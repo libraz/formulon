@@ -2,12 +2,14 @@
 //
 // Parser abstract syntax tree.
 //
-// `AstNode` is the parser's tagged-union output. The 17 `NodeKind` variants
+// `AstNode` is the parser's tagged-union output. The 18 `NodeKind` variants
 // cover every Excel 365 surface construct: literals, references (including
 // external workbook and structured table refs), unary/binary/range/union/
 // intersect operators, the `@` implicit-intersection wrapper, function calls,
 // inline array literals, `LAMBDA` and `LET` forms, immediately-invoked lambda
-// calls, and source-level error literals such as `#DIV/0!`.
+// calls, source-level error literals such as `#DIV/0!`, and an
+// `ErrorPlaceholder` stand-in installed by panic-mode recovery when the
+// parser cannot synthesise a real subtree.
 //
 // Storage model: every node and every variable-arity child array lives in an
 // `Arena`. `AstNode` is trivially destructible (enforced by `static_assert`)
@@ -61,6 +63,11 @@ enum class NodeKind : std::uint8_t {
   LetBinding = 14,
   LambdaCall = 15,
   ErrorLiteral = 16,
+  /// Placeholder node installed by panic-mode recovery in place of a subtree
+  /// whose parse failed. Carries no payload; `range_` is set to the failure
+  /// site by the parser. Consumers (compiler, dumper) must treat this as an
+  /// opaque sentinel and propagate `#NAME?` / `#REF!` semantics if reached.
+  ErrorPlaceholder = 17,
 };
 
 /// Binary operator catalog covering arithmetic, concat, and comparisons.
@@ -217,6 +224,7 @@ class AstNode final {
   friend AstNode* make_let_binding(Arena&, const std::string_view*, const AstNode* const*, std::uint32_t, AstNode*);
   friend AstNode* make_lambda_call(Arena&, AstNode*, const AstNode* const*, std::uint32_t);
   friend AstNode* make_error_literal(Arena&, ErrorCode);
+  friend AstNode* make_error_placeholder(Arena&);
 
   // --- Per-kind payload structs --------------------------------------------
   // Each is trivially destructible; pointer arrays are arena-owned. The
@@ -312,8 +320,7 @@ class AstNode final {
   Payload data_;
 };
 
-static_assert(std::is_trivially_destructible_v<AstNode>,
-              "AstNode must be trivially destructible to live in an Arena");
+static_assert(std::is_trivially_destructible_v<AstNode>, "AstNode must be trivially destructible to live in an Arena");
 
 // Size budget: this asserts our payload layout stays compact enough that the
 // AST does not balloon working-set memory. 64 bytes is generous; the actual
@@ -386,6 +393,12 @@ AstNode* make_lambda_call(Arena& arena, AstNode* callee, const AstNode* const* a
 
 /// Builds an `ErrorLiteral` node.
 AstNode* make_error_literal(Arena& arena, ErrorCode code);
+
+/// Builds an `ErrorPlaceholder` sentinel. The placeholder has no payload; it
+/// signals that panic-mode recovery skipped a subtree because the underlying
+/// tokens were unparseable. The parser sets `range_` to the failure site so
+/// downstream tools can highlight it.
+AstNode* make_error_placeholder(Arena& arena);
 
 }  // namespace parser
 }  // namespace formulon

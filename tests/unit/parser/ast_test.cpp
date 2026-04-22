@@ -345,6 +345,16 @@ TEST(AstNodeErrorLiteral, AccessorRoundtrips) {
   EXPECT_EQ(n->as_error_literal(), ErrorCode::Div0);
 }
 
+TEST(AstNodeErrorPlaceholder, FactoryReturnsCorrectKind) {
+  Arena a;
+  AstNode* n = make_error_placeholder(a);
+  ASSERT_NE(n, nullptr);
+  EXPECT_EQ(n->kind(), NodeKind::ErrorPlaceholder);
+  // No payload accessor; default range is zero-initialised.
+  EXPECT_EQ(n->range().start, 0u);
+  EXPECT_EQ(n->range().end, 0u);
+}
+
 TEST(AstNodeRange, SetRangeIsRoundTripped) {
   Arena a;
   AstNode* n = make_literal(a, Value::number(1.0));

@@ -18,6 +18,14 @@
 //
 // Right-associativity is implemented by recursing the RHS at the same
 // binding power (`min_bp = bp`), left-associativity at `min_bp = bp + 1`.
+//
+// Error recovery: every `parse_expression` call accepts a `SyncContext`
+// describing the syntactic frame it lives in. On error we
+// record a diagnostic, skip tokens up to the next sync token (paying
+// attention to nested `(` `[` `{`), and substitute an `ErrorPlaceholder`
+// for the failed subtree so siblings continue to parse. The parser stops
+// entirely once the error-count cap is reached or the recursion-depth
+// limit is exceeded.
 
 #include "parser/parser.h"
 
@@ -60,7 +68,9 @@ bool IsAsciiLetter(char c) noexcept {
   return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 }
 
-bool IsAsciiDigit(char c) noexcept { return c >= '0' && c <= '9'; }
+bool IsAsciiDigit(char c) noexcept {
+  return c >= '0' && c <= '9';
+}
 
 // Returns the binary binding-power for a token, or 0 if it is not a binary
 // operator at the parser level. `right_bp` receives the precedence to use for
@@ -188,20 +198,32 @@ const char* default_message(ParseErrorCode code) noexcept {
       return "unexpected end of input";
     case ParseErrorCode::ExpectedExpression:
       return "expected expression";
-    case ParseErrorCode::UnclosedParen:
-      return "unclosed parenthesis";
-    case ParseErrorCode::UnclosedBrace:
-      return "unclosed array literal";
+    case ParseErrorCode::ExpectedCloseParen:
+      return "expected ')'";
+    case ParseErrorCode::UnbalancedBraces:
+      return "unbalanced braces in array literal";
     case ParseErrorCode::ArrayRowMismatch:
       return "array literal rows have inconsistent column counts";
     case ParseErrorCode::ExpectedRParenOrComma:
       return "expected ')' or ','";
     case ParseErrorCode::ExpectedCommaOrSemiInArray:
       return "expected ',' or ';' in array literal";
-    case ParseErrorCode::InvalidCellRef:
-      return "invalid cell reference";
+    case ParseErrorCode::InvalidReference:
+      return "invalid reference";
     case ParseErrorCode::UnsupportedConstruct:
-      return "construct not supported in this milestone";
+      return "construct not yet supported";
+    case ParseErrorCode::ExpectedOpenParen:
+      return "expected '('";
+    case ParseErrorCode::ExpectedComma:
+      return "expected ','";
+    case ParseErrorCode::UnbalancedBrackets:
+      return "unbalanced brackets in structured reference";
+    case ParseErrorCode::InvalidRange:
+      return "invalid range expression";
+    case ParseErrorCode::NestedFormulaTooDeep:
+      return "formula nesting depth exceeds the configured limit";
+    case ParseErrorCode::TooManyErrors:
+      return "too many parse errors; stopping";
   }
   return "parse error";
 }
@@ -219,11 +241,17 @@ Parser::Parser(std::string_view source, Arena& arena, ParserOptions opts) noexce
 // Token cursor helpers
 // ---------------------------------------------------------------------------
 
-TokenKind Parser::peek_kind() const noexcept { return peek().kind; }
+TokenKind Parser::peek_kind() const noexcept {
+  return peek().kind;
+}
 
-TokenKind Parser::peek_kind_at(std::size_t offset) const noexcept { return peek_at(offset).kind; }
+TokenKind Parser::peek_kind_at(std::size_t offset) const noexcept {
+  return peek_at(offset).kind;
+}
 
-const Token& Parser::peek() const noexcept { return peek_at(0); }
+const Token& Parser::peek() const noexcept {
+  return peek_at(0);
+}
 
 const Token& Parser::peek_at(std::size_t offset) const noexcept {
   if (pos_ + offset >= tokens_.size()) {
@@ -241,24 +269,86 @@ const Token& Parser::advance() noexcept {
 }
 
 void Parser::record_error(ParseErrorCode code, TextRange range) {
+  record_error_with_token(code, range, std::string_view{});
+}
+
+void Parser::record_error_with_token(ParseErrorCode code, TextRange range, std::string_view offending) {
   if (bailed_) {
     return;
   }
+  // Append the original error first so the caller still sees the actual code
+  // even when the cap is reached on this entry.
   ParseError e;
   e.code = code;
   e.range = range;
   e.message = std::string_view(default_message(code));
+  e.offending_token = offending;
+  e.severity = Severity::Error;
+  e.suggestion = std::string_view{};
   errors_.push_back(e);
-  bailed_ = true;
+
+  // Cap check: once we are at or above the budget, append the sentinel and
+  // latch `bailed_`. The budget counts the sentinel against the limit so
+  // `errors_.size() <= max_error_count` is preserved.
+  if (opts_.max_error_count > 0 && errors_.size() + 1 >= opts_.max_error_count) {
+    ParseError sentinel;
+    sentinel.code = ParseErrorCode::TooManyErrors;
+    sentinel.range = range;
+    sentinel.message = std::string_view(default_message(ParseErrorCode::TooManyErrors));
+    sentinel.severity = Severity::Error;
+    errors_.push_back(sentinel);
+    bailed_ = true;
+  }
 }
 
 void Parser::promote_lexer_errors(const std::vector<LexerError>& lex_errors) {
   for (const auto& le : lex_errors) {
-    ParseError e;
-    e.code = PromoteLexerCode(le.code);
-    e.range = le.range;
-    e.message = std::string_view(default_message(e.code));
-    errors_.push_back(e);
+    if (bailed_) {
+      return;
+    }
+    record_error(PromoteLexerCode(le.code), le.range);
+  }
+}
+
+void Parser::skip_to_sync(SyncContext ctx) noexcept {
+  // Track nesting so that, e.g., `SUM(BAD(1,2,3), 4)` does not sync on the
+  // inner commas while we are recovering inside the outer call's first arg.
+  std::uint32_t depth = 0;
+  while (true) {
+    const TokenKind k = peek_kind();
+    if (k == TokenKind::Eof) {
+      return;
+    }
+    if (depth == 0) {
+      switch (ctx) {
+        case SyncContext::TopLevel:
+          break;  // only Eof terminates.
+        case SyncContext::Paren:
+          if (k == TokenKind::RParen) {
+            return;
+          }
+          break;
+        case SyncContext::CallArg:
+          if (k == TokenKind::Comma || k == TokenKind::RParen) {
+            return;
+          }
+          break;
+        case SyncContext::ArrayElem:
+          if (k == TokenKind::Comma || k == TokenKind::Semicolon || k == TokenKind::RBrace) {
+            return;
+          }
+          break;
+      }
+    }
+    // Update nesting before consuming.
+    if (k == TokenKind::LParen || k == TokenKind::LBrace || k == TokenKind::LBracket) {
+      ++depth;
+    } else if (k == TokenKind::RParen || k == TokenKind::RBrace || k == TokenKind::RBracket) {
+      if (depth > 0) {
+        --depth;
+      }
+    }
+    advance();
   }
 }
 
@@ -390,16 +480,30 @@ AstNode* Parser::parse() {
     return nullptr;
   }
 
-  root_ = parse_expression(0);
+  root_ = parse_expression(0, SyncContext::TopLevel);
   if (root_ == nullptr) {
     return nullptr;
   }
 
   // Trailing tokens that we did not consume are an error; we surface the
-  // first such token as UnexpectedToken.
+  // first such token as UnexpectedToken (recovery here just records and
+  // skips so the user sees a single trailing diagnostic, not a cascade).
+  // `LBracket` and `Hash` get their own diagnostic because the user almost
+  // certainly meant a structured / spilled-range form.
   if (peek_kind() != TokenKind::Eof && !bailed_) {
-    record_error(ParseErrorCode::UnexpectedToken, peek().range);
-    return nullptr;
+    const Token& tok = peek();
+    if (tok.kind == TokenKind::LBracket) {
+      // Reuse parse_atom's balance check by routing through it; the result
+      // is an `ErrorPlaceholder` whose payload we discard - we already have
+      // a root.
+      (void)parse_atom(SyncContext::TopLevel);
+    } else if (tok.kind == TokenKind::Hash) {
+      record_error_with_token(ParseErrorCode::UnsupportedConstruct, tok.range, tok.lexeme);
+      skip_to_sync(SyncContext::TopLevel);
+    } else {
+      record_error_with_token(ParseErrorCode::UnexpectedToken, tok.range, tok.lexeme);
+      skip_to_sync(SyncContext::TopLevel);
+    }
   }
   return root_;
 }
@@ -408,28 +512,58 @@ AstNode* Parser::parse() {
 // Pratt expression loop
 // ---------------------------------------------------------------------------
 
-AstNode* Parser::parse_expression(int min_bp) {
-  AstNode* lhs = parse_atom();
+AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
+  // Depth guard. We use a manual increment / decrement around every return
+  // path because we have no exceptions and forgetting `--depth_` would be
+  // easy to introduce on a future edit.
+  ++depth_;
+  if (depth_ > opts_.max_parse_depth) {
+    record_error(ParseErrorCode::NestedFormulaTooDeep, peek().range);
+    skip_to_sync(ctx);
+    AstNode* placeholder = make_error_placeholder(arena_);
+    if (placeholder != nullptr) {
+      placeholder->set_range(peek().range);
+    }
+    --depth_;
+    return placeholder;
+  }
+  if (bailed_) {
+    AstNode* placeholder = make_error_placeholder(arena_);
+    if (placeholder != nullptr) {
+      placeholder->set_range(peek().range);
+    }
+    --depth_;
+    return placeholder;
+  }
+
+  AstNode* lhs = parse_atom(ctx);
   if (lhs == nullptr) {
+    // parse_atom only returns nullptr on arena exhaustion; treat as a hard
+    // bail by latching and returning nullptr up the stack.
+    bailed_ = true;
+    --depth_;
     return nullptr;
   }
 
   while (true) {
     if (bailed_) {
-      return nullptr;
+      --depth_;
+      return lhs;
     }
     const TokenKind kind = peek_kind();
 
     // Postfix operators first (currently only `%`).
     if (kind == TokenKind::Percent) {
       if (kBpPostfixPercent < min_bp) {
+        --depth_;
         return lhs;
       }
       const Token& tok = advance();
       AstNode* node = make_unary_op(arena_, UnaryOp::Percent, lhs);
       if (node == nullptr) {
-        record_error(ParseErrorCode::UnexpectedToken, tok.range);
-        return nullptr;
+        bailed_ = true;
+        --depth_;
+        return lhs;
       }
       node->set_range(SpanRange(lhs->range(), tok.range));
       lhs = node;
@@ -439,24 +573,37 @@ AstNode* Parser::parse_expression(int min_bp) {
     int right_bp = 0;
     const int bp = InfixBindingPower(kind, &right_bp);
     if (bp == 0 || bp < min_bp) {
+      --depth_;
       return lhs;
     }
 
-    advance();  // consume the operator token.
-    AstNode* rhs = parse_expression(right_bp);
+    const Token& op_tok = advance();  // consume the operator token.
+    AstNode* rhs = parse_expression(right_bp, ctx);
     if (rhs == nullptr) {
-      return nullptr;
+      // Parse_expression always returns a node post-recovery; null means
+      // hard failure (arena exhaustion). Surface the existing LHS to the
+      // caller so they can salvage a partial tree.
+      --depth_;
+      return lhs;
     }
 
     AstNode* node = nullptr;
     if (kind == TokenKind::Colon) {
+      // Validate that `rhs` is something that can plausibly close a range.
+      // A literal / call / unary-op on the rhs of `:` is not an Excel range.
+      const NodeKind rk = rhs->kind();
+      if (rk != NodeKind::Ref && rk != NodeKind::NameRef && rk != NodeKind::ExternalRef &&
+          rk != NodeKind::StructuredRef && rk != NodeKind::RangeOp && rk != NodeKind::ErrorPlaceholder) {
+        record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
+      }
       node = make_range_op(arena_, lhs, rhs);
     } else {
       node = make_binary_op(arena_, TokenToBinOp(kind), lhs, rhs);
     }
     if (node == nullptr) {
-      record_error(ParseErrorCode::UnexpectedToken, peek().range);
-      return nullptr;
+      bailed_ = true;
+      --depth_;
+      return lhs;
     }
     node->set_range(SpanRange(lhs->range(), rhs->range()));
     lhs = node;
@@ -467,7 +614,7 @@ AstNode* Parser::parse_expression(int min_bp) {
 // Atom dispatch
 // ---------------------------------------------------------------------------
 
-AstNode* Parser::parse_atom() {
+AstNode* Parser::parse_atom(SyncContext ctx) {
   const TokenKind kind = peek_kind();
   switch (kind) {
     case TokenKind::Number:
@@ -483,35 +630,102 @@ AstNode* Parser::parse_atom() {
     case TokenKind::LBrace:
       return parse_array_literal_atom();
     case TokenKind::At:
-      return parse_at_prefix_atom();
+      return parse_at_prefix_atom(ctx);
     case TokenKind::Plus:
-      return parse_unary_prefix_atom(UnaryOp::Plus);
+      return parse_unary_prefix_atom(UnaryOp::Plus, ctx);
     case TokenKind::Minus:
-      return parse_unary_prefix_atom(UnaryOp::Minus);
+      return parse_unary_prefix_atom(UnaryOp::Minus, ctx);
     case TokenKind::Ident:
       return parse_ident_or_call_or_full_col();
     case TokenKind::SheetName: {
       const Token& sheet = advance();
-      return parse_sheet_qualified_ref(sheet.text, /*quoted=*/true, sheet.range);
+      AstNode* n = parse_sheet_qualified_ref(sheet.text, /*quoted=*/true, sheet.range);
+      if (n != nullptr) {
+        return n;
+      }
+      skip_to_sync(ctx);
+      AstNode* placeholder = make_error_placeholder(arena_);
+      if (placeholder != nullptr) {
+        placeholder->set_range(sheet.range);
+      }
+      return placeholder;
     }
-    case TokenKind::Eof:
-      record_error(ParseErrorCode::UnexpectedEof, peek().range);
-      return nullptr;
+    case TokenKind::LBracket: {
+      // Structured-ref grammar is not implemented yet; pick the right code
+      // depending on whether the bracket is balanced (UnsupportedConstruct
+      // for `=Table[col]`, UnbalancedBrackets for `=Table[col`).
+      const Token& lbracket = peek();
+      bool found_close = false;
+      std::uint32_t depth = 1;
+      for (std::size_t i = 1;; ++i) {
+        const TokenKind k = peek_kind_at(i);
+        if (k == TokenKind::Eof) {
+          break;
+        }
+        if (k == TokenKind::LBracket) {
+          ++depth;
+        } else if (k == TokenKind::RBracket) {
+          --depth;
+          if (depth == 0) {
+            found_close = true;
+            break;
+          }
+        }
+      }
+      const ParseErrorCode code =
+          found_close ? ParseErrorCode::UnsupportedConstruct : ParseErrorCode::UnbalancedBrackets;
+      record_error_with_token(code, lbracket.range, lbracket.lexeme);
+      skip_to_sync(ctx);
+      AstNode* placeholder = make_error_placeholder(arena_);
+      if (placeholder != nullptr) {
+        placeholder->set_range(lbracket.range);
+      }
+      return placeholder;
+    }
     case TokenKind::String:
-    case TokenKind::LBracket:
-    case TokenKind::Hash:
-      // Deferred to follow-up work (string literals, structured/external refs,
-      // spilled-range `#`). Surface a single, unmistakable diagnostic and stop.
-      record_error(ParseErrorCode::UnsupportedConstruct, peek().range);
-      return nullptr;
-    case TokenKind::Invalid:
+    case TokenKind::Hash: {
+      // String literals and the spilled-range `#` are not implemented yet.
+      // Surface a single, unmistakable diagnostic and recover.
+      const Token& tok = peek();
+      record_error_with_token(ParseErrorCode::UnsupportedConstruct, tok.range, tok.lexeme);
+      skip_to_sync(ctx);
+      AstNode* placeholder = make_error_placeholder(arena_);
+      if (placeholder != nullptr) {
+        placeholder->set_range(tok.range);
+      }
+      return placeholder;
+    }
+    case TokenKind::Invalid: {
       // The tokenizer already recorded a LexerError for this; promote to a
       // parser-level UnexpectedToken so the caller sees one definite stop.
-      record_error(ParseErrorCode::UnexpectedToken, peek().range);
-      return nullptr;
-    default:
-      record_error(ParseErrorCode::ExpectedExpression, peek().range);
-      return nullptr;
+      const Token& tok = peek();
+      record_error_with_token(ParseErrorCode::UnexpectedToken, tok.range, tok.lexeme);
+      advance();
+      skip_to_sync(ctx);
+      AstNode* placeholder = make_error_placeholder(arena_);
+      if (placeholder != nullptr) {
+        placeholder->set_range(tok.range);
+      }
+      return placeholder;
+    }
+    case TokenKind::Eof: {
+      record_error(ParseErrorCode::UnexpectedEof, peek().range);
+      AstNode* placeholder = make_error_placeholder(arena_);
+      if (placeholder != nullptr) {
+        placeholder->set_range(peek().range);
+      }
+      return placeholder;
+    }
+    default: {
+      const Token& tok = peek();
+      record_error_with_token(ParseErrorCode::ExpectedExpression, tok.range, tok.lexeme);
+      skip_to_sync(ctx);
+      AstNode* placeholder = make_error_placeholder(arena_);
+      if (placeholder != nullptr) {
+        placeholder->set_range(tok.range);
+      }
+      return placeholder;
+    }
   }
 }
 
@@ -528,7 +742,6 @@ AstNode* Parser::parse_number_atom() {
   advance();
   AstNode* n = make_literal(arena_, Value::number(tok.number));
   if (n == nullptr) {
-    record_error(ParseErrorCode::ExpectedExpression, tok.range);
     return nullptr;
   }
   n->set_range(tok.range);
@@ -557,7 +770,6 @@ AstNode* Parser::parse_full_row_or_number(const Token& first) {
     advance();
     AstNode* n = make_literal(arena_, Value::number(first.number));
     if (n == nullptr) {
-      record_error(ParseErrorCode::ExpectedExpression, first.range);
       return nullptr;
     }
     n->set_range(first.range);
@@ -577,7 +789,6 @@ AstNode* Parser::parse_full_row_or_number(const Token& first) {
     advance();
     AstNode* n = make_literal(arena_, Value::number(first.number));
     if (n == nullptr) {
-      record_error(ParseErrorCode::ExpectedExpression, first.range);
       return nullptr;
     }
     n->set_range(first.range);
@@ -592,7 +803,6 @@ AstNode* Parser::parse_full_row_or_number(const Token& first) {
   r.is_full_row = true;
   AstNode* n = make_ref(arena_, r);
   if (n == nullptr) {
-    record_error(ParseErrorCode::InvalidCellRef, first.range);
     return nullptr;
   }
   n->set_range(SpanRange(first.range, second.range));
@@ -603,7 +813,6 @@ AstNode* Parser::parse_bool_atom() {
   const Token& tok = advance();
   AstNode* n = make_literal(arena_, Value::boolean(tok.boolean));
   if (n == nullptr) {
-    record_error(ParseErrorCode::ExpectedExpression, tok.range);
     return nullptr;
   }
   n->set_range(tok.range);
@@ -614,7 +823,6 @@ AstNode* Parser::parse_error_literal_atom() {
   const Token& tok = advance();
   AstNode* n = make_error_literal(arena_, tok.error_code);
   if (n == nullptr) {
-    record_error(ParseErrorCode::ExpectedExpression, tok.range);
     return nullptr;
   }
   n->set_range(tok.range);
@@ -623,13 +831,16 @@ AstNode* Parser::parse_error_literal_atom() {
 
 AstNode* Parser::parse_paren_atom() {
   const Token& lparen = advance();
-  AstNode* inner = parse_expression(0);
+  AstNode* inner = parse_expression(0, SyncContext::Paren);
   if (inner == nullptr) {
+    // Hard arena failure during recovery; propagate.
     return nullptr;
   }
   if (peek_kind() != TokenKind::RParen) {
-    record_error(ParseErrorCode::UnclosedParen, lparen.range);
-    return nullptr;
+    record_error_with_token(ParseErrorCode::ExpectedCloseParen, lparen.range, lparen.lexeme);
+    // `inner` is still a usable subtree (possibly a placeholder). Return it
+    // so the surrounding context can keep going; do not consume EOF.
+    return inner;
   }
   const Token& rparen = advance();
   inner->set_range(SpanRange(lparen.range, rparen.range));
@@ -688,9 +899,16 @@ AstNode* Parser::parse_array_literal_atom() {
         }
         return node;
       }
-      default:
-        record_error(ParseErrorCode::ExpectedExpression, peek().range);
-        return nullptr;
+      default: {
+        const Token& tok = peek();
+        record_error_with_token(ParseErrorCode::ExpectedExpression, tok.range, tok.lexeme);
+        skip_to_sync(SyncContext::ArrayElem);
+        AstNode* placeholder = make_error_placeholder(arena_);
+        if (placeholder != nullptr) {
+          placeholder->set_range(tok.range);
+        }
+        return placeholder;
+      }
     }
   };
 
@@ -702,6 +920,9 @@ AstNode* Parser::parse_array_literal_atom() {
   cur_row_cols = 1;
 
   while (true) {
+    if (bailed_) {
+      break;
+    }
     const TokenKind k = peek_kind();
     if (k == TokenKind::RBrace) {
       break;
@@ -721,8 +942,19 @@ AstNode* Parser::parse_array_literal_atom() {
       if (cols == 0) {
         cols = cur_row_cols;
       } else if (cur_row_cols != cols) {
+        // A jagged array cannot be reified as a 2D AstNode. Record the
+        // diagnostic, skip to the closing `}` (consuming it), and return
+        // a placeholder so siblings continue to parse.
         record_error(ParseErrorCode::ArrayRowMismatch, peek().range);
-        return nullptr;
+        skip_to_sync(SyncContext::ArrayElem);
+        if (peek_kind() == TokenKind::RBrace) {
+          advance();
+        }
+        AstNode* placeholder = make_error_placeholder(arena_);
+        if (placeholder != nullptr) {
+          placeholder->set_range(lbrace.range);
+        }
+        return placeholder;
       }
       cur_row_cols = 0;
       ++rows;
@@ -736,11 +968,16 @@ AstNode* Parser::parse_array_literal_atom() {
       continue;
     }
     if (k == TokenKind::Eof) {
-      record_error(ParseErrorCode::UnclosedBrace, lbrace.range);
-      return nullptr;
+      record_error_with_token(ParseErrorCode::UnbalancedBraces, lbrace.range, lbrace.lexeme);
+      // Synthesise a placeholder to carry the brace's source range.
+      AstNode* placeholder = make_error_placeholder(arena_);
+      if (placeholder != nullptr) {
+        placeholder->set_range(lbrace.range);
+      }
+      return placeholder;
     }
-    record_error(ParseErrorCode::ExpectedCommaOrSemiInArray, peek().range);
-    return nullptr;
+    record_error_with_token(ParseErrorCode::ExpectedCommaOrSemiInArray, peek().range, peek().lexeme);
+    skip_to_sync(SyncContext::ArrayElem);
   }
 
   // Final row's column count must match (or initialise) the array width.
@@ -748,50 +985,58 @@ AstNode* Parser::parse_array_literal_atom() {
     cols = cur_row_cols;
   } else if (cur_row_cols != cols) {
     record_error(ParseErrorCode::ArrayRowMismatch, peek().range);
-    return nullptr;
+    if (peek_kind() == TokenKind::RBrace) {
+      advance();
+    }
+    AstNode* placeholder = make_error_placeholder(arena_);
+    if (placeholder != nullptr) {
+      placeholder->set_range(lbrace.range);
+    }
+    return placeholder;
   }
 
   if (peek_kind() != TokenKind::RBrace) {
-    record_error(ParseErrorCode::UnclosedBrace, lbrace.range);
-    return nullptr;
+    record_error_with_token(ParseErrorCode::UnbalancedBraces, lbrace.range, lbrace.lexeme);
+    AstNode* placeholder = make_error_placeholder(arena_);
+    if (placeholder != nullptr) {
+      placeholder->set_range(lbrace.range);
+    }
+    return placeholder;
   }
   const Token& rbrace = advance();
 
   FM_CHECK(elements.size() == static_cast<std::size_t>(rows) * cols, "array element count mismatch after parse");
   AstNode* n = make_array_literal(arena_, rows, cols, elements.data());
   if (n == nullptr) {
-    record_error(ParseErrorCode::UnclosedBrace, lbrace.range);
     return nullptr;
   }
   n->set_range(SpanRange(lbrace.range, rbrace.range));
   return n;
 }
 
-AstNode* Parser::parse_at_prefix_atom() {
+AstNode* Parser::parse_at_prefix_atom(SyncContext ctx) {
   const Token& at_tok = advance();
   // `@` consumes the entire remaining expression (lowest precedence).
-  AstNode* operand = parse_expression(kBpAtPrefix);
+  AstNode* operand = parse_expression(kBpAtPrefix, ctx);
   if (operand == nullptr) {
     return nullptr;
   }
   AstNode* n = make_implicit_intersection(arena_, operand);
   if (n == nullptr) {
-    record_error(ParseErrorCode::UnexpectedToken, at_tok.range);
     return nullptr;
   }
   n->set_range(SpanRange(at_tok.range, operand->range()));
   return n;
 }
 
-AstNode* Parser::parse_unary_prefix_atom(UnaryOp op) {
+AstNode* Parser::parse_unary_prefix_atom(UnaryOp op, SyncContext ctx) {
   const Token& sign_tok = advance();
-  AstNode* operand = parse_expression(kBpUnaryPrefix);
+  AstNode* operand = parse_expression(kBpUnaryPrefix, ctx);
   if (operand == nullptr) {
     return nullptr;
   }
   AstNode* n = make_unary_op(arena_, op, operand);
   if (n == nullptr) {
-    record_error(ParseErrorCode::UnexpectedToken, sign_tok.range);
     return nullptr;
   }
   n->set_range(SpanRange(sign_tok.range, operand->range()));
@@ -802,12 +1047,15 @@ AstNode* Parser::parse_cellref_atom() {
   const Token& tok = advance();
   Reference r;
   if (!decode_cellref_lexeme(tok.lexeme, &r)) {
-    record_error(ParseErrorCode::InvalidCellRef, tok.range);
-    return nullptr;
+    record_error_with_token(ParseErrorCode::InvalidReference, tok.range, tok.lexeme);
+    AstNode* placeholder = make_error_placeholder(arena_);
+    if (placeholder != nullptr) {
+      placeholder->set_range(tok.range);
+    }
+    return placeholder;
   }
   AstNode* n = make_ref(arena_, r);
   if (n == nullptr) {
-    record_error(ParseErrorCode::InvalidCellRef, tok.range);
     return nullptr;
   }
   n->set_range(tok.range);
@@ -832,7 +1080,10 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
     std::vector<const AstNode*> args;
     if (peek_kind() != TokenKind::RParen) {
       while (true) {
-        AstNode* arg = parse_expression(0);
+        if (bailed_) {
+          break;
+        }
+        AstNode* arg = parse_expression(0, SyncContext::CallArg);
         if (arg == nullptr) {
           return nullptr;
         }
@@ -844,18 +1095,39 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
         if (peek_kind() == TokenKind::RParen) {
           break;
         }
-        record_error(ParseErrorCode::ExpectedRParenOrComma, peek().range);
-        return nullptr;
+        if (peek_kind() == TokenKind::Eof) {
+          record_error_with_token(ParseErrorCode::ExpectedCloseParen, call_start, fn_name);
+          break;
+        }
+        // Unexpected token between args - record and try to recover.
+        record_error_with_token(ParseErrorCode::ExpectedComma, peek().range, peek().lexeme);
+        skip_to_sync(SyncContext::CallArg);
+        if (peek_kind() == TokenKind::Comma) {
+          advance();
+          continue;
+        }
+        if (peek_kind() == TokenKind::RParen || peek_kind() == TokenKind::Eof) {
+          break;
+        }
       }
     }
     if (peek_kind() != TokenKind::RParen) {
-      record_error(ParseErrorCode::UnclosedParen, call_start);
-      return nullptr;
+      // Recovery already handled the diagnostic for the EOF case; only emit
+      // here if we somehow stopped on a non-RParen non-EOF token.
+      if (peek_kind() != TokenKind::Eof) {
+        record_error_with_token(ParseErrorCode::ExpectedCloseParen, call_start, fn_name);
+      }
+      AstNode* n =
+          make_call(arena_, fn_name, args.empty() ? nullptr : args.data(), static_cast<std::uint32_t>(args.size()));
+      if (n != nullptr) {
+        n->set_range(call_start);
+      }
+      return n;
     }
     const Token& rparen = advance();
-    AstNode* n = make_call(arena_, fn_name, args.data(), static_cast<std::uint32_t>(args.size()));
+    AstNode* n =
+        make_call(arena_, fn_name, args.empty() ? nullptr : args.data(), static_cast<std::uint32_t>(args.size()));
     if (n == nullptr) {
-      record_error(ParseErrorCode::UnexpectedToken, call_start);
       return nullptr;
     }
     n->set_range(SpanRange(call_start, rparen.range));
@@ -866,7 +1138,15 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
     const std::string_view sheet = ident.lexeme;
     const TextRange sheet_range = ident.range;
     advance();  // Ident
-    return parse_sheet_qualified_ref(sheet, /*quoted=*/false, sheet_range);
+    AstNode* n = parse_sheet_qualified_ref(sheet, /*quoted=*/false, sheet_range);
+    if (n != nullptr) {
+      return n;
+    }
+    AstNode* placeholder = make_error_placeholder(arena_);
+    if (placeholder != nullptr) {
+      placeholder->set_range(sheet_range);
+    }
+    return placeholder;
   }
 
   if (next == TokenKind::Colon && peek_kind_at(2) == TokenKind::Ident) {
@@ -886,7 +1166,6 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
       r.is_full_col = true;
       AstNode* n = make_ref(arena_, r);
       if (n == nullptr) {
-        record_error(ParseErrorCode::InvalidCellRef, start_range);
         return nullptr;
       }
       n->set_range(SpanRange(start_range, end_range));
@@ -900,7 +1179,6 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
   advance();
   AstNode* n = make_name_ref(arena_, ident.lexeme);
   if (n == nullptr) {
-    record_error(ParseErrorCode::ExpectedExpression, ident.range);
     return nullptr;
   }
   n->set_range(ident.range);
@@ -911,7 +1189,7 @@ AstNode* Parser::parse_sheet_qualified_ref(std::string_view sheet, bool quoted, 
   // Expect Bang next. (For SheetName tokens we have not yet consumed Bang;
   // for unquoted Ident the caller has consumed only the Ident.)
   if (peek_kind() != TokenKind::Bang) {
-    record_error(ParseErrorCode::UnexpectedToken, peek().range);
+    record_error_with_token(ParseErrorCode::UnexpectedToken, peek().range, peek().lexeme);
     return nullptr;
   }
   advance();  // Bang
@@ -926,14 +1204,13 @@ AstNode* Parser::parse_sheet_qualified_ref(std::string_view sheet, bool quoted, 
     const Token& cell = advance();
     Reference r;
     if (!decode_cellref_lexeme(cell.lexeme, &r)) {
-      record_error(ParseErrorCode::InvalidCellRef, cell.range);
+      record_error_with_token(ParseErrorCode::InvalidReference, cell.range, cell.lexeme);
       return nullptr;
     }
     r.sheet = sheet;
     r.sheet_quoted = quoted;
     AstNode* n = make_ref(arena_, r);
     if (n == nullptr) {
-      record_error(ParseErrorCode::InvalidCellRef, sheet_range);
       return nullptr;
     }
     n->set_range(SpanRange(sheet_range, cell.range));
@@ -959,7 +1236,6 @@ AstNode* Parser::parse_sheet_qualified_ref(std::string_view sheet, bool quoted, 
       r.sheet_quoted = quoted;
       AstNode* n = make_ref(arena_, r);
       if (n == nullptr) {
-        record_error(ParseErrorCode::InvalidCellRef, sheet_range);
         return nullptr;
       }
       n->set_range(SpanRange(sheet_range, end_range));
@@ -1002,7 +1278,6 @@ AstNode* Parser::parse_sheet_qualified_ref(std::string_view sheet, bool quoted, 
         r.sheet_quoted = quoted;
         AstNode* n = make_ref(arena_, r);
         if (n == nullptr) {
-          record_error(ParseErrorCode::InvalidCellRef, sheet_range);
           return nullptr;
         }
         n->set_range(SpanRange(sheet_range, end_range));
@@ -1010,7 +1285,7 @@ AstNode* Parser::parse_sheet_qualified_ref(std::string_view sheet, bool quoted, 
       }
     }
   }
-  record_error(ParseErrorCode::InvalidCellRef, peek().range);
+  record_error_with_token(ParseErrorCode::InvalidReference, peek().range, peek().lexeme);
   return nullptr;
 }
 

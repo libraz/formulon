@@ -344,6 +344,10 @@ void DumpInto(const AstNode& node, std::string& out) {
       out.append(display_name(node.as_error_literal()));
       out.push_back(')');
       return;
+
+    case NodeKind::ErrorPlaceholder:
+      out.append("(error)");
+      return;
   }
   // Defensive: unreachable while every NodeKind is covered above.
   out.append("(unknown)");

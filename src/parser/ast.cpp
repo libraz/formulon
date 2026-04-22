@@ -323,6 +323,16 @@ AstNode* make_error_literal(Arena& arena, ErrorCode code) {
   return n;
 }
 
+AstNode* make_error_placeholder(Arena& arena) {
+  AstNode* n = arena.create<AstNode>();
+  if (n == nullptr) {
+    return nullptr;
+  }
+  n->kind_ = NodeKind::ErrorPlaceholder;
+  // No payload: every accessor on this kind is an invariant violation.
+  return n;
+}
+
 // ---------------------------------------------------------------------------
 // Accessors
 // ---------------------------------------------------------------------------

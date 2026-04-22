@@ -269,9 +269,9 @@ TEST(AstDumpBinary, AllOperators) {
     const char* token;
   };
   const Case cases[] = {
-      {BinOp::Add, "+"},   {BinOp::Sub, "-"},   {BinOp::Mul, "*"}, {BinOp::Div, "/"},
-      {BinOp::Pow, "^"},   {BinOp::Concat, "&"}, {BinOp::Eq, "="}, {BinOp::NotEq, "<>"},
-      {BinOp::Lt, "<"},    {BinOp::LtEq, "<="}, {BinOp::Gt, ">"},  {BinOp::GtEq, ">="},
+      {BinOp::Add, "+"}, {BinOp::Sub, "-"},    {BinOp::Mul, "*"}, {BinOp::Div, "/"},
+      {BinOp::Pow, "^"}, {BinOp::Concat, "&"}, {BinOp::Eq, "="},  {BinOp::NotEq, "<>"},
+      {BinOp::Lt, "<"},  {BinOp::LtEq, "<="},  {BinOp::Gt, ">"},  {BinOp::GtEq, ">="},
   };
   for (const auto& c : cases) {
     AstNode* n = make_binary_op(a, c.op, l, r);
@@ -414,6 +414,13 @@ TEST(AstDumpErrorLiteral, NA) {
   EXPECT_EQ(dump_sexpr(*n), "(err-lit #N/A)");
 }
 
+TEST(AstDumpErrorPlaceholder, DumpsAsErrorSexpr) {
+  Arena a;
+  AstNode* n = make_error_placeholder(a);
+  ASSERT_NE(n, nullptr);
+  EXPECT_EQ(dump_sexpr(*n), "(error)");
+}
+
 // ---------------------------------------------------------------------------
 // Composite trees
 // ---------------------------------------------------------------------------
@@ -432,8 +439,7 @@ TEST(AstDumpComposite, NestedLambdaCall) {
   // Models =LAMBDA(x, x+1)(5)
   Arena a;
   std::vector<std::string_view> params{"x"};
-  AstNode* body =
-      make_binary_op(a, BinOp::Add, make_name_ref(a, "x"), make_literal(a, Value::number(1.0)));
+  AstNode* body = make_binary_op(a, BinOp::Add, make_name_ref(a, "x"), make_literal(a, Value::number(1.0)));
   AstNode* lam = make_lambda(a, params.data(), 1, body);
   std::vector<const AstNode*> args;
   args.push_back(make_literal(a, Value::number(5.0)));
@@ -479,8 +485,7 @@ TEST(AstDumpComposite, RangeUnionInsideSum) {
   std::vector<const AstNode*> sum_args;
   sum_args.push_back(uni);
   AstNode* n = make_call(a, "SUM", sum_args.data(), 1);
-  EXPECT_EQ(dump_sexpr(*n),
-            "(call SUM (union (range (ref A1) (ref B2)) (range (ref C1) (ref D2))))");
+  EXPECT_EQ(dump_sexpr(*n), "(call SUM (union (range (ref A1) (ref B2)) (range (ref C1) (ref D2))))");
 }
 
 }  // namespace
