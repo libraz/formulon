@@ -1,9 +1,10 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// Minimal lexer-level error record. The Pratt parser (M2.3) will merge a
-// vector of `LexerError` into its larger `ParseError` list (see
-// `backup/plans/19-parser-errors.md` §19.3); at M2.2 we only need enough
-// structure to round-trip the code, UTF-16 range, and offending source span.
+// Minimal lexer-level error record. The Pratt parser will merge a vector
+// of `LexerError` into its larger `ParseError` list (see
+// `backup/plans/19-parser-errors.md` §19.3); the tokenizer only needs
+// enough structure to round-trip the code, UTF-16 range, and offending
+// source span.
 
 #ifndef FORMULON_PARSER_LEXER_ERROR_H_
 #define FORMULON_PARSER_LEXER_ERROR_H_
@@ -19,7 +20,7 @@ namespace parser {
 /// Narrow enumeration of failure modes the tokenizer may flag.
 ///
 /// These map to a subset of the parser-level `ParseErrorCode` catalog; the
-/// M2.3 parser is responsible for promoting these into fully-formed
+/// Pratt parser is responsible for promoting these into fully-formed
 /// `ParseError` values with localized messages.
 enum class LexerErrorCode : std::uint16_t {
   UnterminatedString,

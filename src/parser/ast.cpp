@@ -552,6 +552,7 @@ void AppendColumnLetters(std::string& out, std::uint32_t col) {
 }  // namespace
 
 std::string format_a1(const Reference& r) {
+  FM_CHECK(!(r.is_full_col && r.is_full_row), "format_a1: is_full_col and is_full_row must not both be set");
   std::string out;
   if (!r.sheet.empty()) {
     if (r.sheet_quoted) {
@@ -568,6 +569,30 @@ std::string format_a1(const Reference& r) {
       out.append(r.sheet);
     }
     out.push_back('!');
+  }
+  if (r.is_full_col) {
+    if (r.col_abs) {
+      out.push_back('$');
+    }
+    AppendColumnLetters(out, r.col);
+    out.push_back(':');
+    if (r.col_abs) {
+      out.push_back('$');
+    }
+    AppendColumnLetters(out, r.col);
+    return out;
+  }
+  if (r.is_full_row) {
+    if (r.row_abs) {
+      out.push_back('$');
+    }
+    out.append(std::to_string(r.row + 1));
+    out.push_back(':');
+    if (r.row_abs) {
+      out.push_back('$');
+    }
+    out.append(std::to_string(r.row + 1));
+    return out;
   }
   if (r.col_abs) {
     out.push_back('$');

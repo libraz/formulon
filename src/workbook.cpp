@@ -1,8 +1,8 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// Workbook implementation. The M1 surface is intentionally thin: a factory
-// that builds a one-sheet workbook and a `save()` method that delegates to
-// the OOXML writer slice.
+// Workbook implementation. The current surface is intentionally thin: a
+// factory that builds a one-sheet workbook and a `save()` method that
+// delegates to the OOXML writer slice.
 
 #include "workbook.h"
 

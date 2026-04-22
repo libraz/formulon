@@ -1,6 +1,6 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// Unit tests for the M1 Workbook skeleton. Verifies the factory shape, sheet
+// Unit tests for the Workbook skeleton. Verifies the factory shape, sheet
 // accessor mutation, and the basic byte-level shape of the save() output.
 
 #include "workbook.h"

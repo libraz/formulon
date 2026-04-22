@@ -4,15 +4,16 @@
 // evaluator, and Excel error model all sit on top of. See
 // backup/plans/02-calc-engine.md §2.1 for the authoritative specification.
 //
-// M2.1 scope (this header) covers only the scalar variants: `Blank`,
-// `Number`, `Bool`, and `Error`. The `Text`, `Array`, `Ref`, and `Lambda`
-// variants reserve slots in `ValueKind` but do not yet have factories or
-// accessors: those land in later milestones once their backing types exist
+// The current scope of this header covers only the scalar variants:
+// `Blank`, `Number`, `Bool`, and `Error`. The `Text`, `Array`, `Ref`, and
+// `Lambda` variants reserve slots in `ValueKind` but do not yet have
+// factories or accessors: those will follow once their backing types exist
 // (shared-string table, `ArrayValue`, cell reference representation, LAMBDA
 // closures).
 //
-// `Value` is intentionally trivially copyable at M2.1 so it can be passed
-// freely through the evaluator's value stack without heap allocation.
+// `Value` is intentionally trivially copyable so it can be passed freely
+// through the evaluator's value stack without heap allocation. This
+// invariant must be revisited once the non-scalar variants land.
 
 #ifndef FORMULON_VALUE_H_
 #define FORMULON_VALUE_H_
@@ -173,10 +174,10 @@ constexpr const char* display_name(ErrorCode e) noexcept {
 
 /// Scalar `Value` atom of the Formulon calc engine.
 ///
-/// M2.1 carries only the scalar variants (`Blank`, `Number`, `Bool`,
-/// `Error`); the kind queries for `Text`/`Array`/`Ref`/`Lambda` exist but
-/// always return false until those variants gain factories. All factories
-/// are `noexcept` and never allocate.
+/// Only the scalar variants (`Blank`, `Number`, `Bool`, `Error`) currently
+/// carry a factory; the kind queries for `Text`/`Array`/`Ref`/`Lambda`
+/// exist but always return false until those variants are implemented. All
+/// factories are `noexcept` and never allocate.
 ///
 /// Accessors (`as_number()`, `as_boolean()`, `as_error()`) are precondition-
 /// checked: invoking one on a mismatched kind aborts the process via
@@ -220,7 +221,7 @@ class Value {
   ValueKind kind() const noexcept { return kind_; }
 
   // Kind queries: one per variant. Queries for not-yet-implemented variants
-  // (`Text`, `Array`, `Ref`, `Lambda`) always return false at M2.1.
+  // (`Text`, `Array`, `Ref`, `Lambda`) always return false for now.
   bool is_blank() const noexcept { return kind_ == ValueKind::Blank; }
   bool is_number() const noexcept { return kind_ == ValueKind::Number; }
   bool is_boolean() const noexcept { return kind_ == ValueKind::Bool; }
@@ -243,7 +244,7 @@ class Value {
   ///
   /// Examples: `"Blank"`, `"Number(42)"`, `"Bool(true)"`,
   /// `"Error(#DIV/0!)"`. The exact number format is not load-bearing and
-  /// uses `std::to_string`; Excel-exact formatting lives in M4.
+  /// uses `std::to_string`; Excel-exact formatting is implemented separately.
   std::string debug_to_string() const;
 
   /// Value-level equality.
@@ -270,11 +271,11 @@ class Value {
   Payload data_;
 };
 
-// M2.1 `Value` is scalar-only. Keeping it trivially copyable means the
+// `Value` is currently scalar-only. Keeping it trivially copyable means the
 // evaluator can pass values by value through the VM stack and arg packs
 // without moves or allocations. This invariant must be revisited when
 // `Text`/`Array`/`Ref`/`Lambda` land.
-static_assert(std::is_trivially_copyable_v<Value>, "M2.1 Value is scalar-only and must be trivially copyable");
+static_assert(std::is_trivially_copyable_v<Value>, "Value is scalar-only and must be trivially copyable");
 
 // The payload is 8 bytes (double) + 1 byte tag; with natural alignment
 // the struct should fit in 16 bytes on every platform Formulon targets.

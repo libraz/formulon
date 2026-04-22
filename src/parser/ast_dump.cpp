@@ -30,8 +30,8 @@ void DumpInto(const AstNode& node, std::string& out);
 //     trailing dot trimmed.
 //
 // std::to_string is locale-dependent in principle but produces the C-locale
-// "1.234" form on every libc Formulon supports; we accept the dependency at
-// M2.3a and will swap in double-conversion when we need exact roundtripping.
+// "1.234" form on every libc Formulon supports; we accept the dependency
+// for now and will swap in double-conversion when we need exact roundtripping.
 void AppendNumber(std::string& out, double v) {
   if (std::isnan(v)) {
     out.append("nan");
@@ -93,8 +93,8 @@ void AppendValueLiteral(std::string& out, const Value& v) {
     case ValueKind::Array:
     case ValueKind::Ref:
     case ValueKind::Lambda:
-      // M2.3a only emits scalar Value literals from the parser. The remaining
-      // kinds are reserved for later milestones; treat them as opaque so the
+      // The parser currently only emits scalar Value literals. The remaining
+      // kinds are reserved for follow-up work; treat them as opaque so the
       // dumper still terminates if a future caller stuffs one into a Literal.
       out.append("(value ?)");
       return;

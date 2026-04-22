@@ -1,6 +1,6 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// Unit tests for the M2.1 scalar `Value`. The non-scalar variants
+// Unit tests for the scalar `Value`. The non-scalar variants
 // (Text/Array/Ref/Lambda) are intentionally out of scope here.
 
 #include "value.h"
@@ -122,7 +122,7 @@ TEST(ValueTest, ValueInequalityAcrossKinds) {
 TEST(ValueTest, DebugToStringFormats) {
   EXPECT_EQ("Blank", Value::blank().debug_to_string());
 
-  // Exact number formatting is not Excel-display-exact at M2.1; we only
+  // Exact number formatting is not Excel-display-exact here; we only
   // check the wrapper shape and that the payload appears.
   const std::string num = Value::number(42.0).debug_to_string();
   EXPECT_EQ(0u, num.find("Number("));

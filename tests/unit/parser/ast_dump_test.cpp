@@ -1,7 +1,7 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// Golden tests for `dump_sexpr`. These outputs become the M2.6 parser
-// corpus contract: every change here is a contract change.
+// Golden tests for `dump_sexpr`. These outputs become the parser corpus
+// contract: every change here is a contract change.
 
 #include "parser/ast_dump.h"
 
@@ -131,6 +131,44 @@ TEST(AstDumpRef, QuotedSheet) {
   r.row = 0;
   AstNode* n = make_ref(a, r);
   EXPECT_EQ(dump_sexpr(*n), "(ref 'Sheet 1'!A1)");
+}
+
+TEST(AstDumpRef, FullColumn) {
+  Arena a;
+  Reference r;
+  r.col = 0;
+  r.is_full_col = true;
+  AstNode* n = make_ref(a, r);
+  EXPECT_EQ(dump_sexpr(*n), "(ref A:A)");
+}
+
+TEST(AstDumpRef, FullColumnAbsolute) {
+  Arena a;
+  Reference r;
+  r.col = 0;
+  r.col_abs = true;
+  r.is_full_col = true;
+  AstNode* n = make_ref(a, r);
+  EXPECT_EQ(dump_sexpr(*n), "(ref $A:$A)");
+}
+
+TEST(AstDumpRef, FullRow) {
+  Arena a;
+  Reference r;
+  r.row = 0;
+  r.is_full_row = true;
+  AstNode* n = make_ref(a, r);
+  EXPECT_EQ(dump_sexpr(*n), "(ref 1:1)");
+}
+
+TEST(AstDumpRef, FullColumnSheetQualified) {
+  Arena a;
+  Reference r;
+  r.sheet = "Sheet1";
+  r.col = 0;
+  r.is_full_col = true;
+  AstNode* n = make_ref(a, r);
+  EXPECT_EQ(dump_sexpr(*n), "(ref Sheet1!A:A)");
 }
 
 // ---------------------------------------------------------------------------

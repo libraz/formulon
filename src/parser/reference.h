@@ -31,6 +31,12 @@ namespace parser {
 /// sheet. `sheet_quoted` is a hint for round-trip formatting only: it is set
 /// to `true` when the original source spelled the sheet name in single quotes
 /// (typically because the name contained spaces or other punctuation).
+///
+/// Whole-column (`A:A`) and whole-row (`1:1`) references are encoded by
+/// setting `is_full_col` or `is_full_row`. When `is_full_col` is true the
+/// `row`/`row_abs` fields are meaningless and `format_a1` emits `<col>:<col>`;
+/// when `is_full_row` is true the `col`/`col_abs` fields are meaningless and
+/// `format_a1` emits `<row>:<row>`. The two flags must never both be true.
 struct Reference {
   /// Sheet qualifier without surrounding quotes; empty when absent.
   std::string_view sheet;
@@ -44,6 +50,10 @@ struct Reference {
   bool col_abs = false;
   /// True if the row was prefixed with `$`.
   bool row_abs = false;
+  /// True iff this reference covers an entire column (e.g. `A:A`).
+  bool is_full_col = false;
+  /// True iff this reference covers an entire row (e.g. `1:1`).
+  bool is_full_row = false;
 };
 
 /// Formats `r` as canonical A1 syntax.

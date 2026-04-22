@@ -1,9 +1,10 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// Integration tests for the OOXML writer M1 slice. Each test round-trips the
-// byte stream produced by `Workbook::save()` through miniz and/or pugixml to
-// assert structural expectations: required parts are present, the XML is
-// well-formed, and sheet-name mutations propagate through to workbook.xml.
+// Integration tests for the OOXML writer empty-workbook slice. Each test
+// round-trips the byte stream produced by `Workbook::save()` through miniz
+// and/or pugixml to assert structural expectations: required parts are
+// present, the XML is well-formed, and sheet-name mutations propagate
+// through to workbook.xml.
 
 #include <cstddef>
 #include <cstdint>

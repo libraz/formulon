@@ -1,6 +1,6 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// M2.3a abstract syntax tree.
+// Parser abstract syntax tree.
 //
 // `AstNode` is the parser's tagged-union output. The 17 `NodeKind` variants
 // cover every Excel 365 surface construct: literals, references (including

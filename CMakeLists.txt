@@ -60,8 +60,9 @@ endif()
 # ---------------------------------------------------------------------------
 # Core object library (formulon_core)
 # ---------------------------------------------------------------------------
-# Only the StructuredLog translation unit is compiled at M1.2. The list will
-# grow as subsequent milestones land new modules.
+# Core source list. Currently limited to the utilities, value, workbook,
+# OOXML writer, and parser sources that have landed so far; new modules are
+# appended here as they are implemented.
 set(FORMULON_CORE_SOURCES
   src/utils/structured_log.cpp
   src/value.cpp
@@ -70,6 +71,7 @@ set(FORMULON_CORE_SOURCES
   src/parser/tokenizer.cpp
   src/parser/ast.cpp
   src/parser/ast_dump.cpp
+  src/parser/parser.cpp
 )
 
 add_library(formulon_core OBJECT ${FORMULON_CORE_SOURCES})
@@ -112,11 +114,11 @@ target_link_libraries(formulon_static
 
 # ---------------------------------------------------------------------------
 # CLI target (option kept ON by default, but the binary is not built until
-# M1.3 introduces tools/cli. Placeholder branch to stay honest with the
-# option contract.)
+# tools/cli lands. Placeholder branch to stay honest with the option
+# contract.)
 # ---------------------------------------------------------------------------
 if(FM_BUILD_CLI)
-  message(STATUS "Formulon: FM_BUILD_CLI=ON (CLI target wired in a later milestone)")
+  message(STATUS "Formulon: FM_BUILD_CLI=ON (CLI target not yet wired; placeholder)")
 endif()
 
 # ---------------------------------------------------------------------------

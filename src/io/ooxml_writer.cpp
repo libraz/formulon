@@ -1,10 +1,11 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// OOXML (.xlsx) package writer — M1 slice. Emits the minimum set of parts
-// required for Excel 365 to open the file as an empty workbook. The part
-// contents are hard-coded string templates with targeted substitutions for
-// sheet names and per-sheet sequence numbers; a full builder infrastructure
-// lands in M6 when cells, styles, shared strings and defined names arrive.
+// OOXML (.xlsx) package writer — empty-workbook slice. Emits the minimum
+// set of parts required for Excel 365 to open the file as an empty
+// workbook. The part contents are hard-coded string templates with
+// targeted substitutions for sheet names and per-sheet sequence numbers; a
+// full builder infrastructure will be added once cells, styles, shared
+// strings and defined names arrive.
 //
 // Design references:
 //   * backup/plans/04-xlsx-io.md §4.2 (package structure)

@@ -1,8 +1,8 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// Unit tests for the M2.2 tokenizer. Each group exercises a specific
-// syntactic family; see `backup/plans/02-calc-engine.md` §2.2 for the
-// authoritative token catalog.
+// Unit tests for the Excel formula tokenizer. Each group exercises a
+// specific syntactic family; see `backup/plans/02-calc-engine.md` §2.2
+// for the authoritative token catalog.
 //
 // Note on token lifetimes: `Token::text` (for String / SheetName) references
 // arena memory owned by the producing `Tokenizer`. Tests therefore keep the
@@ -319,8 +319,8 @@ TEST(TokenizerCellRefs, OverflowColumn) {
 }
 
 TEST(TokenizerCellRefs, ColumnOnlyBecomesIdents) {
-  // Documented M2.2 limitation: A:A is IDENT COLON IDENT, left for the
-  // parser to promote.
+  // Documented tokenizer limitation: A:A is IDENT COLON IDENT, left for
+  // the parser to promote.
   auto v = KindsOf("A:A");
   std::vector<TokenKind> expected = {TokenKind::Ident, TokenKind::Colon, TokenKind::Ident, TokenKind::Eof};
   EXPECT_EQ(v, expected);
@@ -431,7 +431,7 @@ TEST(TokenizerSpilledRangeOp, WithWhitespaceBecomesInvalid) {
   // Design decision: `A1 #` - the whitespace breaks spill-adjacency, so the
   // trailing `#` falls into the error-literal scanner and is flagged as
   // InvalidErrorLiteral. The parser layer may later relax this once the
-  // full spilled-range grammar is wired in (M2.3).
+  // full spilled-range grammar is wired in at the parser layer.
   Tokenizer tz("A1 #");
   const auto& v = tz.tokens();
   ASSERT_GE(v.size(), 3u);

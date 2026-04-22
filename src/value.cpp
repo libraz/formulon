@@ -1,6 +1,6 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// Out-of-line members of the M2.1 scalar `Value`. See `value.h` for the
+// Out-of-line members of the scalar `Value`. See `value.h` for the
 // class contract.
 
 #include "value.h"
@@ -68,7 +68,7 @@ bool operator==(const Value& a, const Value& b) noexcept {
     case ValueKind::Array:
     case ValueKind::Ref:
     case ValueKind::Lambda:
-      // Not yet reachable at M2.1: these kinds have no factory, so no
+      // Not yet reachable: these kinds have no factory yet, so no
       // `Value` ever carries them. Treat as equal (same unimplemented
       // state) to keep `operator==` total.
       return true;

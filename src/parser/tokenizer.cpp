@@ -1,12 +1,12 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// Implementation of the M2.2 Excel formula tokenizer. See the header for
+// Implementation of the Excel formula tokenizer. See the header for
 // the high-level contract. Key implementation choices:
 //
 //   * UTF-8 decoding is hand-rolled (no `<codecvt>` / ICU): we only need
 //     byte-length and UTF-16 code-unit count per codepoint.
-//   * Numbers go through `std::strtod` for M2; M4 swaps in `fast_float`
-//     once 1-bit Excel parity becomes mandatory.
+//   * Numbers currently go through `std::strtod`; this will be swapped for
+//     `fast_float` once 1-bit Excel parity becomes mandatory.
 //   * String / quoted-sheet-name escapes expand into the tokenizer's arena
 //     so token views remain stable for the lifetime of the tokenizer.
 //   * The spilled-range `#` operator is disambiguated from `#error!` by
@@ -207,8 +207,8 @@ bool Tokenizer::looks_like_cellref(std::string_view run, bool* letters_only) noe
     return false;
   }
   if (digits_len == 0) {
-    // Letter-only with an optional leading `$`: treated as identifier-like
-    // in M2.2. The caller re-emits as Ident.
+    // Letter-only with an optional leading `$`: treated as identifier-like.
+    // The caller re-emits as Ident.
     if (run[0] == '$' || run.back() == '$') {
       // `$A` or `A$` without digits is still malformed.
       return false;
@@ -904,8 +904,7 @@ void Tokenizer::scan_ident_or_cellref_or_bool() {
     }
     // Multi-byte: decode the whole codepoint and reject sentinels that are
     // not legitimately identifier-eligible (U+FEFF BOM, U+3000 full-width
-    // space). Every other codepoint >= 0x80 is accepted as ident-eligible
-    // for M2.2.
+    // space). Every other codepoint >= 0x80 is accepted as ident-eligible.
     const CodepointInfo info = peek_codepoint(byte_pos_);
     if (!info.valid) {
       break;

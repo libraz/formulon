@@ -1,10 +1,10 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// OOXML (.xlsx) package writer. The M1 slice of this writer only supports
-// empty workbooks — i.e. the output ZIP contains the minimum set of parts
-// that Excel 365 will open without complaint. Later milestones extend this
-// function in place with shared strings, styles, defined names, tables, and
-// the full cell store. See backup/plans/04-xlsx-io.md for the complete
+// OOXML (.xlsx) package writer. The current slice of this writer only
+// supports empty workbooks — i.e. the output ZIP contains the minimum set
+// of parts that Excel 365 will open without complaint. Shared strings,
+// styles, defined names, tables, and the full cell store extend this
+// function in place. See backup/plans/04-xlsx-io.md for the complete
 // contract.
 
 #ifndef FORMULON_IO_OOXML_WRITER_H_
@@ -22,7 +22,7 @@ namespace io {
 
 /// Serialises `wb` into an in-memory `.xlsx` byte stream.
 ///
-/// The M1 slice emits exactly six parts into a miniz-produced ZIP:
+/// The empty-workbook slice emits exactly six parts into a miniz-produced ZIP:
 ///
 ///   * `[Content_Types].xml`
 ///   * `_rels/.rels`

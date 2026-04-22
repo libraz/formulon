@@ -1,12 +1,12 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// M2.2 Excel formula tokenizer.
+// Excel formula tokenizer.
 //
 // The tokenizer consumes a UTF-8 formula source and emits a vector of
 // `Token` values terminated by a single `Eof` token. Errors do not halt
 // tokenization: each failure is recorded in `errors()` and the offending
 // run is either skipped or emitted as an `Invalid` token so the downstream
-// parser (M2.3) can still produce partial ASTs for diagnostic purposes.
+// Pratt parser can still produce partial ASTs for diagnostic purposes.
 //
 // Design notes (see `backup/plans/02-calc-engine.md` §2.2 and
 // `backup/plans/19-parser-errors.md` §19.4.3):

@@ -1,9 +1,9 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// M2.2 token representation.
+// Token representation.
 //
-// This header declares `TokenKind`, `TextRange`, and `Token`: the three types
-// that the Pratt parser (M2.3) consumes from the tokenizer (M2.2). The token
+// This header declares `TokenKind`, `TextRange`, and `Token`: the three
+// types that the Pratt parser consumes from the tokenizer. The token
 // catalog follows `backup/plans/02-calc-engine.md` §2.2; offsets use
 // UTF-16 code units so diagnostics drop directly into Monaco / CodeMirror 6
 // editors (see `backup/plans/19-parser-errors.md` §19.3).
