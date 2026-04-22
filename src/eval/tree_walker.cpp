@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "eval/coerce.h"
+#include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -214,7 +215,8 @@ Value apply_comparison(parser::BinOp op, const Value& lhs, const Value& rhs) {
 // Recursive evaluator
 // ---------------------------------------------------------------------------
 
-Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry);
+Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                const EvalContext& ctx);
 
 // ---------------------------------------------------------------------------
 // Lazy (short-circuit) function impls
@@ -229,12 +231,13 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
 // IF(cond, then, else?) - then is evaluated iff cond coerces to true; else
 // is evaluated iff cond coerces to false. When the third argument is
 // omitted Excel returns the boolean `FALSE` for the falsey path.
-Value eval_if_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry) {
+Value eval_if_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                   const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
   if (arity != 2 && arity != 3) {
     return Value::error(ErrorCode::Value);
   }
-  const Value cond = eval_node(call.as_call_arg(0), arena, registry);
+  const Value cond = eval_node(call.as_call_arg(0), arena, registry, ctx);
   if (cond.is_error()) {
     return cond;
   }
@@ -243,10 +246,10 @@ Value eval_if_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegi
     return Value::error(coerced.error());
   }
   if (coerced.value()) {
-    return eval_node(call.as_call_arg(1), arena, registry);
+    return eval_node(call.as_call_arg(1), arena, registry, ctx);
   }
   if (arity == 3) {
-    return eval_node(call.as_call_arg(2), arena, registry);
+    return eval_node(call.as_call_arg(2), arena, registry, ctx);
   }
   return Value::boolean(false);
 }
@@ -255,34 +258,36 @@ Value eval_if_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegi
 // error, in which case `fallback` is evaluated and returned. The fallback
 // subtree is NOT evaluated when `value` is non-error (true short-circuit).
 // If `fallback` itself raises an error it is propagated as-is.
-Value eval_iferror_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry) {
+Value eval_iferror_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx) {
   if (call.as_call_arity() != 2) {
     return Value::error(ErrorCode::Value);
   }
-  const Value primary = eval_node(call.as_call_arg(0), arena, registry);
+  const Value primary = eval_node(call.as_call_arg(0), arena, registry, ctx);
   if (!primary.is_error()) {
     return primary;
   }
-  return eval_node(call.as_call_arg(1), arena, registry);
+  return eval_node(call.as_call_arg(1), arena, registry, ctx);
 }
 
 // IFNA(value, fallback) - returns `value` unchanged unless it is exactly
 // `#N/A`, in which case `fallback` is evaluated and returned. All other
 // errors (including `#DIV/0!`, `#REF!`, `#VALUE!`, `#NAME?`) propagate as
 // `value`. The fallback subtree is NOT evaluated unless the trigger fires.
-Value eval_ifna_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry) {
+Value eval_ifna_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx) {
   if (call.as_call_arity() != 2) {
     return Value::error(ErrorCode::Value);
   }
-  const Value primary = eval_node(call.as_call_arg(0), arena, registry);
+  const Value primary = eval_node(call.as_call_arg(0), arena, registry, ctx);
   if (!(primary.is_error() && primary.as_error() == ErrorCode::NA)) {
     return primary;
   }
-  return eval_node(call.as_call_arg(1), arena, registry);
+  return eval_node(call.as_call_arg(1), arena, registry, ctx);
 }
 
 using LazyImpl = Value (*)(const parser::AstNode& call, Arena& arena,
-                           const FunctionRegistry& registry);
+                           const FunctionRegistry& registry, const EvalContext& ctx);
 
 struct LazyEntry {
   const char* name;  // canonical UPPERCASE
@@ -315,38 +320,84 @@ const LazyEntry* find_lazy(std::string_view name) noexcept {
 // runs, but an entry whose `propagate_errors` flag is `false` (the IS*
 // type-predicate family) opts out of that short-circuit and receives raw
 // error values among its arguments.
-Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry) {
+Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                    const EvalContext& ctx) {
   const std::string_view name = node.as_call_name();
   const std::uint32_t arity = node.as_call_arity();
 
   if (const LazyEntry* lazy = find_lazy(name); lazy != nullptr) {
-    return lazy->impl(node, arena, registry);
+    return lazy->impl(node, arena, registry, ctx);
   }
 
   const FunctionDef* def = registry.lookup(name);
   if (def == nullptr) {
     return Value::error(ErrorCode::Name);
   }
+  // The pre-expansion arity guards min_arity / max_arity. This happens to
+  // align with Excel's behaviour for the range-aware aggregators:
+  // `=SUM()` is rejected at parse time, and `=SUM(A1:A1)` passes the
+  // `min_arity = 1` check even though its expansion might be empty (which
+  // cannot happen with a finite valid rectangle today).
   if (arity < def->min_arity || arity > def->max_arity) {
     return Value::error(ErrorCode::Value);
   }
 
   // Pre-evaluate arguments left-to-right. By default the first error wins
   // and the impl is never invoked; functions that need to inspect error
-  // arguments (e.g. `ISERROR`) clear `propagate_errors` to opt out.
+  // arguments (e.g. `ISERROR`) clear `propagate_errors` to opt out. When
+  // the function is range-aware (`accepts_ranges`), any argument whose AST
+  // node is a simple RangeOp (Ref:Ref) is flattened into the values vector
+  // in row-major order.
   std::vector<Value> values;
   values.reserve(arity);
   for (std::uint32_t i = 0; i < arity; ++i) {
-    Value v = eval_node(node.as_call_arg(i), arena, registry);
+    const parser::AstNode& arg_node = node.as_call_arg(i);
+    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::RangeOp) {
+      const parser::AstNode& lhs_ast = arg_node.as_range_lhs();
+      const parser::AstNode& rhs_ast = arg_node.as_range_rhs();
+      // Only the simplest form -- literal A1:B2 where both endpoints are
+      // Refs -- is expanded. Anything else (INDIRECT(...), named ranges,
+      // etc.) surfaces as #REF! here; full dynamic range resolution is
+      // deferred.
+      if (lhs_ast.kind() != parser::NodeKind::Ref ||
+          rhs_ast.kind() != parser::NodeKind::Ref) {
+        const Value err = Value::error(ErrorCode::Ref);
+        if (def->propagate_errors) {
+          return err;
+        }
+        values.push_back(err);
+        continue;
+      }
+      auto expanded = ctx.expand_range(lhs_ast.as_ref(), rhs_ast.as_ref(), arena, registry);
+      if (!expanded) {
+        const Value err = Value::error(expanded.error());
+        if (def->propagate_errors) {
+          return err;
+        }
+        values.push_back(err);
+        continue;
+      }
+      for (const Value& v : expanded.value()) {
+        if (def->propagate_errors && v.is_error()) {
+          return v;
+        }
+        values.push_back(v);
+      }
+      continue;
+    }
+    Value v = eval_node(arg_node, arena, registry, ctx);
     if (def->propagate_errors && v.is_error()) {
       return v;
     }
     values.push_back(v);
   }
-  return def->impl(values.data(), arity, arena);
+  // Hand the post-expansion size to the impl; aggregator bodies walk the
+  // flattened vector directly.
+  return def->impl(values.data(), static_cast<std::uint32_t>(values.size()), arena);
 }
 
-Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry) {
+Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                const EvalContext& ctx) {
   switch (node.kind()) {
     case parser::NodeKind::Literal:
       return node.as_literal();
@@ -362,20 +413,20 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
     case parser::NodeKind::ImplicitIntersection:
       // Identity for scalars. Once arrays land this becomes the contraction
       // operator (1x1 selection from a column / row at the call site).
-      return eval_node(node.as_implicit_intersection_operand(), arena, registry);
+      return eval_node(node.as_implicit_intersection_operand(), arena, registry, ctx);
 
     case parser::NodeKind::UnaryOp:
-      return apply_unary(node.as_unary_op(), eval_node(node.as_unary_operand(), arena, registry));
+      return apply_unary(node.as_unary_op(), eval_node(node.as_unary_operand(), arena, registry, ctx));
 
     case parser::NodeKind::BinaryOp: {
       const parser::BinOp op = node.as_binary_op();
       // Evaluate left first so error propagation honours the documented
       // left-most-wins rule from backup/plans/02-calc-engine.md §2.1.1.
-      const Value lhs = eval_node(node.as_binary_lhs(), arena, registry);
+      const Value lhs = eval_node(node.as_binary_lhs(), arena, registry, ctx);
       if (lhs.is_error()) {
         return lhs;
       }
-      const Value rhs = eval_node(node.as_binary_rhs(), arena, registry);
+      const Value rhs = eval_node(node.as_binary_rhs(), arena, registry, ctx);
       if (rhs.is_error()) {
         return rhs;
       }
@@ -410,10 +461,12 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
     }
 
     case parser::NodeKind::Call:
-      return dispatch_call(node, arena, registry);
+      return dispatch_call(node, arena, registry, ctx);
+
+    case parser::NodeKind::Ref:
+      return ctx.resolve_ref(node.as_ref(), arena, registry);
 
     // -- Unsupported: name resolution / closures --------------------------
-    case parser::NodeKind::Ref:
     case parser::NodeKind::ExternalRef:
     case parser::NodeKind::StructuredRef:
     case parser::NodeKind::NameRef:
@@ -435,11 +488,16 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
 }  // namespace
 
 Value evaluate(const parser::AstNode& node, Arena& arena) {
-  return evaluate(node, arena, default_registry());
+  return evaluate(node, arena, default_registry(), EvalContext{});
 }
 
 Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry) {
-  return eval_node(node, arena, registry);
+  return evaluate(node, arena, registry, EvalContext{});
+}
+
+Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+               const EvalContext& ctx) {
+  return eval_node(node, arena, registry, ctx);
 }
 
 }  // namespace eval

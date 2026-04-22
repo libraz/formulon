@@ -11,6 +11,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include "sheet.h"
@@ -47,6 +49,21 @@ class Workbook {
   /// Mutable access to the sheet at `index`. `index` must be `<
   /// sheet_count()`.
   Sheet& sheet(std::size_t index) { return sheets_[index]; }
+
+  /// Appends a new sheet with display name `name` and returns a reference to
+  /// it. The Workbook retains ownership and returned references are
+  /// invalidated by subsequent `add_sheet` calls (which may reallocate the
+  /// underlying vector). Duplicate names are not rejected at this layer;
+  /// OOXML-level name validation lives at the I/O boundary.
+  Sheet& add_sheet(std::string name);
+
+  /// Case-insensitive lookup by display name. Matches using
+  /// `strings::case_insensitive_eq` (ASCII-fold), so `"SHEET2"` and
+  /// `"Sheet2"` locate the same sheet — consistent with Excel's
+  /// case-insensitive sheet-name semantics. Returns `nullptr` when no sheet
+  /// matches. A linear scan is used; workbooks typically carry O(1)–O(10)
+  /// sheets, so a hash index is premature.
+  const Sheet* sheet_by_name(std::string_view name) const noexcept;
 
   /// Serialises the workbook to an in-memory `.xlsx` byte stream. Delegates
   /// to `io::write_ooxml`; see that function's documentation for the exact

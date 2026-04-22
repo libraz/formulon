@@ -15,6 +15,14 @@
 // inline arrays. Once the surrounding infrastructure exists the evaluator
 // will be extended; the public API here is intentionally minimal so that
 // promotion will be a strict superset.
+//
+// `NodeKind::Ref` resolution is delegated to an `EvalContext`: when a
+// context bound to a sheet is supplied, local A1 references resolve to the
+// target cell's cached value (or to the appropriate Excel error sentinel
+// per `EvalContext::resolve_ref`). The one- and two-argument overloads
+// construct a default `EvalContext{}` with no bound sheet, so unqualified
+// references still surface as `#NAME?` — preserving the prior observable
+// behaviour of callers that have not yet wired a context in.
 
 #ifndef FORMULON_EVAL_TREE_WALKER_H_
 #define FORMULON_EVAL_TREE_WALKER_H_
@@ -27,6 +35,7 @@ namespace formulon {
 namespace eval {
 
 class FunctionRegistry;
+class EvalContext;
 
 /// Evaluates the AST `node` to a scalar `Value` using the process-wide
 /// default function registry.
@@ -53,6 +62,14 @@ Value evaluate(const parser::AstNode& node, Arena& arena);
 /// for function dispatch. Useful for tests that want to inject a custom or
 /// minimal function set.
 Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry);
+
+/// Full evaluate: caller supplies both the function registry and an
+/// `EvalContext`. The context anchors local A1 references (see
+/// `EvalContext::resolve_ref` for the resolution rules). When the context
+/// is unbound, references continue to surface as `#NAME?` exactly as the
+/// shorter overloads do.
+Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+               const EvalContext& ctx);
 
 }  // namespace eval
 }  // namespace formulon

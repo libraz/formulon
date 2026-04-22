@@ -13,8 +13,12 @@
 #include <string_view>
 
 #include "gtest/gtest.h"
+#include "eval/eval_context.h"
+#include "eval/eval_state.h"
+#include "eval/function_registry.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "sheet.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -391,6 +395,351 @@ TEST(TreeWalkerIntersection, AtIsIdentityForScalar) {
   const Value v = EvalSource("=@1");
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 1.0);
+}
+
+// ---------------------------------------------------------------------------
+// Reference resolution via `EvalContext`
+// ---------------------------------------------------------------------------
+
+// Mirrors `EvalSource` but binds an `EvalContext` to `sheet` so local A1
+// references in `src` resolve against the supplied sheet.
+Value EvalInSheet(const Sheet& sheet, std::string_view src) {
+  static thread_local Arena parse_arena;
+  static thread_local Arena eval_arena;
+  parse_arena.reset();
+  eval_arena.reset();
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  EvalContext ctx(sheet);
+  return evaluate(*root, eval_arena, default_registry(), ctx);
+}
+
+TEST(TreeWalkerRefs, LiteralCellPlusOne) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(41.0));
+  const Value v = EvalInSheet(sheet, "=A1+1");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 42.0);
+}
+
+TEST(TreeWalkerRefs, EmptyCellPlusOne) {
+  Sheet sheet("Sheet1");
+  const Value v = EvalInSheet(sheet, "=A1+1");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1.0);
+}
+
+TEST(TreeWalkerRefs, TwoCellSum) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(10.0));
+  sheet.set_cell_value(0, 1, Value::number(32.0));
+  const Value v = EvalInSheet(sheet, "=A1+B1");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 42.0);
+}
+
+TEST(TreeWalkerRefs, TextCellCoercedInArithmetic) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::text("5"));
+  const Value v = EvalInSheet(sheet, "=A1+1");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 6.0);
+}
+
+TEST(TreeWalkerRefs, TextCellConcatenation) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::text("hi"));
+  const Value v = EvalInSheet(sheet, "=A1&\"!\"");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "hi!");
+}
+
+TEST(TreeWalkerRefs, BoolCellInArithmetic) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::boolean(true));
+  const Value v = EvalInSheet(sheet, "=A1+1");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 2.0);
+}
+
+TEST(TreeWalkerRefs, ErrorCellPropagates) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::error(ErrorCode::Div0));
+  const Value v = EvalInSheet(sheet, "=A1+1");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+TEST(TreeWalkerRefs, CrossSheetReturnsRef) {
+  Sheet sheet("Sheet1");
+  const Value v = EvalInSheet(sheet, "=Sheet2!A1");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+TEST(TreeWalkerRefs, WholeColumnReturnsValue) {
+  Sheet sheet("Sheet1");
+  const Value v = EvalInSheet(sheet, "=A:A");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(TreeWalkerRefs, RefInIfBranch) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(7.0));
+  const Value v = EvalInSheet(sheet, "=IF(TRUE,A1,0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 7.0);
+}
+
+TEST(TreeWalkerRefs, RefInSumCall) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(3.0));
+  const Value v = EvalInSheet(sheet, "=SUM(A1,4)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 7.0);
+}
+
+TEST(TreeWalkerRefs, NoContextStillNameError) {
+  // The legacy two-arg overload must continue to surface #NAME? for any ref,
+  // since its default context has no bound sheet.
+  Arena parse_arena;
+  Arena eval_arena;
+  parser::Parser p("=A1+1", parse_arena);
+  parser::AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  const Value v = evaluate(*root, eval_arena, default_registry());
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+}
+
+// ---------------------------------------------------------------------------
+// Recursive formula-cell evaluation through the full pipeline
+// ---------------------------------------------------------------------------
+
+// Parses `src` and evaluates it through the full pipeline with a bound
+// `EvalState`, so any reference to a formula cell in `sheet` recurses into
+// the target cell's `formula_text`.
+Value EvalInSheetWithState(const Sheet& sheet, std::string_view src) {
+  static thread_local Arena parse_arena;
+  static thread_local Arena eval_arena;
+  parse_arena.reset();
+  eval_arena.reset();
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  EvalState state;
+  const EvalContext ctx(sheet, state);
+  return evaluate(*root, eval_arena, default_registry(), ctx);
+}
+
+TEST(TreeWalkerFormulaRefs, FormulaCellInArithmetic) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_formula(0, 0, "=10");
+  const Value v = EvalInSheetWithState(sheet, "=A1+32");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 42.0);
+}
+
+TEST(TreeWalkerFormulaRefs, ChainedFormulasInSum) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(5.0));
+  sheet.set_cell_formula(1, 0, "=A1+1");
+  sheet.set_cell_formula(2, 0, "=A2*2");
+  const Value v = EvalInSheetWithState(sheet, "=A3+1");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 13.0);
+}
+
+TEST(TreeWalkerFormulaRefs, CycleInFormulaResolvesToRef) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_formula(0, 0, "=A1+1");
+  const Value v = EvalInSheetWithState(sheet, "=A1");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+TEST(TreeWalkerFormulaRefs, FormulaErrorPropagatesThroughArith) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_formula(0, 0, "=1/0");
+  const Value v = EvalInSheetWithState(sheet, "=A1+1");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+TEST(TreeWalkerFormulaRefs, FormulaTextResultConcat) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_formula(0, 0, "=\"hi\"");
+  const Value v = EvalInSheetWithState(sheet, "=A1&\"!\"");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "hi!");
+}
+
+// ---------------------------------------------------------------------------
+// RangeOp argument expansion in aggregator calls
+// ---------------------------------------------------------------------------
+
+TEST(TreeWalkerRanges, SumThreeCellColumn) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(1, 0, Value::number(2.0));
+  sheet.set_cell_value(2, 0, Value::number(3.0));
+  const Value v = EvalInSheet(sheet, "=SUM(A1:A3)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 6.0);
+}
+
+TEST(TreeWalkerRanges, SumTwoByTwo) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(0, 1, Value::number(2.0));
+  sheet.set_cell_value(1, 0, Value::number(3.0));
+  sheet.set_cell_value(1, 1, Value::number(4.0));
+  const Value v = EvalInSheet(sheet, "=SUM(A1:B2)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 10.0);
+}
+
+TEST(TreeWalkerRanges, SumWithBlankInMiddle) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(5.0));
+  // A2 is intentionally blank; SUM treats blank as 0.
+  sheet.set_cell_value(2, 0, Value::number(7.0));
+  const Value v = EvalInSheet(sheet, "=SUM(A1:A3)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 12.0);
+}
+
+TEST(TreeWalkerRanges, AverageOverThree) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(3.0));
+  // A2 is blank -> coerced to 0 in the total, but still counts toward the
+  // divisor. NOTE: diverges from Excel; documented divergence.
+  sheet.set_cell_value(2, 0, Value::number(9.0));
+  const Value v = EvalInSheet(sheet, "=AVERAGE(A1:A3)");
+  ASSERT_TRUE(v.is_number());
+  // NOTE: diverges from Excel; documented divergence. Excel skips the blank
+  // cell and yields 6.0 (average of 3 and 9); Formulon divides by 3.
+  EXPECT_EQ(v.as_number(), 4.0);
+}
+
+TEST(TreeWalkerRanges, MinOverThree) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(5.0));
+  sheet.set_cell_value(1, 0, Value::number(-1.0));
+  sheet.set_cell_value(2, 0, Value::number(3.0));
+  const Value v = EvalInSheet(sheet, "=MIN(A1:A3)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), -1.0);
+}
+
+TEST(TreeWalkerRanges, MaxOverThree) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(5.0));
+  sheet.set_cell_value(1, 0, Value::number(-1.0));
+  sheet.set_cell_value(2, 0, Value::number(9.0));
+  const Value v = EvalInSheet(sheet, "=MAX(A1:A3)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 9.0);
+}
+
+TEST(TreeWalkerRanges, ProductOverThree) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(2.0));
+  sheet.set_cell_value(1, 0, Value::number(3.0));
+  sheet.set_cell_value(2, 0, Value::number(4.0));
+  const Value v = EvalInSheet(sheet, "=PRODUCT(A1:A3)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 24.0);
+}
+
+TEST(TreeWalkerRanges, MixedRangeAndScalar) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(1, 0, Value::number(2.0));
+  sheet.set_cell_value(2, 0, Value::number(3.0));
+  sheet.set_cell_value(0, 1, Value::number(10.0));
+  const Value v = EvalInSheet(sheet, "=SUM(A1:A3, B1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 16.0);
+}
+
+TEST(TreeWalkerRanges, ErrorCellPropagates) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(1, 0, Value::error(ErrorCode::Div0));
+  sheet.set_cell_value(2, 0, Value::number(3.0));
+  const Value v = EvalInSheet(sheet, "=SUM(A1:A3)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+TEST(TreeWalkerRanges, TextCellInRangeYieldsValue) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(1, 0, Value::text("hello"));
+  sheet.set_cell_value(2, 0, Value::number(3.0));
+  // NOTE: diverges from Excel; Excel skips text cells inside a range.
+  // Formulon coerces every expanded cell via `coerce_to_number`, so a text
+  // cell that cannot parse as a number surfaces #VALUE!.
+  const Value v = EvalInSheet(sheet, "=SUM(A1:A3)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(TreeWalkerRanges, CrossSheetRangeReturnsRef) {
+  Sheet sheet("Sheet1");
+  const Value v = EvalInSheet(sheet, "=SUM(Sheet2!A1:A3)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+TEST(TreeWalkerRanges, WholeColumnRangeReturnsValue) {
+  Sheet sheet("Sheet1");
+  const Value v = EvalInSheet(sheet, "=SUM(A:A)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(TreeWalkerRanges, ReversedRangeSameResult) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(1, 0, Value::number(2.0));
+  sheet.set_cell_value(2, 0, Value::number(3.0));
+  const Value forward = EvalInSheet(sheet, "=SUM(A1:A3)");
+  const Value reversed = EvalInSheet(sheet, "=SUM(A3:A1)");
+  ASSERT_TRUE(forward.is_number());
+  ASSERT_TRUE(reversed.is_number());
+  EXPECT_EQ(reversed.as_number(), forward.as_number());
+}
+
+TEST(TreeWalkerRanges, RangeInNonAggregatorStillValue) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(1, 0, Value::number(2.0));
+  // LEN is not range-aware; its RangeOp argument still surfaces #VALUE!.
+  const Value v = EvalInSheet(sheet, "=LEN(A1:A3)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(TreeWalkerRanges, CycleViaAggregator_ReturnsRef) {
+  Sheet sheet("Sheet1");
+  // A1 aggregates a range that includes itself; EvalState catches the
+  // re-entry on A1 and surfaces #REF!.
+  sheet.set_cell_formula(0, 0, "=SUM(A1:A3)");
+  sheet.set_cell_value(1, 0, Value::number(2.0));
+  sheet.set_cell_value(2, 0, Value::number(3.0));
+  const Value v = EvalInSheetWithState(sheet, "=A1");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
 }  // namespace

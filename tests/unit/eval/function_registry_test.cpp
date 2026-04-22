@@ -117,6 +117,31 @@ TEST(FunctionRegistry, DefaultRegistryIsNonEmpty) {
   EXPECT_GT(r.size(), 0u);
 }
 
+TEST(FunctionRegistry, DefaultAcceptsRangesFalse) {
+  // A bare FunctionDef defaults to non-range-aware; only explicitly
+  // opted-in entries should see range expansion in the dispatcher.
+  FunctionRegistry r;
+  ASSERT_TRUE(r.register_function(FunctionDef{"FOO", 0u, kVariadic, &StubImpl}));
+  const FunctionDef* def = r.lookup("FOO");
+  ASSERT_NE(def, nullptr);
+  EXPECT_FALSE(def->accepts_ranges);
+}
+
+TEST(FunctionRegistry, AggregatorsOptIntoRangeExpansion) {
+  // The five aggregators wired in `builtins.cpp` are the only built-ins
+  // that accept RangeOp arguments.
+  const FunctionRegistry& r = default_registry();
+  for (const char* name : {"SUM", "AVERAGE", "MIN", "MAX", "PRODUCT"}) {
+    const FunctionDef* def = r.lookup(name);
+    ASSERT_NE(def, nullptr) << name;
+    EXPECT_TRUE(def->accepts_ranges) << name;
+  }
+  // A representative non-aggregator stays scalar-only.
+  const FunctionDef* len = r.lookup("LEN");
+  ASSERT_NE(len, nullptr);
+  EXPECT_FALSE(len->accepts_ranges);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

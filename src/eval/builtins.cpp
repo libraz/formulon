@@ -1320,7 +1320,13 @@ Value T(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 }  // namespace
 
 void register_builtins(FunctionRegistry& registry) {
-  registry.register_function(FunctionDef{"SUM", 1u, kVariadic, &Sum});
+  {
+    // SUM is range-aware: `=SUM(A1:A100)` expands the rectangle into scalar
+    // cell values before this impl runs.
+    FunctionDef def{"SUM", 1u, kVariadic, &Sum};
+    def.accepts_ranges = true;
+    registry.register_function(def);
+  }
   registry.register_function(FunctionDef{"CONCAT", 1u, kVariadic, &Concat});
   // CONCATENATE is the legacy spelling kept by Excel for compatibility; it
   // shares the implementation with CONCAT.
@@ -1348,11 +1354,29 @@ void register_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"ROUNDDOWN", 2u, 2u, &RoundDown});
   registry.register_function(FunctionDef{"ROUNDUP", 2u, 2u, &RoundUp});
 
-  // Aggregates (min_arity = 1, variadic).
-  registry.register_function(FunctionDef{"MIN", 1u, kVariadic, &Min});
-  registry.register_function(FunctionDef{"MAX", 1u, kVariadic, &Max});
-  registry.register_function(FunctionDef{"AVERAGE", 1u, kVariadic, &Average});
-  registry.register_function(FunctionDef{"PRODUCT", 1u, kVariadic, &Product});
+  // Aggregates (min_arity = 1, variadic). Each is range-aware: a RangeOp
+  // argument is flattened into scalar cell values by the dispatcher before
+  // the impl runs.
+  {
+    FunctionDef def{"MIN", 1u, kVariadic, &Min};
+    def.accepts_ranges = true;
+    registry.register_function(def);
+  }
+  {
+    FunctionDef def{"MAX", 1u, kVariadic, &Max};
+    def.accepts_ranges = true;
+    registry.register_function(def);
+  }
+  {
+    FunctionDef def{"AVERAGE", 1u, kVariadic, &Average};
+    def.accepts_ranges = true;
+    registry.register_function(def);
+  }
+  {
+    FunctionDef def{"PRODUCT", 1u, kVariadic, &Product};
+    def.accepts_ranges = true;
+    registry.register_function(def);
+  }
 
   // Exponential / logarithmic / trigonometric.
   registry.register_function(FunctionDef{"EXP", 1u, 1u, &Exp});

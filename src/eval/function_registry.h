@@ -51,6 +51,21 @@ struct FunctionDef {
   /// (`ISERROR`, `ISERR`, `ISNA`, `ISNUMBER`, `ISTEXT`, `ISBLANK`,
   /// `ISLOGICAL`), which must be able to inspect error-typed inputs.
   bool propagate_errors = true;
+
+  /// When true, the dispatcher in `tree_walker` expands any argument whose
+  /// AST is `NodeKind::RangeOp` by walking the referenced rectangle on the
+  /// bound sheet and flattening the cell values (row-major) into the args
+  /// vector. When false, a RangeOp argument evaluates to `#VALUE!` as
+  /// before. Only simple literal ranges (Ref:Ref) are expanded; any other
+  /// RangeOp shape (e.g. INDIRECT-produced) surfaces as `#REF!`.
+  ///
+  /// The aggregator impls that opt in (`SUM`, `AVERAGE`, `MIN`, `MAX`,
+  /// `PRODUCT`) treat every expanded cell value through the scalar coercion
+  /// helpers, so range cells containing text or booleans behave like their
+  /// literal-argument counterparts. This diverges from Excel, which skips
+  /// text / bool cells when they appear inside a range; the range-vs-direct
+  /// semantic split is deferred.
+  bool accepts_ranges = false;
 };
 
 /// Case-insensitive function lookup table. Names are stored UPPERCASE

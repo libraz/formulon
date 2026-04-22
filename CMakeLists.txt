@@ -67,6 +67,7 @@ set(FORMULON_CORE_SOURCES
   src/utils/double_format.cpp
   src/utils/structured_log.cpp
   src/value.cpp
+  src/sheet.cpp
   src/workbook.cpp
   src/io/ooxml_writer.cpp
   src/parser/tokenizer.cpp
@@ -79,6 +80,8 @@ set(FORMULON_CORE_SOURCES
   src/eval/function_registry.cpp
   src/eval/builtins.cpp
   src/eval/tree_walker.cpp
+  src/eval/eval_context.cpp
+  src/eval/eval_state.cpp
 )
 
 add_library(formulon_core OBJECT ${FORMULON_CORE_SOURCES})

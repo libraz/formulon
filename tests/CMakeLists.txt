@@ -14,6 +14,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/strings_test.cpp
   unit/arena_test.cpp
   unit/value_test.cpp
+  unit/sheet_test.cpp
   unit/workbook_test.cpp
   unit/utils/double_format_test.cpp
   unit/deps/miniz_smoke_test.cpp
@@ -24,6 +25,9 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/parser/parser_test.cpp
   unit/parser/parser_error_test.cpp
   unit/eval/tree_walker_test.cpp
+  unit/eval/eval_context_test.cpp
+  unit/eval/eval_state_test.cpp
+  unit/eval/cross_sheet_test.cpp
   unit/eval/utf8_length_test.cpp
   unit/eval/function_registry_test.cpp
   unit/eval/builtins_test.cpp
