@@ -38,12 +38,34 @@ option(FM_ENABLE_PTHREAD      "Enable multithreaded recalc" ON)
 include(FormulonWarnings)
 
 # ---------------------------------------------------------------------------
+# Third-party dependencies (see backup/plans/06-build-packaging.md)
+# ---------------------------------------------------------------------------
+# miniz and pugixml are engine dependencies required by OOXML/XLSB I/O.
+# When FM_USE_SYSTEM_DEPS=ON we expect system packages; otherwise we vendor
+# via FetchContent (default).
+if(FM_USE_SYSTEM_DEPS)
+  find_package(miniz   CONFIG REQUIRED)
+  find_package(pugixml CONFIG REQUIRED)
+  if(NOT TARGET formulon::miniz AND TARGET miniz::miniz)
+    add_library(formulon::miniz ALIAS miniz::miniz)
+  endif()
+  if(NOT TARGET formulon::pugixml AND TARGET pugixml::pugixml)
+    add_library(formulon::pugixml ALIAS pugixml::pugixml)
+  endif()
+else()
+  include(cmake/FetchMiniz.cmake)
+  include(cmake/FetchPugixml.cmake)
+endif()
+
+# ---------------------------------------------------------------------------
 # Core object library (formulon_core)
 # ---------------------------------------------------------------------------
 # Only the StructuredLog translation unit is compiled at M1.2. The list will
 # grow as subsequent milestones land new modules.
 set(FORMULON_CORE_SOURCES
   src/utils/structured_log.cpp
+  src/workbook.cpp
+  src/io/ooxml_writer.cpp
 )
 
 add_library(formulon_core OBJECT ${FORMULON_CORE_SOURCES})
@@ -51,6 +73,15 @@ add_library(formulon_core OBJECT ${FORMULON_CORE_SOURCES})
 target_include_directories(formulon_core
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+)
+
+# Engine core depends on miniz (zip/deflate) and pugixml (XML). Link PUBLIC
+# so downstream targets (formulon_static, tests, CLI) inherit include dirs
+# and transitive link requirements.
+target_link_libraries(formulon_core
+  PUBLIC
+    formulon::miniz
+    formulon::pugixml
 )
 
 formulon_apply_warnings(formulon_core)
@@ -63,6 +94,14 @@ add_library(formulon_static STATIC $<TARGET_OBJECTS:formulon_core>)
 target_include_directories(formulon_static
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+)
+
+# $<TARGET_OBJECTS:...> does not propagate usage requirements, so replicate
+# the third-party link dependencies here for downstream consumers.
+target_link_libraries(formulon_static
+  PUBLIC
+    formulon::miniz
+    formulon::pugixml
 )
 
 # No per-target warning flags: formulon_static only aggregates objects.
