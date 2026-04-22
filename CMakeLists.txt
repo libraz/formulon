@@ -64,8 +64,10 @@ endif()
 # grow as subsequent milestones land new modules.
 set(FORMULON_CORE_SOURCES
   src/utils/structured_log.cpp
+  src/value.cpp
   src/workbook.cpp
   src/io/ooxml_writer.cpp
+  src/parser/tokenizer.cpp
 )
 
 add_library(formulon_core OBJECT ${FORMULON_CORE_SOURCES})

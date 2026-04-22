@@ -13,9 +13,11 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/structured_log_test.cpp
   unit/strings_test.cpp
   unit/arena_test.cpp
+  unit/value_test.cpp
   unit/workbook_test.cpp
   unit/deps/miniz_smoke_test.cpp
   unit/deps/pugixml_smoke_test.cpp
+  unit/parser/tokenizer_test.cpp
 )
 
 add_executable(formulon_unit_tests ${FORMULON_UNIT_TEST_SOURCES})
