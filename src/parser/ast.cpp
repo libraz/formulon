@@ -65,6 +65,13 @@ AstNode* make_literal(Arena& arena, Value v) {
     return nullptr;
   }
   n->kind_ = NodeKind::Literal;
+  // Re-intern Text payloads so the AST owns the byte storage independently of
+  // the caller's source (e.g. a Tokenizer arena scoped to Parser::parse()).
+  // This matches the pattern used by every other factory below
+  // (make_ref, make_call, make_name_ref, etc.).
+  if (v.kind() == ValueKind::Text) {
+    v = Value::text(arena.intern(v.as_text()));
+  }
   n->data_.literal = v;
   return n;
 }

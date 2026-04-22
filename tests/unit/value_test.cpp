@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <limits>
 #include <string>
+#include <string_view>
 
 #include "gtest/gtest.h"
 
@@ -109,6 +110,52 @@ TEST(ValueTest, ValueEqualityWithinSameKind) {
   EXPECT_NE(Value::error(ErrorCode::Div0), Value::error(ErrorCode::Value));
 }
 
+TEST(ValueTest, TextFactoryRoundTrip) {
+  Value v = Value::text("hello");
+  EXPECT_EQ(ValueKind::Text, v.kind());
+  EXPECT_TRUE(v.is_text());
+  EXPECT_FALSE(v.is_blank());
+  EXPECT_FALSE(v.is_number());
+  EXPECT_FALSE(v.is_boolean());
+  EXPECT_FALSE(v.is_error());
+  EXPECT_EQ(std::string_view("hello"), v.as_text());
+}
+
+TEST(ValueTest, TextFactoryEmpty) {
+  Value v = Value::text("");
+  EXPECT_EQ(ValueKind::Text, v.kind());
+  EXPECT_TRUE(v.is_text());
+  EXPECT_EQ(std::string_view(""), v.as_text());
+  EXPECT_TRUE(v.as_text().empty());
+}
+
+TEST(ValueTest, TextEqualitySameContent) {
+  EXPECT_EQ(Value::text("abc"), Value::text("abc"));
+  EXPECT_EQ(Value::text(""), Value::text(""));
+}
+
+TEST(ValueTest, TextEqualityDifferentContent) {
+  EXPECT_NE(Value::text("abc"), Value::text("abd"));
+  EXPECT_NE(Value::text("abc"), Value::text("ab"));
+  EXPECT_NE(Value::text(""), Value::text("a"));
+}
+
+TEST(ValueTest, TextEqualityDifferentKind) {
+  EXPECT_NE(Value::text(""), Value::blank());
+  EXPECT_NE(Value::text("0"), Value::number(0.0));
+  EXPECT_NE(Value::text("TRUE"), Value::boolean(true));
+  EXPECT_NE(Value::text("#DIV/0!"), Value::error(ErrorCode::Div0));
+}
+
+TEST(ValueTest, TextDebugToStringQuotesAndEscapes) {
+  EXPECT_EQ("Text(\"\")", Value::text("").debug_to_string());
+  EXPECT_EQ("Text(\"hello\")", Value::text("hello").debug_to_string());
+  // Embedded `"` is doubled to `""`.
+  EXPECT_EQ("Text(\"he said \"\"hi\"\"\")", Value::text("he said \"hi\"").debug_to_string());
+  // Embedded backslash is doubled to `\\`.
+  EXPECT_EQ("Text(\"a\\\\b\")", Value::text("a\\b").debug_to_string());
+}
+
 TEST(ValueTest, ValueInequalityAcrossKinds) {
   EXPECT_NE(Value::blank(), Value::number(0.0));
   EXPECT_NE(Value::number(0.0), Value::boolean(false));
@@ -186,10 +233,12 @@ TEST(ValueTest, DisplayNameMatchesSpec) {
 }
 
 TEST(ValueTest, SizeofValueIsReasonable) {
-  // The tag (1 byte) plus an 8-byte double payload should pack into 16 bytes
-  // on every platform Formulon targets. Enforcing this in a test (in
+  // The payload union is driven by the 16-byte `string_view` text member
+  // (and will later be driven by a 16-byte `Reference` payload). With a
+  // 1-byte tag and alignment padding the struct lands at 24 bytes on
+  // every platform Formulon targets. Enforcing this in a test (in
   // addition to the static_assert in value.h) gives a louder failure.
-  EXPECT_LE(sizeof(Value), static_cast<std::size_t>(16));
+  EXPECT_LE(sizeof(Value), static_cast<std::size_t>(24));
   EXPECT_TRUE(std::is_trivially_copyable<Value>::value);
 }
 
@@ -223,6 +272,16 @@ TEST(ValueDeathTest, AsErrorOnBooleanAborts) {
 
 TEST(ValueDeathTest, AsNumberOnErrorAborts) {
   Value v = Value::error(ErrorCode::Div0);
+  EXPECT_DEATH(v.as_number(), ".*");
+}
+
+TEST(ValueDeathTest, AsTextOnNumberAborts) {
+  Value v = Value::number(1.0);
+  EXPECT_DEATH(v.as_text(), ".*");
+}
+
+TEST(ValueDeathTest, AsNumberOnTextAborts) {
+  Value v = Value::text("abc");
   EXPECT_DEATH(v.as_number(), ".*");
 }
 #endif  // GTEST_HAS_DEATH_TEST

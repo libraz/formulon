@@ -4,12 +4,11 @@
 // evaluator, and Excel error model all sit on top of. See
 // backup/plans/02-calc-engine.md §2.1 for the authoritative specification.
 //
-// The current scope of this header covers only the scalar variants:
-// `Blank`, `Number`, `Bool`, and `Error`. The `Text`, `Array`, `Ref`, and
-// `Lambda` variants reserve slots in `ValueKind` but do not yet have
-// factories or accessors: those will follow once their backing types exist
-// (shared-string table, `ArrayValue`, cell reference representation, LAMBDA
-// closures).
+// The current scope of this header covers the scalar variants `Blank`,
+// `Number`, `Bool`, `Error`, and `Text`. The `Array`, `Ref`, and `Lambda`
+// variants reserve slots in `ValueKind` but do not yet have factories or
+// accessors: those will follow once their backing types exist
+// (`ArrayValue`, cell reference representation, LAMBDA closures).
 //
 // `Value` is intentionally trivially copyable so it can be passed freely
 // through the evaluator's value stack without heap allocation. This
@@ -20,6 +19,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <type_traits>
 
 namespace formulon {
@@ -174,15 +174,17 @@ constexpr const char* display_name(ErrorCode e) noexcept {
 
 /// Scalar `Value` atom of the Formulon calc engine.
 ///
-/// Only the scalar variants (`Blank`, `Number`, `Bool`, `Error`) currently
-/// carry a factory; the kind queries for `Text`/`Array`/`Ref`/`Lambda`
-/// exist but always return false until those variants are implemented. All
-/// factories are `noexcept` and never allocate.
+/// The scalar variants (`Blank`, `Number`, `Bool`, `Error`, `Text`) carry
+/// factories; the kind queries for `Array`/`Ref`/`Lambda` exist but always
+/// return false until those variants are implemented. All factories are
+/// `noexcept` and never allocate. The `Text` payload is a non-owning
+/// `string_view`: the caller is responsible for keeping the underlying
+/// storage alive for at least the lifetime of the `Value`.
 ///
-/// Accessors (`as_number()`, `as_boolean()`, `as_error()`) are precondition-
-/// checked: invoking one on a mismatched kind aborts the process via
-/// `FM_CHECK`. Callers must gate access with the corresponding `is_*()`
-/// query, or branch on `kind()`.
+/// Accessors (`as_number()`, `as_boolean()`, `as_error()`, `as_text()`) are
+/// precondition-checked: invoking one on a mismatched kind aborts the
+/// process via `FM_CHECK`. Callers must gate access with the corresponding
+/// `is_*()` query, or branch on `kind()`.
 class Value {
  public:
   /// Builds a `Blank` value. This is the zero-state used by empty cells.
@@ -217,6 +219,15 @@ class Value {
     return out;
   }
 
+  /// Builds a `Text` value referencing `s`. The caller owns the backing
+  /// storage and must keep it alive for the lifetime of the returned value.
+  static Value text(std::string_view s) noexcept {
+    Value out;
+    out.kind_ = ValueKind::Text;
+    out.data_.text = s;
+    return out;
+  }
+
   /// Returns the discriminator tag for this value.
   ValueKind kind() const noexcept { return kind_; }
 
@@ -239,6 +250,10 @@ class Value {
 
   /// Returns the error-code payload. Aborts if `kind() != Error`.
   ErrorCode as_error() const;
+
+  /// Returns the text payload as a non-owning view. Aborts if
+  /// `kind() != Text`.
+  std::string_view as_text() const;
 
   /// Debug-formatting helper, not an Excel display string.
   ///
@@ -264,6 +279,12 @@ class Value {
     double number;
     bool boolean;
     ErrorCode error;
+    /// Transitional text payload: a non-owning view borrowed from
+    /// arena-interned storage. The long-term plan (per
+    /// backup/plans/02-calc-engine.md §2.1) is to replace this with a
+    /// `uint32_t text_id` indexing a workbook-scoped SharedStringPool,
+    /// which will shrink the union back toward 8 bytes.
+    std::string_view text;
     Payload() noexcept : number(0.0) {}
   };
 
@@ -277,9 +298,12 @@ class Value {
 // `Text`/`Array`/`Ref`/`Lambda` land.
 static_assert(std::is_trivially_copyable_v<Value>, "Value is scalar-only and must be trivially copyable");
 
-// The payload is 8 bytes (double) + 1 byte tag; with natural alignment
-// the struct should fit in 16 bytes on every platform Formulon targets.
-static_assert(sizeof(Value) <= 16, "Value must fit within 16 bytes");
+// The payload union is now driven by the 16-byte `string_view` text
+// member (and will later be driven by a 16-byte `Reference` payload, see
+// backup/plans/02-calc-engine.md §2.1). With a 1-byte tag and 7 bytes of
+// alignment padding the struct lands at 24 bytes on every platform
+// Formulon targets.
+static_assert(sizeof(Value) <= 24, "Value must fit within 24 bytes");
 
 }  // namespace formulon
 

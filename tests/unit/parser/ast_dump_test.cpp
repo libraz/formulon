@@ -97,6 +97,30 @@ TEST(AstDumpLiteral, ErrorValue) {
   EXPECT_EQ(dump_sexpr(*n), "(err #DIV/0!)");
 }
 
+TEST(AstDumpLiteral, TextEmpty) {
+  Arena a;
+  AstNode* n = make_literal(a, Value::text(""));
+  EXPECT_EQ(dump_sexpr(*n), "(text \"\")");
+}
+
+TEST(AstDumpLiteral, TextPlain) {
+  Arena a;
+  AstNode* n = make_literal(a, Value::text("hello"));
+  EXPECT_EQ(dump_sexpr(*n), "(text \"hello\")");
+}
+
+TEST(AstDumpLiteral, TextEscapesEmbeddedDoubleQuote) {
+  Arena a;
+  AstNode* n = make_literal(a, Value::text("he said \"hi\""));
+  EXPECT_EQ(dump_sexpr(*n), "(text \"he said \\\"hi\\\"\")");
+}
+
+TEST(AstDumpLiteral, TextEscapesEmbeddedBackslash) {
+  Arena a;
+  AstNode* n = make_literal(a, Value::text("a\\b"));
+  EXPECT_EQ(dump_sexpr(*n), "(text \"a\\\\b\")");
+}
+
 // ---------------------------------------------------------------------------
 // References
 // ---------------------------------------------------------------------------

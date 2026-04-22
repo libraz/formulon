@@ -89,7 +89,22 @@ void AppendValueLiteral(std::string& out, const Value& v) {
       out.append(display_name(v.as_error()));
       out.push_back(')');
       return;
-    case ValueKind::Text:
+    case ValueKind::Text: {
+      // Quote the payload and escape `"` as `\"` and `\` as `\\` so the
+      // dump is unambiguous when the text contains either character. This
+      // is C-string-style escaping for stable goldens, not Excel's `""`
+      // doubling (which is reserved for source-formula display).
+      out.append("(text \"");
+      const std::string_view s = v.as_text();
+      for (char c : s) {
+        if (c == '\\' || c == '"') {
+          out.push_back('\\');
+        }
+        out.push_back(c);
+      }
+      out.append("\")");
+      return;
+    }
     case ValueKind::Array:
     case ValueKind::Ref:
     case ValueKind::Lambda:

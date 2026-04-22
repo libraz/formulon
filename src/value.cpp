@@ -26,6 +26,11 @@ ErrorCode Value::as_error() const {
   return data_.error;
 }
 
+std::string_view Value::as_text() const {
+  FM_CHECK(kind_ == ValueKind::Text, "Value::as_text() on non-Text");
+  return data_.text;
+}
+
 std::string Value::debug_to_string() const {
   switch (kind_) {
     case ValueKind::Blank:
@@ -36,8 +41,25 @@ std::string Value::debug_to_string() const {
       return std::string("Bool(") + (data_.boolean ? "true" : "false") + ")";
     case ValueKind::Error:
       return std::string("Error(") + display_name(data_.error) + ")";
-    case ValueKind::Text:
-      return "Text(<unimplemented>)";
+    case ValueKind::Text: {
+      // Quote the payload and escape internal `"` as `""` and backslash as
+      // `\\` so the debug output is unambiguous when the text contains
+      // either character.
+      std::string out;
+      out.reserve(data_.text.size() + 8);
+      out.append("Text(\"");
+      for (char c : data_.text) {
+        if (c == '"') {
+          out.append("\"\"");
+        } else if (c == '\\') {
+          out.append("\\\\");
+        } else {
+          out.push_back(c);
+        }
+      }
+      out.append("\")");
+      return out;
+    }
     case ValueKind::Array:
       return "Array(<unimplemented>)";
     case ValueKind::Ref:
@@ -65,6 +87,7 @@ bool operator==(const Value& a, const Value& b) noexcept {
     case ValueKind::Error:
       return a.data_.error == b.data_.error;
     case ValueKind::Text:
+      return a.data_.text == b.data_.text;
     case ValueKind::Array:
     case ValueKind::Ref:
     case ValueKind::Lambda:

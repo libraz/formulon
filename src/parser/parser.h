@@ -15,7 +15,6 @@
 //     (implicit-intersection, lowest precedence).
 //
 // Out of scope for the current parser (deferred to follow-up work):
-//   * String literals (Value::text not yet implemented).
 //   * Union (`,`) outside call arglists; intersection-as-space.
 //   * External / structured / lambda / let / immediately-invoked-lambda forms.
 //   * Suggestion engine (the `ParseError::suggestion` slot is reserved but
@@ -137,6 +136,7 @@ class Parser {
   // Per-atom helpers.
   AstNode* parse_number_atom();
   AstNode* parse_bool_atom();
+  AstNode* parse_string_atom();
   AstNode* parse_error_literal_atom();
   AstNode* parse_paren_atom();
   AstNode* parse_array_literal_atom();

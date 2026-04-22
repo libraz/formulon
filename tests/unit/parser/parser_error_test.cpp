@@ -102,13 +102,6 @@ TEST(ParserErrors, UnclosedCallParen) {
   EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::ExpectedCloseParen));
 }
 
-TEST(ParserErrors, StringLiteralIsUnsupported) {
-  Arena a;
-  Parser p("=\"hi\"", a);
-  (void)p.parse();
-  EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::UnsupportedConstruct));
-}
-
 TEST(ParserErrors, SpilledHashIsUnsupported) {
   Arena a;
   Parser p("=A1#", a);

@@ -94,6 +94,34 @@ TEST(ParserAtoms, NameRef) { EXPECT_EQ(ParseToSexpr("=foo"), "(name foo)"); }
 TEST(ParserAtoms, NameRefMixedCase) { EXPECT_EQ(ParseToSexpr("=Foo_bar"), "(name Foo_bar)"); }
 
 // ---------------------------------------------------------------------------
+// String literals
+// ---------------------------------------------------------------------------
+
+TEST(ParserStrings, PlainString) { EXPECT_EQ(ParseToSexpr("=\"hello\""), "(text \"hello\")"); }
+
+TEST(ParserStrings, EmptyString) { EXPECT_EQ(ParseToSexpr("=\"\""), "(text \"\")"); }
+
+TEST(ParserStrings, EscapedDoubleQuotes) {
+  // Excel doubles `"` inside string literals; the tokenizer resolves the
+  // escape so the payload contains a single `"`. The dumper then escapes
+  // `"` as `\"` for unambiguous goldens.
+  EXPECT_EQ(ParseToSexpr("=\"he said \"\"hi\"\"\""), "(text \"he said \\\"hi\\\"\")");
+}
+
+TEST(ParserStrings, ConcatTwoStrings) {
+  EXPECT_EQ(ParseToSexpr("=\"a\"&\"b\""), "(binary & (text \"a\") (text \"b\"))");
+}
+
+TEST(ParserStrings, IfWithStringBranches) {
+  EXPECT_EQ(ParseToSexpr("=IF(TRUE,\"yes\",\"no\")"),
+            "(call IF (bool true) (text \"yes\") (text \"no\"))");
+}
+
+TEST(ParserStrings, LenOfString) {
+  EXPECT_EQ(ParseToSexpr("=LEN(\"foo\")"), "(call LEN (text \"foo\"))");
+}
+
+// ---------------------------------------------------------------------------
 // Optional leading `=` is consumed exactly once
 // ---------------------------------------------------------------------------
 

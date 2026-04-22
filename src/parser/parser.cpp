@@ -683,9 +683,10 @@ AstNode* Parser::parse_atom(SyncContext ctx) {
       return placeholder;
     }
     case TokenKind::String:
+      return parse_string_atom();
     case TokenKind::Hash: {
-      // String literals and the spilled-range `#` are not implemented yet.
-      // Surface a single, unmistakable diagnostic and recover.
+      // The spilled-range `#` is not implemented yet. Surface a single,
+      // unmistakable diagnostic and recover.
       const Token& tok = peek();
       record_error_with_token(ParseErrorCode::UnsupportedConstruct, tok.range, tok.lexeme);
       skip_to_sync(ctx);
@@ -812,6 +813,19 @@ AstNode* Parser::parse_full_row_or_number(const Token& first) {
 AstNode* Parser::parse_bool_atom() {
   const Token& tok = advance();
   AstNode* n = make_literal(arena_, Value::boolean(tok.boolean));
+  if (n == nullptr) {
+    return nullptr;
+  }
+  n->set_range(tok.range);
+  return n;
+}
+
+AstNode* Parser::parse_string_atom() {
+  // The token's `text` field is the escape-resolved payload, already interned
+  // in the tokenizer arena, so we can hand it straight to `Value::text`
+  // without copying.
+  const Token& tok = advance();
+  AstNode* n = make_literal(arena_, Value::text(tok.text));
   if (n == nullptr) {
     return nullptr;
   }
