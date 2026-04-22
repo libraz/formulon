@@ -68,6 +68,8 @@ set(FORMULON_CORE_SOURCES
   src/workbook.cpp
   src/io/ooxml_writer.cpp
   src/parser/tokenizer.cpp
+  src/parser/ast.cpp
+  src/parser/ast_dump.cpp
 )
 
 add_library(formulon_core OBJECT ${FORMULON_CORE_SOURCES})

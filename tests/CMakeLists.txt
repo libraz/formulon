@@ -18,6 +18,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/deps/miniz_smoke_test.cpp
   unit/deps/pugixml_smoke_test.cpp
   unit/parser/tokenizer_test.cpp
+  unit/parser/ast_test.cpp
+  unit/parser/ast_dump_test.cpp
 )
 
 add_executable(formulon_unit_tests ${FORMULON_UNIT_TEST_SOURCES})
