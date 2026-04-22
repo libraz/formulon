@@ -311,7 +311,10 @@ const LazyEntry* find_lazy(std::string_view name) noexcept {
 //
 // All other names are routed through `registry`: unknown name -> #NAME?,
 // arity violation -> #VALUE!, otherwise every argument is pre-evaluated in
-// order and the left-most error short-circuits before the impl runs.
+// order. By default the left-most error short-circuits before the impl
+// runs, but an entry whose `propagate_errors` flag is `false` (the IS*
+// type-predicate family) opts out of that short-circuit and receives raw
+// error values among its arguments.
 Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry) {
   const std::string_view name = node.as_call_name();
   const std::uint32_t arity = node.as_call_arity();
@@ -328,12 +331,14 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
     return Value::error(ErrorCode::Value);
   }
 
-  // Pre-evaluate arguments left-to-right; first error wins.
+  // Pre-evaluate arguments left-to-right. By default the first error wins
+  // and the impl is never invoked; functions that need to inspect error
+  // arguments (e.g. `ISERROR`) clear `propagate_errors` to opt out.
   std::vector<Value> values;
   values.reserve(arity);
   for (std::uint32_t i = 0; i < arity; ++i) {
     Value v = eval_node(node.as_call_arg(i), arena, registry);
-    if (v.is_error()) {
+    if (def->propagate_errors && v.is_error()) {
       return v;
     }
     values.push_back(v);

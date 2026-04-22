@@ -29,7 +29,10 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_test.cpp
   unit/eval/builtins_logical_test.cpp
   unit/eval/builtins_math_test.cpp
+  unit/eval/builtins_math2_test.cpp
   unit/eval/builtins_text_test.cpp
+  unit/eval/builtins_text2_test.cpp
+  unit/eval/builtins_info_test.cpp
   unit/eval/text_ops_test.cpp
 )
 

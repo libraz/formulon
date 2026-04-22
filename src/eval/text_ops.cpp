@@ -111,5 +111,66 @@ std::string to_upper_ascii(std::string_view text) {
   return out;
 }
 
+std::string encode_utf8_codepoint(std::uint32_t codepoint) {
+  // Invalid codepoints (beyond Unicode max or in the surrogate range) yield
+  // an empty result. Caller is expected to validate before calling, but we
+  // double-guard so this helper never emits malformed UTF-8.
+  if (codepoint > 0x10FFFFu || (codepoint >= 0xD800u && codepoint <= 0xDFFFu)) {
+    return std::string();
+  }
+  std::string out;
+  if (codepoint < 0x80u) {
+    out.push_back(static_cast<char>(codepoint));
+  } else if (codepoint < 0x800u) {
+    out.push_back(static_cast<char>(0xC0u | (codepoint >> 6)));
+    out.push_back(static_cast<char>(0x80u | (codepoint & 0x3Fu)));
+  } else if (codepoint < 0x10000u) {
+    out.push_back(static_cast<char>(0xE0u | (codepoint >> 12)));
+    out.push_back(static_cast<char>(0x80u | ((codepoint >> 6) & 0x3Fu)));
+    out.push_back(static_cast<char>(0x80u | (codepoint & 0x3Fu)));
+  } else {
+    out.push_back(static_cast<char>(0xF0u | (codepoint >> 18)));
+    out.push_back(static_cast<char>(0x80u | ((codepoint >> 12) & 0x3Fu)));
+    out.push_back(static_cast<char>(0x80u | ((codepoint >> 6) & 0x3Fu)));
+    out.push_back(static_cast<char>(0x80u | (codepoint & 0x3Fu)));
+  }
+  return out;
+}
+
+Utf8DecodeResult decode_first_utf8_codepoint(std::string_view text) noexcept {
+  if (text.empty()) {
+    return {false, 0u, 0u};
+  }
+  const auto c0 = static_cast<unsigned char>(text[0]);
+  if (c0 < 0x80u) {
+    return {true, static_cast<std::uint32_t>(c0), 1u};
+  }
+  std::size_t need = 0;
+  std::uint32_t value = 0;
+  if ((c0 & 0xE0u) == 0xC0u) {
+    need = 1;
+    value = c0 & 0x1Fu;
+  } else if ((c0 & 0xF0u) == 0xE0u) {
+    need = 2;
+    value = c0 & 0x0Fu;
+  } else if ((c0 & 0xF8u) == 0xF0u) {
+    need = 3;
+    value = c0 & 0x07u;
+  } else {
+    return {false, 0u, 0u};
+  }
+  if (text.size() < need + 1) {
+    return {false, 0u, 0u};
+  }
+  for (std::size_t k = 0; k < need; ++k) {
+    const auto ck = static_cast<unsigned char>(text[k + 1]);
+    if ((ck & 0xC0u) != 0x80u) {
+      return {false, 0u, 0u};
+    }
+    value = (value << 6) | (ck & 0x3Fu);
+  }
+  return {true, value, need + 1};
+}
+
 }  // namespace eval
 }  // namespace formulon

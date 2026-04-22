@@ -441,6 +441,253 @@ Value Product(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return Value::number(total);
 }
 
+// --- Exponential / logarithmic / trigonometric --------------------------
+//
+// Every function in this section coerces its inputs through
+// `coerce_to_number` (Bool -> 0/1, Text -> parsed, Blank -> 0, Error ->
+// propagated by the dispatcher's left-most-error rule) and returns
+// `#NUM!` for any non-finite result. Trigonometric inputs are radians.
+
+// Excel uses an internally-stored value of pi rounded to ~15 significant
+// digits. The hard-coded constant here is the same double precision value
+// that `std::acos(-1.0)` would yield on any IEEE 754 system, which keeps
+// `RADIANS(180) == kPi` exact.
+static constexpr double kPi = 3.14159265358979323846;
+
+// EXP(x) - e raised to x. Overflow (e.g. EXP(1000)) produces +Inf, which is
+// caught by the finite-check and surfaces as `#NUM!`. EXP(0) == 1.
+Value Exp(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto x = coerce_to_number(args[0]);
+  if (!x) {
+    return Value::error(x.error());
+  }
+  const double r = std::exp(x.value());
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+// LN(x) - natural logarithm. Excel rejects `x <= 0` with `#NUM!`.
+Value Ln(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto x = coerce_to_number(args[0]);
+  if (!x) {
+    return Value::error(x.error());
+  }
+  if (x.value() <= 0.0) {
+    return Value::error(ErrorCode::Num);
+  }
+  const double r = std::log(x.value());
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+// LOG(x, [base]) - logarithm with an optional base (default 10). Excel
+// quirks pinned here:
+//   - `x <= 0`            -> `#NUM!`
+//   - `base <= 0`         -> `#NUM!` (would-be `ln(base)` on a non-positive
+//                            value already fails before the divide)
+//   - `base == 1`         -> `#DIV/0!` (the divisor `ln(1)` is zero; Excel
+//                            surfaces this distinct error code rather than
+//                            `#NUM!`)
+Value Log(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  auto x = coerce_to_number(args[0]);
+  if (!x) {
+    return Value::error(x.error());
+  }
+  if (x.value() <= 0.0) {
+    return Value::error(ErrorCode::Num);
+  }
+  double base = 10.0;
+  if (arity >= 2) {
+    auto parsed = coerce_to_number(args[1]);
+    if (!parsed) {
+      return Value::error(parsed.error());
+    }
+    base = parsed.value();
+  }
+  if (base <= 0.0) {
+    return Value::error(ErrorCode::Num);
+  }
+  const double denom = std::log(base);
+  if (denom == 0.0) {
+    return Value::error(ErrorCode::Div0);
+  }
+  const double r = std::log(x.value()) / denom;
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+// LOG10(x) - base-10 logarithm. `x <= 0` -> `#NUM!`.
+Value Log10(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto x = coerce_to_number(args[0]);
+  if (!x) {
+    return Value::error(x.error());
+  }
+  if (x.value() <= 0.0) {
+    return Value::error(ErrorCode::Num);
+  }
+  const double r = std::log10(x.value());
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+// PI() - the constant pi. Zero-argument; the registry's arity check rejects
+// any call with arguments before this body runs.
+Value Pi(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  return Value::number(kPi);
+}
+
+// RADIANS(degrees) - degrees-to-radians conversion. RADIANS(0) == 0,
+// RADIANS(180) == pi.
+Value Radians(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto x = coerce_to_number(args[0]);
+  if (!x) {
+    return Value::error(x.error());
+  }
+  const double r = x.value() * kPi / 180.0;
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+// DEGREES(radians) - radians-to-degrees conversion. DEGREES(pi) == 180.
+Value Degrees(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto x = coerce_to_number(args[0]);
+  if (!x) {
+    return Value::error(x.error());
+  }
+  const double r = x.value() * 180.0 / kPi;
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+// SIN(x) - sine in radians. Excel imposes no domain restriction; only
+// non-finite results (essentially impossible for finite input) surface
+// `#NUM!`.
+Value Sin(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto x = coerce_to_number(args[0]);
+  if (!x) {
+    return Value::error(x.error());
+  }
+  const double r = std::sin(x.value());
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+// COS(x) - cosine in radians.
+Value Cos(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto x = coerce_to_number(args[0]);
+  if (!x) {
+    return Value::error(x.error());
+  }
+  const double r = std::cos(x.value());
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+// TAN(x) - tangent in radians. Excel quirk pin: even at the pole
+// `TAN(PI/2)` the return value is a very large but FINITE number (because
+// PI/2 in double precision differs slightly from the mathematical pole),
+// so we do NOT pre-reject pole-adjacent inputs - only true Inf/NaN is
+// reported as `#NUM!`.
+Value Tan(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto x = coerce_to_number(args[0]);
+  if (!x) {
+    return Value::error(x.error());
+  }
+  const double r = std::tan(x.value());
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+// ASIN(x) - arcsine. Domain [-1, 1]; outside -> `#NUM!`. Result in
+// [-pi/2, pi/2] radians.
+Value Asin(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto x = coerce_to_number(args[0]);
+  if (!x) {
+    return Value::error(x.error());
+  }
+  if (x.value() < -1.0 || x.value() > 1.0) {
+    return Value::error(ErrorCode::Num);
+  }
+  const double r = std::asin(x.value());
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+// ACOS(x) - arccosine. Domain [-1, 1]; outside -> `#NUM!`. Result in
+// [0, pi] radians.
+Value Acos(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto x = coerce_to_number(args[0]);
+  if (!x) {
+    return Value::error(x.error());
+  }
+  if (x.value() < -1.0 || x.value() > 1.0) {
+    return Value::error(ErrorCode::Num);
+  }
+  const double r = std::acos(x.value());
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+// ATAN(x) - arctangent. No domain restriction. Result in (-pi/2, pi/2)
+// radians.
+Value Atan(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto x = coerce_to_number(args[0]);
+  if (!x) {
+    return Value::error(x.error());
+  }
+  const double r = std::atan(x.value());
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+// ATAN2(x, y) - two-argument arctangent. Excel's argument order is
+// `(x, y)`, the OPPOSITE of C's `std::atan2(y, x)`. We pass them through
+// swapped so callers see Excel semantics. When BOTH x and y are zero,
+// Excel returns `#DIV/0!` even though `std::atan2(0, 0)` is defined as 0.
+// Result in (-pi, pi] radians.
+Value Atan2(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto x = coerce_to_number(args[0]);
+  if (!x) {
+    return Value::error(x.error());
+  }
+  auto y = coerce_to_number(args[1]);
+  if (!y) {
+    return Value::error(y.error());
+  }
+  if (x.value() == 0.0 && y.value() == 0.0) {
+    return Value::error(ErrorCode::Div0);
+  }
+  const double r = std::atan2(y.value(), x.value());
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
 // --- Text ---------------------------------------------------------------
 //
 // Every text builtin coerces its inputs via `coerce_to_text` /
@@ -812,6 +1059,264 @@ Value Exact(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return Value::boolean(a.value() == b.value());
 }
 
+// --- Text manipulation, second batch ------------------------------------
+//
+// TEXTJOIN, UNICHAR, UNICODE, CLEAN, PROPER. The same conventions as the
+// first text batch apply: argument coercion via the helpers in
+// `eval/coerce.h`, error propagation through the dispatcher's left-most
+// rule, results interned into the call's arena.
+
+// TEXTJOIN(delimiter, ignore_empty, text1, [text2], ...)
+//
+// Joins every text argument with `delimiter`. When `ignore_empty` is TRUE
+// (the typical case), arguments whose text representation is the empty
+// string are skipped, so two consecutive empty inputs do NOT produce a
+// double delimiter. With `ignore_empty` FALSE every argument participates
+// even if empty (yielding consecutive delimiters). Result length is capped
+// at Excel's 32,767-unit limit; exceeding it surfaces `#VALUE!`.
+Value TextJoin(const Value* args, std::uint32_t arity, Arena& arena) {
+  auto delimiter = coerce_to_text(args[0]);
+  if (!delimiter) {
+    return Value::error(delimiter.error());
+  }
+  auto ignore_empty = coerce_to_bool(args[1]);
+  if (!ignore_empty) {
+    return Value::error(ignore_empty.error());
+  }
+  std::string out;
+  bool first = true;
+  for (std::uint32_t i = 2; i < arity; ++i) {
+    auto piece = coerce_to_text(args[i]);
+    if (!piece) {
+      return Value::error(piece.error());
+    }
+    if (ignore_empty.value() && piece.value().empty()) {
+      continue;
+    }
+    if (!first) {
+      out.append(delimiter.value());
+    }
+    out.append(piece.value());
+    first = false;
+    // Early-out cap check: once the byte length exceeds the byte upper bound
+    // for the cap (4 bytes per UTF-16 unit pessimistically), the UTF-16 unit
+    // count must also exceed the cap. Definitive check below.
+    if (utf16_units_in(out) > kExcelTextCapUnits) {
+      return Value::error(ErrorCode::Value);
+    }
+  }
+  return Value::text(arena.intern(out));
+}
+
+// UNICHAR(number) - returns the Unicode character whose codepoint is
+// `number`. Truncates the input to an integer. Out-of-range and surrogate
+// codepoints surface `#VALUE!`. Result is encoded as UTF-8 bytes.
+Value Unichar(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  auto parsed = read_int_arg(args[0]);
+  if (!parsed) {
+    return Value::error(parsed.error());
+  }
+  const int n = parsed.value();
+  if (n < 1 || n > 0x10FFFF) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (n >= 0xD800 && n <= 0xDFFF) {
+    // UTF-16 surrogate halves do not represent characters on their own.
+    return Value::error(ErrorCode::Value);
+  }
+  const std::string encoded = encode_utf8_codepoint(static_cast<std::uint32_t>(n));
+  if (encoded.empty()) {
+    // Defensive: encoder validates internally; an empty string here would
+    // mean the helper rejected our codepoint despite the range checks.
+    return Value::error(ErrorCode::Value);
+  }
+  return Value::text(arena.intern(encoded));
+}
+
+// UNICODE(text) - returns the Unicode codepoint of the first character in
+// `text`. Empty text yields `#VALUE!`. The returned value is the actual
+// codepoint, not a UTF-16 code unit: supplementary-plane characters return
+// values above 0xFFFF (e.g. `UNICODE("😀")` = 128512, not the high surrogate).
+Value Unicode_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto text = coerce_to_text(args[0]);
+  if (!text) {
+    return Value::error(text.error());
+  }
+  if (text.value().empty()) {
+    return Value::error(ErrorCode::Value);
+  }
+  const Utf8DecodeResult decoded = decode_first_utf8_codepoint(text.value());
+  if (!decoded.valid) {
+    return Value::error(ErrorCode::Value);
+  }
+  return Value::number(static_cast<double>(decoded.codepoint));
+}
+
+// CLEAN(text) - strips ASCII control characters (0x00..0x1F) from `text`.
+// Bytes >= 0x20 (including 0x7F DEL and the entire UTF-8 multi-byte range
+// 0x80..0xFF) are preserved verbatim. Embedded NUL is NOT a string
+// terminator here: the input is a `string_view` and we copy through every
+// non-control byte.
+Value Clean(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  auto text = coerce_to_text(args[0]);
+  if (!text) {
+    return Value::error(text.error());
+  }
+  const std::string& src = text.value();
+  std::string out;
+  out.reserve(src.size());
+  for (char c : src) {
+    if (static_cast<unsigned char>(c) >= 0x20u) {
+      out.push_back(c);
+    }
+  }
+  return Value::text(arena.intern(out));
+}
+
+// PROPER(text) - title-case `text`. ASCII letters that begin a "word" are
+// uppercased; ASCII letters that follow another ASCII letter are lowercased.
+// A "word boundary" is any byte that is NOT an ASCII letter, including
+// digits, punctuation, whitespace, and any byte >= 0x80 (so a Japanese
+// character followed by an ASCII letter starts a new word). Non-ASCII bytes
+// pass through unchanged - matching the existing UPPER / LOWER policy.
+Value Proper(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  auto text = coerce_to_text(args[0]);
+  if (!text) {
+    return Value::error(text.error());
+  }
+  const std::string& src = text.value();
+  std::string out;
+  out.reserve(src.size());
+  bool start_of_word = true;
+  for (char c : src) {
+    const auto u = static_cast<unsigned char>(c);
+    const bool is_lower = (u >= 'a' && u <= 'z');
+    const bool is_upper = (u >= 'A' && u <= 'Z');
+    if (is_lower || is_upper) {
+      if (start_of_word) {
+        out.push_back(is_upper ? c : static_cast<char>(c - 32));
+      } else {
+        out.push_back(is_lower ? c : static_cast<char>(c + 32));
+      }
+      start_of_word = false;
+    } else {
+      out.push_back(c);
+      start_of_word = true;
+    }
+  }
+  return Value::text(arena.intern(out));
+}
+
+// --- Type predicates ----------------------------------------------------
+//
+// These functions are registered with `propagate_errors = false` so the
+// dispatcher hands them error-typed inputs verbatim. Each returns a Bool
+// based purely on the input's `ValueKind` (and, for ISERR / ISNA, the
+// specific `ErrorCode`). None of them ever surface a formula error of
+// their own beyond the registry's arity check.
+
+// ISNUMBER(value) - true iff the input is a Number cell.
+Value IsNumber(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  return Value::boolean(args[0].kind() == ValueKind::Number);
+}
+
+// ISTEXT(value) - true iff the input is a Text cell.
+Value IsText(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  return Value::boolean(args[0].kind() == ValueKind::Text);
+}
+
+// ISBLANK(value) - true iff the input is the Blank scalar. Empty text
+// (`""`) is NOT blank in Excel - `ISBLANK("")` returns FALSE.
+Value IsBlank(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  return Value::boolean(args[0].kind() == ValueKind::Blank);
+}
+
+// ISLOGICAL(value) - true iff the input is a Bool. Numeric 0/1 do not
+// count: only the actual TRUE/FALSE booleans qualify.
+Value IsLogical(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  return Value::boolean(args[0].kind() == ValueKind::Bool);
+}
+
+// ISERROR(value) - true iff the input is any formula error, including
+// `#N/A`. Combined with the cleared `propagate_errors` flag this lets
+// callers branch on errors without first wrapping them in IFERROR.
+Value IsError(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  return Value::boolean(args[0].kind() == ValueKind::Error);
+}
+
+// ISERR(value) - true iff the input is a formula error OTHER than `#N/A`.
+// `ISERR(#N/A)` is FALSE; `ISERR(#DIV/0!)`, `ISERR(#REF!)`, etc. are TRUE.
+Value IsErr(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  const Value& v = args[0];
+  if (v.kind() != ValueKind::Error) {
+    return Value::boolean(false);
+  }
+  return Value::boolean(v.as_error() != ErrorCode::NA);
+}
+
+// ISNA(value) - true iff the input is exactly `#N/A`. All other errors
+// (and all non-error values) yield FALSE.
+Value IsNa(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  const Value& v = args[0];
+  if (v.kind() != ValueKind::Error) {
+    return Value::boolean(false);
+  }
+  return Value::boolean(v.as_error() == ErrorCode::NA);
+}
+
+// --- Coercion-style info functions --------------------------------------
+//
+// `N` and `T` propagate errors via the dispatcher's default short-circuit
+// (no flag override needed). They differ from `VALUE` / generic
+// `coerce_to_*` in that they NEVER fail: any non-matching input maps to
+// the function's neutral element (0 for `N`, "" for `T`).
+
+// N(value) - coerce to a Number with Excel's narrow rules:
+//   - Number          -> the number unchanged
+//   - Bool            -> 1.0 for TRUE, 0.0 for FALSE
+//   - Text            -> 0.0 ALWAYS (N intentionally does not parse text;
+//                        contrast with VALUE, which does)
+//   - Blank           -> 0.0
+//   - Error           -> propagated by the dispatcher before this body runs
+Value N(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  const Value& v = args[0];
+  switch (v.kind()) {
+    case ValueKind::Number:
+      return v;
+    case ValueKind::Bool:
+      return Value::number(v.as_boolean() ? 1.0 : 0.0);
+    case ValueKind::Text:
+    case ValueKind::Blank:
+      return Value::number(0.0);
+    case ValueKind::Error:
+      // Unreachable in practice: dispatcher short-circuits errors. Defensive
+      // fall-through keeps the switch exhaustive.
+      return v;
+    case ValueKind::Array:
+    case ValueKind::Ref:
+    case ValueKind::Lambda:
+      return Value::error(ErrorCode::Value);
+  }
+  return Value::error(ErrorCode::Value);
+}
+
+// T(value) - coerce to Text with Excel's narrow rules:
+//   - Text            -> the text unchanged
+//   - Number / Bool   -> empty string ""
+//   - Blank           -> empty string ""
+//   - Error           -> propagated by the dispatcher before this body runs
+Value T(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  const Value& v = args[0];
+  if (v.kind() == ValueKind::Text) {
+    return v;
+  }
+  if (v.kind() == ValueKind::Error) {
+    // Unreachable in practice: dispatcher short-circuits errors.
+    return v;
+  }
+  return Value::text({});
+}
+
 }  // namespace
 
 void register_builtins(FunctionRegistry& registry) {
@@ -849,6 +1354,22 @@ void register_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"AVERAGE", 1u, kVariadic, &Average});
   registry.register_function(FunctionDef{"PRODUCT", 1u, kVariadic, &Product});
 
+  // Exponential / logarithmic / trigonometric.
+  registry.register_function(FunctionDef{"EXP", 1u, 1u, &Exp});
+  registry.register_function(FunctionDef{"LN", 1u, 1u, &Ln});
+  registry.register_function(FunctionDef{"LOG", 1u, 2u, &Log});
+  registry.register_function(FunctionDef{"LOG10", 1u, 1u, &Log10});
+  registry.register_function(FunctionDef{"PI", 0u, 0u, &Pi});
+  registry.register_function(FunctionDef{"RADIANS", 1u, 1u, &Radians});
+  registry.register_function(FunctionDef{"DEGREES", 1u, 1u, &Degrees});
+  registry.register_function(FunctionDef{"SIN", 1u, 1u, &Sin});
+  registry.register_function(FunctionDef{"COS", 1u, 1u, &Cos});
+  registry.register_function(FunctionDef{"TAN", 1u, 1u, &Tan});
+  registry.register_function(FunctionDef{"ASIN", 1u, 1u, &Asin});
+  registry.register_function(FunctionDef{"ACOS", 1u, 1u, &Acos});
+  registry.register_function(FunctionDef{"ATAN", 1u, 1u, &Atan});
+  registry.register_function(FunctionDef{"ATAN2", 2u, 2u, &Atan2});
+
   // Text manipulation.
   registry.register_function(FunctionDef{"UPPER", 1u, 1u, &Upper});
   registry.register_function(FunctionDef{"LOWER", 1u, 1u, &Lower});
@@ -862,6 +1383,28 @@ void register_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"SEARCH", 2u, 3u, &Search});
   registry.register_function(FunctionDef{"VALUE", 1u, 1u, &Value_});
   registry.register_function(FunctionDef{"EXACT", 2u, 2u, &Exact});
+
+  // Text manipulation, second batch.
+  registry.register_function(FunctionDef{"TEXTJOIN", 3u, kVariadic, &TextJoin});
+  registry.register_function(FunctionDef{"UNICHAR", 1u, 1u, &Unichar});
+  registry.register_function(FunctionDef{"UNICODE", 1u, 1u, &Unicode_});
+  registry.register_function(FunctionDef{"CLEAN", 1u, 1u, &Clean});
+  registry.register_function(FunctionDef{"PROPER", 1u, 1u, &Proper});
+
+  // Info / type queries.
+  // The IS* family must inspect error-typed arguments verbatim, so each
+  // entry clears `propagate_errors` to opt out of the dispatcher's default
+  // left-most-error short-circuit. `N` and `T` use the default (errors
+  // propagate before the body runs).
+  registry.register_function(FunctionDef{"ISNUMBER", 1u, 1u, &IsNumber, /*propagate_errors=*/false});
+  registry.register_function(FunctionDef{"ISTEXT", 1u, 1u, &IsText, /*propagate_errors=*/false});
+  registry.register_function(FunctionDef{"ISBLANK", 1u, 1u, &IsBlank, /*propagate_errors=*/false});
+  registry.register_function(FunctionDef{"ISLOGICAL", 1u, 1u, &IsLogical, /*propagate_errors=*/false});
+  registry.register_function(FunctionDef{"ISERROR", 1u, 1u, &IsError, /*propagate_errors=*/false});
+  registry.register_function(FunctionDef{"ISERR", 1u, 1u, &IsErr, /*propagate_errors=*/false});
+  registry.register_function(FunctionDef{"ISNA", 1u, 1u, &IsNa, /*propagate_errors=*/false});
+  registry.register_function(FunctionDef{"N", 1u, 1u, &N});
+  registry.register_function(FunctionDef{"T", 1u, 1u, &T});
 }
 
 }  // namespace eval

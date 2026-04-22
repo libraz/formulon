@@ -123,6 +123,109 @@ TEST(TextOpsCaseFold, BoundaryBytesAroundAlpha) {
   EXPECT_EQ(to_lower_ascii(s), "@a[z`a{z");
 }
 
+// ---------------------------------------------------------------------------
+// encode_utf8_codepoint
+// ---------------------------------------------------------------------------
+
+TEST(TextOpsEncodeUtf8, AsciiOneByte) {
+  EXPECT_EQ(encode_utf8_codepoint(0x41u), "A");
+  EXPECT_EQ(encode_utf8_codepoint(0x00u), std::string("\x00", 1));
+  EXPECT_EQ(encode_utf8_codepoint(0x7Fu), "\x7F");
+}
+
+TEST(TextOpsEncodeUtf8, TwoByteRange) {
+  // U+00A9 = (c) -> 0xC2 0xA9.
+  EXPECT_EQ(encode_utf8_codepoint(0x00A9u), "\xC2\xA9");
+  // U+07FF -> 0xDF 0xBF (largest 2-byte).
+  EXPECT_EQ(encode_utf8_codepoint(0x07FFu), "\xDF\xBF");
+}
+
+TEST(TextOpsEncodeUtf8, ThreeByteRange) {
+  // U+3042 "あ" -> 0xE3 0x81 0x82.
+  EXPECT_EQ(encode_utf8_codepoint(0x3042u), "\xE3\x81\x82");
+  // U+FFFD replacement char -> 0xEF 0xBF 0xBD.
+  EXPECT_EQ(encode_utf8_codepoint(0xFFFDu), "\xEF\xBF\xBD");
+}
+
+TEST(TextOpsEncodeUtf8, FourByteSupplementary) {
+  // U+1F600 "😀" -> 0xF0 0x9F 0x98 0x80.
+  EXPECT_EQ(encode_utf8_codepoint(0x1F600u), "\xF0\x9F\x98\x80");
+  // U+10FFFF (max valid codepoint) -> 0xF4 0x8F 0xBF 0xBF.
+  EXPECT_EQ(encode_utf8_codepoint(0x10FFFFu), "\xF4\x8F\xBF\xBF");
+}
+
+TEST(TextOpsEncodeUtf8, SurrogateAndOutOfRangeReturnEmpty) {
+  EXPECT_EQ(encode_utf8_codepoint(0xD800u), "");
+  EXPECT_EQ(encode_utf8_codepoint(0xDFFFu), "");
+  EXPECT_EQ(encode_utf8_codepoint(0x110000u), "");
+  EXPECT_EQ(encode_utf8_codepoint(0xFFFFFFFFu), "");
+}
+
+// ---------------------------------------------------------------------------
+// decode_first_utf8_codepoint
+// ---------------------------------------------------------------------------
+
+TEST(TextOpsDecodeUtf8, EmptyIsInvalid) {
+  const auto r = decode_first_utf8_codepoint(std::string_view{});
+  EXPECT_FALSE(r.valid);
+  EXPECT_EQ(r.codepoint, 0u);
+  EXPECT_EQ(r.byte_len, 0u);
+}
+
+TEST(TextOpsDecodeUtf8, AsciiOneByte) {
+  const auto r = decode_first_utf8_codepoint("Abc");
+  EXPECT_TRUE(r.valid);
+  EXPECT_EQ(r.codepoint, 0x41u);
+  EXPECT_EQ(r.byte_len, 1u);
+}
+
+TEST(TextOpsDecodeUtf8, TwoByteCopyright) {
+  const auto r = decode_first_utf8_codepoint("\xC2\xA9");
+  EXPECT_TRUE(r.valid);
+  EXPECT_EQ(r.codepoint, 0x00A9u);
+  EXPECT_EQ(r.byte_len, 2u);
+}
+
+TEST(TextOpsDecodeUtf8, ThreeByteHiragana) {
+  const auto r = decode_first_utf8_codepoint("\xE3\x81\x82");
+  EXPECT_TRUE(r.valid);
+  EXPECT_EQ(r.codepoint, 0x3042u);
+  EXPECT_EQ(r.byte_len, 3u);
+}
+
+TEST(TextOpsDecodeUtf8, FourByteSupplementary) {
+  const auto r = decode_first_utf8_codepoint("\xF0\x9F\x98\x80");
+  EXPECT_TRUE(r.valid);
+  EXPECT_EQ(r.codepoint, 0x1F600u);
+  EXPECT_EQ(r.byte_len, 4u);
+}
+
+TEST(TextOpsDecodeUtf8, OnlyFirstCodepointReturned) {
+  // Two emojis: first decode returns the first one and reports byte_len=4.
+  const auto r = decode_first_utf8_codepoint("\xF0\x9F\x8E\x89\xF0\x9F\x8E\x8A");
+  EXPECT_TRUE(r.valid);
+  EXPECT_EQ(r.codepoint, 0x1F389u);
+  EXPECT_EQ(r.byte_len, 4u);
+}
+
+TEST(TextOpsDecodeUtf8, MalformedLeadingByte) {
+  // A continuation-style byte (0x80) in lead position is invalid.
+  const auto r = decode_first_utf8_codepoint("\x80hello");
+  EXPECT_FALSE(r.valid);
+}
+
+TEST(TextOpsDecodeUtf8, TruncatedSequence) {
+  // A 3-byte lead with only one continuation byte present.
+  const auto r = decode_first_utf8_codepoint("\xE3\x81");
+  EXPECT_FALSE(r.valid);
+}
+
+TEST(TextOpsDecodeUtf8, BadContinuationByte) {
+  // 3-byte lead, but the second supposed continuation has the wrong tag.
+  const auto r = decode_first_utf8_codepoint("\xE3\x81\x20");
+  EXPECT_FALSE(r.valid);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

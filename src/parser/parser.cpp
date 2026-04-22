@@ -465,6 +465,23 @@ AstNode* Parser::parse() {
     }
     tokens_.push_back(t);
   }
+
+  // Disambiguate CellRef-shaped tokens that are actually function-call names.
+  // `LOG10`, `LOG2`, and similar function names match the cell-reference
+  // pattern `[A-Z]+[0-9]+`, so the tokenizer (which is grammar-agnostic)
+  // emits CellRef. When such a token is immediately followed by `(`, the
+  // only correct interpretation is a function call: rewrite to Ident here.
+  //
+  // Skip the rewrite when the CellRef is preceded by `!` (sheet-qualified
+  // reference). `Sheet1!LOG10` must remain a CellRef so that
+  // `parse_sheet_qualified_ref` resolves it as the sheet-scoped cell.
+  for (std::size_t i = 0; i + 1 < tokens_.size(); ++i) {
+    if (tokens_[i].kind != TokenKind::CellRef) continue;
+    if (tokens_[i + 1].kind != TokenKind::LParen) continue;
+    if (i > 0 && tokens_[i - 1].kind == TokenKind::Bang) continue;
+    tokens_[i].kind = TokenKind::Ident;
+  }
+
   // Lift any tokenizer-level errors before parsing so callers see them even
   // if the parse otherwise succeeds. Promotion does not bail the parser.
   promote_lexer_errors(tz.errors());

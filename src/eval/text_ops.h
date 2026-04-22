@@ -47,6 +47,29 @@ std::string utf16_substring(std::string_view text, std::uint32_t start_units, st
 std::string to_lower_ascii(std::string_view text);
 std::string to_upper_ascii(std::string_view text);
 
+/// Encodes a single Unicode codepoint as a UTF-8 byte sequence (1-4 bytes).
+///
+/// The caller is responsible for validating `codepoint` (rejecting values
+/// outside [0, 0x10FFFF] and the surrogate range [0xD800, 0xDFFF]) before
+/// invoking this helper. When passed an invalid codepoint, the function
+/// returns an empty string. This signature mirrors the helpers above:
+/// pure UTF-8 in, owned `std::string` out, no `Value`/`Arena` dependencies.
+std::string encode_utf8_codepoint(std::uint32_t codepoint);
+
+/// Result of decoding the first UTF-8 codepoint in a byte sequence.
+/// `valid` is false when `text` is empty or the leading bytes form a
+/// malformed / truncated sequence.
+struct Utf8DecodeResult {
+  bool valid;
+  std::uint32_t codepoint;
+  std::size_t byte_len;
+};
+
+/// Decodes the first UTF-8 codepoint in `text`. On a malformed leading byte,
+/// truncated continuation, or empty input, returns `{false, 0, 0}`. Used by
+/// UNICODE() to read the leading codepoint of a string.
+Utf8DecodeResult decode_first_utf8_codepoint(std::string_view text) noexcept;
+
 }  // namespace eval
 }  // namespace formulon
 

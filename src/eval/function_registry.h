@@ -43,6 +43,14 @@ struct FunctionDef {
   /// short-circuits on the left-most error before invoking `impl`. The
   /// callee is responsible for any further per-argument coercion.
   Value (*impl)(const Value* args, std::uint32_t arity, Arena& arena);
+  /// When true (the default, matching Excel for the vast majority of
+  /// functions), the dispatcher in `tree_walker` short-circuits on the
+  /// left-most argument that evaluates to an error and never invokes the
+  /// `impl` callback. When false, errors are passed through as raw `Value`
+  /// arguments - required by the IS* type-predicate family
+  /// (`ISERROR`, `ISERR`, `ISNA`, `ISNUMBER`, `ISTEXT`, `ISBLANK`,
+  /// `ISLOGICAL`), which must be able to inspect error-typed inputs.
+  bool propagate_errors = true;
 };
 
 /// Case-insensitive function lookup table. Names are stored UPPERCASE

@@ -169,6 +169,53 @@ TEST(ParserCalls, FunctionNameCasePreserved) {
 TEST(ParserCalls, OneArg) { EXPECT_EQ(ParseToSexpr("=ABS(-1)"), "(call ABS (unary - (num 1)))"); }
 
 // ---------------------------------------------------------------------------
+// CellRef-to-call disambiguation
+//
+// Function names like `LOG10` lex as CellRef (column "LOG", row 10) because
+// the tokenizer is grammar-agnostic. The parser's token-stream postprocess
+// rewrites such tokens to Ident when immediately followed by `(`, so they
+// reach the function-call dispatch path.
+// ---------------------------------------------------------------------------
+
+TEST(ParserCellRefCall, Log10WithArgIsCall) {
+  EXPECT_EQ(ParseToSexpr("=LOG10(100)"), "(call LOG10 (num 100))");
+}
+
+TEST(ParserCellRefCall, Log10WithoutParenStaysCellRef) {
+  EXPECT_EQ(ParseToSexpr("=LOG10"), "(ref LOG10)");
+}
+
+TEST(ParserCellRefCall, Log10WithSpaceBeforeParenIsCall) {
+  // Whitespace is filtered before the postprocess loop, so a space between
+  // the name and `(` does not block the rewrite.
+  EXPECT_EQ(ParseToSexpr("=LOG10 (100)"), "(call LOG10 (num 100))");
+}
+
+TEST(ParserCellRefCall, SheetQualifiedLog10StaysCellRef) {
+  // Bang-guard preserves sheet-qualified references.
+  EXPECT_EQ(ParseToSexpr("=Sheet1!LOG10"), "(ref Sheet1!LOG10)");
+}
+
+TEST(ParserCellRefCall, RangeOfLog10IsRangeOfRefs) {
+  // Neither side is followed by `(`, so the rewrite does not fire and both
+  // operands remain CellRefs.
+  EXPECT_EQ(ParseToSexpr("=LOG10:LOG10"), "(range (ref LOG10) (ref LOG10))");
+}
+
+TEST(ParserCellRefCall, Log10InArithmeticStaysCellRef) {
+  EXPECT_EQ(ParseToSexpr("=LOG10+1"), "(binary + (ref LOG10) (num 1))");
+}
+
+TEST(ParserCellRefCall, Log10InsideSumArgsStaysCellRef) {
+  // Inside SUM's arg list, LOG10 is not followed by `(`, so it remains a ref.
+  EXPECT_EQ(ParseToSexpr("=SUM(LOG10)"), "(call SUM (ref LOG10))");
+}
+
+TEST(ParserCellRefCall, Log10EmptyCall) {
+  EXPECT_EQ(ParseToSexpr("=LOG10()"), "(call LOG10)");
+}
+
+// ---------------------------------------------------------------------------
 // Range operator
 // ---------------------------------------------------------------------------
 
