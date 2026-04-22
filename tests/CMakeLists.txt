@@ -27,6 +27,10 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/utf8_length_test.cpp
   unit/eval/function_registry_test.cpp
   unit/eval/builtins_test.cpp
+  unit/eval/builtins_logical_test.cpp
+  unit/eval/builtins_math_test.cpp
+  unit/eval/builtins_text_test.cpp
+  unit/eval/text_ops_test.cpp
 )
 
 add_executable(formulon_unit_tests ${FORMULON_UNIT_TEST_SOURCES})

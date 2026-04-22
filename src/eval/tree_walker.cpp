@@ -153,10 +153,13 @@ Value apply_arithmetic(parser::BinOp op, double lhs, double rhs) {
       }
       return finalize_arithmetic(lhs / rhs);
     case parser::BinOp::Pow: {
-      // Excel matches IEEE-754 std::pow for the basic cases. Negative base
-      // with a non-integer exponent yields #NUM! (NaN from pow).
-      const double r = std::pow(lhs, rhs);
-      return finalize_arithmetic(r);
+      // Delegates to the shared `apply_pow` helper so the `^` operator and
+      // the `POWER()` builtin cannot drift apart on edge cases.
+      auto r = apply_pow(lhs, rhs);
+      if (!r) {
+        return Value::error(r.error());
+      }
+      return Value::number(r.value());
     }
     default:
       // Caller guarantees op is arithmetic.
@@ -213,11 +216,98 @@ Value apply_comparison(parser::BinOp op, const Value& lhs, const Value& rhs) {
 
 Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry);
 
+// ---------------------------------------------------------------------------
+// Lazy (short-circuit) function impls
+// ---------------------------------------------------------------------------
+//
+// Each lazy impl receives the full `Call` AST node so it can pull arguments
+// out by index and decide which subtrees to evaluate. The eager path in
+// `dispatch_call` is bypassed entirely: arity checks and error propagation
+// belong inside each impl. On arity mismatch the impls return #VALUE! to
+// match the eager dispatcher's behaviour.
+
+// IF(cond, then, else?) - then is evaluated iff cond coerces to true; else
+// is evaluated iff cond coerces to false. When the third argument is
+// omitted Excel returns the boolean `FALSE` for the falsey path.
+Value eval_if_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity != 2 && arity != 3) {
+    return Value::error(ErrorCode::Value);
+  }
+  const Value cond = eval_node(call.as_call_arg(0), arena, registry);
+  if (cond.is_error()) {
+    return cond;
+  }
+  auto coerced = coerce_to_bool(cond);
+  if (!coerced) {
+    return Value::error(coerced.error());
+  }
+  if (coerced.value()) {
+    return eval_node(call.as_call_arg(1), arena, registry);
+  }
+  if (arity == 3) {
+    return eval_node(call.as_call_arg(2), arena, registry);
+  }
+  return Value::boolean(false);
+}
+
+// IFERROR(value, fallback) - returns `value` unchanged unless it is any
+// error, in which case `fallback` is evaluated and returned. The fallback
+// subtree is NOT evaluated when `value` is non-error (true short-circuit).
+// If `fallback` itself raises an error it is propagated as-is.
+Value eval_iferror_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry) {
+  if (call.as_call_arity() != 2) {
+    return Value::error(ErrorCode::Value);
+  }
+  const Value primary = eval_node(call.as_call_arg(0), arena, registry);
+  if (!primary.is_error()) {
+    return primary;
+  }
+  return eval_node(call.as_call_arg(1), arena, registry);
+}
+
+// IFNA(value, fallback) - returns `value` unchanged unless it is exactly
+// `#N/A`, in which case `fallback` is evaluated and returned. All other
+// errors (including `#DIV/0!`, `#REF!`, `#VALUE!`, `#NAME?`) propagate as
+// `value`. The fallback subtree is NOT evaluated unless the trigger fires.
+Value eval_ifna_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry) {
+  if (call.as_call_arity() != 2) {
+    return Value::error(ErrorCode::Value);
+  }
+  const Value primary = eval_node(call.as_call_arg(0), arena, registry);
+  if (!(primary.is_error() && primary.as_error() == ErrorCode::NA)) {
+    return primary;
+  }
+  return eval_node(call.as_call_arg(1), arena, registry);
+}
+
+using LazyImpl = Value (*)(const parser::AstNode& call, Arena& arena,
+                           const FunctionRegistry& registry);
+
+struct LazyEntry {
+  const char* name;  // canonical UPPERCASE
+  LazyImpl impl;
+};
+
+constexpr LazyEntry kLazyDispatch[] = {
+    {"IF", &eval_if_lazy},
+    {"IFERROR", &eval_iferror_lazy},
+    {"IFNA", &eval_ifna_lazy},
+};
+
+const LazyEntry* find_lazy(std::string_view name) noexcept {
+  for (const auto& e : kLazyDispatch) {
+    if (strings::case_insensitive_eq(name, std::string_view(e.name))) {
+      return &e;
+    }
+  }
+  return nullptr;
+}
+
 // Special-cased function-call dispatch.
 //
-// The first branch handles short-circuit functions whose argument evaluation
-// must NOT happen eagerly. `IF` is the only entry today; further short-circuit
-// builtins follow the same shape and join this block when introduced.
+// Lazy entries (`IF`, `IFERROR`, `IFNA`) are routed through the table above;
+// each impl owns its own arity check and chooses which subtrees to evaluate.
 //
 // All other names are routed through `registry`: unknown name -> #NAME?,
 // arity violation -> #VALUE!, otherwise every argument is pre-evaluated in
@@ -226,33 +316,8 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
   const std::string_view name = node.as_call_name();
   const std::uint32_t arity = node.as_call_arity();
 
-  // Short-circuit: IF.
-  // Compare case-insensitively; the registry uppercases on lookup but we do
-  // not want a registry round-trip here.
-  if (strings::case_insensitive_eq(name, std::string_view("IF"))) {
-    if (arity == 2 || arity == 3) {
-      const Value cond = eval_node(node.as_call_arg(0), arena, registry);
-      if (cond.is_error()) {
-        return cond;
-      }
-      auto coerced = coerce_to_bool(cond);
-      if (!coerced) {
-        return Value::error(coerced.error());
-      }
-      if (coerced.value()) {
-        return eval_node(node.as_call_arg(1), arena, registry);
-      }
-      if (arity == 3) {
-        return eval_node(node.as_call_arg(2), arena, registry);
-      }
-      // Excel returns FALSE when the false-branch is omitted and the
-      // condition evaluates falsey.
-      return Value::boolean(false);
-    }
-    // Fall through to the generic arity check below by treating IF as a
-    // not-found name; the registry lookup returns nullptr, so we synthesise
-    // the #VALUE! response here directly.
-    return Value::error(ErrorCode::Value);
+  if (const LazyEntry* lazy = find_lazy(name); lazy != nullptr) {
+    return lazy->impl(node, arena, registry);
   }
 
   const FunctionDef* def = registry.lookup(name);

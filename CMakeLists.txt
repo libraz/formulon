@@ -75,6 +75,7 @@ set(FORMULON_CORE_SOURCES
   src/parser/parser.cpp
   src/eval/coerce.cpp
   src/eval/utf8_length.cpp
+  src/eval/text_ops.cpp
   src/eval/function_registry.cpp
   src/eval/builtins.cpp
   src/eval/tree_walker.cpp

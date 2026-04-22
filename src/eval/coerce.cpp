@@ -101,6 +101,17 @@ Expected<std::string, ErrorCode> coerce_to_text(const Value& v) {
   return ErrorCode::Value;
 }
 
+Expected<double, ErrorCode> apply_pow(double base, double exp) {
+  // Excel matches IEEE-754 std::pow for the basic cases. Negative base with
+  // a non-integer exponent yields NaN -> #NUM!. Overflow / underflow to Inf
+  // also yields #NUM!. POWER(0, 0) returns 1 here, matching std::pow.
+  const double r = std::pow(base, exp);
+  if (std::isnan(r) || std::isinf(r)) {
+    return ErrorCode::Num;
+  }
+  return r;
+}
+
 Expected<bool, ErrorCode> coerce_to_bool(const Value& v) {
   switch (v.kind()) {
     case ValueKind::Bool:
@@ -115,16 +126,17 @@ Expected<bool, ErrorCode> coerce_to_bool(const Value& v) {
     case ValueKind::Blank:
       return false;
     case ValueKind::Text: {
-      // Excel accepts "TRUE" / "FALSE" case-insensitively in boolean
-      // contexts; trim whitespace defensively to match the strtod path.
-      const std::string_view trimmed = strings::trim(v.as_text());
-      if (strings::case_insensitive_eq(trimmed, std::string_view("TRUE"))) {
-        return true;
+      // Excel coerces text to bool by routing through the numeric rule:
+      // the text is parsed as a number, and a successful parse becomes
+      // `false` iff the value is exactly zero. The literal strings
+      // `"TRUE"` and `"FALSE"` are NOT recognised here (they fail the
+      // numeric parse and surface as `#VALUE!`); only bool literals
+      // (TRUE / FALSE without quotes) and numeric strings round-trip.
+      auto coerced = coerce_to_number(v);
+      if (!coerced) {
+        return coerced.error();
       }
-      if (strings::case_insensitive_eq(trimmed, std::string_view("FALSE"))) {
-        return false;
-      }
-      return ErrorCode::Value;
+      return coerced.value() != 0.0;
     }
     case ValueKind::Error:
       return v.as_error();
