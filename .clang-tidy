@@ -1,0 +1,18 @@
+---
+Checks: >
+  clang-diagnostic-*,
+  clang-analyzer-*,
+  -clang-analyzer-cplusplus.NewDeleteLeaks,
+  cppcoreguidelines-*,
+  modernize-*,
+  performance-*,
+  readability-*,
+  -readability-function-cognitive-complexity,
+  -modernize-use-trailing-return-type,
+  -modernize-use-nodiscard
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*/src/.*'
+FormatStyle: file
+CheckOptions:
+  - key: SystemHeaderFilterRegex
+    value: '.*(_deps|build|third_party)/.*'

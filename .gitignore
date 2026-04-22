@@ -1,0 +1,127 @@
+# Local scratch / backup area (never committed)
+.backup/
+
+# Build directories
+build/
+build-*/
+cmake-build-*/
+dist/
+*.o
+*.a
+*.so
+*.dylib
+*.wasm
+*.wasm.br
+*.wasm.gz
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+_deps/
+
+# Emscripten
+emsdk/
+*.em.js
+
+# Generated files
+*.log
+*.out
+core
+core.*
+
+# Binaries
+formulon
+formulon-cli
+formulon_cli
+*.exe
+
+# Dependencies
+third_party/*
+!third_party/CMakeLists.txt
+
+# Snapshots & Data
+/var/
+tmp/
+
+# Test outputs
+/[Tt]esting/
+*.gcov
+*.gcda
+*.gcno
+
+# Coverage reports
+coverage/
+*.info
+*.profraw
+*.profdata
+
+# Environment / secrets
+.env
+.env.prod
+.env.local
+.secrets
+logs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.bak
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Cache
+.cache/
+
+# AI / Agent tools
+.claude/
+.serena/
+.wrangler/
+.act/
+
+# Config (local customizations)
+CLAUDE.md
+.test-diff.conf
+
+# Design / backup area
+backup/
+
+# Node / TypeScript
+node_modules/
+.yarn/cache/
+.yarn/install-state.gz
+.pnp.*
+*.tsbuildinfo
+.turbo/
+
+# Python (bindings / oracle tooling)
+__pycache__/
+*.py[oc]
+*.egg-info
+.venv/
+.python-version
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+dumps/
+
+# Oracle generated artifacts (golden JSON is committed; intermediate workbooks are not)
+tests/oracle/work/
+tests/oracle/_tmp/
+*.xlsx~
+
+# Fuzz corpora / crashes
+tests/fuzz/corpus/
+tests/fuzz/crashes/
+tests/fuzz/artifacts/
+
+# Benchmarks
+bench_results/
+*.nanobench.json

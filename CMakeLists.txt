@@ -1,0 +1,85 @@
+cmake_minimum_required(VERSION 3.20)
+project(formulon VERSION 0.0.0 LANGUAGES CXX)
+
+# ---------------------------------------------------------------------------
+# Language standard and global settings
+# ---------------------------------------------------------------------------
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Default to Debug when not explicitly specified.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+endif()
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
+# Reproducible build: honour SOURCE_DATE_EPOCH if present.
+if(DEFINED ENV{SOURCE_DATE_EPOCH})
+  set(FORMULON_SOURCE_DATE_EPOCH "$ENV{SOURCE_DATE_EPOCH}")
+  message(STATUS "Formulon: SOURCE_DATE_EPOCH = ${FORMULON_SOURCE_DATE_EPOCH}")
+endif()
+
+# ---------------------------------------------------------------------------
+# Build options (see backup/plans/06-build-packaging.md §6.1.2)
+# ---------------------------------------------------------------------------
+option(FM_BUILD_TESTING       "Build unit/property/oracle tests" ON)
+option(FM_BUILD_WASM          "Build WASM target (requires emscripten)" OFF)
+option(FM_BUILD_PYTHON_SHARED "Build shared lib for Python ctypes" OFF)
+option(FM_BUILD_CLI           "Build formulon_cli binary" ON)
+option(FM_BUILD_FUZZ          "Build libFuzzer harnesses (clang only)" OFF)
+option(FM_ENABLE_COVERAGE     "Enable gcov/lcov" OFF)
+option(FM_USE_SYSTEM_DEPS     "Prefer system-installed third-party deps" OFF)
+option(FM_ENABLE_PTHREAD      "Enable multithreaded recalc" ON)
+
+include(FormulonWarnings)
+
+# ---------------------------------------------------------------------------
+# Core object library (formulon_core)
+# ---------------------------------------------------------------------------
+# Only the StructuredLog translation unit is compiled at M1.2. The list will
+# grow as subsequent milestones land new modules.
+set(FORMULON_CORE_SOURCES
+  src/utils/structured_log.cpp
+)
+
+add_library(formulon_core OBJECT ${FORMULON_CORE_SOURCES})
+
+target_include_directories(formulon_core
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+)
+
+formulon_apply_warnings(formulon_core)
+
+# ---------------------------------------------------------------------------
+# Static library aggregating the core objects
+# ---------------------------------------------------------------------------
+add_library(formulon_static STATIC $<TARGET_OBJECTS:formulon_core>)
+
+target_include_directories(formulon_static
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+)
+
+# No per-target warning flags: formulon_static only aggregates objects.
+
+# ---------------------------------------------------------------------------
+# CLI target (option kept ON by default, but the binary is not built until
+# M1.3 introduces tools/cli. Placeholder branch to stay honest with the
+# option contract.)
+# ---------------------------------------------------------------------------
+if(FM_BUILD_CLI)
+  message(STATUS "Formulon: FM_BUILD_CLI=ON (CLI target wired in a later milestone)")
+endif()
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+if(FM_BUILD_TESTING)
+  enable_testing()
+  add_subdirectory(tests)
+endif()
