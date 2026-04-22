@@ -4,7 +4,6 @@
 
 #include "parser/ast_dump.h"
 
-#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -12,6 +11,7 @@
 
 #include "parser/ast.h"
 #include "parser/reference.h"
+#include "utils/double_format.h"
 #include "utils/expected.h"  // FM_CHECK
 #include "value.h"
 
@@ -22,55 +22,6 @@ namespace {
 // Forward declaration: dumper recurses through every variable-arity arm.
 void DumpInto(const AstNode& node, std::string& out);
 
-// Formats a double with locale-independent rules:
-//   * Exact integer in [-1e16, 1e16] -> integer form, no decimal point.
-//   * NaN / +inf / -inf -> "nan" / "inf" / "-inf".
-//   * Negative zero -> "0".
-//   * Otherwise -> std::to_string with trailing zeros and a stranded
-//     trailing dot trimmed.
-//
-// std::to_string is locale-dependent in principle but produces the C-locale
-// "1.234" form on every libc Formulon supports; we accept the dependency
-// for now and will swap in double-conversion when we need exact roundtripping.
-void AppendNumber(std::string& out, double v) {
-  if (std::isnan(v)) {
-    out.append("nan");
-    return;
-  }
-  if (std::isinf(v)) {
-    out.append(v < 0.0 ? "-inf" : "inf");
-    return;
-  }
-  // Negative zero collapses to plain "0" for stable goldens.
-  if (v == 0.0) {
-    out.push_back('0');
-    return;
-  }
-  // Integer fast path.
-  if (std::abs(v) < 1e16) {
-    const double truncated = std::trunc(v);
-    if (truncated == v) {
-      const std::int64_t as_int = static_cast<std::int64_t>(truncated);
-      out.append(std::to_string(as_int));
-      return;
-    }
-  }
-  std::string s = std::to_string(v);
-  // Strip trailing zeros after a decimal point, then a trailing dot.
-  const auto dot = s.find('.');
-  if (dot != std::string::npos) {
-    std::size_t last = s.size();
-    while (last > dot + 1 && s[last - 1] == '0') {
-      --last;
-    }
-    if (last > 0 && s[last - 1] == '.') {
-      --last;
-    }
-    s.resize(last);
-  }
-  out.append(s);
-}
-
 void AppendValueLiteral(std::string& out, const Value& v) {
   switch (v.kind()) {
     case ValueKind::Blank:
@@ -78,7 +29,7 @@ void AppendValueLiteral(std::string& out, const Value& v) {
       return;
     case ValueKind::Number:
       out.append("(num ");
-      AppendNumber(out, v.as_number());
+      format_double(out, v.as_number());
       out.push_back(')');
       return;
     case ValueKind::Bool:

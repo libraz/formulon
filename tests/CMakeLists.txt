@@ -15,6 +15,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/arena_test.cpp
   unit/value_test.cpp
   unit/workbook_test.cpp
+  unit/utils/double_format_test.cpp
   unit/deps/miniz_smoke_test.cpp
   unit/deps/pugixml_smoke_test.cpp
   unit/parser/tokenizer_test.cpp
@@ -22,6 +23,10 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/parser/ast_dump_test.cpp
   unit/parser/parser_test.cpp
   unit/parser/parser_error_test.cpp
+  unit/eval/tree_walker_test.cpp
+  unit/eval/utf8_length_test.cpp
+  unit/eval/function_registry_test.cpp
+  unit/eval/builtins_test.cpp
 )
 
 add_executable(formulon_unit_tests ${FORMULON_UNIT_TEST_SOURCES})

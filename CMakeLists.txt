@@ -64,6 +64,7 @@ endif()
 # OOXML writer, and parser sources that have landed so far; new modules are
 # appended here as they are implemented.
 set(FORMULON_CORE_SOURCES
+  src/utils/double_format.cpp
   src/utils/structured_log.cpp
   src/value.cpp
   src/workbook.cpp
@@ -72,6 +73,11 @@ set(FORMULON_CORE_SOURCES
   src/parser/ast.cpp
   src/parser/ast_dump.cpp
   src/parser/parser.cpp
+  src/eval/coerce.cpp
+  src/eval/utf8_length.cpp
+  src/eval/function_registry.cpp
+  src/eval/builtins.cpp
+  src/eval/tree_walker.cpp
 )
 
 add_library(formulon_core OBJECT ${FORMULON_CORE_SOURCES})
