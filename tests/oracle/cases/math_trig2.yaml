@@ -1,0 +1,236 @@
+suite: math_trig2
+description: >
+  Hyperbolic, reciprocal-trig, and parity-rounding builtins (SINH, COSH,
+  TANH, ASINH, ACOSH, ATANH, SEC, CSC, COT, ACOT, SECH, CSCH, COTH,
+  ACOTH, EVEN, ODD, QUOTIENT). Kept in a separate suite from math_trig
+  so the existing golden JSON stays bit-stable and only the new cases
+  need to be populated by `make oracle-gen` on macOS.
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # -- SINH ----------------------------------------------------------------
+  - id: sinh_of_zero
+    formula: "=SINH(0)"
+
+  - id: sinh_of_one
+    description: "(e - 1/e) / 2 ~= 1.1752011936438014"
+    formula: "=SINH(1)"
+
+  - id: sinh_of_negative_one
+    formula: "=SINH(-1)"
+
+  - id: sinh_overflow_is_num
+    description: "|x| beyond ~710 overflows double: expect #NUM!"
+    formula: "=SINH(1000)"
+
+  # -- COSH ----------------------------------------------------------------
+  - id: cosh_of_zero
+    formula: "=COSH(0)"
+
+  - id: cosh_of_one
+    description: "(e + 1/e) / 2 ~= 1.5430806348152437"
+    formula: "=COSH(1)"
+
+  - id: cosh_of_negative_one
+    description: "Symmetric; matches cosh(1)."
+    formula: "=COSH(-1)"
+
+  - id: cosh_overflow_is_num
+    formula: "=COSH(1000)"
+
+  # -- TANH ----------------------------------------------------------------
+  - id: tanh_of_zero
+    formula: "=TANH(0)"
+
+  - id: tanh_of_one
+    formula: "=TANH(1)"
+
+  - id: tanh_large_is_nearly_one
+    description: "TANH asymptotes to 1; 100 is already numerically 1."
+    formula: "=TANH(100)"
+
+  - id: tanh_negative_large_is_nearly_minus_one
+    formula: "=TANH(-100)"
+
+  # -- ASINH / ACOSH / ATANH -----------------------------------------------
+  - id: asinh_of_zero
+    formula: "=ASINH(0)"
+
+  - id: asinh_of_one
+    formula: "=ASINH(1)"
+
+  - id: asinh_sinh_round_trip
+    formula: "=ASINH(SINH(0.75))"
+
+  - id: acosh_of_one
+    formula: "=ACOSH(1)"
+
+  - id: acosh_of_two
+    formula: "=ACOSH(2)"
+
+  - id: acosh_below_one_is_num
+    description: "Outside domain |x| >= 1: expect #NUM!"
+    formula: "=ACOSH(0.5)"
+
+  - id: atanh_of_zero
+    formula: "=ATANH(0)"
+
+  - id: atanh_of_half
+    formula: "=ATANH(0.5)"
+
+  - id: atanh_of_one_is_num
+    description: "Endpoint is NOT in the open interval: expect #NUM!"
+    formula: "=ATANH(1)"
+
+  - id: atanh_above_one_is_num
+    formula: "=ATANH(2)"
+
+  # -- SEC / CSC / COT -----------------------------------------------------
+  - id: sec_of_zero
+    formula: "=SEC(0)"
+
+  - id: sec_of_quarter_pi
+    description: "SEC(pi/4) = sqrt(2)"
+    formula: "=SEC(PI()/4)"
+
+  - id: sec_of_pi
+    formula: "=SEC(PI())"
+
+  - id: csc_of_zero_is_div0
+    description: "sin(0) == 0 -> #DIV/0!"
+    formula: "=CSC(0)"
+
+  - id: csc_of_half_pi
+    formula: "=CSC(PI()/2)"
+
+  - id: csc_of_quarter_pi
+    description: "CSC(pi/4) = sqrt(2)"
+    formula: "=CSC(PI()/4)"
+
+  - id: cot_of_zero_is_div0
+    formula: "=COT(0)"
+
+  - id: cot_of_quarter_pi
+    formula: "=COT(PI()/4)"
+
+  - id: cot_of_negative_quarter_pi
+    formula: "=COT(-PI()/4)"
+
+  # -- ACOT ----------------------------------------------------------------
+  - id: acot_of_zero
+    description: "ACOT(0) = pi/2"
+    formula: "=ACOT(0)"
+
+  - id: acot_of_one
+    description: "ACOT(1) = pi/4"
+    formula: "=ACOT(1)"
+
+  - id: acot_of_negative_one
+    description: "Range is (0, PI); ACOT(-1) = 3*pi/4, NOT -pi/4."
+    formula: "=ACOT(-1)"
+
+  # -- SECH / CSCH / COTH / ACOTH ------------------------------------------
+  - id: sech_of_zero
+    formula: "=SECH(0)"
+
+  - id: sech_large_is_zero
+    description: "cosh overflow -> SECH collapses to 0"
+    formula: "=SECH(1000)"
+
+  - id: csch_of_zero_is_div0
+    formula: "=CSCH(0)"
+
+  - id: csch_of_one
+    description: "1 / sinh(1)"
+    formula: "=CSCH(1)"
+
+  - id: csch_large_is_zero
+    formula: "=CSCH(1000)"
+
+  - id: coth_of_zero_is_div0
+    formula: "=COTH(0)"
+
+  - id: coth_of_one
+    formula: "=COTH(1)"
+
+  - id: coth_large_approaches_one
+    formula: "=COTH(1000)"
+
+  - id: coth_negative_large_approaches_minus_one
+    formula: "=COTH(-1000)"
+
+  - id: acoth_of_two
+    formula: "=ACOTH(2)"
+
+  - id: acoth_of_one_is_num
+    description: "Endpoint excluded."
+    formula: "=ACOTH(1)"
+
+  - id: acoth_inside_is_num
+    description: "|x| <= 1 is outside domain."
+    formula: "=ACOTH(0.5)"
+
+  # -- EVEN ---------------------------------------------------------------
+  - id: even_of_one_point_five
+    description: "Positive fractional rounds AWAY from zero: -> 2"
+    formula: "=EVEN(1.5)"
+
+  - id: even_of_three
+    formula: "=EVEN(3)"
+
+  - id: even_of_four
+    description: "Already even: unchanged."
+    formula: "=EVEN(4)"
+
+  - id: even_of_negative_one_point_five
+    description: "Away from zero -> -2"
+    formula: "=EVEN(-1.5)"
+
+  - id: even_of_negative_two_point_one
+    description: "Ceil away gives -3 (odd); step to -4."
+    formula: "=EVEN(-2.1)"
+
+  - id: even_of_zero
+    formula: "=EVEN(0)"
+
+  # -- ODD ----------------------------------------------------------------
+  - id: odd_of_one_point_five
+    formula: "=ODD(1.5)"
+
+  - id: odd_of_two
+    description: "Rounds away from zero to next odd: 3."
+    formula: "=ODD(2)"
+
+  - id: odd_of_three
+    formula: "=ODD(3)"
+
+  - id: odd_of_negative_one_point_five
+    formula: "=ODD(-1.5)"
+
+  - id: odd_of_negative_two
+    formula: "=ODD(-2)"
+
+  - id: odd_of_zero
+    description: "Quirk: ODD(0) = 1, not 0."
+    formula: "=ODD(0)"
+
+  # -- QUOTIENT -----------------------------------------------------------
+  - id: quotient_positive_over_positive
+    formula: "=QUOTIENT(10, 3)"
+
+  - id: quotient_negative_over_positive
+    description: "Truncates TOWARD zero: -10/3 -> -3, NOT -4."
+    formula: "=QUOTIENT(-10, 3)"
+
+  - id: quotient_positive_over_negative
+    formula: "=QUOTIENT(10, -3)"
+
+  - id: quotient_both_negative
+    formula: "=QUOTIENT(-10, -3)"
+
+  - id: quotient_fractional_numerator
+    description: "5.9/2 = 2.95 -> trunc -> 2"
+    formula: "=QUOTIENT(5.9, 2)"
+
+  - id: quotient_zero_denominator_is_div0
+    formula: "=QUOTIENT(5, 0)"

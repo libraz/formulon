@@ -1,0 +1,592 @@
+{
+  "suite": "stats_compat",
+  "description": "Legacy (pre-2010) statistical spellings — NORMDIST/BINOMDIST/POISSON/CHIDIST/TDIST/COVAR/PEARSON etc.",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-23T11:15:14Z"
+  },
+  "tolerance": {
+    "abs": 1e-09,
+    "rel": 1e-09
+  },
+  "cases": [
+    {
+      "id": "normdist_cdf",
+      "formula": "=NORMDIST(1.5, 0, 1, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.9331927987311419
+      }
+    },
+    {
+      "id": "normdist_pdf",
+      "formula": "=NORMDIST(1.5, 0, 1, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.12951759566589174
+      }
+    },
+    {
+      "id": "normdist_nonstandard_cdf",
+      "formula": "=NORMDIST(110, 100, 15, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.7475074624530771
+      }
+    },
+    {
+      "id": "normdist_sd_zero_is_num",
+      "formula": "=NORMDIST(1, 0, 0, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "norminv_median",
+      "formula": "=NORMINV(0.5, 10, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "norminv_upper_tail",
+      "formula": "=NORMINV(0.975, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.9599639845400536
+      }
+    },
+    {
+      "id": "normsdist_legacy_is_cumulative",
+      "formula": "=NORMSDIST(1.96)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.9750021048517795
+      }
+    },
+    {
+      "id": "normsdist_at_zero_is_half",
+      "formula": "=NORMSDIST(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "normsinv_upper_tail",
+      "formula": "=NORMSINV(0.975)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.9599639845400536
+      }
+    },
+    {
+      "id": "binomdist_pmf",
+      "formula": "=BINOMDIST(5, 10, 0.5, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.2460937500000001
+      }
+    },
+    {
+      "id": "binomdist_cdf",
+      "formula": "=BINOMDIST(5, 10, 0.5, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.623046875
+      }
+    },
+    {
+      "id": "binomdist_k_above_n_is_num",
+      "formula": "=BINOMDIST(11, 10, 0.5, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "poisson_pmf",
+      "formula": "=POISSON(3, 2, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.18044704431548364
+      }
+    },
+    {
+      "id": "poisson_cdf",
+      "formula": "=POISSON(3, 2, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.8571234604985469
+      }
+    },
+    {
+      "id": "poisson_mean_zero_pmf_at_positive_k",
+      "formula": "=POISSON(1, 0, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "poisson_mean_zero_pmf_at_zero",
+      "formula": "=POISSON(0, 0, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "poisson_mean_zero_cdf",
+      "formula": "=POISSON(3, 0, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "poisson_mean_negative_is_num",
+      "formula": "=POISSON(1, -1, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "expondist_cdf",
+      "formula": "=EXPONDIST(1, 2, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.8646647167633873
+      }
+    },
+    {
+      "id": "expondist_pdf",
+      "formula": "=EXPONDIST(1, 2, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.2706705664732254
+      }
+    },
+    {
+      "id": "expondist_negative_x_is_num",
+      "formula": "=EXPONDIST(-1, 2, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chidist_right_tail",
+      "formula": "=CHIDIST(5, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0820849986238988
+      }
+    },
+    {
+      "id": "chidist_at_zero_is_one",
+      "formula": "=CHIDIST(0, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "chidist_negative_x_is_num",
+      "formula": "=CHIDIST(-1, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chiinv_upper_quantile",
+      "formula": "=CHIINV(0.05, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.991464547107982
+      }
+    },
+    {
+      "id": "chiinv_median",
+      "formula": "=CHIINV(0.5, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.3862943611198906
+      }
+    },
+    {
+      "id": "fdist_right_tail",
+      "formula": "=FDIST(2, 5, 5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.23251131913037865
+      }
+    },
+    {
+      "id": "fdist_negative_x_is_num",
+      "formula": "=FDIST(-1, 5, 5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "finv_upper_quantile",
+      "formula": "=FINV(0.05, 5, 5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0503290576326485
+      }
+    },
+    {
+      "id": "gammadist_cdf",
+      "formula": "=GAMMADIST(1, 2, 1, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.2642411176571152
+      }
+    },
+    {
+      "id": "gammadist_pdf",
+      "formula": "=GAMMADIST(1, 2, 1, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.3678794411714423
+      }
+    },
+    {
+      "id": "gammainv_median",
+      "formula": "=GAMMAINV(0.5, 2, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.6783469900166608
+      }
+    },
+    {
+      "id": "weibull_cdf",
+      "formula": "=WEIBULL(1, 2, 1, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6321205588285577
+      }
+    },
+    {
+      "id": "weibull_pdf",
+      "formula": "=WEIBULL(1, 2, 1, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.7357588823428847
+      }
+    },
+    {
+      "id": "lognormdist_legacy_is_cumulative",
+      "formula": "=LOGNORMDIST(2, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.7558914042144174
+      }
+    },
+    {
+      "id": "lognormdist_nonpositive_x_is_num",
+      "formula": "=LOGNORMDIST(0, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "loginv_median",
+      "formula": "=LOGINV(0.5, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "hypgeomdist_pmf",
+      "formula": "=HYPGEOMDIST(3, 5, 10, 20)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.34829721362229116
+      }
+    },
+    {
+      "id": "hypgeomdist_boundary_zero",
+      "formula": "=HYPGEOMDIST(6, 5, 10, 20)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "betadist_default_bounds_cdf",
+      "formula": "=BETADIST(0.5, 2, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6875
+      }
+    },
+    {
+      "id": "betadist_custom_bounds_cdf",
+      "formula": "=BETADIST(5, 2, 3, 0, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6875
+      }
+    },
+    {
+      "id": "betadist_x_outside_bounds_is_num",
+      "formula": "=BETADIST(11, 2, 3, 0, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "betainv_default_bounds",
+      "formula": "=BETAINV(0.5, 2, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.3857275681323895
+      }
+    },
+    {
+      "id": "betainv_custom_bounds",
+      "formula": "=BETAINV(0.5, 2, 3, 0, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.857275681323895
+      }
+    },
+    {
+      "id": "tdist_right_tail",
+      "formula": "=TDIST(1.5, 5, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.09695184012123675
+      }
+    },
+    {
+      "id": "tdist_two_tail",
+      "formula": "=TDIST(1.5, 5, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.1939036802424735
+      }
+    },
+    {
+      "id": "tdist_negative_x_is_num",
+      "formula": "=TDIST(-1.5, 5, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "tdist_bad_tails_is_num",
+      "formula": "=TDIST(1, 5, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "tinv_two_tail_legacy",
+      "formula": "=TINV(0.05, 5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.570581835636315
+      }
+    },
+    {
+      "id": "covar_population",
+      "formula": "=COVAR(A1:A5, B1:B5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.2
+      }
+    },
+    {
+      "id": "pearson_perfect_positive",
+      "formula": "=PEARSON(A1:A3, B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "pearson_general",
+      "formula": "=PEARSON(B1:B5, A1:A5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7745966692414833
+      }
+    }
+  ]
+}

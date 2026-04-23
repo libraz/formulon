@@ -87,6 +87,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins/info.cpp
   src/eval/builtins/logical.cpp
   src/eval/builtins/math.cpp
+  src/eval/builtins/math_combinatorics.cpp
   src/eval/builtins/math_trig.cpp
   src/eval/builtins/references.cpp
   src/eval/builtins/stats.cpp
@@ -108,6 +109,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/financial_lazy.cpp
   src/eval/reference_lazy.cpp
   src/eval/regression_lazy.cpp
+  src/eval/info_lazy.cpp
   src/eval/lookups/classic.cpp
   src/eval/lookups/xlookup.cpp
 )

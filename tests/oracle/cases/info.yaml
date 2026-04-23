@@ -123,3 +123,189 @@ cases:
   - id: n_of_blank_cell
     setup: {}
     formula: "=N(A1)"
+
+  # -- ISEVEN / ISODD (truncate-then-test parity) -------------------------
+  - id: iseven_of_positive_even
+    formula: "=ISEVEN(4)"
+
+  - id: iseven_of_positive_odd
+    formula: "=ISEVEN(3)"
+
+  - id: iseven_of_zero
+    formula: "=ISEVEN(0)"
+
+  - id: iseven_negative_fraction_truncates
+    description: "-2.9 truncates to -2 (NOT rounds to -3); -2 is even -> TRUE"
+    formula: "=ISEVEN(-2.9)"
+
+  - id: iseven_of_true
+    description: "TRUE coerces to 1 -> odd -> FALSE"
+    formula: "=ISEVEN(TRUE)"
+
+  - id: iseven_of_false
+    description: "FALSE coerces to 0 -> even -> TRUE"
+    formula: "=ISEVEN(FALSE)"
+
+  - id: iseven_of_text_is_value
+    formula: "=ISEVEN(\"abc\")"
+
+  - id: isodd_of_positive_odd
+    formula: "=ISODD(3)"
+
+  - id: isodd_of_positive_even
+    formula: "=ISODD(4)"
+
+  - id: isodd_negative_fraction_truncates
+    description: "-3.9 truncates to -3 -> odd -> TRUE"
+    formula: "=ISODD(-3.9)"
+
+  - id: isodd_of_true
+    formula: "=ISODD(TRUE)"
+
+  # -- ISNONTEXT (inverse of ISTEXT; error does NOT propagate) -----------
+  - id: isnontext_of_text_is_false
+    formula: "=ISNONTEXT(\"hello\")"
+
+  - id: isnontext_of_empty_string_is_false
+    formula: "=ISNONTEXT(\"\")"
+
+  - id: isnontext_of_number_is_true
+    formula: "=ISNONTEXT(42)"
+
+  - id: isnontext_of_bool_is_true
+    formula: "=ISNONTEXT(TRUE)"
+
+  - id: isnontext_of_error_is_true
+    description: "Error argument is inspected, not propagated"
+    formula: "=ISNONTEXT(1/0)"
+
+  - id: isnontext_of_blank_cell_is_true
+    setup: {}
+    formula: "=ISNONTEXT(A1)"
+
+  # -- ERROR.TYPE (error-code -> integer map) ----------------------------
+  - id: error_type_div0_is_2
+    formula: "=ERROR.TYPE(1/0)"
+
+  - id: error_type_value_is_3
+    formula: "=ERROR.TYPE(#VALUE!)"
+
+  - id: error_type_ref_is_4
+    formula: "=ERROR.TYPE(#REF!)"
+
+  - id: error_type_name_is_5
+    formula: "=ERROR.TYPE(#NAME?)"
+
+  - id: error_type_num_is_6
+    formula: "=ERROR.TYPE(#NUM!)"
+
+  - id: error_type_na_is_7
+    formula: "=ERROR.TYPE(NA())"
+
+  - id: error_type_non_error_is_na
+    description: "Non-error argument -> #N/A per Microsoft docs"
+    formula: "=ERROR.TYPE(42)"
+
+  # -- TYPE (kind -> integer map) ----------------------------------------
+  - id: type_of_number
+    formula: "=TYPE(42)"
+
+  - id: type_of_text
+    formula: "=TYPE(\"hello\")"
+
+  - id: type_of_bool
+    formula: "=TYPE(TRUE)"
+
+  - id: type_of_error
+    description: "propagate_errors=false wiring: TYPE(#DIV/0!) = 16"
+    formula: "=TYPE(1/0)"
+
+  - id: type_of_empty_cell
+    description: "Excel: empty cell is Number-typed for TYPE purposes (1)"
+    setup: {}
+    formula: "=TYPE(A1)"
+
+  # -- ISFORMULA (context-aware: peeks at cell.formula_text) --------------
+  - id: isformula_of_formula_cell
+    description: "A1 holds a formula -> TRUE"
+    setup: { A1: "=1+2" }
+    formula: "=ISFORMULA(A1)"
+
+  - id: isformula_of_literal_cell
+    setup: { A1: 42 }
+    formula: "=ISFORMULA(A1)"
+
+  - id: isformula_of_empty_cell
+    setup: {}
+    formula: "=ISFORMULA(A1)"
+
+  - id: isformula_of_literal_number_is_value
+    description: "Non-reference argument -> #VALUE!"
+    formula: "=ISFORMULA(42)"
+
+  - id: isformula_of_literal_text_is_value
+    formula: "=ISFORMULA(\"A1\")"
+
+  # -- ISREF (AST shape introspection) ------------------------------------
+  - id: isref_of_cell_ref
+    setup: { A1: 1 }
+    formula: "=ISREF(A1)"
+
+  - id: isref_of_range
+    setup: { A1: 1, A2: 2 }
+    formula: "=ISREF(A1:A2)"
+
+  - id: isref_of_number_literal
+    formula: "=ISREF(42)"
+
+  - id: isref_of_text_literal
+    formula: "=ISREF(\"A1\")"
+
+  - id: isref_of_arithmetic
+    formula: "=ISREF(1+2)"
+
+  - id: isref_of_sum_call
+    description: "SUM returns a Value, not a reference -> FALSE"
+    setup: { A1: 1, A2: 2 }
+    formula: "=ISREF(SUM(A1:A2))"
+
+  - id: isref_of_indirect_valid
+    description: "INDIRECT that resolves to a real ref -> TRUE"
+    setup: { A1: 42 }
+    formula: "=ISREF(INDIRECT(\"A1\"))"
+
+  - id: isref_of_indirect_invalid
+    description: "INDIRECT that surfaces #REF! -> FALSE"
+    formula: "=ISREF(INDIRECT(\"not a ref\"))"
+
+  - id: isref_of_offset
+    setup: { A1: 42 }
+    formula: "=ISREF(OFFSET(A1, 0, 0))"
+
+  # -- SHEET (sheet number lookup) ----------------------------------------
+  #
+  # Tests that depend on the oracle workbook's sheet layout (SHEET(),
+  # SHEET(A1), SHEET(A1:A2)) are intentionally absent: the oracle harness
+  # writes each case to a fresh sheet, so Mac's SHEET() returns the
+  # per-case sheet index while Formulon's single-sheet context always
+  # returns 1. Those shapes are covered by unit tests instead.
+  - id: sheet_of_missing_name_is_na
+    description: "Unknown sheet name -> #N/A"
+    formula: "=SHEET(\"NoSuchSheet\")"
+
+  # -- SHEETS (count of sheets in a reference) ----------------------------
+  #
+  # SHEETS() with no args is similarly workbook-layout-dependent in the
+  # oracle harness (returns 80+). Covered by unit tests.
+  - id: sheets_of_single_ref
+    description: "MVP: a non-3D reference spans exactly one sheet -> 1"
+    setup: { A1: 42 }
+    formula: "=SHEETS(A1)"
+
+  - id: sheets_of_range
+    setup: { A1: 1, A2: 2 }
+    formula: "=SHEETS(A1:A2)"
+
+  - id: sheets_of_non_reference_is_na
+    description: "Mac: SHEETS(non-ref) -> #N/A, not #VALUE!"
+    formula: "=SHEETS(42)"

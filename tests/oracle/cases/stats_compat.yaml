@@ -1,0 +1,201 @@
+suite: stats_compat
+description: Legacy (pre-2010) statistical spellings — NORMDIST/BINOMDIST/POISSON/CHIDIST/TDIST/COVAR/PEARSON etc.
+# The underlying math is the same as the .NEW forms (NORM.DIST, BINOM.DIST,
+# ...). These cases lock in the legacy argument conventions:
+#   * NORMSDIST / LOGNORMDIST are always cumulative (no `cumulative` flag).
+#   * HYPGEOMDIST is always non-cumulative (PMF only).
+#   * BETADIST is CDF-only and accepts 3-5 args with optional [A, B].
+#   * TDIST takes (x, df, tails); `tails=1` maps to T.DIST.RT, `tails=2` to
+#     T.DIST.2T, and `x < 0` surfaces `#NUM!` even for the right-tail form.
+#   * COVAR / PEARSON are aliases of COVARIANCE.P / CORREL.
+tolerance: { abs: 1.0e-9, rel: 1.0e-9 }
+locale: ja-JP
+cases:
+  # -- NORMDIST / NORMINV / NORMSDIST / NORMSINV ---------------------------
+  - id: normdist_cdf
+    formula: "=NORMDIST(1.5, 0, 1, TRUE)"
+
+  - id: normdist_pdf
+    formula: "=NORMDIST(1.5, 0, 1, FALSE)"
+
+  - id: normdist_nonstandard_cdf
+    formula: "=NORMDIST(110, 100, 15, TRUE)"
+
+  - id: normdist_sd_zero_is_num
+    description: "sd <= 0 surfaces #NUM! just like NORM.DIST"
+    formula: "=NORMDIST(1, 0, 0, TRUE)"
+
+  - id: norminv_median
+    formula: "=NORMINV(0.5, 10, 2)"
+
+  - id: norminv_upper_tail
+    formula: "=NORMINV(0.975, 0, 1)"
+
+  - id: normsdist_legacy_is_cumulative
+    description: "Legacy NORMSDIST has no cumulative flag — always CDF"
+    formula: "=NORMSDIST(1.96)"
+
+  - id: normsdist_at_zero_is_half
+    formula: "=NORMSDIST(0)"
+
+  - id: normsinv_upper_tail
+    formula: "=NORMSINV(0.975)"
+
+  # -- BINOMDIST -----------------------------------------------------------
+  - id: binomdist_pmf
+    formula: "=BINOMDIST(5, 10, 0.5, FALSE)"
+
+  - id: binomdist_cdf
+    formula: "=BINOMDIST(5, 10, 0.5, TRUE)"
+
+  - id: binomdist_k_above_n_is_num
+    formula: "=BINOMDIST(11, 10, 0.5, FALSE)"
+
+  # -- POISSON -------------------------------------------------------------
+  - id: poisson_pmf
+    formula: "=POISSON(3, 2, FALSE)"
+
+  - id: poisson_cdf
+    formula: "=POISSON(3, 2, TRUE)"
+
+  - id: poisson_mean_zero_pmf_at_positive_k
+    description: "Mac Excel: mean=0 is a degenerate point mass at 0 — PMF(k>0) = 0"
+    formula: "=POISSON(1, 0, FALSE)"
+
+  - id: poisson_mean_zero_pmf_at_zero
+    description: "Mac Excel: PMF(0) at mean=0 is 1 (all mass concentrated at 0)"
+    formula: "=POISSON(0, 0, FALSE)"
+
+  - id: poisson_mean_zero_cdf
+    description: "Mac Excel: CDF at any k>=0 with mean=0 is 1"
+    formula: "=POISSON(3, 0, TRUE)"
+
+  - id: poisson_mean_negative_is_num
+    formula: "=POISSON(1, -1, FALSE)"
+
+  # -- EXPONDIST -----------------------------------------------------------
+  - id: expondist_cdf
+    formula: "=EXPONDIST(1, 2, TRUE)"
+
+  - id: expondist_pdf
+    formula: "=EXPONDIST(1, 2, FALSE)"
+
+  - id: expondist_negative_x_is_num
+    formula: "=EXPONDIST(-1, 2, TRUE)"
+
+  # -- CHIDIST / CHIINV ----------------------------------------------------
+  - id: chidist_right_tail
+    formula: "=CHIDIST(5, 2)"
+
+  - id: chidist_at_zero_is_one
+    description: "Right-tail CDF at x=0 equals 1 (entire mass on the right)"
+    formula: "=CHIDIST(0, 2)"
+
+  - id: chidist_negative_x_is_num
+    formula: "=CHIDIST(-1, 2)"
+
+  - id: chiinv_upper_quantile
+    formula: "=CHIINV(0.05, 2)"
+
+  - id: chiinv_median
+    formula: "=CHIINV(0.5, 2)"
+
+  # -- FDIST / FINV --------------------------------------------------------
+  - id: fdist_right_tail
+    formula: "=FDIST(2, 5, 5)"
+
+  - id: fdist_negative_x_is_num
+    formula: "=FDIST(-1, 5, 5)"
+
+  - id: finv_upper_quantile
+    formula: "=FINV(0.05, 5, 5)"
+
+  # -- GAMMADIST / GAMMAINV -----------------------------------------------
+  - id: gammadist_cdf
+    formula: "=GAMMADIST(1, 2, 1, TRUE)"
+
+  - id: gammadist_pdf
+    formula: "=GAMMADIST(1, 2, 1, FALSE)"
+
+  - id: gammainv_median
+    formula: "=GAMMAINV(0.5, 2, 1)"
+
+  # -- WEIBULL -------------------------------------------------------------
+  - id: weibull_cdf
+    formula: "=WEIBULL(1, 2, 1, TRUE)"
+
+  - id: weibull_pdf
+    formula: "=WEIBULL(1, 2, 1, FALSE)"
+
+  # -- LOGNORMDIST / LOGINV -----------------------------------------------
+  - id: lognormdist_legacy_is_cumulative
+    description: "Legacy LOGNORMDIST has no cumulative flag — always CDF"
+    formula: "=LOGNORMDIST(2, 0, 1)"
+
+  - id: lognormdist_nonpositive_x_is_num
+    formula: "=LOGNORMDIST(0, 0, 1)"
+
+  - id: loginv_median
+    formula: "=LOGINV(0.5, 0, 1)"
+
+  # -- HYPGEOMDIST ---------------------------------------------------------
+  - id: hypgeomdist_pmf
+    description: "Legacy HYPGEOMDIST is PMF-only (no cumulative flag)"
+    formula: "=HYPGEOMDIST(3, 5, 10, 20)"
+
+  - id: hypgeomdist_boundary_zero
+    description: "k above support -> PMF = 0"
+    formula: "=HYPGEOMDIST(6, 5, 10, 20)"
+
+  # -- BETADIST / BETAINV --------------------------------------------------
+  - id: betadist_default_bounds_cdf
+    description: "3-arg BETADIST(x, alpha, beta) uses [A,B]=[0,1]"
+    formula: "=BETADIST(0.5, 2, 3)"
+
+  - id: betadist_custom_bounds_cdf
+    description: "5-arg form with A=0, B=10 — x = 5 maps to y = 0.5"
+    formula: "=BETADIST(5, 2, 3, 0, 10)"
+
+  - id: betadist_x_outside_bounds_is_num
+    formula: "=BETADIST(11, 2, 3, 0, 10)"
+
+  - id: betainv_default_bounds
+    formula: "=BETAINV(0.5, 2, 3)"
+
+  - id: betainv_custom_bounds
+    formula: "=BETAINV(0.5, 2, 3, 0, 10)"
+
+  # -- TDIST / TINV --------------------------------------------------------
+  - id: tdist_right_tail
+    description: "tails=1 -> right-tail = T.DIST.RT"
+    formula: "=TDIST(1.5, 5, 1)"
+
+  - id: tdist_two_tail
+    description: "tails=2 -> two-tail = T.DIST.2T"
+    formula: "=TDIST(1.5, 5, 2)"
+
+  - id: tdist_negative_x_is_num
+    description: "Legacy TDIST rejects x < 0 with #NUM! (even for right-tail)"
+    formula: "=TDIST(-1.5, 5, 1)"
+
+  - id: tdist_bad_tails_is_num
+    formula: "=TDIST(1, 5, 3)"
+
+  - id: tinv_two_tail_legacy
+    description: "Legacy TINV is the two-tailed inverse = T.INV.2T"
+    formula: "=TINV(0.05, 5)"
+
+  # -- COVAR / PEARSON (aliases of COVARIANCE.P / CORREL) ------------------
+  - id: covar_population
+    description: "COVAR is the legacy name for COVARIANCE.P (population)"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 2, B2: 4, B3: 5, B4: 4, B5: 5 }
+    formula: "=COVAR(A1:A5, B1:B5)"
+
+  - id: pearson_perfect_positive
+    description: "PEARSON is an alias of CORREL (Pearson product-moment r)"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 2, B2: 4, B3: 6 }
+    formula: "=PEARSON(A1:A3, B1:B3)"
+
+  - id: pearson_general
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 2, B2: 4, B3: 5, B4: 4, B5: 5 }
+    formula: "=PEARSON(B1:B5, A1:A5)"

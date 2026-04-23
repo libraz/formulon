@@ -18,6 +18,7 @@
 #include "eval/builtins/info.h"
 #include "eval/builtins/logical.h"
 #include "eval/builtins/math.h"
+#include "eval/builtins/math_combinatorics.h"
 #include "eval/builtins/math_trig.h"
 #include "eval/builtins/references.h"
 #include "eval/builtins/stats.h"
@@ -32,6 +33,7 @@ void register_builtins(FunctionRegistry& registry) {
   register_aggregate_builtins(registry);
   register_logical_builtins(registry);
   register_math_builtins(registry);
+  register_math_combinatorics_builtins(registry);
   register_math_trig_builtins(registry);
   register_stats_builtins(registry);
   register_text_builtins(registry);

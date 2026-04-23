@@ -16,6 +16,7 @@
 #include "eval/eval_context.h"
 #include "eval/financial_lazy.h"
 #include "eval/function_registry.h"
+#include "eval/info_lazy.h"
 #include "eval/lazy_impls.h"
 #include "eval/lookups/classic.h"
 #include "eval/lookups/xlookup.h"
@@ -301,6 +302,9 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"COUNT", &eval_count_lazy},
     {"COUNTIF", &eval_countif_lazy},
     {"COUNTIFS", &eval_countifs_lazy},
+    // COVAR is the pre-2010 legacy spelling of COVARIANCE.P; both compute
+    // the population covariance with identical semantics.
+    {"COVAR", &eval_covariance_p_lazy},
     {"COVARIANCE.P", &eval_covariance_p_lazy},
     {"COVARIANCE.S", &eval_covariance_s_lazy},
     // FORECAST is the legacy spelling kept by Excel for back-compat;
@@ -315,15 +319,29 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"INDEX", &eval_index_lazy},
     {"INDIRECT", &eval_indirect_lazy},
     {"INTERCEPT", &eval_intercept_lazy},
+    // ISFORMULA / ISREF inspect the un-evaluated AST of their argument;
+    // they cannot ride the eager path because it flattens references to
+    // `Value` before the impl runs.
+    {"ISFORMULA", &eval_isformula_lazy},
+    {"ISREF", &eval_isref_lazy},
     {"IRR", &eval_irr_lazy},
     {"MATCH", &eval_match_lazy},
     {"MAXIFS", &eval_maxifs_lazy},
     {"MINIFS", &eval_minifs_lazy},
+    {"MIRR", &eval_mirr_lazy},
     {"NETWORKDAYS", &eval_networkdays_lazy},
     {"OFFSET", &eval_offset_lazy},
+    // PEARSON is mathematically identical to CORREL (Pearson product-moment
+    // correlation coefficient); Excel keeps both names for back-compat.
+    {"PEARSON", &eval_correl_lazy},
     {"ROW", &eval_row_lazy},
     {"ROWS", &eval_rows_lazy},
     {"RSQ", &eval_rsq_lazy},
+    // SHEET / SHEETS consult the bound Workbook + current Sheet on the
+    // EvalContext; AST introspection of an optional reference argument
+    // tells them which sheet to answer for.
+    {"SHEET", &eval_sheet_lazy},
+    {"SHEETS", &eval_sheets_lazy},
     {"SLOPE", &eval_slope_lazy},
     {"SUMIF", &eval_sumif_lazy},
     {"SUMIFS", &eval_sumifs_lazy},

@@ -1,10 +1,10 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
 // Implementation of Formulon's arithmetic and rounding built-in functions:
-// ABS, SIGN, INT, TRUNC, SQRT, MOD, POWER, ROUND, ROUNDDOWN, and ROUNDUP.
-// Each impl follows the same recipe as the rest of the builtin catalog:
-// coerce arguments via `eval/coerce.h`, propagate the left-most coercion
-// error, and return a `Value`.
+// ABS, SIGN, INT, TRUNC, SQRT, MOD, POWER, ROUND, ROUNDDOWN, ROUNDUP,
+// EVEN, ODD, and QUOTIENT. Each impl follows the same recipe as the rest
+// of the builtin catalog: coerce arguments via `eval/coerce.h`, propagate
+// the left-most coercion error, and return a `Value`.
 
 #include "eval/builtins/math.h"
 
@@ -459,6 +459,84 @@ Value FloorMath(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return Value::number(r);
 }
 
+// --- Parity-aware rounding ----------------------------------------------
+//
+// EVEN and ODD both round AWAY from zero to the nearest integer of the
+// required parity. ODD has a single documented special case: `ODD(0) = 1`
+// (because 0 has no odd neighbour in the "nearest" direction, Excel
+// promotes it to +1). All other zero / non-integer inputs behave as a
+// normal away-from-zero rounding followed by a parity fix-up.
+
+// EVEN(x) - nearest even integer, rounded AWAY from zero.
+//   `EVEN(1.5) = 2`, `EVEN(3) = 4`, `EVEN(-1.5) = -2`, `EVEN(-2.1) = -4`,
+//   `EVEN(0) = 0`.
+Value Even(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto coerced = coerce_to_number(args[0]);
+  if (!coerced) {
+    return Value::error(coerced.error());
+  }
+  const double x = coerced.value();
+  if (x == 0.0) {
+    return Value::number(0.0);
+  }
+  // Round AWAY from zero to the nearest integer first, then step one away
+  // again if that integer happens to be odd. `std::ceil / std::floor` on
+  // the signed value implements the away-from-zero step.
+  const double away = (x > 0.0) ? std::ceil(x) : std::floor(x);
+  // Parity check via std::fmod: `|away| mod 2 == 0` -> already even.
+  const double parity = std::fmod(std::fabs(away), 2.0);
+  const double r = (parity == 0.0) ? away : away + ((x > 0.0) ? 1.0 : -1.0);
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+// ODD(x) - nearest odd integer, rounded AWAY from zero. `ODD(0) = 1` is the
+// documented quirk; otherwise symmetric to EVEN.
+//   `ODD(1.5) = 3`, `ODD(2) = 3`, `ODD(-1.5) = -3`, `ODD(-2) = -3`.
+Value Odd(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto coerced = coerce_to_number(args[0]);
+  if (!coerced) {
+    return Value::error(coerced.error());
+  }
+  const double x = coerced.value();
+  if (x == 0.0) {
+    return Value::number(1.0);
+  }
+  const double away = (x > 0.0) ? std::ceil(x) : std::floor(x);
+  const double parity = std::fmod(std::fabs(away), 2.0);
+  // `|away| mod 2 == 1` -> already odd. Otherwise step one away from zero.
+  const double r = (parity != 0.0) ? away : away + ((x > 0.0) ? 1.0 : -1.0);
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+// QUOTIENT(numerator, denominator) - integer division, truncated TOWARD
+// zero (not floor-division). Matches Excel: `QUOTIENT(-10, 3) = -3`.
+// `denominator == 0` -> `#DIV/0!`. Very large quotients fall through the
+// finite-check and surface `#NUM!`.
+Value Quotient(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto num = coerce_to_number(args[0]);
+  if (!num) {
+    return Value::error(num.error());
+  }
+  auto den = coerce_to_number(args[1]);
+  if (!den) {
+    return Value::error(den.error());
+  }
+  if (den.value() == 0.0) {
+    return Value::error(ErrorCode::Div0);
+  }
+  const double r = std::trunc(num.value() / den.value());
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
 }  // namespace
 
 void register_math_builtins(FunctionRegistry& registry) {
@@ -472,11 +550,16 @@ void register_math_builtins(FunctionRegistry& registry) {
   // Two-argument numeric.
   registry.register_function(FunctionDef{"MOD", 2u, 2u, &Mod});
   registry.register_function(FunctionDef{"POWER", 2u, 2u, &Power});
+  registry.register_function(FunctionDef{"QUOTIENT", 2u, 2u, &Quotient});
 
   // Rounding (all take value + digits).
   registry.register_function(FunctionDef{"ROUND", 2u, 2u, &Round});
   registry.register_function(FunctionDef{"ROUNDDOWN", 2u, 2u, &RoundDown});
   registry.register_function(FunctionDef{"ROUNDUP", 2u, 2u, &RoundUp});
+
+  // Parity-aware rounding.
+  registry.register_function(FunctionDef{"EVEN", 1u, 1u, &Even});
+  registry.register_function(FunctionDef{"ODD", 1u, 1u, &Odd});
 
   // Significance-aware rounding.
   registry.register_function(FunctionDef{"CEILING", 2u, 2u, &Ceiling});

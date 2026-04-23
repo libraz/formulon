@@ -1,0 +1,432 @@
+{
+  "suite": "financial_ext",
+  "description": "Non-DCC financial builtins — DOLLARDE / DOLLARFR / EFFECT / NOMINAL / FVSCHEDULE / PDURATION / RRI / MIRR / ISPMT. See `eval/builtins/financial.cpp` and `eval/financial_lazy.cpp` (MIRR).",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-23T10:33:58Z"
+  },
+  "tolerance": {
+    "abs": 0.001,
+    "rel": 1e-06
+  },
+  "cases": [
+    {
+      "id": "dollarde_sixteenths",
+      "formula": "=DOLLARDE(1.02, 16)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.125
+      }
+    },
+    {
+      "id": "dollarde_halves_single_digit",
+      "formula": "=DOLLARDE(1.1, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5000000000000004
+      }
+    },
+    {
+      "id": "dollarde_denom_one_is_identity",
+      "formula": "=DOLLARDE(2.5, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.5
+      }
+    },
+    {
+      "id": "dollarde_denom_negative_is_num",
+      "formula": "=DOLLARDE(1.1, -2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "dollarde_denom_fractional_zero_is_div0",
+      "formula": "=DOLLARDE(1.1, 0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "dollarfr_sixteenths",
+      "formula": "=DOLLARFR(1.125, 16)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.02
+      }
+    },
+    {
+      "id": "dollarfr_halves",
+      "formula": "=DOLLARFR(1.5, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "dollarfr_negative_denom_is_num",
+      "formula": "=DOLLARFR(1.5, -2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "dollarfr_zero_denom_is_div0",
+      "formula": "=DOLLARFR(1.5, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "effect_monthly_compounding",
+      "formula": "=EFFECT(0.0525, 12)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0537818867274622
+      }
+    },
+    {
+      "id": "effect_annual_is_identity",
+      "formula": "=EFFECT(0.05, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.050000000000000044
+      }
+    },
+    {
+      "id": "effect_negative_nominal_is_num",
+      "formula": "=EFFECT(-0.05, 12)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "effect_npery_below_one_is_num",
+      "formula": "=EFFECT(0.05, 0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "nominal_inverse_of_effect",
+      "formula": "=NOMINAL(0.053781812, 12)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.05249992877615739
+      }
+    },
+    {
+      "id": "nominal_annual_is_identity",
+      "formula": "=NOMINAL(0.05, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.050000000000000044
+      }
+    },
+    {
+      "id": "nominal_negative_is_num",
+      "formula": "=NOMINAL(-0.05, 12)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "nominal_npery_below_one_is_num",
+      "formula": "=NOMINAL(0.05, 0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "fvschedule_range_of_rates",
+      "formula": "=FVSCHEDULE(1000, A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1212.75
+      }
+    },
+    {
+      "id": "fvschedule_single_rate",
+      "formula": "=FVSCHEDULE(1000, 0.05)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1050.0
+      }
+    },
+    {
+      "id": "fvschedule_negative_rate",
+      "formula": "=FVSCHEDULE(1000, -0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 900.0
+      }
+    },
+    {
+      "id": "pduration_double_at_ten_percent",
+      "formula": "=PDURATION(0.1, 1000, 2000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.272540897341714
+      }
+    },
+    {
+      "id": "pduration_no_growth_is_zero",
+      "formula": "=PDURATION(0.05, 1000, 1000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "pduration_rate_zero_is_num",
+      "formula": "=PDURATION(0, 1000, 2000)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "pduration_negative_pv_is_num",
+      "formula": "=PDURATION(0.1, -1000, 2000)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "pduration_negative_fv_is_num",
+      "formula": "=PDURATION(0.1, 1000, -2000)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rri_double_over_five_years",
+      "formula": "=RRI(5, 1000, 2000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.1486983549970351
+      }
+    },
+    {
+      "id": "rri_one_period_full_ratio",
+      "formula": "=RRI(1, 1000, 1100)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.10000000000000009
+      }
+    },
+    {
+      "id": "rri_no_growth_is_zero",
+      "formula": "=RRI(5, 1000, 1000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "rri_nper_zero_is_num",
+      "formula": "=RRI(0, 1000, 2000)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rri_negative_pv_is_num",
+      "formula": "=RRI(5, -1000, 2000)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "mirr_classic_microsoft_example",
+      "formula": "=MIRR(A1:A6, 0.1, 0.12)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -120000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 39000.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30000.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 21000.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 37000.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 46000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.1260941303659051
+      }
+    },
+    {
+      "id": "mirr_array_literal",
+      "formula": "=MIRR({-1000, 500, 700}, 0.1, 0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.1180339887498949
+      }
+    },
+    {
+      "id": "mirr_all_positive_is_div0",
+      "formula": "=MIRR(A1:A3, 0.1, 0.1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 300.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "mirr_all_negative_is_minus_one",
+      "formula": "=MIRR(A1:A3, 0.1, 0.1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -100.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": -300.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "ispmt_first_period_full_interest",
+      "formula": "=ISPMT(0.05, 0, 10, 1000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -50.0
+      }
+    },
+    {
+      "id": "ispmt_last_period_is_zero",
+      "formula": "=ISPMT(0.05, 10, 10, 1000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "ispmt_mid_schedule",
+      "formula": "=ISPMT(0.1/12, 1, 36, 8000000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -64814.81481481482
+      }
+    },
+    {
+      "id": "ispmt_negative_pv_flips_sign",
+      "formula": "=ISPMT(0.05, 1, 10, -1000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45.0
+      }
+    },
+    {
+      "id": "ispmt_nper_zero_is_div0",
+      "formula": "=ISPMT(0.05, 0, 0, 1000)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    }
+  ]
+}

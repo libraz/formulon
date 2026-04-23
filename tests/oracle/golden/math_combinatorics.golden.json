@@ -1,0 +1,689 @@
+{
+  "suite": "math_combinatorics",
+  "description": "Combinatorial, numeral-system, precise-rounding, and miscellaneous scalar math builtins (ARABIC, ROMAN, BASE, DECIMAL, CEILING.PRECISE, FLOOR.PRECISE, ISO.CEILING, COMBIN, COMBINA, FACT, FACTDOUBLE, GCD, LCM, MULTINOMIAL, SQRTPI). Kept in a separate suite so the existing math golden stays bit-stable and only new cases need to be populated by `make oracle-gen` on macOS.\n",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-23T10:06:39Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "fact_zero",
+      "formula": "=FACT(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "fact_five",
+      "formula": "=FACT(5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 120.0
+      }
+    },
+    {
+      "id": "fact_fractional_truncates",
+      "formula": "=FACT(5.9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 120.0
+      }
+    },
+    {
+      "id": "fact_negative_is_num",
+      "formula": "=FACT(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "fact_overflow_is_num",
+      "formula": "=FACT(171)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "factdouble_zero",
+      "formula": "=FACTDOUBLE(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "factdouble_minus_one",
+      "formula": "=FACTDOUBLE(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "factdouble_seven",
+      "formula": "=FACTDOUBLE(7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 105.0
+      }
+    },
+    {
+      "id": "factdouble_eight",
+      "formula": "=FACTDOUBLE(8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 384.0
+      }
+    },
+    {
+      "id": "combin_five_choose_two",
+      "formula": "=COMBIN(5, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "combin_n_choose_n",
+      "formula": "=COMBIN(7, 7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "combin_k_greater_is_num",
+      "formula": "=COMBIN(3, 5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "combin_fractional_truncates",
+      "formula": "=COMBIN(5.9, 2.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "combina_four_three",
+      "formula": "=COMBINA(4, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "combina_k_greater_allowed",
+      "formula": "=COMBINA(3, 5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 21.0
+      }
+    },
+    {
+      "id": "combina_zero_zero",
+      "formula": "=COMBINA(0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "combina_negative_is_num",
+      "formula": "=COMBINA(-1, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "multinomial_single_arg",
+      "formula": "=MULTINOMIAL(5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.9999999999999996
+      }
+    },
+    {
+      "id": "multinomial_two_args",
+      "formula": "=MULTINOMIAL(2, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.999999999999998
+      }
+    },
+    {
+      "id": "multinomial_three_args",
+      "formula": "=MULTINOMIAL(1, 2, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 59.99999999999993
+      }
+    },
+    {
+      "id": "multinomial_negative_is_num",
+      "formula": "=MULTINOMIAL(2, -1, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "gcd_two_args",
+      "formula": "=GCD(12, 18)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "gcd_three_args",
+      "formula": "=GCD(24, 36, 60)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "gcd_all_zero",
+      "formula": "=GCD(0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "gcd_negative_is_num",
+      "formula": "=GCD(12, -18)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "lcm_two_args",
+      "formula": "=LCM(4, 6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "lcm_three_args",
+      "formula": "=LCM(2, 3, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "lcm_any_zero_is_zero",
+      "formula": "=LCM(4, 0, 6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "lcm_negative_is_num",
+      "formula": "=LCM(4, -6)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "arabic_subtractive",
+      "formula": "=ARABIC(\"MCMXCIX\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1999.0
+      }
+    },
+    {
+      "id": "arabic_empty_is_zero",
+      "formula": "=ARABIC(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "arabic_negative_prefix",
+      "formula": "=ARABIC(\"-MCM\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1900.0
+      }
+    },
+    {
+      "id": "arabic_invalid_char",
+      "formula": "=ARABIC(\"FOO\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arabic_lowercase",
+      "formula": "=ARABIC(\"xiv\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.0
+      }
+    },
+    {
+      "id": "roman_classic",
+      "formula": "=ROMAN(1999)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "MCMXCIX"
+      }
+    },
+    {
+      "id": "roman_zero_is_empty",
+      "formula": "=ROMAN(0)",
+      "setup": {},
+      "skipped": "ROMAN(0) -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
+    },
+    {
+      "id": "roman_four",
+      "formula": "=ROMAN(4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "IV"
+      }
+    },
+    {
+      "id": "roman_forty_nine",
+      "formula": "=ROMAN(49)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "XLIX"
+      }
+    },
+    {
+      "id": "roman_out_of_range_negative",
+      "formula": "=ROMAN(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "roman_out_of_range_above",
+      "formula": "=ROMAN(4000)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "roman_499_form_0",
+      "formula": "=ROMAN(499, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "CDXCIX"
+      }
+    },
+    {
+      "id": "roman_499_form_1",
+      "formula": "=ROMAN(499, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LDVLIV"
+      }
+    },
+    {
+      "id": "roman_499_form_2",
+      "formula": "=ROMAN(499, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "XDIX"
+      }
+    },
+    {
+      "id": "roman_499_form_3",
+      "formula": "=ROMAN(499, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "VDIV"
+      }
+    },
+    {
+      "id": "roman_499_form_4",
+      "formula": "=ROMAN(499, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ID"
+      }
+    },
+    {
+      "id": "roman_1999_form_4",
+      "formula": "=ROMAN(1999, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "MIM"
+      }
+    },
+    {
+      "id": "base_binary_of_seven",
+      "formula": "=BASE(7, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "111"
+      }
+    },
+    {
+      "id": "base_hex_of_fifteen",
+      "formula": "=BASE(15, 16)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "F"
+      }
+    },
+    {
+      "id": "base_36_of_thirty_five",
+      "formula": "=BASE(35, 36)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Z"
+      }
+    },
+    {
+      "id": "base_min_len_pads",
+      "formula": "=BASE(7, 2, 8)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "00000111"
+      }
+    },
+    {
+      "id": "base_zero",
+      "formula": "=BASE(0, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "base_negative_is_num",
+      "formula": "=BASE(-1, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "base_bad_radix_is_num",
+      "formula": "=BASE(5, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "decimal_binary_of_seven",
+      "formula": "=DECIMAL(\"111\", 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "decimal_hex_of_ff",
+      "formula": "=DECIMAL(\"FF\", 16)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 255.0
+      }
+    },
+    {
+      "id": "decimal_lowercase_hex",
+      "formula": "=DECIMAL(\"ff\", 16)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 255.0
+      }
+    },
+    {
+      "id": "decimal_empty_is_value",
+      "formula": "=DECIMAL(\"\", 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "decimal_bad_digit_is_num",
+      "formula": "=DECIMAL(\"2\", 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "decimal_bad_radix_is_num",
+      "formula": "=DECIMAL(\"10\", 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "ceiling_precise_positive_default",
+      "formula": "=CEILING.PRECISE(4.3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "ceiling_precise_negative_toward_plus_inf",
+      "formula": "=CEILING.PRECISE(-4.3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4.0
+      }
+    },
+    {
+      "id": "ceiling_precise_negative_sig_ignored",
+      "formula": "=CEILING.PRECISE(-4.3, -2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4.0
+      }
+    },
+    {
+      "id": "ceiling_precise_sig_zero",
+      "formula": "=CEILING.PRECISE(4.3, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "floor_precise_positive_default",
+      "formula": "=FLOOR.PRECISE(4.7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "floor_precise_negative_toward_minus_inf",
+      "formula": "=FLOOR.PRECISE(-4.3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "floor_precise_negative_sig_ignored",
+      "formula": "=FLOOR.PRECISE(4.7, -2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "floor_precise_sig_zero",
+      "formula": "=FLOOR.PRECISE(4.7, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "iso_ceiling_positive",
+      "formula": "=ISO.CEILING(4.3, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "iso_ceiling_negative",
+      "formula": "=ISO.CEILING(-4.3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4.0
+      }
+    },
+    {
+      "id": "iso_ceiling_default_sig",
+      "formula": "=ISO.CEILING(4.3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "iso_ceiling_sig_zero",
+      "formula": "=ISO.CEILING(4.3, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sqrtpi_one",
+      "formula": "=SQRTPI(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.7724538509055159
+      }
+    },
+    {
+      "id": "sqrtpi_zero",
+      "formula": "=SQRTPI(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sqrtpi_four",
+      "formula": "=SQRTPI(4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.5449077018110318
+      }
+    },
+    {
+      "id": "sqrtpi_negative_is_num",
+      "formula": "=SQRTPI(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    }
+  ]
+}

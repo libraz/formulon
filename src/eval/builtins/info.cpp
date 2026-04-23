@@ -1,19 +1,25 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
 // Implementation of Formulon's info-style built-in functions:
-// ISNUMBER, ISTEXT, ISBLANK, ISLOGICAL, ISERROR, ISERR, ISNA, N, T.
+// ISNUMBER, ISTEXT, ISBLANK, ISLOGICAL, ISERROR, ISERR, ISNA, ISEVEN,
+// ISODD, ISNONTEXT, ERROR.TYPE, TYPE, N, T.
 //
-// The IS* family must inspect error-typed arguments verbatim, so each is
-// registered with `propagate_errors = false` to opt out of the dispatcher's
-// default left-most-error short-circuit. `N` and `T` use the default (errors
-// propagate before the body runs).
+// The IS* family, plus ERROR.TYPE and TYPE, must inspect error-typed
+// arguments verbatim, so each is registered with
+// `propagate_errors = false` to opt out of the dispatcher's default
+// left-most-error short-circuit. `N` and `T` use the default (errors
+// propagate before the body runs). ISEVEN / ISODD coerce through
+// `coerce_to_number` and therefore *do* propagate errors.
 
 #include "eval/builtins/info.h"
 
+#include <cmath>
 #include <cstdint>
 
+#include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
+#include "utils/expected.h"
 #include "value.h"
 
 namespace formulon {
@@ -138,6 +144,170 @@ Value T(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return Value::text({});
 }
 
+// --- Parity predicates --------------------------------------------------
+//
+// ISEVEN / ISODD reject Bool inputs with `#VALUE!` (Mac Excel 365 does
+// *not* coerce TRUE/FALSE to 1/0 here, unlike most numeric contexts).
+// All other inputs go through `coerce_to_number` (blank->0, numeric text
+// parsed), then truncate toward zero and check the low bit. Non-numeric
+// coercion failure surfaces as `#VALUE!`. Errors propagate through the
+// dispatcher's default short-circuit (no `propagate_errors = false`
+// opt-out here).
+//
+// Example: `ISEVEN(-2.9)` truncates to `-2` -> TRUE. `ISEVEN(TRUE)` ->
+// `#VALUE!`. `ISEVEN("3")` -> text "3" parses as number 3 -> FALSE.
+
+// Shared helper: coerces, truncates, and returns the low bit as a bool
+// under the caller-supplied predicate. Returns Expected so the caller can
+// propagate `#VALUE!` from a failed coercion or a rejected Bool argument.
+Expected<bool, ErrorCode> truncated_is_even(const Value& v) {
+  // Excel rejects Bool inputs to ISEVEN/ISODD outright, without the usual
+  // TRUE->1 / FALSE->0 coercion. Guard before `coerce_to_number`.
+  if (v.kind() == ValueKind::Bool) {
+    return ErrorCode::Value;
+  }
+  auto coerced = coerce_to_number(v);
+  if (!coerced) {
+    return coerced.error();
+  }
+  const double x = coerced.value();
+  if (std::isnan(x) || std::isinf(x)) {
+    return ErrorCode::Num;
+  }
+  // `std::trunc` rounds toward zero; casting through int64_t keeps the
+  // low-bit check exact for any |x| <= 2^63. Larger magnitudes wrap, but
+  // Excel's own behaviour at that range is also undefined — matching
+  // open-source xlcalc implementations.
+  const auto truncated = static_cast<std::int64_t>(std::trunc(x));
+  // C++ modulo on negative operands is implementation-defined-free only
+  // for `%2` returning 0/-1/1, so fold back to unsigned parity.
+  return (truncated % 2) == 0;
+}
+
+// ISEVEN(value) - truncated integer of value is even. Errors propagate.
+Value IsEven(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto even = truncated_is_even(args[0]);
+  if (!even) {
+    return Value::error(even.error());
+  }
+  return Value::boolean(even.value());
+}
+
+// ISODD(value) - truncated integer of value is odd. Errors propagate.
+Value IsOdd(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto even = truncated_is_even(args[0]);
+  if (!even) {
+    return Value::error(even.error());
+  }
+  return Value::boolean(!even.value());
+}
+
+// --- ISNONTEXT(value) --------------------------------------------------
+//
+// TRUE iff the argument is NOT text. Blank / Number / Bool / Error all
+// return TRUE. Only a Text-kind value returns FALSE. Registered with
+// `propagate_errors = false` so `ISNONTEXT(#DIV/0!) = TRUE` (errors do
+// NOT short-circuit through this function).
+Value IsNonText(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  return Value::boolean(args[0].kind() != ValueKind::Text);
+}
+
+// --- ERROR.TYPE(value) --------------------------------------------------
+//
+// Maps an Excel error value to its documented integer code. Non-error
+// inputs surface as `#N/A` (Excel's documented behaviour). Registered
+// with `propagate_errors = false` so the error argument is passed
+// through verbatim rather than short-circuited.
+//
+//   #NULL!         -> 1
+//   #DIV/0!        -> 2
+//   #VALUE!        -> 3
+//   #REF!          -> 4
+//   #NAME?         -> 5
+//   #NUM!          -> 6
+//   #N/A           -> 7
+//   #GETTING_DATA  -> 8
+//
+// Formulon's current ErrorCode enum does not have a #GETTING_DATA variant;
+// if one is added later the switch will need a new arm.
+Value ErrorType(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  const Value& v = args[0];
+  if (v.kind() != ValueKind::Error) {
+    return Value::error(ErrorCode::NA);
+  }
+  switch (v.as_error()) {
+    case ErrorCode::Null:
+      return Value::number(1.0);
+    case ErrorCode::Div0:
+      return Value::number(2.0);
+    case ErrorCode::Value:
+      return Value::number(3.0);
+    case ErrorCode::Ref:
+      return Value::number(4.0);
+    case ErrorCode::Name:
+      return Value::number(5.0);
+    case ErrorCode::Num:
+      return Value::number(6.0);
+    case ErrorCode::NA:
+      return Value::number(7.0);
+    case ErrorCode::GettingData:
+      return Value::number(8.0);
+    // Newer Excel errors (Spill, Calc, Field, Blocked, Connect, External,
+    // Busy, Python, Unknown) are not in the classic 1..8 ERROR.TYPE table
+    // and Microsoft's ja-JP Excel 365 Mac surfaces varying codes for them
+    // depending on build. We fall through to #N/A (matching the
+    // "non-standard error -> N/A" safety rail) until the oracle corpus
+    // pins a definitive code.
+    case ErrorCode::Spill:
+    case ErrorCode::Calc:
+    case ErrorCode::Field:
+    case ErrorCode::Blocked:
+    case ErrorCode::Connect:
+    case ErrorCode::External:
+    case ErrorCode::Busy:
+    case ErrorCode::Python:
+    case ErrorCode::Unknown:
+      return Value::error(ErrorCode::NA);
+  }
+  return Value::error(ErrorCode::NA);
+}
+
+// --- TYPE(value) --------------------------------------------------------
+//
+// Maps the argument's runtime kind to Excel's documented type code:
+//
+//   Number  -> 1
+//   Text    -> 2
+//   Bool    -> 4
+//   Error   -> 16
+//   Array   -> 64
+//   Blank   -> 1 (Excel treats an empty cell as Number for TYPE purposes)
+//
+// Registered with `propagate_errors = false` so `TYPE(#DIV/0!) = 16`
+// rather than short-circuiting.
+Value Type(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  switch (args[0].kind()) {
+    case ValueKind::Number:
+    case ValueKind::Blank:
+      return Value::number(1.0);
+    case ValueKind::Text:
+      return Value::number(2.0);
+    case ValueKind::Bool:
+      return Value::number(4.0);
+    case ValueKind::Error:
+      return Value::number(16.0);
+    case ValueKind::Array:
+      return Value::number(64.0);
+    case ValueKind::Ref:
+    case ValueKind::Lambda:
+      // Ref / Lambda are not user-visible scalar kinds in Excel; fall
+      // through to `#VALUE!` so unexpected shapes surface rather than
+      // silently returning a misleading type code.
+      return Value::error(ErrorCode::Value);
+  }
+  return Value::error(ErrorCode::Value);
+}
+
 }  // namespace
 
 void register_info_builtins(FunctionRegistry& registry) {
@@ -155,6 +325,19 @@ void register_info_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"NA", 0u, 0u, &Na});
   registry.register_function(FunctionDef{"N", 1u, 1u, &N});
   registry.register_function(FunctionDef{"T", 1u, 1u, &T});
+
+  // Parity predicates: coerce through `coerce_to_number`, so errors
+  // propagate through the dispatcher's default short-circuit (do NOT
+  // clear `propagate_errors`).
+  registry.register_function(FunctionDef{"ISEVEN", 1u, 1u, &IsEven});
+  registry.register_function(FunctionDef{"ISODD", 1u, 1u, &IsOdd});
+
+  // ISNONTEXT, ERROR.TYPE, TYPE all inspect error values directly rather
+  // than propagating them, so they opt out of the dispatcher's default
+  // left-most-error short-circuit just like the IS* family above.
+  registry.register_function(FunctionDef{"ISNONTEXT", 1u, 1u, &IsNonText, /*propagate_errors=*/false});
+  registry.register_function(FunctionDef{"ERROR.TYPE", 1u, 1u, &ErrorType, /*propagate_errors=*/false});
+  registry.register_function(FunctionDef{"TYPE", 1u, 1u, &Type, /*propagate_errors=*/false});
   // ROWS / COLUMNS / ROW / COLUMN are routed through the lazy dispatch
   // table in `tree_walker.cpp` (see `eval_rows_lazy` et al. in
   // `shape_ops_lazy.cpp`) because they must introspect each argument's

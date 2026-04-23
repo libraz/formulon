@@ -17,7 +17,7 @@ CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 
         wasm wasm-debug test-wasm test-python \
         oracle-setup oracle-gen oracle-verify \
         fuzz-parser fuzz-xlsx fuzz-eval bench coverage \
-        function-status
+        function-status behavior-status
 
 all: build
 
@@ -153,3 +153,10 @@ coverage:
 # catalog at tools/catalog/functions.txt. No build step required.
 function-status:
 	@python3 tools/catalog/status.py
+
+# Behaviour-vocabulary report. Parallels function-status but operates on
+# function sub-behaviours (TEXT format codes, DATEVALUE era strings, CP932
+# CHAR / CODE ranges, SEARCH / FIND wildcards). See
+# tools/catalog/behaviors.yaml.
+behavior-status:
+	@python3 tools/catalog/behaviors.py --report

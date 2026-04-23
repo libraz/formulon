@@ -35,6 +35,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_logical_test.cpp
   unit/eval/builtins_math_test.cpp
   unit/eval/builtins_math2_test.cpp
+  unit/eval/builtins_math3_test.cpp
+  unit/eval/builtins_math4_test.cpp
   unit/eval/builtins_text_test.cpp
   unit/eval/builtins_text2_test.cpp
   unit/eval/builtins_textb_test.cpp
@@ -42,6 +44,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/text_format_date_test.cpp
   unit/eval/value_numbervalue_test.cpp
   unit/eval/builtins_info_test.cpp
+  unit/eval/info_lazy_test.cpp
   unit/eval/builtins_count_test.cpp
   unit/eval/builtins_shape_test.cpp
   unit/eval/builtins_stats_test.cpp
@@ -61,6 +64,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_datetime_test.cpp
   unit/eval/builtins_datevalue_timevalue_test.cpp
   unit/eval/builtins_financial_test.cpp
+  unit/eval/builtins_financial2_test.cpp
   unit/eval/builtins_regression_test.cpp
   unit/eval/text_ops_test.cpp
   unit/eval/let_test.cpp
@@ -91,6 +95,30 @@ target_compile_definitions(formulon_unit_tests
 )
 
 gtest_discover_tests(formulon_unit_tests)
+
+# Behavior-vocabulary drift check. Parallel to RegistryCatalog.AllRegisteredInCatalog
+# but for function sub-behaviors (format codes, era strings, locale separators).
+# Prefers the oracle venv Python (which ships PyYAML) over the system interpreter
+# so `ctest` actually enforces the invariant on dev machines. Without PyYAML the
+# script soft-skips, which keeps CI green on hosts that haven't bootstrapped the
+# oracle venv but also means the invariant is not enforced there — acceptable
+# because the enforced run happens on any machine with `make oracle-setup`.
+set(_FORMULON_ORACLE_VENV_PY "${CMAKE_SOURCE_DIR}/tools/oracle/.venv/bin/python3")
+if(EXISTS "${_FORMULON_ORACLE_VENV_PY}")
+  set(_FORMULON_BEHAVIOR_PY "${_FORMULON_ORACLE_VENV_PY}")
+else()
+  find_package(Python3 COMPONENTS Interpreter)
+  if(Python3_Interpreter_FOUND)
+    set(_FORMULON_BEHAVIOR_PY "${Python3_EXECUTABLE}")
+  endif()
+endif()
+if(DEFINED _FORMULON_BEHAVIOR_PY)
+  add_test(
+    NAME BehaviorDrift
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/catalog/behaviors.py --check
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+endif()
 
 add_subdirectory(integration)
 add_subdirectory(oracle)

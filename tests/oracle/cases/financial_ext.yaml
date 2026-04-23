@@ -1,0 +1,163 @@
+suite: financial_ext
+description: Non-DCC financial builtins — DOLLARDE / DOLLARFR / EFFECT / NOMINAL / FVSCHEDULE / PDURATION / RRI / MIRR / ISPMT. See `eval/builtins/financial.cpp` and `eval/financial_lazy.cpp` (MIRR).
+# Matches the tolerance used by `financial.yaml`: Mac xlwings returns some
+# Excel-computed floats as their displayed value rather than the underlying
+# double, so 1e-3 absolute / 1e-6 relative comfortably covers display-
+# rounding error while still catching real formula divergence.
+tolerance: { abs: 1.0e-3, rel: 1.0e-6 }
+locale: ja-JP
+cases:
+  # -- DOLLARDE -----------------------------------------------------------
+  - id: dollarde_sixteenths
+    description: "DOLLARDE(1.02, 16): '1 + 2/16' under scale-100 -> 1.125"
+    formula: "=DOLLARDE(1.02, 16)"
+
+  - id: dollarde_halves_single_digit
+    description: "denom=2 -> scale=10: 1.1 -> 1 + 0.1*10/2 = 1.5"
+    formula: "=DOLLARDE(1.1, 2)"
+
+  - id: dollarde_denom_one_is_identity
+    description: "denom=1: result equals the input price"
+    formula: "=DOLLARDE(2.5, 1)"
+
+  - id: dollarde_denom_negative_is_num
+    description: "Negative denominator -> #NUM!"
+    formula: "=DOLLARDE(1.1, -2)"
+
+  - id: dollarde_denom_fractional_zero_is_div0
+    description: "denom=0.5 truncates to 0 -> #DIV/0!"
+    formula: "=DOLLARDE(1.1, 0.5)"
+
+  # -- DOLLARFR -----------------------------------------------------------
+  - id: dollarfr_sixteenths
+    description: "DOLLARFR(1.125, 16) = 1.02 (inverse of DOLLARDE example)"
+    formula: "=DOLLARFR(1.125, 16)"
+
+  - id: dollarfr_halves
+    description: "DOLLARFR(1.5, 2) = 1.1"
+    formula: "=DOLLARFR(1.5, 2)"
+
+  - id: dollarfr_negative_denom_is_num
+    formula: "=DOLLARFR(1.5, -2)"
+
+  - id: dollarfr_zero_denom_is_div0
+    formula: "=DOLLARFR(1.5, 0)"
+
+  # -- EFFECT -------------------------------------------------------------
+  - id: effect_monthly_compounding
+    description: "5.25% nominal compounded monthly -> ~5.378% effective"
+    formula: "=EFFECT(0.0525, 12)"
+
+  - id: effect_annual_is_identity
+    description: "npery=1: effect == nominal"
+    formula: "=EFFECT(0.05, 1)"
+
+  - id: effect_negative_nominal_is_num
+    formula: "=EFFECT(-0.05, 12)"
+
+  - id: effect_npery_below_one_is_num
+    description: "npery=0.5 truncates to 0 -> #NUM!"
+    formula: "=EFFECT(0.05, 0.5)"
+
+  # -- NOMINAL ------------------------------------------------------------
+  - id: nominal_inverse_of_effect
+    description: "NOMINAL round-trips EFFECT: ~5.378% -> 5.25%"
+    formula: "=NOMINAL(0.053781812, 12)"
+
+  - id: nominal_annual_is_identity
+    formula: "=NOMINAL(0.05, 1)"
+
+  - id: nominal_negative_is_num
+    formula: "=NOMINAL(-0.05, 12)"
+
+  - id: nominal_npery_below_one_is_num
+    formula: "=NOMINAL(0.05, 0.5)"
+
+  # -- FVSCHEDULE ---------------------------------------------------------
+  - id: fvschedule_range_of_rates
+    description: "principal=1000, rates {5%, 5%, 10%} -> 1212.75"
+    setup: { A1: 0.05, A2: 0.05, A3: 0.10 }
+    formula: "=FVSCHEDULE(1000, A1:A3)"
+
+  - id: fvschedule_single_rate
+    description: "Single scalar rate: principal*(1+r)"
+    formula: "=FVSCHEDULE(1000, 0.05)"
+
+  - id: fvschedule_negative_rate
+    description: "Negative rate reduces principal"
+    formula: "=FVSCHEDULE(1000, -0.1)"
+
+  # -- PDURATION ----------------------------------------------------------
+  - id: pduration_double_at_ten_percent
+    description: "log(2000/1000)/log(1.1) ~= 7.27 periods"
+    formula: "=PDURATION(0.1, 1000, 2000)"
+
+  - id: pduration_no_growth_is_zero
+    description: "pv==fv: log(1)/log(1+r) = 0"
+    formula: "=PDURATION(0.05, 1000, 1000)"
+
+  - id: pduration_rate_zero_is_num
+    formula: "=PDURATION(0, 1000, 2000)"
+
+  - id: pduration_negative_pv_is_num
+    formula: "=PDURATION(0.1, -1000, 2000)"
+
+  - id: pduration_negative_fv_is_num
+    formula: "=PDURATION(0.1, 1000, -2000)"
+
+  # -- RRI ----------------------------------------------------------------
+  - id: rri_double_over_five_years
+    description: "(2000/1000)^(1/5) - 1 ~= 0.1487"
+    formula: "=RRI(5, 1000, 2000)"
+
+  - id: rri_one_period_full_ratio
+    description: "nper=1: rate = fv/pv - 1"
+    formula: "=RRI(1, 1000, 1100)"
+
+  - id: rri_no_growth_is_zero
+    formula: "=RRI(5, 1000, 1000)"
+
+  - id: rri_nper_zero_is_num
+    formula: "=RRI(0, 1000, 2000)"
+
+  - id: rri_negative_pv_is_num
+    formula: "=RRI(5, -1000, 2000)"
+
+  # -- MIRR ---------------------------------------------------------------
+  - id: mirr_classic_microsoft_example
+    description: "Microsoft docs: {-120000, 39000, 30000, 21000, 37000, 46000} @ 10%/12%"
+    setup: { A1: -120000, A2: 39000, A3: 30000, A4: 21000, A5: 37000, A6: 46000 }
+    formula: "=MIRR(A1:A6, 0.1, 0.12)"
+
+  - id: mirr_array_literal
+    description: "Inline array literal cash flows"
+    formula: "=MIRR({-1000, 500, 700}, 0.1, 0.1)"
+
+  - id: mirr_all_positive_is_div0
+    description: "No sign change -> #DIV/0!"
+    setup: { A1: 100, A2: 200, A3: 300 }
+    formula: "=MIRR(A1:A3, 0.1, 0.1)"
+
+  - id: mirr_all_negative_is_minus_one
+    description: "All-negative CF: npv_pos=0 -> ratio=0 -> pow(0, x)-1 = -1"
+    setup: { A1: -100, A2: -200, A3: -300 }
+    formula: "=MIRR(A1:A3, 0.1, 0.1)"
+
+  # -- ISPMT --------------------------------------------------------------
+  - id: ispmt_first_period_full_interest
+    description: "ISPMT uses simple-interest schedule: per=0 gives -pv*rate"
+    formula: "=ISPMT(0.05, 0, 10, 1000)"
+
+  - id: ispmt_last_period_is_zero
+    description: "per=nper: (1 - 1) = 0 -> zero interest"
+    formula: "=ISPMT(0.05, 10, 10, 1000)"
+
+  - id: ispmt_mid_schedule
+    description: "Mid-schedule interest decreases linearly"
+    formula: "=ISPMT(0.1/12, 1, 36, 8000000)"
+
+  - id: ispmt_negative_pv_flips_sign
+    formula: "=ISPMT(0.05, 1, 10, -1000)"
+
+  - id: ispmt_nper_zero_is_div0
+    formula: "=ISPMT(0.05, 0, 0, 1000)"

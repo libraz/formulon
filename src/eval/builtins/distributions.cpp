@@ -749,6 +749,47 @@ Value HypgeomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   return finalize(HypgeomPmf(k, n, big_k, big_n));
 }
 
+// ---------------------------------------------------------------------------
+// Legacy (pre-2010) distribution spellings.
+//
+// LOGNORMDIST / HYPGEOMDIST / BETADIST predate the 2010 overhaul that
+// introduced LOGNORM.DIST / HYPGEOM.DIST / BETA.DIST with explicit
+// cumulative flags. The legacy forms inject the fixed cumulative bit
+// and forward to the canonical impl so the math stays in one place.
+// BETAINV and LOGINV / GAMMA* / WEIBULL have signature-identical
+// .NEW forms and therefore need no wrapper (they register the same
+// pointer under the legacy name).
+
+// LOGNORMDIST(x, mean, sd) - 3-arg legacy: cumulative CDF only.
+Value LognormDistLegacy(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  Value synthetic[4] = {args[0], args[1], args[2], Value::boolean(true)};
+  return LognormDist(synthetic, 4u, arena);
+}
+
+// HYPGEOMDIST(sample_s, number_sample, population_s, number_pop) - 4-arg
+// legacy: non-cumulative PMF only.
+Value HypgeomDistLegacy(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  Value synthetic[5] = {args[0], args[1], args[2], args[3], Value::boolean(false)};
+  return HypgeomDist(synthetic, 5u, arena);
+}
+
+// BETADIST(x, alpha, beta, [A], [B]) - 3-5 arg legacy: cumulative CDF
+// only. Injects `cumulative = TRUE` at slot 3 before calling BETA.DIST,
+// then forwards the optional A / B bounds (which default to [0, 1]).
+Value BetaDistLegacy(const Value* args, std::uint32_t arity, Arena& arena) {
+  Value synthetic[6] = {args[0], args[1], args[2], Value::boolean(true), Value::blank(), Value::blank()};
+  std::uint32_t new_arity = 4u;
+  if (arity >= 4u) {
+    synthetic[4] = args[3];
+    new_arity = 5u;
+  }
+  if (arity >= 5u) {
+    synthetic[5] = args[4];
+    new_arity = 6u;
+  }
+  return BetaDist(synthetic, new_arity, arena);
+}
+
 }  // namespace
 
 void register_distribution_builtins(FunctionRegistry& registry) {
@@ -772,6 +813,20 @@ void register_distribution_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"LOGNORM.INV", 3u, 3u, &LognormInv});
 
   registry.register_function(FunctionDef{"HYPGEOM.DIST", 5u, 5u, &HypgeomDist});
+
+  // Legacy (pre-2010) spellings. BETAINV, GAMMADIST, GAMMAINV, WEIBULL,
+  // and LOGINV are signature-identical to the .NEW form and share the
+  // impl pointer. LOGNORMDIST / HYPGEOMDIST / BETADIST route through
+  // wrappers above because their legacy signatures drop or shift the
+  // cumulative flag.
+  registry.register_function(FunctionDef{"BETADIST", 3u, 5u, &BetaDistLegacy});
+  registry.register_function(FunctionDef{"BETAINV", 3u, 5u, &BetaInv});
+  registry.register_function(FunctionDef{"GAMMADIST", 4u, 4u, &GammaDist});
+  registry.register_function(FunctionDef{"GAMMAINV", 3u, 3u, &GammaInv});
+  registry.register_function(FunctionDef{"WEIBULL", 4u, 4u, &WeibullDist});
+  registry.register_function(FunctionDef{"LOGNORMDIST", 3u, 3u, &LognormDistLegacy});
+  registry.register_function(FunctionDef{"LOGINV", 3u, 3u, &LognormInv});
+  registry.register_function(FunctionDef{"HYPGEOMDIST", 4u, 4u, &HypgeomDistLegacy});
 }
 
 }  // namespace eval

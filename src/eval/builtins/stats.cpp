@@ -594,8 +594,10 @@ double PoissonPmf(double k, double mean) {
 }
 
 // POISSON.DIST(x, mean, cumulative) - Poisson distribution PMF or CDF.
-// `x` is floored toward negative infinity. `x < 0` or `mean <= 0`
-// yields `#NUM!`. CDF is the O(x) partial sum of PMFs.
+// `x` is floored toward negative infinity. `x < 0` or `mean < 0` yields
+// `#NUM!`. `mean == 0` is the degenerate point mass at 0: PMF(0) = 1,
+// PMF(k) = 0 for k > 0, CDF(k) = 1 for k >= 0. Matches Mac Excel 365.
+// CDF is the O(x) partial sum of PMFs.
 Value PoissonDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto x_arg = coerce_to_number(args[0]);
   if (!x_arg) {
@@ -611,8 +613,17 @@ Value PoissonDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   }
   const double x = std::floor(x_arg.value());
   const double mean = mean_arg.value();
-  if (x < 0.0 || mean <= 0.0) {
+  if (x < 0.0 || mean < 0.0) {
     return Value::error(ErrorCode::Num);
+  }
+  if (mean == 0.0) {
+    // Degenerate distribution: all mass at k = 0. CDF is 1 at any x >= 0;
+    // PMF is 1 at k == 0 and 0 elsewhere. Handled explicitly so the log-
+    // space PoissonPmf doesn't hit log(0) = -inf.
+    if (cum.value()) {
+      return Value::number(1.0);
+    }
+    return Value::number(x == 0.0 ? 1.0 : 0.0);
   }
   double r;
   if (cum.value()) {
@@ -1284,6 +1295,51 @@ Value FInvRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return Value::number(r);
 }
 
+// ---------------------------------------------------------------------------
+// Legacy (pre-2010) distribution spellings.
+//
+// Excel kept the un-dotted names (NORMDIST, BINOMDIST, POISSON, ...) as
+// aliases when the 2010 release introduced the canonical forms
+// (NORM.DIST, BINOM.DIST, POISSON.DIST). Direct aliases share the same
+// impl pointer; wrappers below handle the handful of signatures that
+// differ from the canonical form (NORMSDIST is 1-arg-always-cumulative,
+// TDIST dispatches on its `tails` argument).
+
+// NORMSDIST(z) - 1-arg legacy: cumulative standard-normal CDF. Equivalent
+// to NORM.S.DIST(z, TRUE).
+Value NormSDistLegacy(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  Value synthetic[2] = {args[0], Value::boolean(true)};
+  return NormSDist(synthetic, 2u, arena);
+}
+
+// TDIST(x, deg_freedom, tails) - legacy: x must be >= 0; tails is 1 or 2
+// (truncated toward zero). tails=1 maps to T.DIST.RT, tails=2 maps to
+// T.DIST.2T. Any other tails value surfaces #NUM!.
+Value TDistLegacy(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  auto x_arg = coerce_to_number(args[0]);
+  if (!x_arg) {
+    return Value::error(x_arg.error());
+  }
+  auto tails_arg = coerce_to_number(args[2]);
+  if (!tails_arg) {
+    return Value::error(tails_arg.error());
+  }
+  const double x = x_arg.value();
+  const double tails = std::trunc(tails_arg.value());
+  if (x < 0.0) {
+    return Value::error(ErrorCode::Num);
+  }
+  if (tails == 1.0) {
+    Value synthetic[2] = {args[0], args[1]};
+    return TDistRt(synthetic, 2u, arena);
+  }
+  if (tails == 2.0) {
+    Value synthetic[2] = {args[0], args[1]};
+    return TDist2T(synthetic, 2u, arena);
+  }
+  return Value::error(ErrorCode::Num);
+}
+
 }  // namespace
 
 void register_stats_builtins(FunctionRegistry& registry) {
@@ -1410,6 +1466,23 @@ void register_stats_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"F.DIST.RT", 3u, 3u, &FDistRt});
   registry.register_function(FunctionDef{"F.INV", 3u, 3u, &FInv});
   registry.register_function(FunctionDef{"F.INV.RT", 3u, 3u, &FInvRt});
+
+  // Legacy (pre-2010) spellings. Signature-compatible aliases share the
+  // canonical impl pointer; NORMSDIST and TDIST have bespoke wrappers
+  // because their arities / tail semantics differ from the .NEW form.
+  registry.register_function(FunctionDef{"NORMDIST", 4u, 4u, &NormDist});
+  registry.register_function(FunctionDef{"NORMINV", 3u, 3u, &NormInv});
+  registry.register_function(FunctionDef{"NORMSDIST", 1u, 1u, &NormSDistLegacy});
+  registry.register_function(FunctionDef{"NORMSINV", 1u, 1u, &NormSInv});
+  registry.register_function(FunctionDef{"BINOMDIST", 4u, 4u, &BinomDist});
+  registry.register_function(FunctionDef{"POISSON", 3u, 3u, &PoissonDist});
+  registry.register_function(FunctionDef{"EXPONDIST", 3u, 3u, &ExponDist});
+  registry.register_function(FunctionDef{"CHIDIST", 2u, 2u, &ChisqDistRt});
+  registry.register_function(FunctionDef{"CHIINV", 2u, 2u, &ChisqInvRt});
+  registry.register_function(FunctionDef{"FDIST", 3u, 3u, &FDistRt});
+  registry.register_function(FunctionDef{"FINV", 3u, 3u, &FInvRt});
+  registry.register_function(FunctionDef{"TDIST", 3u, 3u, &TDistLegacy});
+  registry.register_function(FunctionDef{"TINV", 2u, 2u, &TInv2T});
 
   // The pairwise linear-regression family (CORREL, COVARIANCE.P,
   // COVARIANCE.S, SLOPE, INTERCEPT, RSQ, FORECAST / FORECAST.LINEAR)

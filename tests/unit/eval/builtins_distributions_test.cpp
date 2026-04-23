@@ -332,10 +332,25 @@ TEST(BuiltinsPoissonDist, NegativeXIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(BuiltinsPoissonDist, ZeroMeanIsNum) {
-  const Value v = EvalSource("=POISSON.DIST(0, 0, FALSE)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+TEST(BuiltinsPoissonDist, ZeroMeanIsPointMass) {
+  // Mac Excel 365: `mean == 0` is the degenerate Poisson concentrated at
+  // k = 0. PMF(0) = 1, PMF(k > 0) = 0, CDF(k >= 0) = 1. We align with the
+  // oracle rather than rejecting the edge case.
+  {
+    const Value v = EvalSource("=POISSON.DIST(0, 0, FALSE)");
+    ASSERT_TRUE(v.is_number());
+    EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+  }
+  {
+    const Value v = EvalSource("=POISSON.DIST(1, 0, FALSE)");
+    ASSERT_TRUE(v.is_number());
+    EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+  }
+  {
+    const Value v = EvalSource("=POISSON.DIST(3, 0, TRUE)");
+    ASSERT_TRUE(v.is_number());
+    EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+  }
 }
 
 TEST(BuiltinsPoissonDist, NegativeMeanIsNum) {

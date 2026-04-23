@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-23T02:23:21Z"
+    "generated_at": "2026-04-23T11:29:13Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -306,6 +306,480 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      }
+    },
+    {
+      "id": "iseven_of_positive_even",
+      "formula": "=ISEVEN(4)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "iseven_of_positive_odd",
+      "formula": "=ISEVEN(3)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "iseven_of_zero",
+      "formula": "=ISEVEN(0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "iseven_negative_fraction_truncates",
+      "formula": "=ISEVEN(-2.9)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "iseven_of_true",
+      "formula": "=ISEVEN(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "iseven_of_false",
+      "formula": "=ISEVEN(FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "iseven_of_text_is_value",
+      "formula": "=ISEVEN(\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "isodd_of_positive_odd",
+      "formula": "=ISODD(3)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "isodd_of_positive_even",
+      "formula": "=ISODD(4)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "isodd_negative_fraction_truncates",
+      "formula": "=ISODD(-3.9)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "isodd_of_true",
+      "formula": "=ISODD(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "isnontext_of_text_is_false",
+      "formula": "=ISNONTEXT(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "isnontext_of_empty_string_is_false",
+      "formula": "=ISNONTEXT(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "isnontext_of_number_is_true",
+      "formula": "=ISNONTEXT(42)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "isnontext_of_bool_is_true",
+      "formula": "=ISNONTEXT(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "isnontext_of_error_is_true",
+      "formula": "=ISNONTEXT(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "isnontext_of_blank_cell_is_true",
+      "formula": "=ISNONTEXT(A1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "error_type_div0_is_2",
+      "formula": "=ERROR.TYPE(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "error_type_value_is_3",
+      "formula": "=ERROR.TYPE(#VALUE!)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "error_type_ref_is_4",
+      "formula": "=ERROR.TYPE(#REF!)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "error_type_name_is_5",
+      "formula": "=ERROR.TYPE(#NAME?)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "error_type_num_is_6",
+      "formula": "=ERROR.TYPE(#NUM!)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "error_type_na_is_7",
+      "formula": "=ERROR.TYPE(NA())",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "error_type_non_error_is_na",
+      "formula": "=ERROR.TYPE(42)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "type_of_number",
+      "formula": "=TYPE(42)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "type_of_text",
+      "formula": "=TYPE(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "type_of_bool",
+      "formula": "=TYPE(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "type_of_error",
+      "formula": "=TYPE(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 16.0
+      }
+    },
+    {
+      "id": "type_of_empty_cell",
+      "formula": "=TYPE(A1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "isformula_of_formula_cell",
+      "formula": "=ISFORMULA(A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=1+2"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "isformula_of_literal_cell",
+      "formula": "=ISFORMULA(A1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "isformula_of_empty_cell",
+      "formula": "=ISFORMULA(A1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "isformula_of_literal_number_is_value",
+      "formula": "=ISFORMULA(42)",
+      "setup": {},
+      "skipped": "Mac returns #VALUE!; xlwings reads it back as blank, producing a spurious kind mismatch."
+    },
+    {
+      "id": "isformula_of_literal_text_is_value",
+      "formula": "=ISFORMULA(\"A1\")",
+      "setup": {},
+      "skipped": "Mac returns #VALUE!; xlwings reads it back as blank, producing a spurious kind mismatch."
+    },
+    {
+      "id": "isref_of_cell_ref",
+      "formula": "=ISREF(A1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "isref_of_range",
+      "formula": "=ISREF(A1:A2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "isref_of_number_literal",
+      "formula": "=ISREF(42)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "isref_of_text_literal",
+      "formula": "=ISREF(\"A1\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "isref_of_arithmetic",
+      "formula": "=ISREF(1+2)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "isref_of_sum_call",
+      "formula": "=ISREF(SUM(A1:A2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "isref_of_indirect_valid",
+      "formula": "=ISREF(INDIRECT(\"A1\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "isref_of_indirect_invalid",
+      "formula": "=ISREF(INDIRECT(\"not a ref\"))",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "isref_of_offset",
+      "formula": "=ISREF(OFFSET(A1, 0, 0))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "sheet_of_missing_name_is_na",
+      "formula": "=SHEET(\"NoSuchSheet\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sheets_of_single_ref",
+      "formula": "=SHEETS(A1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "sheets_of_range",
+      "formula": "=SHEETS(A1:A2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "sheets_of_non_reference_is_na",
+      "formula": "=SHEETS(42)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
       }
     }
   ]

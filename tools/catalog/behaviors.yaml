@@ -1,0 +1,273 @@
+# Formulon behaviour-vocabulary catalog.
+#
+# The canonical `tools/catalog/functions.txt` tracks Excel function *names*;
+# this file tracks function *sub-behaviours* that live one level deeper than
+# a name and that Formulon implements (or omits) at argument granularity —
+# TEXT format codes, DATEVALUE ja-JP era strings, NUMBERVALUE locale
+# separators, CHAR / CODE CP932 ranges, SEARCH / FIND wildcards, and a few
+# broadcasting patterns. The oracle case corpus under `tests/oracle/cases/`
+# remains the sole source of truth for *behaviour*: this file declares which
+# sub-behaviours we *intend* to track, and `tools/catalog/behaviors.py`
+# verifies the declared intent against the observed case coverage.
+#
+# Schema:
+#
+#   groups:
+#     - function: "TEXT"
+#       aspect:   "format codes"
+#       behaviors:
+#         - name:     "yyyy"       # human-readable label (unique within group)
+#           probe:    "yyyy"       # plain substring search in the case formula
+#           expected: impl         # impl | diverged | missing
+#         - name:     "mmm"
+#           probe_regex: '\bmmm\b' # Python re, anchored as needed
+#           expected: impl
+#
+# `probe` is a plain substring match on the YAML-level `formula:` field of
+# every case under `tests/oracle/cases/`. `probe_regex` is a Python `re`
+# pattern used when substring search is too blunt (e.g. distinguishing
+# `mmm` from `mmmm`). Exactly one of `probe` / `probe_regex` must be set.
+#
+# `expected` encodes what `behaviors.py` should observe:
+#
+#   impl      - at least one *live* oracle case (not a skip-oracle divergence)
+#               exists and matches the probe. This is what "we rely on this
+#               sub-behaviour" looks like.
+#   diverged  - matching cases exist but every one of them is listed in
+#               `tests/divergence.yaml` with `mode: skip-oracle`. The
+#               sub-behaviour is acknowledged but intentionally skipped.
+#   missing   - no oracle case matches the probe. Either we have not yet
+#               added coverage, or the behaviour is intentionally out of
+#               scope. TODO entries land here.
+#
+# When the declared `expected` drifts away from the observed status,
+# `behaviors.py --check` (wired into ctest as `BehaviorDrift`) fails with a
+# diff. The fix is to either widen coverage (add an oracle case), adjust
+# `divergence.yaml`, or update this file — in that order of preference.
+
+groups:
+
+  # -------------------------------------------------------------------------
+  # TEXT format-string tokens. Covered by the parser / token enum in
+  # `src/eval/text_format/number_format.cpp` and exercised under
+  # `tests/oracle/cases/text_format.yaml`.
+  # -------------------------------------------------------------------------
+  - function: "TEXT"
+    aspect: "format codes"
+    behaviors:
+      - name: "yyyy (4-digit year)"
+        probe: "yyyy"
+        expected: impl
+      - name: "yy (2-digit year)"
+        probe_regex: '"yy(?!y)'
+        expected: impl
+      - name: "mmmm (month name long)"
+        probe: "mmmm"
+        expected: impl
+      - name: "mmm (month name short)"
+        probe_regex: '\bmmm(?!m)'
+        expected: impl
+      - name: "mm (2-digit month or minute)"
+        probe_regex: '(?<![a-z])mm(?![a-z])'
+        expected: impl
+      - name: "m (1-digit month or minute)"
+        probe_regex: '(?<![a-z])m(?![a-z])'
+        expected: impl
+      - name: "dddd (weekday long)"
+        probe: "dddd"
+        expected: impl
+      - name: "ddd (weekday short)"
+        probe_regex: '\bddd(?!d)'
+        expected: impl
+      - name: "dd (2-digit day)"
+        probe_regex: '(?<![a-z])dd(?![a-z])'
+        expected: impl
+      - name: "d (1-digit day)"
+        probe_regex: '(?<![a-z])d(?![a-z])'
+        expected: impl
+      - name: "aaaa / aaa (ja-JP weekday kanji)"
+        probe_regex: 'aaa+'
+        expected: missing
+      - name: "gggg / ggg / g (ja-JP era)"
+        probe_regex: 'ggg+|"g"'
+        expected: missing
+      - name: "[Red] colour bracket"
+        probe: "[Red]"
+        expected: impl
+      - name: "[>=N] conditional bracket"
+        probe_regex: '\[\s*[<>=][^]]*\]'
+        expected: missing
+      - name: "[$-409] en-US locale prefix"
+        probe: "[$-409]"
+        expected: impl
+      - name: "[$-411] ja-JP locale prefix"
+        probe: "[$-411]"
+        expected: missing
+      - name: "[h] elapsed hours"
+        probe: "[h]"
+        expected: impl
+      - name: "[m] elapsed minutes"
+        probe: "[m]"
+        expected: impl
+      - name: "[s] elapsed seconds"
+        probe: "[s]"
+        expected: impl
+      - name: "# ?/? fraction format"
+        probe_regex: '\?\s*/\s*\?'
+        expected: missing
+      - name: "0.00E+00 scientific"
+        probe_regex: '0\.0+E\+'
+        expected: impl
+      - name: "0% percent"
+        probe_regex: '0%"|"[^"]*%"'
+        expected: impl
+      - name: "#,##0 thousands separator"
+        probe: "#,##0"
+        expected: impl
+      - name: "_) underscore-padding"
+        probe_regex: '_[)\(\- ]'
+        expected: missing
+      - name: "@ text-section placeholder"
+        probe_regex: '"[^"]*@[^"]*"'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # DATEVALUE ja-JP era string recognition. Implemented in
+  # `src/eval/date_text_parse.cpp` (shared with VALUE / NUMBERVALUE). None of
+  # the era forms are recognised today; the vocabulary enumerates them so
+  # the TODO list is discoverable.
+  # -------------------------------------------------------------------------
+  - function: "DATEVALUE"
+    aspect: "ja-JP era strings"
+    behaviors:
+      - name: "令和 (Reiwa) full form"
+        probe: "令和"
+        expected: missing
+      - name: "平成 (Heisei) full form"
+        probe: "平成"
+        expected: missing
+      - name: "昭和 (Showa) full form"
+        probe: "昭和"
+        expected: missing
+      - name: "大正 (Taisho) full form"
+        probe: "大正"
+        expected: missing
+      - name: "明治 (Meiji) full form"
+        probe: "明治"
+        expected: missing
+      - name: "元年 (first-year marker)"
+        probe: "元年"
+        expected: missing
+      - name: "R6.4.22 short Reiwa form"
+        probe_regex: '"R\d'
+        expected: missing
+      - name: "H30.1.1 short Heisei form"
+        probe_regex: '"H\d'
+        expected: missing
+
+  # -------------------------------------------------------------------------
+  # CHAR / CODE: Mac Excel ja-JP uses CP932 / JIS X 0208. The ASCII and
+  # half-width-katakana regions are implemented; DBCS lead bytes and the
+  # row-cell encoding of hiragana / kanji remain as documented divergences
+  # (see `tests/divergence.yaml`).
+  # -------------------------------------------------------------------------
+  - function: "CHAR / CODE"
+    aspect: "CP932 ranges"
+    behaviors:
+      - name: "ASCII passthrough (0x00..0x7F)"
+        probe_regex: '=CHAR\(\d+\)|=CODE\("[\x20-\x7e]"\)'
+        expected: impl
+      - name: "half-width katakana (LENB byte count)"
+        probe_regex: 'ｱ|ｲ|ｳ|ｴ|ｵ'
+        expected: impl
+      - name: "hiragana via CODE (JIS row-cell)"
+        # Word boundary keeps `UNICODE("あ` from matching — `UNICODE` ends
+        # in `CODE` and would otherwise collide with the `CODE("あ` probe.
+        probe_regex: '(?<![A-Z])CODE\("あ'
+        expected: diverged
+      - name: "DBCS lead byte (0x81..0x9F / 0xE0..0xFC)"
+        # Lead-byte numeric ranges: 129..159 and 224..252. Half-width
+        # katakana (160..223) is deliberately excluded.
+        probe_regex: '=CHAR\((?:12[9]|1[3-5][0-9]|22[4-9]|2[3-4][0-9]|25[0-2])\)'
+        expected: missing
+
+  # -------------------------------------------------------------------------
+  # Byte-oriented text slicing (LENB / LEFTB / RIGHTB / MIDB). The ja-JP
+  # DBCS counts ASCII=1, half-width kana=1, everything else=2 (including
+  # supplementary-plane characters, each counted as a single 2-byte run).
+  # -------------------------------------------------------------------------
+  - function: "LENB / LEFTB / MIDB / RIGHTB"
+    aspect: "ja-JP DBCS byte counts"
+    behaviors:
+      - name: "ASCII = 1 byte"
+        probe: 'LENB("hello'
+        expected: impl
+      - name: "half-width kana = 1 byte"
+        probe: 'LENB("ｱ'
+        expected: impl
+      - name: "hiragana / kanji = 2 bytes"
+        probe: 'LENB("あ'
+        expected: impl
+      - name: "supplementary-plane emoji"
+        probe_regex: 'LENB\("😀'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # SEARCH / FIND wildcard handling. SEARCH supports `*` and `?`, with `~*`
+  # and `~?` as literal escapes. FIND is strictly literal in Excel.
+  # -------------------------------------------------------------------------
+  - function: "SEARCH / FIND"
+    aspect: "wildcards"
+    behaviors:
+      - name: "SEARCH with * wildcard"
+        probe_regex: 'SEARCH\("[^"]*\*'
+        expected: impl
+      - name: "SEARCH with ? wildcard"
+        probe_regex: 'SEARCH\("[^"]*\?'
+        expected: impl
+      - name: "SEARCH with ~* literal escape"
+        probe_regex: 'SEARCH\("[^"]*~\*'
+        expected: missing
+      - name: "SEARCH with ~? literal escape"
+        probe_regex: 'SEARCH\("[^"]*~\?'
+        expected: missing
+
+  # -------------------------------------------------------------------------
+  # NUMBERVALUE separator overrides. The 1-arg form uses en-US defaults
+  # (`.` decimal, `,` group); the 2- and 3-arg forms accept caller-supplied
+  # overrides.
+  # -------------------------------------------------------------------------
+  - function: "NUMBERVALUE"
+    aspect: "locale separators"
+    behaviors:
+      - name: "default separators (./,)"
+        probe: 'NUMBERVALUE("'
+        expected: impl
+      - name: "custom decimal separator"
+        probe_regex: 'NUMBERVALUE\("[^"]+",\s*","'
+        expected: impl
+      - name: "custom group separator (3-arg)"
+        probe_regex: 'NUMBERVALUE\("[^"]+",\s*"[^"]+",\s*"'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # Shape of function arguments. Scalars, cell references, ranges, and
+  # array literals all feed the same dispatcher, but the coercion path
+  # differs — this group exists to make sure each shape has at least one
+  # live oracle case.
+  # -------------------------------------------------------------------------
+  - function: "(shape)"
+    aspect: "argument shapes"
+    behaviors:
+      - name: "range argument to aggregator (SUM(A1:A3))"
+        probe_regex: 'SUM\(A\d+:A\d+'
+        expected: impl
+      - name: "single cell-ref argument (ISTEXT(A1))"
+        probe_regex: '\(A\d+\)'
+        expected: impl
+      - name: "array literal row {1,2,3}"
+        probe_regex: '\{[0-9,\s.\-]+\}'
+        expected: impl
+      - name: "array literal column {1;2;3}"
+        probe_regex: '\{[0-9;\s.\-]+\}'
+        expected: impl

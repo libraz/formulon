@@ -525,6 +525,253 @@ TEST(BuiltinsT, TwoArgsIsArityViolation) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+// ---------------------------------------------------------------------------
+// ISEVEN (truncate-then-test; coerces through `coerce_to_number`)
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsIsEven, EvenIntegerIsTrue) {
+  const Value v = EvalSource("=ISEVEN(4)");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(BuiltinsIsEven, OddIntegerIsFalse) {
+  const Value v = EvalSource("=ISEVEN(3)");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_FALSE(v.as_boolean());
+}
+
+TEST(BuiltinsIsEven, ZeroIsTrue) {
+  const Value v = EvalSource("=ISEVEN(0)");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(BuiltinsIsEven, NegativeFractionTruncatesTowardZero) {
+  // -2.9 truncates to -2 (NOT rounds to -3); -2 is even.
+  const Value v = EvalSource("=ISEVEN(-2.9)");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(BuiltinsIsEven, PositiveFractionTruncatesTowardZero) {
+  // 3.9 truncates to 3 -> odd -> FALSE.
+  const Value v = EvalSource("=ISEVEN(3.9)");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_FALSE(v.as_boolean());
+}
+
+TEST(BuiltinsIsEven, TrueIsValueError) {
+  // Mac Excel 365 rejects Bool inputs to ISEVEN/ISODD outright — TRUE is
+  // NOT coerced to 1 the way it is in most numeric contexts.
+  const Value v = EvalSource("=ISEVEN(TRUE)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsIsEven, FalseIsValueError) {
+  // FALSE is also rejected, even though 0 would trivially be even.
+  const Value v = EvalSource("=ISEVEN(FALSE)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsIsEven, BlankCoercesToZeroEven) {
+  const Value v = CallSingle("ISEVEN", Value::blank());
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(BuiltinsIsEven, TextIsValueError) {
+  const Value v = EvalSource("=ISEVEN(\"abc\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsIsEven, ErrorPropagates) {
+  // Errors propagate through the dispatcher's default short-circuit;
+  // ISEVEN does NOT clear `propagate_errors`.
+  const Value v = EvalSource("=ISEVEN(#DIV/0!)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+// ---------------------------------------------------------------------------
+// ISODD (analogue of ISEVEN)
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsIsOdd, OddIntegerIsTrue) {
+  const Value v = EvalSource("=ISODD(3)");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(BuiltinsIsOdd, EvenIntegerIsFalse) {
+  const Value v = EvalSource("=ISODD(4)");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_FALSE(v.as_boolean());
+}
+
+TEST(BuiltinsIsOdd, NegativeOddTruncates) {
+  // -3.9 truncates to -3 -> odd -> TRUE.
+  const Value v = EvalSource("=ISODD(-3.9)");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(BuiltinsIsOdd, TrueIsValueError) {
+  // Matches ISEVEN: Bool inputs are rejected, not coerced.
+  const Value v = EvalSource("=ISODD(TRUE)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsIsOdd, ErrorPropagates) {
+  const Value v = EvalSource("=ISODD(#NAME?)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+}
+
+// ---------------------------------------------------------------------------
+// ISNONTEXT (inverse of ISTEXT; error does NOT propagate)
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsIsNonText, TextIsFalse) {
+  const Value v = EvalSource("=ISNONTEXT(\"hello\")");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_FALSE(v.as_boolean());
+}
+
+TEST(BuiltinsIsNonText, EmptyTextIsFalse) {
+  const Value v = EvalSource("=ISNONTEXT(\"\")");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_FALSE(v.as_boolean());
+}
+
+TEST(BuiltinsIsNonText, NumberIsTrue) {
+  const Value v = EvalSource("=ISNONTEXT(42)");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(BuiltinsIsNonText, BoolIsTrue) {
+  const Value v = EvalSource("=ISNONTEXT(TRUE)");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(BuiltinsIsNonText, ErrorIsTrueNotPropagated) {
+  // Smoking-gun test: ISNONTEXT(#DIV/0!) = TRUE (does NOT short-circuit
+  // to the error). Matches ISERROR's pattern.
+  const Value v = EvalSource("=ISNONTEXT(#DIV/0!)");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(BuiltinsIsNonText, BlankIsTrue) {
+  const Value v = CallSingle("ISNONTEXT", Value::blank());
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+// ---------------------------------------------------------------------------
+// ERROR.TYPE
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsErrorType, DivZeroIsTwo) {
+  const Value v = EvalSource("=ERROR.TYPE(#DIV/0!)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 2.0);
+}
+
+TEST(BuiltinsErrorType, ValueIsThree) {
+  const Value v = EvalSource("=ERROR.TYPE(#VALUE!)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 3.0);
+}
+
+TEST(BuiltinsErrorType, RefIsFour) {
+  const Value v = EvalSource("=ERROR.TYPE(#REF!)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 4.0);
+}
+
+TEST(BuiltinsErrorType, NameIsFive) {
+  const Value v = EvalSource("=ERROR.TYPE(#NAME?)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 5.0);
+}
+
+TEST(BuiltinsErrorType, NumIsSix) {
+  const Value v = EvalSource("=ERROR.TYPE(#NUM!)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 6.0);
+}
+
+TEST(BuiltinsErrorType, NaIsSeven) {
+  const Value v = EvalSource("=ERROR.TYPE(#N/A)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 7.0);
+}
+
+TEST(BuiltinsErrorType, ComputedErrorIsNotShortCircuited) {
+  // Confirms propagate_errors=false wiring on a non-literal trigger: the
+  // dispatcher must hand the materialised #DIV/0! to the body, not
+  // short-circuit the call.
+  const Value v = EvalSource("=ERROR.TYPE(1/0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 2.0);
+}
+
+TEST(BuiltinsErrorType, NumberIsNa) {
+  // Non-error arg -> #N/A per Microsoft docs.
+  const Value v = EvalSource("=ERROR.TYPE(42)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsErrorType, TextIsNa) {
+  const Value v = EvalSource("=ERROR.TYPE(\"hello\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+// ---------------------------------------------------------------------------
+// TYPE
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsType, NumberIsOne) {
+  const Value v = EvalSource("=TYPE(42)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1.0);
+}
+
+TEST(BuiltinsType, TextIsTwo) {
+  const Value v = EvalSource("=TYPE(\"hello\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 2.0);
+}
+
+TEST(BuiltinsType, BoolIsFour) {
+  const Value v = EvalSource("=TYPE(TRUE)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 4.0);
+}
+
+TEST(BuiltinsType, ErrorIsSixteenNotPropagated) {
+  // propagate_errors=false: TYPE(#DIV/0!) = 16, not #DIV/0!.
+  const Value v = EvalSource("=TYPE(#DIV/0!)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 16.0);
+}
+
+TEST(BuiltinsType, BlankIsOne) {
+  // Excel's documented behaviour: TYPE of an empty cell is 1 (Number).
+  const Value v = CallSingle("TYPE", Value::blank());
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

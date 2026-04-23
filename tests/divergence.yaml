@@ -97,6 +97,11 @@ entries:
     reason: "=TEXT(42, \"\") -> \"\" which xlwings read-back classifies as blank. Formulon correctly returns text(\"\")."
     prefer: formulon
     first_noted: 2026-04-23
+  - id: roman_zero_is_empty
+    mode: skip-oracle
+    reason: "ROMAN(0) -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
+    prefer: formulon
+    first_noted: 2026-04-23
 
   # -- CODE / CHAR: Mac Excel ja-JP uses CP932 / JIS X 0208 encoding ------
   # Mac Excel ja-JP's CODE / CHAR operate on the Shift-JIS (CP932)
@@ -111,6 +116,25 @@ entries:
     mode: skip-oracle
     reason: "Mac Excel ja-JP CODE returns JIS X 0208 row-cell (9250 for \"あ\"); Formulon returns the Unicode codepoint (12354) pending a CP932 table."
     prefer: mac-excel-365
+    first_noted: 2026-04-23
+
+  # -- ISFORMULA of non-reference literals ---------------------------------
+  # Mac Excel 365 returns `#VALUE!` for ISFORMULA(42) and
+  # ISFORMULA("A1"), matching the documented rule that ISFORMULA expects
+  # a reference. xlwings reads that specific error back as blank (the
+  # CVErr path the driver uses mis-maps #VALUE! from these argument
+  # shapes), so the golden records `kind: blank` rather than the actual
+  # error. Formulon correctly surfaces `#VALUE!`. Skipped until we
+  # replace the xlwings read-back with an AppleScript/COM path.
+  - id: isformula_of_literal_number_is_value
+    mode: skip-oracle
+    reason: "Mac returns #VALUE!; xlwings reads it back as blank, producing a spurious kind mismatch."
+    prefer: formulon
+    first_noted: 2026-04-23
+  - id: isformula_of_literal_text_is_value
+    mode: skip-oracle
+    reason: "Mac returns #VALUE!; xlwings reads it back as blank, producing a spurious kind mismatch."
+    prefer: formulon
     first_noted: 2026-04-23
 
 # -- How to add ------------------------------------------------------------
