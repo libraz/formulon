@@ -77,6 +77,17 @@ YMD ymd_from_serial(double serial_floor) noexcept {
 }
 
 double serial_from_ymd(int y, unsigned m, unsigned d) noexcept {
+  // Excel reserves serial 60 for the fictitious 1900-02-29 that the 1900
+  // leap-year bug retains. `days_from_civil` would normalise (1900, 2, 29)
+  // to the real civil day 1900-03-01, which maps through
+  // `kExcelBaseAfterGhost` to serial 61 (the correct answer for 1900-03-01).
+  // Intercept the literal input shape here BEFORE normalisation so
+  // DATE(1900, 2, 29) still returns 60. Callers that reach the ghost day
+  // via month/day overflow (e.g. DATE(1900, 1, 60) -> 1900-03-01) are
+  // unaffected because their raw (y, m, d) triple is not (1900, 2, 29).
+  if (y == 1900 && m == 2u && d == 29u) {
+    return 60.0;
+  }
   const std::int64_t civil = days_from_civil(y, m, d);
   // Dates strictly before 1900-03-01 use the "before-ghost" base; the rest
   // (including negative civil days for pre-1900 inputs, which the caller

@@ -4,11 +4,15 @@
 // COUNTBLANK. Each test parses a formula source, evaluates the AST
 // through the default registry, and asserts the resulting Value.
 //
-// All three functions are registered with `propagate_errors = false` and
-// `accepts_ranges = true`, so errors inside expanded ranges reach the
-// impl directly and are skipped or counted per Excel semantics. See the
-// block comment above `Count` in src/eval/builtins.cpp for the accepted
-// range-vs-direct divergence.
+// COUNTA and COUNTBLANK are registered with `propagate_errors = false`
+// and `accepts_ranges = true`, so errors inside expanded ranges reach the
+// impl directly and are skipped or counted per Excel semantics.
+//
+// COUNT itself is NOT in the eager registry: it lives in the lazy
+// dispatch table (`eval_count_lazy` in special_forms_lazy.cpp) because
+// Excel's "direct-arg Bool counts, range-sourced Bool doesn't" rule
+// requires per-arg AST inspection that the eager dispatcher's flattened
+// values vector has already erased.
 
 #include <cstdint>
 #include <string>
@@ -84,23 +88,22 @@ Value CallDirect(std::string_view name, const Value* args, std::uint32_t arity) 
 // Registry pins
 // ---------------------------------------------------------------------------
 
-TEST(BuiltinsCountRegistry, AllThreeRegistered) {
-  EXPECT_NE(default_registry().lookup("COUNT"), nullptr);
+TEST(BuiltinsCountRegistry, CountaAndCountblankRegistered) {
+  // COUNTA / COUNTBLANK ride the eager registry path. COUNT is lazy and
+  // therefore absent from the registry; the dispatch table in
+  // tree_walker.cpp routes it directly.
+  EXPECT_EQ(default_registry().lookup("COUNT"), nullptr);
   EXPECT_NE(default_registry().lookup("COUNTA"), nullptr);
   EXPECT_NE(default_registry().lookup("COUNTBLANK"), nullptr);
 }
 
-TEST(BuiltinsCountRegistry, AllAreRangeAwareAndNonPropagating) {
-  const FunctionDef* count = default_registry().lookup("COUNT");
+TEST(BuiltinsCountRegistry, CountaAndCountblankRangeAwareAndNonPropagating) {
   const FunctionDef* counta = default_registry().lookup("COUNTA");
   const FunctionDef* countblank = default_registry().lookup("COUNTBLANK");
-  ASSERT_NE(count, nullptr);
   ASSERT_NE(counta, nullptr);
   ASSERT_NE(countblank, nullptr);
-  EXPECT_TRUE(count->accepts_ranges);
   EXPECT_TRUE(counta->accepts_ranges);
   EXPECT_TRUE(countblank->accepts_ranges);
-  EXPECT_FALSE(count->propagate_errors);
   EXPECT_FALSE(counta->propagate_errors);
   EXPECT_FALSE(countblank->propagate_errors);
 }
@@ -127,11 +130,13 @@ TEST(BuiltinsCount, NegativeAndFractionalNumbers) {
   EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
 }
 
-TEST(BuiltinsCount, BooleanLiteralIsSkipped) {
-  // Excel pin: COUNT ignores booleans even when they are direct arguments.
+TEST(BuiltinsCount, BooleanLiteralIsCountedAsDirectArg) {
+  // Excel pin: COUNT counts booleans when they are direct arguments, but
+  // NOT when they are sourced from a range. Verified against Mac Excel 365
+  // (`=COUNT(TRUE)` -> 1).
   const Value v = EvalSource("=COUNT(TRUE)");
   ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
 }
 
 TEST(BuiltinsCount, NumericTextIsSkipped) {
@@ -155,16 +160,25 @@ TEST(BuiltinsCount, DirectErrorArgIsSkipped) {
   EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
 }
 
-TEST(BuiltinsCount, MixedTypesCountsOnlyNumbers) {
+TEST(BuiltinsCount, MixedDirectArgsCountsNumbersAndBooleans) {
+  // Direct-arg rule: numbers AND booleans count; text and errors skip.
+  // Of the seven args below, {1, 3, 4.5} are numbers and {TRUE, FALSE}
+  // are booleans -> 5. The two quoted numeric-looking strings skip.
   const Value v = EvalSource("=COUNT(1, TRUE, \"2\", 3, FALSE, \"text\", 4.5)");
   ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(v.as_number(), 5.0);
 }
 
-TEST(BuiltinsCount, BlankArgIsSkipped) {
-  // Blank has no formula literal, so we invoke the impl directly.
-  const Value args[] = {Value::number(1.0), Value::blank(), Value::number(2.0)};
-  const Value v = CallDirect("COUNT", args, 3u);
+TEST(BuiltinsCount, BlankCellInRangeIsSkipped) {
+  // Blank has no formula literal and COUNT is lazy (not in the registry),
+  // so we can't call the impl directly. Instead route a Blank through a
+  // range: A2 is unset, so the range flattens as [1, Blank, 2]. COUNT
+  // skips the blank and returns 2.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  // row 1 left blank
+  wb.sheet(0).set_cell_value(2, 0, Value::number(2.0));
+  const Value v = EvalSourceIn("=COUNT(A1:A3)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }

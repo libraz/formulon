@@ -157,36 +157,20 @@ Value Product(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 
 // --- Counting aggregators -----------------------------------------------
 //
-// COUNT / COUNTA / COUNTBLANK. Unlike SUM / AVERAGE / MIN / MAX / PRODUCT
-// these three are registered with `propagate_errors = false`: Excel's COUNT
-// family is specified in terms of which cells to "count" rather than which
-// values to coerce, so an error inside a range must not short-circuit the
-// whole call. That opt-out means the impls see Error-typed values in their
-// args array directly and must skip them explicitly.
+// COUNTA / COUNTBLANK. Both are registered with `propagate_errors = false`:
+// Excel's COUNT family is specified in terms of which cells to "count"
+// rather than which values to coerce, so an error inside a range must not
+// short-circuit the whole call. That opt-out means the impls see
+// Error-typed values in their args array directly and must skip them
+// explicitly.
 //
-// Accepted divergence (range-vs-direct parity):
-//   =COUNT(1, 1/0) in Excel is #DIV/0! because the error propagates as a
-//   direct argument; =COUNT(A1:A2) where one cell holds #DIV/0! silently
-//   skips the error and counts only the numerics. We do not distinguish
-//   the two call shapes - any error anywhere is skipped - so direct-arg
-//   callers get the range-shape behaviour. The same simplification already
-//   applies to text / bool values appearing inside SUM-family ranges (see
-//   FunctionDef::accepts_ranges comment in function_registry.h). A true
-//   range-context concept is deferred.
-
-// COUNT(value, ...) - count of Number values. Booleans, text (even
-// numeric-looking text like "5"), blanks, and errors are all skipped.
-// Direct-arg booleans are also skipped (Excel's COUNT never counts
-// booleans even when they appear outside a range).
-Value Count(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  double total = 0.0;
-  for (std::uint32_t i = 0; i < arity; ++i) {
-    if (args[i].is_number()) {
-      total += 1.0;
-    }
-  }
-  return Value::number(total);
-}
+// COUNT itself is routed through the lazy dispatch table (see
+// `eval_count_lazy` in `special_forms_lazy.cpp`) because Excel counts Bool
+// values differently depending on whether they are direct arguments or
+// sourced from a range: `=COUNT(1, TRUE, 3)` is 3, but `=COUNT(A1:A3)`
+// where A2 holds TRUE is 2. That provenance distinction requires per-arg
+// AST inspection that the eager dispatcher's flattened values vector has
+// already erased.
 
 // COUNTA(value, ...) - count of non-Blank values. Numbers, booleans, text
 // (including the empty string produced by a formula returning ""), and
@@ -258,15 +242,11 @@ void register_aggregate_builtins(FunctionRegistry& registry) {
     registry.register_function(def);
   }
 
-  // Counting aggregators. All three are range-aware and opt out of the
+  // Counting aggregators. Both are range-aware and opt out of the
   // dispatcher's left-most-error rule so the impl itself decides which
-  // values to count (see the block comment above `Count` in this file for
-  // the range-vs-direct divergence).
-  {
-    FunctionDef def{"COUNT", 1u, kVariadic, &Count, /*propagate_errors=*/false};
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
+  // values to count. COUNT is registered as a lazy impl in
+  // `tree_walker.cpp`, not here, because it needs per-arg AST shape to
+  // apply Excel's direct-vs-range provenance rule for Bool values.
   {
     FunctionDef def{"COUNTA", 1u, kVariadic, &CountA, /*propagate_errors=*/false};
     def.accepts_ranges = true;

@@ -283,6 +283,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"AVERAGEIF", &eval_averageif_lazy},
     {"AVERAGEIFS", &eval_averageifs_lazy},
     {"CHOOSE", &eval_choose_lazy},
+    {"COUNT", &eval_count_lazy},
     {"COUNTIF", &eval_countif_lazy},
     {"COUNTIFS", &eval_countifs_lazy},
     {"HLOOKUP", &eval_hlookup_lazy},
@@ -353,6 +354,34 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
   values.reserve(arity);
   for (std::uint32_t i = 0; i < arity; ++i) {
     const parser::AstNode& arg_node = node.as_call_arg(i);
+    // Minimal array-literal support: when a range-aware function receives
+    // a `{a;b;c}` style literal, flatten it in row-major order exactly like
+    // a RangeOp argument. This is just enough to let LARGE / SMALL /
+    // PERCENTILE.INC / QUARTILE.INC accept brace literals as their "array"
+    // input; full array-aware evaluation (broadcasting, spilled output)
+    // stays deferred — a bare `={1;2;3}` outside a function call still
+    // surfaces as #VALUE! via `eval_node`'s ArrayLiteral case.
+    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::ArrayLiteral) {
+      const std::uint32_t rows = arg_node.as_array_rows();
+      const std::uint32_t cols = arg_node.as_array_cols();
+      bool short_circuit = false;
+      Value propagated_err = Value::blank();
+      for (std::uint32_t r = 0; r < rows && !short_circuit; ++r) {
+        for (std::uint32_t c = 0; c < cols; ++c) {
+          Value v = eval_node(arg_node.as_array_element(r, c), arena, registry, ctx);
+          if (def->propagate_errors && v.is_error()) {
+            propagated_err = v;
+            short_circuit = true;
+            break;
+          }
+          values.push_back(v);
+        }
+      }
+      if (short_circuit) {
+        return propagated_err;
+      }
+      continue;
+    }
     if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::RangeOp) {
       const parser::AstNode& lhs_ast = arg_node.as_range_lhs();
       const parser::AstNode& rhs_ast = arg_node.as_range_rhs();

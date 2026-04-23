@@ -33,6 +33,12 @@ Value eval_iferror_lazy(const parser::AstNode& call, Arena& arena, const Functio
 Value eval_ifna_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx);
 
+// COUNT is lazy because Excel's "direct-arg bool counts, range-sourced bool
+// doesn't" rule requires per-arg AST inspection: once a range has been
+// flattened into a `Value` vector, the provenance of each Bool is lost.
+Value eval_count_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx);
+
 }  // namespace eval
 }  // namespace formulon
 
