@@ -80,6 +80,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/text_ops_test.cpp
   unit/eval/let_test.cpp
   unit/eval/builtins_misc_test.cpp
+  unit/eval/builtins_rand_test.cpp
   unit/registry_catalog_test.cpp
 )
 

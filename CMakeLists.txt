@@ -92,11 +92,16 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins/logical.cpp
   src/eval/builtins/math.cpp
   src/eval/builtins/math_combinatorics.cpp
+  src/eval/builtins/math_rng.cpp
   src/eval/builtins/math_trig.cpp
   src/eval/builtins/references.cpp
   src/eval/builtins/stats.cpp
   src/eval/builtins/stats/stats_distributions.cpp
+  src/eval/builtins/stats/stats_distributions_misc.cpp
   src/eval/builtins/text.cpp
+  src/eval/builtins/text_detail.cpp
+  src/eval/builtins/text_dbcs.cpp
+  src/eval/builtins/text_modern.cpp
   src/eval/builtins/text_format.cpp
   src/eval/text_format/number_format.cpp
   src/eval/text_format/number_format_tokenizer.cpp

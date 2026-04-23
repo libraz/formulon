@@ -158,10 +158,8 @@ double InverseStandardNormal(double p) {
   static constexpr double p_low = 0.02425;
   static constexpr double p_high = 1.0 - p_low;
 
-  // Constant pi, matches `std::acos(-1.0)` on any IEEE-754 system. Kept
-  // local to the Halley refinement below because the normalisation is the
-  // only place outside `stats/stats_distributions.cpp` that needs it.
-  static constexpr double kStatsPi = 3.14159265358979323846;
+  // Constant pi used by the Halley refinement below. Shared with the
+  // distribution TUs via `stats_helpers.h::kStatsPi`.
 
   double z;
   if (p < p_low) {

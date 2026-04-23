@@ -23,6 +23,10 @@ namespace formulon {
 namespace eval {
 namespace stats_detail {
 
+// Mathematical constant pi, used to normalise the standard-normal PDF.
+// Matches `std::acos(-1.0)` on any IEEE-754 system.
+inline constexpr double kStatsPi = 3.14159265358979323846;
+
 // Extracts the numeric values from `args[0..count-1]`. Non-Number values
 // (text / bool / blank after range expansion) are silently skipped. Errors
 // never reach this helper because the dispatcher short-circuits with
@@ -63,6 +67,16 @@ Expected<double, ErrorCode> read_kth_arg(const Value& v);
 // precision. Callers must guarantee `0 < p < 1`; `p <= 0` or `p >= 1`
 // should surface `#NUM!` before calling in.
 double InverseStandardNormal(double p);
+
+// Probability mass function of Binomial(n, p) at k. Shared between
+// BINOM.DIST (in `stats_distributions.cpp`) and BINOM.INV /
+// BINOM.DIST.RANGE (in `stats_distributions_misc.cpp`).
+double BinomPmf(double k, double n, double prob);
+
+// Newton-Raphson inverter for Student's t CDF. Shared between T.INV /
+// T.INV.2T (in `stats_distributions.cpp`) and CONFIDENCE.T (in
+// `stats_distributions_misc.cpp`). Assumes `0 < p < 1` and `df >= 1`.
+double TInvCore(double p, double df) noexcept;
 
 // Value-returning distribution builtins implemented in
 // `stats/stats_distributions.cpp`.
