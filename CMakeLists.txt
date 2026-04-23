@@ -83,6 +83,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins_logical.cpp
   src/eval/builtins_math.cpp
   src/eval/builtins_math_trig.cpp
+  src/eval/builtins_stats.cpp
   src/eval/tree_walker.cpp
   src/eval/eval_context.cpp
   src/eval/eval_state.cpp
