@@ -155,3 +155,80 @@ cases:
 
   - id: value_of_non_numeric_text
     formula: "=VALUE(\"hello\")"
+
+  # -- CEILING / FLOOR / MROUND / *.MATH ----------------------------------
+  - id: ceiling_pos
+    formula: "=CEILING(4.3,1)"
+
+  - id: ceiling_neg_same_sign
+    description: "Legacy CEILING with matching negative significance"
+    formula: "=CEILING(-4.3,-1)"
+
+  - id: ceiling_sign_mismatch_rounds_toward_plus_inf
+    description: |
+      Excel 365 Mac: legacy CEILING with opposite signs rounds toward
+      +infinity (math ceil), NOT #NUM! as documented for pre-365 builds.
+    formula: "=CEILING(-4.3,1)"
+
+  - id: ceiling_sig_zero
+    description: "Legacy CEILING: significance=0 short-circuits to 0"
+    formula: "=CEILING(4.3,0)"
+
+  - id: floor_pos
+    formula: "=FLOOR(4.7,1)"
+
+  - id: floor_neg_same_sign
+    formula: "=FLOOR(-4.3,-1)"
+
+  - id: floor_sign_mismatch_rounds_toward_minus_inf
+    description: |
+      Excel 365 Mac: legacy FLOOR with opposite signs rounds toward
+      -infinity (math floor), NOT #NUM! as documented for pre-365 builds.
+    formula: "=FLOOR(-4.3,1)"
+
+  - id: floor_sig_zero_is_div0
+    description: "Legacy FLOOR quirk: significance=0 -> #DIV/0!, not 0"
+    formula: "=FLOOR(4.3,0)"
+
+  - id: mround_basic
+    formula: "=MROUND(10,3)"
+
+  - id: mround_tie_away_from_zero
+    description: "MROUND ties round away from zero: 7.5/3 = 2.5 -> 3 -> 9"
+    formula: "=MROUND(7.5,3)"
+
+  - id: mround_negative
+    formula: "=MROUND(-10,-3)"
+
+  - id: mround_sign_mismatch_is_num
+    formula: "=MROUND(10,-3)"
+
+  - id: mround_multiple_zero
+    description: "MROUND: multiple=0 returns 0 (no #DIV/0!)"
+    formula: "=MROUND(5,0)"
+
+  - id: ceiling_math_default_sig
+    formula: "=CEILING.MATH(4.3)"
+
+  - id: ceiling_math_neg_default_mode
+    description: "Default mode=0 rounds negatives toward +inf (toward zero)"
+    formula: "=CEILING.MATH(-4.3)"
+
+  - id: ceiling_math_neg_mode_away
+    description: "mode != 0 rounds negatives away from zero (toward -inf)"
+    formula: "=CEILING.MATH(-4.3,1,1)"
+
+  - id: ceiling_math_sig_neg_uses_abs
+    description: "Negative significance is allowed in *.MATH; uses |sig|"
+    formula: "=CEILING.MATH(4.3,-2)"
+
+  - id: floor_math_default_sig
+    formula: "=FLOOR.MATH(4.7)"
+
+  - id: floor_math_neg_default_mode
+    description: "Default mode=0 rounds negatives toward -inf (away from zero)"
+    formula: "=FLOOR.MATH(-4.3)"
+
+  - id: floor_math_neg_mode_toward_zero
+    description: "mode != 0 rounds negatives toward zero (toward +inf)"
+    formula: "=FLOOR.MATH(-4.3,1,1)"

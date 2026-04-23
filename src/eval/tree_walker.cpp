@@ -290,12 +290,14 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"IF", &eval_if_lazy},
     {"IFERROR", &eval_iferror_lazy},
     {"IFNA", &eval_ifna_lazy},
+    {"IFS", &eval_ifs_lazy},
     {"INDEX", &eval_index_lazy},
     {"MATCH", &eval_match_lazy},
     {"MAXIFS", &eval_maxifs_lazy},
     {"MINIFS", &eval_minifs_lazy},
     {"SUMIF", &eval_sumif_lazy},
     {"SUMIFS", &eval_sumifs_lazy},
+    {"SWITCH", &eval_switch_lazy},
     {"VLOOKUP", &eval_vlookup_lazy},
     {"XLOOKUP", &eval_xlookup_lazy},
     {"XMATCH", &eval_xmatch_lazy},
@@ -418,8 +420,7 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         if (def->range_filter_numeric_only && v.kind() != ValueKind::Number) {
           continue;
         }
-        if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number &&
-            v.kind() != ValueKind::Bool) {
+        if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
           continue;
         }
         values.push_back(v);

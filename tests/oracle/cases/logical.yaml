@@ -127,3 +127,52 @@ cases:
   - id: ifna_does_not_catch_div0
     description: "IFNA only catches #N/A, not other errors"
     formula: "=IFNA(1/0,\"fallback\")"
+
+  # -- IFS -----------------------------------------------------------------
+  - id: ifs_first_true_wins
+    formula: "=IFS(TRUE,1,TRUE,2)"
+
+  - id: ifs_second_true_wins
+    formula: "=IFS(FALSE,1,TRUE,2)"
+
+  - id: ifs_no_match_is_na
+    description: "Excel: IFS with no TRUE condition returns #N/A"
+    formula: "=IFS(FALSE,1,FALSE,2)"
+
+  - id: ifs_error_in_condition_propagates
+    description: "Error in an evaluated condition short-circuits the rest"
+    formula: "=IFS(1/0,\"div\",TRUE,\"ok\")"
+
+  - id: ifs_unmatched_branch_not_evaluated
+    description: "Untaken value subtrees must not evaluate (short-circuit)"
+    formula: "=IFS(TRUE,\"ok\",FALSE,1/0)"
+
+  - id: ifs_three_branch_middle_wins
+    setup: { A1: 5 }
+    formula: "=IFS(A1>10,\"big\",A1>3,\"med\",TRUE,\"small\")"
+
+  # -- SWITCH --------------------------------------------------------------
+  - id: switch_hits_first_case
+    formula: "=SWITCH(1,1,\"one\",2,\"two\")"
+
+  - id: switch_hits_second_case
+    formula: "=SWITCH(2,1,\"one\",2,\"two\")"
+
+  - id: switch_no_match_no_default_is_na
+    description: "Excel: SWITCH without default returns #N/A on no match"
+    formula: "=SWITCH(3,1,\"one\",2,\"two\")"
+
+  - id: switch_no_match_with_default
+    description: "Trailing unpaired argument is the default value"
+    formula: "=SWITCH(3,1,\"one\",2,\"two\",\"other\")"
+
+  - id: switch_text_expr
+    formula: "=SWITCH(\"b\",\"a\",1,\"b\",2,\"c\",3)"
+
+  - id: switch_error_in_expr_propagates
+    description: "Error in `expr` propagates before any case is compared"
+    formula: "=SWITCH(1/0,1,\"one\",0,\"zero\",\"def\")"
+
+  - id: switch_case_insensitive_text
+    description: "SWITCH text comparison is case-insensitive (matches `=` op)"
+    formula: "=SWITCH(\"A\",\"a\",\"hit\",\"miss\")"

@@ -242,6 +242,223 @@ Value RoundUp(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return Value::number(r);
 }
 
+// --- Significance-aware rounding (legacy CEILING / FLOOR / MROUND) ------
+//
+// The legacy forms share one awkward quirk: if `number` and `significance`
+// have opposite signs (and neither is zero), Excel returns #NUM!. The
+// modern `*.MATH` variants (below) drop this rule and use `|significance|`
+// unconditionally. `MROUND` inherits the opposite-sign #NUM! rule.
+
+inline double signum(double x) {
+  if (x > 0.0) {
+    return 1.0;
+  }
+  if (x < 0.0) {
+    return -1.0;
+  }
+  return 0.0;
+}
+
+// CEILING(number, significance) - legacy: nearest multiple of
+// `|significance|` in the direction determined by sign matching:
+//
+//   * number == 0  -> 0
+//   * significance == 0 -> 0 (no #DIV/0!, unlike FLOOR)
+//   * sign(number) == sign(significance)  -> round AWAY from zero
+//     (magnitude ceil on the positive half-line).
+//   * sign(number) != sign(significance)  -> round toward +infinity
+//     (math ceil on the signed value, matching CEILING.MATH defaults).
+//
+// Excel 365 Mac no longer returns #NUM! on sign mismatch; that behaviour
+// was the pre-365 legacy rule. See the corresponding oracle suite for the
+// exact values used as reference.
+Value Ceiling(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto number = coerce_to_number(args[0]);
+  if (!number) {
+    return Value::error(number.error());
+  }
+  auto significance = coerce_to_number(args[1]);
+  if (!significance) {
+    return Value::error(significance.error());
+  }
+  const double n = number.value();
+  const double s = significance.value();
+  if (n == 0.0) {
+    return Value::number(0.0);
+  }
+  if (s == 0.0) {
+    // Legacy CEILING: significance of zero yields zero (no #DIV/0!).
+    return Value::number(0.0);
+  }
+  const double abs_s = std::fabs(s);
+  // Matching signs: magnitude away-from-zero, then restore sign.
+  // Mismatched signs: math ceiling on the signed value.
+  const double r =
+      (signum(n) == signum(s)) ? signum(n) * std::ceil(std::fabs(n) / abs_s) * abs_s : std::ceil(n / abs_s) * abs_s;
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+// FLOOR(number, significance) - legacy: nearest multiple of
+// `|significance|` in the direction determined by sign matching. Mirror
+// image of CEILING above, with two differences:
+//
+//   * significance == 0 -> #DIV/0! (Excel-documented quirk).
+//   * Direction in mismatched-sign case is toward -infinity (math floor).
+//
+// As with CEILING, Excel 365 Mac no longer treats a sign mismatch as
+// #NUM!; this impl tracks the current oracle.
+Value Floor(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto number = coerce_to_number(args[0]);
+  if (!number) {
+    return Value::error(number.error());
+  }
+  auto significance = coerce_to_number(args[1]);
+  if (!significance) {
+    return Value::error(significance.error());
+  }
+  const double n = number.value();
+  const double s = significance.value();
+  if (n == 0.0) {
+    return Value::number(0.0);
+  }
+  if (s == 0.0) {
+    return Value::error(ErrorCode::Div0);
+  }
+  const double abs_s = std::fabs(s);
+  // Matching signs: magnitude toward-zero, then restore sign.
+  // Mismatched signs: math floor on the signed value.
+  const double r =
+      (signum(n) == signum(s)) ? signum(n) * std::floor(std::fabs(n) / abs_s) * abs_s : std::floor(n / abs_s) * abs_s;
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+// MROUND(number, multiple) - nearest multiple of `|multiple|` to `number`,
+// with ties rounded away from zero. Opposite-signed inputs yield #NUM!;
+// `multiple = 0` returns 0 (Excel's documented quirk).
+Value MRound(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto number = coerce_to_number(args[0]);
+  if (!number) {
+    return Value::error(number.error());
+  }
+  auto multiple = coerce_to_number(args[1]);
+  if (!multiple) {
+    return Value::error(multiple.error());
+  }
+  const double n = number.value();
+  const double m = multiple.value();
+  if (m == 0.0) {
+    return Value::number(0.0);
+  }
+  if (n != 0.0 && signum(n) != signum(m)) {
+    return Value::error(ErrorCode::Num);
+  }
+  const double abs_m = std::fabs(m);
+  // `std::floor(x + 0.5)` implements round-half-away-from-zero on the
+  // positive half-line; the outer `signum(n)` restores the sign.
+  const double r = signum(n) * std::floor(std::fabs(n) / abs_m + 0.5) * abs_m;
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+// --- CEILING.MATH / FLOOR.MATH ------------------------------------------
+//
+// Modern variants: `significance` is always used as `|significance|`
+// (negative values do NOT trigger #NUM!), and the optional `mode` arg
+// only affects NEGATIVE inputs:
+//   * mode = 0 (default): both round toward +infinity for CEILING.MATH,
+//     toward -infinity for FLOOR.MATH.
+//   * mode != 0: both round AWAY from zero
+//     (CEILING.MATH: toward -infinity for negatives;
+//      FLOOR.MATH: toward +infinity i.e. toward zero for negatives).
+
+Value CeilingMath(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  auto number = coerce_to_number(args[0]);
+  if (!number) {
+    return Value::error(number.error());
+  }
+  double significance = 1.0;
+  if (arity >= 2) {
+    auto coerced = coerce_to_number(args[1]);
+    if (!coerced) {
+      return Value::error(coerced.error());
+    }
+    significance = coerced.value();
+  }
+  bool away_from_zero = false;
+  if (arity >= 3) {
+    auto coerced = coerce_to_number(args[2]);
+    if (!coerced) {
+      return Value::error(coerced.error());
+    }
+    away_from_zero = coerced.value() != 0.0;
+  }
+  const double n = number.value();
+  if (n == 0.0) {
+    return Value::number(0.0);
+  }
+  if (significance == 0.0) {
+    return Value::number(0.0);
+  }
+  const double abs_s = std::fabs(significance);
+  const double scaled = n / abs_s;
+  // Positive inputs: always ceil. Negative inputs: ceil (toward +inf) for
+  // default mode, floor (away from zero) when mode != 0.
+  const double rounded = (n > 0.0 || !away_from_zero) ? std::ceil(scaled) : std::floor(scaled);
+  const double r = rounded * abs_s;
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+Value FloorMath(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  auto number = coerce_to_number(args[0]);
+  if (!number) {
+    return Value::error(number.error());
+  }
+  double significance = 1.0;
+  if (arity >= 2) {
+    auto coerced = coerce_to_number(args[1]);
+    if (!coerced) {
+      return Value::error(coerced.error());
+    }
+    significance = coerced.value();
+  }
+  bool toward_zero = false;
+  if (arity >= 3) {
+    auto coerced = coerce_to_number(args[2]);
+    if (!coerced) {
+      return Value::error(coerced.error());
+    }
+    toward_zero = coerced.value() != 0.0;
+  }
+  const double n = number.value();
+  if (n == 0.0) {
+    return Value::number(0.0);
+  }
+  if (significance == 0.0) {
+    return Value::number(0.0);
+  }
+  const double abs_s = std::fabs(significance);
+  const double scaled = n / abs_s;
+  // Positive inputs: always floor. Negative inputs: floor (toward -inf)
+  // for default mode, ceil (toward zero) when mode != 0.
+  const double rounded = (n > 0.0 || !toward_zero) ? std::floor(scaled) : std::ceil(scaled);
+  const double r = rounded * abs_s;
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
 }  // namespace
 
 void register_math_builtins(FunctionRegistry& registry) {
@@ -260,6 +477,13 @@ void register_math_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"ROUND", 2u, 2u, &Round});
   registry.register_function(FunctionDef{"ROUNDDOWN", 2u, 2u, &RoundDown});
   registry.register_function(FunctionDef{"ROUNDUP", 2u, 2u, &RoundUp});
+
+  // Significance-aware rounding.
+  registry.register_function(FunctionDef{"CEILING", 2u, 2u, &Ceiling});
+  registry.register_function(FunctionDef{"FLOOR", 2u, 2u, &Floor});
+  registry.register_function(FunctionDef{"MROUND", 2u, 2u, &MRound});
+  registry.register_function(FunctionDef{"CEILING.MATH", 1u, 3u, &CeilingMath});
+  registry.register_function(FunctionDef{"FLOOR.MATH", 1u, 3u, &FloorMath});
 }
 
 }  // namespace eval

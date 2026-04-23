@@ -1,0 +1,110 @@
+suite: integration
+description: Cross-family composition — realistic nested formulas that exercise multiple subsystems at once
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # -- Date arithmetic -----------------------------------------------------
+  - id: date_plus_days
+    description: "Number + date serial equals future date serial"
+    formula: "=DATE(2024,1,1)+30"
+
+  - id: date_diff_via_minus
+    formula: "=DATE(2024,5,1)-DATE(2024,1,1)"
+
+  - id: year_of_edate
+    formula: "=YEAR(EDATE(DATE(2024,1,15),14))"
+
+  - id: eomonth_of_today_like
+    description: "Pinned input so it's reproducible across runs"
+    formula: "=DAY(EOMONTH(DATE(2024,2,10),0))"
+
+  # -- Aggregates nested with conditions -----------------------------------
+  - id: round_of_average
+    setup: { A1: 10, A2: 20, A3: 33 }
+    formula: "=ROUND(AVERAGE(A1:A3),2)"
+
+  - id: max_minus_min
+    setup: { A1: 10, A2: 50, A3: 30, A4: 5 }
+    formula: "=MAX(A1:A4)-MIN(A1:A4)"
+
+  - id: sum_of_sqrt
+    description: "Nested: SUM of individual SQRT calls"
+    formula: "=SQRT(9)+SQRT(16)+SQRT(25)"
+
+  - id: if_wrapped_sum
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=IF(SUM(A1:A3)>50,\"big\",\"small\")"
+
+  # -- Lookup chained with aggregates --------------------------------------
+  - id: index_feeds_sum
+    setup: { A1: 1, A2: 2, A3: 3, B1: 10, B2: 20, B3: 30 }
+    formula: "=INDEX(B1:B3,MATCH(2,A1:A3,0))"
+
+  - id: vlookup_wrapped_iferror
+    setup: { A1: "x", B1: 100, A2: "y", B2: 200 }
+    formula: "=IFERROR(VLOOKUP(\"z\",A1:B2,2,FALSE),0)"
+
+  # -- Text building -------------------------------------------------------
+  - id: concat_formatted_number
+    setup: { A1: 3.14159 }
+    formula: "=\"pi=\"&ROUND(A1,2)"
+
+  - id: left_of_upper
+    setup: { A1: "hello world" }
+    formula: "=LEFT(UPPER(A1),5)"
+
+  - id: textjoin_with_if
+    setup: { A1: "x", A2: "", A3: "z" }
+    formula: "=TEXTJOIN(\"-\",TRUE,A1:A3)"
+
+  # -- Error propagation through compositions -----------------------------
+  - id: error_passes_through_nesting
+    description: "Innermost error wins even 3 calls deep"
+    formula: "=ROUND(AVERAGE(1/0,2,3),2)"
+
+  - id: iferror_catches_deep
+    formula: "=IFERROR(ROUND(1/0,2),-1)"
+
+  - id: ifna_lets_div0_through
+    description: "IFNA only catches #N/A; #DIV/0! bypasses"
+    formula: "=IFERROR(IFNA(1/0,99),\"div0\")"
+
+  # -- Boolean chains ------------------------------------------------------
+  - id: and_of_comparisons
+    setup: { A1: 50, A2: 100 }
+    formula: "=AND(A1>0,A2<200,A1<A2)"
+
+  - id: if_bool_coercion_chain
+    description: "IF(NOT(ISBLANK(A1)),...) typical guard pattern"
+    setup: { A1: 42 }
+    formula: "=IF(NOT(ISBLANK(A1)),A1*2,0)"
+
+  - id: or_mixed_with_iserror
+    setup: { A1: 10 }
+    formula: "=OR(ISERROR(A1),A1>5)"
+
+  # -- Criteria aggregates + wildcards + lookup ---------------------------
+  - id: countifs_then_if
+    setup: { A1: "apple", A2: "apricot", A3: "banana", B1: 10, B2: 20, B3: 30 }
+    formula: "=IF(COUNTIFS(A1:A3,\"ap*\")>1,\"many\",\"few\")"
+
+  - id: sumifs_nested_in_average_guard
+    setup: { A1: 1, A2: 2, A3: 3, B1: 10, B2: 20, B3: 30 }
+    formula: "=IFERROR(SUMIFS(B1:B3,A1:A3,\">=2\")/COUNTIFS(A1:A3,\">=2\"),0)"
+
+  # -- Statistics composition ----------------------------------------------
+  - id: stdev_of_subset
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5 }
+    formula: "=STDEV.S(A1:A5)"
+
+  - id: large_minus_small
+    setup: { A1: 10, A2: 5, A3: 30, A4: 20 }
+    formula: "=LARGE(A1:A4,1)-SMALL(A1:A4,1)"
+
+  # -- Array literal composition (requires eval-time range expansion) ------
+  - id: median_of_array_literal
+    description: "Array literals now flatten into range-aware aggregators"
+    formula: "=MEDIAN({1;3;5;7;9})"
+
+  - id: sum_of_array_literal
+    formula: "=SUM({1;2;3;4;5})"

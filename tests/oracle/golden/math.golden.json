@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-23T02:19:15Z"
+    "generated_at": "2026-04-23T03:03:48Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -416,6 +416,186 @@
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ceiling_pos",
+      "formula": "=CEILING(4.3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "ceiling_neg_same_sign",
+      "formula": "=CEILING(-4.3,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "ceiling_sign_mismatch_rounds_toward_plus_inf",
+      "formula": "=CEILING(-4.3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4.0
+      }
+    },
+    {
+      "id": "ceiling_sig_zero",
+      "formula": "=CEILING(4.3,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "floor_pos",
+      "formula": "=FLOOR(4.7,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "floor_neg_same_sign",
+      "formula": "=FLOOR(-4.3,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4.0
+      }
+    },
+    {
+      "id": "floor_sign_mismatch_rounds_toward_minus_inf",
+      "formula": "=FLOOR(-4.3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "floor_sig_zero_is_div0",
+      "formula": "=FLOOR(4.3,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "mround_basic",
+      "formula": "=MROUND(10,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "mround_tie_away_from_zero",
+      "formula": "=MROUND(7.5,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "mround_negative",
+      "formula": "=MROUND(-10,-3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -9.0
+      }
+    },
+    {
+      "id": "mround_sign_mismatch_is_num",
+      "formula": "=MROUND(10,-3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "mround_multiple_zero",
+      "formula": "=MROUND(5,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "ceiling_math_default_sig",
+      "formula": "=CEILING.MATH(4.3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "ceiling_math_neg_default_mode",
+      "formula": "=CEILING.MATH(-4.3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4.0
+      }
+    },
+    {
+      "id": "ceiling_math_neg_mode_away",
+      "formula": "=CEILING.MATH(-4.3,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "ceiling_math_sig_neg_uses_abs",
+      "formula": "=CEILING.MATH(4.3,-2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "floor_math_default_sig",
+      "formula": "=FLOOR.MATH(4.7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "floor_math_neg_default_mode",
+      "formula": "=FLOOR.MATH(-4.3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "floor_math_neg_mode_toward_zero",
+      "formula": "=FLOOR.MATH(-4.3,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4.0
       }
     }
   ]

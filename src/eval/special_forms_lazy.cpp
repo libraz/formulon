@@ -9,12 +9,14 @@
 #include "eval/special_forms_lazy.h"
 
 #include <cstdint>
+#include <string_view>
 
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -123,6 +125,105 @@ Value eval_count_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     }
   }
   return Value::number(total);
+}
+
+// IFS(cond1, val1, ...) - Excel's multi-branch short-circuit: the first
+// TRUE condition wins and its paired value is evaluated and returned; all
+// remaining branches (both conditions AND values) are skipped. Errors in
+// an evaluated condition propagate. When no condition matches (including
+// the degenerate odd-arity case) the result is #N/A, matching Excel's
+// documented "if none match" behaviour.
+Value eval_ifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                    const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 2) {
+    return Value::error(ErrorCode::Value);
+  }
+  // Iterate in (cond, value) pairs. If the count is odd, the trailing
+  // condition has no paired value; we still evaluate it for error
+  // propagation, then fall through to #N/A.
+  for (std::uint32_t i = 0; i + 1 < arity; i += 2) {
+    const Value cond = eval_node(call.as_call_arg(i), arena, registry, ctx);
+    if (cond.is_error()) {
+      return cond;
+    }
+    auto coerced = coerce_to_bool(cond);
+    if (!coerced) {
+      return Value::error(coerced.error());
+    }
+    if (coerced.value()) {
+      return eval_node(call.as_call_arg(i + 1), arena, registry, ctx);
+    }
+  }
+  if ((arity % 2) == 1) {
+    // Trailing unpaired condition: evaluate for error propagation only,
+    // then fall through to #N/A regardless of its truth value.
+    const Value trailing = eval_node(call.as_call_arg(arity - 1), arena, registry, ctx);
+    if (trailing.is_error()) {
+      return trailing;
+    }
+  }
+  return Value::error(ErrorCode::NA);
+}
+
+// Equality test for SWITCH: matches the `=` operator's semantics for the
+// scalar types SWITCH actually consumes. Text comparison is ASCII
+// case-insensitive (Excel-canonical). Cross-type pairs never match -- this
+// is NOT an error, just "not equal", so the caller keeps walking cases.
+bool switch_equal(const Value& lhs, const Value& rhs) {
+  if (lhs.kind() != rhs.kind()) {
+    return false;
+  }
+  switch (lhs.kind()) {
+    case ValueKind::Number:
+      return lhs.as_number() == rhs.as_number();
+    case ValueKind::Bool:
+      return lhs.as_boolean() == rhs.as_boolean();
+    case ValueKind::Text:
+      return strings::case_insensitive_eq(lhs.as_text(), rhs.as_text());
+    case ValueKind::Blank:
+      return true;
+    default:
+      return false;
+  }
+}
+
+// SWITCH(expr, case1, val1, ..., [default]) - first case that equals
+// `expr` wins; only that branch's value subtree is evaluated. An extra
+// trailing argument (odd arity after expr) is the default. No match and
+// no default -> #N/A. Errors in `expr` or in any evaluated case expression
+// propagate.
+Value eval_switch_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  // Minimum useful form is SWITCH(expr, case, val): 3 args. A bare
+  // SWITCH(expr) or SWITCH(expr, default) is rejected as an arity
+  // violation (matches Excel's "You've entered too few arguments").
+  if (arity < 3) {
+    return Value::error(ErrorCode::Value);
+  }
+  const Value expr = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (expr.is_error()) {
+    return expr;
+  }
+  // Walk (case, value) pairs starting at index 1. If a trailing single
+  // argument remains at the end it is the default.
+  std::uint32_t i = 1;
+  while (i + 1 < arity) {
+    const Value case_val = eval_node(call.as_call_arg(i), arena, registry, ctx);
+    if (case_val.is_error()) {
+      return case_val;
+    }
+    if (switch_equal(expr, case_val)) {
+      return eval_node(call.as_call_arg(i + 1), arena, registry, ctx);
+    }
+    i += 2;
+  }
+  if (i < arity) {
+    // Trailing default argument.
+    return eval_node(call.as_call_arg(i), arena, registry, ctx);
+  }
+  return Value::error(ErrorCode::NA);
 }
 
 }  // namespace eval
