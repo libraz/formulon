@@ -1,7 +1,7 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
 // Implementation of Formulon's aggregate built-in functions:
-// SUM, MIN, MAX, AVERAGE, PRODUCT, COUNT, COUNTA, COUNTBLANK, CONCAT,
+// SUM, SUMSQ, MIN, MAX, AVERAGE, PRODUCT, COUNT, COUNTA, COUNTBLANK, CONCAT,
 // CONCATENATE, and LEN. Each impl follows the same recipe as the rest of
 // the builtin catalog: coerce arguments via `eval/coerce.h`, propagate the
 // left-most coercion error, and return a `Value`.
@@ -171,6 +171,28 @@ Value Product(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return Value::number(total);
 }
 
+// SUMSQ(value, ...) - sum of squares. Follows the same provenance rule as
+// SUM: direct scalar args coerce through `coerce_to_number` (so TRUE -> 1,
+// "5" -> 5, "abc" -> #VALUE!), while Bool / Text / Blank cells sourced
+// from a range are dropped before the impl runs (the dispatcher's
+// `range_filter_numeric_only` flag). Any error in the argument list
+// propagates left-to-right.
+Value SumSq(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  double total = 0.0;
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    auto coerced = coerce_to_number(args[i]);
+    if (!coerced) {
+      return Value::error(coerced.error());
+    }
+    const double x = coerced.value();
+    total += x * x;
+  }
+  if (std::isnan(total) || std::isinf(total)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(total);
+}
+
 // --- Counting aggregators -----------------------------------------------
 //
 // COUNTA / COUNTBLANK. Both are registered with `propagate_errors = false`:
@@ -264,6 +286,15 @@ void register_aggregate_builtins(FunctionRegistry& registry) {
   }
   {
     FunctionDef def{"PRODUCT", 1u, kVariadic, &Product};
+    def.accepts_ranges = true;
+    def.range_filter_numeric_only = true;
+    registry.register_function(def);
+  }
+  {
+    // SUMSQ mirrors SUM's provenance rule: direct args coerce through
+    // `coerce_to_number`; range-sourced Bool / Text / Blank are silently
+    // dropped by the dispatcher before the impl sees them.
+    FunctionDef def{"SUMSQ", 1u, kVariadic, &SumSq};
     def.accepts_ranges = true;
     def.range_filter_numeric_only = true;
     registry.register_function(def);

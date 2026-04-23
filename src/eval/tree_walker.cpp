@@ -22,8 +22,10 @@
 #include "eval/lookups/xlookup.h"
 #include "eval/name_env.h"
 #include "eval/range_args.h"
+#include "eval/rank_lazy.h"
 #include "eval/reference_lazy.h"
 #include "eval/regression_lazy.h"
+#include "eval/series_sum_lazy.h"
 #include "eval/shape_ops_lazy.h"
 #include "eval/special_forms_lazy.h"
 #include "eval/workdays_lazy.h"
@@ -278,7 +280,12 @@ Value apply_comparison(parser::BinOp op, const Value& lhs, const Value& rhs) {
 //   NETWORKDAYS / WORKDAY                      -> src/eval/workdays_lazy.cpp
 //   INDIRECT / OFFSET                          -> src/eval/reference_lazy.cpp
 //   CORREL / COVARIANCE.P / COVARIANCE.S /
-//   SLOPE / INTERCEPT / RSQ / FORECAST.LINEAR  -> src/eval/regression_lazy.cpp
+//   SLOPE / INTERCEPT / RSQ / FORECAST.LINEAR /
+//   STEYX / SUMX2PY2 / SUMX2MY2 / SUMXMY2      -> src/eval/regression_lazy.cpp
+//   SERIESSUM                                  -> src/eval/series_sum_lazy.cpp
+//   RANK / RANK.EQ / RANK.AVG /
+//   PERCENTRANK / PERCENTRANK.INC /
+//   PERCENTRANK.EXC                            -> src/eval/rank_lazy.cpp
 // Each family publishes its externs via its own header
 // (`eval/special_forms_lazy.h`, `eval/conditional_aggregates.h`,
 // `eval/lookups/classic.h`, `eval/lookups/xlookup.h`,
@@ -334,18 +341,29 @@ constexpr LazyEntry kLazyDispatch[] = {
     // PEARSON is mathematically identical to CORREL (Pearson product-moment
     // correlation coefficient); Excel keeps both names for back-compat.
     {"PEARSON", &eval_correl_lazy},
+    {"PERCENTRANK", &eval_percentrank_inc_lazy},
+    {"PERCENTRANK.EXC", &eval_percentrank_exc_lazy},
+    {"PERCENTRANK.INC", &eval_percentrank_inc_lazy},
+    {"RANK", &eval_rank_eq_lazy},
+    {"RANK.AVG", &eval_rank_avg_lazy},
+    {"RANK.EQ", &eval_rank_eq_lazy},
     {"ROW", &eval_row_lazy},
     {"ROWS", &eval_rows_lazy},
     {"RSQ", &eval_rsq_lazy},
+    {"SERIESSUM", &eval_series_sum_lazy},
     // SHEET / SHEETS consult the bound Workbook + current Sheet on the
     // EvalContext; AST introspection of an optional reference argument
     // tells them which sheet to answer for.
     {"SHEET", &eval_sheet_lazy},
     {"SHEETS", &eval_sheets_lazy},
     {"SLOPE", &eval_slope_lazy},
+    {"STEYX", &eval_steyx_lazy},
     {"SUMIF", &eval_sumif_lazy},
     {"SUMIFS", &eval_sumifs_lazy},
     {"SUMPRODUCT", &eval_sumproduct_lazy},
+    {"SUMX2MY2", &eval_sumx2my2_lazy},
+    {"SUMX2PY2", &eval_sumx2py2_lazy},
+    {"SUMXMY2", &eval_sumxmy2_lazy},
     {"SWITCH", &eval_switch_lazy},
     {"VLOOKUP", &eval_vlookup_lazy},
     {"WORKDAY", &eval_workday_lazy},
@@ -473,6 +491,24 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
           continue;
         }
+        if (def->range_filter_a_coerce) {
+          // A-family (AVERAGEA / MAXA / MINA / VAR{A,PA} / STDEV{A,PA}).
+          // Bool and Text cells inside a range are coerced to numbers rather
+          // than dropped: TRUE -> 1, FALSE -> 0, any text (including the
+          // empty string and numeric-looking strings like "3.14") -> 0.
+          // Blank cells are still skipped.
+          if (v.kind() == ValueKind::Blank) {
+            continue;
+          }
+          if (v.kind() == ValueKind::Bool) {
+            values.push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
+            continue;
+          }
+          if (v.kind() == ValueKind::Text) {
+            values.push_back(Value::number(0.0));
+            continue;
+          }
+        }
         values.push_back(v);
       }
       continue;
@@ -506,6 +542,24 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         }
         if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
           continue;
+        }
+        if (def->range_filter_a_coerce) {
+          // A-family (AVERAGEA / MAXA / MINA / VAR{A,PA} / STDEV{A,PA}).
+          // Bool and Text cells inside a range are coerced to numbers rather
+          // than dropped: TRUE -> 1, FALSE -> 0, any text (including the
+          // empty string and numeric-looking strings like "3.14") -> 0.
+          // Blank cells are still skipped.
+          if (v.kind() == ValueKind::Blank) {
+            continue;
+          }
+          if (v.kind() == ValueKind::Bool) {
+            values.push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
+            continue;
+          }
+          if (v.kind() == ValueKind::Text) {
+            values.push_back(Value::number(0.0));
+            continue;
+          }
         }
         values.push_back(v);
       }

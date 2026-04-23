@@ -1,6 +1,6 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// Registers Excel's aggregate built-ins (SUM/MIN/MAX/AVERAGE/PRODUCT,
+// Registers Excel's aggregate built-ins (SUM/SUMSQ/MIN/MAX/AVERAGE/PRODUCT,
 // COUNT/COUNTA/COUNTBLANK, CONCAT/CONCATENATE, LEN) into a FunctionRegistry.
 // Kept in its own translation unit so the aggregate family can evolve
 // independently of the rest of the builtin catalog.
@@ -13,9 +13,9 @@ namespace eval {
 
 class FunctionRegistry;
 
-/// Registers the aggregate built-in functions (SUM, MIN, MAX, AVERAGE, PRODUCT,
-/// COUNT, COUNTA, COUNTBLANK, CONCAT, CONCATENATE, LEN) into `registry`.
-/// Intended to be invoked from `register_builtins`.
+/// Registers the aggregate built-in functions (SUM, SUMSQ, MIN, MAX, AVERAGE,
+/// PRODUCT, COUNT, COUNTA, COUNTBLANK, CONCAT, CONCATENATE, LEN) into
+/// `registry`. Intended to be invoked from `register_builtins`.
 void register_aggregate_builtins(FunctionRegistry& registry);
 
 }  // namespace eval

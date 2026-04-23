@@ -1,10 +1,11 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
 // Lazy impls for the pairwise linear-regression family: CORREL,
-// COVARIANCE.P, COVARIANCE.S, SLOPE, INTERCEPT, RSQ, and
-// FORECAST.LINEAR (aliased as FORECAST). Each takes two parallel arrays
-// (plus a leading x-scalar in FORECAST.LINEAR's case) and computes a
-// statistic over matched (x, y) pairs.
+// COVARIANCE.P, COVARIANCE.S, SLOPE, INTERCEPT, RSQ,
+// FORECAST.LINEAR (aliased as FORECAST), STEYX, and the paired
+// sum-of-products family (SUMX2PY2, SUMX2MY2, SUMXMY2). Each takes two
+// parallel arrays (plus a leading x-scalar in FORECAST.LINEAR's case)
+// and reduces the matched (x, y) pairs to a single statistic.
 //
 // These ride the lazy-dispatch seam rather than the eager path because
 // every array argument may arrive as a bare `Ref`, a `RangeOp`, or an
@@ -74,6 +75,33 @@ Value eval_rsq_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
 /// `#DIV/0!`; shape mismatch surfaces as `#N/A`.
 Value eval_forecast_linear_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                                 const EvalContext& ctx);
+
+/// `STEYX(known_y, known_x)` - standard error of predicted y-values in
+/// linear regression. Defined as
+/// `sqrt((sum_yy - sum_xy^2 / sum_xx) / (n - 2))`. Fewer than 3 pairs or
+/// `sum_xx == 0` -> `#DIV/0!`; shape mismatch -> `#N/A`.
+Value eval_steyx_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx);
+
+/// `SUMX2PY2(array_x, array_y)` - Σᵢ (x_i² + y_i²). Shares the pairwise
+/// shape / error / non-numeric-drop rules with the rest of this file: a
+/// shape mismatch returns `#N/A`; any error cell propagates in left-to-
+/// right scan order (array_x first); a non-numeric cell in either side of
+/// a pair drops the whole pair; empty surviving pair set returns `#N/A`.
+/// Note the argument order differs from the regression family: the SUMX
+/// series uses `(x, y)`, whereas CORREL et al. use `(y, x)`.
+Value eval_sumx2py2_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx);
+
+/// `SUMX2MY2(array_x, array_y)` - Σᵢ (x_i² - y_i²). Same semantics as
+/// SUMX2PY2.
+Value eval_sumx2my2_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx);
+
+/// `SUMXMY2(array_x, array_y)` - Σᵢ (x_i - y_i)². Same semantics as
+/// SUMX2PY2.
+Value eval_sumxmy2_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx);
 
 }  // namespace eval
 }  // namespace formulon

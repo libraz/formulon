@@ -74,6 +74,8 @@ set(FORMULON_CORE_SOURCES
   src/parser/ast.cpp
   src/parser/ast_dump.cpp
   src/parser/parser.cpp
+  src/parser/parser_atoms.cpp
+  src/parser/parser_reference.cpp
   src/eval/coerce.cpp
   src/eval/utf8_length.cpp
   src/eval/text_ops.cpp
@@ -84,6 +86,8 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins/datetime.cpp
   src/eval/builtins/distributions.cpp
   src/eval/builtins/financial.cpp
+  src/eval/builtins/financial_depreciation.cpp
+  src/eval/builtins/financial_misc.cpp
   src/eval/builtins/info.cpp
   src/eval/builtins/logical.cpp
   src/eval/builtins/math.cpp
@@ -91,9 +95,12 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins/math_trig.cpp
   src/eval/builtins/references.cpp
   src/eval/builtins/stats.cpp
+  src/eval/builtins/stats/stats_distributions.cpp
   src/eval/builtins/text.cpp
   src/eval/builtins/text_format.cpp
   src/eval/text_format/number_format.cpp
+  src/eval/text_format/number_format_tokenizer.cpp
+  src/eval/text_format/number_format_render.cpp
   src/eval/stats/special_functions.cpp
   src/eval/tree_walker.cpp
   src/eval/eval_context.cpp
@@ -109,6 +116,8 @@ set(FORMULON_CORE_SOURCES
   src/eval/financial_lazy.cpp
   src/eval/reference_lazy.cpp
   src/eval/regression_lazy.cpp
+  src/eval/series_sum_lazy.cpp
+  src/eval/rank_lazy.cpp
   src/eval/info_lazy.cpp
   src/eval/lookups/classic.cpp
   src/eval/lookups/xlookup.cpp

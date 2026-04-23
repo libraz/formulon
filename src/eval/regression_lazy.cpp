@@ -1,8 +1,9 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
 // Implementation of the pairwise linear-regression lazy impls:
-// CORREL, COVARIANCE.P, COVARIANCE.S, SLOPE, INTERCEPT, RSQ, and
-// FORECAST.LINEAR (aliased as FORECAST).
+// CORREL, COVARIANCE.P, COVARIANCE.S, SLOPE, INTERCEPT, RSQ,
+// FORECAST.LINEAR (aliased as FORECAST), STEYX, and the paired sum-of-
+// products family SUMX2PY2 / SUMX2MY2 / SUMXMY2.
 //
 // Every function shares the same front-end work: walk two parallel AST
 // arguments — each of which may be a `Ref`, a `RangeOp`, or an inline
@@ -340,6 +341,112 @@ Value eval_rsq_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
   // directly avoids the intermediate sqrt in CORREL and stays closer
   // to the double-precision limit.
   return finite_number((s.sum_xy * s.sum_xy) / (s.sum_xx * s.sum_yy));
+}
+
+Value eval_steyx_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx) {
+  auto prepared = prepare_pairs(call, arena, registry, ctx);
+  if (std::holds_alternative<Value>(prepared)) {
+    return std::get<Value>(prepared);
+  }
+  const NumericPairs& pairs = std::get<NumericPairs>(prepared);
+  // Residual standard error has (n - 2) degrees of freedom, so we need at
+  // least 3 pairs. A collinear x-vector (sum_xx == 0) also makes the
+  // regression undefined.
+  if (pairs.x.size() < 3U) {
+    return Value::error(ErrorCode::Div0);
+  }
+  const RegressionStats s = compute_regression_stats(pairs);
+  if (s.sum_xx == 0.0) {
+    return Value::error(ErrorCode::Div0);
+  }
+  const double residual_ss = s.sum_yy - (s.sum_xy * s.sum_xy) / s.sum_xx;
+  // Floating-point subtraction can produce a tiny negative when the fit
+  // is essentially exact; clamp to zero before taking the root.
+  const double clamped = residual_ss < 0.0 ? 0.0 : residual_ss;
+  return finite_number(std::sqrt(clamped / static_cast<double>(pairs.x.size() - 2U)));
+}
+
+namespace {
+
+// Shared front-end for SUMX2PY2 / SUMX2MY2 / SUMXMY2. These take a pair
+// of arrays in `(array_x, array_y)` order — the opposite of the rest of
+// this file's `(known_y, known_x)` convention — so the impls cannot
+// reuse `prepare_pairs` directly. Error propagation must still run in
+// Excel's left-to-right order (array_x first), so we pass the arguments
+// to `collect_numeric_pairs` in their declared order; that leaves
+// array_x's cells in `pairs.y` and array_y's cells in `pairs.x`. The
+// caller unpacks both fields with explicit local names to keep the
+// subsequent arithmetic readable.
+std::variant<Value, NumericPairs> prepare_sumx_pairs(const parser::AstNode& call, Arena& arena,
+                                                     const FunctionRegistry& registry, const EvalContext& ctx) {
+  if (call.as_call_arity() != 2U) {
+    return Value{Value::error(ErrorCode::Value)};
+  }
+  return collect_numeric_pairs(call.as_call_arg(0), call.as_call_arg(1), arena, registry, ctx);
+}
+
+}  // namespace
+
+Value eval_sumx2py2_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx) {
+  auto prepared = prepare_sumx_pairs(call, arena, registry, ctx);
+  if (std::holds_alternative<Value>(prepared)) {
+    return std::get<Value>(prepared);
+  }
+  const NumericPairs& pairs = std::get<NumericPairs>(prepared);
+  // Unpack with Excel-facing names: the first argument (array_x) lives in
+  // `pairs.y`, and the second (array_y) lives in `pairs.x`. See
+  // `prepare_sumx_pairs` for the reason.
+  const std::vector<double>& x = pairs.y;
+  const std::vector<double>& y = pairs.x;
+  if (x.empty()) {
+    return Value::error(ErrorCode::NA);
+  }
+  double total = 0.0;
+  for (std::size_t i = 0; i < x.size(); ++i) {
+    total += x[i] * x[i] + y[i] * y[i];
+  }
+  return finite_number(total);
+}
+
+Value eval_sumx2my2_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx) {
+  auto prepared = prepare_sumx_pairs(call, arena, registry, ctx);
+  if (std::holds_alternative<Value>(prepared)) {
+    return std::get<Value>(prepared);
+  }
+  const NumericPairs& pairs = std::get<NumericPairs>(prepared);
+  const std::vector<double>& x = pairs.y;
+  const std::vector<double>& y = pairs.x;
+  if (x.empty()) {
+    return Value::error(ErrorCode::NA);
+  }
+  double total = 0.0;
+  for (std::size_t i = 0; i < x.size(); ++i) {
+    total += x[i] * x[i] - y[i] * y[i];
+  }
+  return finite_number(total);
+}
+
+Value eval_sumxmy2_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx) {
+  auto prepared = prepare_sumx_pairs(call, arena, registry, ctx);
+  if (std::holds_alternative<Value>(prepared)) {
+    return std::get<Value>(prepared);
+  }
+  const NumericPairs& pairs = std::get<NumericPairs>(prepared);
+  const std::vector<double>& x = pairs.y;
+  const std::vector<double>& y = pairs.x;
+  if (x.empty()) {
+    return Value::error(ErrorCode::NA);
+  }
+  double total = 0.0;
+  for (std::size_t i = 0; i < x.size(); ++i) {
+    const double d = x[i] - y[i];
+    total += d * d;
+  }
+  return finite_number(total);
 }
 
 Value eval_forecast_linear_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

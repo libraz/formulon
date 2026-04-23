@@ -45,3 +45,248 @@ cases:
 
   - id: var_p_population
     formula: "=VAR.P(1,2,3,4,5)"
+
+  # -- Legacy spellings of VAR.P / STDEV.P (pre-2010) -------------------------
+  - id: varp_legacy_matches_var_p
+    formula: "=VARP(1,2,3,4,5)"
+
+  - id: stdevp_legacy_matches_stdev_p
+    formula: "=STDEVP(1,2,3,4,5)"
+
+  # -- "A" family: AVERAGEA / MAXA / MINA -------------------------------------
+  # These evaluate text as 0 and Bool as 0 / 1 (range-sourced), unlike the
+  # non-A counterparts which skip them. Blank cells in a range are still
+  # ignored.
+  - id: averagea_numeric_only_matches_average
+    description: "With only numbers AVERAGEA matches AVERAGE"
+    formula: "=AVERAGEA(1,2,3,4,5)"
+
+  - id: averagea_range_text_counts_as_zero
+    setup: { A1: 1, A2: "text", A3: 3 }
+    formula: "=AVERAGEA(A1:A3)"
+
+  - id: averagea_range_true_counts_as_one
+    setup: { A1: 1, A2: true, A3: 3 }
+    formula: "=AVERAGEA(A1:A3)"
+
+  - id: averagea_range_false_counts_as_zero
+    setup: { A1: 1, A2: false, A3: 5 }
+    formula: "=AVERAGEA(A1:A3)"
+
+  - id: averagea_range_blank_is_skipped
+    description: "Range Blank cells are skipped (not counted as 0)"
+    setup: { A1: 1, A3: 5 }
+    formula: "=AVERAGEA(A1:A3)"
+
+  - id: maxa_text_counts_as_zero
+    description: "text 'big' evaluates to 0, so 0 beats -5 and -2"
+    setup: { A1: -5, A2: "big", A3: -2 }
+    formula: "=MAXA(A1:A3)"
+
+  - id: maxa_true_counts_as_one
+    setup: { A1: 0.5, A2: true }
+    formula: "=MAXA(A1:A2)"
+
+  - id: mina_text_counts_as_zero
+    description: "text evaluates to 0, so 0 beats 5 and 3"
+    setup: { A1: 5, A2: "small", A3: 3 }
+    formula: "=MINA(A1:A3)"
+
+  - id: mina_false_counts_as_zero
+    setup: { A1: 0.5, A2: false }
+    formula: "=MINA(A1:A2)"
+
+  # -- VARA / VARPA / STDEVA / STDEVPA ----------------------------------------
+  - id: vara_sample_with_bool_and_text
+    description: "{1, TRUE, 'x', 4}: n=4, values=[1,1,0,4], mean=1.5, var.s"
+    setup: { A1: 1, A2: true, A3: "x", A4: 4 }
+    formula: "=VARA(A1:A4)"
+
+  - id: varpa_pop_with_bool_and_text
+    setup: { A1: 1, A2: true, A3: "x", A4: 4 }
+    formula: "=VARPA(A1:A4)"
+
+  - id: stdeva_sample_with_bool_and_text
+    setup: { A1: 1, A2: true, A3: "x", A4: 4 }
+    formula: "=STDEVA(A1:A4)"
+
+  - id: stdevpa_pop_with_bool_and_text
+    setup: { A1: 1, A2: true, A3: "x", A4: 4 }
+    formula: "=STDEVPA(A1:A4)"
+
+  - id: vara_numeric_only_matches_var_s
+    formula: "=VARA(1,2,3,4,5)"
+
+  - id: stdeva_numeric_only_matches_stdev_s
+    formula: "=STDEVA(1,2,3,4,5)"
+
+  - id: averagea_direct_true
+    description: "Direct TRUE coerces to 1"
+    formula: "=AVERAGEA(1, TRUE, 3)"
+
+  # -- Descriptive statistics: GEOMEAN / HARMEAN / DEVSQ / AVEDEV ------------
+  - id: geomean_basic
+    description: "Geometric mean of {2, 8} = 4"
+    formula: "=GEOMEAN(2,8)"
+
+  - id: geomean_range
+    setup: { A1: 2, A2: 4, A3: 8 }
+    formula: "=GEOMEAN(A1:A3)"
+
+  - id: geomean_zero_is_num
+    description: "Zero input -> #NUM! (geometric mean is undefined)"
+    formula: "=GEOMEAN(1,0,3)"
+
+  - id: geomean_negative_is_num
+    formula: "=GEOMEAN(1,-2,3)"
+
+  - id: harmean_basic
+    description: "Harmonic mean of {2, 4} = 2 / (1/2 + 1/4) = 8/3"
+    formula: "=HARMEAN(2,4)"
+
+  - id: harmean_range
+    setup: { A1: 1, A2: 2, A3: 4 }
+    formula: "=HARMEAN(A1:A3)"
+
+  - id: harmean_negative_is_num
+    formula: "=HARMEAN(1,-2,3)"
+
+  - id: devsq_basic
+    description: "{2, 4, 6}: mean=4, SS = 4 + 0 + 4 = 8"
+    formula: "=DEVSQ(2,4,6)"
+
+  - id: devsq_single_value_is_zero
+    formula: "=DEVSQ(42)"
+
+  - id: avedev_basic
+    description: "{4, 5, 6, 7, 8}: mean=6, mean|dev| = (2+1+0+1+2)/5 = 1.2"
+    formula: "=AVEDEV(4,5,6,7,8)"
+
+  - id: avedev_range
+    setup: { A1: 1, A2: 3, A3: 5 }
+    formula: "=AVEDEV(A1:A3)"
+
+  # -- TRIMMEAN --------------------------------------------------------------
+  - id: trimmean_basic
+    description: "n=10, percent=0.2 -> trim 1 each side -> mean of {2..9} = 5.5"
+    formula: "=TRIMMEAN({1;2;3;4;5;6;7;8;9;10}, 0.2)"
+
+  - id: trimmean_zero_percent_is_average
+    formula: "=TRIMMEAN({1;2;3;4;5}, 0)"
+
+  - id: trimmean_out_of_range_is_num
+    formula: "=TRIMMEAN({1;2;3;4;5}, 1)"
+
+  - id: trimmean_negative_percent_is_num
+    formula: "=TRIMMEAN({1;2;3;4;5}, -0.1)"
+
+  # -- SKEW / SKEW.P / KURT --------------------------------------------------
+  - id: skew_basic
+    description: "SKEW of {1,2,3,4,5} is 0 (symmetric)"
+    formula: "=SKEW(1,2,3,4,5)"
+
+  - id: skew_positive
+    description: "Right-skewed data yields positive SKEW"
+    formula: "=SKEW(1,1,1,2,10)"
+
+  - id: skew_too_few_is_div0
+    formula: "=SKEW(1,2)"
+
+  - id: skewp_basic
+    formula: "=SKEW.P(1,2,3,4,5)"
+
+  - id: skewp_constant_is_div0
+    formula: "=SKEW.P(3,3,3)"
+
+  - id: kurt_basic
+    description: "{1,2,3,4,5}: excess kurtosis"
+    formula: "=KURT(1,2,3,4,5)"
+
+  - id: kurt_too_few_is_div0
+    formula: "=KURT(1,2,3)"
+
+  # -- STANDARDIZE -----------------------------------------------------------
+  - id: standardize_basic
+    description: "z = (42 - 40) / 1.5"
+    formula: "=STANDARDIZE(42, 40, 1.5)"
+
+  - id: standardize_zero_sd_is_num
+    formula: "=STANDARDIZE(42, 40, 0)"
+
+  - id: standardize_negative_sd_is_num
+    formula: "=STANDARDIZE(42, 40, -1)"
+
+  # -- STEYX (regression standard error) -------------------------------------
+  - id: steyx_basic
+    description: "Classic {1,2,3,4,5} vs {2,4,6,8,10} -> perfect fit -> 0"
+    formula: "=STEYX({2;4;6;8;10},{1;2;3;4;5})"
+
+  - id: steyx_small_residuals
+    description: "Noisy data; STEYX > 0"
+    formula: "=STEYX({2;4;5;8;10},{1;2;3;4;5})"
+
+  - id: steyx_too_few_is_div0
+    formula: "=STEYX({1;2},{3;4})"
+
+  - id: steyx_shape_mismatch_is_na
+    description: "known_y and known_x must have the same rectangle"
+    formula: "=STEYX({1;2;3},{1;2})"
+
+  # -- RANK / RANK.EQ / RANK.AVG ---------------------------------------------
+  - id: rank_descending_basic
+    formula: "=RANK(20, {30;20;10}, 0)"
+
+  - id: rank_ascending_basic
+    formula: "=RANK(20, {30;20;10}, 1)"
+
+  - id: rank_ties_share_highest
+    description: "With ties, RANK returns the highest (lowest-number) rank"
+    formula: "=RANK(20, {30;20;20;10}, 0)"
+
+  - id: rank_not_present_is_na
+    formula: "=RANK(15, {30;20;10}, 0)"
+
+  - id: rank_eq_equivalent
+    formula: "=RANK.EQ(20, {30;20;20;10}, 0)"
+
+  - id: rank_avg_ties_averaged
+    description: "Tied at positions 2 and 3 -> average 2.5"
+    formula: "=RANK.AVG(20, {30;20;20;10}, 0)"
+
+  - id: rank_avg_no_ties_matches_eq
+    formula: "=RANK.AVG(20, {30;20;10}, 0)"
+
+  # -- PERCENTRANK / .INC / .EXC ---------------------------------------------
+  - id: percentrank_inc_midpoint
+    formula: "=PERCENTRANK.INC({1;2;3;4;5}, 3)"
+
+  - id: percentrank_inc_at_min
+    formula: "=PERCENTRANK.INC({10;20;30}, 10)"
+
+  - id: percentrank_inc_at_max
+    formula: "=PERCENTRANK.INC({10;20;30}, 30)"
+
+  - id: percentrank_inc_interpolated_truncated
+    description: "Raw 0.75 exact at default 3 digits"
+    formula: "=PERCENTRANK.INC({1;2;4}, 3)"
+
+  - id: percentrank_inc_significance_two
+    description: "Significance=2 truncates 0.375 to 0.37 (NOT rounded)"
+    formula: "=PERCENTRANK.INC({1;2;3;4;5}, 2.5, 2)"
+
+  - id: percentrank_legacy_matches_inc
+    formula: "=PERCENTRANK({1;2;3;4;5}, 3)"
+
+  - id: percentrank_inc_out_of_range_is_na
+    formula: "=PERCENTRANK.INC({1;2;3}, 4)"
+
+  - id: percentrank_exc_midpoint
+    description: "Raw 3/6 = 0.5"
+    formula: "=PERCENTRANK.EXC({1;2;3;4;5}, 3)"
+
+  - id: percentrank_exc_at_min
+    description: "Raw 1/6 truncated to 3 digits -> 0.166"
+    formula: "=PERCENTRANK.EXC({1;2;3;4;5}, 1)"
+
+  - id: percentrank_exc_out_of_range_is_na
+    formula: "=PERCENTRANK.EXC({1;2;3;4;5}, 6)"

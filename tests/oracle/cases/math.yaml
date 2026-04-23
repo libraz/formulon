@@ -232,3 +232,52 @@ cases:
   - id: floor_math_neg_mode_toward_zero
     description: "mode != 0 rounds negatives toward zero (toward +inf)"
     formula: "=FLOOR.MATH(-4.3,1,1)"
+
+  # -- SUMSQ / SUMX2PY2 / SUMX2MY2 / SUMXMY2 / SERIESSUM --------------------
+  - id: sumsq_basic
+    formula: "=SUMSQ(3, 4)"
+
+  - id: sumsq_range
+    setup: { A1: 3, A2: 4, A3: 5 }
+    formula: "=SUMSQ(A1:A3)"
+
+  - id: sumsq_skips_text_in_range
+    description: "Text cells in a range argument are dropped silently"
+    setup: { A1: 3, A2: "x", A3: 5 }
+    formula: "=SUMSQ(A1:A3)"
+
+  - id: sumsq_direct_text_is_value
+    description: "A non-numeric direct text argument surfaces #VALUE!"
+    formula: "=SUMSQ(3, \"abc\")"
+
+  - id: sumx2py2_basic
+    description: "Σ (x² + y²) over {1,2,3} and {4,5,6} = 91"
+    formula: "=SUMX2PY2({1;2;3}, {4;5;6})"
+
+  - id: sumx2my2_basic
+    description: "Σ (x² - y²) over {1,2,3} and {4,5,6} = -63"
+    formula: "=SUMX2MY2({1;2;3}, {4;5;6})"
+
+  - id: sumxmy2_basic
+    description: "Σ (x - y)² over {1,2,3} and {4,5,6} = 27"
+    formula: "=SUMXMY2({1;2;3}, {4;5;6})"
+
+  - id: sumx2py2_shape_mismatch_is_na
+    description: "Mismatched rectangles return #N/A"
+    formula: "=SUMX2PY2({1;2;3}, {4;5})"
+
+  - id: sumx2my2_single_point
+    description: "Single-element arrays: 2² - 5² = -21"
+    formula: "=SUMX2MY2({2}, {5})"
+
+  - id: seriessum_binary_polynomial
+    description: "Σ xⁱ for i=0..3 with x=2 and unit coefficients -> 15"
+    formula: "=SERIESSUM(2, 0, 1, {1;1;1;1})"
+
+  - id: seriessum_step_two
+    description: "2² + 2⁴ = 20"
+    formula: "=SERIESSUM(2, 2, 2, {1;1})"
+
+  - id: seriessum_x_equals_one
+    description: "x=1 makes every power one: sum is just Σ coefficients"
+    formula: "=SERIESSUM(1, 0, 1, {5;5;5})"

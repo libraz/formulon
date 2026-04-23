@@ -76,6 +76,16 @@ struct FunctionDef {
   /// dispatcher's normal coercion, so a text literal passed directly
   /// surfaces as #VALUE!.
   bool range_filter_bool_coercible = false;
+
+  /// Provenance-aware transform for the "A" family
+  /// (AVERAGEA / MAXA / MINA / VARA / VARPA / STDEVA / STDEVPA): when set,
+  /// range-sourced cells are coerced to numbers before reaching the impl --
+  /// Bool becomes 0 / 1, Text (including the empty string) becomes 0, Blank
+  /// cells are dropped, and Number cells are kept unchanged. Direct scalar
+  /// arguments pass through unchanged (so a direct TRUE still coerces to 1
+  /// via the impl's own `coerce_to_number`, and a direct non-numeric text
+  /// still surfaces `#VALUE!`).
+  bool range_filter_a_coerce = false;
 };
 
 /// Case-insensitive function lookup table. Names are stored UPPERCASE

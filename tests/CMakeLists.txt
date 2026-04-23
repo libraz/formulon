@@ -48,6 +48,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_count_test.cpp
   unit/eval/builtins_shape_test.cpp
   unit/eval/builtins_stats_test.cpp
+  unit/eval/builtins_stats_a_test.cpp
+  unit/eval/builtins_descriptive_stats_test.cpp
   unit/eval/builtins_distributions_test.cpp
   unit/eval/builtins_chisq_test.cpp
   unit/eval/builtins_t_test.cpp
@@ -66,6 +68,10 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_financial_test.cpp
   unit/eval/builtins_financial2_test.cpp
   unit/eval/builtins_regression_test.cpp
+  unit/eval/builtins_sumsq_test.cpp
+  unit/eval/builtins_sumx_test.cpp
+  unit/eval/builtins_series_sum_test.cpp
+  unit/eval/builtins_rank_test.cpp
   unit/eval/text_ops_test.cpp
   unit/eval/let_test.cpp
   unit/registry_catalog_test.cpp
