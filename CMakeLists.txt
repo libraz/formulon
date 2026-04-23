@@ -84,6 +84,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/eval_state.cpp
   src/eval/criteria.cpp
   src/eval/date_time.cpp
+  src/eval/range_args.cpp
 )
 
 add_library(formulon_core OBJECT ${FORMULON_CORE_SOURCES})
