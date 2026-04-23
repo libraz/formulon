@@ -1,0 +1,114 @@
+suite: hypothesis
+description: T.TEST / TTEST / F.TEST / FTEST / CHISQ.TEST / CHITEST / Z.TEST / ZTEST / PROB — Excel hypothesis-test / probability builtins
+# P-values from these functions are bounded in [0, 1] with values on the
+# order of 10^-4 to 10^-1 for the cases in this suite, so double-precision
+# tolerance comfortably covers them. If xlwings rounds to the displayed
+# format for long decimals, widen both bounds.
+tolerance: { abs: 1.0e-6, rel: 1.0e-6 }
+locale: ja-JP
+cases:
+  # -- T.TEST --------------------------------------------------------------
+  - id: t_test_paired_small
+    description: "Paired two-tailed t-test on a small sample"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 3, B2: 4, B3: 6, B4: 4, B5: 4 }
+    formula: "=T.TEST(A1:A5, B1:B5, 2, 1)"
+
+  - id: t_test_equal_var_two_tailed
+    description: "Equal-variance two-sample t-test, two-tailed"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 6, B2: 7, B3: 8, B4: 9, B5: 10 }
+    formula: "=T.TEST(A1:A5, B1:B5, 2, 2)"
+
+  - id: t_test_welch_two_tailed
+    description: "Welch's unequal-variance t-test, two-tailed"
+    setup: { A1: 3, A2: 4, A3: 5, A4: 9, A5: 10, B1: 1, B2: 2, B3: 3, B4: 4, B5: 5 }
+    formula: "=T.TEST(A1:A5, B1:B5, 2, 3)"
+
+  - id: t_test_one_tail_half_of_two_tail
+    description: "Identity: 2 * one-tail(type=2) == two-tail(type=2)"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 6, B2: 7, B3: 8, B4: 9, B5: 10 }
+    formula: "=T.TEST(A1:A5, B1:B5, 2, 2) - 2*T.TEST(A1:A5, B1:B5, 1, 2)"
+
+  - id: ttest_legacy_matches_t_test
+    description: "Legacy TTEST must match T.TEST exactly"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 6, B2: 7, B3: 8, B4: 9, B5: 10 }
+    formula: "=TTEST(A1:A5, B1:B5, 2, 2) - T.TEST(A1:A5, B1:B5, 2, 2)"
+
+  # -- F.TEST --------------------------------------------------------------
+  - id: f_test_basic
+    description: "F-test of equal variances on two small samples"
+    setup: { A1: 6, A2: 7, A3: 9, A4: 15, A5: 21, B1: 20, B2: 28, B3: 31, B4: 38, B5: 40 }
+    formula: "=F.TEST(A1:A5, B1:B5)"
+
+  - id: f_test_legacy_matches
+    description: "Legacy FTEST must match F.TEST exactly"
+    setup: { A1: 6, A2: 7, A3: 9, A4: 15, A5: 21, B1: 20, B2: 28, B3: 31, B4: 38, B5: 40 }
+    formula: "=FTEST(A1:A5, B1:B5) - F.TEST(A1:A5, B1:B5)"
+
+  # -- CHISQ.TEST ----------------------------------------------------------
+  - id: chisq_test_2x2_table
+    description: "Chi-squared independence test on a 2x2 contingency table"
+    setup:
+      A1: 58
+      B1: 11
+      A2: 35
+      B2: 25
+      C1: 45.35
+      D1: 23.65
+      C2: 47.65
+      D2: 24.85
+    formula: "=CHISQ.TEST(A1:B2, C1:D2)"
+
+  - id: chitest_legacy_matches
+    description: "Legacy CHITEST must match CHISQ.TEST exactly"
+    setup:
+      A1: 58
+      B1: 11
+      A2: 35
+      B2: 25
+      C1: 45.35
+      D1: 23.65
+      C2: 47.65
+      D2: 24.85
+    formula: "=CHITEST(A1:B2, C1:D2) - CHISQ.TEST(A1:B2, C1:D2)"
+
+  - id: chisq_test_one_dimensional
+    description: "1-D chi-squared uses df = n - 1; perfect match -> 1"
+    setup: { A1: 10, A2: 20, A3: 30, B1: 10, B2: 20, B3: 30 }
+    formula: "=CHISQ.TEST(A1:A3, B1:B3)"
+
+  # -- Z.TEST --------------------------------------------------------------
+  - id: z_test_known_sigma
+    description: "One-tailed z-test with supplied sigma = 2"
+    setup: { A1: 3, A2: 6, A3: 7, A4: 8, A5: 6, A6: 5, A7: 4, A8: 2, A9: 1, A10: 9 }
+    formula: "=Z.TEST(A1:A10, 4, 2)"
+
+  - id: z_test_sample_sigma
+    description: "One-tailed z-test using the sample standard deviation"
+    setup: { A1: 3, A2: 6, A3: 7, A4: 8, A5: 6, A6: 5, A7: 4, A8: 2, A9: 1, A10: 9 }
+    formula: "=Z.TEST(A1:A10, 4)"
+
+  - id: ztest_legacy_matches
+    description: "Legacy ZTEST must match Z.TEST exactly"
+    setup: { A1: 3, A2: 6, A3: 7, A4: 8, A5: 6, A6: 5, A7: 4, A8: 2, A9: 1, A10: 9 }
+    formula: "=ZTEST(A1:A10, 4) - Z.TEST(A1:A10, 4)"
+
+  # -- PROB ----------------------------------------------------------------
+  - id: prob_point
+    description: "PROB with omitted upper limit: sum of probs where x_i == lower"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, B1: 0.1, B2: 0.2, B3: 0.3, B4: 0.4 }
+    formula: "=PROB(A1:A4, B1:B4, 2)"
+
+  - id: prob_range
+    description: "PROB with lower=2, upper=3 -> 0.2 + 0.3 = 0.5"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, B1: 0.1, B2: 0.2, B3: 0.3, B4: 0.4 }
+    formula: "=PROB(A1:A4, B1:B4, 2, 3)"
+
+  - id: prob_probs_sum_not_one_is_num
+    description: "Probabilities summing to 1.1 -> #NUM!"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, B1: 0.1, B2: 0.2, B3: 0.3, B4: 0.5 }
+    formula: "=PROB(A1:A4, B1:B4, 2)"
+
+  - id: prob_negative_prob_is_num
+    description: "Negative probability -> #NUM!"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, B1: 0.1, B2: 0.2, B3: 0.3, B4: -0.1 }
+    formula: "=PROB(A1:A4, B1:B4, 2)"

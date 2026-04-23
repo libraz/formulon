@@ -286,3 +286,104 @@ cases:
   - id: code_hiragana_first
     description: "Non-ASCII: Excel ja-JP returns CP932; oracle decides"
     formula: "=CODE(\"あいう\")"
+
+  # -- REPLACE ------------------------------------------------------------
+  - id: replace_middle
+    description: "Replace 3 UTF-16 units starting at position 2 with 'XYZ'"
+    formula: "=REPLACE(\"abcdef\", 2, 3, \"XYZ\")"
+
+  - id: replace_append
+    description: "start_num past end appends new_text to old_text"
+    formula: "=REPLACE(\"abc\", 5, 2, \"XYZ\")"
+
+  - id: replace_empty_new
+    formula: "=REPLACE(\"abcdef\", 2, 3, \"\")"
+
+  # -- REPLACEB (ja-JP DBCS bytes) ----------------------------------------
+  - id: replaceb_hiragana_middle
+    description: "Replace 2 DBCS bytes starting at byte 3 (the second hiragana) with 'X'"
+    formula: "=REPLACEB(\"あいう\", 3, 2, \"X\")"
+
+  - id: replaceb_head_pad
+    description: "start_byte=2 splits 'あ'; MIDB-style head-pad ASCII space"
+    formula: "=REPLACEB(\"あい\", 2, 2, \"X\")"
+
+  - id: replaceb_tail_pad
+    description: "Deletion window ends inside a 2-byte char -> trailing ASCII space"
+    formula: "=REPLACEB(\"あいう\", 1, 3, \"X\")"
+
+  # -- FINDB / SEARCHB ----------------------------------------------------
+  - id: findb_hiragana
+    description: "Each hiragana = 2 DBCS bytes; 'う' starts at byte 5 in 'あいう'"
+    formula: "=FINDB(\"う\", \"あいう\")"
+
+  - id: findb_not_found_is_value
+    formula: "=FINDB(\"z\", \"abcdef\")"
+
+  - id: findb_empty_needle_returns_start
+    description: "FIND quirk: empty needle returns start_num"
+    formula: "=FINDB(\"\", \"abc\", 2)"
+
+  - id: searchb_hiragana_wildcard
+    description: "'い*' matches from 'い' (DBCS byte 3) in 'あいう'"
+    formula: "=SEARCHB(\"い*\", \"あいう\")"
+
+  - id: searchb_case_insensitive
+    formula: "=SEARCHB(\"B\", \"abc\")"
+
+  # -- FIXED --------------------------------------------------------------
+  - id: fixed_positive
+    formula: "=FIXED(1234567.891, 2)"
+
+  - id: fixed_default_two_decimals
+    formula: "=FIXED(1234.5678)"
+
+  - id: fixed_negative_decimals
+    description: "Negative decimals rounds left of decimal point"
+    formula: "=FIXED(1234.56, -2)"
+
+  - id: fixed_no_commas
+    formula: "=FIXED(1234567.891, -3, TRUE)"
+
+  # -- DOLLAR (Mac Excel ja-JP uses yen sign '¥' = UTF-8 0xC2 0xA5) -------
+  - id: dollar_positive
+    description: "Mac Excel ja-JP DOLLAR uses ¥ prefix, not $. Diverges from en-US."
+    formula: "=DOLLAR(1234.5)"
+
+  - id: dollar_negative_parens
+    description: "Negative value renders as (¥...) with no minus sign"
+    formula: "=DOLLAR(-1234.5)"
+
+  - id: dollar_zero
+    formula: "=DOLLAR(0)"
+
+  - id: dollar_negative_decimals
+    description: "DOLLAR(1234.5, -2) rounds to 1200 first"
+    formula: "=DOLLAR(1234.5, -2)"
+
+  # -- TEXTBEFORE / TEXTAFTER ---------------------------------------------
+  - id: textbefore_first
+    formula: "=TEXTBEFORE(\"abc-def-ghi\", \"-\")"
+
+  - id: textbefore_second
+    formula: "=TEXTBEFORE(\"abc-def-ghi\", \"-\", 2)"
+
+  - id: textbefore_negative_instance
+    description: "instance_num = -1 selects the last occurrence"
+    formula: "=TEXTBEFORE(\"abc-def-ghi\", \"-\", -1)"
+
+  - id: textbefore_not_found_is_na
+    formula: "=TEXTBEFORE(\"abc\", \"-\")"
+
+  - id: textbefore_if_not_found_custom
+    formula: "=TEXTBEFORE(\"abc\", \"-\", 1, 0, 0, \"NA\")"
+
+  - id: textafter_first
+    formula: "=TEXTAFTER(\"abc-def-ghi\", \"-\")"
+
+  - id: textafter_negative_instance
+    formula: "=TEXTAFTER(\"abc-def-ghi\", \"-\", -1)"
+
+  - id: textafter_match_end_at_end
+    description: "match_end=1 + instance=-1 matches the end-of-text sentinel"
+    formula: "=TEXTAFTER(\"abc\", \"-\", -1, 0, 1)"

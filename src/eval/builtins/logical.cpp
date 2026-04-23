@@ -1,9 +1,9 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
 // Implementation of Formulon's logical built-in functions: TRUE, FALSE, NOT,
-// AND, and OR. Each impl follows the same recipe as the rest of the builtin
-// catalog: coerce arguments via `eval/coerce.h`, propagate the left-most
-// coercion error, and return a `Value`.
+// AND, OR, and XOR. Each impl follows the same recipe as the rest of the
+// builtin catalog: coerce arguments via `eval/coerce.h`, propagate the
+// left-most coercion error, and return a `Value`.
 
 #include "eval/builtins/logical.h"
 
@@ -78,6 +78,23 @@ Value Or_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return Value::boolean(result);
 }
 
+/// XOR(value, ...) -- exclusive-or across any number of boolean-coercible
+/// arguments. Returns TRUE iff an odd number of the coerced arguments are
+/// TRUE. Shares AND / OR's range-aware surface: range-sourced Text / Blank
+/// cells are silently skipped via `range_filter_bool_coercible`; direct
+/// scalar arguments that fail `coerce_to_bool` surface `#VALUE!`.
+Value Xor_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  bool result = false;
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    auto coerced = coerce_to_bool(args[i]);
+    if (!coerced) {
+      return Value::error(coerced.error());
+    }
+    result ^= coerced.value();
+  }
+  return Value::boolean(result);
+}
+
 }  // namespace
 
 void register_logical_builtins(FunctionRegistry& registry) {
@@ -97,6 +114,15 @@ void register_logical_builtins(FunctionRegistry& registry) {
   }
   {
     FunctionDef def{"OR", 1u, kVariadic, &Or_};
+    def.accepts_ranges = true;
+    def.range_filter_bool_coercible = true;
+    registry.register_function(def);
+  }
+  {
+    // XOR shares AND / OR's range-aware surface: a trailing range argument
+    // such as `=XOR(A1:A3)` expands in the dispatcher; Text and Blank cells
+    // inside the range are silently skipped rather than surfacing #VALUE!.
+    FunctionDef def{"XOR", 1u, kVariadic, &Xor_};
     def.accepts_ranges = true;
     def.range_filter_bool_coercible = true;
     registry.register_function(def);

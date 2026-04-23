@@ -221,6 +221,71 @@ Value CombinA(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return Value::number(r);
 }
 
+// PERMUT(n, k) - number of k-permutations of n distinct items =
+// n! / (n-k)! = n * (n-1) * ... * (n-k+1). Both arguments floor to
+// non-negative integer; `k > n` yields `#NUM!`, as does overflow.
+// Edge cases: `PERMUT(n, 0) = 1` for any n >= 0.
+Value Permut(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto n_v = coerce_to_number(args[0]);
+  if (!n_v) {
+    return Value::error(n_v.error());
+  }
+  auto k_v = coerce_to_number(args[1]);
+  if (!k_v) {
+    return Value::error(k_v.error());
+  }
+  std::uint64_t n = 0;
+  std::uint64_t k = 0;
+  if (!try_truncate_nonneg(n_v.value(), static_cast<std::uint64_t>(1) << 53u, &n) ||
+      !try_truncate_nonneg(k_v.value(), static_cast<std::uint64_t>(1) << 53u, &k)) {
+    return Value::error(ErrorCode::Num);
+  }
+  if (k > n) {
+    return Value::error(ErrorCode::Num);
+  }
+  // Multiply incrementally in double precision; bail out as soon as the
+  // running product overflows to infinity.
+  double result = 1.0;
+  for (std::uint64_t i = 0; i < k; ++i) {
+    result *= static_cast<double>(n - i);
+    if (std::isinf(result) || std::isnan(result)) {
+      return Value::error(ErrorCode::Num);
+    }
+  }
+  return Value::number(result);
+}
+
+// PERMUTATIONA(n, k) - number of k-permutations of n items with repetition =
+// n^k. Both arguments floor to non-negative integer. `PERMUTATIONA(0, 0) = 1`
+// by Excel convention; `PERMUTATIONA(0, k>0) = 0`. Overflow yields `#NUM!`.
+Value PermutationA(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto n_v = coerce_to_number(args[0]);
+  if (!n_v) {
+    return Value::error(n_v.error());
+  }
+  auto k_v = coerce_to_number(args[1]);
+  if (!k_v) {
+    return Value::error(k_v.error());
+  }
+  std::uint64_t n = 0;
+  std::uint64_t k = 0;
+  if (!try_truncate_nonneg(n_v.value(), static_cast<std::uint64_t>(1) << 53u, &n) ||
+      !try_truncate_nonneg(k_v.value(), static_cast<std::uint64_t>(1) << 53u, &k)) {
+    return Value::error(ErrorCode::Num);
+  }
+  if (n == 0 && k == 0) {
+    return Value::number(1.0);
+  }
+  if (n == 0) {
+    return Value::number(0.0);
+  }
+  const double r = std::pow(static_cast<double>(n), static_cast<double>(k));
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
 // MULTINOMIAL(a1, a2, ...) - multinomial coefficient = (sum(a_i))! / prod(a_i!).
 // Each argument truncated to non-negative integer; negative -> #NUM!.
 // Overflow -> #NUM!.
@@ -720,6 +785,8 @@ void register_math_combinatorics_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"FACTDOUBLE", 1u, 1u, &FactDouble});
   registry.register_function(FunctionDef{"COMBIN", 2u, 2u, &Combin});
   registry.register_function(FunctionDef{"COMBINA", 2u, 2u, &CombinA});
+  registry.register_function(FunctionDef{"PERMUT", 2u, 2u, &Permut});
+  registry.register_function(FunctionDef{"PERMUTATIONA", 2u, 2u, &PermutationA});
 
   // Variadic combinatorial aggregators. Range-aware: `=MULTINOMIAL(A1:A3)`
   // expands the rectangle into scalar args before the impl runs. Unlike the

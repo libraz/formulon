@@ -270,3 +270,22 @@ cases:
 
   - id: sqrtpi_negative_is_num
     formula: "=SQRTPI(-1)"
+
+  # -- PERMUT / PERMUTATIONA -----------------------------------------------
+  - id: permut_basic
+    description: "5 * 4 = 20"
+    formula: "=PERMUT(5, 2)"
+
+  - id: permut_k_zero
+    description: "Empty product is 1"
+    formula: "=PERMUT(5, 0)"
+
+  - id: permut_k_gt_n_is_num
+    formula: "=PERMUT(3, 5)"
+
+  - id: permutationa_basic
+    description: "3^2 = 9"
+    formula: "=PERMUTATIONA(3, 2)"
+
+  - id: permutationa_zero_zero_is_one
+    formula: "=PERMUTATIONA(0, 0)"

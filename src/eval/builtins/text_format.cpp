@@ -243,6 +243,148 @@ Value Text_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 }
 
 // ---------------------------------------------------------------------------
+// FIXED(number, [decimals=2], [no_commas=FALSE])
+// ---------------------------------------------------------------------------
+//
+// Rounds `number` to `decimals` places and renders it with thousands group
+// separators unless `no_commas` is truthy. `decimals` is truncated toward
+// zero; Excel caps the decimals parameter at 127 (values outside [-127, 127]
+// surface `#VALUE!`). Negative `decimals` rounds left of the decimal point
+// (e.g. `FIXED(1234.56, -2) = "1,200"`). The actual rounding at negative
+// decimals is done manually before formatting because `apply_format`'s
+// numeric walker does not support left-of-decimal-point rounding.
+
+Expected<int, ErrorCode> fixed_read_int(const Value& v) {
+  auto coerced = coerce_to_number(v);
+  if (!coerced) {
+    return coerced.error();
+  }
+  const double d = coerced.value();
+  if (std::isnan(d) || std::isinf(d)) {
+    return ErrorCode::Num;
+  }
+  return static_cast<int>(std::trunc(d));
+}
+
+Value Fixed_(const Value* args, std::uint32_t arity, Arena& arena) {
+  auto num = coerce_to_number(args[0]);
+  if (!num) {
+    return Value::error(num.error());
+  }
+  if (std::isnan(num.value()) || std::isinf(num.value())) {
+    return Value::error(ErrorCode::Num);
+  }
+  int decimals = 2;
+  if (arity >= 2) {
+    auto parsed = fixed_read_int(args[1]);
+    if (!parsed) {
+      return Value::error(parsed.error());
+    }
+    decimals = parsed.value();
+  }
+  if (decimals > 127 || decimals < -127) {
+    return Value::error(ErrorCode::Value);
+  }
+  bool no_commas = false;
+  if (arity >= 3) {
+    auto parsed = coerce_to_bool(args[2]);
+    if (!parsed) {
+      return Value::error(parsed.error());
+    }
+    no_commas = parsed.value();
+  }
+  // Apply negative-decimals rounding manually: round to the nearest
+  // multiple of 10^|decimals| with the same half-away-from-zero convention
+  // as `std::round`.
+  double value = num.value();
+  if (decimals < 0) {
+    const double scale = std::pow(10.0, -decimals);
+    value = std::round(value / scale) * scale;
+  }
+  const int effective_decimals = decimals < 0 ? 0 : decimals;
+  std::string fmt;
+  fmt.reserve(16 + static_cast<std::size_t>(effective_decimals));
+  fmt.append(no_commas ? "0" : "#,##0");
+  if (effective_decimals > 0) {
+    fmt.push_back('.');
+    fmt.append(static_cast<std::size_t>(effective_decimals), '0');
+  }
+  std::string out;
+  out.reserve(32);
+  const auto status = text_format::apply_format(value, fmt, out);
+  if (status != text_format::FormatStatus::kOk) {
+    return Value::error(ErrorCode::Value);
+  }
+  return Value::text(arena.intern(out));
+}
+
+// ---------------------------------------------------------------------------
+// DOLLAR(number, [decimals=2])
+// ---------------------------------------------------------------------------
+//
+// Mac Excel ja-JP formats with the yen sign `¥` (UTF-8 0xC2 0xA5) rather
+// than the dollar sign: positive values render as `¥1,234.56`, negative
+// values as `(¥1,234.56)` (parentheses, no leading minus). Uses a two-
+// section format `¥#,##0.00;(¥#,##0.00)`; the format engine's section
+// selector emits `std::fabs(value)` for section 1 so the negative branch
+// already strips the minus sign. Negative `decimals` rounds left of the
+// decimal point (same rule as FIXED); `|decimals| > 127` -> `#VALUE!`.
+
+Value Dollar_(const Value* args, std::uint32_t arity, Arena& arena) {
+  auto num = coerce_to_number(args[0]);
+  if (!num) {
+    return Value::error(num.error());
+  }
+  if (std::isnan(num.value()) || std::isinf(num.value())) {
+    return Value::error(ErrorCode::Num);
+  }
+  int decimals = 2;
+  if (arity >= 2) {
+    auto parsed = fixed_read_int(args[1]);
+    if (!parsed) {
+      return Value::error(parsed.error());
+    }
+    decimals = parsed.value();
+  }
+  if (decimals > 127 || decimals < -127) {
+    return Value::error(ErrorCode::Value);
+  }
+  double value = num.value();
+  if (decimals < 0) {
+    const double scale = std::pow(10.0, -decimals);
+    value = std::round(value / scale) * scale;
+  }
+  const int effective_decimals = decimals < 0 ? 0 : decimals;
+  // Two-section ¥ format: positive uses `¥#,##0[.00]`, negative uses
+  // `(¥#,##0[.00])`. The format engine passes `std::fabs(value)` into
+  // section 1, so the trailing `)` lands after the formatted digits.
+  std::string fraction;
+  if (effective_decimals > 0) {
+    fraction.reserve(1u + static_cast<std::size_t>(effective_decimals));
+    fraction.push_back('.');
+    fraction.append(static_cast<std::size_t>(effective_decimals), '0');
+  }
+  std::string fmt;
+  fmt.reserve(32 + 2u * fraction.size());
+  // Positive section: "¥#,##0[.00]"
+  fmt.append("\xC2\xA5#,##0");
+  fmt.append(fraction);
+  fmt.push_back(';');
+  // Negative section: "(¥#,##0[.00])"
+  fmt.push_back('(');
+  fmt.append("\xC2\xA5#,##0");
+  fmt.append(fraction);
+  fmt.push_back(')');
+  std::string out;
+  out.reserve(32);
+  const auto status = text_format::apply_format(value, fmt, out);
+  if (status != text_format::FormatStatus::kOk) {
+    return Value::error(ErrorCode::Value);
+  }
+  return Value::text(arena.intern(out));
+}
+
+// ---------------------------------------------------------------------------
 // VALUE(text)
 // ---------------------------------------------------------------------------
 
@@ -363,6 +505,8 @@ void register_text_format_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"TEXT", 2u, 2u, &Text_});
   registry.register_function(FunctionDef{"VALUE", 1u, 1u, &Value_});
   registry.register_function(FunctionDef{"NUMBERVALUE", 1u, 3u, &NumberValue_});
+  registry.register_function(FunctionDef{"FIXED", 1u, 3u, &Fixed_});
+  registry.register_function(FunctionDef{"DOLLAR", 1u, 2u, &Dollar_});
 }
 
 }  // namespace eval

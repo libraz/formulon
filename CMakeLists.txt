@@ -110,6 +110,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/date_text_parse.cpp
   src/eval/range_args.cpp
   src/eval/special_forms_lazy.cpp
+  src/eval/areas_lazy.cpp
   src/eval/conditional_aggregates.cpp
   src/eval/shape_ops_lazy.cpp
   src/eval/workdays_lazy.cpp
@@ -118,6 +119,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/regression_lazy.cpp
   src/eval/series_sum_lazy.cpp
   src/eval/rank_lazy.cpp
+  src/eval/hypothesis_lazy.cpp
   src/eval/info_lazy.cpp
   src/eval/lookups/classic.cpp
   src/eval/lookups/xlookup.cpp

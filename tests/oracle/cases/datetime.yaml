@@ -1,5 +1,5 @@
 suite: datetime
-description: DATE / TIME / YEAR / MONTH / DAY / HOUR / MINUTE / SECOND / WEEKDAY / EDATE / EOMONTH / DAYS / WEEKNUM / ISOWEEKNUM / YEARFRAC / DATEDIF / NETWORKDAYS / WORKDAY
+description: DATE / TIME / YEAR / MONTH / DAY / HOUR / MINUTE / SECOND / WEEKDAY / EDATE / EOMONTH / DAYS / DAYS360 / WEEKNUM / ISOWEEKNUM / YEARFRAC / DATEDIF / NETWORKDAYS / NETWORKDAYS.INTL / WORKDAY / WORKDAY.INTL
 tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
 locale: ja-JP
 cases:
@@ -229,3 +229,50 @@ cases:
   - id: workday_with_array_holidays
     description: "Holidays extend the run forward"
     formula: "=WORKDAY(DATE(2024,1,1),5,{45293,45294})"
+
+  # -- DAYS360 -------------------------------------------------------------
+  - id: days360_us_method
+    description: "US/NASD: start day < 30, end day 31 -> end rolls to next month day 1"
+    formula: "=DAYS360(DATE(2024,2,15),DATE(2024,3,31))"
+
+  - id: days360_european_method
+    description: "European: both 31s cap at 30; Jan 31 -> Mar 31 = 60"
+    formula: "=DAYS360(DATE(2024,1,31),DATE(2024,3,31),TRUE)"
+
+  - id: days360_end_31_start_lt_30
+    description: "US: 31 at end with start < 30 rolls to day 1 of next month"
+    formula: "=DAYS360(DATE(2024,2,15),DATE(2024,3,31),FALSE)"
+
+  - id: days360_full_year
+    description: "Full year is exactly 360 days on the 360-day calendar"
+    formula: "=DAYS360(DATE(2024,1,1),DATE(2025,1,1))"
+
+  # -- NETWORKDAYS.INTL ----------------------------------------------------
+  - id: networkdays_intl_default
+    description: "Default weekend (Sat+Sun) matches NETWORKDAYS"
+    formula: "=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,12))"
+
+  - id: networkdays_intl_explicit_1
+    description: "Selector 1 is the documented Sat+Sun pattern"
+    formula: "=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,14),1)"
+
+  - id: networkdays_intl_string_mask
+    description: "7-char `0000011` string selects Sat+Sun weekend"
+    formula: "=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,14),\"0000011\")"
+
+  - id: networkdays_intl_sun_only
+    description: "Selector 11 = Sunday-only weekend"
+    formula: "=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,7),11)"
+
+  # -- WORKDAY.INTL --------------------------------------------------------
+  - id: workday_intl_default
+    description: "Default weekend (Sat+Sun) matches WORKDAY"
+    formula: "=WORKDAY.INTL(DATE(2024,1,1),5)"
+
+  - id: workday_intl_sun_only
+    description: "Sunday-only weekend: Sat Jan 6 is a working day"
+    formula: "=WORKDAY.INTL(DATE(2024,1,1),5,11)"
+
+  - id: workday_intl_string_mask
+    description: "String mask equivalent to selector 1"
+    formula: "=WORKDAY.INTL(DATE(2024,1,1),5,\"0000011\")"

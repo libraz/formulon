@@ -341,6 +341,42 @@ static Value PercentileInc(const Value* args, std::uint32_t arity, Arena& /*aren
   return Value::number(r);
 }
 
+// PERCENTILE.EXC(array, k) - exclusive-interpolation percentile. `k` must
+// lie strictly inside the open interval (1/(n+1), n/(n+1)); values at or
+// beyond the boundary yield `#NUM!`. Empty numeric slice yields `#NUM!`.
+// The interpolation point is `pos = k * (n + 1)` (1-based); if
+// `1 <= floor(pos) < n` the result is
+// `xs[idx-1] + (pos - idx) * (xs[idx] - xs[idx-1])`.
+static Value PercentileExc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  const std::uint32_t data_count = arity - 1u;
+  auto k_raw = read_kth_arg(args[arity - 1u]);
+  if (!k_raw) {
+    return Value::error(k_raw.error());
+  }
+  const double k = k_raw.value();
+  std::vector<double> xs = collect_numerics(args, data_count);
+  if (xs.empty()) {
+    return Value::error(ErrorCode::Num);
+  }
+  std::sort(xs.begin(), xs.end());
+  const std::size_t n = xs.size();
+  const double pos = k * (static_cast<double>(n) + 1.0);
+  const double floor_pos = std::floor(pos);
+  const auto idx = static_cast<std::int64_t>(floor_pos);
+  const double frac = pos - floor_pos;
+  // k <= 1/(n+1) puts idx < 1; k >= n/(n+1) puts idx >= n. Both are the
+  // exclusive-method boundaries and yield `#NUM!` per Excel.
+  if (idx < 1 || idx >= static_cast<std::int64_t>(n)) {
+    return Value::error(ErrorCode::Num);
+  }
+  const auto lo = static_cast<std::size_t>(idx - 1);
+  const double r = xs[lo] + frac * (xs[lo + 1u] - xs[lo]);
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
 // QUARTILE.INC(array, quart) / QUARTILE(array, quart) - quartile by
 // `PERCENTILE.INC(array, quart/4)`. `quart` must be an integer in
 // {0, 1, 2, 3, 4}; non-integer or out-of-range yields `#NUM!`.
@@ -372,6 +408,42 @@ static Value QuartileInc(const Value* args, std::uint32_t arity, Arena& /*arena*
   } else {
     r = xs[idx] + frac * (xs[idx + 1u] - xs[idx]);
   }
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+// QUARTILE.EXC(array, quart) - exclusive quartile, equivalent to
+// `PERCENTILE.EXC(array, quart/4)` with `quart` restricted to {1, 2, 3}.
+// Unlike QUARTILE.INC there is no Q0 or Q4: `quart <= 0`, `quart >= 4`, or
+// a non-integer `quart` yields `#NUM!`. Empty numeric slice yields `#NUM!`.
+static Value QuartileExc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  const std::uint32_t data_count = arity - 1u;
+  auto q_raw = read_kth_arg(args[arity - 1u]);
+  if (!q_raw) {
+    return Value::error(q_raw.error());
+  }
+  const double q = q_raw.value();
+  if (q < 1.0 || q > 3.0 || std::floor(q) != q) {
+    return Value::error(ErrorCode::Num);
+  }
+  std::vector<double> xs = collect_numerics(args, data_count);
+  if (xs.empty()) {
+    return Value::error(ErrorCode::Num);
+  }
+  std::sort(xs.begin(), xs.end());
+  const std::size_t n = xs.size();
+  const double k = q / 4.0;
+  const double pos = k * (static_cast<double>(n) + 1.0);
+  const double floor_pos = std::floor(pos);
+  const auto idx = static_cast<std::int64_t>(floor_pos);
+  const double frac = pos - floor_pos;
+  if (idx < 1 || idx >= static_cast<std::int64_t>(n)) {
+    return Value::error(ErrorCode::Num);
+  }
+  const auto lo = static_cast<std::size_t>(idx - 1);
+  const double r = xs[lo] + frac * (xs[lo + 1u] - xs[lo]);
   if (std::isnan(r) || std::isinf(r)) {
     return Value::error(ErrorCode::Num);
   }
@@ -846,6 +918,14 @@ void register_stats_builtins(FunctionRegistry& registry) {
     registry.register_function(def);
   }
   {
+    // PERCENTILE.EXC: exclusive-interpolation variant. `k` must lie in the
+    // open interval (1/(n+1), n/(n+1)); out-of-range yields `#NUM!`.
+    FunctionDef def{"PERCENTILE.EXC", 2u, kVariadic, &stats_detail::PercentileExc};
+    def.accepts_ranges = true;
+    def.range_filter_numeric_only = true;
+    registry.register_function(def);
+  }
+  {
     FunctionDef def{"QUARTILE.INC", 2u, kVariadic, &stats_detail::QuartileInc};
     def.accepts_ranges = true;
     registry.register_function(def);
@@ -853,6 +933,14 @@ void register_stats_builtins(FunctionRegistry& registry) {
   {
     FunctionDef def{"QUARTILE", 2u, kVariadic, &stats_detail::QuartileInc};
     def.accepts_ranges = true;
+    registry.register_function(def);
+  }
+  {
+    // QUARTILE.EXC: exclusive quartile with `quart` restricted to {1, 2, 3}.
+    // Shares the interpolation kernel with PERCENTILE.EXC.
+    FunctionDef def{"QUARTILE.EXC", 2u, kVariadic, &stats_detail::QuartileExc};
+    def.accepts_ranges = true;
+    def.range_filter_numeric_only = true;
     registry.register_function(def);
   }
   {
@@ -1058,6 +1146,33 @@ void register_stats_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"FINV", 3u, 3u, &stats_detail::FInvRt});
   registry.register_function(FunctionDef{"TDIST", 3u, 3u, &stats_detail::TDistLegacy});
   registry.register_function(FunctionDef{"TINV", 2u, 2u, &stats_detail::TInv2T});
+
+  // Confidence-interval half-widths (CONFIDENCE / .NORM / .T). All
+  // scalar-only; share the normal impl pointer for the two equivalent
+  // spellings. The T variant uses TInvCore on df = size - 1.
+  registry.register_function(FunctionDef{"CONFIDENCE", 3u, 3u, &stats_detail::ConfidenceNorm});
+  registry.register_function(FunctionDef{"CONFIDENCE.NORM", 3u, 3u, &stats_detail::ConfidenceNorm});
+  registry.register_function(FunctionDef{"CONFIDENCE.T", 3u, 3u, &stats_detail::ConfidenceT});
+
+  // Binomial quantile (BINOM.INV / CRITBINOM legacy alias) and range
+  // probability (BINOM.DIST.RANGE, 3 or 4 args).
+  registry.register_function(FunctionDef{"BINOM.INV", 3u, 3u, &stats_detail::BinomInv});
+  registry.register_function(FunctionDef{"CRITBINOM", 3u, 3u, &stats_detail::BinomInv});
+  registry.register_function(FunctionDef{"BINOM.DIST.RANGE", 3u, 4u, &stats_detail::BinomDistRange});
+
+  // Fisher transformation and inverse, both scalar-only.
+  registry.register_function(FunctionDef{"FISHER", 1u, 1u, &stats_detail::Fisher});
+  registry.register_function(FunctionDef{"FISHERINV", 1u, 1u, &stats_detail::FisherInv});
+
+  // Standard-normal helpers: GAUSS = NORM.S.DIST(x, TRUE) - 0.5, PHI is
+  // the standard-normal PDF.
+  registry.register_function(FunctionDef{"GAUSS", 1u, 1u, &stats_detail::Gauss});
+  registry.register_function(FunctionDef{"PHI", 1u, 1u, &stats_detail::Phi});
+
+  // Negative binomial distribution. 4-arg canonical form plus the
+  // pre-2010 3-arg spelling (always PMF).
+  registry.register_function(FunctionDef{"NEGBINOM.DIST", 4u, 4u, &stats_detail::NegBinomDist});
+  registry.register_function(FunctionDef{"NEGBINOMDIST", 3u, 3u, &stats_detail::NegBinomDistLegacy});
 
   // The pairwise linear-regression family (CORREL, COVARIANCE.P,
   // COVARIANCE.S, SLOPE, INTERCEPT, RSQ, FORECAST / FORECAST.LINEAR)

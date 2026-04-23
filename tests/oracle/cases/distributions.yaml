@@ -122,3 +122,101 @@ cases:
   - id: expon_negative_lambda_is_num
     description: "lambda <= 0 yields #NUM!"
     formula: "=EXPON.DIST(1, -1, TRUE)"
+
+  # -- CONFIDENCE / CONFIDENCE.NORM / CONFIDENCE.T -------------------------
+  - id: confidence_norm_basic
+    description: "z_{0.975} * 20 / sqrt(100) ~ 3.919928"
+    formula: "=CONFIDENCE(0.05, 20, 100)"
+
+  - id: confidence_norm_dot_matches
+    description: "CONFIDENCE.NORM equals CONFIDENCE for the same inputs"
+    formula: "=CONFIDENCE.NORM(0.05, 20, 100)"
+
+  - id: confidence_alpha_zero_is_num
+    formula: "=CONFIDENCE(0, 20, 100)"
+
+  - id: confidence_t_basic
+    description: "t_{0.975, 29} * 20 / sqrt(30) ~ 7.468123"
+    formula: "=CONFIDENCE.T(0.05, 20, 30)"
+
+  - id: confidence_t_size_one_is_div0
+    description: "df = size - 1 = 0 collapses the distribution; Excel returns #DIV/0!"
+    formula: "=CONFIDENCE.T(0.05, 20, 1)"
+
+  # -- BINOM.INV / CRITBINOM -----------------------------------------------
+  - id: binom_inv_median
+    description: "Smallest k with P(X<=k) >= 0.5 under BINOM(100, 0.5) is 50"
+    formula: "=BINOM.INV(100, 0.5, 0.5)"
+
+  - id: binom_inv_three_quarter
+    description: "Smallest k with P(X<=k) >= 0.75 under BINOM(100, 0.5) is 53"
+    formula: "=BINOM.INV(100, 0.5, 0.75)"
+
+  - id: critbinom_matches_binom_inv
+    description: "CRITBINOM is the pre-2010 alias for BINOM.INV"
+    formula: "=CRITBINOM(100, 0.5, 0.75)"
+
+  - id: binom_inv_alpha_zero
+    formula: "=BINOM.INV(10, 0.3, 0)"
+
+  # -- FISHER / FISHERINV --------------------------------------------------
+  - id: fisher_zero
+    formula: "=FISHER(0)"
+
+  - id: fisher_half
+    description: "0.5 * ln(3) ~ 0.549306"
+    formula: "=FISHER(0.5)"
+
+  - id: fisher_boundary_is_num
+    formula: "=FISHER(1)"
+
+  - id: fisherinv_round_trip
+    description: "FISHERINV(FISHER(0.3)) = 0.3"
+    formula: "=FISHERINV(FISHER(0.3))"
+
+  - id: fisherinv_zero
+    formula: "=FISHERINV(0)"
+
+  # -- GAUSS / PHI ---------------------------------------------------------
+  - id: gauss_zero
+    formula: "=GAUSS(0)"
+
+  - id: gauss_one
+    description: "NORM.S.DIST(1, TRUE) - 0.5 ~ 0.341345"
+    formula: "=GAUSS(1)"
+
+  - id: phi_zero
+    description: "1 / sqrt(2*pi) ~ 0.398942"
+    formula: "=PHI(0)"
+
+  - id: phi_one
+    description: "exp(-0.5) / sqrt(2*pi) ~ 0.241971"
+    formula: "=PHI(1)"
+
+  # -- NEGBINOM.DIST / NEGBINOMDIST ----------------------------------------
+  - id: negbinom_dist_pmf
+    description: "C(14,4) * 0.25^5 * 0.75^10 ~ 0.055049"
+    formula: "=NEGBINOM.DIST(10, 5, 0.25, FALSE)"
+
+  - id: negbinom_dist_cdf
+    description: "CDF strictly exceeds the PMF at the same point"
+    formula: "=NEGBINOM.DIST(10, 5, 0.25, TRUE)"
+
+  - id: negbinomdist_legacy_matches
+    description: "Legacy 3-arg spelling always returns the PMF"
+    formula: "=NEGBINOMDIST(10, 5, 0.25)"
+
+  - id: negbinom_dist_prob_zero_is_num
+    formula: "=NEGBINOM.DIST(10, 5, 0, FALSE)"
+
+  # -- BINOM.DIST.RANGE ----------------------------------------------------
+  - id: binom_dist_range_basic
+    description: "PMF(4)+PMF(5)+PMF(6) for BINOM(10, 0.5) = 672/1024 = 0.65625"
+    formula: "=BINOM.DIST.RANGE(10, 0.5, 4, 6)"
+
+  - id: binom_dist_range_three_arg_matches_pmf
+    description: "3-arg form is a single-point PMF query"
+    formula: "=BINOM.DIST.RANGE(10, 0.5, 5)"
+
+  - id: binom_dist_range_reversed_is_num
+    formula: "=BINOM.DIST.RANGE(10, 0.5, 6, 4)"

@@ -11,11 +11,13 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/areas_lazy.h"
 #include "eval/coerce.h"
 #include "eval/conditional_aggregates.h"
 #include "eval/eval_context.h"
 #include "eval/financial_lazy.h"
 #include "eval/function_registry.h"
+#include "eval/hypothesis_lazy.h"
 #include "eval/info_lazy.h"
 #include "eval/lazy_impls.h"
 #include "eval/lookups/classic.h"
@@ -300,8 +302,12 @@ struct LazyEntry {
 };
 
 constexpr LazyEntry kLazyDispatch[] = {
+    {"AREAS", &eval_areas_lazy},
     {"AVERAGEIF", &eval_averageif_lazy},
     {"AVERAGEIFS", &eval_averageifs_lazy},
+    // CHITEST is the pre-2010 legacy spelling of CHISQ.TEST; same impl.
+    {"CHISQ.TEST", &eval_chisq_test_lazy},
+    {"CHITEST", &eval_chisq_test_lazy},
     {"CHOOSE", &eval_choose_lazy},
     {"COLUMN", &eval_column_lazy},
     {"COLUMNS", &eval_columns_lazy},
@@ -314,10 +320,13 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"COVAR", &eval_covariance_p_lazy},
     {"COVARIANCE.P", &eval_covariance_p_lazy},
     {"COVARIANCE.S", &eval_covariance_s_lazy},
+    {"F.TEST", &eval_f_test_lazy},
     // FORECAST is the legacy spelling kept by Excel for back-compat;
     // its impl and arity are identical to FORECAST.LINEAR.
     {"FORECAST", &eval_forecast_linear_lazy},
     {"FORECAST.LINEAR", &eval_forecast_linear_lazy},
+    // FTEST is the pre-2010 legacy spelling of F.TEST; same impl.
+    {"FTEST", &eval_f_test_lazy},
     {"HLOOKUP", &eval_hlookup_lazy},
     {"IF", &eval_if_lazy},
     {"IFERROR", &eval_iferror_lazy},
@@ -337,6 +346,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"MINIFS", &eval_minifs_lazy},
     {"MIRR", &eval_mirr_lazy},
     {"NETWORKDAYS", &eval_networkdays_lazy},
+    {"NETWORKDAYS.INTL", &eval_networkdays_intl_lazy},
     {"OFFSET", &eval_offset_lazy},
     // PEARSON is mathematically identical to CORREL (Pearson product-moment
     // correlation coefficient); Excel keeps both names for back-compat.
@@ -344,6 +354,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"PERCENTRANK", &eval_percentrank_inc_lazy},
     {"PERCENTRANK.EXC", &eval_percentrank_exc_lazy},
     {"PERCENTRANK.INC", &eval_percentrank_inc_lazy},
+    {"PROB", &eval_prob_lazy},
     {"RANK", &eval_rank_eq_lazy},
     {"RANK.AVG", &eval_rank_avg_lazy},
     {"RANK.EQ", &eval_rank_eq_lazy},
@@ -365,10 +376,17 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"SUMX2PY2", &eval_sumx2py2_lazy},
     {"SUMXMY2", &eval_sumxmy2_lazy},
     {"SWITCH", &eval_switch_lazy},
+    {"T.TEST", &eval_t_test_lazy},
+    // TTEST is the pre-2010 legacy spelling of T.TEST; same impl.
+    {"TTEST", &eval_t_test_lazy},
     {"VLOOKUP", &eval_vlookup_lazy},
     {"WORKDAY", &eval_workday_lazy},
+    {"WORKDAY.INTL", &eval_workday_intl_lazy},
     {"XLOOKUP", &eval_xlookup_lazy},
     {"XMATCH", &eval_xmatch_lazy},
+    {"Z.TEST", &eval_z_test_lazy},
+    // ZTEST is the pre-2010 legacy spelling of Z.TEST; same impl.
+    {"ZTEST", &eval_z_test_lazy},
 };
 
 const LazyEntry* find_lazy(std::string_view name) noexcept {

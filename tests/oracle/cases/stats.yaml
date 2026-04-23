@@ -290,3 +290,44 @@ cases:
 
   - id: percentrank_exc_out_of_range_is_na
     formula: "=PERCENTRANK.EXC({1;2;3;4;5}, 6)"
+
+  # -- PERCENTILE.EXC / QUARTILE.EXC -----------------------------------------
+  - id: percentile_exc_q1
+    description: "n=10, k=0.25 -> pos=2.75, blend xs[1]..xs[2] -> 2.75"
+    formula: "=PERCENTILE.EXC({1;2;3;4;5;6;7;8;9;10}, 0.25)"
+
+  - id: percentile_exc_median
+    description: "n=10, k=0.5 -> pos=5.5, blend xs[4]..xs[5] -> 5.5"
+    formula: "=PERCENTILE.EXC({1;2;3;4;5;6;7;8;9;10}, 0.5)"
+
+  - id: percentile_exc_q3
+    description: "n=10, k=0.75 -> pos=8.25, blend xs[7]..xs[8] -> 8.25"
+    formula: "=PERCENTILE.EXC({1;2;3;4;5;6;7;8;9;10}, 0.75)"
+
+  - id: percentile_exc_out_of_range_low_is_num
+    description: "k=0.24 below 1/(n+1)=0.25 yields #NUM!"
+    formula: "=PERCENTILE.EXC({10;20;30}, 0.24)"
+
+  - id: percentile_exc_out_of_range_high_is_num
+    description: "k=0.76 above n/(n+1)=0.75 yields #NUM!"
+    formula: "=PERCENTILE.EXC({10;20;30}, 0.76)"
+
+  - id: quartile_exc_q1
+    formula: "=QUARTILE.EXC({1;2;3;4;5;6;7;8;9;10}, 1)"
+
+  - id: quartile_exc_q2
+    formula: "=QUARTILE.EXC({1;2;3;4;5;6;7;8;9;10}, 2)"
+
+  - id: quartile_exc_q3
+    formula: "=QUARTILE.EXC({1;2;3;4;5;6;7;8;9;10}, 3)"
+
+  - id: quartile_exc_q_zero_is_num
+    description: "Exclusive method has no Q0; quart must be in {1, 2, 3}"
+    formula: "=QUARTILE.EXC({1;2;3;4;5}, 0)"
+
+  - id: quartile_exc_q_four_is_num
+    description: "Unlike QUARTILE.INC, quart=4 is rejected"
+    formula: "=QUARTILE.EXC({1;2;3;4;5}, 4)"
+
+  - id: quartile_exc_q_fractional_is_num
+    formula: "=QUARTILE.EXC({1;2;3;4;5}, 1.5)"

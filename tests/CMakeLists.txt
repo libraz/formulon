@@ -40,6 +40,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_text_test.cpp
   unit/eval/builtins_text2_test.cpp
   unit/eval/builtins_textb_test.cpp
+  unit/eval/builtins_text3_test.cpp
   unit/eval/text_format_number_test.cpp
   unit/eval/text_format_date_test.cpp
   unit/eval/value_numbervalue_test.cpp
@@ -48,6 +49,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_count_test.cpp
   unit/eval/builtins_shape_test.cpp
   unit/eval/builtins_stats_test.cpp
+  unit/eval/builtins_stats_exc_test.cpp
   unit/eval/builtins_stats_a_test.cpp
   unit/eval/builtins_descriptive_stats_test.cpp
   unit/eval/builtins_distributions_test.cpp
@@ -68,12 +70,16 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_financial_test.cpp
   unit/eval/builtins_financial2_test.cpp
   unit/eval/builtins_regression_test.cpp
+  unit/eval/builtins_hypothesis_test.cpp
   unit/eval/builtins_sumsq_test.cpp
   unit/eval/builtins_sumx_test.cpp
   unit/eval/builtins_series_sum_test.cpp
   unit/eval/builtins_rank_test.cpp
+  unit/eval/builtins_distributions_ext2_test.cpp
+  unit/eval/builtins_math5_test.cpp
   unit/eval/text_ops_test.cpp
   unit/eval/let_test.cpp
+  unit/eval/builtins_misc_test.cpp
   unit/registry_catalog_test.cpp
 )
 

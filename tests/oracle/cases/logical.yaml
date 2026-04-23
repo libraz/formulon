@@ -71,6 +71,22 @@ cases:
     setup: { A1: false, A2: true, A3: false }
     formula: "=OR(A1:A3)"
 
+  # -- XOR -----------------------------------------------------------------
+  - id: xor_two_true_is_false
+    description: "XOR of two TRUE values is FALSE (even count)"
+    formula: "=XOR(TRUE,TRUE)"
+
+  - id: xor_two_false_is_false
+    formula: "=XOR(FALSE,FALSE)"
+
+  - id: xor_three_true_is_true
+    description: "Odd count of TRUE values -> TRUE"
+    formula: "=XOR(TRUE,TRUE,TRUE)"
+
+  - id: xor_numeric_coerce
+    description: "Numbers coerce to bool: 1 TRUE, 0 FALSE -> XOR(TRUE,FALSE)"
+    formula: "=XOR(1,0)"
+
   # -- IF ------------------------------------------------------------------
   - id: if_true_branch
     formula: "=IF(TRUE,\"yes\",\"no\")"

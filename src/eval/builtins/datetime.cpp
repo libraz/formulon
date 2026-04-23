@@ -1,23 +1,27 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
 // Implementation of Formulon's calendar built-in functions: DATE, TIME, YEAR,
-// MONTH, DAY, HOUR, MINUTE, SECOND, WEEKDAY, EDATE, EOMONTH, DAYS, WEEKNUM,
-// ISOWEEKNUM, YEARFRAC, DATEDIF, DATEVALUE, TIMEVALUE.
+// MONTH, DAY, HOUR, MINUTE, SECOND, WEEKDAY, EDATE, EOMONTH, DAYS, DAYS360,
+// WEEKNUM, ISOWEEKNUM, YEARFRAC, DATEDIF, DATEVALUE, TIMEVALUE, NOW, TODAY.
 //
-// All entries are eager, scalar-only (no range expansion). NOW / TODAY are
-// deferred until the evaluator gains a clock-injection surface. DATEVALUE /
-// TIMEVALUE parse a common subset of Excel's ja-JP-locale date/time
-// strings (ISO, slash, and kanji forms — see the parser helpers below);
-// wareki (Reiwa/Heisei/Showa/...) and current-year-defaulting partials are
-// intentionally out of scope and documented as divergences in
+// Most entries are eager, scalar-only (no range expansion). NOW / TODAY read
+// the host's local wall clock via `std::chrono::system_clock` +
+// `localtime_r` / `localtime_s` and return an Excel serial directly; volatile
+// recalc semantics are the scheduler's responsibility, not this file's.
+// DATEVALUE / TIMEVALUE parse a common subset of Excel's ja-JP-locale
+// date/time strings (ISO, slash, and kanji forms — see the parser helpers
+// below); wareki (Reiwa/Heisei/Showa/...) and current-year-defaulting
+// partials are intentionally out of scope and documented as divergences in
 // tests/divergence.yaml. Shared calendar helpers (serial <-> y/m/d, weekday
 // arithmetic, time-of-day decomposition) live in `eval/date_time.h`; this
 // file only layers Excel's argument-shape and error-handling rules on top.
 
 #include "eval/builtins/datetime.h"
 
+#include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <ctime>
 #include <string_view>
 
 #include "eval/coerce.h"
@@ -673,6 +677,139 @@ Value Days_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return Value::number(diff);
 }
 
+/// DAYS360(start, end, [method]). Counts days under a 360-day-year calendar.
+/// `method` is a boolean-coercible selector: FALSE (default) selects the
+/// US/NASD rule set, TRUE selects the European rule set. The result is an
+/// integer (possibly negative) computed as
+/// `360*(ey - sy) + 30*(em - sm) + (ed - sd)` after the day components have
+/// been adjusted per the selected rule set.
+///
+/// US/NASD adjustments (order matters: conditions use the pre-adjusted start
+/// day):
+///   1. end day 31 and start day < 30  -> end becomes 1, end month += 1
+///   2. end day 31 and start day >= 30 -> end day becomes 30
+///   3. start day 31                    -> start day becomes 30
+///
+/// European adjustments: any day of 31 is capped at 30 on both sides.
+Value Days360_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  auto start_n = coerce_to_number(args[0]);
+  if (!start_n) {
+    return Value::error(start_n.error());
+  }
+  auto end_n = coerce_to_number(args[1]);
+  if (!end_n) {
+    return Value::error(end_n.error());
+  }
+  bool european = false;
+  if (arity >= 3) {
+    auto m = coerce_to_bool(args[2]);
+    if (!m) {
+      return Value::error(m.error());
+    }
+    european = m.value();
+  }
+  const double start_f = std::floor(start_n.value());
+  const double end_f = std::floor(end_n.value());
+  // `ymd_from_serial`'s contract requires a non-negative input; reject
+  // pre-1900 serials rather than triggering undefined behaviour downstream.
+  if (start_f < 0.0 || end_f < 0.0) {
+    return Value::error(ErrorCode::Num);
+  }
+  const date_time::YMD s = date_time::ymd_from_serial(start_f);
+  const date_time::YMD e = date_time::ymd_from_serial(end_f);
+  int sy = s.y;
+  int sm = static_cast<int>(s.m);
+  int sd = static_cast<int>(s.d);
+  int ey = e.y;
+  int em = static_cast<int>(e.m);
+  int ed = static_cast<int>(e.d);
+  if (european) {
+    if (sd == 31) {
+      sd = 30;
+    }
+    if (ed == 31) {
+      ed = 30;
+    }
+  } else {
+    const bool start_is_last = (sd == 31);
+    if (ed == 31) {
+      if (sd < 30) {
+        ed = 1;
+        em += 1;
+        if (em > 12) {
+          em = 1;
+          ey += 1;
+        }
+      } else {
+        ed = 30;
+      }
+    }
+    if (start_is_last) {
+      sd = 30;
+    }
+  }
+  const long long result = 360LL * static_cast<long long>(ey - sy) + 30LL * static_cast<long long>(em - sm) +
+                           static_cast<long long>(ed - sd);
+  return Value::number(static_cast<double>(result));
+}
+
+// ---------------------------------------------------------------------------
+// NOW / TODAY
+//
+// Both read the host wall clock. Excel returns local time (the worksheet is
+// locale-bound), so we convert `system_clock::now()` via `localtime_r` /
+// `localtime_s` to decompose the timestamp into a calendar date + time of
+// day, then build the Excel serial from those fields. NOW includes the
+// fractional time-of-day; TODAY discards it. Both are marked volatile in
+// Excel; the engine's recalc scheduling is out of scope for this impl — every
+// invocation re-reads the clock.
+// ---------------------------------------------------------------------------
+
+// Returns (date_serial, tod_fraction) for the current local time. Called
+// independently by NOW and TODAY so neither routes through a dummy-arena
+// call. Defined here rather than in `date_time.cpp` because the clock read
+// is only needed by these two builtins and we want to keep `date_time.h`
+// clock-agnostic.
+struct LocalNow {
+  double date_serial;
+  double tod_fraction;
+};
+
+LocalNow read_local_now() noexcept {
+  using std::chrono::system_clock;
+  const std::time_t tt = system_clock::to_time_t(system_clock::now());
+  std::tm local{};
+#if defined(_WIN32)
+  localtime_s(&local, &tt);
+#else
+  localtime_r(&tt, &local);
+#endif
+  const int y = local.tm_year + 1900;
+  const unsigned m = static_cast<unsigned>(local.tm_mon + 1);
+  const unsigned d = static_cast<unsigned>(local.tm_mday);
+  const double date_serial = date_time::serial_from_ymd(y, m, d);
+  const double tod = (static_cast<double>(local.tm_hour) * 3600.0 + static_cast<double>(local.tm_min) * 60.0 +
+                      static_cast<double>(local.tm_sec)) /
+                     86400.0;
+  return LocalNow{date_serial, tod};
+}
+
+/// NOW(). Returns the current local date-time as an Excel serial
+/// (integer = days since the Excel epoch; fraction = time-of-day / 86400).
+/// Zero-argument; `localtime_r` / `localtime_s` decompose the wall clock.
+Value Now_(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  const LocalNow now = read_local_now();
+  return Value::number(now.date_serial + now.tod_fraction);
+}
+
+/// TODAY(). Returns the current local date as an integer Excel serial.
+/// Equivalent to `std::floor(NOW())` but reads the clock once to avoid any
+/// second-boundary drift between the two halves.
+Value Today_(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  const LocalNow now = read_local_now();
+  return Value::number(now.date_serial);
+}
+
 // ---------------------------------------------------------------------------
 // DATEVALUE / TIMEVALUE text parsing
 //
@@ -755,7 +892,9 @@ Value Timevalue_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 
 void register_datetime_builtins(FunctionRegistry& registry) {
   // Date / time. All eager, scalar-only (no range expansion). NOW / TODAY
-  // are deferred until the evaluator gains a clock-injection surface.
+  // read the host's local wall clock via `std::chrono::system_clock` and
+  // `localtime_r` (Windows: `localtime_s`). Recalc semantics (marking them
+  // volatile) are handled by the scheduler, not this registration.
   registry.register_function(FunctionDef{"DATE", 3u, 3u, &Date_});
   registry.register_function(FunctionDef{"TIME", 3u, 3u, &Time_});
   registry.register_function(FunctionDef{"YEAR", 1u, 1u, &Year_});
@@ -768,12 +907,15 @@ void register_datetime_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"EDATE", 2u, 2u, &Edate_});
   registry.register_function(FunctionDef{"EOMONTH", 2u, 2u, &Eomonth_});
   registry.register_function(FunctionDef{"DAYS", 2u, 2u, &Days_});
+  registry.register_function(FunctionDef{"DAYS360", 2u, 3u, &Days360_});
   registry.register_function(FunctionDef{"WEEKNUM", 1u, 2u, &Weeknum_});
   registry.register_function(FunctionDef{"ISOWEEKNUM", 1u, 1u, &Isoweeknum_});
   registry.register_function(FunctionDef{"YEARFRAC", 2u, 3u, &Yearfrac_});
   registry.register_function(FunctionDef{"DATEDIF", 3u, 3u, &Datedif_});
   registry.register_function(FunctionDef{"DATEVALUE", 1u, 1u, &Datevalue_});
   registry.register_function(FunctionDef{"TIMEVALUE", 1u, 1u, &Timevalue_});
+  registry.register_function(FunctionDef{"NOW", 0u, 0u, &Now_});
+  registry.register_function(FunctionDef{"TODAY", 0u, 0u, &Today_});
 }
 
 }  // namespace eval

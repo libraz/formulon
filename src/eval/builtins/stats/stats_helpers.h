@@ -88,6 +88,16 @@ Value FInv(const Value* args, std::uint32_t arity, Arena& arena);
 Value FInvRt(const Value* args, std::uint32_t arity, Arena& arena);
 Value NormSDistLegacy(const Value* args, std::uint32_t arity, Arena& arena);
 Value TDistLegacy(const Value* args, std::uint32_t arity, Arena& arena);
+Value ConfidenceNorm(const Value* args, std::uint32_t arity, Arena& arena);
+Value ConfidenceT(const Value* args, std::uint32_t arity, Arena& arena);
+Value BinomInv(const Value* args, std::uint32_t arity, Arena& arena);
+Value Fisher(const Value* args, std::uint32_t arity, Arena& arena);
+Value FisherInv(const Value* args, std::uint32_t arity, Arena& arena);
+Value Gauss(const Value* args, std::uint32_t arity, Arena& arena);
+Value Phi(const Value* args, std::uint32_t arity, Arena& arena);
+Value NegBinomDist(const Value* args, std::uint32_t arity, Arena& arena);
+Value NegBinomDistLegacy(const Value* args, std::uint32_t arity, Arena& arena);
+Value BinomDistRange(const Value* args, std::uint32_t arity, Arena& arena);
 
 }  // namespace stats_detail
 }  // namespace eval

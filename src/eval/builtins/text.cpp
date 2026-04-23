@@ -271,6 +271,53 @@ Value Substitute(const Value* args, std::uint32_t arity, Arena& arena) {
   return Value::text(arena.intern(out));
 }
 
+// REPLACE(old_text, start_num, num_chars, new_text) - UTF-16-unit replace.
+// Replaces `num_chars` UTF-16 units of `old_text` starting at 1-based
+// `start_num` with `new_text`. `start_num > total_units + 1` clamps to
+// append (the suffix is empty). `start_num < 1` or `num_chars < 0` surface
+// `#VALUE!`. The result is capped at Excel's 32,767-unit text limit.
+Value Replace_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  auto old_text = coerce_to_text(args[0]);
+  if (!old_text) {
+    return Value::error(old_text.error());
+  }
+  auto start = read_int_arg(args[1]);
+  if (!start) {
+    return Value::error(start.error());
+  }
+  auto num_chars = read_int_arg(args[2]);
+  if (!num_chars) {
+    return Value::error(num_chars.error());
+  }
+  auto new_text = coerce_to_text(args[3]);
+  if (!new_text) {
+    return Value::error(new_text.error());
+  }
+  if (start.value() < 1 || num_chars.value() < 0) {
+    return Value::error(ErrorCode::Value);
+  }
+  const std::uint32_t total = utf16_units_in(old_text.value());
+  auto start_unit = static_cast<std::uint32_t>(start.value() - 1);
+  if (start_unit > total) {
+    start_unit = total;
+  }
+  const std::uint32_t remaining = total - start_unit;
+  const auto delete_units = static_cast<std::uint32_t>(num_chars.value()) > remaining
+                                ? remaining
+                                : static_cast<std::uint32_t>(num_chars.value());
+  const std::string prefix = utf16_substring(old_text.value(), 0u, start_unit);
+  const std::string suffix = utf16_substring(old_text.value(), start_unit + delete_units, remaining - delete_units);
+  std::string out;
+  out.reserve(prefix.size() + new_text.value().size() + suffix.size());
+  out.append(prefix);
+  out.append(new_text.value());
+  out.append(suffix);
+  if (static_cast<std::uint64_t>(utf16_units_in(out)) > kExcelTextCapUnits) {
+    return Value::error(ErrorCode::Value);
+  }
+  return Value::text(arena.intern(out));
+}
+
 // FIND(find_text, within_text, [start_num]) - case-sensitive, no wildcards.
 // 1-based UTF-16-unit position of the first occurrence at or after
 // `start_num` (default 1). Not found -> `#VALUE!`. Out-of-range `start_num`
@@ -366,6 +413,141 @@ Value Search(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   }
   const std::uint32_t units = utf16_units_in(std::string_view(haystack.value()).substr(0, pos));
   return Value::number(static_cast<double>(units + 1));
+}
+
+// --- FINDB / SEARCHB shared helpers -------------------------------------
+
+// Forward declaration of the UTF-8 walker defined later in the TU for the
+// byte-oriented family (LEFTB/RIGHTB/MIDB). FINDB/SEARCHB need the same
+// character-to-DBCS mapping to translate matches back to 1-based DBCS
+// positions.
+struct Utf8Step;
+Utf8Step next_utf8_step(std::string_view src, std::size_t i) noexcept;
+
+// Per-character record: UTF-8 byte offset, byte length, 1-based DBCS
+// position (byte position under the ja-JP DBCS rule), and DBCS cost.
+struct DbcsCharRec {
+  std::size_t byte_offset;
+  std::size_t byte_len;
+  std::uint64_t dbcs_position;  // 1-based
+  int dbcs_bytes;
+};
+
+// Walks `src` once and builds the per-character map. O(n) time, one pass.
+std::vector<DbcsCharRec> build_dbcs_char_map(std::string_view src);
+
+// FINDB(find_text, within_text, [start_num]) - case-sensitive, no wildcards.
+// Returns the 1-based ja-JP DBCS byte position of the first occurrence of
+// `find_text` in `within_text` at or after `start_num` (default 1, also in
+// DBCS bytes). Not found / out-of-range `start_num` / `start_num < 1`
+// surface `#VALUE!`. Empty `find_text` returns `start_num` (FIND's quirk).
+Value FindB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  auto needle = coerce_to_text(args[0]);
+  if (!needle) {
+    return Value::error(needle.error());
+  }
+  auto haystack = coerce_to_text(args[1]);
+  if (!haystack) {
+    return Value::error(haystack.error());
+  }
+  int start = 1;
+  if (arity >= 3) {
+    auto parsed = read_int_arg(args[2]);
+    if (!parsed) {
+      return Value::error(parsed.error());
+    }
+    start = parsed.value();
+  }
+  const std::uint64_t total_dbcs = bytes_in_jajp(haystack.value());
+  if (start < 1 || static_cast<std::uint64_t>(start) > total_dbcs + 1) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (needle.value().empty()) {
+    return Value::number(static_cast<double>(start));
+  }
+  const std::vector<DbcsCharRec> chars = build_dbcs_char_map(haystack.value());
+  for (const DbcsCharRec& rec : chars) {
+    if (rec.dbcs_position < static_cast<std::uint64_t>(start)) {
+      continue;
+    }
+    if (haystack.value().compare(rec.byte_offset, needle.value().size(), needle.value()) == 0) {
+      return Value::number(static_cast<double>(rec.dbcs_position));
+    }
+  }
+  return Value::error(ErrorCode::Value);
+}
+
+// SEARCHB(find_text, within_text, [start_num]) - case-insensitive with
+// DOS-style wildcards. Mirrors SEARCH semantically but position values are
+// in DBCS bytes. `start_num` is also in DBCS bytes.
+Value SearchB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  auto needle = coerce_to_text(args[0]);
+  if (!needle) {
+    return Value::error(needle.error());
+  }
+  auto haystack = coerce_to_text(args[1]);
+  if (!haystack) {
+    return Value::error(haystack.error());
+  }
+  int start = 1;
+  if (arity >= 3) {
+    auto parsed = read_int_arg(args[2]);
+    if (!parsed) {
+      return Value::error(parsed.error());
+    }
+    start = parsed.value();
+  }
+  const std::uint64_t total_dbcs = bytes_in_jajp(haystack.value());
+  if (start < 1 || static_cast<std::uint64_t>(start) > total_dbcs + 1) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (needle.value().empty()) {
+    return Value::number(static_cast<double>(start));
+  }
+  const std::vector<DbcsCharRec> chars = build_dbcs_char_map(haystack.value());
+  // Find the byte offset that corresponds to `start`. If `start` lands
+  // strictly inside a 2-byte character, round up to the next character
+  // boundary (matches SEARCH's rounding-up convention on UTF-16 splits).
+  std::size_t start_byte = haystack.value().size();
+  for (const DbcsCharRec& rec : chars) {
+    if (rec.dbcs_position >= static_cast<std::uint64_t>(start)) {
+      start_byte = rec.byte_offset;
+      break;
+    }
+  }
+  // Case-fold on both sides (ASCII only; matches SEARCH's policy).
+  const std::string lowered_haystack = to_lower_ascii(haystack.value());
+  const std::string lowered_needle = to_lower_ascii(needle.value());
+  std::size_t match_byte = std::string::npos;
+  const bool has_metachar = lowered_needle.find_first_of("*?~") != std::string::npos;
+  if (!has_metachar) {
+    match_byte = lowered_haystack.find(lowered_needle, start_byte);
+  } else {
+    const std::string_view suffix = std::string_view(lowered_haystack).substr(start_byte);
+    const std::size_t rel = wildcard_find(lowered_needle, suffix);
+    if (rel != std::string_view::npos) {
+      match_byte = start_byte + rel;
+    }
+  }
+  if (match_byte == std::string::npos) {
+    return Value::error(ErrorCode::Value);
+  }
+  // Walk the character map to translate the byte offset into a 1-based
+  // DBCS position. If the match lands mid-character (should not happen for
+  // UTF-8-aligned needles) we fall back to the containing character's DBCS
+  // position.
+  for (const DbcsCharRec& rec : chars) {
+    if (rec.byte_offset == match_byte) {
+      return Value::number(static_cast<double>(rec.dbcs_position));
+    }
+    if (rec.byte_offset > match_byte) {
+      break;
+    }
+  }
+  // Defensive: if the match happens to land exactly at haystack.size()
+  // (possible with wildcard on empty trailing), return the final position
+  // after the last character.
+  return Value::number(static_cast<double>(total_dbcs + 1));
 }
 
 // EXACT(text1, text2) - byte-wise (case-sensitive) equality.
@@ -778,6 +960,184 @@ Value Midb(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return Value::text(arena.intern(out));
 }
 
+// Builds the per-character DBCS map for a UTF-8 byte sequence. Each entry
+// stores the character's UTF-8 byte offset and length, its DBCS cost, and
+// its 1-based DBCS position. Used by FINDB / SEARCHB / REPLACEB to
+// translate between UTF-8 byte offsets and ja-JP DBCS byte positions.
+std::vector<DbcsCharRec> build_dbcs_char_map(std::string_view src) {
+  std::vector<DbcsCharRec> out;
+  out.reserve(src.size());
+  std::uint64_t dbcs_cursor = 1;  // 1-based DBCS position of the next character
+  std::size_t i = 0;
+  while (i < src.size()) {
+    const Utf8Step step = next_utf8_step(src, i);
+    DbcsCharRec rec;
+    rec.byte_offset = i;
+    rec.byte_len = step.byte_len;
+    rec.dbcs_position = dbcs_cursor;
+    rec.dbcs_bytes = step.dbcs_bytes;
+    out.push_back(rec);
+    dbcs_cursor += static_cast<std::uint64_t>(step.dbcs_bytes);
+    i += step.byte_len;
+  }
+  return out;
+}
+
+// REPLACEB(old_text, start_num, num_bytes, new_text) - ja-JP DBCS byte
+// replace. Mirrors REPLACE but all offsets are in DBCS bytes. If
+// `start_num` falls strictly inside a 2-byte character, a single ASCII
+// space is emitted in place of the character's leading byte (MIDB's head-
+// pad convention). Similarly, if the final byte to remove lands mid-
+// character, the trailing byte of deletion is substituted with an ASCII
+// space before `new_text` is appended. `start_num < 1` or `num_bytes < 0`
+// -> `#VALUE!`. Result capped at Excel's 32,767-unit text limit.
+Value ReplaceB_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  auto old_text = coerce_to_text(args[0]);
+  if (!old_text) {
+    return Value::error(old_text.error());
+  }
+  auto start = read_int_arg(args[1]);
+  if (!start) {
+    return Value::error(start.error());
+  }
+  auto num_bytes = read_int_arg(args[2]);
+  if (!num_bytes) {
+    return Value::error(num_bytes.error());
+  }
+  auto new_text = coerce_to_text(args[3]);
+  if (!new_text) {
+    return Value::error(new_text.error());
+  }
+  if (start.value() < 1 || num_bytes.value() < 0) {
+    return Value::error(ErrorCode::Value);
+  }
+  const std::string& src = old_text.value();
+  const auto start_byte = static_cast<std::uint64_t>(start.value());  // 1-based
+  const auto budget = static_cast<std::uint64_t>(num_bytes.value());  // bytes to remove
+  const std::uint64_t end_byte_inclusive = start_byte + budget - 1;   // final byte to delete
+
+  std::string prefix;
+  std::string suffix;
+  prefix.reserve(src.size());
+  suffix.reserve(src.size());
+  bool head_pad = false;
+  bool tail_pad = false;
+  std::uint64_t cursor = 0;  // DBCS bytes consumed so far (0-based, next char's first byte is cursor+1)
+  std::size_t i = 0;
+  bool in_deletion = false;  // we've emitted either the head_pad or started consuming the deletion window
+
+  while (i < src.size()) {
+    const Utf8Step step = next_utf8_step(src, i);
+    const auto cost = static_cast<std::uint64_t>(step.dbcs_bytes);
+    const std::uint64_t char_start = cursor + 1;   // 1-based first byte
+    const std::uint64_t char_end = cursor + cost;  // 1-based last byte
+
+    if (!in_deletion) {
+      // Still accumulating the prefix or about to enter the deletion window.
+      if (char_end < start_byte) {
+        prefix.append(src, i, step.byte_len);
+        cursor += cost;
+        i += step.byte_len;
+        continue;
+      }
+      if (char_start == start_byte) {
+        // Deletion window starts cleanly at this character.
+        in_deletion = true;
+        // Fall through to the deletion handler below.
+      } else {
+        // Deletion window starts strictly inside this multi-byte character.
+        // Emit a head-pad space in the prefix; conceptually the first byte
+        // of this character has been "consumed" from the deletion budget.
+        head_pad = true;
+        prefix.push_back(' ');
+        cursor += cost;
+        i += step.byte_len;
+        // The remaining (cost - (start_byte - char_start)) bytes of this
+        // character are also deleted from the budget. Since the entire
+        // character is skipped, `budget` effectively decreases by
+        // `char_end - start_byte + 1` (the bytes from start_byte through
+        // char_end). We advance directly past the character.
+        const std::uint64_t consumed_from_budget = char_end - start_byte + 1;
+        if (consumed_from_budget >= budget) {
+          // Budget already exhausted inside this one character; nothing
+          // more to delete. The tail of the deletion window also fell
+          // within this character, so we do NOT emit a tail pad separately.
+          in_deletion = true;
+          // The rest of the loop walks suffix characters; mark we're past
+          // the deletion window.
+          break;
+        }
+        in_deletion = true;
+        // Remaining budget after this character.
+        const std::uint64_t remaining_budget = budget - consumed_from_budget;
+        // Continue from the next character with the remaining budget.
+        // We reset the effective window: simulate an in-progress deletion
+        // by recomputing `end_byte_inclusive_local`.
+        // To keep the logic simple, re-enter the main loop with adjusted
+        // bookkeeping via a helper lambda-free approach: consume characters
+        // fully or emit tail pad on partial overflow.
+        std::uint64_t budget_left = remaining_budget;
+        while (i < src.size() && budget_left > 0) {
+          const Utf8Step s2 = next_utf8_step(src, i);
+          const auto c2 = static_cast<std::uint64_t>(s2.dbcs_bytes);
+          if (c2 <= budget_left) {
+            cursor += c2;
+            i += s2.byte_len;
+            budget_left -= c2;
+          } else {
+            // Partial overlap: final byte of deletion lands inside this
+            // character (only possible with c2 == 2, budget_left == 1).
+            tail_pad = true;
+            cursor += c2;
+            i += s2.byte_len;
+            budget_left = 0;
+          }
+        }
+        break;
+      }
+    }
+    // in_deletion is true: consume `budget` bytes starting from `start_byte`.
+    // At this point `char_start == start_byte` on entry.
+    {
+      std::uint64_t budget_left = budget;
+      while (i < src.size() && budget_left > 0) {
+        const Utf8Step s2 = next_utf8_step(src, i);
+        const auto c2 = static_cast<std::uint64_t>(s2.dbcs_bytes);
+        if (c2 <= budget_left) {
+          cursor += c2;
+          i += s2.byte_len;
+          budget_left -= c2;
+        } else {
+          tail_pad = true;
+          cursor += c2;
+          i += s2.byte_len;
+          budget_left = 0;
+        }
+      }
+      break;
+    }
+  }
+  // Copy any remaining characters into the suffix.
+  if (i < src.size()) {
+    suffix.append(src, i, std::string::npos);
+  }
+  (void)end_byte_inclusive;
+  (void)head_pad;
+
+  std::string out;
+  out.reserve(prefix.size() + new_text.value().size() + (tail_pad ? 1u : 0u) + suffix.size());
+  out.append(prefix);
+  out.append(new_text.value());
+  if (tail_pad) {
+    out.push_back(' ');
+  }
+  out.append(suffix);
+  if (static_cast<std::uint64_t>(utf16_units_in(out)) > kExcelTextCapUnits) {
+    return Value::error(ErrorCode::Value);
+  }
+  return Value::text(arena.intern(out));
+}
+
 // CHAR(number) - returns the single-character text whose Mac Excel ja-JP
 // codepage value is `number`. `number` is truncated to an integer; values
 // outside 1..255 surface `#VALUE!`.
@@ -852,6 +1212,218 @@ Value Code_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return Value::number(static_cast<double>(decoded.codepoint));
 }
 
+// --- TEXTBEFORE / TEXTAFTER shared core ---------------------------------
+//
+// Excel's TEXTBEFORE / TEXTAFTER locate the Nth occurrence of a delimiter in
+// `text` and return everything before or after it. Semantics (Excel 365):
+//
+//   * `instance_num` defaults to 1. 0 -> `#VALUE!`. Negative counts from
+//     the end: -1 is the last occurrence, -2 the second-to-last, etc.
+//   * `match_mode` 0 (default) = case-sensitive, 1 = case-insensitive; any
+//     other value -> `#VALUE!`.
+//   * `match_end` 0 (default) = only literal delimiter hits count; 1 = the
+//     start and end of `text` also participate as virtual matches, so
+//     `TEXTBEFORE("abc", "-", 1, 0, 1) = "abc"` (end-of-text virtual hit).
+//     Any other value -> `#VALUE!`.
+//   * `if_not_found` optional: when the requested instance does not exist,
+//     return this value instead of `#N/A`.
+//   * Empty `delimiter` -> `#VALUE!` (matches Excel).
+//
+// The shared helper locates the match window for the Nth hit and returns
+// its byte range. The caller (TEXTBEFORE or TEXTAFTER) substrings around
+// it. For virtual matches under `match_end=1`, TEXTBEFORE matching the
+// start sentinel yields `""`, and TEXTAFTER matching the end sentinel
+// yields `""`.
+
+struct TextMatchResult {
+  bool found = false;
+  std::size_t match_start_byte = 0;
+  std::size_t match_end_byte = 0;  // one past the last byte of the match
+};
+
+// Searches `text` for the Nth occurrence of `delimiter`, honouring
+// `match_mode` and `match_end`. Sets `out_err` if the arguments are
+// malformed. Returns `{found=false}` when the instance does not exist.
+TextMatchResult find_text_instance(std::string_view text, std::string_view delimiter, int instance_num, int match_mode,
+                                   int match_end, bool* out_err_value) {
+  if (delimiter.empty() || instance_num == 0 || (match_mode != 0 && match_mode != 1) ||
+      (match_end != 0 && match_end != 1)) {
+    *out_err_value = true;
+    return {};
+  }
+  *out_err_value = false;
+  // Collect all literal delimiter byte offsets.
+  std::vector<std::pair<std::size_t, std::size_t>> hits;  // [start, end)
+  {
+    std::string lowered_text;
+    std::string lowered_delim;
+    std::string_view hay = text;
+    std::string_view needle = delimiter;
+    if (match_mode == 1) {
+      lowered_text = to_lower_ascii(text);
+      lowered_delim = to_lower_ascii(delimiter);
+      hay = lowered_text;
+      needle = lowered_delim;
+    }
+    std::size_t i = 0;
+    while (i <= hay.size()) {
+      const std::size_t pos = hay.find(needle, i);
+      if (pos == std::string_view::npos) {
+        break;
+      }
+      hits.emplace_back(pos, pos + needle.size());
+      // Advance past the match to avoid overlapping counts.
+      i = pos + needle.size();
+      if (needle.empty()) {
+        break;  // defensive; delimiter.empty() is rejected above
+      }
+    }
+  }
+  // Virtual start/end sentinels when match_end=1.
+  const bool use_virtual = match_end == 1;
+  const std::size_t virtual_start_start = 0;
+  const std::size_t virtual_start_end = 0;
+  const std::size_t virtual_end_start = text.size();
+  const std::size_t virtual_end_end = text.size();
+  // Build the ordered list of candidate (start, end) pairs.
+  std::vector<std::pair<std::size_t, std::size_t>> ordered;
+  ordered.reserve(hits.size() + (use_virtual ? 2u : 0u));
+  if (use_virtual) {
+    ordered.emplace_back(virtual_start_start, virtual_start_end);
+  }
+  for (const auto& h : hits) {
+    ordered.push_back(h);
+  }
+  if (use_virtual) {
+    ordered.emplace_back(virtual_end_start, virtual_end_end);
+  }
+  if (ordered.empty()) {
+    return {};
+  }
+  std::size_t idx = 0;
+  if (instance_num > 0) {
+    if (static_cast<std::size_t>(instance_num) > ordered.size()) {
+      return {};
+    }
+    idx = static_cast<std::size_t>(instance_num - 1);
+  } else {
+    const auto k = static_cast<std::size_t>(-instance_num);
+    if (k > ordered.size()) {
+      return {};
+    }
+    idx = ordered.size() - k;
+  }
+  TextMatchResult r;
+  r.found = true;
+  r.match_start_byte = ordered[idx].first;
+  r.match_end_byte = ordered[idx].second;
+  return r;
+}
+
+// Reads the optional (instance_num, match_mode, match_end, if_not_found)
+// trailing args common to TEXTBEFORE and TEXTAFTER. Writes the three int
+// params; returns the not-found fallback Value if the caller supplied one
+// (indicated by `has_if_not_found`).
+struct TextBeforeAfterOpts {
+  int instance_num = 1;
+  int match_mode = 0;
+  int match_end = 0;
+  bool has_if_not_found = false;
+  Value if_not_found = Value::error(ErrorCode::NA);
+};
+
+Expected<TextBeforeAfterOpts, ErrorCode> read_tba_opts(const Value* args, std::uint32_t arity) {
+  TextBeforeAfterOpts opts;
+  if (arity >= 3) {
+    auto parsed = read_int_arg(args[2]);
+    if (!parsed) {
+      return parsed.error();
+    }
+    opts.instance_num = parsed.value();
+  }
+  if (arity >= 4) {
+    auto parsed = read_int_arg(args[3]);
+    if (!parsed) {
+      return parsed.error();
+    }
+    opts.match_mode = parsed.value();
+  }
+  if (arity >= 5) {
+    auto parsed = read_int_arg(args[4]);
+    if (!parsed) {
+      return parsed.error();
+    }
+    opts.match_end = parsed.value();
+  }
+  if (arity >= 6) {
+    opts.has_if_not_found = true;
+    opts.if_not_found = args[5];
+    if (opts.if_not_found.is_error()) {
+      return opts.if_not_found.as_error();
+    }
+  }
+  return opts;
+}
+
+// TEXTBEFORE(text, delimiter, [instance_num], [match_mode], [match_end], [if_not_found])
+Value TextBefore_(const Value* args, std::uint32_t arity, Arena& arena) {
+  auto text = coerce_to_text(args[0]);
+  if (!text) {
+    return Value::error(text.error());
+  }
+  auto delimiter = coerce_to_text(args[1]);
+  if (!delimiter) {
+    return Value::error(delimiter.error());
+  }
+  auto opts = read_tba_opts(args, arity);
+  if (!opts) {
+    return Value::error(opts.error());
+  }
+  bool arg_err = false;
+  const TextMatchResult hit = find_text_instance(text.value(), delimiter.value(), opts.value().instance_num,
+                                                 opts.value().match_mode, opts.value().match_end, &arg_err);
+  if (arg_err) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (!hit.found) {
+    if (opts.value().has_if_not_found) {
+      return opts.value().if_not_found;
+    }
+    return Value::error(ErrorCode::NA);
+  }
+  // Everything before the match's starting byte.
+  return Value::text(arena.intern(text.value().substr(0, hit.match_start_byte)));
+}
+
+// TEXTAFTER(text, delimiter, [instance_num], [match_mode], [match_end], [if_not_found])
+Value TextAfter_(const Value* args, std::uint32_t arity, Arena& arena) {
+  auto text = coerce_to_text(args[0]);
+  if (!text) {
+    return Value::error(text.error());
+  }
+  auto delimiter = coerce_to_text(args[1]);
+  if (!delimiter) {
+    return Value::error(delimiter.error());
+  }
+  auto opts = read_tba_opts(args, arity);
+  if (!opts) {
+    return Value::error(opts.error());
+  }
+  bool arg_err = false;
+  const TextMatchResult hit = find_text_instance(text.value(), delimiter.value(), opts.value().instance_num,
+                                                 opts.value().match_mode, opts.value().match_end, &arg_err);
+  if (arg_err) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (!hit.found) {
+    if (opts.value().has_if_not_found) {
+      return opts.value().if_not_found;
+    }
+    return Value::error(ErrorCode::NA);
+  }
+  return Value::text(arena.intern(text.value().substr(hit.match_end_byte)));
+}
+
 // PROPER(text) - title-case `text`. ASCII letters that begin a "word" are
 // uppercased; ASCII letters that follow another ASCII letter are lowercased.
 // A "word boundary" is any byte that is NOT an ASCII letter, including
@@ -901,6 +1473,11 @@ void register_text_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"FIND", 2u, 3u, &Find});
   registry.register_function(FunctionDef{"SEARCH", 2u, 3u, &Search});
   registry.register_function(FunctionDef{"EXACT", 2u, 2u, &Exact});
+  registry.register_function(FunctionDef{"REPLACE", 4u, 4u, &Replace_});
+  registry.register_function(FunctionDef{"FINDB", 2u, 3u, &FindB_});
+  registry.register_function(FunctionDef{"SEARCHB", 2u, 3u, &SearchB_});
+  registry.register_function(FunctionDef{"TEXTBEFORE", 2u, 6u, &TextBefore_});
+  registry.register_function(FunctionDef{"TEXTAFTER", 2u, 6u, &TextAfter_});
 
   // Text manipulation, second batch.
   {
@@ -922,6 +1499,7 @@ void register_text_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"LEFTB", 1u, 2u, &Leftb});
   registry.register_function(FunctionDef{"RIGHTB", 1u, 2u, &Rightb});
   registry.register_function(FunctionDef{"MIDB", 3u, 3u, &Midb});
+  registry.register_function(FunctionDef{"REPLACEB", 4u, 4u, &ReplaceB_});
   registry.register_function(FunctionDef{"CHAR", 1u, 1u, &Char_});
   registry.register_function(FunctionDef{"CODE", 1u, 1u, &Code_});
 }
