@@ -1,0 +1,124 @@
+suite: distributions
+description: NORM.DIST / NORM.S.DIST / NORM.INV / NORM.S.INV / BINOM.DIST / POISSON.DIST / EXPON.DIST — probability-distribution family
+# xlwings returns Excel-computed floats as their displayed value (typically
+# ~15 digits but with some tail-digit truncation). Stats values here have
+# magnitudes between ~1e-4 and 1e0, so 1e-6 absolute / relative tolerances
+# comfortably absorb any display-rounding artefact while still catching
+# real divergence.
+tolerance: { abs: 1.0e-6, rel: 1.0e-6 }
+locale: ja-JP
+cases:
+  # -- NORM.DIST -----------------------------------------------------------
+  - id: norm_dist_pdf_zero
+    description: "PDF of N(0, 1) at 0 = 1/sqrt(2*pi) ~ 0.398942"
+    formula: "=NORM.DIST(0, 0, 1, FALSE)"
+
+  - id: norm_dist_cdf_zero
+    description: "CDF of N(0, 1) at 0 = 0.5"
+    formula: "=NORM.DIST(0, 0, 1, TRUE)"
+
+  - id: norm_dist_cdf_one
+    description: "CDF of N(0, 1) at 1 ~ 0.841345"
+    formula: "=NORM.DIST(1, 0, 1, TRUE)"
+
+  - id: norm_dist_scaled
+    description: "N(100, 15) CDF at 105 ~ 0.630559"
+    formula: "=NORM.DIST(105, 100, 15, TRUE)"
+
+  - id: norm_dist_negative_sd_is_num
+    description: "sd <= 0 yields #NUM!"
+    formula: "=NORM.DIST(0, 0, -1, TRUE)"
+
+  # -- NORM.S.DIST ---------------------------------------------------------
+  - id: norm_s_dist_zero_cdf
+    formula: "=NORM.S.DIST(0, TRUE)"
+
+  - id: norm_s_dist_z2_cdf
+    description: "Standard-normal CDF at z=2 ~ 0.977250"
+    formula: "=NORM.S.DIST(2, TRUE)"
+
+  - id: norm_s_dist_z0_pdf
+    formula: "=NORM.S.DIST(0, FALSE)"
+
+  # -- NORM.INV ------------------------------------------------------------
+  - id: norm_inv_half
+    description: "p=0.5 maps to the mean"
+    formula: "=NORM.INV(0.5, 0, 1)"
+
+  - id: norm_inv_95pct
+    description: "95th percentile of N(0, 1) ~ 1.644854"
+    formula: "=NORM.INV(0.95, 0, 1)"
+
+  - id: norm_inv_scaled
+    description: "97.5th percentile of N(100, 15) ~ 129.3995"
+    formula: "=NORM.INV(0.975, 100, 15)"
+
+  - id: norm_inv_p_zero_is_num
+    description: "p <= 0 yields #NUM!"
+    formula: "=NORM.INV(0, 0, 1)"
+
+  - id: norm_inv_p_one_is_num
+    description: "p >= 1 yields #NUM!"
+    formula: "=NORM.INV(1, 0, 1)"
+
+  # -- NORM.S.INV ----------------------------------------------------------
+  - id: norm_s_inv_half
+    formula: "=NORM.S.INV(0.5)"
+
+  - id: norm_s_inv_95pct
+    formula: "=NORM.S.INV(0.95)"
+
+  # -- BINOM.DIST ----------------------------------------------------------
+  - id: binom_pmf_fair_coin
+    description: "BINOM(10, 0.5) PMF at 5 = 252/1024 = 0.24609375"
+    formula: "=BINOM.DIST(5, 10, 0.5, FALSE)"
+
+  - id: binom_cdf_fair_coin
+    description: "P(X<=5) for BINOM(10, 0.5) ~ 0.623047"
+    formula: "=BINOM.DIST(5, 10, 0.5, TRUE)"
+
+  - id: binom_edge_zero_success
+    description: "P(X=0) for BINOM(10, 0.5) = 2^-10 ~ 0.000977"
+    formula: "=BINOM.DIST(0, 10, 0.5, FALSE)"
+
+  - id: binom_edge_all_success
+    description: "P(X=10) for BINOM(10, 0.5) = 2^-10 ~ 0.000977"
+    formula: "=BINOM.DIST(10, 10, 0.5, FALSE)"
+
+  - id: binom_out_of_range_is_num
+    description: "number_s > trials yields #NUM!"
+    formula: "=BINOM.DIST(11, 10, 0.5, FALSE)"
+
+  # -- POISSON.DIST --------------------------------------------------------
+  - id: poisson_pmf_mean3
+    description: "Poisson(3) PMF at 2 ~ 0.224042"
+    formula: "=POISSON.DIST(2, 3, FALSE)"
+
+  - id: poisson_cdf_mean3
+    description: "Poisson(3) CDF at 2 ~ 0.423190"
+    formula: "=POISSON.DIST(2, 3, TRUE)"
+
+  - id: poisson_zero_count
+    description: "Poisson(3) PMF at 0 = e^-3 ~ 0.049787"
+    formula: "=POISSON.DIST(0, 3, FALSE)"
+
+  - id: poisson_negative_x_is_num
+    description: "x < 0 yields #NUM!"
+    formula: "=POISSON.DIST(-1, 3, FALSE)"
+
+  # -- EXPON.DIST ----------------------------------------------------------
+  - id: expon_pdf_zero
+    description: "Exponential(1) PDF at 0 = lambda = 1"
+    formula: "=EXPON.DIST(0, 1, FALSE)"
+
+  - id: expon_cdf_zero
+    description: "Exponential CDF at 0 = 0"
+    formula: "=EXPON.DIST(0, 1, TRUE)"
+
+  - id: expon_cdf_ln2
+    description: "Exponential(1) CDF at ln(2) = 0.5 (median)"
+    formula: "=EXPON.DIST(LN(2), 1, TRUE)"
+
+  - id: expon_negative_lambda_is_num
+    description: "lambda <= 0 yields #NUM!"
+    formula: "=EXPON.DIST(1, -1, TRUE)"

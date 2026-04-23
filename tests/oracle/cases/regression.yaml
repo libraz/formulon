@@ -1,0 +1,98 @@
+suite: regression
+description: CORREL / COVARIANCE.P / COVARIANCE.S / SLOPE / INTERCEPT / RSQ / FORECAST.LINEAR — pairwise linear-regression builtins
+# These functions are numerically stable and xlwings returns close-to-full
+# precision for the small-magnitude values in this suite (|v| < 100), so we
+# can assert near-double tolerance. Widen if xlwings starts rounding to the
+# displayed format.
+tolerance: { abs: 1.0e-10, rel: 1.0e-10 }
+locale: ja-JP
+cases:
+  # -- CORREL --------------------------------------------------------------
+  - id: correl_perfect_positive
+    description: "y = 2x -> perfect positive correlation"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 2, B2: 4, B3: 6 }
+    formula: "=CORREL(A1:A3, B1:B3)"
+
+  - id: correl_perfect_negative
+    description: "Strictly decreasing y vs increasing x -> -1"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 6, B2: 4, B3: 2 }
+    formula: "=CORREL(A1:A3, B1:B3)"
+
+  - id: correl_general
+    description: "Reference dataset: CORREL(B, A) = 6 / sqrt(60) ~ 0.77459667"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 2, B2: 4, B3: 5, B4: 4, B5: 5 }
+    formula: "=CORREL(B1:B5, A1:A5)"
+
+  - id: correl_zero_variance_x_is_div0
+    description: "All x values identical -> #DIV/0!"
+    setup: { A1: 1, A2: 1, A3: 1, B1: 2, B2: 4, B3: 5 }
+    formula: "=CORREL(B1:B3, A1:A3)"
+
+  - id: correl_shape_mismatch_is_na
+    description: "Mismatched rectangle shapes -> #N/A"
+    setup: { A1: 1, A2: 2, B1: 1, B2: 2, B3: 3 }
+    formula: "=CORREL(A1:A2, B1:B3)"
+
+  - id: correl_skips_text_pair
+    description: "Text in either cell drops the pair; remaining points (1,2) + (3,6) form a perfect line -> 1"
+    setup: { A1: 1, A2: "x", A3: 3, B1: 2, B2: 4, B3: 6 }
+    formula: "=CORREL(A1:A3, B1:B3)"
+
+  # -- COVARIANCE.P / COVARIANCE.S -----------------------------------------
+  - id: covar_p_basic
+    description: "Population covariance on reference dataset -> 1.2"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 2, B2: 4, B3: 5, B4: 4, B5: 5 }
+    formula: "=COVARIANCE.P(B1:B5, A1:A5)"
+
+  - id: covar_s_basic
+    description: "Sample covariance on reference dataset -> 1.5 (= COVAR.P * n/(n-1))"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 2, B2: 4, B3: 5, B4: 4, B5: 5 }
+    formula: "=COVARIANCE.S(B1:B5, A1:A5)"
+
+  - id: covar_s_n_is_1_is_div0
+    description: "Sample covariance with n=1 -> #DIV/0!"
+    setup: { A1: 1, B1: 2 }
+    formula: "=COVARIANCE.S(A1:A1, B1:B1)"
+
+  # -- SLOPE / INTERCEPT ---------------------------------------------------
+  - id: slope_basic
+    description: "Reference dataset: slope = 6/10 = 0.6"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 2, B2: 4, B3: 5, B4: 4, B5: 5 }
+    formula: "=SLOPE(B1:B5, A1:A5)"
+
+  - id: intercept_basic
+    description: "Reference dataset: intercept = mean_y - slope*mean_x = 2.2"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 2, B2: 4, B3: 5, B4: 4, B5: 5 }
+    formula: "=INTERCEPT(B1:B5, A1:A5)"
+
+  - id: slope_plus_intercept_identity
+    description: "slope*3 + intercept = FORECAST at x=3 = 4.0"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 2, B2: 4, B3: 5, B4: 4, B5: 5 }
+    formula: "=SLOPE(B1:B5,A1:A5)*3 + INTERCEPT(B1:B5,A1:A5)"
+
+  # -- RSQ ------------------------------------------------------------------
+  - id: rsq_basic
+    description: "Reference dataset: RSQ = 0.6"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 2, B2: 4, B3: 5, B4: 4, B5: 5 }
+    formula: "=RSQ(B1:B5, A1:A5)"
+
+  - id: rsq_equals_correl_squared
+    description: "RSQ identity: RSQ - CORREL^2 should be 0"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 2, B2: 4, B3: 5, B4: 4, B5: 5 }
+    formula: "=RSQ(B1:B5,A1:A5) - CORREL(B1:B5,A1:A5)^2"
+
+  # -- FORECAST.LINEAR / FORECAST -----------------------------------------
+  - id: forecast_at_x_zero
+    description: "FORECAST at x=0 equals intercept (2.2)"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 2, B2: 4, B3: 5, B4: 4, B5: 5 }
+    formula: "=FORECAST.LINEAR(0, B1:B5, A1:A5)"
+
+  - id: forecast_at_x_three
+    description: "FORECAST at x=3 -> slope*3 + intercept = 4.0"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 2, B2: 4, B3: 5, B4: 4, B5: 5 }
+    formula: "=FORECAST.LINEAR(3, B1:B5, A1:A5)"
+
+  - id: forecast_legacy_alias
+    description: "Legacy FORECAST name should match FORECAST.LINEAR"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 2, B2: 4, B3: 5, B4: 4, B5: 5 }
+    formula: "=FORECAST(3, B1:B5, A1:A5)"

@@ -181,3 +181,108 @@ cases:
 
   - id: unicode_japanese
     formula: "=UNICODE(\"あ\")"
+
+  # -- LENB (ja-JP DBCS byte count) ---------------------------------------
+  - id: lenb_ascii
+    formula: "=LENB(\"hello\")"
+
+  - id: lenb_empty
+    formula: "=LENB(\"\")"
+
+  - id: lenb_hiragana
+    description: "Each hiragana is 2 bytes under ja-JP DBCS (LENB = 6)"
+    formula: "=LENB(\"あいう\")"
+
+  - id: lenb_mixed
+    description: "3 ASCII (1b each) + 1 hiragana (2b) = 5"
+    formula: "=LENB(\"abcあ\")"
+
+  - id: lenb_halfwidth_kana
+    description: "Half-width katakana U+FF61..U+FF9F are 1 byte each"
+    formula: "=LENB(\"ｱｲｳ\")"
+
+  - id: lenb_supplementary_plane
+    description: "Supplementary-plane emoji: verify Excel's DBCS byte count"
+    formula: "=LENB(\"😀\")"
+
+  # -- LEFTB --------------------------------------------------------------
+  - id: leftb_ascii
+    formula: "=LEFTB(\"hello\", 3)"
+
+  - id: leftb_default_count
+    formula: "=LEFTB(\"hello\")"
+
+  - id: leftb_hiragana_exact
+    description: "Budget 4 = 2 full hiragana chars"
+    formula: "=LEFTB(\"あいう\", 4)"
+
+  - id: leftb_hiragana_splits
+    description: "Budget 3: 1 full hiragana + space pad on 1-byte overflow"
+    formula: "=LEFTB(\"あいう\", 3)"
+
+  - id: leftb_negative_is_value
+    formula: "=LEFTB(\"hello\", -1)"
+
+  - id: leftb_zero_count
+    formula: "=LEFTB(\"hello\", 0)"
+
+  # -- RIGHTB -------------------------------------------------------------
+  - id: rightb_ascii
+    formula: "=RIGHTB(\"hello\", 3)"
+
+  - id: rightb_hiragana_exact
+    description: "Budget 4 = rightmost 2 hiragana chars"
+    formula: "=RIGHTB(\"あいう\", 4)"
+
+  - id: rightb_hiragana_splits
+    description: "Budget 3: space pad then rightmost full hiragana"
+    formula: "=RIGHTB(\"あいう\", 3)"
+
+  # -- MIDB ---------------------------------------------------------------
+  - id: midb_ascii
+    formula: "=MIDB(\"hello\", 2, 3)"
+
+  - id: midb_hiragana_clean
+    description: "Byte window starts on a clean hiragana boundary"
+    formula: "=MIDB(\"あいうえお\", 3, 4)"
+
+  - id: midb_hiragana_start_mid_char
+    description: "Start byte lands inside a 2-byte char: Excel pads with spaces"
+    formula: "=MIDB(\"あいうえお\", 2, 4)"
+
+  - id: midb_start_beyond
+    formula: "=MIDB(\"abc\", 10, 3)"
+
+  - id: midb_start_zero_is_value
+    formula: "=MIDB(\"abc\", 0, 3)"
+
+  # -- CHAR ---------------------------------------------------------------
+  - id: char_ascii_a
+    formula: "=CHAR(65)"
+
+  - id: char_space
+    formula: "=CHAR(32)"
+
+  - id: char_high_byte
+    description: "0x80..0xFF range: Excel ja-JP uses CP932; oracle decides"
+    formula: "=CHAR(169)"
+
+  - id: char_zero_is_value
+    formula: "=CHAR(0)"
+
+  - id: char_256_is_value
+    formula: "=CHAR(256)"
+
+  # -- CODE ---------------------------------------------------------------
+  - id: code_ascii_a
+    formula: "=CODE(\"A\")"
+
+  - id: code_empty_is_value
+    formula: "=CODE(\"\")"
+
+  - id: code_multi_char_uses_first
+    formula: "=CODE(\"Apple\")"
+
+  - id: code_hiragana_first
+    description: "Non-ASCII: Excel ja-JP returns CP932; oracle decides"
+    formula: "=CODE(\"あいう\")"

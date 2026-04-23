@@ -36,10 +36,17 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_math2_test.cpp
   unit/eval/builtins_text_test.cpp
   unit/eval/builtins_text2_test.cpp
+  unit/eval/builtins_textb_test.cpp
   unit/eval/builtins_info_test.cpp
   unit/eval/builtins_count_test.cpp
   unit/eval/builtins_shape_test.cpp
   unit/eval/builtins_stats_test.cpp
+  unit/eval/builtins_distributions_test.cpp
+  unit/eval/builtins_chisq_test.cpp
+  unit/eval/builtins_t_test.cpp
+  unit/eval/builtins_f_test.cpp
+  unit/eval/stats/special_functions_test.cpp
+  unit/eval/stats/incomplete_beta_test.cpp
   unit/eval/criteria_test.cpp
   unit/eval/builtins_countif_test.cpp
   unit/eval/builtins_ifs_test.cpp
@@ -47,6 +54,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_vlookup_test.cpp
   unit/eval/builtins_xlookup_test.cpp
   unit/eval/builtins_datetime_test.cpp
+  unit/eval/builtins_financial_test.cpp
+  unit/eval/builtins_regression_test.cpp
   unit/eval/text_ops_test.cpp
 )
 

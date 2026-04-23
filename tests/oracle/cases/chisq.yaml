@@ -1,0 +1,81 @@
+suite: chisq
+description: CHISQ.DIST / CHISQ.DIST.RT / CHISQ.INV / CHISQ.INV.RT — chi-squared distribution family
+# xlwings returns Excel-computed floats as their displayed value (typically
+# ~15 digits but with some tail-digit truncation). Chi-squared quantiles
+# sit between ~0 and ~25 for the cases exercised here, and CDFs span the
+# full [0, 1] range; 1e-6 absolute / relative tolerances comfortably
+# absorb display-rounding artefacts while still catching real divergence.
+tolerance: { abs: 1.0e-6, rel: 1.0e-6 }
+locale: ja-JP
+cases:
+  # -- CHISQ.DIST ----------------------------------------------------------
+  - id: chisq_dist_cdf_5_4df
+    description: "CDF of chi-squared(df=4) at x=5 ~ 0.712703"
+    formula: "=CHISQ.DIST(5, 4, TRUE)"
+
+  - id: chisq_dist_pdf_5_4df
+    description: "PDF of chi-squared(df=4) at x=5 ~ 0.102626"
+    formula: "=CHISQ.DIST(5, 4, FALSE)"
+
+  - id: chisq_dist_cdf_0
+    description: "CDF at x=0 is 0 for any df"
+    formula: "=CHISQ.DIST(0, 4, TRUE)"
+
+  - id: chisq_dist_pdf_df2_x0
+    description: "PDF at x=0 with df=2 is exactly 0.5 (exponential rate 1/2)"
+    formula: "=CHISQ.DIST(0, 2, FALSE)"
+
+  - id: chisq_dist_cdf_large_x
+    description: "CDF at x=100 with df=10 ~ 1"
+    formula: "=CHISQ.DIST(100, 10, TRUE)"
+
+  - id: chisq_dist_negative_x_is_num
+    description: "x < 0 yields #NUM!"
+    formula: "=CHISQ.DIST(-1, 4, TRUE)"
+
+  - id: chisq_dist_df_zero_is_num
+    description: "df < 1 yields #NUM!"
+    formula: "=CHISQ.DIST(5, 0, TRUE)"
+
+  - id: chisq_dist_pdf_df1_x0_is_num
+    description: "PDF at x=0 with df=1 diverges; Excel surfaces #NUM!"
+    formula: "=CHISQ.DIST(0, 1, FALSE)"
+
+  # -- CHISQ.DIST.RT -------------------------------------------------------
+  - id: chisq_dist_rt_basic
+    description: "Right-tailed CDF of chi-squared(df=4) at 5 ~ 0.287297"
+    formula: "=CHISQ.DIST.RT(5, 4)"
+
+  - id: chisq_dist_rt_plus_dist_is_1
+    description: "CHISQ.DIST(..., TRUE) + CHISQ.DIST.RT == 1"
+    formula: "=CHISQ.DIST(5, 4, TRUE) + CHISQ.DIST.RT(5, 4)"
+
+  # -- CHISQ.INV -----------------------------------------------------------
+  - id: chisq_inv_95pct_4df
+    description: "95th percentile of chi-squared(df=4) ~ 9.48773"
+    formula: "=CHISQ.INV(0.95, 4)"
+
+  - id: chisq_inv_half_4df
+    description: "Median of chi-squared(df=4) ~ 3.35669"
+    formula: "=CHISQ.INV(0.5, 4)"
+
+  - id: chisq_inv_round_trip
+    description: "CHISQ.INV(CHISQ.DIST(5, 4, TRUE), 4) should equal 5 to tolerance"
+    formula: "=CHISQ.INV(CHISQ.DIST(5, 4, TRUE), 4) - 5"
+
+  - id: chisq_inv_p_zero
+    description: "CHISQ.INV(0, df) = 0 (mass on the left boundary)"
+    formula: "=CHISQ.INV(0, 4)"
+
+  - id: chisq_inv_p_one_is_num
+    description: "CHISQ.INV(1, df) diverges; Excel surfaces #NUM!"
+    formula: "=CHISQ.INV(1, 4)"
+
+  # -- CHISQ.INV.RT --------------------------------------------------------
+  - id: chisq_inv_rt_5pct_4df
+    description: "CHISQ.INV.RT(0.05, 4) == CHISQ.INV(0.95, 4) ~ 9.48773"
+    formula: "=CHISQ.INV.RT(0.05, 4)"
+
+  - id: chisq_inv_rt_round_trip
+    description: "CHISQ.INV.RT(CHISQ.DIST.RT(5, 4), 4) should equal 5 to tolerance"
+    formula: "=CHISQ.INV.RT(CHISQ.DIST.RT(5, 4), 4) - 5"

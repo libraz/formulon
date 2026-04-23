@@ -14,11 +14,13 @@
 #include "eval/coerce.h"
 #include "eval/conditional_aggregates.h"
 #include "eval/eval_context.h"
+#include "eval/financial_lazy.h"
 #include "eval/function_registry.h"
 #include "eval/lazy_impls.h"
 #include "eval/lookups/classic.h"
 #include "eval/lookups/xlookup.h"
 #include "eval/range_args.h"
+#include "eval/regression_lazy.h"
 #include "eval/shape_ops_lazy.h"
 #include "eval/special_forms_lazy.h"
 #include "eval/workdays_lazy.h"
@@ -271,6 +273,8 @@ Value apply_comparison(parser::BinOp op, const Value& lhs, const Value& rhs) {
 //   XLOOKUP / XMATCH                           -> src/eval/lookups/xlookup.cpp
 //   ROWS / COLUMNS / ROW / COLUMN / SUMPRODUCT -> src/eval/shape_ops_lazy.cpp
 //   NETWORKDAYS / WORKDAY                      -> src/eval/workdays_lazy.cpp
+//   CORREL / COVARIANCE.P / COVARIANCE.S /
+//   SLOPE / INTERCEPT / RSQ / FORECAST.LINEAR  -> src/eval/regression_lazy.cpp
 // Each family publishes its externs via its own header
 // (`eval/special_forms_lazy.h`, `eval/conditional_aggregates.h`,
 // `eval/lookups/classic.h`, `eval/lookups/xlookup.h`,
@@ -290,21 +294,32 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"CHOOSE", &eval_choose_lazy},
     {"COLUMN", &eval_column_lazy},
     {"COLUMNS", &eval_columns_lazy},
+    {"CORREL", &eval_correl_lazy},
     {"COUNT", &eval_count_lazy},
     {"COUNTIF", &eval_countif_lazy},
     {"COUNTIFS", &eval_countifs_lazy},
+    {"COVARIANCE.P", &eval_covariance_p_lazy},
+    {"COVARIANCE.S", &eval_covariance_s_lazy},
+    // FORECAST is the legacy spelling kept by Excel for back-compat;
+    // its impl and arity are identical to FORECAST.LINEAR.
+    {"FORECAST", &eval_forecast_linear_lazy},
+    {"FORECAST.LINEAR", &eval_forecast_linear_lazy},
     {"HLOOKUP", &eval_hlookup_lazy},
     {"IF", &eval_if_lazy},
     {"IFERROR", &eval_iferror_lazy},
     {"IFNA", &eval_ifna_lazy},
     {"IFS", &eval_ifs_lazy},
     {"INDEX", &eval_index_lazy},
+    {"INTERCEPT", &eval_intercept_lazy},
+    {"IRR", &eval_irr_lazy},
     {"MATCH", &eval_match_lazy},
     {"MAXIFS", &eval_maxifs_lazy},
     {"MINIFS", &eval_minifs_lazy},
     {"NETWORKDAYS", &eval_networkdays_lazy},
     {"ROW", &eval_row_lazy},
     {"ROWS", &eval_rows_lazy},
+    {"RSQ", &eval_rsq_lazy},
+    {"SLOPE", &eval_slope_lazy},
     {"SUMIF", &eval_sumif_lazy},
     {"SUMIFS", &eval_sumifs_lazy},
     {"SUMPRODUCT", &eval_sumproduct_lazy},

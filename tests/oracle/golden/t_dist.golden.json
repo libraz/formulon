@@ -1,0 +1,125 @@
+{
+  "suite": "t_dist",
+  "description": "T.DIST / T.DIST.2T / T.DIST.RT / T.INV / T.INV.2T — Student's t distribution family",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-23T05:26:30Z"
+  },
+  "tolerance": {
+    "abs": 1e-06,
+    "rel": 1e-06
+  },
+  "cases": [
+    {
+      "id": "t_dist_cdf_0_5df",
+      "formula": "=T.DIST(0, 5, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "t_dist_cdf_1_5df",
+      "formula": "=T.DIST(1, 5, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.8183912661754387
+      }
+    },
+    {
+      "id": "t_dist_pdf_0_5df",
+      "formula": "=T.DIST(0, 5, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.3796066898224945
+      }
+    },
+    {
+      "id": "t_dist_cdf_negative",
+      "formula": "=T.DIST(-1, 5, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.18160873382456139
+      }
+    },
+    {
+      "id": "t_dist_df_zero_is_num",
+      "formula": "=T.DIST(0, 0, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "t_dist_rt_basic",
+      "formula": "=T.DIST.RT(1.5, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.08225366322272014
+      }
+    },
+    {
+      "id": "t_dist_2t_basic",
+      "formula": "=T.DIST.2T(2, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0733880347707404
+      }
+    },
+    {
+      "id": "t_dist_2t_negative_x_is_num",
+      "formula": "=T.DIST.2T(-1, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "t_inv_95pct_10df",
+      "formula": "=T.INV(0.95, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.8124611228116754
+      }
+    },
+    {
+      "id": "t_inv_half",
+      "formula": "=T.INV(0.5, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "t_inv_2t_5pct",
+      "formula": "=T.INV.2T(0.05, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.2281388519862744
+      }
+    },
+    {
+      "id": "t_inv_round_trip",
+      "formula": "=T.INV(T.DIST(1, 5, TRUE), 5) - 1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    }
+  ]
+}

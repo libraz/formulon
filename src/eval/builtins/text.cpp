@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "eval/coerce.h"
 #include "eval/criteria.h"
@@ -526,6 +527,363 @@ Value Clean(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return Value::text(arena.intern(out));
 }
 
+// --- Byte-oriented text family (LENB / LEFTB / RIGHTB / MIDB / CHAR / CODE)
+//
+// Excel ja-JP measures "byte" length against the Shift-JIS (CP932) single-
+// byte region: ASCII and half-width katakana are 1 byte, every other BMP
+// character is 2 bytes, and supplementary-plane characters are 4 bytes
+// (two UTF-16 surrogate halves, each classified as 2-byte DBCS). See
+// `src/eval/utf8_length.h::byte_count_jajp` for the classifier.
+//
+// When a byte-budgeted slice (LEFTB/RIGHTB/MIDB) would land in the middle
+// of a 2-byte character (i.e. we have exactly 1 byte of budget left and the
+// next character costs 2), Excel substitutes a single ASCII space (0x20)
+// and stops. MIDB additionally substitutes a space when its `start_byte`
+// falls inside a 2-byte character.
+
+// Decode a single UTF-8 codepoint starting at `src[i]`. On malformed input
+// returns a 1-byte "raw" step so the caller can still make progress; such
+// steps are classified as 1 DBCS byte per `byte_count_jajp` convention.
+struct Utf8Step {
+  std::uint32_t codepoint;  // Decoded codepoint (0xFFFD on malformed input).
+  std::size_t byte_len;     // Number of UTF-8 bytes consumed (>= 1).
+  int dbcs_bytes;           // DBCS byte cost under the ja-JP rule.
+};
+
+Utf8Step next_utf8_step(std::string_view src, std::size_t i) noexcept {
+  const auto c0 = static_cast<unsigned char>(src[i]);
+  if (c0 < 0x80u) {
+    return {static_cast<std::uint32_t>(c0), 1u, 1};
+  }
+  std::size_t need = 0;
+  std::uint32_t value = 0;
+  if ((c0 & 0xE0u) == 0xC0u) {
+    need = 1;
+    value = c0 & 0x1Fu;
+  } else if ((c0 & 0xF0u) == 0xE0u) {
+    need = 2;
+    value = c0 & 0x0Fu;
+  } else if ((c0 & 0xF8u) == 0xF0u) {
+    need = 3;
+    value = c0 & 0x07u;
+  } else {
+    return {0xFFFDu, 1u, 1};
+  }
+  if (i + need >= src.size()) {
+    return {0xFFFDu, 1u, 1};
+  }
+  for (std::size_t k = 0; k < need; ++k) {
+    const auto ck = static_cast<unsigned char>(src[i + 1 + k]);
+    if ((ck & 0xC0u) != 0x80u) {
+      return {0xFFFDu, 1u, 1};
+    }
+    value = (value << 6) | (ck & 0x3Fu);
+  }
+  return {value, need + 1, byte_count_jajp(value)};
+}
+
+// LENB(text) - returns the ja-JP DBCS byte length of the coerced text.
+Value Lenb(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto text = coerce_to_text(args[0]);
+  if (!text) {
+    return Value::error(text.error());
+  }
+  return Value::number(static_cast<double>(bytes_in_jajp(text.value())));
+}
+
+// LEFTB(text, [num_bytes=1]) - leftmost `num_bytes` bytes. When a 2-byte
+// character would straddle the budget (1 byte remaining), emit an ASCII
+// space in its place and stop.
+Value Leftb(const Value* args, std::uint32_t arity, Arena& arena) {
+  auto text = coerce_to_text(args[0]);
+  if (!text) {
+    return Value::error(text.error());
+  }
+  int n = 1;
+  if (arity >= 2) {
+    auto parsed = read_int_arg(args[1]);
+    if (!parsed) {
+      return Value::error(parsed.error());
+    }
+    n = parsed.value();
+  }
+  if (n < 0) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (n == 0) {
+    return Value::text({});
+  }
+  const std::string& src = text.value();
+  const auto budget = static_cast<std::uint64_t>(n);
+  std::uint64_t used = 0;
+  std::string out;
+  out.reserve(src.size());
+  std::size_t i = 0;
+  while (i < src.size()) {
+    const Utf8Step step = next_utf8_step(src, i);
+    const auto cost = static_cast<std::uint64_t>(step.dbcs_bytes);
+    if (used + cost <= budget) {
+      out.append(src, i, step.byte_len);
+      used += cost;
+      i += step.byte_len;
+      if (used == budget) {
+        break;
+      }
+    } else {
+      // Character would overflow the budget. If we have exactly 1 byte
+      // remaining and the character is a multi-byte (cost >= 2) char, pad
+      // with a single ASCII space. Otherwise stop cleanly.
+      if (used + 1 == budget && cost >= 2) {
+        out.push_back(' ');
+      }
+      break;
+    }
+  }
+  return Value::text(arena.intern(out));
+}
+
+// RIGHTB(text, [num_bytes=1]) - mirror of LEFTB. Walk the byte stream once
+// forward to record the per-character byte cost and byte offset, then take
+// the rightmost window that fits the budget. If a 2-byte character would
+// straddle the window boundary on the left edge, emit an ASCII space.
+Value Rightb(const Value* args, std::uint32_t arity, Arena& arena) {
+  auto text = coerce_to_text(args[0]);
+  if (!text) {
+    return Value::error(text.error());
+  }
+  int n = 1;
+  if (arity >= 2) {
+    auto parsed = read_int_arg(args[1]);
+    if (!parsed) {
+      return Value::error(parsed.error());
+    }
+    n = parsed.value();
+  }
+  if (n < 0) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (n == 0) {
+    return Value::text({});
+  }
+  const std::string& src = text.value();
+  const auto budget = static_cast<std::uint64_t>(n);
+
+  // Collect (byte_offset, byte_len, dbcs_cost) for each character.
+  struct CharRec {
+    std::size_t offset;
+    std::size_t byte_len;
+    int dbcs_bytes;
+  };
+  std::vector<CharRec> chars;
+  chars.reserve(src.size());
+  {
+    std::size_t i = 0;
+    while (i < src.size()) {
+      const Utf8Step step = next_utf8_step(src, i);
+      chars.push_back({i, step.byte_len, step.dbcs_bytes});
+      i += step.byte_len;
+    }
+  }
+
+  // Walk right-to-left accumulating cost until we can't fit the next char.
+  std::uint64_t used = 0;
+  std::size_t first_full_idx = chars.size();
+  bool pad_space = false;
+  for (std::size_t k = chars.size(); k > 0; --k) {
+    const CharRec& rec = chars[k - 1];
+    const auto cost = static_cast<std::uint64_t>(rec.dbcs_bytes);
+    if (used + cost <= budget) {
+      used += cost;
+      first_full_idx = k - 1;
+      if (used == budget) {
+        break;
+      }
+    } else {
+      if (used + 1 == budget && cost >= 2) {
+        pad_space = true;
+      }
+      break;
+    }
+  }
+
+  std::string out;
+  out.reserve(src.size());
+  if (pad_space) {
+    out.push_back(' ');
+  }
+  if (first_full_idx < chars.size()) {
+    const std::size_t start_byte = chars[first_full_idx].offset;
+    out.append(src, start_byte, std::string::npos);
+  }
+  return Value::text(arena.intern(out));
+}
+
+// MIDB(text, start_byte, num_bytes) - byte-window slice.
+// `start_byte<1` or `num_bytes<0` -> `#VALUE!`. If `start_byte > LENB(text)`,
+// return "". If `start_byte` lands inside a 2-byte character, emit a space
+// pad and consume 1 byte of budget; from there walk normally, padding on
+// the trailing edge with the same 1-byte-overflow rule as LEFTB.
+Value Midb(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  auto text = coerce_to_text(args[0]);
+  if (!text) {
+    return Value::error(text.error());
+  }
+  auto start = read_int_arg(args[1]);
+  if (!start) {
+    return Value::error(start.error());
+  }
+  auto length = read_int_arg(args[2]);
+  if (!length) {
+    return Value::error(length.error());
+  }
+  if (start.value() < 1 || length.value() < 0) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (length.value() == 0) {
+    return Value::text({});
+  }
+  const std::string& src = text.value();
+  const auto start_byte = static_cast<std::uint64_t>(start.value());  // 1-based
+  const auto budget = static_cast<std::uint64_t>(length.value());
+
+  // Walk characters and track byte cursor.
+  std::uint64_t cursor = 0;  // Bytes consumed so far (DBCS byte index).
+  std::size_t i = 0;
+  std::string out;
+  out.reserve(src.size());
+  std::uint64_t used = 0;
+  bool started = false;
+  bool head_pad = false;
+
+  while (i < src.size()) {
+    const Utf8Step step = next_utf8_step(src, i);
+    const auto cost = static_cast<std::uint64_t>(step.dbcs_bytes);
+    const std::uint64_t char_start = cursor + 1;   // 1-based byte position of this char.
+    const std::uint64_t char_end = cursor + cost;  // 1-based byte position of final byte.
+    if (!started) {
+      if (char_end < start_byte) {
+        // Entire character is before the window.
+        cursor += cost;
+        i += step.byte_len;
+        continue;
+      }
+      // This character either starts at `start_byte` or straddles it.
+      if (char_start == start_byte) {
+        started = true;
+        // Fall through to the "consume within budget" path below.
+      } else {
+        // Start falls strictly inside a multi-byte character. Emit a head
+        // space pad consuming 1 byte of budget, skip the remainder of this
+        // character, and continue.
+        head_pad = true;
+        out.push_back(' ');
+        used += 1;
+        cursor += cost;
+        i += step.byte_len;
+        started = true;
+        if (used == budget) {
+          return Value::text(arena.intern(out));
+        }
+        continue;
+      }
+    }
+    // Inside the window.
+    if (used + cost <= budget) {
+      out.append(src, i, step.byte_len);
+      used += cost;
+      cursor += cost;
+      i += step.byte_len;
+      if (used == budget) {
+        break;
+      }
+    } else {
+      if (used + 1 == budget && cost >= 2) {
+        out.push_back(' ');
+      }
+      break;
+    }
+  }
+  // If the start was past the end of the text we emit nothing.
+  if (!started && !head_pad) {
+    return Value::text({});
+  }
+  return Value::text(arena.intern(out));
+}
+
+// CHAR(number) - returns the single-character text whose Mac Excel ja-JP
+// codepage value is `number`. `number` is truncated to an integer; values
+// outside 1..255 surface `#VALUE!`.
+//
+// Mac Excel ja-JP uses the Shift-JIS (CP932) codepage for this function.
+// CP932 partitions 0x00..0xFF as follows:
+//
+//   0x00..0x7F  - ASCII (identical to Unicode)
+//   0x81..0x9F  - DBCS lead byte (not a valid single-byte char)
+//   0xA1..0xDF  - Half-width katakana (U+FF61..U+FF9F)
+//   0xE0..0xFC  - DBCS lead byte
+//   0x80, 0xA0, 0xFD..0xFF - unassigned
+//
+// We implement the two single-byte regions (ASCII and half-width katakana)
+// exactly. Lead-byte values are echoed back as their CP1252 equivalent:
+// Mac Excel returns a variety of fallback glyphs for these and we capture
+// specific mismatches in `tests/divergence.yaml`.
+Value Char_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  auto parsed = read_int_arg(args[0]);
+  if (!parsed) {
+    return Value::error(parsed.error());
+  }
+  const int n = parsed.value();
+  if (n < 1 || n > 255) {
+    return Value::error(ErrorCode::Value);
+  }
+  std::uint32_t cp = 0;
+  if (n < 0x80) {
+    cp = static_cast<std::uint32_t>(n);
+  } else if (n >= 0xA1 && n <= 0xDF) {
+    // Half-width katakana mapping: 0xA1 -> U+FF61, 0xDF -> U+FF9F.
+    cp = 0xFF61u + static_cast<std::uint32_t>(n - 0xA1);
+  } else {
+    // CP932 DBCS lead-byte or unassigned slot. Fall back to the CP1252
+    // value so the character is at least printable; any divergence from
+    // Mac Excel ja-JP is captured per-case in tests/divergence.yaml.
+    static constexpr std::uint32_t kCp1252HighTable[32] = {
+        0x20ACu, 0xFFFDu, 0x201Au, 0x0192u, 0x201Eu, 0x2026u, 0x2020u, 0x2021u, 0x02C6u, 0x2030u, 0x0160u,
+        0x2039u, 0x0152u, 0xFFFDu, 0x017Du, 0xFFFDu, 0xFFFDu, 0x2018u, 0x2019u, 0x201Cu, 0x201Du, 0x2022u,
+        0x2013u, 0x2014u, 0x02DCu, 0x2122u, 0x0161u, 0x203Au, 0x0153u, 0xFFFDu, 0x017Eu, 0x0178u,
+    };
+    if (n < 0xA0) {
+      cp = kCp1252HighTable[n - 0x80];
+    } else {
+      cp = static_cast<std::uint32_t>(n);
+    }
+  }
+  const std::string encoded = encode_utf8_codepoint(cp);
+  if (encoded.empty()) {
+    return Value::error(ErrorCode::Value);
+  }
+  return Value::text(arena.intern(encoded));
+}
+
+// CODE(text) - returns the ANSI/Mac codepage value of the first character
+// in `text`. Empty text yields `#VALUE!`. For ASCII (<= 0x7F) the result is
+// the codepoint; for non-ASCII we return the first UTF-8 codepoint as a
+// number. Mac Excel ja-JP returns CP932 values for non-ASCII; any mismatch
+// is documented in `tests/divergence.yaml`.
+Value Code_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto text = coerce_to_text(args[0]);
+  if (!text) {
+    return Value::error(text.error());
+  }
+  if (text.value().empty()) {
+    return Value::error(ErrorCode::Value);
+  }
+  const Utf8DecodeResult decoded = decode_first_utf8_codepoint(text.value());
+  if (!decoded.valid) {
+    return Value::error(ErrorCode::Value);
+  }
+  return Value::number(static_cast<double>(decoded.codepoint));
+}
+
 // PROPER(text) - title-case `text`. ASCII letters that begin a "word" are
 // uppercased; ASCII letters that follow another ASCII letter are lowercased.
 // A "word boundary" is any byte that is NOT an ASCII letter, including
@@ -591,6 +949,14 @@ void register_text_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"UNICODE", 1u, 1u, &Unicode_});
   registry.register_function(FunctionDef{"CLEAN", 1u, 1u, &Clean});
   registry.register_function(FunctionDef{"PROPER", 1u, 1u, &Proper});
+
+  // Byte-oriented text family (ja-JP DBCS).
+  registry.register_function(FunctionDef{"LENB", 1u, 1u, &Lenb});
+  registry.register_function(FunctionDef{"LEFTB", 1u, 2u, &Leftb});
+  registry.register_function(FunctionDef{"RIGHTB", 1u, 2u, &Rightb});
+  registry.register_function(FunctionDef{"MIDB", 3u, 3u, &Midb});
+  registry.register_function(FunctionDef{"CHAR", 1u, 1u, &Char_});
+  registry.register_function(FunctionDef{"CODE", 1u, 1u, &Code_});
 }
 
 }  // namespace eval

@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-23T02:38:15Z"
+    "generated_at": "2026-04-23T05:36:54Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -463,6 +463,258 @@
         "kind": "number",
         "value": 12354.0
       }
+    },
+    {
+      "id": "lenb_ascii",
+      "formula": "=LENB(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "lenb_empty",
+      "formula": "=LENB(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "lenb_hiragana",
+      "formula": "=LENB(\"あいう\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "lenb_mixed",
+      "formula": "=LENB(\"abcあ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "lenb_halfwidth_kana",
+      "formula": "=LENB(\"ｱｲｳ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "lenb_supplementary_plane",
+      "formula": "=LENB(\"😀\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "leftb_ascii",
+      "formula": "=LEFTB(\"hello\", 3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hel"
+      }
+    },
+    {
+      "id": "leftb_default_count",
+      "formula": "=LEFTB(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "h"
+      }
+    },
+    {
+      "id": "leftb_hiragana_exact",
+      "formula": "=LEFTB(\"あいう\", 4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "あい"
+      }
+    },
+    {
+      "id": "leftb_hiragana_splits",
+      "formula": "=LEFTB(\"あいう\", 3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "あ "
+      }
+    },
+    {
+      "id": "leftb_negative_is_value",
+      "formula": "=LEFTB(\"hello\", -1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "leftb_zero_count",
+      "formula": "=LEFTB(\"hello\", 0)",
+      "setup": {},
+      "skipped": "LEFTB(\"hello\",0) -> \"\"; xlwings read-back classifies as blank. Formulon returns text(\"\")."
+    },
+    {
+      "id": "rightb_ascii",
+      "formula": "=RIGHTB(\"hello\", 3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "llo"
+      }
+    },
+    {
+      "id": "rightb_hiragana_exact",
+      "formula": "=RIGHTB(\"あいう\", 4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "いう"
+      }
+    },
+    {
+      "id": "rightb_hiragana_splits",
+      "formula": "=RIGHTB(\"あいう\", 3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " う"
+      }
+    },
+    {
+      "id": "midb_ascii",
+      "formula": "=MIDB(\"hello\", 2, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ell"
+      }
+    },
+    {
+      "id": "midb_hiragana_clean",
+      "formula": "=MIDB(\"あいうえお\", 3, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "いう"
+      }
+    },
+    {
+      "id": "midb_hiragana_start_mid_char",
+      "formula": "=MIDB(\"あいうえお\", 2, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " い "
+      }
+    },
+    {
+      "id": "midb_start_beyond",
+      "formula": "=MIDB(\"abc\", 10, 3)",
+      "setup": {},
+      "skipped": "MIDB with start beyond length -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
+    },
+    {
+      "id": "midb_start_zero_is_value",
+      "formula": "=MIDB(\"abc\", 0, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "char_ascii_a",
+      "formula": "=CHAR(65)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "A"
+      }
+    },
+    {
+      "id": "char_space",
+      "formula": "=CHAR(32)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " "
+      }
+    },
+    {
+      "id": "char_high_byte",
+      "formula": "=CHAR(169)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ｩ"
+      }
+    },
+    {
+      "id": "char_zero_is_value",
+      "formula": "=CHAR(0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "char_256_is_value",
+      "formula": "=CHAR(256)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "code_ascii_a",
+      "formula": "=CODE(\"A\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 65.0
+      }
+    },
+    {
+      "id": "code_empty_is_value",
+      "formula": "=CODE(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "code_multi_char_uses_first",
+      "formula": "=CODE(\"Apple\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 65.0
+      }
+    },
+    {
+      "id": "code_hiragana_first",
+      "formula": "=CODE(\"あいう\")",
+      "setup": {},
+      "skipped": "Mac Excel ja-JP CODE returns JIS X 0208 row-cell (9250 for \"あ\"); Formulon returns the Unicode codepoint (12354) pending a CP932 table."
     }
   ]
 }

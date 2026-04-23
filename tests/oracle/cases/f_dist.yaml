@@ -1,0 +1,52 @@
+suite: f_dist
+description: F.DIST / F.DIST.RT / F.INV / F.INV.RT — Snedecor's F distribution family
+# xlwings returns Excel-computed floats as their displayed value. F
+# quantiles for the cases here sit in [0, ~3.5] and CDFs span the full
+# [0, 1] range; 1e-6 absolute / relative tolerances absorb display
+# rounding while still catching real divergence.
+tolerance: { abs: 1.0e-6, rel: 1.0e-6 }
+locale: ja-JP
+cases:
+  # -- F.DIST --------------------------------------------------------------
+  - id: f_dist_cdf_basic
+    description: "CDF of F(5, 10) at x=2 ~ 0.8358"
+    formula: "=F.DIST(2, 5, 10, TRUE)"
+
+  - id: f_dist_pdf_basic
+    description: "PDF of F(5, 10) at x=2 ~ 0.1620"
+    formula: "=F.DIST(2, 5, 10, FALSE)"
+
+  - id: f_dist_cdf_zero
+    description: "CDF at x=0 is 0"
+    formula: "=F.DIST(0, 5, 10, TRUE)"
+
+  - id: f_dist_negative_x_is_num
+    description: "x < 0 yields #NUM!"
+    formula: "=F.DIST(-1, 5, 10, TRUE)"
+
+  # -- F.DIST.RT -----------------------------------------------------------
+  - id: f_dist_rt_basic
+    description: "Right-tail CDF of F(5, 10) at x=2 ~ 0.1642"
+    formula: "=F.DIST.RT(2, 5, 10)"
+
+  - id: f_dist_rt_plus_dist_is_1
+    description: "F.DIST(..., TRUE) + F.DIST.RT == 1"
+    formula: "=F.DIST(2, 5, 10, TRUE) + F.DIST.RT(2, 5, 10)"
+
+  # -- F.INV ---------------------------------------------------------------
+  - id: f_inv_95pct
+    description: "95th percentile of F(5, 10) ~ 3.3258"
+    formula: "=F.INV(0.95, 5, 10)"
+
+  - id: f_inv_median
+    description: "Median of F(5, 10) ~ 0.9319"
+    formula: "=F.INV(0.5, 5, 10)"
+
+  # -- F.INV.RT ------------------------------------------------------------
+  - id: f_inv_rt_5pct
+    description: "F.INV.RT(0.05, 5, 10) ~ 3.3258 (matches F.INV(0.95, ...))"
+    formula: "=F.INV.RT(0.05, 5, 10)"
+
+  - id: f_inv_round_trip
+    description: "F.INV(F.DIST(2, 5, 10, TRUE), 5, 10) - 2 should be 0 to tolerance"
+    formula: "=F.INV(F.DIST(2, 5, 10, TRUE), 5, 10) - 2"

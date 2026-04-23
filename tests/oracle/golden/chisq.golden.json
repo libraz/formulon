@@ -1,0 +1,170 @@
+{
+  "suite": "chisq",
+  "description": "CHISQ.DIST / CHISQ.DIST.RT / CHISQ.INV / CHISQ.INV.RT — chi-squared distribution family",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-23T05:12:13Z"
+  },
+  "tolerance": {
+    "abs": 1e-06,
+    "rel": 1e-06
+  },
+  "cases": [
+    {
+      "id": "chisq_dist_cdf_5_4df",
+      "formula": "=CHISQ.DIST(5, 4, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.7127025048163542
+      }
+    },
+    {
+      "id": "chisq_dist_pdf_5_4df",
+      "formula": "=CHISQ.DIST(5, 4, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.10260624827987351
+      }
+    },
+    {
+      "id": "chisq_dist_cdf_0",
+      "formula": "=CHISQ.DIST(0, 4, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "chisq_dist_pdf_df2_x0",
+      "formula": "=CHISQ.DIST(0, 2, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "chisq_dist_cdf_large_x",
+      "formula": "=CHISQ.DIST(100, 10, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "chisq_dist_negative_x_is_num",
+      "formula": "=CHISQ.DIST(-1, 4, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chisq_dist_df_zero_is_num",
+      "formula": "=CHISQ.DIST(5, 0, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chisq_dist_pdf_df1_x0_is_num",
+      "formula": "=CHISQ.DIST(0, 1, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chisq_dist_rt_basic",
+      "formula": "=CHISQ.DIST.RT(5, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.2872974951836458
+      }
+    },
+    {
+      "id": "chisq_dist_rt_plus_dist_is_1",
+      "formula": "=CHISQ.DIST(5, 4, TRUE) + CHISQ.DIST.RT(5, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "chisq_inv_95pct_4df",
+      "formula": "=CHISQ.INV(0.95, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.487729036781158
+      }
+    },
+    {
+      "id": "chisq_inv_half_4df",
+      "formula": "=CHISQ.INV(0.5, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.3566939800333215
+      }
+    },
+    {
+      "id": "chisq_inv_round_trip",
+      "formula": "=CHISQ.INV(CHISQ.DIST(5, 4, TRUE), 4) - 5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "chisq_inv_p_zero",
+      "formula": "=CHISQ.INV(0, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "chisq_inv_p_one_is_num",
+      "formula": "=CHISQ.INV(1, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chisq_inv_rt_5pct_4df",
+      "formula": "=CHISQ.INV.RT(0.05, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.487729036781158
+      }
+    },
+    {
+      "id": "chisq_inv_rt_round_trip",
+      "formula": "=CHISQ.INV.RT(CHISQ.DIST.RT(5, 4), 4) - 5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    }
+  ]
+}

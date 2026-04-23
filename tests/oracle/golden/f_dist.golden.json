@@ -1,0 +1,107 @@
+{
+  "suite": "f_dist",
+  "description": "F.DIST / F.DIST.RT / F.INV / F.INV.RT — Snedecor's F distribution family",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-23T05:26:30Z"
+  },
+  "tolerance": {
+    "abs": 1e-06,
+    "rel": 1e-06
+  },
+  "cases": [
+    {
+      "id": "f_dist_cdf_basic",
+      "formula": "=F.DIST(2, 5, 10, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.8358050491002612
+      }
+    },
+    {
+      "id": "f_dist_pdf_basic",
+      "formula": "=F.DIST(2, 5, 10, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.162005742180115
+      }
+    },
+    {
+      "id": "f_dist_cdf_zero",
+      "formula": "=F.DIST(0, 5, 10, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "f_dist_negative_x_is_num",
+      "formula": "=F.DIST(-1, 5, 10, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "f_dist_rt_basic",
+      "formula": "=F.DIST.RT(2, 5, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.16419495089973882
+      }
+    },
+    {
+      "id": "f_dist_rt_plus_dist_is_1",
+      "formula": "=F.DIST(2, 5, 10, TRUE) + F.DIST.RT(2, 5, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "f_inv_95pct",
+      "formula": "=F.INV(0.95, 5, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.3258345304130126
+      }
+    },
+    {
+      "id": "f_inv_median",
+      "formula": "=F.INV(0.5, 5, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.9319331608510484
+      }
+    },
+    {
+      "id": "f_inv_rt_5pct",
+      "formula": "=F.INV.RT(0.05, 5, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.325834530413013
+      }
+    },
+    {
+      "id": "f_inv_round_trip",
+      "formula": "=F.INV(F.DIST(2, 5, 10, TRUE), 5, 10) - 2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    }
+  ]
+}

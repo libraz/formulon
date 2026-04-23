@@ -1,0 +1,62 @@
+suite: t_dist
+description: T.DIST / T.DIST.2T / T.DIST.RT / T.INV / T.INV.2T — Student's t distribution family
+# xlwings returns Excel-computed floats as their displayed value (typically
+# ~15 digits but with some tail-digit truncation). Student's t quantiles
+# for the cases here sit in [-3, 3]; CDFs span the full [0, 1] range.
+# 1e-6 absolute / relative tolerances absorb display-rounding artefacts
+# while still catching real divergence.
+tolerance: { abs: 1.0e-6, rel: 1.0e-6 }
+locale: ja-JP
+cases:
+  # -- T.DIST --------------------------------------------------------------
+  - id: t_dist_cdf_0_5df
+    description: "CDF at x=0 is exactly 0.5 (symmetry)"
+    formula: "=T.DIST(0, 5, TRUE)"
+
+  - id: t_dist_cdf_1_5df
+    description: "CDF of t(df=5) at x=1 ~ 0.8184"
+    formula: "=T.DIST(1, 5, TRUE)"
+
+  - id: t_dist_pdf_0_5df
+    description: "PDF of t(df=5) at x=0 ~ 0.3796"
+    formula: "=T.DIST(0, 5, FALSE)"
+
+  - id: t_dist_cdf_negative
+    description: "Symmetry: CDF(-1, 5) = 1 - CDF(1, 5) ~ 0.1816"
+    formula: "=T.DIST(-1, 5, TRUE)"
+
+  - id: t_dist_df_zero_is_num
+    description: "df < 1 yields #NUM!"
+    formula: "=T.DIST(0, 0, TRUE)"
+
+  # -- T.DIST.RT -----------------------------------------------------------
+  - id: t_dist_rt_basic
+    description: "Right-tail CDF of t(df=10) at x=1.5 ~ 0.0822"
+    formula: "=T.DIST.RT(1.5, 10)"
+
+  # -- T.DIST.2T -----------------------------------------------------------
+  - id: t_dist_2t_basic
+    description: "Two-tail probability of t(df=10) at x=2 ~ 0.0734 (= 2 * sf(2, 10))"
+    formula: "=T.DIST.2T(2, 10)"
+
+  - id: t_dist_2t_negative_x_is_num
+    description: "Two-tail rejects negative x (#NUM!)"
+    formula: "=T.DIST.2T(-1, 10)"
+
+  # -- T.INV ---------------------------------------------------------------
+  - id: t_inv_95pct_10df
+    description: "95th percentile of t(df=10) ~ 1.8125"
+    formula: "=T.INV(0.95, 10)"
+
+  - id: t_inv_half
+    description: "Median of t(df=10) is exactly 0"
+    formula: "=T.INV(0.5, 10)"
+
+  # -- T.INV.2T ------------------------------------------------------------
+  - id: t_inv_2t_5pct
+    description: "Two-tail 5% critical value for df=10 ~ 2.2281"
+    formula: "=T.INV.2T(0.05, 10)"
+
+  - id: t_inv_round_trip
+    description: "T.INV(T.DIST(1, 5, TRUE), 5) - 1 should be 0 to tolerance"
+    formula: "=T.INV(T.DIST(1, 5, TRUE), 5) - 1"

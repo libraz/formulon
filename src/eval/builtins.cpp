@@ -13,6 +13,7 @@
 
 #include "eval/builtins/aggregate.h"
 #include "eval/builtins/datetime.h"
+#include "eval/builtins/financial.h"
 #include "eval/builtins/info.h"
 #include "eval/builtins/logical.h"
 #include "eval/builtins/math.h"
@@ -33,6 +34,7 @@ void register_builtins(FunctionRegistry& registry) {
   register_text_builtins(registry);
   register_info_builtins(registry);
   register_datetime_builtins(registry);
+  register_financial_builtins(registry);
 }
 
 }  // namespace eval

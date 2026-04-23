@@ -2,7 +2,10 @@
 //
 // Registers Excel's statistical built-ins (MEDIAN, MODE/MODE.SNGL,
 // LARGE/SMALL, PERCENTILE[.INC], QUARTILE[.INC], STDEV[.S]/STDEV.P,
-// VAR[.S]/VAR.P) into a FunctionRegistry. Kept in its own translation
+// VAR[.S]/VAR.P) plus the probability-distribution family
+// (NORM.DIST, NORM.S.DIST, NORM.INV, NORM.S.INV, BINOM.DIST,
+// POISSON.DIST, EXPON.DIST, CHISQ.DIST, CHISQ.DIST.RT, CHISQ.INV,
+// CHISQ.INV.RT) into a FunctionRegistry. Kept in its own translation
 // unit so the statistics family can evolve independently of the rest of
 // the builtin catalog.
 
@@ -16,8 +19,10 @@ class FunctionRegistry;
 
 /// Registers the statistical built-in functions (MEDIAN, MODE, MODE.SNGL,
 /// LARGE, SMALL, PERCENTILE, PERCENTILE.INC, QUARTILE, QUARTILE.INC, STDEV,
-/// STDEV.S, STDEV.P, VAR, VAR.S, VAR.P) into `registry`. Intended to be
-/// invoked from `register_builtins`.
+/// STDEV.S, STDEV.P, VAR, VAR.S, VAR.P, NORM.DIST, NORM.S.DIST, NORM.INV,
+/// NORM.S.INV, BINOM.DIST, POISSON.DIST, EXPON.DIST, CHISQ.DIST,
+/// CHISQ.DIST.RT, CHISQ.INV, CHISQ.INV.RT) into `registry`.
+/// Intended to be invoked from `register_builtins`.
 void register_stats_builtins(FunctionRegistry& registry);
 
 }  // namespace eval
