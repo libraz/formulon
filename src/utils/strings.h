@@ -160,6 +160,28 @@ inline bool case_insensitive_eq(std::string_view a, std::string_view b) noexcept
   return true;
 }
 
+/// Lexicographic ASCII-case-insensitive comparison.
+///
+/// Returns a negative value when `a` sorts before `b`, zero when they are
+/// equal under `case_insensitive_eq`, and a positive value otherwise.
+/// Byte-by-byte: each byte is lowered via `ascii_to_lower` before compare;
+/// non-ASCII bytes (high bit set) compare verbatim, matching the equality
+/// helper above. Shorter prefixes sort before longer continuations.
+inline int case_insensitive_compare(std::string_view a, std::string_view b) noexcept {
+  const std::size_t n = a.size() < b.size() ? a.size() : b.size();
+  for (std::size_t i = 0; i < n; ++i) {
+    const unsigned char ca = static_cast<unsigned char>(ascii_to_lower(a[i]));
+    const unsigned char cb = static_cast<unsigned char>(ascii_to_lower(b[i]));
+    if (ca != cb) {
+      return ca < cb ? -1 : 1;
+    }
+  }
+  if (a.size() == b.size()) {
+    return 0;
+  }
+  return a.size() < b.size() ? -1 : 1;
+}
+
 /// Returns a lowercase copy of `input` using `ascii_to_lower` byte by byte.
 /// Non-ASCII bytes are preserved exactly.
 inline std::string to_ascii_lower(std::string_view input) {

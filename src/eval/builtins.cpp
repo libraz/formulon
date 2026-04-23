@@ -441,6 +441,69 @@ Value Product(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return Value::number(total);
 }
 
+// --- Counting aggregators -----------------------------------------------
+//
+// COUNT / COUNTA / COUNTBLANK. Unlike SUM / AVERAGE / MIN / MAX / PRODUCT
+// these three are registered with `propagate_errors = false`: Excel's COUNT
+// family is specified in terms of which cells to "count" rather than which
+// values to coerce, so an error inside a range must not short-circuit the
+// whole call. That opt-out means the impls see Error-typed values in their
+// args array directly and must skip them explicitly.
+//
+// Accepted divergence (range-vs-direct parity):
+//   =COUNT(1, 1/0) in Excel is #DIV/0! because the error propagates as a
+//   direct argument; =COUNT(A1:A2) where one cell holds #DIV/0! silently
+//   skips the error and counts only the numerics. We do not distinguish
+//   the two call shapes - any error anywhere is skipped - so direct-arg
+//   callers get the range-shape behaviour. The same simplification already
+//   applies to text / bool values appearing inside SUM-family ranges (see
+//   FunctionDef::accepts_ranges comment in function_registry.h). A true
+//   range-context concept is deferred.
+
+// COUNT(value, ...) - count of Number values. Booleans, text (even
+// numeric-looking text like "5"), blanks, and errors are all skipped.
+// Direct-arg booleans are also skipped (Excel's COUNT never counts
+// booleans even when they appear outside a range).
+Value Count(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  double total = 0.0;
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    if (args[i].is_number()) {
+      total += 1.0;
+    }
+  }
+  return Value::number(total);
+}
+
+// COUNTA(value, ...) - count of non-Blank values. Numbers, booleans, text
+// (including the empty string produced by a formula returning ""), and
+// errors are all counted. Only the Blank scalar is skipped.
+Value CountA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  double total = 0.0;
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    if (!args[i].is_blank()) {
+      total += 1.0;
+    }
+  }
+  return Value::number(total);
+}
+
+// COUNTBLANK(value, ...) - count of Blank scalars and Text values whose
+// contents are exactly "". Numbers (including 0), booleans (including
+// FALSE), non-empty text, and errors are all skipped. The public Excel 365
+// signature accepts a single range; we accept variadic for symmetry with
+// the sibling aggregators - a single A1:B2 ref still expands to many
+// scalar args via the dispatcher.
+Value CountBlank(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  double total = 0.0;
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    const Value& v = args[i];
+    if (v.is_blank() || (v.is_text() && v.as_text().empty())) {
+      total += 1.0;
+    }
+  }
+  return Value::number(total);
+}
+
 // --- Exponential / logarithmic / trigonometric --------------------------
 //
 // Every function in this section coerces its inputs through
@@ -1374,6 +1437,26 @@ void register_builtins(FunctionRegistry& registry) {
   }
   {
     FunctionDef def{"PRODUCT", 1u, kVariadic, &Product};
+    def.accepts_ranges = true;
+    registry.register_function(def);
+  }
+
+  // Counting aggregators. All three are range-aware and opt out of the
+  // dispatcher's left-most-error rule so the impl itself decides which
+  // values to count (see the block comment above `Count` in builtins.cpp
+  // for the range-vs-direct divergence).
+  {
+    FunctionDef def{"COUNT", 1u, kVariadic, &Count, /*propagate_errors=*/false};
+    def.accepts_ranges = true;
+    registry.register_function(def);
+  }
+  {
+    FunctionDef def{"COUNTA", 1u, kVariadic, &CountA, /*propagate_errors=*/false};
+    def.accepts_ranges = true;
+    registry.register_function(def);
+  }
+  {
+    FunctionDef def{"COUNTBLANK", 1u, kVariadic, &CountBlank, /*propagate_errors=*/false};
     def.accepts_ranges = true;
     registry.register_function(def);
   }

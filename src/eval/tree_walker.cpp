@@ -7,11 +7,13 @@
 
 #include <cmath>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "eval/coerce.h"
+#include "eval/criteria.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "parser/ast.h"
@@ -215,8 +217,7 @@ Value apply_comparison(parser::BinOp op, const Value& lhs, const Value& rhs) {
 // Recursive evaluator
 // ---------------------------------------------------------------------------
 
-Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                const EvalContext& ctx);
+Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx);
 
 // ---------------------------------------------------------------------------
 // Lazy (short-circuit) function impls
@@ -227,6 +228,32 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
 // `dispatch_call` is bypassed entirely: arity checks and error propagation
 // belong inside each impl. On arity mismatch the impls return #VALUE! to
 // match the eager dispatcher's behaviour.
+//
+// Current entries:
+//   IF          - short-circuit branch: only the taken side is evaluated.
+//   IFERROR     - evaluates fallback only when primary is any error.
+//   IFNA        - evaluates fallback only when primary is exactly #N/A.
+//   COUNTIF     - range-aware: arg 0 must be a range/Ref, arg 1 is a scalar
+//                 criterion evaluated once; counts matching cells.
+//   SUMIF       - range-aware: arg 0 is the criteria range, arg 2 (optional)
+//                 is the parallel sum range; sums matching numeric cells.
+//   AVERAGEIF   - like SUMIF, but returns the mean of matching numeric
+//                 cells or #DIV/0! when nothing matches.
+//   COUNTIFS    - multi-criteria AND across N (range, criterion) pairs.
+//   SUMIFS      - like COUNTIFS, but with a result range as the leading arg.
+//   AVERAGEIFS  - like SUMIFS, returns mean or #DIV/0! when no matches.
+//   MAXIFS      - like SUMIFS, returns max of numerics (0 if no matches).
+//   MINIFS      - like SUMIFS, returns min of numerics (0 if no matches).
+//   CHOOSE      - index-selected argument; only the chosen subtree runs.
+//   INDEX       - range-aware: shape (rows,cols) of arg 0 is used to pick
+//                 a single cell by (row_num, col_num).
+//   MATCH       - range-aware: lookup_array (arg 1) must be a 1-D range/Ref.
+//
+// The conditional aggregators (`*IF`/`*IFS`) cannot ride on the eager
+// `accepts_ranges` path because arg 0 must reach the impl as AST (so a
+// bare single-cell Ref can be treated as a 1-cell range) AND the parallel
+// result / additional criteria ranges must iterate in lockstep rather than
+// being flattened into a single values vector alongside the first.
 
 // IF(cond, then, else?) - then is evaluated iff cond coerces to true; else
 // is evaluated iff cond coerces to false. When the third argument is
@@ -286,8 +313,1190 @@ Value eval_ifna_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   return eval_node(call.as_call_arg(1), arena, registry, ctx);
 }
 
-using LazyImpl = Value (*)(const parser::AstNode& call, Arena& arena,
-                           const FunctionRegistry& registry, const EvalContext& ctx);
+// ---------------------------------------------------------------------------
+// COUNTIF / SUMIF / AVERAGEIF support
+// ---------------------------------------------------------------------------
+//
+// The three conditional aggregators share a lot of shape: arg 0 is a
+// criteria range, arg 1 is a scalar criterion, and `SUMIF` / `AVERAGEIF`
+// additionally take an optional parallel range. The helpers below split
+// that shape into reusable building blocks so the three impls themselves
+// read as straight-line code.
+
+// Resolves `arg_node` to a flat vector of cell Values. Accepts either a
+// `RangeOp` (`A1:B2`) with two `Ref` endpoints or a bare `Ref` (treated as
+// a 1-cell range). Anything else — a number literal, a function call, a
+// structured reference — fails with `#VALUE!`. An expansion error from
+// `expand_range` (e.g. `#REF!` for a missing sheet) is surfaced via
+// `*out_err_code`.
+//
+// `out_rows` and `out_cols`, when non-null, receive the rectangle's shape
+// (1-cell Ref -> 1x1, RangeOp -> computed from normalised endpoints).
+// Callers that only need the flat vector can pass `nullptr` and are
+// unaffected.
+bool resolve_range_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
+                       std::uint32_t* out_rows = nullptr, std::uint32_t* out_cols = nullptr) {
+  if (arg_node.kind() == parser::NodeKind::RangeOp) {
+    const parser::AstNode& lhs_ast = arg_node.as_range_lhs();
+    const parser::AstNode& rhs_ast = arg_node.as_range_rhs();
+    if (lhs_ast.kind() != parser::NodeKind::Ref || rhs_ast.kind() != parser::NodeKind::Ref) {
+      *out_err_code = ErrorCode::Ref;
+      return false;
+    }
+    const parser::Reference& lhs_ref = lhs_ast.as_ref();
+    const parser::Reference& rhs_ref = rhs_ast.as_ref();
+    auto expanded = ctx.expand_range(lhs_ref, rhs_ref, arena, registry);
+    if (!expanded) {
+      *out_err_code = expanded.error();
+      return false;
+    }
+    *out_cells = std::move(expanded.value());
+    if (out_rows != nullptr || out_cols != nullptr) {
+      // `expand_range` normalises endpoint ordering (A3:A1 == A1:A3) so
+      // mirror that here. Full-col/full-row would have already failed the
+      // expansion with #VALUE!, so we can safely take the absolute span.
+      const std::uint32_t r_lo = lhs_ref.row < rhs_ref.row ? lhs_ref.row : rhs_ref.row;
+      const std::uint32_t r_hi = lhs_ref.row < rhs_ref.row ? rhs_ref.row : lhs_ref.row;
+      const std::uint32_t c_lo = lhs_ref.col < rhs_ref.col ? lhs_ref.col : rhs_ref.col;
+      const std::uint32_t c_hi = lhs_ref.col < rhs_ref.col ? rhs_ref.col : lhs_ref.col;
+      if (out_rows != nullptr) {
+        *out_rows = r_hi - r_lo + 1U;
+      }
+      if (out_cols != nullptr) {
+        *out_cols = c_hi - c_lo + 1U;
+      }
+    }
+    return true;
+  }
+  if (arg_node.kind() == parser::NodeKind::Ref) {
+    // Single-cell Ref: treat as a 1-element range so COUNTIF(A1, ">0") is
+    // well-defined. Error / blank surface via `resolve_ref` as a Value and
+    // are forwarded unchanged; the matcher handles them correctly.
+    out_cells->clear();
+    out_cells->push_back(ctx.resolve_ref(arg_node.as_ref(), arena, registry));
+    if (out_rows != nullptr) {
+      *out_rows = 1U;
+    }
+    if (out_cols != nullptr) {
+      *out_cols = 1U;
+    }
+    return true;
+  }
+  // Any other shape — literal, call, arithmetic, array — is not a range
+  // and Excel rejects it with #VALUE!.
+  *out_err_code = ErrorCode::Value;
+  return false;
+}
+
+// COUNTIF(range, criterion)
+//
+// Counts cells in `range` that match `criterion`. Errors encountered in
+// the range itself are silently skipped (per-cell #DIV/0! does NOT
+// propagate); an error CRITERION, however, propagates. An error in
+// resolving the range itself (e.g. `#REF!` from a missing sheet) is
+// surfaced directly.
+Value eval_countif_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx) {
+  if (call.as_call_arity() != 2) {
+    return Value::error(ErrorCode::Value);
+  }
+  std::vector<Value> cells;
+  ErrorCode range_err = ErrorCode::Value;
+  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &cells, &range_err)) {
+    return Value::error(range_err);
+  }
+  const Value criterion_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
+  if (criterion_val.is_error()) {
+    return criterion_val;
+  }
+  const ParsedCriterion parsed = parse_criterion(criterion_val);
+  double count = 0.0;
+  for (const Value& cell : cells) {
+    if (matches_criterion(cell, parsed)) {
+      count += 1.0;
+    }
+  }
+  return Value::number(count);
+}
+
+// SUMIF(range, criterion [, sum_range])
+//
+// When `sum_range` is omitted, the sum is taken over `range` itself. When
+// provided, `sum_range` must also be a range/Ref; the two are iterated in
+// parallel.
+//
+// Accepted divergence: if `sum_range` has a different cell count than
+// `range`, we iterate `min(range.size(), sum_range.size())` rather than
+// reshaping from the anchor as Excel does. Aligns with the
+// range-vs-direct divergence already documented in `eval_context.cpp`.
+//
+// Matching cells whose sum-side value is not numeric (text, bool, blank)
+// are excluded from the sum. Matches Excel — SUMIF sums only numbers even
+// when the criterion itself passed on a non-numeric cell.
+Value eval_sumif_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity != 2 && arity != 3) {
+    return Value::error(ErrorCode::Value);
+  }
+  std::vector<Value> criteria_cells;
+  ErrorCode range_err = ErrorCode::Value;
+  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &criteria_cells, &range_err)) {
+    return Value::error(range_err);
+  }
+  const Value criterion_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
+  if (criterion_val.is_error()) {
+    return criterion_val;
+  }
+  const ParsedCriterion parsed = parse_criterion(criterion_val);
+
+  // Choose the effective sum range: either the explicit third arg, or a
+  // copy of the criteria range when sum_range is omitted.
+  const std::vector<Value>* sum_cells_ptr = nullptr;
+  std::vector<Value> explicit_sum_cells;
+  if (arity == 3) {
+    ErrorCode sum_err = ErrorCode::Value;
+    if (!resolve_range_arg(call.as_call_arg(2), arena, registry, ctx, &explicit_sum_cells, &sum_err)) {
+      return Value::error(sum_err);
+    }
+    sum_cells_ptr = &explicit_sum_cells;
+  } else {
+    sum_cells_ptr = &criteria_cells;
+  }
+  const std::vector<Value>& sum_cells = *sum_cells_ptr;
+
+  const std::size_t n = criteria_cells.size() < sum_cells.size() ? criteria_cells.size() : sum_cells.size();
+  double sum = 0.0;
+  for (std::size_t i = 0; i < n; ++i) {
+    if (!matches_criterion(criteria_cells[i], parsed)) {
+      continue;
+    }
+    const Value& sv = sum_cells[i];
+    // Skip non-numeric sum-side cells (text/bool/blank/error). Matches
+    // Excel's SUMIF which sums only numbers.
+    if (!sv.is_number()) {
+      continue;
+    }
+    sum += sv.as_number();
+  }
+  return Value::number(sum);
+}
+
+// AVERAGEIF(range, criterion [, average_range])
+//
+// Returns the arithmetic mean of the matching numeric cells on the
+// averaging side, or `#DIV/0!` when no matches qualify. Non-numeric
+// matches (text, bool, blank) are excluded from both the numerator and
+// the denominator, matching Excel.
+Value eval_averageif_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                          const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity != 2 && arity != 3) {
+    return Value::error(ErrorCode::Value);
+  }
+  std::vector<Value> criteria_cells;
+  ErrorCode range_err = ErrorCode::Value;
+  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &criteria_cells, &range_err)) {
+    return Value::error(range_err);
+  }
+  const Value criterion_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
+  if (criterion_val.is_error()) {
+    return criterion_val;
+  }
+  const ParsedCriterion parsed = parse_criterion(criterion_val);
+
+  const std::vector<Value>* avg_cells_ptr = nullptr;
+  std::vector<Value> explicit_avg_cells;
+  if (arity == 3) {
+    ErrorCode avg_err = ErrorCode::Value;
+    if (!resolve_range_arg(call.as_call_arg(2), arena, registry, ctx, &explicit_avg_cells, &avg_err)) {
+      return Value::error(avg_err);
+    }
+    avg_cells_ptr = &explicit_avg_cells;
+  } else {
+    avg_cells_ptr = &criteria_cells;
+  }
+  const std::vector<Value>& avg_cells = *avg_cells_ptr;
+
+  const std::size_t n = criteria_cells.size() < avg_cells.size() ? criteria_cells.size() : avg_cells.size();
+  double sum = 0.0;
+  double count = 0.0;
+  for (std::size_t i = 0; i < n; ++i) {
+    if (!matches_criterion(criteria_cells[i], parsed)) {
+      continue;
+    }
+    const Value& av = avg_cells[i];
+    if (!av.is_number()) {
+      continue;
+    }
+    sum += av.as_number();
+    count += 1.0;
+  }
+  if (count == 0.0) {
+    return Value::error(ErrorCode::Div0);
+  }
+  return Value::number(sum / count);
+}
+
+// ---------------------------------------------------------------------------
+// COUNTIFS / SUMIFS / AVERAGEIFS / MAXIFS / MINIFS support
+// ---------------------------------------------------------------------------
+//
+// The five multi-criteria aggregators share the shape "N parallel (range,
+// criterion) pairs, each range the same size". Size mismatches are
+// `#VALUE!` in Excel 365 — stricter than SUMIF's clamp-to-min behaviour,
+// which we also match here.
+
+/// Resolves `pair_count` consecutive (range, criterion) pairs starting at
+/// argument index `first_pair_index` in `call`. Each criteria range is
+/// resolved through `resolve_range_arg` and must have exactly
+/// `expected_size` cells; otherwise the helper fails with `#VALUE!`.
+/// Each criterion sub-expression is evaluated once; an error Value
+/// propagates.
+///
+/// On success, appends the resolved cell vectors (in pair order) to
+/// `*out_cell_arrays` and appends the parsed criteria to `*out_parsed`,
+/// then returns `true`.
+///
+/// On failure, writes the error Value to propagate into `*out_err_value`
+/// and returns `false`. `*out_cell_arrays` / `*out_parsed` may have
+/// partially-accumulated state on failure; callers must not read them in
+/// that case.
+///
+/// `*out_parsed` uses `unique_ptr` indirection so the heap-resident
+/// `ParsedCriterion::rhs_storage` string is never relocated after parse
+/// and its `rhs_text` `string_view` stays stable across vector growth.
+bool resolve_criteria_pairs(const parser::AstNode& call, std::uint32_t first_pair_index, std::uint32_t pair_count,
+                            std::size_t expected_size, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx, std::vector<std::vector<Value>>* out_cell_arrays,
+                            std::vector<std::unique_ptr<ParsedCriterion>>* out_parsed, Value* out_err_value) {
+  out_cell_arrays->reserve(out_cell_arrays->size() + pair_count);
+  out_parsed->reserve(out_parsed->size() + pair_count);
+  for (std::uint32_t k = 0; k < pair_count; ++k) {
+    const std::uint32_t range_idx = first_pair_index + (k * 2);
+    const std::uint32_t crit_idx = range_idx + 1;
+    std::vector<Value> cells;
+    ErrorCode range_err = ErrorCode::Value;
+    if (!resolve_range_arg(call.as_call_arg(range_idx), arena, registry, ctx, &cells, &range_err)) {
+      *out_err_value = Value::error(range_err);
+      return false;
+    }
+    if (cells.size() != expected_size) {
+      *out_err_value = Value::error(ErrorCode::Value);
+      return false;
+    }
+    const Value crit_val = eval_node(call.as_call_arg(crit_idx), arena, registry, ctx);
+    if (crit_val.is_error()) {
+      *out_err_value = crit_val;
+      return false;
+    }
+    auto parsed = std::make_unique<ParsedCriterion>(parse_criterion(crit_val));
+    out_cell_arrays->push_back(std::move(cells));
+    out_parsed->push_back(std::move(parsed));
+  }
+  return true;
+}
+
+/// Tests whether position `i` in the parallel criteria-range arrays
+/// satisfies every parsed criterion. Short-circuits on the first failure.
+bool all_criteria_match(const std::vector<std::vector<Value>>& criteria_cells,
+                        const std::vector<std::unique_ptr<ParsedCriterion>>& parsed, std::size_t i) {
+  const std::size_t n = parsed.size();
+  for (std::size_t k = 0; k < n; ++k) {
+    if (!matches_criterion(criteria_cells[k][i], *parsed[k])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// COUNTIFS(range1, crit1 [, range2, crit2, ...])
+//
+// Counts cells where every `(range_k[i], crit_k)` pair matches in lockstep.
+// Arity must be even and >= 2. All criteria ranges must have the same cell
+// count; Excel 365 raises `#VALUE!` on shape mismatch (stricter than
+// SUMIF's clamp-to-min behaviour) and we match that.
+Value eval_countifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 2 || (arity % 2) != 0) {
+    return Value::error(ErrorCode::Value);
+  }
+  // Resolve the first criteria range to fix the expected size.
+  std::vector<std::vector<Value>> criteria_cells;
+  std::vector<std::unique_ptr<ParsedCriterion>> parsed;
+  std::vector<Value> first_cells;
+  ErrorCode range_err = ErrorCode::Value;
+  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &first_cells, &range_err)) {
+    return Value::error(range_err);
+  }
+  const std::size_t expected_size = first_cells.size();
+  const Value first_crit = eval_node(call.as_call_arg(1), arena, registry, ctx);
+  if (first_crit.is_error()) {
+    return first_crit;
+  }
+  criteria_cells.push_back(std::move(first_cells));
+  parsed.push_back(std::make_unique<ParsedCriterion>(parse_criterion(first_crit)));
+
+  const std::uint32_t remaining_pairs = (arity - 2) / 2;
+  if (remaining_pairs > 0) {
+    Value err = Value::number(0.0);
+    if (!resolve_criteria_pairs(call, /*first_pair_index=*/2, remaining_pairs, expected_size, arena, registry, ctx,
+                                &criteria_cells, &parsed, &err)) {
+      return err;
+    }
+  }
+
+  double count = 0.0;
+  for (std::size_t i = 0; i < expected_size; ++i) {
+    if (all_criteria_match(criteria_cells, parsed, i)) {
+      count += 1.0;
+    }
+  }
+  return Value::number(count);
+}
+
+// SUMIFS(sum_range, range1, crit1 [, range2, crit2, ...])
+//
+// Sums cells of `sum_range` where every parallel `(range_k[i], crit_k)`
+// pair matches. Arity must be odd and >= 3. `sum_range` and every criteria
+// range must share the same cell count; mismatch -> `#VALUE!`. Non-numeric
+// cells in `sum_range` at matching positions are skipped. Empty match
+// pool -> `0`.
+Value eval_sumifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 3 || (arity % 2) != 1) {
+    return Value::error(ErrorCode::Value);
+  }
+  std::vector<Value> sum_cells;
+  ErrorCode range_err = ErrorCode::Value;
+  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &sum_cells, &range_err)) {
+    return Value::error(range_err);
+  }
+  const std::size_t expected_size = sum_cells.size();
+
+  std::vector<std::vector<Value>> criteria_cells;
+  std::vector<std::unique_ptr<ParsedCriterion>> parsed;
+  const std::uint32_t pair_count = (arity - 1) / 2;
+  Value err = Value::number(0.0);
+  if (!resolve_criteria_pairs(call, /*first_pair_index=*/1, pair_count, expected_size, arena, registry, ctx,
+                              &criteria_cells, &parsed, &err)) {
+    return err;
+  }
+
+  double sum = 0.0;
+  for (std::size_t i = 0; i < expected_size; ++i) {
+    if (!all_criteria_match(criteria_cells, parsed, i)) {
+      continue;
+    }
+    const Value& sv = sum_cells[i];
+    if (!sv.is_number()) {
+      continue;
+    }
+    sum += sv.as_number();
+  }
+  return Value::number(sum);
+}
+
+// AVERAGEIFS(avg_range, range1, crit1 [, range2, crit2, ...])
+//
+// Returns the mean of the numeric cells in `avg_range` at positions where
+// every parallel criterion matches. Empty match pool -> `#DIV/0!`. Non-
+// numeric cells in `avg_range` at matching positions are excluded from
+// both the numerator and the denominator, matching Excel.
+Value eval_averageifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 3 || (arity % 2) != 1) {
+    return Value::error(ErrorCode::Value);
+  }
+  std::vector<Value> avg_cells;
+  ErrorCode range_err = ErrorCode::Value;
+  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &avg_cells, &range_err)) {
+    return Value::error(range_err);
+  }
+  const std::size_t expected_size = avg_cells.size();
+
+  std::vector<std::vector<Value>> criteria_cells;
+  std::vector<std::unique_ptr<ParsedCriterion>> parsed;
+  const std::uint32_t pair_count = (arity - 1) / 2;
+  Value err = Value::number(0.0);
+  if (!resolve_criteria_pairs(call, /*first_pair_index=*/1, pair_count, expected_size, arena, registry, ctx,
+                              &criteria_cells, &parsed, &err)) {
+    return err;
+  }
+
+  double sum = 0.0;
+  double count = 0.0;
+  for (std::size_t i = 0; i < expected_size; ++i) {
+    if (!all_criteria_match(criteria_cells, parsed, i)) {
+      continue;
+    }
+    const Value& av = avg_cells[i];
+    if (!av.is_number()) {
+      continue;
+    }
+    sum += av.as_number();
+    count += 1.0;
+  }
+  if (count == 0.0) {
+    return Value::error(ErrorCode::Div0);
+  }
+  return Value::number(sum / count);
+}
+
+// MAXIFS(max_range, range1, crit1 [, range2, crit2, ...])
+//
+// Returns the maximum numeric value in `max_range` at positions where
+// every parallel criterion matches. Non-numeric cells at matching
+// positions are skipped. Empty numeric pool -> `0` (Excel's quirk — no
+// `#NUM!` even though "max of empty" is mathematically undefined).
+Value eval_maxifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 3 || (arity % 2) != 1) {
+    return Value::error(ErrorCode::Value);
+  }
+  std::vector<Value> max_cells;
+  ErrorCode range_err = ErrorCode::Value;
+  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &max_cells, &range_err)) {
+    return Value::error(range_err);
+  }
+  const std::size_t expected_size = max_cells.size();
+
+  std::vector<std::vector<Value>> criteria_cells;
+  std::vector<std::unique_ptr<ParsedCriterion>> parsed;
+  const std::uint32_t pair_count = (arity - 1) / 2;
+  Value err = Value::number(0.0);
+  if (!resolve_criteria_pairs(call, /*first_pair_index=*/1, pair_count, expected_size, arena, registry, ctx,
+                              &criteria_cells, &parsed, &err)) {
+    return err;
+  }
+
+  bool any = false;
+  double best = 0.0;
+  for (std::size_t i = 0; i < expected_size; ++i) {
+    if (!all_criteria_match(criteria_cells, parsed, i)) {
+      continue;
+    }
+    const Value& mv = max_cells[i];
+    if (!mv.is_number()) {
+      continue;
+    }
+    const double x = mv.as_number();
+    if (!any || x > best) {
+      best = x;
+      any = true;
+    }
+  }
+  if (!any) {
+    return Value::number(0.0);
+  }
+  return Value::number(best);
+}
+
+// MINIFS(min_range, range1, crit1 [, range2, crit2, ...])
+//
+// Symmetric to MAXIFS: returns the minimum numeric value. Empty numeric
+// pool -> `0`.
+Value eval_minifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 3 || (arity % 2) != 1) {
+    return Value::error(ErrorCode::Value);
+  }
+  std::vector<Value> min_cells;
+  ErrorCode range_err = ErrorCode::Value;
+  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &min_cells, &range_err)) {
+    return Value::error(range_err);
+  }
+  const std::size_t expected_size = min_cells.size();
+
+  std::vector<std::vector<Value>> criteria_cells;
+  std::vector<std::unique_ptr<ParsedCriterion>> parsed;
+  const std::uint32_t pair_count = (arity - 1) / 2;
+  Value err = Value::number(0.0);
+  if (!resolve_criteria_pairs(call, /*first_pair_index=*/1, pair_count, expected_size, arena, registry, ctx,
+                              &criteria_cells, &parsed, &err)) {
+    return err;
+  }
+
+  bool any = false;
+  double best = 0.0;
+  for (std::size_t i = 0; i < expected_size; ++i) {
+    if (!all_criteria_match(criteria_cells, parsed, i)) {
+      continue;
+    }
+    const Value& mv = min_cells[i];
+    if (!mv.is_number()) {
+      continue;
+    }
+    const double x = mv.as_number();
+    if (!any || x < best) {
+      best = x;
+      any = true;
+    }
+  }
+  if (!any) {
+    return Value::number(0.0);
+  }
+  return Value::number(best);
+}
+
+// ---------------------------------------------------------------------------
+// CHOOSE / INDEX / MATCH / VLOOKUP / HLOOKUP (lookup & reference)
+// ---------------------------------------------------------------------------
+
+// Axis along which VLOOKUP / HLOOKUP scan their table_array rectangle for the
+// lookup_value. `Column` means "walk top-down through the first column"
+// (VLOOKUP); `Row` means "walk left-to-right through the first row"
+// (HLOOKUP).
+enum class LookupAxis : std::uint8_t { Column, Row };
+
+// Linear scan for VLOOKUP / HLOOKUP. Walks the first column (axis=Column) or
+// the first row (axis=Row) of the `flat` rectangle (rows x cols, row-major)
+// for `lookup_value`, using approximate (largest <= value) or exact (first
+// hit) matching.
+//
+// Returns the 0-based offset along the scanned axis on match, or `SIZE_MAX`
+// when no match was found.
+//
+// In exact mode, text-vs-text matching always routes through
+// `wildcard_match` so the caller doesn't need a separate "has wildcards?"
+// branch. `~X` always means "literal X" and a pattern with no `*` / `?` /
+// `~` degenerates to a byte-exact compare, matching Excel's rules.
+//
+// Cross-type comparisons (Number vs Text, Bool vs anything else) produce "no
+// match" - the scanned cell is skipped. This is the same accepted divergence
+// MATCH documents for its approximate path.
+std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std::uint32_t cols, LookupAxis axis,
+                        const Value& lookup_value, bool approximate) {
+  const std::size_t n = axis == LookupAxis::Column ? rows : cols;
+  if (n == 0) {
+    return SIZE_MAX;
+  }
+  // Index the i-th cell along the scan axis. For Column we walk (i, 0);
+  // for Row we walk (0, i). The flat buffer is row-major so the linear
+  // index is `i * cols + 0` (Column) or `0 * cols + i` (Row).
+  auto cell_at = [&](std::size_t i) -> const Value& {
+    const std::size_t flat_idx = axis == LookupAxis::Column ? (i * static_cast<std::size_t>(cols)) : i;
+    return flat[flat_idx];
+  };
+
+  if (!approximate) {
+    // Exact match: first hit wins. Text vs Text is routed through the
+    // wildcard matcher unconditionally — with no metacharacters the match
+    // degenerates to case-insensitive byte equality, and `~X` is always
+    // treated as a literal X. Every other kind-pairing is a literal
+    // equality compare.
+    if (lookup_value.is_text()) {
+      const std::string pat_lower = strings::to_ascii_lower(lookup_value.as_text());
+      for (std::size_t i = 0; i < n; ++i) {
+        const Value& cell = cell_at(i);
+        if (!cell.is_text()) {
+          continue;
+        }
+        const std::string cell_lower = strings::to_ascii_lower(cell.as_text());
+        if (wildcard_match(pat_lower, cell_lower)) {
+          return i;
+        }
+      }
+      return SIZE_MAX;
+    }
+    if (lookup_value.is_number() || lookup_value.is_blank()) {
+      const double target = lookup_value.is_blank() ? 0.0 : lookup_value.as_number();
+      for (std::size_t i = 0; i < n; ++i) {
+        const Value& cell = cell_at(i);
+        if (cell.is_number() && cell.as_number() == target) {
+          return i;
+        }
+        if (cell.is_blank() && target == 0.0) {
+          return i;
+        }
+      }
+      return SIZE_MAX;
+    }
+    if (lookup_value.is_boolean()) {
+      const bool target = lookup_value.as_boolean();
+      for (std::size_t i = 0; i < n; ++i) {
+        const Value& cell = cell_at(i);
+        if (cell.is_boolean() && cell.as_boolean() == target) {
+          return i;
+        }
+      }
+      return SIZE_MAX;
+    }
+    return SIZE_MAX;
+  }
+
+  // Approximate match: ascending-assumed scan. Record the last position
+  // whose value is <= lookup_value and stop at the first strictly greater
+  // cell. Wildcards are NEVER honoured here (Excel treats them as literal
+  // text in approximate mode).
+  auto cmp_numeric = [](double x, double y) -> int {
+    if (x < y) {
+      return -1;
+    }
+    if (x > y) {
+      return 1;
+    }
+    return 0;
+  };
+  std::size_t best = SIZE_MAX;
+  for (std::size_t i = 0; i < n; ++i) {
+    const Value& cell = cell_at(i);
+    int cmp = 0;  // sign of (cell - lookup_value)
+    bool comparable = false;
+    if (lookup_value.is_text() && cell.is_text()) {
+      cmp = strings::case_insensitive_compare(cell.as_text(), lookup_value.as_text());
+      comparable = true;
+    } else if ((lookup_value.is_number() || lookup_value.is_blank()) && (cell.is_number() || cell.is_blank())) {
+      const double lv = lookup_value.is_blank() ? 0.0 : lookup_value.as_number();
+      const double cv = cell.is_blank() ? 0.0 : cell.as_number();
+      cmp = cmp_numeric(cv, lv);
+      comparable = true;
+    } else if (lookup_value.is_boolean() && cell.is_boolean()) {
+      const int lb = lookup_value.as_boolean() ? 1 : 0;
+      const int cb = cell.as_boolean() ? 1 : 0;
+      cmp = cmp_numeric(cb, lb);
+      comparable = true;
+    }
+    if (!comparable) {
+      // Cross-type: skip. Accepted divergence from Excel's full ordering.
+      continue;
+    }
+    if (cmp <= 0) {
+      best = i;
+      continue;
+    }
+    break;
+  }
+  return best;
+}
+
+// CHOOSE(index_num, value1, value2, ...)
+//
+// Evaluates `index_num`, truncates to int, and returns only the corresponding
+// argument subtree (`CHOOSE(2, a, b, c)` returns `b` and never touches `a`
+// or `c`). Out-of-range indices yield `#VALUE!`; a numeric coercion failure
+// on `index_num` also yields `#VALUE!`. Errors in `index_num` propagate.
+// Errors in the chosen value also propagate; unselected arguments are never
+// evaluated.
+Value eval_choose_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  // Need at least index_num plus one value.
+  if (arity < 2) {
+    return Value::error(ErrorCode::Value);
+  }
+  const Value idx_val = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (idx_val.is_error()) {
+    return idx_val;
+  }
+  auto idx_num = coerce_to_number(idx_val);
+  if (!idx_num) {
+    return Value::error(idx_num.error());
+  }
+  // Excel truncates (toward zero) rather than rounds: CHOOSE(2.9, ...)
+  // selects the 2nd value, not the 3rd.
+  const double raw = std::floor(idx_num.value());
+  if (!(raw >= 1.0 && raw <= static_cast<double>(arity - 1))) {
+    return Value::error(ErrorCode::Value);
+  }
+  const auto n = static_cast<std::uint32_t>(raw);
+  return eval_node(call.as_call_arg(n), arena, registry, ctx);
+}
+
+// INDEX(array, row_num, [column_num])
+//
+// Returns a single cell from `array` by 1-based (row_num, column_num). The
+// source array must be a `RangeOp(Ref, Ref)` or a single `Ref`; anything
+// else is `#VALUE!`. Out-of-bounds indices are `#REF!`. Negative or
+// non-coercible indices are `#VALUE!`.
+//
+// Shape disambiguation for the 2-arg form: if the array is 1-D (rows == 1
+// or cols == 1), the sole index selects along the non-singleton dimension.
+// For a 2-D array with only two args provided, `row_num` selects the row
+// and the "entire row" result would be needed for the column — unsupported
+// today, so we return `#VALUE!` (documented divergence from Excel 365
+// which spills in that case).
+//
+// Accepted divergence: a zero in either index dimension is "return the
+// whole row/column" in Excel 365 via dynamic arrays. Scalar array results
+// are not wired up yet, so INDEX returns `#VALUE!` for that shape.
+Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity != 2 && arity != 3) {
+    return Value::error(ErrorCode::Value);
+  }
+  std::vector<Value> cells;
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  ErrorCode range_err = ErrorCode::Value;
+  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &cells, &range_err, &rows, &cols)) {
+    return Value::error(range_err);
+  }
+  if (rows == 0U || cols == 0U) {
+    // Defensive: expand_range always produces a positive rectangle today.
+    return Value::error(ErrorCode::Ref);
+  }
+
+  // row_num is required (arity 2 or 3), col_num is optional.
+  const Value row_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
+  if (row_val.is_error()) {
+    return row_val;
+  }
+  auto row_num_exp = coerce_to_number(row_val);
+  if (!row_num_exp) {
+    return Value::error(row_num_exp.error());
+  }
+  const double row_raw = std::floor(row_num_exp.value());
+  if (row_raw < 0.0) {
+    return Value::error(ErrorCode::Value);
+  }
+  const auto row_idx = static_cast<std::uint32_t>(row_raw);
+
+  std::uint32_t col_idx = 0;
+  bool col_explicit = false;
+  if (arity == 3) {
+    const Value col_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
+    if (col_val.is_error()) {
+      return col_val;
+    }
+    auto col_num_exp = coerce_to_number(col_val);
+    if (!col_num_exp) {
+      return Value::error(col_num_exp.error());
+    }
+    const double col_raw = std::floor(col_num_exp.value());
+    if (col_raw < 0.0) {
+      return Value::error(ErrorCode::Value);
+    }
+    col_idx = static_cast<std::uint32_t>(col_raw);
+    col_explicit = true;
+  }
+
+  // Resolve (row_idx, col_idx) into a (0-based) row / column within the
+  // rectangle. The logic depends on shape and how many indices the caller
+  // provided. Zero values are "whole dimension" in Excel's spill model —
+  // unsupported here.
+  std::uint32_t r = 0;
+  std::uint32_t c = 0;
+  if (!col_explicit) {
+    // Two-arg form.
+    if (rows == 1U && cols == 1U) {
+      // 1x1 range: row_num must be 1 (or 0 "whole", which we reject).
+      if (row_idx != 1U) {
+        return Value::error(ErrorCode::Ref);
+      }
+      r = 0;
+      c = 0;
+    } else if (rows == 1U) {
+      // Row vector: sole index selects the column.
+      if (row_idx == 0U) {
+        return Value::error(ErrorCode::Value);
+      }
+      if (row_idx > cols) {
+        return Value::error(ErrorCode::Ref);
+      }
+      r = 0;
+      c = row_idx - 1U;
+    } else if (cols == 1U) {
+      // Column vector: sole index selects the row.
+      if (row_idx == 0U) {
+        return Value::error(ErrorCode::Value);
+      }
+      if (row_idx > rows) {
+        return Value::error(ErrorCode::Ref);
+      }
+      r = row_idx - 1U;
+      c = 0;
+    } else {
+      // 2-D array with only row selector: Excel would spill the whole row;
+      // we don't support scalar spill results yet.
+      return Value::error(ErrorCode::Value);
+    }
+  } else {
+    // Three-arg form.
+    if (row_idx == 0U || col_idx == 0U) {
+      // Whole-row / whole-column via dynamic-array spill — unsupported.
+      return Value::error(ErrorCode::Value);
+    }
+    if (rows == 1U) {
+      // Row vector: row_num must be 1.
+      if (row_idx != 1U) {
+        return Value::error(ErrorCode::Ref);
+      }
+      if (col_idx > cols) {
+        return Value::error(ErrorCode::Ref);
+      }
+      r = 0;
+      c = col_idx - 1U;
+    } else if (cols == 1U) {
+      // Column vector: col_num must be 1.
+      if (col_idx != 1U) {
+        return Value::error(ErrorCode::Ref);
+      }
+      if (row_idx > rows) {
+        return Value::error(ErrorCode::Ref);
+      }
+      r = row_idx - 1U;
+      c = 0;
+    } else {
+      if (row_idx > rows || col_idx > cols) {
+        return Value::error(ErrorCode::Ref);
+      }
+      r = row_idx - 1U;
+      c = col_idx - 1U;
+    }
+  }
+
+  const std::size_t flat = (static_cast<std::size_t>(r) * static_cast<std::size_t>(cols)) + static_cast<std::size_t>(c);
+  if (flat >= cells.size()) {
+    return Value::error(ErrorCode::Ref);
+  }
+  return cells[flat];
+}
+
+// MATCH(lookup_value, lookup_array, [match_type])
+//
+// Returns the 1-based position of `lookup_value` inside the 1-D
+// `lookup_array`. `lookup_array` must be a `RangeOp(Ref, Ref)` or a single
+// `Ref` with a 1-D shape (row vector or column vector); a 2-D range yields
+// `#N/A`.
+//
+// match_type semantics:
+//   *  1 (default) - ascending array; returns the largest position whose
+//      value is <= lookup_value. Wildcards are NOT honoured.
+//   *  0           - exact match with DOS-style wildcards (`*`, `?`, `~`)
+//      for text targets; first hit wins. No match -> `#N/A`.
+//   * -1           - descending array; returns the largest position whose
+//      value is >= lookup_value.
+//
+// Cross-type comparison is not implemented beyond "same rank, ordered" for
+// approximate modes: a cell whose kind doesn't match the lookup_value rank
+// is treated as a non-match and never participates in the approximate
+// ranking. This is a documented accepted divergence.
+Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity != 2 && arity != 3) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  // lookup_value (scalar). Errors propagate; Blank is treated as 0 for the
+  // numeric comparison path below, matching Excel.
+  const Value lookup = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (lookup.is_error()) {
+    return lookup;
+  }
+
+  // lookup_array: must be a range / Ref with a 1-D shape.
+  std::vector<Value> cells;
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  ErrorCode range_err = ErrorCode::Value;
+  if (!resolve_range_arg(call.as_call_arg(1), arena, registry, ctx, &cells, &range_err, &rows, &cols)) {
+    return Value::error(range_err);
+  }
+  if (rows != 1U && cols != 1U) {
+    // 2-D array to MATCH is not supported and Excel reports #N/A.
+    return Value::error(ErrorCode::NA);
+  }
+
+  // match_type: default 1. Truncate toward zero and clamp into {-1, 0, 1};
+  // any other value is rejected with #N/A (Excel's effective behaviour).
+  int match_type = 1;
+  if (arity == 3) {
+    const Value mt_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
+    if (mt_val.is_error()) {
+      return mt_val;
+    }
+    auto mt_num = coerce_to_number(mt_val);
+    if (!mt_num) {
+      return Value::error(mt_num.error());
+    }
+    const double mt_raw = std::floor(mt_num.value());
+    if (mt_raw == -1.0) {
+      match_type = -1;
+    } else if (mt_raw == 0.0) {
+      match_type = 0;
+    } else if (mt_raw == 1.0) {
+      match_type = 1;
+    } else {
+      return Value::error(ErrorCode::NA);
+    }
+  }
+
+  const std::size_t n = cells.size();
+  if (n == 0) {
+    return Value::error(ErrorCode::NA);
+  }
+
+  // Exact match (match_type == 0): honours wildcards for Text lookup,
+  // case-insensitive ASCII equality otherwise. Non-matching cell kinds do
+  // not count.
+  if (match_type == 0) {
+    if (lookup.is_text()) {
+      // The wildcard matcher handles `*` / `?` as metacharacters and
+      // `~X` as an escaped literal. Running it on a pattern with no real
+      // wildcards is still correct — `~*` becomes a literal `*` compare,
+      // `foo` becomes a byte-exact compare. Lowering both sides gives
+      // Excel's case-insensitive ASCII equality.
+      const std::string pat_lower = strings::to_ascii_lower(lookup.as_text());
+      for (std::size_t i = 0; i < n; ++i) {
+        const Value& cell = cells[i];
+        if (!cell.is_text()) {
+          continue;
+        }
+        const std::string cell_lower = strings::to_ascii_lower(cell.as_text());
+        if (wildcard_match(pat_lower, cell_lower)) {
+          return Value::number(static_cast<double>(i + 1));
+        }
+      }
+      return Value::error(ErrorCode::NA);
+    }
+    if (lookup.is_number() || lookup.is_blank()) {
+      const double target = lookup.is_blank() ? 0.0 : lookup.as_number();
+      for (std::size_t i = 0; i < n; ++i) {
+        const Value& cell = cells[i];
+        if (cell.is_number() && cell.as_number() == target) {
+          return Value::number(static_cast<double>(i + 1));
+        }
+        if (cell.is_blank() && target == 0.0) {
+          return Value::number(static_cast<double>(i + 1));
+        }
+      }
+      return Value::error(ErrorCode::NA);
+    }
+    if (lookup.is_boolean()) {
+      const bool target = lookup.as_boolean();
+      for (std::size_t i = 0; i < n; ++i) {
+        const Value& cell = cells[i];
+        if (cell.is_boolean() && cell.as_boolean() == target) {
+          return Value::number(static_cast<double>(i + 1));
+        }
+      }
+      return Value::error(ErrorCode::NA);
+    }
+    return Value::error(ErrorCode::NA);
+  }
+
+  // Approximate match (match_type == 1 or -1). Linear scan; we do NOT
+  // honour wildcards here (Excel treats them as literals in approximate
+  // mode). Cross-type comparisons are skipped (treated as non-match).
+  auto cmp_numeric = [](double x, double y) -> int {
+    if (x < y) {
+      return -1;
+    }
+    if (x > y) {
+      return 1;
+    }
+    return 0;
+  };
+  auto cmp_text = [](std::string_view a, std::string_view b) -> int { return strings::case_insensitive_compare(a, b); };
+
+  // `last_valid_pos` is the running best position under the ordering rule.
+  // For type=+1 we want the largest position whose value is <= target; for
+  // type=-1 the largest position whose value is >= target.
+  std::size_t best_pos = 0;  // 1-based; 0 means "not found yet".
+  for (std::size_t i = 0; i < n; ++i) {
+    const Value& cell = cells[i];
+    int cmp = 0;  // sign of (cell - lookup)
+    bool comparable = false;
+    if (lookup.is_text() && cell.is_text()) {
+      cmp = cmp_text(cell.as_text(), lookup.as_text());
+      comparable = true;
+    } else if ((lookup.is_number() || lookup.is_blank()) && (cell.is_number() || cell.is_blank())) {
+      const double lv = lookup.is_blank() ? 0.0 : lookup.as_number();
+      const double cv = cell.is_blank() ? 0.0 : cell.as_number();
+      cmp = cmp_numeric(cv, lv);
+      comparable = true;
+    } else if (lookup.is_boolean() && cell.is_boolean()) {
+      const int lb = lookup.as_boolean() ? 1 : 0;
+      const int cb = cell.as_boolean() ? 1 : 0;
+      cmp = cmp_numeric(cb, lb);
+      comparable = true;
+    }
+    if (!comparable) {
+      // Cross-type: skip. Accepted divergence from Excel's full ordering.
+      continue;
+    }
+    if (match_type == 1) {
+      // Ascending: record last position with cell <= lookup. Stop at the
+      // first cell strictly greater than lookup.
+      if (cmp <= 0) {
+        best_pos = i + 1;
+        continue;
+      }
+      break;
+    }
+    // match_type == -1, descending: record last position with cell >=
+    // lookup. Stop at the first cell strictly less than lookup.
+    if (cmp >= 0) {
+      best_pos = i + 1;
+      continue;
+    }
+    break;
+  }
+  if (best_pos == 0) {
+    return Value::error(ErrorCode::NA);
+  }
+  return Value::number(static_cast<double>(best_pos));
+}
+
+// VLOOKUP(lookup_value, table_array, col_index_num, [range_lookup])
+//
+// Scans the first column of `table_array` for `lookup_value` and returns
+// the cell at (matched_row, col_index_num - 1). `range_lookup` defaults to
+// TRUE (approximate match); FALSE enables exact match with DOS-style
+// wildcards on Text lookup values (`*`, `?`, `~` escape). Approximate mode
+// expects the first column to be ascending and returns the largest row
+// whose value is <= lookup_value; `#N/A` when every first-column cell is
+// already greater. Wildcards are NOT honoured in approximate mode.
+//
+// Error lookup_value propagates unchanged. Cross-type comparisons skip
+// (accepted divergence, same as MATCH).
+Value eval_vlookup_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity != 3 && arity != 4) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  const Value lookup = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (lookup.is_error()) {
+    return lookup;
+  }
+
+  std::vector<Value> cells;
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  ErrorCode range_err = ErrorCode::Value;
+  if (!resolve_range_arg(call.as_call_arg(1), arena, registry, ctx, &cells, &range_err, &rows, &cols)) {
+    return Value::error(range_err);
+  }
+  if (rows == 0U || cols == 0U) {
+    return Value::error(ErrorCode::Ref);
+  }
+
+  const Value col_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
+  if (col_val.is_error()) {
+    return col_val;
+  }
+  auto col_num_exp = coerce_to_number(col_val);
+  if (!col_num_exp) {
+    return Value::error(col_num_exp.error());
+  }
+  const double col_raw = std::floor(col_num_exp.value());
+  if (col_raw < 1.0) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (col_raw > static_cast<double>(cols)) {
+    return Value::error(ErrorCode::Ref);
+  }
+  const auto col_idx = static_cast<std::uint32_t>(col_raw);
+
+  // range_lookup defaults to TRUE when omitted.
+  bool approximate = true;
+  if (arity == 4) {
+    const Value rl_val = eval_node(call.as_call_arg(3), arena, registry, ctx);
+    if (rl_val.is_error()) {
+      return rl_val;
+    }
+    auto rl_bool = coerce_to_bool(rl_val);
+    if (!rl_bool) {
+      return Value::error(rl_bool.error());
+    }
+    approximate = rl_bool.value();
+  }
+
+  const std::size_t off = lookup_scan(cells, rows, cols, LookupAxis::Column, lookup, approximate);
+  if (off == SIZE_MAX) {
+    return Value::error(ErrorCode::NA);
+  }
+  const std::size_t flat = (off * static_cast<std::size_t>(cols)) + static_cast<std::size_t>(col_idx - 1U);
+  if (flat >= cells.size()) {
+    // Defensive; the bounds checks above should already rule this out.
+    return Value::error(ErrorCode::Ref);
+  }
+  return cells[flat];
+}
+
+// HLOOKUP(lookup_value, table_array, row_index_num, [range_lookup])
+//
+// Symmetric to VLOOKUP: scans the first row of `table_array` left-to-right
+// for `lookup_value` and returns the cell at (row_index_num - 1,
+// matched_col). All other rules (wildcards, range_lookup semantics, edge
+// cases) mirror VLOOKUP with rows/cols swapped.
+Value eval_hlookup_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity != 3 && arity != 4) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  const Value lookup = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (lookup.is_error()) {
+    return lookup;
+  }
+
+  std::vector<Value> cells;
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  ErrorCode range_err = ErrorCode::Value;
+  if (!resolve_range_arg(call.as_call_arg(1), arena, registry, ctx, &cells, &range_err, &rows, &cols)) {
+    return Value::error(range_err);
+  }
+  if (rows == 0U || cols == 0U) {
+    return Value::error(ErrorCode::Ref);
+  }
+
+  const Value row_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
+  if (row_val.is_error()) {
+    return row_val;
+  }
+  auto row_num_exp = coerce_to_number(row_val);
+  if (!row_num_exp) {
+    return Value::error(row_num_exp.error());
+  }
+  const double row_raw = std::floor(row_num_exp.value());
+  if (row_raw < 1.0) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (row_raw > static_cast<double>(rows)) {
+    return Value::error(ErrorCode::Ref);
+  }
+  const auto row_idx = static_cast<std::uint32_t>(row_raw);
+
+  bool approximate = true;
+  if (arity == 4) {
+    const Value rl_val = eval_node(call.as_call_arg(3), arena, registry, ctx);
+    if (rl_val.is_error()) {
+      return rl_val;
+    }
+    auto rl_bool = coerce_to_bool(rl_val);
+    if (!rl_bool) {
+      return Value::error(rl_bool.error());
+    }
+    approximate = rl_bool.value();
+  }
+
+  const std::size_t off = lookup_scan(cells, rows, cols, LookupAxis::Row, lookup, approximate);
+  if (off == SIZE_MAX) {
+    return Value::error(ErrorCode::NA);
+  }
+  const std::size_t flat = (static_cast<std::size_t>(row_idx - 1U) * static_cast<std::size_t>(cols)) + off;
+  if (flat >= cells.size()) {
+    return Value::error(ErrorCode::Ref);
+  }
+  return cells[flat];
+}
+
+using LazyImpl = Value (*)(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx);
 
 struct LazyEntry {
   const char* name;  // canonical UPPERCASE
@@ -295,9 +1504,22 @@ struct LazyEntry {
 };
 
 constexpr LazyEntry kLazyDispatch[] = {
+    {"AVERAGEIF", &eval_averageif_lazy},
+    {"AVERAGEIFS", &eval_averageifs_lazy},
+    {"CHOOSE", &eval_choose_lazy},
+    {"COUNTIF", &eval_countif_lazy},
+    {"COUNTIFS", &eval_countifs_lazy},
+    {"HLOOKUP", &eval_hlookup_lazy},
     {"IF", &eval_if_lazy},
     {"IFERROR", &eval_iferror_lazy},
     {"IFNA", &eval_ifna_lazy},
+    {"INDEX", &eval_index_lazy},
+    {"MATCH", &eval_match_lazy},
+    {"MAXIFS", &eval_maxifs_lazy},
+    {"MINIFS", &eval_minifs_lazy},
+    {"SUMIF", &eval_sumif_lazy},
+    {"SUMIFS", &eval_sumifs_lazy},
+    {"VLOOKUP", &eval_vlookup_lazy},
 };
 
 const LazyEntry* find_lazy(std::string_view name) noexcept {
@@ -311,7 +1533,8 @@ const LazyEntry* find_lazy(std::string_view name) noexcept {
 
 // Special-cased function-call dispatch.
 //
-// Lazy entries (`IF`, `IFERROR`, `IFNA`) are routed through the table above;
+// Lazy entries (`IF`, `IFERROR`, `IFNA`, the `*IF`/`*IFS` aggregators) are
+// routed through the table above;
 // each impl owns its own arity check and chooses which subtrees to evaluate.
 //
 // All other names are routed through `registry`: unknown name -> #NAME?,
@@ -359,8 +1582,7 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       // Refs -- is expanded. Anything else (INDIRECT(...), named ranges,
       // etc.) surfaces as #REF! here; full dynamic range resolution is
       // deferred.
-      if (lhs_ast.kind() != parser::NodeKind::Ref ||
-          rhs_ast.kind() != parser::NodeKind::Ref) {
+      if (lhs_ast.kind() != parser::NodeKind::Ref || rhs_ast.kind() != parser::NodeKind::Ref) {
         const Value err = Value::error(ErrorCode::Ref);
         if (def->propagate_errors) {
           return err;
@@ -396,8 +1618,7 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
   return def->impl(values.data(), static_cast<std::uint32_t>(values.size()), arena);
 }
 
-Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                const EvalContext& ctx) {
+Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
   switch (node.kind()) {
     case parser::NodeKind::Literal:
       return node.as_literal();
@@ -495,8 +1716,7 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
   return evaluate(node, arena, registry, EvalContext{});
 }
 
-Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-               const EvalContext& ctx) {
+Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
   return eval_node(node, arena, registry, ctx);
 }
 

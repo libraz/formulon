@@ -37,6 +37,12 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_text_test.cpp
   unit/eval/builtins_text2_test.cpp
   unit/eval/builtins_info_test.cpp
+  unit/eval/builtins_count_test.cpp
+  unit/eval/criteria_test.cpp
+  unit/eval/builtins_countif_test.cpp
+  unit/eval/builtins_ifs_test.cpp
+  unit/eval/builtins_lookup_test.cpp
+  unit/eval/builtins_vlookup_test.cpp
   unit/eval/text_ops_test.cpp
 )
 
