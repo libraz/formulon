@@ -1,0 +1,49 @@
+suite: countif
+description: COUNTIF / SUMIF / AVERAGEIF criteria engine
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  - id: countif_number_equality
+    setup: { A1: 10, A2: 20, A3: 10 }
+    formula: "=COUNTIF(A1:A3,10)"
+
+  - id: countif_explicit_gt
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=COUNTIF(A1:A3,\">15\")"
+
+  - id: countif_explicit_ne
+    setup: { A1: 10, A2: 20, A3: 10 }
+    formula: "=COUNTIF(A1:A3,\"<>10\")"
+
+  - id: countif_text_exact
+    setup: { A1: "apple", A2: "banana", A3: "apple" }
+    formula: "=COUNTIF(A1:A3,\"apple\")"
+
+  - id: countif_wildcard_star
+    setup: { A1: "apple", A2: "application", A3: "banana" }
+    formula: "=COUNTIF(A1:A3,\"app*\")"
+
+  - id: countif_wildcard_q
+    setup: { A1: "cat", A2: "cut", A3: "cart" }
+    formula: "=COUNTIF(A1:A3,\"c?t\")"
+
+  - id: countif_tilde_escapes_star
+    description: "~* matches a literal asterisk"
+    setup: { A1: "a*b", A2: "ab", A3: "a*c" }
+    formula: "=COUNTIF(A1:A3,\"a~*?\")"
+
+  - id: sumif_numeric_gt
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=SUMIF(A1:A3,\">15\")"
+
+  - id: sumif_with_sum_range
+    setup: { A1: "x", A2: "y", A3: "x", B1: 1, B2: 2, B3: 3 }
+    formula: "=SUMIF(A1:A3,\"x\",B1:B3)"
+
+  - id: averageif_numeric_gt
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=AVERAGEIF(A1:A3,\">15\")"
+
+  - id: averageif_no_match_returns_div0
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=AVERAGEIF(A1:A3,\">100\")"

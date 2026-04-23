@@ -67,3 +67,4 @@ formulon_apply_warnings(formulon_unit_tests)
 gtest_discover_tests(formulon_unit_tests)
 
 add_subdirectory(integration)
+add_subdirectory(oracle)

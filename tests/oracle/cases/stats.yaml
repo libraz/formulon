@@ -1,0 +1,47 @@
+suite: stats
+description: MEDIAN / MODE / LARGE / SMALL / PERCENTILE / QUARTILE / STDEV / VAR
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  - id: median_odd_count
+    formula: "=MEDIAN(1,2,3,4,5)"
+
+  - id: median_even_count
+    formula: "=MEDIAN(1,2,3,4)"
+
+  - id: median_skips_text_in_range
+    setup: { A1: 1, A2: "text", A3: 3, A4: 5 }
+    formula: "=MEDIAN(A1:A4)"
+
+  - id: mode_sngl_basic
+    formula: "=MODE.SNGL(1,2,2,3,3,3)"
+
+  - id: mode_no_duplicate_is_na
+    formula: "=MODE(1,2,3)"
+
+  - id: large_k2
+    formula: "=LARGE({10;5;30;20},2)"
+
+  - id: small_k1
+    formula: "=SMALL({10;5;30;20},1)"
+
+  - id: percentile_inc_median
+    formula: "=PERCENTILE.INC({1;2;3;4;5},0.5)"
+
+  - id: percentile_inc_zero
+    formula: "=PERCENTILE.INC({10;20;30},0)"
+
+  - id: quartile_inc_q1
+    formula: "=QUARTILE.INC({1;2;3;4;5;6;7;8;9},1)"
+
+  - id: stdev_s_sample
+    formula: "=STDEV.S(1,2,3,4,5)"
+
+  - id: stdev_p_population
+    formula: "=STDEV.P(1,2,3,4,5)"
+
+  - id: var_s_sample
+    formula: "=VAR.S(1,2,3,4,5)"
+
+  - id: var_p_population
+    formula: "=VAR.P(1,2,3,4,5)"

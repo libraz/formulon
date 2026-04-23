@@ -1,0 +1,46 @@
+# Known / accepted divergences between Formulon and Mac Excel 365 (ja-JP).
+#
+# Every entry documents a case where the oracle verifier would otherwise
+# fail. Two modes are supported:
+#
+#   mode: skip-oracle
+#     Case is excluded from oracle-gen and oracle-verify. Use sparingly —
+#     only for intrinsically non-reproducible results (NOW, RAND, TODAY
+#     without a seed injection) or oracle bugs (e.g. Mac Excel CVErr
+#     inconsistency). Prefer widening tolerance when possible.
+#
+#   tolerance: { abs: <N>, rel: <N> }
+#     Case is generated and verified, but the verifier accepts any result
+#     within the given absolute-or-relative tolerance. Default is strict
+#     equality (0.0 / 0.0). Use for expected ±1ulp drift on transcendental
+#     / statistical functions.
+#
+# Every entry MUST carry a `reason` string that cites an incident or
+# source; `prefer` optionally records which implementation we trust if the
+# two differ (Mac Excel 365 / Win Excel 365 / Formulon). PR reviewers
+# check this file's diff on any oracle-gen roll-forward.
+#
+# Schema (parsed by tools/oracle/oracle_gen.py::_load_divergence_skips
+# and by the divergence tooling planned in backup/plans/07 §7.4):
+#
+#   entries:
+#     - id: <case_id from tests/oracle/cases/*.yaml>
+#       reason: "..."
+#       mode: skip-oracle | tolerance      # default: tolerance
+#       tolerance: { abs: 1e-10, rel: 0 }
+#       prefer: mac-excel-365 | win-excel-365 | formulon
+#       first_noted: YYYY-MM-DD
+#       last_verified_excel_version: "16.xx.x (Build ...)"
+
+entries: []
+
+# -- How to add ------------------------------------------------------------
+# 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
+#    the diff: is the spread within expected floating point drift? Is it a
+#    documented Excel behaviour Formulon intentionally doesn't follow?
+# 2. Add an entry here with a reason citing either:
+#    - a stable Excel quirk (e.g. "Mac Excel returns #NUM! where Win Excel
+#      returns #VALUE! for SQRT(-0)")
+#    - a ±1ulp transcendental drift noted on a specific build
+# 3. Commit the YAML + refreshed golden together; PR description links the
+#    incident.

@@ -1,0 +1,160 @@
+{
+  "suite": "stats",
+  "description": "MEDIAN / MODE / LARGE / SMALL / PERCENTILE / QUARTILE / STDEV / VAR",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-23T01:57:45Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "median_odd_count",
+      "formula": "=MEDIAN(1,2,3,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "median_even_count",
+      "formula": "=MEDIAN(1,2,3,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.5
+      }
+    },
+    {
+      "id": "median_skips_text_in_range",
+      "formula": "=MEDIAN(A1:A4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "text"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "mode_sngl_basic",
+      "formula": "=MODE.SNGL(1,2,2,3,3,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "mode_no_duplicate_is_na",
+      "formula": "=MODE(1,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "large_k2",
+      "formula": "=LARGE({10;5;30;20},2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "small_k1",
+      "formula": "=SMALL({10;5;30;20},1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "percentile_inc_median",
+      "formula": "=PERCENTILE.INC({1;2;3;4;5},0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "percentile_inc_zero",
+      "formula": "=PERCENTILE.INC({10;20;30},0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "quartile_inc_q1",
+      "formula": "=QUARTILE.INC({1;2;3;4;5;6;7;8;9},1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "stdev_s_sample",
+      "formula": "=STDEV.S(1,2,3,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5811388300841898
+      }
+    },
+    {
+      "id": "stdev_p_population",
+      "formula": "=STDEV.P(1,2,3,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.4142135623730951
+      }
+    },
+    {
+      "id": "var_s_sample",
+      "formula": "=VAR.S(1,2,3,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.5
+      }
+    },
+    {
+      "id": "var_p_population",
+      "formula": "=VAR.P(1,2,3,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    }
+  ]
+}

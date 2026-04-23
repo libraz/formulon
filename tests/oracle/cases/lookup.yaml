@@ -1,0 +1,89 @@
+suite: lookup
+description: MATCH / INDEX / CHOOSE / VLOOKUP / HLOOKUP / XLOOKUP / XMATCH
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  # -- MATCH ---------------------------------------------------------------
+  - id: match_exact_found
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=MATCH(20,A1:A3,0)"
+
+  - id: match_exact_not_found
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=MATCH(25,A1:A3,0)"
+
+  - id: match_asc_smaller
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=MATCH(25,A1:A3,1)"
+
+  - id: match_desc_larger
+    setup: { A1: 30, A2: 20, A3: 10 }
+    formula: "=MATCH(15,A1:A3,-1)"
+
+  - id: match_text_wildcard
+    setup: { A1: "cat", A2: "cart", A3: "dog" }
+    formula: "=MATCH(\"ca?\",A1:A3,0)"
+
+  # -- INDEX ---------------------------------------------------------------
+  - id: index_single_cell
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=INDEX(A1:A3,2)"
+
+  - id: index_two_d
+    setup: { A1: 1, B1: 2, A2: 3, B2: 4 }
+    formula: "=INDEX(A1:B2,2,1)"
+
+  # -- CHOOSE --------------------------------------------------------------
+  - id: choose_second_value
+    formula: "=CHOOSE(2,\"a\",\"b\",\"c\")"
+
+  - id: choose_index_out_of_range
+    formula: "=CHOOSE(5,\"a\",\"b\",\"c\")"
+
+  # -- VLOOKUP -------------------------------------------------------------
+  - id: vlookup_exact_found
+    setup: { A1: "apple",  B1: 1,
+             A2: "banana", B2: 2,
+             A3: "cherry", B3: 3 }
+    formula: "=VLOOKUP(\"banana\",A1:B3,2,FALSE)"
+
+  - id: vlookup_exact_not_found
+    setup: { A1: "apple",  B1: 1,
+             A2: "banana", B2: 2 }
+    formula: "=VLOOKUP(\"cherry\",A1:B2,2,FALSE)"
+
+  - id: vlookup_approx
+    setup: { A1: 10, B1: "low",
+             A2: 20, B2: "mid",
+             A3: 30, B3: "high" }
+    formula: "=VLOOKUP(25,A1:B3,2,TRUE)"
+
+  # -- HLOOKUP -------------------------------------------------------------
+  - id: hlookup_exact_found
+    setup: { A1: "a", B1: "b", C1: "c",
+             A2: 10, B2: 20, C2: 30 }
+    formula: "=HLOOKUP(\"b\",A1:C2,2,FALSE)"
+
+  # -- XLOOKUP -------------------------------------------------------------
+  - id: xlookup_exact_found
+    setup: { A1: 10, B1: "ten",
+             A2: 20, B2: "twenty" }
+    formula: "=XLOOKUP(20,A1:A2,B1:B2)"
+
+  - id: xlookup_if_not_found
+    setup: { A1: 10, B1: "ten",
+             A2: 20, B2: "twenty" }
+    formula: "=XLOOKUP(30,A1:A2,B1:B2,\"missing\")"
+
+  - id: xlookup_match_mode_smaller
+    setup: { A1: 10, A2: 20, A3: 30, B1: "ten", B2: "twenty", B3: "thirty" }
+    formula: "=XLOOKUP(25,A1:A3,B1:B3,,-1)"
+
+  # -- XMATCH --------------------------------------------------------------
+  - id: xmatch_exact_found
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=XMATCH(20,A1:A3,0)"
+
+  - id: xmatch_wildcard
+    setup: { A1: "cat", A2: "cart", A3: "dog" }
+    formula: "=XMATCH(\"ca?\",A1:A3,2)"

@@ -1,0 +1,13 @@
+[project]
+name = "formulon-oracle"
+version = "0.0.0"
+description = "Oracle generator for Formulon (drives Mac Excel 365 via xlwings)"
+requires-python = ">=3.12"
+dependencies = [
+    "xlwings>=0.30.0",
+    "pyyaml>=6.0",
+]
+
+[tool.rye]
+managed = true
+virtual = true

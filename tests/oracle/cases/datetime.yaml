@@ -1,0 +1,91 @@
+suite: datetime
+description: DATE / TIME / YEAR / MONTH / DAY / HOUR / MINUTE / SECOND / WEEKDAY / EDATE / EOMONTH / DAYS
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # -- DATE / TIME ---------------------------------------------------------
+  - id: date_2024_4_22
+    formula: "=DATE(2024,4,22)"
+
+  - id: date_two_digit_year_adds_1900
+    description: "Excel: year < 1900 is biased by +1900"
+    formula: "=DATE(26,4,23)"
+
+  - id: date_negative_month_normalises
+    description: "DATE(2026, 0, 15) -> Dec 2025"
+    formula: "=DATE(2026,0,15)"
+
+  - id: date_day_overflow_normalises
+    formula: "=DATE(2024,1,32)"
+
+  - id: time_mid_day
+    formula: "=TIME(12,0,0)"
+
+  - id: time_wrap_25_hours
+    description: "TIME(25,0,0) wraps to 01:00 (fraction 1/24)"
+    formula: "=TIME(25,0,0)"
+
+  # -- YEAR / MONTH / DAY --------------------------------------------------
+  - id: year_of_serial
+    formula: "=YEAR(DATE(2024,4,22))"
+
+  - id: month_of_serial
+    formula: "=MONTH(DATE(2024,4,22))"
+
+  - id: day_of_serial
+    formula: "=DAY(DATE(2024,4,22))"
+
+  # -- HOUR / MINUTE / SECOND ---------------------------------------------
+  - id: hour_of_time
+    formula: "=HOUR(TIME(13,45,30))"
+
+  - id: minute_of_time
+    formula: "=MINUTE(TIME(13,45,30))"
+
+  - id: second_of_time
+    formula: "=SECOND(TIME(13,45,30))"
+
+  # -- WEEKDAY -------------------------------------------------------------
+  - id: weekday_default_sun1
+    description: "2024/4/22 is a Monday; return_type=1 gives 2"
+    formula: "=WEEKDAY(DATE(2024,4,22))"
+
+  - id: weekday_mon1
+    description: "return_type=2 (Mon=1) of Monday = 1"
+    formula: "=WEEKDAY(DATE(2024,4,22),2)"
+
+  - id: weekday_mon0
+    description: "return_type=3 (Mon=0) of Monday = 0"
+    formula: "=WEEKDAY(DATE(2024,4,22),3)"
+
+  # -- EDATE / EOMONTH / DAYS ---------------------------------------------
+  - id: edate_plus_three_months
+    formula: "=EDATE(DATE(2024,4,22),3)"
+
+  - id: eomonth_same_month
+    formula: "=EOMONTH(DATE(2024,4,15),0)"
+
+  - id: eomonth_forward_two
+    formula: "=EOMONTH(DATE(2024,4,15),2)"
+
+  - id: days_positive
+    formula: "=DAYS(DATE(2024,5,1),DATE(2024,4,22))"
+
+  - id: days_negative
+    formula: "=DAYS(DATE(2024,4,22),DATE(2024,5,1))"
+
+  # -- 1900 leap-bug -------------------------------------------------------
+  # N() forces a numeric read; xlwings can't coerce Feb 29 1900 to a Python
+  # datetime otherwise, and the cell's auto-applied date format would
+  # intercept the raw serial.
+  - id: date_1900_02_28_serial
+    description: "Excel: DATE(1900,2,28) -> 59"
+    formula: "=N(DATE(1900,2,28))"
+
+  - id: date_1900_ghost_serial
+    description: "Excel: DATE(1900,2,29) -> 60 (the ghost leap day)"
+    formula: "=N(DATE(1900,2,29))"
+
+  - id: date_1900_03_01_serial
+    description: "Excel: DATE(1900,3,1) -> 61 (NOT 60)"
+    formula: "=N(DATE(1900,3,1))"

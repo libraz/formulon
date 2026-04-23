@@ -1,0 +1,224 @@
+{
+  "suite": "datetime",
+  "description": "DATE / TIME / YEAR / MONTH / DAY / HOUR / MINUTE / SECOND / WEEKDAY / EDATE / EOMONTH / DAYS",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-23T01:57:45Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "date_2024_4_22",
+      "formula": "=DATE(2024,4,22)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45404.0
+      }
+    },
+    {
+      "id": "date_two_digit_year_adds_1900",
+      "formula": "=DATE(26,4,23)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9610.0
+      }
+    },
+    {
+      "id": "date_negative_month_normalises",
+      "formula": "=DATE(2026,0,15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46006.0
+      }
+    },
+    {
+      "id": "date_day_overflow_normalises",
+      "formula": "=DATE(2024,1,32)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45323.0
+      }
+    },
+    {
+      "id": "time_mid_day",
+      "formula": "=TIME(12,0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "time_wrap_25_hours",
+      "formula": "=TIME(25,0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.04166666666666674
+      }
+    },
+    {
+      "id": "year_of_serial",
+      "formula": "=YEAR(DATE(2024,4,22))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2024.0
+      }
+    },
+    {
+      "id": "month_of_serial",
+      "formula": "=MONTH(DATE(2024,4,22))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "day_of_serial",
+      "formula": "=DAY(DATE(2024,4,22))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 22.0
+      }
+    },
+    {
+      "id": "hour_of_time",
+      "formula": "=HOUR(TIME(13,45,30))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 13.0
+      }
+    },
+    {
+      "id": "minute_of_time",
+      "formula": "=MINUTE(TIME(13,45,30))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45.0
+      }
+    },
+    {
+      "id": "second_of_time",
+      "formula": "=SECOND(TIME(13,45,30))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "weekday_default_sun1",
+      "formula": "=WEEKDAY(DATE(2024,4,22))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "weekday_mon1",
+      "formula": "=WEEKDAY(DATE(2024,4,22),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "weekday_mon0",
+      "formula": "=WEEKDAY(DATE(2024,4,22),3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "edate_plus_three_months",
+      "formula": "=EDATE(DATE(2024,4,22),3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45495.0
+      }
+    },
+    {
+      "id": "eomonth_same_month",
+      "formula": "=EOMONTH(DATE(2024,4,15),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45412.0
+      }
+    },
+    {
+      "id": "eomonth_forward_two",
+      "formula": "=EOMONTH(DATE(2024,4,15),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45473.0
+      }
+    },
+    {
+      "id": "days_positive",
+      "formula": "=DAYS(DATE(2024,5,1),DATE(2024,4,22))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "days_negative",
+      "formula": "=DAYS(DATE(2024,4,22),DATE(2024,5,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -9.0
+      }
+    },
+    {
+      "id": "date_1900_02_28_serial",
+      "formula": "=N(DATE(1900,2,28))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 59.0
+      }
+    },
+    {
+      "id": "date_1900_ghost_serial",
+      "formula": "=N(DATE(1900,2,29))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "date_1900_03_01_serial",
+      "formula": "=N(DATE(1900,3,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 61.0
+      }
+    }
+  ]
+}

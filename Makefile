@@ -72,17 +72,60 @@ test-python:
 	@echo "test-python: not yet implemented (planned for M12)"
 	@exit 0
 
+# -- Oracle targets --------------------------------------------------------
+# Drive Mac Excel 365 to generate golden JSON (oracle-gen), and verify
+# Formulon's output against committed goldens (oracle-verify). The
+# generator is macOS-only; the verifier runs on any platform that can
+# build the test binary because it only reads committed JSON.
+#
+# Python tooling is managed by rye (https://rye.astral.sh/):
+#   tools/oracle/pyproject.toml      project + deps
+#   tools/oracle/requirements.lock   pinned versions (committed)
+#   tools/oracle/.venv/              local venv (gitignored)
+#
+# See tools/oracle/README.md and backup/plans/07-oracle-testing.md.
+ORACLE_DIR := tools/oracle
+ORACLE_VENV := $(ORACLE_DIR)/.venv
+ORACLE_GEN := $(ORACLE_VENV)/bin/python tools/oracle/oracle_gen.py
+
 oracle-setup:
-	@echo "oracle-setup: not yet implemented (planned for M7)"
-	@exit 0
+	@if [ "$$(uname -s)" != "Darwin" ]; then \
+	  echo "oracle-setup: xlwings driver is macOS only (got $$(uname -s))"; \
+	  exit 1; \
+	fi
+	@if ! command -v rye >/dev/null 2>&1; then \
+	  echo "oracle-setup: rye not found in PATH."; \
+	  echo "  Install from https://rye.astral.sh/ (curl -sSf https://rye.astral.sh/get | bash)"; \
+	  echo "  or: brew install rye"; \
+	  exit 1; \
+	fi
+	@(cd $(ORACLE_DIR) && rye sync)
+	@echo "oracle-setup: venv ready at $(ORACLE_VENV)"
+	@echo "Grant Automation permission: System Settings -> Privacy & Security"
+	@echo "    -> Automation -> (your terminal) -> Microsoft Excel"
 
 oracle-gen:
-	@echo "oracle-gen: not yet implemented (planned for M7)"
-	@exit 0
+	@if [ "$$(uname -s)" != "Darwin" ]; then \
+	  echo "oracle-gen: macOS only (got $$(uname -s))"; \
+	  exit 1; \
+	fi
+	@if [ ! -x "$(ORACLE_VENV)/bin/python" ]; then \
+	  echo "oracle-gen: run 'make oracle-setup' first"; \
+	  exit 1; \
+	fi
+	@$(ORACLE_GEN) $(if $(SUITE),--suite $(SUITE),)
 
 oracle-verify:
-	@echo "oracle-verify: not yet implemented (planned for M7)"
-	@exit 0
+	@if [ ! -f $(BUILD_DIR)/CMakeCache.txt ]; then \
+	  echo "oracle-verify: run 'make build' first"; exit 1; \
+	fi
+	@$(CMAKE) --build $(BUILD_DIR) --target formulon_oracle_tests --parallel
+	@# gtest_discover_tests caches the parameter list keyed by binary
+	@# timestamp, but our goldens aren't a build input. Force
+	@# rediscovery so newly regenerated golden/*.golden.json files land
+	@# in the ctest test list on the next run.
+	@rm -f $(BUILD_DIR)/tests/oracle/formulon_oracle_tests*_tests.cmake
+	@(cd $(BUILD_DIR) && $(CTEST) -L oracle --output-on-failure --timeout 60)
 
 fuzz-parser:
 	@echo "fuzz-parser: not yet implemented (planned for M8)"

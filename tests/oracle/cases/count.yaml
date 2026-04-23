@@ -1,0 +1,45 @@
+suite: count
+description: COUNT / COUNTA / COUNTBLANK aggregators
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+options:
+  date1904: false
+  iterative: false
+cases:
+  - id: count_three_literals
+    formula: "=COUNT(1,2,3)"
+
+  - id: count_skips_text_literal
+    formula: "=COUNT(1,\"x\",3)"
+
+  - id: count_skips_text_in_range
+    setup: { A1: 1, A2: "text", A3: 3 }
+    formula: "=COUNT(A1:A3)"
+
+  - id: count_skips_bool_in_range
+    description: "Excel: booleans do NOT count through a range (but DO as direct args)"
+    setup: { A1: 1, A2: true, A3: 3 }
+    formula: "=COUNT(A1:A3)"
+
+  - id: count_counts_bool_as_direct_arg
+    formula: "=COUNT(1,TRUE,3)"
+
+  - id: count_empty_range_all_blanks
+    formula: "=COUNT(A1:A3)"
+
+  - id: counta_includes_text_and_bool
+    setup: { A1: 1, A2: "x", A3: true }
+    formula: "=COUNTA(A1:A3)"
+
+  - id: counta_skips_blank_cell
+    setup: { A1: 1, A3: 3 }
+    formula: "=COUNTA(A1:A3)"
+
+  - id: countblank_counts_empty
+    setup: { A1: 1, A3: 3 }
+    formula: "=COUNTBLANK(A1:A3)"
+
+  - id: countblank_counts_empty_string
+    setup: { A1: "", A2: "x", A3: 3 }
+    description: "Excel: empty-string formula result counts as blank for COUNTBLANK"
+    formula: "=COUNTBLANK(A1:A3)"
