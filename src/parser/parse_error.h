@@ -58,6 +58,9 @@ enum class ParseErrorCode : std::uint16_t {
   InvalidRange,          // `=A1:foo` (rhs of `:` not ref-like)
   NestedFormulaTooDeep,  // recursion depth exceeded ParserOptions limit
   TooManyErrors,         // accumulated error count hit the cap
+  // Parser-level: LET-specific validation.
+  LetInvalidName,  // LET binding name is empty, clashes with an A1 cell ref, or fails the identifier syntax
+  LetWrongArity,   // LET argument count is even, or less than the required body-plus-one-binding minimum
 };
 
 /// Diagnostic severity. The parser currently emits only `Error`; `Warning`

@@ -24,6 +24,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/parser/ast_dump_test.cpp
   unit/parser/parser_test.cpp
   unit/parser/parser_error_test.cpp
+  unit/parser/let_test.cpp
   unit/eval/tree_walker_test.cpp
   unit/eval/eval_context_test.cpp
   unit/eval/eval_state_test.cpp
@@ -54,9 +55,11 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_vlookup_test.cpp
   unit/eval/builtins_xlookup_test.cpp
   unit/eval/builtins_datetime_test.cpp
+  unit/eval/builtins_datevalue_timevalue_test.cpp
   unit/eval/builtins_financial_test.cpp
   unit/eval/builtins_regression_test.cpp
   unit/eval/text_ops_test.cpp
+  unit/eval/let_test.cpp
 )
 
 add_executable(formulon_unit_tests ${FORMULON_UNIT_TEST_SOURCES})

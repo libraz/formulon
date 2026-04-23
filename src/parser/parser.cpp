@@ -41,6 +41,7 @@
 #include "parser/tokenizer.h"
 #include "utils/arena.h"
 #include "utils/expected.h"  // FM_CHECK
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -224,6 +225,10 @@ const char* default_message(ParseErrorCode code) noexcept {
       return "formula nesting depth exceeds the configured limit";
     case ParseErrorCode::TooManyErrors:
       return "too many parse errors; stopping";
+    case ParseErrorCode::LetInvalidName:
+      return "invalid LET binding name";
+    case ParseErrorCode::LetWrongArity:
+      return "LET requires an odd number of arguments (name, expr, [name, expr, ...], body)";
   }
   return "parse error";
 }
@@ -476,9 +481,12 @@ AstNode* Parser::parse() {
   // reference). `Sheet1!LOG10` must remain a CellRef so that
   // `parse_sheet_qualified_ref` resolves it as the sheet-scoped cell.
   for (std::size_t i = 0; i + 1 < tokens_.size(); ++i) {
-    if (tokens_[i].kind != TokenKind::CellRef) continue;
-    if (tokens_[i + 1].kind != TokenKind::LParen) continue;
-    if (i > 0 && tokens_[i - 1].kind == TokenKind::Bang) continue;
+    if (tokens_[i].kind != TokenKind::CellRef)
+      continue;
+    if (tokens_[i + 1].kind != TokenKind::LParen)
+      continue;
+    if (i > 0 && tokens_[i - 1].kind == TokenKind::Bang)
+      continue;
     tokens_[i].kind = TokenKind::Ident;
   }
 
@@ -1104,6 +1112,12 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
   const TokenKind next = peek_kind_at(1);
 
   if (next == TokenKind::LParen) {
+    // LET is a special form: binding names are bare identifiers that must
+    // NOT be resolved as cell references. Detect it before the generic
+    // argument loop kicks in so name slots go through a dedicated parse path.
+    if (strings::case_insensitive_eq(ident.lexeme, std::string_view("LET"))) {
+      return parse_let_call(ident);
+    }
     const std::string_view fn_name = ident.lexeme;
     const TextRange call_start = ident.range;
     advance();  // Ident
@@ -1213,6 +1227,229 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
     return nullptr;
   }
   n->set_range(ident.range);
+  return n;
+}
+
+namespace {
+
+// Returns true iff `name` starts with `[A-Za-z_]` and continues with
+// `[A-Za-z0-9_.?]*`. Length must be non-zero and <= 255 bytes. This is the
+// identifier shape Excel accepts for LET bindings and defined names; stricter
+// than the tokenizer's Ident rule (which accepts numeric suffixes alone).
+bool IsLetNameShape(std::string_view name) noexcept {
+  if (name.empty() || name.size() > 255) {
+    return false;
+  }
+  const char first = name[0];
+  if (!IsAsciiLetter(first) && first != '_') {
+    return false;
+  }
+  for (std::size_t i = 1; i < name.size(); ++i) {
+    const char c = name[i];
+    const bool ok = IsAsciiLetter(c) || IsAsciiDigit(c) || c == '_' || c == '.' || c == '?';
+    if (!ok) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Returns true iff `name` has the shape of an A1-style cell reference
+// (`[A-Za-z]{1,3}[1-9][0-9]*`). Excel rejects such identifiers as LET
+// binding names because they would be indistinguishable from cell refs when
+// used in the body.
+bool LooksLikeCellRef(std::string_view name) noexcept {
+  std::size_t i = 0;
+  while (i < name.size() && IsAsciiLetter(name[i])) {
+    ++i;
+  }
+  const std::size_t letters = i;
+  if (letters == 0 || letters > 3) {
+    return false;
+  }
+  // First digit must not be zero so names like `A0` (not a valid ref) still
+  // go through the LET path.
+  if (i >= name.size() || name[i] < '1' || name[i] > '9') {
+    return false;
+  }
+  ++i;
+  while (i < name.size() && IsAsciiDigit(name[i])) {
+    ++i;
+  }
+  return i == name.size();
+}
+
+}  // namespace
+
+bool Parser::parse_let_binding_name(std::string_view* out_name, TextRange* out_range) {
+  // The binding-name slot accepts a single Ident token. CellRef tokens
+  // (produced for patterns that match the A1 shape) are rejected because the
+  // tokenizer already routed them away from Ident; this is the expected
+  // behaviour for names like `A1` that collide with cell refs.
+  const Token& tok = peek();
+  if (tok.kind == TokenKind::CellRef) {
+    record_error_with_token(ParseErrorCode::LetInvalidName, tok.range, tok.lexeme);
+    advance();
+    return false;
+  }
+  if (tok.kind != TokenKind::Ident) {
+    record_error_with_token(ParseErrorCode::LetInvalidName, tok.range, tok.lexeme);
+    return false;
+  }
+  if (!IsLetNameShape(tok.lexeme) || LooksLikeCellRef(tok.lexeme)) {
+    record_error_with_token(ParseErrorCode::LetInvalidName, tok.range, tok.lexeme);
+    advance();
+    return false;
+  }
+  *out_name = tok.lexeme;
+  *out_range = tok.range;
+  advance();
+  return true;
+}
+
+AstNode* Parser::parse_let_call(const Token& name_tok) {
+  const TextRange call_start = name_tok.range;
+  advance();  // LET Ident
+  advance();  // LParen
+
+  // Accumulate name / expr pairs until a bare expression (the body) remains.
+  std::vector<std::string_view> names;
+  std::vector<const AstNode*> exprs;
+  AstNode* body = nullptr;
+
+  // Empty arg list is an arity error but still needs recovery; we synthesise
+  // a placeholder body and return below.
+  if (peek_kind() == TokenKind::RParen) {
+    record_error_with_token(ParseErrorCode::LetWrongArity, name_tok.range, name_tok.lexeme);
+    const Token& rparen_empty = advance();
+    AstNode* placeholder = make_error_placeholder(arena_);
+    if (placeholder != nullptr) {
+      placeholder->set_range(SpanRange(call_start, rparen_empty.range));
+    }
+    return placeholder;
+  }
+
+  // Slot-walk loop. At each iteration pos_ sits on the first token of the
+  // next slot. A slot is classified as a binding name when it is a lone
+  // well-shaped Ident followed by a comma (so it cannot stand as a complete
+  // expression); any other shape is the body. This works for all odd-arity
+  // well-formed inputs because the body is always the *final* slot, never
+  // followed by a comma.
+  while (true) {
+    if (bailed_) {
+      break;
+    }
+    // CellRef-shaped tokens (e.g. `A1`, `AA10`) that sit in a binding-name
+    // slot are specifically forbidden by Excel: the name would collide with
+    // the A1 cell it spells. Detect the shape here so we emit the dedicated
+    // LetInvalidName diagnostic instead of letting the token fall into the
+    // body path (which would either parse it as a Ref or surface a
+    // non-specific arity error).
+    if (peek_kind() == TokenKind::CellRef && peek_kind_at(1) == TokenKind::Comma) {
+      const Token& bad = peek();
+      record_error_with_token(ParseErrorCode::LetInvalidName, bad.range, bad.lexeme);
+      advance();  // consume the cell-ref
+      if (peek_kind() == TokenKind::Comma) {
+        advance();  // consume the comma
+      }
+      // Parse (and discard) the would-be initialiser so siblings continue.
+      AstNode* expr = parse_expression(0, SyncContext::CallArg);
+      if (expr == nullptr) {
+        return nullptr;
+      }
+      // The LET grammar requires an odd total arity; since we dropped this
+      // pair, the final arity is still consistent: continue to the next slot.
+      if (peek_kind() == TokenKind::Comma) {
+        advance();
+        continue;
+      }
+      // No comma: the expression we just parsed was the tail; promote it
+      // to body if no bindings were valid yet.
+      if (body == nullptr && names.empty()) {
+        body = expr;
+      }
+      break;
+    }
+    const bool is_name_slot = (peek_kind() == TokenKind::Ident) && IsLetNameShape(peek().lexeme) &&
+                              !LooksLikeCellRef(peek().lexeme) && peek_kind_at(1) == TokenKind::Comma;
+    if (is_name_slot) {
+      std::string_view name;
+      // The name's source span is written via parse_let_binding_name; we do
+      // not currently attach it to the LetBinding node, but keeping the slot
+      // lets that diagnostic link land without another signature change.
+      TextRange name_range{};
+      if (!parse_let_binding_name(&name, &name_range)) {
+        (void)name_range;
+        skip_to_sync(SyncContext::CallArg);
+        if (peek_kind() == TokenKind::Comma) {
+          advance();
+        }
+        continue;
+      }
+      // parse_let_binding_name already advanced over the name; the next
+      // token is the comma guaranteed by `is_name_slot`.
+      advance();  // Comma
+      AstNode* expr = parse_expression(0, SyncContext::CallArg);
+      if (expr == nullptr) {
+        return nullptr;  // hard arena failure
+      }
+      names.push_back(name);
+      exprs.push_back(expr);
+      if (peek_kind() == TokenKind::Comma) {
+        advance();
+        continue;  // more slots follow
+      }
+      // No comma after an (name, expr) pair means this was the penultimate
+      // slot and the expr we just parsed was the tail of a well-formed LET
+      // that is missing its body. Treat as an arity error.
+      record_error_with_token(ParseErrorCode::LetWrongArity, name_tok.range, name_tok.lexeme);
+      break;
+    }
+
+    // Body slot: parse a full expression; the next token should be `)`.
+    body = parse_expression(0, SyncContext::CallArg);
+    if (body == nullptr) {
+      return nullptr;  // hard arena failure
+    }
+    if (peek_kind() == TokenKind::Comma) {
+      // Extra argument after the body (even arity). Record and recover by
+      // skipping the rest of the arglist.
+      record_error_with_token(ParseErrorCode::LetWrongArity, name_tok.range, name_tok.lexeme);
+      skip_to_sync(SyncContext::Paren);
+    }
+    break;
+  }
+
+  // At this point we expect `)`; emit diagnostics and recover if not.
+  TextRange end_range = call_start;
+  if (peek_kind() == TokenKind::RParen) {
+    const Token& rparen = advance();
+    end_range = rparen.range;
+  } else if (peek_kind() != TokenKind::Eof) {
+    record_error_with_token(ParseErrorCode::ExpectedCloseParen, call_start, name_tok.lexeme);
+  } else {
+    record_error_with_token(ParseErrorCode::ExpectedCloseParen, call_start, name_tok.lexeme);
+  }
+
+  // Validate arity: need >= 1 binding and a body.
+  if (names.empty() || body == nullptr) {
+    if (body == nullptr) {
+      record_error_with_token(ParseErrorCode::LetWrongArity, call_start, name_tok.lexeme);
+    } else if (names.empty()) {
+      record_error_with_token(ParseErrorCode::LetWrongArity, call_start, name_tok.lexeme);
+    }
+    AstNode* placeholder = make_error_placeholder(arena_);
+    if (placeholder != nullptr) {
+      placeholder->set_range(SpanRange(call_start, end_range));
+    }
+    return placeholder;
+  }
+
+  AstNode* n = make_let_binding(arena_, names.data(), exprs.data(), static_cast<std::uint32_t>(names.size()), body);
+  if (n == nullptr) {
+    return nullptr;
+  }
+  n->set_range(SpanRange(call_start, end_range));
   return n;
 }
 

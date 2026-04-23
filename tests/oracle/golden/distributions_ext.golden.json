@@ -1,0 +1,359 @@
+{
+  "suite": "distributions_ext",
+  "description": "BETA / GAMMA / WEIBULL / LOGNORM / HYPGEOM extended distribution family",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-23T06:37:48Z"
+  },
+  "tolerance": {
+    "abs": 1e-06,
+    "rel": 1e-06
+  },
+  "cases": [
+    {
+      "id": "beta_dist_cdf_standard",
+      "formula": "=BETA.DIST(0.4, 8, 10, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.3594923429330944
+      }
+    },
+    {
+      "id": "beta_dist_pdf_symmetric",
+      "formula": "=BETA.DIST(0.5, 2, 2, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "beta_dist_scaled_cdf",
+      "formula": "=BETA.DIST(1.8, 8, 10, TRUE, 1, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.3594923429330944
+      }
+    },
+    {
+      "id": "beta_dist_x_out_of_range_is_num",
+      "formula": "=BETA.DIST(1.5, 2, 3, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "beta_inv_symmetric_median",
+      "formula": "=BETA.INV(0.5, 2, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "beta_inv_round_trip",
+      "formula": "=BETA.INV(BETA.DIST(0.4, 8, 10, TRUE), 8, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.4000000000000001
+      }
+    },
+    {
+      "id": "beta_inv_p_zero_is_num",
+      "formula": "=BETA.INV(0, 2, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "gamma_integer",
+      "formula": "=GAMMA(5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 24.0
+      }
+    },
+    {
+      "id": "gamma_half",
+      "formula": "=GAMMA(0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.772453850905516
+      }
+    },
+    {
+      "id": "gamma_zero_is_num",
+      "formula": "=GAMMA(0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "gamma_negative_integer_is_num",
+      "formula": "=GAMMA(-3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "gammaln_ten",
+      "formula": "=GAMMALN(10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12.80182748008147
+      }
+    },
+    {
+      "id": "gammaln_precise_matches",
+      "formula": "=GAMMALN.PRECISE(7.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.534364236758734
+      }
+    },
+    {
+      "id": "gammaln_negative_is_num",
+      "formula": "=GAMMALN(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "gamma_dist_cdf_basic",
+      "formula": "=GAMMA.DIST(2, 3, 2, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.08030139707139419
+      }
+    },
+    {
+      "id": "gamma_dist_pdf_basic",
+      "formula": "=GAMMA.DIST(2, 3, 2, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.09196986029286058
+      }
+    },
+    {
+      "id": "gamma_dist_cdf_zero",
+      "formula": "=GAMMA.DIST(0, 3, 2, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "gamma_dist_negative_x_is_num",
+      "formula": "=GAMMA.DIST(-1, 3, 2, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "gamma_inv_round_trip",
+      "formula": "=GAMMA.INV(GAMMA.DIST(4, 3, 2, TRUE), 3, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "gamma_inv_p_zero_is_zero",
+      "formula": "=GAMMA.INV(0, 3, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "gamma_inv_negative_alpha_is_num",
+      "formula": "=GAMMA.INV(0.5, -1, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "weibull_cdf_basic",
+      "formula": "=WEIBULL.DIST(105, 20, 100, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.929581390069277
+      }
+    },
+    {
+      "id": "weibull_pdf_exponential",
+      "formula": "=WEIBULL.DIST(0, 1, 1, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "weibull_cdf_zero",
+      "formula": "=WEIBULL.DIST(0, 2, 1, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "weibull_negative_x_is_num",
+      "formula": "=WEIBULL.DIST(-1, 2, 3, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "weibull_zero_alpha_is_num",
+      "formula": "=WEIBULL.DIST(1, 0, 2, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "lognorm_dist_cdf_basic",
+      "formula": "=LOGNORM.DIST(4, 3.5, 1.2, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.03908355570680048
+      }
+    },
+    {
+      "id": "lognorm_dist_pdf_standard",
+      "formula": "=LOGNORM.DIST(1, 0, 1, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.39894228040143265
+      }
+    },
+    {
+      "id": "lognorm_dist_zero_x_is_num",
+      "formula": "=LOGNORM.DIST(0, 0, 1, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "lognorm_dist_zero_sd_is_num",
+      "formula": "=LOGNORM.DIST(1, 0, 0, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "lognorm_inv_median",
+      "formula": "=LOGNORM.INV(0.5, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "lognorm_inv_round_trip",
+      "formula": "=LOGNORM.INV(LOGNORM.DIST(2, 0, 1, TRUE), 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0000000000000004
+      }
+    },
+    {
+      "id": "lognorm_inv_p_zero_is_num",
+      "formula": "=LOGNORM.INV(0, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "hypgeom_pmf_basic",
+      "formula": "=HYPGEOM.DIST(1, 4, 8, 20, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.3632610939112486
+      }
+    },
+    {
+      "id": "hypgeom_pmf_zero",
+      "formula": "=HYPGEOM.DIST(0, 4, 8, 20, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.10216718266253864
+      }
+    },
+    {
+      "id": "hypgeom_cdf_full_support",
+      "formula": "=HYPGEOM.DIST(4, 4, 8, 20, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "hypgeom_k_exceeds_sample_is_num",
+      "formula": "=HYPGEOM.DIST(5, 4, 8, 20, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "hypgeom_negative_k_is_num",
+      "formula": "=HYPGEOM.DIST(-1, 4, 8, 20, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    }
+  ]
+}

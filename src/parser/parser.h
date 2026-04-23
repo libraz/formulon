@@ -147,6 +147,20 @@ class Parser {
   AstNode* parse_cellref_atom();
   AstNode* parse_full_row_or_number(const Token& first);
 
+  // Parses a `LET(name, expr, [name, expr, ...], body)` invocation. Expects
+  // that the caller has already identified the "LET" ident and verified the
+  // next token is `(`; both tokens are still unconsumed when this is called.
+  // On any validation failure the helper records a diagnostic and returns an
+  // `ErrorPlaceholder` so siblings keep parsing.
+  AstNode* parse_let_call(const Token& name_tok);
+  // Parses a bare identifier in a LET binding-name slot. Enforces Excel's
+  // name-shape rules (leading letter/underscore, subsequent letters/digits/
+  // underscore/period/question-mark, length <= 255) and forbids names that
+  // would parse as A1-style cell references. Records diagnostics and returns
+  // false on failure; on success writes the identifier text into `*out_name`
+  // and the token range into `*out_range`.
+  bool parse_let_binding_name(std::string_view* out_name, TextRange* out_range);
+
   // Builds a Reference from a CellRef token's lexeme.
   bool decode_cellref_lexeme(std::string_view lex, Reference* out) noexcept;
   // Returns the column index encoded by an Ident token's letters; 0 means

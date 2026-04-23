@@ -19,6 +19,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/lookups/classic.h"
 #include "eval/lookups/xlookup.h"
+#include "eval/name_env.h"
 #include "eval/range_args.h"
 #include "eval/regression_lazy.h"
 #include "eval/shape_ops_lazy.h"
@@ -542,13 +543,54 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
     case parser::NodeKind::Ref:
       return ctx.resolve_ref(node.as_ref(), arena, registry);
 
-    // -- Unsupported: name resolution / closures --------------------------
+    case parser::NodeKind::NameRef: {
+      // Lexical-scope lookup for LET (and, eventually, LAMBDA) bindings.
+      // When the name is not in scope we surface `#NAME?`; defined-name
+      // resolution at workbook scope is a separate infrastructure pass and
+      // intentionally not handled here.
+      const NameEnv* env = ctx.name_env();
+      if (env != nullptr) {
+        if (const Value* bound = env->lookup(node.as_name()); bound != nullptr) {
+          return *bound;
+        }
+      }
+      return Value::error(ErrorCode::Name);
+    }
+
+    case parser::NodeKind::LetBinding: {
+      // Sequential (left-to-right) bind-then-body. Excel semantics:
+      //   * Each binding initialiser evaluates in the scope of previously
+      //     bound names, so `LET(x, 1, y, x+2, y)` returns 3.
+      //   * Error values DO flow into the environment -- downstream
+      //     expressions (including `IFERROR` inside the body) may catch
+      //     them: `LET(x, 1/0, IFERROR(x, 99))` returns 99.
+      //   * Names are ASCII-case-insensitive and a later binding with the
+      //     same name shadows earlier ones in subsequent expressions.
+      NameEnv env;
+      const NameEnv* parent = ctx.name_env();
+      // Start from whatever the caller supplied; extending `NameEnv` makes
+      // `env` point at a new head frame while preserving the parent chain.
+      if (parent != nullptr) {
+        env = *parent;
+      }
+      const std::uint32_t count = node.as_let_binding_count();
+      for (std::uint32_t i = 0; i < count; ++i) {
+        const parser::AstNode& expr_node = node.as_let_binding_expr(i);
+        const EvalContext inner_ctx = ctx.with_name_env(&env);
+        const Value v = eval_node(expr_node, arena, registry, inner_ctx);
+        env = env.extend(node.as_let_binding_name(i), v, arena);
+      }
+      const EvalContext body_ctx = ctx.with_name_env(&env);
+      return eval_node(node.as_let_body(), arena, registry, body_ctx);
+    }
+
+    // -- Unsupported: closures / external names ---------------------------
     case parser::NodeKind::ExternalRef:
     case parser::NodeKind::StructuredRef:
-    case parser::NodeKind::NameRef:
     case parser::NodeKind::LambdaCall:
     case parser::NodeKind::Lambda:
-    case parser::NodeKind::LetBinding:
+      // LAMBDA requires closure capture which is not yet modelled by the
+      // scalar `Value` variant; defer to follow-up work.
       return Value::error(ErrorCode::Name);
 
     // -- Unsupported: range-producing operators / array literals ----------

@@ -1,0 +1,449 @@
+{
+  "suite": "datevalue_timevalue",
+  "description": "DATEVALUE / TIMEVALUE text-to-serial parsing (ISO / slash / kanji forms, AM-PM, embedded date-time)",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-23T06:16:49Z"
+  },
+  "tolerance": {
+    "abs": 1e-10,
+    "rel": 1e-10
+  },
+  "cases": [
+    {
+      "id": "datevalue_iso_dash",
+      "formula": "=DATEVALUE(\"2024-03-15\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45366.0
+      }
+    },
+    {
+      "id": "datevalue_iso_dash_single_digit",
+      "formula": "=DATEVALUE(\"2024-3-5\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45356.0
+      }
+    },
+    {
+      "id": "datevalue_iso_with_t_separator",
+      "formula": "=DATEVALUE(\"2024-03-15T00:00:00\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datevalue_iso_with_space_time",
+      "formula": "=DATEVALUE(\"2024-03-15 13:30\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45366.0
+      }
+    },
+    {
+      "id": "datevalue_slash",
+      "formula": "=DATEVALUE(\"2024/3/15\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45366.0
+      }
+    },
+    {
+      "id": "datevalue_slash_padded",
+      "formula": "=DATEVALUE(\"2024/03/15\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45366.0
+      }
+    },
+    {
+      "id": "datevalue_kanji_with_terminator",
+      "formula": "=DATEVALUE(\"2024年3月15日\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45366.0
+      }
+    },
+    {
+      "id": "datevalue_kanji_padded_no_terminator",
+      "formula": "=DATEVALUE(\"2024年03月15\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datevalue_leading_whitespace",
+      "formula": "=DATEVALUE(\"   2024-03-15\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45366.0
+      }
+    },
+    {
+      "id": "datevalue_trailing_whitespace",
+      "formula": "=DATEVALUE(\"2024-03-15   \")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45366.0
+      }
+    },
+    {
+      "id": "datevalue_fullwidth_space_trimmed",
+      "formula": "=DATEVALUE(\"　2024-03-15　\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datevalue_two_digit_year_2020s",
+      "formula": "=DATEVALUE(\"29-03-15\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 47192.0
+      }
+    },
+    {
+      "id": "datevalue_two_digit_year_1990s",
+      "formula": "=DATEVALUE(\"95-07-04\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 34884.0
+      }
+    },
+    {
+      "id": "datevalue_real_leap_day",
+      "formula": "=DATEVALUE(\"2024-02-29\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45351.0
+      }
+    },
+    {
+      "id": "datevalue_non_leap_feb_29_is_value",
+      "formula": "=DATEVALUE(\"2023-02-29\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datevalue_empty_string_is_value",
+      "formula": "=DATEVALUE(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datevalue_whitespace_only_is_value",
+      "formula": "=DATEVALUE(\"   \")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datevalue_malformed_is_value",
+      "formula": "=DATEVALUE(\"hello world\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datevalue_month_out_of_range_is_value",
+      "formula": "=DATEVALUE(\"2024-13-01\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datevalue_day_out_of_range_is_value",
+      "formula": "=DATEVALUE(\"2024-02-30\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datevalue_boolean_coerces_and_fails",
+      "formula": "=DATEVALUE(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datevalue_number_coerces_and_fails",
+      "formula": "=DATEVALUE(42)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datevalue_agrees_with_date",
+      "formula": "=DATEVALUE(\"2026-04-23\")-DATE(2026,4,23)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "timevalue_hours_minutes",
+      "formula": "=TIMEVALUE(\"13:30\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5625
+      }
+    },
+    {
+      "id": "timevalue_midnight",
+      "formula": "=TIMEVALUE(\"00:00\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "timevalue_noon",
+      "formula": "=TIMEVALUE(\"12:00\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "timevalue_just_before_midnight",
+      "formula": "=TIMEVALUE(\"23:59\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.9993055555555556
+      }
+    },
+    {
+      "id": "timevalue_hours_minutes_seconds",
+      "formula": "=TIMEVALUE(\"13:30:45\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5630208333333333
+      }
+    },
+    {
+      "id": "timevalue_last_second_of_day",
+      "formula": "=TIMEVALUE(\"23:59:59\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.999988425925926
+      }
+    },
+    {
+      "id": "timevalue_fractional_seconds",
+      "formula": "=TIMEVALUE(\"00:00:00.5\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.787037037037037e-06
+      }
+    },
+    {
+      "id": "timevalue_one_thirty_pm",
+      "formula": "=TIMEVALUE(\"1:30 PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5625
+      }
+    },
+    {
+      "id": "timevalue_twelve_am_is_midnight",
+      "formula": "=TIMEVALUE(\"12:00 AM\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "timevalue_twelve_pm_is_noon",
+      "formula": "=TIMEVALUE(\"12:00 PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "timevalue_lowercase_ampm",
+      "formula": "=TIMEVALUE(\"1:30 pm\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5625
+      }
+    },
+    {
+      "id": "timevalue_no_space_before_ampm",
+      "formula": "=TIMEVALUE(\"1:30PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "timevalue_hours_above_24_wrap",
+      "formula": "=TIMEVALUE(\"25:00\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.04166666666666674
+      }
+    },
+    {
+      "id": "timevalue_embedded_in_date",
+      "formula": "=TIMEVALUE(\"2024-03-15 13:30\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5625
+      }
+    },
+    {
+      "id": "timevalue_iso_t_separator",
+      "formula": "=TIMEVALUE(\"2024-03-15T06:00:00\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "timevalue_leading_whitespace",
+      "formula": "=TIMEVALUE(\"   13:30\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5625
+      }
+    },
+    {
+      "id": "timevalue_trailing_fullwidth_space",
+      "formula": "=TIMEVALUE(\"13:30　\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5625
+      }
+    },
+    {
+      "id": "timevalue_empty_string_is_value",
+      "formula": "=TIMEVALUE(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "timevalue_minutes_out_of_range_is_value",
+      "formula": "=TIMEVALUE(\"12:60\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5416666666666666
+      }
+    },
+    {
+      "id": "timevalue_seconds_out_of_range_is_value",
+      "formula": "=TIMEVALUE(\"12:30:60\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5215277777777778
+      }
+    },
+    {
+      "id": "timevalue_malformed_is_value",
+      "formula": "=TIMEVALUE(\"not a time\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "timevalue_ampm_hour_zero_is_value",
+      "formula": "=TIMEVALUE(\"0:30 AM\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.020833333333333332
+      }
+    },
+    {
+      "id": "timevalue_ampm_hour_13_is_value",
+      "formula": "=TIMEVALUE(\"13:30 PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "timevalue_boolean_coerces_and_fails",
+      "formula": "=TIMEVALUE(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "timevalue_agrees_with_time",
+      "formula": "=TIMEVALUE(\"14:30:15\")-TIME(14,30,15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    }
+  ]
+}

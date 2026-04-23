@@ -1,0 +1,134 @@
+{
+  "suite": "let",
+  "description": "LET(name, expr, [name, expr, ...], body) lexical-scope special form",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-23T07:04:41Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "single_binding_arithmetic",
+      "formula": "=LET(x, 10, x+5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "single_binding_identity",
+      "formula": "=LET(x, 7, x)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "single_binding_zero",
+      "formula": "=LET(x, 0, x)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "two_bindings_sequential",
+      "formula": "=LET(x, 10, y, x*2, y+1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 21.0
+      }
+    },
+    {
+      "id": "three_bindings_arithmetic",
+      "formula": "=LET(a, 1, b, a+1, c, b+1, a+b+c)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "nested_let_in_binding",
+      "formula": "=LET(x, LET(y, 5, y*y), x+1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 26.0
+      }
+    },
+    {
+      "id": "nested_let_in_body",
+      "formula": "=LET(x, 2, LET(y, x+1, y*y))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "inner_let_does_not_leak",
+      "formula": "=LET(x, 1, LET(x, 99, x) + x)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "case_insensitive_lookup",
+      "formula": "=LET(Foo, 3, FOO+1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "text_binding_upper",
+      "formula": "=LET(g, \"hello\", UPPER(g))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "HELLO"
+      }
+    },
+    {
+      "id": "bool_binding_if_branch",
+      "formula": "=LET(b, TRUE, IF(b, 1, 0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "binding_error_catchable",
+      "formula": "=LET(x, 1/0, IFERROR(x, 99))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 99.0
+      }
+    },
+    {
+      "id": "binding_error_uncaught_propagates",
+      "formula": "=LET(x, 1/0, x+1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    }
+  ]
+}

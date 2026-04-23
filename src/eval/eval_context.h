@@ -40,6 +40,7 @@ namespace eval {
 
 class EvalState;
 class FunctionRegistry;
+class NameEnv;
 
 /// Evaluator-side view of the data a formula needs to resolve cell
 /// references.
@@ -193,10 +194,28 @@ class EvalContext {
   /// printers) can observe whether cross-sheet resolution is available.
   const Workbook* workbook() const noexcept { return workbook_; }
 
+  /// Returns the active lexical-scope environment for bare name references
+  /// (`LET` bindings; eventually LAMBDA parameters). Null indicates the
+  /// top-level scope where no LET is in flight: under that shape every
+  /// `NameRef` resolves to `#NAME?` because defined-name lookup at workbook
+  /// scope is not yet wired.
+  const NameEnv* name_env() const noexcept { return name_env_; }
+
+  /// Returns a copy of `*this` whose `name_env()` is `env`. Used by the LET
+  /// evaluator to extend scope for each binding initialiser and the body
+  /// without touching the parent context (which may be shared between
+  /// sibling evaluations).
+  EvalContext with_name_env(const NameEnv* env) const noexcept {
+    EvalContext copy = *this;
+    copy.name_env_ = env;
+    return copy;
+  }
+
  private:
   const Sheet* current_sheet_ = nullptr;
   EvalState* state_ = nullptr;
   const Workbook* workbook_ = nullptr;
+  const NameEnv* name_env_ = nullptr;
 };
 
 }  // namespace eval

@@ -1,0 +1,174 @@
+suite: distributions_ext
+description: BETA / GAMMA / WEIBULL / LOGNORM / HYPGEOM extended distribution family
+# xlwings returns Excel-computed floats as their displayed value (typically
+# ~15 digits but with some tail-digit truncation). The values here span
+# ~0 to ~1 for CDFs / PMFs and small/moderate magnitudes for the inverses;
+# 1e-6 absolute / relative tolerances absorb display rounding while still
+# catching real divergence. Inverses polished by Newton drift at most a
+# few ulps from Excel's output; if tighter bounds become warranted, add
+# per-case tolerance entries in divergence.yaml rather than loosening the
+# whole suite.
+tolerance: { abs: 1.0e-6, rel: 1.0e-6 }
+locale: ja-JP
+cases:
+  # -- BETA.DIST -----------------------------------------------------------
+  - id: beta_dist_cdf_standard
+    description: "BETA(8, 10) CDF at 0.4 ~ 0.359492"
+    formula: "=BETA.DIST(0.4, 8, 10, TRUE)"
+
+  - id: beta_dist_pdf_symmetric
+    description: "BETA(2, 2) PDF at 0.5 = 1.5"
+    formula: "=BETA.DIST(0.5, 2, 2, FALSE)"
+
+  - id: beta_dist_scaled_cdf
+    description: "BETA(8, 10) rescaled to [1, 3] CDF at 1.8 ~ 0.359492 (y = 0.4)"
+    formula: "=BETA.DIST(1.8, 8, 10, TRUE, 1, 3)"
+
+  - id: beta_dist_x_out_of_range_is_num
+    description: "x > B yields #NUM!"
+    formula: "=BETA.DIST(1.5, 2, 3, TRUE)"
+
+  # -- BETA.INV ------------------------------------------------------------
+  - id: beta_inv_symmetric_median
+    description: "Median of BETA(2, 2) is 0.5"
+    formula: "=BETA.INV(0.5, 2, 2)"
+
+  - id: beta_inv_round_trip
+    description: "BETA.INV(BETA.DIST(0.4, 8, 10, TRUE), 8, 10) ~ 0.4"
+    formula: "=BETA.INV(BETA.DIST(0.4, 8, 10, TRUE), 8, 10)"
+
+  - id: beta_inv_p_zero_is_num
+    description: "p <= 0 yields #NUM!"
+    formula: "=BETA.INV(0, 2, 3)"
+
+  # -- GAMMA ---------------------------------------------------------------
+  - id: gamma_integer
+    description: "Γ(5) = 4! = 24"
+    formula: "=GAMMA(5)"
+
+  - id: gamma_half
+    description: "Γ(0.5) = sqrt(pi) ~ 1.772454"
+    formula: "=GAMMA(0.5)"
+
+  - id: gamma_zero_is_num
+    description: "Γ(0) is a pole; #NUM!"
+    formula: "=GAMMA(0)"
+
+  - id: gamma_negative_integer_is_num
+    description: "Γ(-3) is a pole; #NUM!"
+    formula: "=GAMMA(-3)"
+
+  # -- GAMMALN / GAMMALN.PRECISE -------------------------------------------
+  - id: gammaln_ten
+    description: "ln Γ(10) = ln(9!) ~ 12.801827"
+    formula: "=GAMMALN(10)"
+
+  - id: gammaln_precise_matches
+    description: "GAMMALN.PRECISE(7.5) == GAMMALN(7.5); this verifies the PRECISE alias"
+    formula: "=GAMMALN.PRECISE(7.5)"
+
+  - id: gammaln_negative_is_num
+    description: "ln Γ is undefined for x <= 0"
+    formula: "=GAMMALN(-1)"
+
+  # -- GAMMA.DIST ----------------------------------------------------------
+  - id: gamma_dist_cdf_basic
+    description: "GAMMA(alpha=3, beta=2) CDF at 2 ~ 0.080301"
+    formula: "=GAMMA.DIST(2, 3, 2, TRUE)"
+
+  - id: gamma_dist_pdf_basic
+    description: "GAMMA(alpha=3, beta=2) PDF at 2 ~ 0.091970"
+    formula: "=GAMMA.DIST(2, 3, 2, FALSE)"
+
+  - id: gamma_dist_cdf_zero
+    description: "GAMMA CDF at x=0 is 0 for any alpha"
+    formula: "=GAMMA.DIST(0, 3, 2, TRUE)"
+
+  - id: gamma_dist_negative_x_is_num
+    description: "x < 0 yields #NUM!"
+    formula: "=GAMMA.DIST(-1, 3, 2, TRUE)"
+
+  # -- GAMMA.INV -----------------------------------------------------------
+  - id: gamma_inv_round_trip
+    description: "GAMMA.INV(GAMMA.DIST(4, 3, 2, TRUE), 3, 2) ~ 4"
+    formula: "=GAMMA.INV(GAMMA.DIST(4, 3, 2, TRUE), 3, 2)"
+
+  - id: gamma_inv_p_zero_is_zero
+    description: "GAMMA.INV(0, ...) = 0 (left endpoint of support)"
+    formula: "=GAMMA.INV(0, 3, 2)"
+
+  - id: gamma_inv_negative_alpha_is_num
+    description: "alpha <= 0 yields #NUM!"
+    formula: "=GAMMA.INV(0.5, -1, 2)"
+
+  # -- WEIBULL.DIST --------------------------------------------------------
+  - id: weibull_cdf_basic
+    description: "WEIBULL(alpha=20, beta=100) CDF at 105 ~ 0.929581"
+    formula: "=WEIBULL.DIST(105, 20, 100, TRUE)"
+
+  - id: weibull_pdf_exponential
+    description: "Mac Excel returns 0 for Weibull PDF at x=0 regardless of alpha"
+    formula: "=WEIBULL.DIST(0, 1, 1, FALSE)"
+
+  - id: weibull_cdf_zero
+    description: "WEIBULL CDF at x=0 is 0"
+    formula: "=WEIBULL.DIST(0, 2, 1, TRUE)"
+
+  - id: weibull_negative_x_is_num
+    description: "x < 0 yields #NUM!"
+    formula: "=WEIBULL.DIST(-1, 2, 3, TRUE)"
+
+  - id: weibull_zero_alpha_is_num
+    description: "alpha <= 0 yields #NUM!"
+    formula: "=WEIBULL.DIST(1, 0, 2, TRUE)"
+
+  # -- LOGNORM.DIST --------------------------------------------------------
+  - id: lognorm_dist_cdf_basic
+    description: "LOGNORM(mean=3.5, sd=1.2) CDF at 4 ~ 0.039083"
+    formula: "=LOGNORM.DIST(4, 3.5, 1.2, TRUE)"
+
+  - id: lognorm_dist_pdf_standard
+    description: "LOGNORM(mean=0, sd=1) PDF at 1 = 1/sqrt(2*pi) ~ 0.398942"
+    formula: "=LOGNORM.DIST(1, 0, 1, FALSE)"
+
+  - id: lognorm_dist_zero_x_is_num
+    description: "x <= 0 yields #NUM!"
+    formula: "=LOGNORM.DIST(0, 0, 1, TRUE)"
+
+  - id: lognorm_dist_zero_sd_is_num
+    description: "sd <= 0 yields #NUM!"
+    formula: "=LOGNORM.DIST(1, 0, 0, TRUE)"
+
+  # -- LOGNORM.INV ---------------------------------------------------------
+  - id: lognorm_inv_median
+    description: "Median of LOGNORM(0, 1) is exp(0) = 1"
+    formula: "=LOGNORM.INV(0.5, 0, 1)"
+
+  - id: lognorm_inv_round_trip
+    description: "LOGNORM.INV(LOGNORM.DIST(2, 0, 1, TRUE), 0, 1) ~ 2"
+    formula: "=LOGNORM.INV(LOGNORM.DIST(2, 0, 1, TRUE), 0, 1)"
+
+  - id: lognorm_inv_p_zero_is_num
+    description: "p <= 0 yields #NUM!"
+    formula: "=LOGNORM.INV(0, 0, 1)"
+
+  # -- HYPGEOM.DIST --------------------------------------------------------
+  - id: hypgeom_pmf_basic
+    description: "HYPGEOM(k=1, n=4, K=8, N=20) PMF = 1760/4845 ~ 0.363261"
+    formula: "=HYPGEOM.DIST(1, 4, 8, 20, FALSE)"
+
+  - id: hypgeom_pmf_zero
+    description: "HYPGEOM(k=0, n=4, K=8, N=20) PMF = C(12,4)/C(20,4) ~ 0.102167"
+    formula: "=HYPGEOM.DIST(0, 4, 8, 20, FALSE)"
+
+  - id: hypgeom_cdf_full_support
+    description: "HYPGEOM CDF over full support = 1"
+    formula: "=HYPGEOM.DIST(4, 4, 8, 20, TRUE)"
+
+  - id: hypgeom_k_exceeds_sample_is_num
+    description: "k > n is infeasible; Mac Excel returns 0 (the PMF is zero there)"
+    formula: "=HYPGEOM.DIST(5, 4, 8, 20, FALSE)"
+
+  - id: hypgeom_negative_k_is_num
+    description: "k < 0 is treated as malformed input by Mac Excel; yields #NUM!"
+    formula: "=HYPGEOM.DIST(-1, 4, 8, 20, FALSE)"

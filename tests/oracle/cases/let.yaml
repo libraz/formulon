@@ -1,0 +1,60 @@
+suite: let
+description: LET(name, expr, [name, expr, ...], body) lexical-scope special form
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # -- Scalar bindings -----------------------------------------------------
+  - id: single_binding_arithmetic
+    description: "Basic LET with one binding used in the body"
+    formula: "=LET(x, 10, x+5)"
+
+  - id: single_binding_identity
+    formula: "=LET(x, 7, x)"
+
+  - id: single_binding_zero
+    description: "Blank-equivalent numeric bind; ensures 0 does not degrade"
+    formula: "=LET(x, 0, x)"
+
+  # -- Sequential scope ----------------------------------------------------
+  - id: two_bindings_sequential
+    description: "Second binding reads the first: x=10, y=x*2, body=y+1"
+    formula: "=LET(x, 10, y, x*2, y+1)"
+
+  - id: three_bindings_arithmetic
+    formula: "=LET(a, 1, b, a+1, c, b+1, a+b+c)"
+
+  # -- Nested LET ----------------------------------------------------------
+  - id: nested_let_in_binding
+    description: "Inner LET feeds outer x: inner yields 25, outer adds 1"
+    formula: "=LET(x, LET(y, 5, y*y), x+1)"
+
+  - id: nested_let_in_body
+    formula: "=LET(x, 2, LET(y, x+1, y*y))"
+
+  # -- Shadowing -----------------------------------------------------------
+  # Note: Excel does NOT accept rebinding the same name within a single LET
+  # (it treats `=LET(x, 1, x, x+10, x)` as a parse error). Shadowing across
+  # nested LETs is valid and tested below.
+  - id: inner_let_does_not_leak
+    description: "Inner LET's shadow of x is local; outer x recovers after"
+    formula: "=LET(x, 1, LET(x, 99, x) + x)"
+
+  # -- Case insensitivity --------------------------------------------------
+  - id: case_insensitive_lookup
+    formula: "=LET(Foo, 3, FOO+1)"
+
+  # -- Text and boolean values --------------------------------------------
+  - id: text_binding_upper
+    formula: "=LET(g, \"hello\", UPPER(g))"
+
+  - id: bool_binding_if_branch
+    formula: "=LET(b, TRUE, IF(b, 1, 0))"
+
+  # -- Error flow ----------------------------------------------------------
+  - id: binding_error_catchable
+    description: "Div/0 in binding is caught by IFERROR in body"
+    formula: "=LET(x, 1/0, IFERROR(x, 99))"
+
+  - id: binding_error_uncaught_propagates
+    description: "Uncaught Div/0 from a binding flows into body arithmetic"
+    formula: "=LET(x, 1/0, x+1)"

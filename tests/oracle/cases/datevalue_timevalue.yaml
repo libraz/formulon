@@ -1,0 +1,200 @@
+suite: datevalue_timevalue
+description: DATEVALUE / TIMEVALUE text-to-serial parsing (ISO / slash / kanji forms, AM-PM, embedded date-time)
+# DATEVALUE returns an integer serial (exact match); TIMEVALUE returns a
+# fractional day that can drift by a few ULPs on the Excel side, so we set
+# a relative tolerance of 1e-10 which covers the widest observed spread.
+tolerance: { abs: 1.0e-10, rel: 1.0e-10 }
+locale: ja-JP
+cases:
+  # -- DATEVALUE: ISO forms ------------------------------------------------
+  - id: datevalue_iso_dash
+    formula: "=DATEVALUE(\"2024-03-15\")"
+
+  - id: datevalue_iso_dash_single_digit
+    description: "Single-digit month/day should parse"
+    formula: "=DATEVALUE(\"2024-3-5\")"
+
+  - id: datevalue_iso_with_t_separator
+    description: "Mac Excel rejects the ISO 8601 'T' date/time separator (#VALUE!)"
+    formula: "=DATEVALUE(\"2024-03-15T00:00:00\")"
+
+  - id: datevalue_iso_with_space_time
+    description: "Space-separated time after date: ignored by DATEVALUE"
+    formula: "=DATEVALUE(\"2024-03-15 13:30\")"
+
+  # -- DATEVALUE: slash forms ---------------------------------------------
+  - id: datevalue_slash
+    formula: "=DATEVALUE(\"2024/3/15\")"
+
+  - id: datevalue_slash_padded
+    formula: "=DATEVALUE(\"2024/03/15\")"
+
+  # -- DATEVALUE: kanji form (ja-JP) --------------------------------------
+  - id: datevalue_kanji_with_terminator
+    description: "Japanese kanji form with trailing 日"
+    formula: "=DATEVALUE(\"2024年3月15日\")"
+
+  - id: datevalue_kanji_padded_no_terminator
+    description: "Mac Excel requires trailing 日 in the kanji form (#VALUE! without it)"
+    formula: "=DATEVALUE(\"2024年03月15\")"
+
+  # -- DATEVALUE: whitespace handling -------------------------------------
+  - id: datevalue_leading_whitespace
+    formula: "=DATEVALUE(\"   2024-03-15\")"
+
+  - id: datevalue_trailing_whitespace
+    formula: "=DATEVALUE(\"2024-03-15   \")"
+
+  - id: datevalue_fullwidth_space_trimmed
+    description: "Mac Excel does NOT trim U+3000 fullwidth space (#VALUE!)"
+    formula: "=DATEVALUE(\"　2024-03-15　\")"
+
+  # -- DATEVALUE: two-digit year pivot ------------------------------------
+  - id: datevalue_two_digit_year_2020s
+    description: "Two-digit year 00..29 maps to 2000..2029"
+    formula: "=DATEVALUE(\"29-03-15\")"
+
+  - id: datevalue_two_digit_year_1990s
+    description: "Two-digit year 30..99 maps to 1930..1999"
+    formula: "=DATEVALUE(\"95-07-04\")"
+
+  # -- DATEVALUE: leap days -----------------------------------------------
+  - id: datevalue_real_leap_day
+    description: "2024 is a leap year; Feb 29 is valid"
+    formula: "=DATEVALUE(\"2024-02-29\")"
+
+  - id: datevalue_non_leap_feb_29_is_value
+    description: "2023 is not a leap year; Feb 29 parses to #VALUE!"
+    formula: "=DATEVALUE(\"2023-02-29\")"
+
+  # -- DATEVALUE: error cases ---------------------------------------------
+  - id: datevalue_empty_string_is_value
+    formula: "=DATEVALUE(\"\")"
+
+  - id: datevalue_whitespace_only_is_value
+    formula: "=DATEVALUE(\"   \")"
+
+  - id: datevalue_malformed_is_value
+    formula: "=DATEVALUE(\"hello world\")"
+
+  - id: datevalue_month_out_of_range_is_value
+    formula: "=DATEVALUE(\"2024-13-01\")"
+
+  - id: datevalue_day_out_of_range_is_value
+    formula: "=DATEVALUE(\"2024-02-30\")"
+
+  - id: datevalue_boolean_coerces_and_fails
+    description: "Boolean coerces to \"TRUE\" which is not a date"
+    formula: "=DATEVALUE(TRUE)"
+
+  - id: datevalue_number_coerces_and_fails
+    description: "A bare number coerces to its string form; not a valid date"
+    formula: "=DATEVALUE(42)"
+
+  # -- DATEVALUE: roundtrip via DATE for sanity ---------------------------
+  - id: datevalue_agrees_with_date
+    description: "DATEVALUE(\"2026-04-23\") == DATE(2026,4,23)"
+    formula: "=DATEVALUE(\"2026-04-23\")-DATE(2026,4,23)"
+
+  # -- TIMEVALUE: HH:MM ---------------------------------------------------
+  - id: timevalue_hours_minutes
+    description: "13:30 -> 0.5625"
+    formula: "=TIMEVALUE(\"13:30\")"
+
+  - id: timevalue_midnight
+    formula: "=TIMEVALUE(\"00:00\")"
+
+  - id: timevalue_noon
+    formula: "=TIMEVALUE(\"12:00\")"
+
+  - id: timevalue_just_before_midnight
+    description: "23:59 -> 1439/1440"
+    formula: "=TIMEVALUE(\"23:59\")"
+
+  # -- TIMEVALUE: HH:MM:SS ------------------------------------------------
+  - id: timevalue_hours_minutes_seconds
+    description: "13:30:45 -> 48645/86400"
+    formula: "=TIMEVALUE(\"13:30:45\")"
+
+  - id: timevalue_last_second_of_day
+    description: "23:59:59 -> 86399/86400"
+    formula: "=TIMEVALUE(\"23:59:59\")"
+
+  - id: timevalue_fractional_seconds
+    description: "0:0:0.5 -> 0.5/86400"
+    formula: "=TIMEVALUE(\"00:00:00.5\")"
+
+  # -- TIMEVALUE: AM/PM ---------------------------------------------------
+  - id: timevalue_one_thirty_pm
+    description: "1:30 PM -> 0.5625"
+    formula: "=TIMEVALUE(\"1:30 PM\")"
+
+  - id: timevalue_twelve_am_is_midnight
+    description: "Excel convention: 12:00 AM is midnight (0.0)"
+    formula: "=TIMEVALUE(\"12:00 AM\")"
+
+  - id: timevalue_twelve_pm_is_noon
+    description: "Excel convention: 12:00 PM is noon (0.5)"
+    formula: "=TIMEVALUE(\"12:00 PM\")"
+
+  - id: timevalue_lowercase_ampm
+    description: "AM/PM suffix is case-insensitive"
+    formula: "=TIMEVALUE(\"1:30 pm\")"
+
+  - id: timevalue_no_space_before_ampm
+    description: "Mac Excel rejects AM/PM without a preceding space (#VALUE!)"
+    formula: "=TIMEVALUE(\"1:30PM\")"
+
+  # -- TIMEVALUE: hours above 24 ------------------------------------------
+  - id: timevalue_hours_above_24_wrap
+    description: "25:00 is treated as a duration; mod-1 = 1/24"
+    formula: "=TIMEVALUE(\"25:00\")"
+
+  # -- TIMEVALUE: embedded in a date --------------------------------------
+  - id: timevalue_embedded_in_date
+    description: "\"2024-03-15 13:30\" -> 0.5625 (date part discarded)"
+    formula: "=TIMEVALUE(\"2024-03-15 13:30\")"
+
+  - id: timevalue_iso_t_separator
+    description: "Mac Excel rejects the ISO 8601 'T' separator in TIMEVALUE too (#VALUE!)"
+    formula: "=TIMEVALUE(\"2024-03-15T06:00:00\")"
+
+  # -- TIMEVALUE: whitespace handling -------------------------------------
+  - id: timevalue_leading_whitespace
+    formula: "=TIMEVALUE(\"   13:30\")"
+
+  - id: timevalue_trailing_fullwidth_space
+    description: "Mac Excel does NOT trim trailing U+3000 fullwidth space (#VALUE!)"
+    formula: "=TIMEVALUE(\"13:30　\")"
+
+  # -- TIMEVALUE: error cases ---------------------------------------------
+  - id: timevalue_empty_string_is_value
+    formula: "=TIMEVALUE(\"\")"
+
+  - id: timevalue_minutes_out_of_range_is_value
+    description: "Excel carries minutes >= 60 into hours: 12:60 -> 13:00 = 13/24"
+    formula: "=TIMEVALUE(\"12:60\")"
+
+  - id: timevalue_seconds_out_of_range_is_value
+    description: "Excel carries seconds >= 60 into minutes: 12:30:60 -> 12:31:00"
+    formula: "=TIMEVALUE(\"12:30:60\")"
+
+  - id: timevalue_malformed_is_value
+    formula: "=TIMEVALUE(\"not a time\")"
+
+  - id: timevalue_ampm_hour_zero_is_value
+    description: "Mac Excel accepts 0:30 AM as 00:30 = 30/1440 (AM modifier ignored)"
+    formula: "=TIMEVALUE(\"0:30 AM\")"
+
+  - id: timevalue_ampm_hour_13_is_value
+    description: "13:30 PM is outside the 1..12 range required by 12-hour mode"
+    formula: "=TIMEVALUE(\"13:30 PM\")"
+
+  - id: timevalue_boolean_coerces_and_fails
+    description: "Boolean coerces to \"TRUE\" which is not a time"
+    formula: "=TIMEVALUE(TRUE)"
+
+  # -- TIMEVALUE: agreement with TIME -------------------------------------
+  - id: timevalue_agrees_with_time
+    description: "TIMEVALUE(\"14:30:15\") == TIME(14,30,15)"
+    formula: "=TIMEVALUE(\"14:30:15\")-TIME(14,30,15)"

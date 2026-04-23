@@ -81,6 +81,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins.cpp
   src/eval/builtins/aggregate.cpp
   src/eval/builtins/datetime.cpp
+  src/eval/builtins/distributions.cpp
   src/eval/builtins/financial.cpp
   src/eval/builtins/info.cpp
   src/eval/builtins/logical.cpp
