@@ -16,6 +16,7 @@
 #include "eval/criteria.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
+#include "eval/lazy_impls.h"
 #include "eval/range_args.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -217,8 +218,11 @@ Value apply_comparison(parser::BinOp op, const Value& lhs, const Value& rhs) {
 // ---------------------------------------------------------------------------
 // Recursive evaluator
 // ---------------------------------------------------------------------------
-
-Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx);
+//
+// `eval_node` is declared in `eval/lazy_impls.h` with external linkage so
+// lazy-impl translation units (e.g. `special_forms_lazy.cpp`) can reach
+// it. Its definition lives at the bottom of this file, outside the
+// anonymous namespace.
 
 // ---------------------------------------------------------------------------
 // Lazy (short-circuit) function impls
@@ -256,63 +260,9 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
 // result / additional criteria ranges must iterate in lockstep rather than
 // being flattened into a single values vector alongside the first.
 
-// IF(cond, then, else?) - then is evaluated iff cond coerces to true; else
-// is evaluated iff cond coerces to false. When the third argument is
-// omitted Excel returns the boolean `FALSE` for the falsey path.
-Value eval_if_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                   const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity != 2 && arity != 3) {
-    return Value::error(ErrorCode::Value);
-  }
-  const Value cond = eval_node(call.as_call_arg(0), arena, registry, ctx);
-  if (cond.is_error()) {
-    return cond;
-  }
-  auto coerced = coerce_to_bool(cond);
-  if (!coerced) {
-    return Value::error(coerced.error());
-  }
-  if (coerced.value()) {
-    return eval_node(call.as_call_arg(1), arena, registry, ctx);
-  }
-  if (arity == 3) {
-    return eval_node(call.as_call_arg(2), arena, registry, ctx);
-  }
-  return Value::boolean(false);
-}
-
-// IFERROR(value, fallback) - returns `value` unchanged unless it is any
-// error, in which case `fallback` is evaluated and returned. The fallback
-// subtree is NOT evaluated when `value` is non-error (true short-circuit).
-// If `fallback` itself raises an error it is propagated as-is.
-Value eval_iferror_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                        const EvalContext& ctx) {
-  if (call.as_call_arity() != 2) {
-    return Value::error(ErrorCode::Value);
-  }
-  const Value primary = eval_node(call.as_call_arg(0), arena, registry, ctx);
-  if (!primary.is_error()) {
-    return primary;
-  }
-  return eval_node(call.as_call_arg(1), arena, registry, ctx);
-}
-
-// IFNA(value, fallback) - returns `value` unchanged unless it is exactly
-// `#N/A`, in which case `fallback` is evaluated and returned. All other
-// errors (including `#DIV/0!`, `#REF!`, `#VALUE!`, `#NAME?`) propagate as
-// `value`. The fallback subtree is NOT evaluated unless the trigger fires.
-Value eval_ifna_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                     const EvalContext& ctx) {
-  if (call.as_call_arity() != 2) {
-    return Value::error(ErrorCode::Value);
-  }
-  const Value primary = eval_node(call.as_call_arg(0), arena, registry, ctx);
-  if (!(primary.is_error() && primary.as_error() == ErrorCode::NA)) {
-    return primary;
-  }
-  return eval_node(call.as_call_arg(1), arena, registry, ctx);
-}
+// `eval_if_lazy`, `eval_iferror_lazy`, and `eval_ifna_lazy` are defined in
+// `src/eval/special_forms_lazy.cpp`; they are declared in
+// `eval/lazy_impls.h` and referenced by the dispatch table below.
 
 // ---------------------------------------------------------------------------
 // COUNTIF / SUMIF / AVERAGEIF support
@@ -1865,9 +1815,8 @@ Value eval_xmatch_lazy(const parser::AstNode& call, Arena& arena, const Function
   return Value::number(static_cast<double>(off + 1U));
 }
 
-using LazyImpl = Value (*)(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                           const EvalContext& ctx);
-
+// `LazyImpl` is declared in `eval/lazy_impls.h` so translation units that
+// own individual lazy impls can publish matching function pointers.
 struct LazyEntry {
   const char* name;  // canonical UPPERCASE
   LazyImpl impl;
@@ -1990,6 +1939,14 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
   return def->impl(values.data(), static_cast<std::uint32_t>(values.size()), arena);
 }
 
+}  // namespace
+
+// Defined with external linkage (declared in `eval/lazy_impls.h`) so the
+// per-family lazy-impl TUs can recurse into the evaluator. The helpers it
+// calls below — `apply_unary`, `apply_arithmetic`, `apply_concat`,
+// `apply_comparison`, `dispatch_call` — live in the anonymous namespace
+// above and remain reachable via ordinary unqualified lookup because that
+// anonymous namespace is nested inside `formulon::eval`.
 Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
   switch (node.kind()) {
     case parser::NodeKind::Literal:
@@ -2077,8 +2034,6 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
   }
   return Value::error(ErrorCode::Value);
 }
-
-}  // namespace
 
 Value evaluate(const parser::AstNode& node, Arena& arena) {
   return evaluate(node, arena, default_registry(), EvalContext{});
