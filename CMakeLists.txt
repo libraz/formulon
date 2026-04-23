@@ -80,6 +80,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/function_registry.cpp
   src/eval/builtins.cpp
   src/eval/builtins_aggregate.cpp
+  src/eval/builtins_datetime.cpp
   src/eval/builtins_logical.cpp
   src/eval/builtins_math.cpp
   src/eval/builtins_math_trig.cpp
