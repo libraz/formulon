@@ -32,7 +32,36 @@
 #       first_noted: YYYY-MM-DD
 #       last_verified_excel_version: "16.xx.x (Build ...)"
 
-entries: []
+entries:
+  # -- xlwings empty-string round-trip gap ---------------------------------
+  # The Mac xlwings driver cannot write a cell holding the empty string
+  # "": assigning "" leaves the cell genuinely blank from Excel's point of
+  # view. Symmetrically, reading a cell whose formula returned "" comes
+  # back as None (blank) rather than as the text "". Both directions
+  # break the four cases below. These are genuine Formulon-vs-Excel
+  # agreements that we cannot round-trip through the current oracle
+  # infrastructure; revisit if we replace xlwings with AppleScript/COM
+  # direct writes. Kept in the YAML so the divergences are visible.
+  - id: isblank_of_empty_string
+    mode: skip-oracle
+    reason: "xlwings writes \"\" as a blank cell, so Excel reports ISBLANK=TRUE even though Formulon correctly says FALSE."
+    prefer: formulon
+    first_noted: 2026-04-23
+  - id: t_of_number
+    mode: skip-oracle
+    reason: "xlwings classifies the empty-string result of =T(42) as blank on read-back; Formulon returns text(\"\") which is strictly correct."
+    prefer: formulon
+    first_noted: 2026-04-23
+  - id: t_of_bool
+    mode: skip-oracle
+    reason: "Same xlwings \"\" -> blank read-back gap as t_of_number."
+    prefer: formulon
+    first_noted: 2026-04-23
+  - id: t_of_blank_cell
+    mode: skip-oracle
+    reason: "Same xlwings \"\" -> blank read-back gap as t_of_number."
+    prefer: formulon
+    first_noted: 2026-04-23
 
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect

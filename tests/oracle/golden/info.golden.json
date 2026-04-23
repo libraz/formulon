@@ -1,0 +1,312 @@
+{
+  "suite": "info",
+  "description": "IS* predicates, T, N type-introspection and coercion",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-23T02:23:21Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "isblank_of_empty_cell",
+      "formula": "=ISBLANK(A1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "isblank_of_number",
+      "formula": "=ISBLANK(A1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "isblank_of_empty_string",
+      "formula": "=ISBLANK(A1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": ""
+        }
+      },
+      "skipped": "xlwings writes \"\" as a blank cell, so Excel reports ISBLANK=TRUE even though Formulon correctly says FALSE."
+    },
+    {
+      "id": "isnumber_of_integer",
+      "formula": "=ISNUMBER(42)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "isnumber_of_float",
+      "formula": "=ISNUMBER(3.14)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "isnumber_of_text",
+      "formula": "=ISNUMBER(\"42\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "isnumber_of_bool",
+      "formula": "=ISNUMBER(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "isnumber_of_error",
+      "formula": "=ISNUMBER(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "istext_of_string_literal",
+      "formula": "=ISTEXT(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "istext_of_empty_string",
+      "formula": "=ISTEXT(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "istext_of_number",
+      "formula": "=ISTEXT(42)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "istext_of_blank_cell",
+      "formula": "=ISTEXT(A1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "islogical_of_true",
+      "formula": "=ISLOGICAL(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "islogical_of_false",
+      "formula": "=ISLOGICAL(FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "islogical_of_number",
+      "formula": "=ISLOGICAL(1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "islogical_of_text",
+      "formula": "=ISLOGICAL(\"TRUE\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "iserror_of_div0",
+      "formula": "=ISERROR(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "iserror_of_na",
+      "formula": "=ISERROR(NA())",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "iserror_of_number",
+      "formula": "=ISERROR(42)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "iserr_of_div0",
+      "formula": "=ISERR(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "iserr_of_na_is_false",
+      "formula": "=ISERR(NA())",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "isna_of_na",
+      "formula": "=ISNA(NA())",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "isna_of_div0",
+      "formula": "=ISNA(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "isna_of_number",
+      "formula": "=ISNA(42)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "t_of_text",
+      "formula": "=T(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hello"
+      }
+    },
+    {
+      "id": "t_of_number",
+      "formula": "=T(42)",
+      "setup": {},
+      "skipped": "xlwings classifies the empty-string result of =T(42) as blank on read-back; Formulon returns text(\"\") which is strictly correct."
+    },
+    {
+      "id": "t_of_bool",
+      "formula": "=T(TRUE)",
+      "setup": {},
+      "skipped": "Same xlwings \"\" -> blank read-back gap as t_of_number."
+    },
+    {
+      "id": "t_of_blank_cell",
+      "formula": "=T(A1)",
+      "setup": {},
+      "skipped": "Same xlwings \"\" -> blank read-back gap as t_of_number."
+    },
+    {
+      "id": "n_of_number",
+      "formula": "=N(42)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "n_of_true",
+      "formula": "=N(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "n_of_false",
+      "formula": "=N(FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n_of_text",
+      "formula": "=N(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n_of_blank_cell",
+      "formula": "=N(A1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    }
+  ]
+}

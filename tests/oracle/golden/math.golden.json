@@ -1,0 +1,422 @@
+{
+  "suite": "math",
+  "description": "ABS / SIGN / INT / TRUNC / MOD / ROUND* / POWER / SQRT / EXP / LN / LOG / LOG10 / PI / VALUE",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-23T02:19:15Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "abs_positive",
+      "formula": "=ABS(5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "abs_negative",
+      "formula": "=ABS(-5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "abs_zero",
+      "formula": "=ABS(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "abs_fraction",
+      "formula": "=ABS(-3.14)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.14
+      }
+    },
+    {
+      "id": "sign_positive",
+      "formula": "=SIGN(42)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "sign_negative",
+      "formula": "=SIGN(-42)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "sign_zero",
+      "formula": "=SIGN(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "int_positive_fraction",
+      "formula": "=INT(3.7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "int_negative_fraction",
+      "formula": "=INT(-3.7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4.0
+      }
+    },
+    {
+      "id": "int_already_integer",
+      "formula": "=INT(5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "trunc_positive_fraction",
+      "formula": "=TRUNC(3.7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "trunc_negative_fraction",
+      "formula": "=TRUNC(-3.7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "trunc_with_digits",
+      "formula": "=TRUNC(3.14159,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.14
+      }
+    },
+    {
+      "id": "mod_positive",
+      "formula": "=MOD(10,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mod_exact_division",
+      "formula": "=MOD(10,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mod_negative_dividend",
+      "formula": "=MOD(-10,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "mod_zero_divisor_is_div0",
+      "formula": "=MOD(5,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "round_half_up",
+      "formula": "=ROUND(2.5,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "round_neg_half",
+      "formula": "=ROUND(-2.5,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "round_to_two_digits",
+      "formula": "=ROUND(3.14159,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.14
+      }
+    },
+    {
+      "id": "round_to_neg_digits",
+      "formula": "=ROUND(1234.5,-2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1200.0
+      }
+    },
+    {
+      "id": "roundup_positive",
+      "formula": "=ROUNDUP(3.14,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.2
+      }
+    },
+    {
+      "id": "roundup_negative",
+      "formula": "=ROUNDUP(-3.14,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.2
+      }
+    },
+    {
+      "id": "rounddown_positive",
+      "formula": "=ROUNDDOWN(3.19,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.1
+      }
+    },
+    {
+      "id": "rounddown_negative",
+      "formula": "=ROUNDDOWN(-3.19,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.1
+      }
+    },
+    {
+      "id": "power_square",
+      "formula": "=POWER(5,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 25.0
+      }
+    },
+    {
+      "id": "power_fraction",
+      "formula": "=POWER(2,0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.4142135623730951
+      }
+    },
+    {
+      "id": "power_negative_base_int_exp",
+      "formula": "=POWER(-2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -8.0
+      }
+    },
+    {
+      "id": "power_zero_to_zero",
+      "formula": "=POWER(0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "sqrt_of_nine",
+      "formula": "=SQRT(9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "sqrt_of_zero",
+      "formula": "=SQRT(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sqrt_of_negative_is_num",
+      "formula": "=SQRT(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "exp_of_zero",
+      "formula": "=EXP(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "exp_of_one",
+      "formula": "=EXP(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.718281828459045
+      }
+    },
+    {
+      "id": "ln_of_one",
+      "formula": "=LN(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "ln_of_e",
+      "formula": "=LN(EXP(1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "ln_of_zero_is_num",
+      "formula": "=LN(0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "log_default_base_10",
+      "formula": "=LOG(1000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "log_explicit_base_2",
+      "formula": "=LOG(8,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "log10_of_100",
+      "formula": "=LOG10(100)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "pi_value",
+      "formula": "=PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "pi_times_two",
+      "formula": "=PI()*2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.283185307179586
+      }
+    },
+    {
+      "id": "value_of_numeric_string",
+      "formula": "=VALUE(\"42\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "value_of_float_string",
+      "formula": "=VALUE(\"3.14\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.14
+      }
+    },
+    {
+      "id": "value_of_non_numeric_text",
+      "formula": "=VALUE(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

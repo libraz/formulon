@@ -274,10 +274,12 @@ TEST(MathPower, BasicPositiveExponent) {
   EXPECT_EQ(v.as_number(), 1024.0);
 }
 
-TEST(MathPower, ZeroPowZeroIsOne) {
+// Excel reports #NUM! for 0^0, diverging from the IEEE-754 pow convention.
+// Both POWER() and the `^` operator share this rule via apply_pow.
+TEST(MathPower, ZeroPowZeroIsNum) {
   const Value v = EvalSource("=POWER(0, 0)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), 1.0);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(MathPower, NegativeBaseFractionalExpYieldsNum) {

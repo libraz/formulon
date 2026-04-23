@@ -246,6 +246,15 @@ TEST_P(OracleTest, Matches) {
     return;
   }
 
+  // Cases marked skip-oracle in tests/divergence.yaml flow through oracle-gen
+  // with a bare `"skipped": "<reason>"` field (no `expect`). The verifier
+  // surfaces them as gtest-skipped so the pass-rate math still reflects them
+  // as "known non-verified" rather than hiding the gap.
+  if (const JsonValue* skipped = param.raw_case.find("skipped");
+      skipped && skipped->is_string()) {
+    GTEST_SKIP() << "divergence.yaml skip-oracle: " << skipped->as_string();
+  }
+
   const JsonValue* formula_v = param.raw_case.find("formula");
   const JsonValue* expect_v = param.raw_case.find("expect");
   if (formula_v == nullptr || !formula_v->is_string() ||

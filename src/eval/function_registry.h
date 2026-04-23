@@ -58,14 +58,24 @@ struct FunctionDef {
   /// vector. When false, a RangeOp argument evaluates to `#VALUE!` as
   /// before. Only simple literal ranges (Ref:Ref) are expanded; any other
   /// RangeOp shape (e.g. INDIRECT-produced) surfaces as `#REF!`.
-  ///
-  /// The aggregator impls that opt in (`SUM`, `AVERAGE`, `MIN`, `MAX`,
-  /// `PRODUCT`) treat every expanded cell value through the scalar coercion
-  /// helpers, so range cells containing text or booleans behave like their
-  /// literal-argument counterparts. This diverges from Excel, which skips
-  /// text / bool cells when they appear inside a range; the range-vs-direct
-  /// semantic split is deferred.
   bool accepts_ranges = false;
+
+  /// Provenance-aware filter: when set, only Number-typed values flowing in
+  /// through a RangeOp (or range-like) argument survive flattening; Bool,
+  /// Text, and Blank cells inside the range are dropped before reaching the
+  /// impl. Direct scalar arguments are unaffected and continue to coerce
+  /// through the normal rules. Mirrors Excel's behaviour for SUM / AVERAGE /
+  /// MIN / MAX / PRODUCT, where a bool cell sourced from a range is skipped
+  /// silently while a bool passed directly coerces to 1 / 0.
+  bool range_filter_numeric_only = false;
+
+  /// Provenance-aware filter for AND / OR: when set, Number and Bool values
+  /// flowing in through a RangeOp argument survive (numbers coerce to bool
+  /// via 0 / non-zero), and Text / Blank cells inside the range are
+  /// dropped silently. Direct scalar arguments still flow through the
+  /// dispatcher's normal coercion, so a text literal passed directly
+  /// surfaces as #VALUE!.
+  bool range_filter_bool_coercible = false;
 };
 
 /// Case-insensitive function lookup table. Names are stored UPPERCASE

@@ -410,6 +410,18 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         if (def->propagate_errors && v.is_error()) {
           return v;
         }
+        // Provenance-aware filtering for range-sourced values. Excel skips
+        // Bool / Text / Blank cells inside a range for SUM / AVERAGE /
+        // MIN / MAX / PRODUCT, and skips Text / Blank for AND / OR.
+        // Direct scalar arguments (handled in the `else` branch below) are
+        // not affected by either filter.
+        if (def->range_filter_numeric_only && v.kind() != ValueKind::Number) {
+          continue;
+        }
+        if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number &&
+            v.kind() != ValueKind::Bool) {
+          continue;
+        }
         values.push_back(v);
       }
       continue;

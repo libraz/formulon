@@ -328,11 +328,13 @@ TEST(TreeWalkerNumeric, NegativeBaseFractionalExponent) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(TreeWalkerNumeric, ZeroPowZeroIsOne) {
-  // Excel matches IEEE pow(0, 0) == 1.
+TEST(TreeWalkerNumeric, ZeroPowZeroIsNum) {
+  // Excel reports #NUM! for 0^0 rather than the IEEE pow convention of 1.
+  // This applies to both the `^` operator and the POWER() builtin via the
+  // shared apply_pow helper.
   const Value v = EvalSource("=0^0");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), 1.0);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 // ---------------------------------------------------------------------------
@@ -620,14 +622,12 @@ TEST(TreeWalkerRanges, SumWithBlankInMiddle) {
 TEST(TreeWalkerRanges, AverageOverThree) {
   Sheet sheet("Sheet1");
   sheet.set_cell_value(0, 0, Value::number(3.0));
-  // A2 is blank -> coerced to 0 in the total, but still counts toward the
-  // divisor. NOTE: diverges from Excel; documented divergence.
+  // A2 is blank; the range provenance filter drops blank cells before the
+  // AVERAGE impl runs, so the divisor is 2 (matches Excel).
   sheet.set_cell_value(2, 0, Value::number(9.0));
   const Value v = EvalInSheet(sheet, "=AVERAGE(A1:A3)");
   ASSERT_TRUE(v.is_number());
-  // NOTE: diverges from Excel; documented divergence. Excel skips the blank
-  // cell and yields 6.0 (average of 3 and 9); Formulon divides by 3.
-  EXPECT_EQ(v.as_number(), 4.0);
+  EXPECT_EQ(v.as_number(), 6.0);
 }
 
 TEST(TreeWalkerRanges, MinOverThree) {
@@ -681,17 +681,17 @@ TEST(TreeWalkerRanges, ErrorCellPropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
-TEST(TreeWalkerRanges, TextCellInRangeYieldsValue) {
+TEST(TreeWalkerRanges, TextCellInRangeIsSkipped) {
   Sheet sheet("Sheet1");
   sheet.set_cell_value(0, 0, Value::number(1.0));
   sheet.set_cell_value(1, 0, Value::text("hello"));
   sheet.set_cell_value(2, 0, Value::number(3.0));
-  // NOTE: diverges from Excel; Excel skips text cells inside a range.
-  // Formulon coerces every expanded cell via `coerce_to_number`, so a text
-  // cell that cannot parse as a number surfaces #VALUE!.
+  // The range provenance filter drops text cells silently for SUM / AVERAGE
+  // / MIN / MAX / PRODUCT, matching Excel. A text *literal* passed directly
+  // (=SUM(1,"hello",3)) still surfaces #VALUE!.
   const Value v = EvalInSheet(sheet, "=SUM(A1:A3)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 4.0);
 }
 
 TEST(TreeWalkerRanges, CrossSheetRangeReturnsRef) {

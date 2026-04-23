@@ -102,9 +102,16 @@ Expected<std::string, ErrorCode> coerce_to_text(const Value& v) {
 }
 
 Expected<double, ErrorCode> apply_pow(double base, double exp) {
-  // Excel matches IEEE-754 std::pow for the basic cases. Negative base with
-  // a non-integer exponent yields NaN -> #NUM!. Overflow / underflow to Inf
-  // also yields #NUM!. POWER(0, 0) returns 1 here, matching std::pow.
+  // Excel treats 0^0 as indeterminate and reports #NUM!, diverging from the
+  // IEEE-754 pow convention of 1. Guarded explicitly before the std::pow
+  // call so both the POWER() builtin and the `^` binary operator share the
+  // same behaviour.
+  if (base == 0.0 && exp == 0.0) {
+    return ErrorCode::Num;
+  }
+  // For all other cases Excel matches std::pow: negative base with a
+  // non-integer exponent yields NaN -> #NUM!, and overflow / underflow to
+  // Inf also yields #NUM!.
   const double r = std::pow(base, exp);
   if (std::isnan(r) || std::isinf(r)) {
     return ErrorCode::Num;

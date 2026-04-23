@@ -1,0 +1,157 @@
+suite: math
+description: ABS / SIGN / INT / TRUNC / MOD / ROUND* / POWER / SQRT / EXP / LN / LOG / LOG10 / PI / VALUE
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # -- ABS -----------------------------------------------------------------
+  - id: abs_positive
+    formula: "=ABS(5)"
+
+  - id: abs_negative
+    formula: "=ABS(-5)"
+
+  - id: abs_zero
+    formula: "=ABS(0)"
+
+  - id: abs_fraction
+    formula: "=ABS(-3.14)"
+
+  # -- SIGN ----------------------------------------------------------------
+  - id: sign_positive
+    formula: "=SIGN(42)"
+
+  - id: sign_negative
+    formula: "=SIGN(-42)"
+
+  - id: sign_zero
+    formula: "=SIGN(0)"
+
+  # -- INT (floor toward -inf) --------------------------------------------
+  - id: int_positive_fraction
+    formula: "=INT(3.7)"
+
+  - id: int_negative_fraction
+    description: "INT rounds toward -inf: INT(-3.7) = -4, not -3"
+    formula: "=INT(-3.7)"
+
+  - id: int_already_integer
+    formula: "=INT(5)"
+
+  # -- TRUNC (truncate toward zero) ---------------------------------------
+  - id: trunc_positive_fraction
+    formula: "=TRUNC(3.7)"
+
+  - id: trunc_negative_fraction
+    description: "TRUNC rounds toward 0: TRUNC(-3.7) = -3 (not -4)"
+    formula: "=TRUNC(-3.7)"
+
+  - id: trunc_with_digits
+    formula: "=TRUNC(3.14159,2)"
+
+  # -- MOD -----------------------------------------------------------------
+  - id: mod_positive
+    formula: "=MOD(10,3)"
+
+  - id: mod_exact_division
+    formula: "=MOD(10,5)"
+
+  - id: mod_negative_dividend
+    description: "Excel MOD sign follows divisor: MOD(-10,3) = 2"
+    formula: "=MOD(-10,3)"
+
+  - id: mod_zero_divisor_is_div0
+    formula: "=MOD(5,0)"
+
+  # -- ROUND / ROUNDUP / ROUNDDOWN ----------------------------------------
+  - id: round_half_up
+    description: "Excel: banker's rounding NOT used; .5 always rounds away from zero"
+    formula: "=ROUND(2.5,0)"
+
+  - id: round_neg_half
+    formula: "=ROUND(-2.5,0)"
+
+  - id: round_to_two_digits
+    formula: "=ROUND(3.14159,2)"
+
+  - id: round_to_neg_digits
+    description: "Negative digits round to tens/hundreds"
+    formula: "=ROUND(1234.5,-2)"
+
+  - id: roundup_positive
+    description: "ROUNDUP rounds away from zero"
+    formula: "=ROUNDUP(3.14,1)"
+
+  - id: roundup_negative
+    formula: "=ROUNDUP(-3.14,1)"
+
+  - id: rounddown_positive
+    formula: "=ROUNDDOWN(3.19,1)"
+
+  - id: rounddown_negative
+    formula: "=ROUNDDOWN(-3.19,1)"
+
+  # -- POWER / SQRT -------------------------------------------------------
+  - id: power_square
+    formula: "=POWER(5,2)"
+
+  - id: power_fraction
+    formula: "=POWER(2,0.5)"
+
+  - id: power_negative_base_int_exp
+    formula: "=POWER(-2,3)"
+
+  - id: power_zero_to_zero
+    description: "Excel returns 1 for POWER(0,0) (IEEE pow convention)"
+    formula: "=POWER(0,0)"
+
+  - id: sqrt_of_nine
+    formula: "=SQRT(9)"
+
+  - id: sqrt_of_zero
+    formula: "=SQRT(0)"
+
+  - id: sqrt_of_negative_is_num
+    formula: "=SQRT(-1)"
+
+  # -- EXP / LN / LOG / LOG10 ---------------------------------------------
+  - id: exp_of_zero
+    formula: "=EXP(0)"
+
+  - id: exp_of_one
+    formula: "=EXP(1)"
+
+  - id: ln_of_one
+    formula: "=LN(1)"
+
+  - id: ln_of_e
+    formula: "=LN(EXP(1))"
+
+  - id: ln_of_zero_is_num
+    formula: "=LN(0)"
+
+  - id: log_default_base_10
+    description: "LOG(n) with no base defaults to base 10"
+    formula: "=LOG(1000)"
+
+  - id: log_explicit_base_2
+    formula: "=LOG(8,2)"
+
+  - id: log10_of_100
+    formula: "=LOG10(100)"
+
+  # -- PI ------------------------------------------------------------------
+  - id: pi_value
+    formula: "=PI()"
+
+  - id: pi_times_two
+    formula: "=PI()*2"
+
+  # -- VALUE ---------------------------------------------------------------
+  - id: value_of_numeric_string
+    formula: "=VALUE(\"42\")"
+
+  - id: value_of_float_string
+    formula: "=VALUE(\"3.14\")"
+
+  - id: value_of_non_numeric_text
+    formula: "=VALUE(\"hello\")"

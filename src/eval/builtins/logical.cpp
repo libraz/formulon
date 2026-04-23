@@ -84,8 +84,23 @@ void register_logical_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"TRUE", 0u, 0u, &True_});
   registry.register_function(FunctionDef{"FALSE", 0u, 0u, &False_});
   registry.register_function(FunctionDef{"NOT", 1u, 1u, &Not});
-  registry.register_function(FunctionDef{"AND", 1u, kVariadic, &And_});
-  registry.register_function(FunctionDef{"OR", 1u, kVariadic, &Or_});
+  // AND / OR are range-aware so `=AND(A1:A3)` expands the rectangle. The
+  // `range_filter_bool_coercible` flag silently drops Text / Blank cells
+  // inside a range (Excel skips them rather than surfacing #VALUE!), while
+  // direct scalar arguments still flow through `coerce_to_bool` and surface
+  // #VALUE! for non-coercible text literals.
+  {
+    FunctionDef def{"AND", 1u, kVariadic, &And_};
+    def.accepts_ranges = true;
+    def.range_filter_bool_coercible = true;
+    registry.register_function(def);
+  }
+  {
+    FunctionDef def{"OR", 1u, kVariadic, &Or_};
+    def.accepts_ranges = true;
+    def.range_filter_bool_coercible = true;
+    registry.register_function(def);
+  }
 }
 
 }  // namespace eval

@@ -77,6 +77,14 @@ Value IsNa(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return Value::boolean(v.as_error() == ErrorCode::NA);
 }
 
+// NA() - zero-argument constant that returns the #N/A error. Used as the
+// explicit way to inject #N/A into a formula; typically paired with
+// IFNA / ISNA. Distinct from lookup-style #N/A which surfaces from
+// MATCH / VLOOKUP miss paths.
+Value Na(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  return Value::error(ErrorCode::NA);
+}
+
 // --- Coercion-style info functions --------------------------------------
 //
 // `N` and `T` propagate errors via the dispatcher's default short-circuit
@@ -144,6 +152,7 @@ void register_info_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"ISERROR", 1u, 1u, &IsError, /*propagate_errors=*/false});
   registry.register_function(FunctionDef{"ISERR", 1u, 1u, &IsErr, /*propagate_errors=*/false});
   registry.register_function(FunctionDef{"ISNA", 1u, 1u, &IsNa, /*propagate_errors=*/false});
+  registry.register_function(FunctionDef{"NA", 0u, 0u, &Na});
   registry.register_function(FunctionDef{"N", 1u, 1u, &N});
   registry.register_function(FunctionDef{"T", 1u, 1u, &T});
 }

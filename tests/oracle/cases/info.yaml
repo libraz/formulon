@@ -1,0 +1,125 @@
+suite: info
+description: IS* predicates, T, N type-introspection and coercion
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  # -- ISBLANK -------------------------------------------------------------
+  - id: isblank_of_empty_cell
+    setup: {}
+    formula: "=ISBLANK(A1)"
+
+  - id: isblank_of_number
+    setup: { A1: 1 }
+    formula: "=ISBLANK(A1)"
+
+  - id: isblank_of_empty_string
+    description: "Excel: ISBLANK(\"\") is FALSE — empty string is not blank"
+    setup: { A1: "" }
+    formula: "=ISBLANK(A1)"
+
+  # -- ISNUMBER ------------------------------------------------------------
+  - id: isnumber_of_integer
+    formula: "=ISNUMBER(42)"
+
+  - id: isnumber_of_float
+    formula: "=ISNUMBER(3.14)"
+
+  - id: isnumber_of_text
+    formula: "=ISNUMBER(\"42\")"
+
+  - id: isnumber_of_bool
+    description: "Excel: ISNUMBER(TRUE) is FALSE — bool is not a number"
+    formula: "=ISNUMBER(TRUE)"
+
+  - id: isnumber_of_error
+    formula: "=ISNUMBER(1/0)"
+
+  # -- ISTEXT --------------------------------------------------------------
+  - id: istext_of_string_literal
+    formula: "=ISTEXT(\"hello\")"
+
+  - id: istext_of_empty_string
+    formula: "=ISTEXT(\"\")"
+
+  - id: istext_of_number
+    formula: "=ISTEXT(42)"
+
+  - id: istext_of_blank_cell
+    description: "Excel: ISTEXT of a blank cell is FALSE"
+    setup: {}
+    formula: "=ISTEXT(A1)"
+
+  # -- ISLOGICAL -----------------------------------------------------------
+  - id: islogical_of_true
+    formula: "=ISLOGICAL(TRUE)"
+
+  - id: islogical_of_false
+    formula: "=ISLOGICAL(FALSE)"
+
+  - id: islogical_of_number
+    formula: "=ISLOGICAL(1)"
+
+  - id: islogical_of_text
+    formula: "=ISLOGICAL(\"TRUE\")"
+
+  # -- ISERROR / ISERR / ISNA ---------------------------------------------
+  - id: iserror_of_div0
+    formula: "=ISERROR(1/0)"
+
+  - id: iserror_of_na
+    formula: "=ISERROR(NA())"
+
+  - id: iserror_of_number
+    formula: "=ISERROR(42)"
+
+  - id: iserr_of_div0
+    description: "ISERR catches any error EXCEPT #N/A"
+    formula: "=ISERR(1/0)"
+
+  - id: iserr_of_na_is_false
+    description: "ISERR ignores #N/A (use ISNA for that)"
+    formula: "=ISERR(NA())"
+
+  - id: isna_of_na
+    formula: "=ISNA(NA())"
+
+  - id: isna_of_div0
+    description: "ISNA only matches #N/A"
+    formula: "=ISNA(1/0)"
+
+  - id: isna_of_number
+    formula: "=ISNA(42)"
+
+  # -- T (text coercion) ---------------------------------------------------
+  - id: t_of_text
+    formula: "=T(\"hello\")"
+
+  - id: t_of_number
+    description: "T returns empty string for non-text"
+    formula: "=T(42)"
+
+  - id: t_of_bool
+    formula: "=T(TRUE)"
+
+  - id: t_of_blank_cell
+    setup: {}
+    formula: "=T(A1)"
+
+  # -- N (number coercion) -------------------------------------------------
+  - id: n_of_number
+    formula: "=N(42)"
+
+  - id: n_of_true
+    description: "N(TRUE) -> 1"
+    formula: "=N(TRUE)"
+
+  - id: n_of_false
+    formula: "=N(FALSE)"
+
+  - id: n_of_text
+    description: "N of non-numeric text -> 0"
+    formula: "=N(\"hello\")"
+
+  - id: n_of_blank_cell
+    setup: {}
+    formula: "=N(A1)"

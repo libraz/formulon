@@ -1,0 +1,124 @@
+suite: operators
+description: Arithmetic / comparison / concatenation operators with coercion
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # -- Arithmetic ----------------------------------------------------------
+  - id: add_integers
+    formula: "=1+2"
+
+  - id: add_floats
+    formula: "=1.5+2.25"
+
+  - id: subtract
+    formula: "=10-3"
+
+  - id: multiply
+    formula: "=6*7"
+
+  - id: divide_exact
+    formula: "=10/4"
+
+  - id: divide_by_zero
+    formula: "=1/0"
+
+  - id: power_op
+    formula: "=2^10"
+
+  - id: unary_negate
+    formula: "=-5"
+
+  - id: unary_plus
+    formula: "=+5"
+
+  - id: percent_unary
+    description: "Postfix % divides by 100"
+    formula: "=50%"
+
+  - id: percent_in_expression
+    formula: "=20*10%"
+
+  # -- Numeric string coercion -------------------------------------------
+  - id: add_numeric_string
+    description: "Excel: \"3\"+4 coerces string to number"
+    formula: "=\"3\"+4"
+
+  - id: add_non_numeric_string
+    formula: "=\"abc\"+4"
+
+  - id: add_bool_true_is_one
+    formula: "=TRUE+1"
+
+  - id: add_bool_false_is_zero
+    formula: "=FALSE+5"
+
+  # -- Precedence ----------------------------------------------------------
+  - id: precedence_mul_over_add
+    formula: "=1+2*3"
+
+  - id: precedence_paren_overrides
+    formula: "=(1+2)*3"
+
+  - id: precedence_pow_over_mul
+    formula: "=2*3^2"
+
+  - id: precedence_unary_over_pow
+    description: "Excel: unary minus binds tighter than ^, so -2^2 = 4 (not -4)"
+    formula: "=-2^2"
+
+  # -- Comparison (returns BOOL) ------------------------------------------
+  - id: cmp_eq_true
+    formula: "=3=3"
+
+  - id: cmp_eq_false
+    formula: "=3=4"
+
+  - id: cmp_ne
+    formula: "=3<>4"
+
+  - id: cmp_lt
+    formula: "=3<5"
+
+  - id: cmp_lte
+    formula: "=5<=5"
+
+  - id: cmp_gt
+    formula: "=5>3"
+
+  - id: cmp_gte
+    formula: "=3>=5"
+
+  - id: cmp_number_vs_text
+    description: "Excel: numbers always compare less than text"
+    formula: "=1<\"a\""
+
+  - id: cmp_text_case_insensitive_eq
+    description: "Excel = on text is case-insensitive"
+    formula: "=\"ABC\"=\"abc\""
+
+  - id: cmp_bool_greater_than_text
+    description: "Excel rank: number < text < FALSE < TRUE"
+    formula: "=TRUE>\"zzz\""
+
+  # -- Concatenation ------------------------------------------------------
+  - id: concat_text
+    formula: "=\"a\"&\"b\""
+
+  - id: concat_number_coerces
+    description: "Number & text coerces number to its shortest text form"
+    formula: "=1&\"x\""
+
+  - id: concat_bool
+    description: "TRUE in concat becomes the text \"TRUE\""
+    formula: "=TRUE&\"x\""
+
+  - id: concat_float
+    formula: "=3.14&\"\""
+
+  # -- Error propagation --------------------------------------------------
+  - id: error_propagates_through_add
+    formula: "=1/0+1"
+
+  - id: error_leftmost_wins
+    description: "Left-most error wins: #DIV/0! beats #N/A"
+    formula: "=1/0+NA()"

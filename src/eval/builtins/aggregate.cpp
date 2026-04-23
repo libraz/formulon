@@ -71,13 +71,16 @@ Value Len(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 
 // --- Aggregates ---------------------------------------------------------
 
-// MIN(value, ...) - smallest of the coerced numbers. The Excel "skip text
-// in cell-references" rule does NOT apply here: a literal non-numeric
-// argument coerces via `coerce_to_number` and surfaces `#VALUE!` on
-// failure. The caller's pre-evaluation has already short-circuited any
-// argument that was itself an error.
+// MIN(value, ...) - smallest of the coerced numbers. A literal non-numeric
+// argument coerces via `coerce_to_number` and surfaces `#VALUE!` on failure.
+// The caller's pre-evaluation has already short-circuited any argument that
+// was itself an error. When every argument is filtered out by the
+// range-vs-direct provenance rule (e.g. `=MIN(A1:A3)` over an empty / all-
+// text range), Excel returns 0 rather than an error.
 Value Min(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  // arity >= 1 by registry contract (min_arity = 1).
+  if (arity == 0) {
+    return Value::number(0.0);
+  }
   auto first = coerce_to_number(args[0]);
   if (!first) {
     return Value::error(first.error());
@@ -98,8 +101,11 @@ Value Min(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return Value::number(best);
 }
 
-// MAX(value, ...) - symmetric to MIN.
+// MAX(value, ...) - symmetric to MIN. Empty post-filter arity also returns 0.
 Value Max(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  if (arity == 0) {
+    return Value::number(0.0);
+  }
   auto first = coerce_to_number(args[0]);
   if (!first) {
     return Value::error(first.error());
@@ -120,10 +126,14 @@ Value Max(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return Value::number(best);
 }
 
-// AVERAGE(value, ...) - arithmetic mean. With `min_arity = 1` enforced
-// at the registry, the divisor is always at least 1, so there is no
-// divide-by-zero edge case.
+// AVERAGE(value, ...) - arithmetic mean. The registry enforces min_arity=1
+// on the pre-expansion argument count, but the provenance filter may drop
+// every range-sourced value before this impl runs; in that case Excel
+// reports #DIV/0!.
 Value Average(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  if (arity == 0) {
+    return Value::error(ErrorCode::Div0);
+  }
   double total = 0.0;
   for (std::uint32_t i = 0; i < arity; ++i) {
     auto coerced = coerce_to_number(args[i]);
@@ -140,7 +150,13 @@ Value Average(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 }
 
 // PRODUCT(value, ...) - product of all args. Overflow to Inf -> `#NUM!`.
+// When every argument was filtered out by the range-vs-direct provenance
+// rule (e.g. `=PRODUCT(A1:A3)` over an empty / all-text range), Excel
+// returns 0 rather than the mathematical identity 1.
 Value Product(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  if (arity == 0) {
+    return Value::number(0.0);
+  }
   double total = 1.0;
   for (std::uint32_t i = 0; i < arity; ++i) {
     auto coerced = coerce_to_number(args[i]);
@@ -207,9 +223,12 @@ Value CountBlank(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 void register_aggregate_builtins(FunctionRegistry& registry) {
   {
     // SUM is range-aware: `=SUM(A1:A100)` expands the rectangle into scalar
-    // cell values before this impl runs.
+    // cell values before this impl runs. Range-sourced Bool / Text / Blank
+    // cells are silently skipped to match Excel's provenance rule; direct
+    // arguments continue to coerce normally.
     FunctionDef def{"SUM", 1u, kVariadic, &Sum};
     def.accepts_ranges = true;
+    def.range_filter_numeric_only = true;
     registry.register_function(def);
   }
   registry.register_function(FunctionDef{"CONCAT", 1u, kVariadic, &Concat});
@@ -220,25 +239,33 @@ void register_aggregate_builtins(FunctionRegistry& registry) {
 
   // Aggregates (min_arity = 1, variadic). Each is range-aware: a RangeOp
   // argument is flattened into scalar cell values by the dispatcher before
-  // the impl runs.
+  // the impl runs. The `range_filter_numeric_only` flag mirrors Excel's
+  // provenance rule: Bool / Text / Blank cells sourced from a range are
+  // dropped silently, while direct scalar arguments continue through
+  // normal coercion (so =SUM(10,TRUE,30) is 41 but =SUM(A1:A3) with a
+  // TRUE cell is 40).
   {
     FunctionDef def{"MIN", 1u, kVariadic, &Min};
     def.accepts_ranges = true;
+    def.range_filter_numeric_only = true;
     registry.register_function(def);
   }
   {
     FunctionDef def{"MAX", 1u, kVariadic, &Max};
     def.accepts_ranges = true;
+    def.range_filter_numeric_only = true;
     registry.register_function(def);
   }
   {
     FunctionDef def{"AVERAGE", 1u, kVariadic, &Average};
     def.accepts_ranges = true;
+    def.range_filter_numeric_only = true;
     registry.register_function(def);
   }
   {
     FunctionDef def{"PRODUCT", 1u, kVariadic, &Product};
     def.accepts_ranges = true;
+    def.range_filter_numeric_only = true;
     registry.register_function(def);
   }
 

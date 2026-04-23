@@ -1,0 +1,332 @@
+{
+  "suite": "operators",
+  "description": "Arithmetic / comparison / concatenation operators with coercion",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-23T02:19:15Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "add_integers",
+      "formula": "=1+2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "add_floats",
+      "formula": "=1.5+2.25",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.75
+      }
+    },
+    {
+      "id": "subtract",
+      "formula": "=10-3",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "multiply",
+      "formula": "=6*7",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "divide_exact",
+      "formula": "=10/4",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.5
+      }
+    },
+    {
+      "id": "divide_by_zero",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "power_op",
+      "formula": "=2^10",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1024.0
+      }
+    },
+    {
+      "id": "unary_negate",
+      "formula": "=-5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "unary_plus",
+      "formula": "=+5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "percent_unary",
+      "formula": "=50%",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "percent_in_expression",
+      "formula": "=20*10%",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "add_numeric_string",
+      "formula": "=\"3\"+4",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "add_non_numeric_string",
+      "formula": "=\"abc\"+4",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "add_bool_true_is_one",
+      "formula": "=TRUE+1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "add_bool_false_is_zero",
+      "formula": "=FALSE+5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "precedence_mul_over_add",
+      "formula": "=1+2*3",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "precedence_paren_overrides",
+      "formula": "=(1+2)*3",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "precedence_pow_over_mul",
+      "formula": "=2*3^2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 18.0
+      }
+    },
+    {
+      "id": "precedence_unary_over_pow",
+      "formula": "=-2^2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "cmp_eq_true",
+      "formula": "=3=3",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_eq_false",
+      "formula": "=3=4",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "cmp_ne",
+      "formula": "=3<>4",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_lt",
+      "formula": "=3<5",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_lte",
+      "formula": "=5<=5",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_gt",
+      "formula": "=5>3",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_gte",
+      "formula": "=3>=5",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "cmp_number_vs_text",
+      "formula": "=1<\"a\"",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_text_case_insensitive_eq",
+      "formula": "=\"ABC\"=\"abc\"",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_bool_greater_than_text",
+      "formula": "=TRUE>\"zzz\"",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "concat_text",
+      "formula": "=\"a\"&\"b\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ab"
+      }
+    },
+    {
+      "id": "concat_number_coerces",
+      "formula": "=1&\"x\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1x"
+      }
+    },
+    {
+      "id": "concat_bool",
+      "formula": "=TRUE&\"x\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "TRUEx"
+      }
+    },
+    {
+      "id": "concat_float",
+      "formula": "=3.14&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3.14"
+      }
+    },
+    {
+      "id": "error_propagates_through_add",
+      "formula": "=1/0+1",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "error_leftmost_wins",
+      "formula": "=1/0+NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    }
+  ]
+}

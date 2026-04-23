@@ -1,0 +1,447 @@
+{
+  "suite": "aggregate",
+  "description": "SUM / AVERAGE / MIN / MAX / PRODUCT with direct args, ranges, and coercion edge cases",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-23T02:19:15Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "sum_three_integers",
+      "formula": "=SUM(1,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "sum_with_floats",
+      "formula": "=SUM(1.5,2.5,3.0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "sum_from_range",
+      "formula": "=SUM(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "sum_range_skips_text",
+      "formula": "=SUM(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "text"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 40.0
+      }
+    },
+    {
+      "id": "sum_range_skips_bool",
+      "formula": "=SUM(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 40.0
+      }
+    },
+    {
+      "id": "sum_direct_arg_bool_counted",
+      "formula": "=SUM(10,TRUE,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 41.0
+      }
+    },
+    {
+      "id": "sum_range_with_error",
+      "formula": "=SUM(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "sum_empty_range",
+      "formula": "=SUM(A1:A3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sum_mixed_direct_and_range",
+      "formula": "=SUM(A1:A2,30,40)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "average_three_integers",
+      "formula": "=AVERAGE(2,4,6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "average_from_range",
+      "formula": "=AVERAGE(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "average_range_skips_text",
+      "formula": "=AVERAGE(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "text"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "average_range_skips_bool",
+      "formula": "=AVERAGE(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "average_empty_range_is_div0",
+      "formula": "=AVERAGE(A1:A3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "average_direct_arg_bool_counted",
+      "formula": "=AVERAGE(10,TRUE,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 13.666666666666666
+      }
+    },
+    {
+      "id": "min_three_integers",
+      "formula": "=MIN(3,1,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "min_with_negative",
+      "formula": "=MIN(-5,0,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "min_from_range",
+      "formula": "=MIN(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "min_range_skips_text_and_bool",
+      "formula": "=MIN(A1:A4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "text"
+        },
+        "A3": {
+          "kind": "bool",
+          "value": true
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "min_empty_range_is_zero",
+      "formula": "=MIN(A1:A3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "max_three_integers",
+      "formula": "=MAX(3,1,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "max_with_negative",
+      "formula": "=MAX(-5,-10,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "max_from_range",
+      "formula": "=MAX(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "max_empty_range_is_zero",
+      "formula": "=MAX(A1:A3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "product_three_integers",
+      "formula": "=PRODUCT(2,3,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 24.0
+      }
+    },
+    {
+      "id": "product_with_zero",
+      "formula": "=PRODUCT(2,0,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "product_from_range",
+      "formula": "=PRODUCT(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 24.0
+      }
+    },
+    {
+      "id": "product_empty_range_is_zero",
+      "formula": "=PRODUCT(A1:A3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "product_range_skips_text",
+      "formula": "=PRODUCT(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "text"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    }
+  ]
+}

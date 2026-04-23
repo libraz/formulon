@@ -1,0 +1,129 @@
+suite: logical
+description: TRUE / FALSE / NOT / AND / OR / IF / IFERROR / IFNA
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  # -- Literal constants ---------------------------------------------------
+  - id: true_literal
+    formula: "=TRUE()"
+
+  - id: false_literal
+    formula: "=FALSE()"
+
+  # -- NOT -----------------------------------------------------------------
+  - id: not_of_true
+    formula: "=NOT(TRUE)"
+
+  - id: not_of_false
+    formula: "=NOT(FALSE)"
+
+  - id: not_of_one_is_false
+    description: "NOT coerces number to bool: 1 -> TRUE -> NOT -> FALSE"
+    formula: "=NOT(1)"
+
+  - id: not_of_zero_is_true
+    formula: "=NOT(0)"
+
+  # -- AND -----------------------------------------------------------------
+  - id: and_all_true
+    formula: "=AND(TRUE,TRUE,TRUE)"
+
+  - id: and_with_false_short
+    formula: "=AND(TRUE,FALSE,TRUE)"
+
+  - id: and_coerces_numbers
+    description: "Non-zero numbers are TRUE, zero is FALSE"
+    formula: "=AND(1,2,3)"
+
+  - id: and_with_zero_number
+    formula: "=AND(1,0,1)"
+
+  - id: and_single_arg_true
+    formula: "=AND(TRUE)"
+
+  - id: and_from_range
+    setup: { A1: true, A2: true, A3: true }
+    formula: "=AND(A1:A3)"
+
+  - id: and_range_with_false
+    setup: { A1: true, A2: false, A3: true }
+    formula: "=AND(A1:A3)"
+
+  - id: and_range_skips_text
+    description: "Excel: AND skips text cells in range context (no #VALUE!)"
+    setup: { A1: true, A2: "text", A3: true }
+    formula: "=AND(A1:A3)"
+
+  # -- OR ------------------------------------------------------------------
+  - id: or_all_false
+    formula: "=OR(FALSE,FALSE,FALSE)"
+
+  - id: or_one_true_wins
+    formula: "=OR(FALSE,TRUE,FALSE)"
+
+  - id: or_numbers_nonzero_true
+    formula: "=OR(0,0,1)"
+
+  - id: or_all_zero_false
+    formula: "=OR(0,0,0)"
+
+  - id: or_from_range
+    setup: { A1: false, A2: true, A3: false }
+    formula: "=OR(A1:A3)"
+
+  # -- IF ------------------------------------------------------------------
+  - id: if_true_branch
+    formula: "=IF(TRUE,\"yes\",\"no\")"
+
+  - id: if_false_branch
+    formula: "=IF(FALSE,\"yes\",\"no\")"
+
+  - id: if_number_condition_true
+    description: "Non-zero number coerces to TRUE"
+    formula: "=IF(5,\"yes\",\"no\")"
+
+  - id: if_number_condition_false
+    formula: "=IF(0,\"yes\",\"no\")"
+
+  - id: if_nested
+    formula: "=IF(A1>10,\"big\",IF(A1>5,\"mid\",\"small\"))"
+    setup: { A1: 7 }
+
+  - id: if_lazy_false_branch_error_ignored
+    description: "IF must not evaluate the untaken branch (1/0 would be #DIV/0!)"
+    formula: "=IF(TRUE,1,1/0)"
+
+  - id: if_lazy_true_branch_error_ignored
+    formula: "=IF(FALSE,1/0,2)"
+
+  - id: if_missing_false_branch_defaults_false
+    description: "Excel: IF(FALSE, x) returns FALSE when value_if_false is omitted"
+    formula: "=IF(FALSE,\"yes\")"
+
+  - id: if_returns_number_then_text
+    formula: "=IF(A1>0,1,\"neg\")"
+    setup: { A1: 5 }
+
+  # -- IFERROR -------------------------------------------------------------
+  - id: iferror_passes_through
+    formula: "=IFERROR(10,\"fallback\")"
+
+  - id: iferror_catches_div0
+    formula: "=IFERROR(1/0,\"fallback\")"
+
+  - id: iferror_catches_na
+    formula: "=IFERROR(NA(),\"fallback\")"
+
+  - id: iferror_catches_value
+    formula: "=IFERROR(\"x\"+1,\"fallback\")"
+
+  # -- IFNA ----------------------------------------------------------------
+  - id: ifna_passes_through
+    formula: "=IFNA(10,\"fallback\")"
+
+  - id: ifna_catches_na
+    formula: "=IFNA(NA(),\"fallback\")"
+
+  - id: ifna_does_not_catch_div0
+    description: "IFNA only catches #N/A, not other errors"
+    formula: "=IFNA(1/0,\"fallback\")"
