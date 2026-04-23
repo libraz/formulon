@@ -639,11 +639,23 @@ void register_financial_builtins(FunctionRegistry& registry) {
 
   // Depreciation family — all eager, no range support. SLN/SYD have
   // fixed arity; DDB/DB take an optional trailing (factor / month) arg.
-  // Implementations live in `financial_depreciation.cpp`.
+  // VDB accepts an optional factor and no_switch tail; AMORDEGRC /
+  // AMORLINC accept an optional basis tail. Implementations live in
+  // `financial_depreciation.cpp`.
   registry.register_function(FunctionDef{"SLN", 3u, 3u, &financial_detail::Sln});
   registry.register_function(FunctionDef{"SYD", 4u, 4u, &financial_detail::Syd});
   registry.register_function(FunctionDef{"DDB", 4u, 5u, &financial_detail::Ddb});
   registry.register_function(FunctionDef{"DB", 4u, 5u, &financial_detail::Db});
+  registry.register_function(FunctionDef{"VDB", 5u, 7u, &financial_detail::Vdb});
+  registry.register_function(FunctionDef{"AMORDEGRC", 6u, 7u, &financial_detail::Amordegrc});
+  registry.register_function(FunctionDef{"AMORLINC", 6u, 7u, &financial_detail::Amorlinc});
+
+  // Accrued interest family. Implementations live in
+  // `financial_accrual.cpp`.
+  //   ACCRINT:  6 required + optional (basis, calc_method), max 8.
+  //   ACCRINTM: 4 required + optional basis,              max 5.
+  registry.register_function(FunctionDef{"ACCRINT", 6u, 8u, &financial_detail::Accrint});
+  registry.register_function(FunctionDef{"ACCRINTM", 4u, 5u, &financial_detail::Accrintm});
 
   // Fractional-dollar quote conversion. Pure scalar pair, no range arg.
   // Implementations live in `financial_misc.cpp`.
@@ -668,6 +680,17 @@ void register_financial_builtins(FunctionRegistry& registry) {
     def.range_filter_numeric_only = true;
     registry.register_function(def);
   }
+
+  // Security-rate / T-Bill family. All eager scalar, no range support.
+  // Implementations live in `financial_rates.cpp`.
+  //   DISC / INTRATE / RECEIVED: 4 required + optional basis (min 4, max 5).
+  //   TBILLPRICE / TBILLYIELD / TBILLEQ: exactly 3 args (fixed basis).
+  registry.register_function(FunctionDef{"DISC", 4u, 5u, &financial_detail::Disc});
+  registry.register_function(FunctionDef{"INTRATE", 4u, 5u, &financial_detail::Intrate});
+  registry.register_function(FunctionDef{"RECEIVED", 4u, 5u, &financial_detail::Received});
+  registry.register_function(FunctionDef{"TBILLPRICE", 3u, 3u, &financial_detail::TBillPrice});
+  registry.register_function(FunctionDef{"TBILLYIELD", 3u, 3u, &financial_detail::TBillYield});
+  registry.register_function(FunctionDef{"TBILLEQ", 3u, 3u, &financial_detail::TBillEq});
 }
 
 }  // namespace eval

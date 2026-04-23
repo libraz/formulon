@@ -447,90 +447,10 @@ Value Isoweeknum_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
 }
 
 // ---------------------------------------------------------------------------
-// YEARFRAC day-count helpers
+// YEARFRAC day-count helpers live in `eval/date_time.h` so the financial
+// rate builtins (DISC / INTRATE / RECEIVED / ...) can share them without
+// pulling in the rest of the datetime module.
 // ---------------------------------------------------------------------------
-
-// Basis 0 (US 30/360 NASD). Returns signed day count under the NASD rule.
-// Callers pass `end >= start` after swap; the sign convention therefore
-// matches a positive yearfrac result.
-double yearfrac_us30_360(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept {
-  // NASD rule set (Excel's implementation):
-  //   if d1 == 31                         -> d1 = 30
-  //   if d2 == 31 and d1 >= 30            -> d2 = 30
-  //   if last-day-of-Feb(d1)              -> d1 = 30
-  //     and last-day-of-Feb(d2) too       -> d2 = 30
-  auto last_day_of_feb = [](int y, unsigned m, unsigned d) {
-    if (m != 2u) {
-      return false;
-    }
-    const bool leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
-    return d == (leap ? 29u : 28u);
-  };
-  const bool d1_last_feb = last_day_of_feb(y1, m1, d1);
-  const bool d2_last_feb = last_day_of_feb(y2, m2, d2);
-  if (d1_last_feb && d2_last_feb) {
-    d2 = 30;
-  }
-  if (d1_last_feb) {
-    d1 = 30;
-  }
-  if (d2 == 31u && d1 >= 30u) {
-    d2 = 30;
-  }
-  if (d1 == 31u) {
-    d1 = 30;
-  }
-  const double days = 360.0 * (y2 - y1) + 30.0 * (static_cast<double>(m2) - static_cast<double>(m1)) +
-                      (static_cast<double>(d2) - static_cast<double>(d1));
-  return days / 360.0;
-}
-
-// Basis 4 (European 30/360). Same skeleton as basis 0 but both days are
-// capped at 30 unconditionally.
-double yearfrac_eu30_360(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept {
-  if (d1 > 30u) {
-    d1 = 30;
-  }
-  if (d2 > 30u) {
-    d2 = 30;
-  }
-  const double days = 360.0 * (y2 - y1) + 30.0 * (static_cast<double>(m2) - static_cast<double>(m1)) +
-                      (static_cast<double>(d2) - static_cast<double>(d1));
-  return days / 360.0;
-}
-
-// Basis 1 (Actual/Actual). Excel's documented behaviour (matching
-// OpenFormula §6.11.23 and Excel 365's observed output):
-//
-//   - denominator = 366 if any Feb 29 falls strictly inside the interval
-//     [start, end) OR if both start and end are Feb 29 in a leap year;
-//   - denominator = 365 otherwise.
-//
-// This rule makes exact anniversary spans return an integer number of
-// years (e.g. 2023-01-01 -> 2024-01-01 = 1.0 because 2024-02-29 is past
-// the end), while sub-year intervals that straddle a leap day are scaled
-// by 366.
-double yearfrac_actual_actual(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept {
-  const std::int64_t days1 = date_time::days_from_civil(y1, m1, d1);
-  const std::int64_t days2 = date_time::days_from_civil(y2, m2, d2);
-  const double actual_days = static_cast<double>(days2 - days1);
-  // Scan every calendar year in [y1, y2] for a Feb 29 that lies inside
-  // the half-open interval [start, end). Only leap years can contribute.
-  bool includes_leap_day = false;
-  auto is_leap = [](int y) { return (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0); };
-  for (int y = y1; y <= y2; ++y) {
-    if (!is_leap(y)) {
-      continue;
-    }
-    const std::int64_t feb29 = date_time::days_from_civil(y, 2, 29);
-    if (feb29 >= days1 && feb29 < days2) {
-      includes_leap_day = true;
-      break;
-    }
-  }
-  const double denom = includes_leap_day ? 366.0 : 365.0;
-  return actual_days / denom;
-}
 
 /// YEARFRAC(start, end, [basis]). Returns the positive (sign-stripped)
 /// fraction of a year between two dates under one of five day-count
@@ -563,9 +483,9 @@ Value Yearfrac_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const date_time::YMD b = date_time::ymd_from_serial(e);
   switch (basis) {
     case 0:
-      return Value::number(yearfrac_us30_360(a.y, a.m, a.d, b.y, b.m, b.d));
+      return Value::number(date_time::yearfrac_us30_360(a.y, a.m, a.d, b.y, b.m, b.d));
     case 1:
-      return Value::number(yearfrac_actual_actual(a.y, a.m, a.d, b.y, b.m, b.d));
+      return Value::number(date_time::yearfrac_actual_actual(a.y, a.m, a.d, b.y, b.m, b.d));
     case 2:
       // Actual/360 -- raw day diff honours the 1900 leap-bug so we compute
       // it from the Excel serials (not days_from_civil) for parity.
@@ -573,7 +493,7 @@ Value Yearfrac_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     case 3:
       return Value::number((e - s) / 365.0);
     case 4:
-      return Value::number(yearfrac_eu30_360(a.y, a.m, a.d, b.y, b.m, b.d));
+      return Value::number(date_time::yearfrac_eu30_360(a.y, a.m, a.d, b.y, b.m, b.d));
     default:
       return Value::error(ErrorCode::Num);
   }

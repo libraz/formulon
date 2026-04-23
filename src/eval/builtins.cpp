@@ -13,11 +13,13 @@
 
 #include "eval/builtins/aggregate.h"
 #include "eval/builtins/complex_num.h"
+#include "eval/builtins/cube.h"
 #include "eval/builtins/datetime.h"
 #include "eval/builtins/distributions.h"
 #include "eval/builtins/engineering.h"
 #include "eval/builtins/engineering_special.h"
 #include "eval/builtins/financial.h"
+#include "eval/builtins/financial_coupon.h"
 #include "eval/builtins/info.h"
 #include "eval/builtins/logical.h"
 #include "eval/builtins/math.h"
@@ -29,6 +31,7 @@
 #include "eval/builtins/text.h"
 #include "eval/builtins/text_format.h"
 #include "eval/builtins/text_width.h"
+#include "eval/builtins/web.h"
 #include "eval/function_registry.h"
 
 namespace formulon {
@@ -48,11 +51,14 @@ void register_builtins(FunctionRegistry& registry) {
   register_info_builtins(registry);
   register_datetime_builtins(registry);
   register_financial_builtins(registry);
+  register_financial_coupon_builtins(registry);
   register_distribution_builtins(registry);
   register_engineering_builtins(registry);
   register_engineering_special_builtins(registry);
   register_complex_num_builtins(registry);
   register_reference_builtins(registry);
+  register_web_builtins(registry);
+  register_cube_builtins(registry);
 }
 
 }  // namespace eval

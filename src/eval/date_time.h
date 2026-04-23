@@ -87,6 +87,23 @@ double serial_from_ymd(int y, unsigned m, unsigned d) noexcept;
 /// and keeps `HOUR(serial + TIME(h,m,s))` round-trip stable.
 HMS hms_from_fraction(double serial) noexcept;
 
+/// Year fraction under the US 30/360 (NASD) convention — Excel basis 0.
+/// Callers must ensure `(y1, m1, d1) <= (y2, m2, d2)`; the sign convention
+/// of the result assumes that ordering. Implements the NASD ruleset
+/// (end-of-February adjustments, 31st collapsed to 30th).
+double yearfrac_us30_360(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept;
+
+/// Year fraction under the European 30/360 convention — Excel basis 4.
+/// Both day components are capped at 30 unconditionally.
+double yearfrac_eu30_360(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept;
+
+/// Year fraction under the Actual/Actual convention — Excel basis 1.
+/// Denominator is 366 when a Feb 29 lies strictly inside the interval
+/// `[start, end)` (or both endpoints are Feb 29 in a leap year), 365
+/// otherwise. This produces integer-valued results on exact anniversary
+/// spans.
+double yearfrac_actual_actual(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept;
+
 }  // namespace date_time
 }  // namespace eval
 }  // namespace formulon

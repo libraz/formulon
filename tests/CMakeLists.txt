@@ -72,6 +72,9 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_datevalue_timevalue_test.cpp
   unit/eval/builtins_financial_test.cpp
   unit/eval/builtins_financial2_test.cpp
+  unit/eval/builtins_financial_rates_test.cpp
+  unit/eval/builtins_financial_coupon_test.cpp
+  unit/eval/builtins_financial_accrual_test.cpp
   unit/eval/builtins_regression_test.cpp
   unit/eval/builtins_hypothesis_test.cpp
   unit/eval/builtins_sumsq_test.cpp
@@ -87,6 +90,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_engineering_test.cpp
   unit/eval/builtins_engineering_special_test.cpp
   unit/eval/builtins_complex_test.cpp
+  unit/eval/builtins_web_test.cpp
+  unit/eval/builtins_cube_test.cpp
   unit/registry_catalog_test.cpp
 )
 

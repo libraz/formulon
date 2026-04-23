@@ -97,6 +97,72 @@ double serial_from_ymd(int y, unsigned m, unsigned d) noexcept {
   return static_cast<double>(civil + base);
 }
 
+double yearfrac_us30_360(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept {
+  // NASD rule set (Excel's implementation):
+  //   if d1 == 31                         -> d1 = 30
+  //   if d2 == 31 and d1 >= 30            -> d2 = 30
+  //   if last-day-of-Feb(d1)              -> d1 = 30
+  //     and last-day-of-Feb(d2) too       -> d2 = 30
+  auto last_day_of_feb = [](int y, unsigned m, unsigned d) {
+    if (m != 2u) {
+      return false;
+    }
+    const bool leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
+    return d == (leap ? 29u : 28u);
+  };
+  const bool d1_last_feb = last_day_of_feb(y1, m1, d1);
+  const bool d2_last_feb = last_day_of_feb(y2, m2, d2);
+  if (d1_last_feb && d2_last_feb) {
+    d2 = 30;
+  }
+  if (d1_last_feb) {
+    d1 = 30;
+  }
+  if (d2 == 31u && d1 >= 30u) {
+    d2 = 30;
+  }
+  if (d1 == 31u) {
+    d1 = 30;
+  }
+  const double days = 360.0 * (y2 - y1) + 30.0 * (static_cast<double>(m2) - static_cast<double>(m1)) +
+                      (static_cast<double>(d2) - static_cast<double>(d1));
+  return days / 360.0;
+}
+
+double yearfrac_eu30_360(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept {
+  if (d1 > 30u) {
+    d1 = 30;
+  }
+  if (d2 > 30u) {
+    d2 = 30;
+  }
+  const double days = 360.0 * (y2 - y1) + 30.0 * (static_cast<double>(m2) - static_cast<double>(m1)) +
+                      (static_cast<double>(d2) - static_cast<double>(d1));
+  return days / 360.0;
+}
+
+double yearfrac_actual_actual(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept {
+  const std::int64_t days1 = days_from_civil(y1, m1, d1);
+  const std::int64_t days2 = days_from_civil(y2, m2, d2);
+  const double actual_days = static_cast<double>(days2 - days1);
+  // Scan every calendar year in [y1, y2] for a Feb 29 that lies inside
+  // the half-open interval [start, end). Only leap years can contribute.
+  bool includes_leap_day = false;
+  auto is_leap = [](int y) { return (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0); };
+  for (int y = y1; y <= y2; ++y) {
+    if (!is_leap(y)) {
+      continue;
+    }
+    const std::int64_t feb29 = days_from_civil(y, 2, 29);
+    if (feb29 >= days1 && feb29 < days2) {
+      includes_leap_day = true;
+      break;
+    }
+  }
+  const double denom = includes_leap_day ? 366.0 : 365.0;
+  return actual_days / denom;
+}
+
 HMS hms_from_fraction(double serial) noexcept {
   // Extract the positive fractional part: `fmod` preserves the sign of the
   // dividend, which we compensate for when serial < 0. The date-aware

@@ -1,0 +1,75 @@
+suite: financial_rates
+description: Security-rate / T-Bill financial builtins — DISC / INTRATE / RECEIVED / TBILLPRICE / TBILLYIELD / TBILLEQ. See `eval/builtins/financial_rates.cpp`.
+# Matches the tolerance used by `financial.yaml` / `financial_ext.yaml`:
+# Mac xlwings returns some Excel-computed floats as their displayed value
+# rather than the underlying double, so 1e-3 absolute / 1e-6 relative
+# comfortably covers display-rounding error while still catching real
+# formula divergence.
+tolerance: { abs: 1.0e-3, rel: 1.0e-6 }
+locale: ja-JP
+cases:
+  # -- DISC ---------------------------------------------------------------
+  - id: disc_basis_actual_actual
+    description: "Microsoft docs example: DISC with basis 1 (actual/actual) ~ 0.05279"
+    formula: "=DISC(DATE(2018,1,25), DATE(2018,6,15), 97.975, 100, 1)"
+
+  - id: disc_default_basis
+    description: "DISC with default basis 0 (US 30/360)"
+    formula: "=DISC(DATE(2018,1,25), DATE(2018,6,15), 97.975, 100)"
+
+  - id: disc_basis_actual_360
+    description: "DISC with basis 2 (actual/360)"
+    formula: "=DISC(DATE(2018,1,25), DATE(2018,6,15), 97.975, 100, 2)"
+
+  - id: disc_invalid_basis_is_num
+    description: "DISC with unsupported basis -> #NUM!"
+    formula: "=DISC(DATE(2018,1,25), DATE(2018,6,15), 97.975, 100, 5)"
+
+  # -- INTRATE ------------------------------------------------------------
+  - id: intrate_basis_actual_360
+    description: "Microsoft docs example: INTRATE with basis 2 ~ 0.05768"
+    formula: "=INTRATE(DATE(2008,2,15), DATE(2008,5,15), 1000000, 1014420, 2)"
+
+  - id: intrate_default_basis
+    description: "INTRATE with default basis 0"
+    formula: "=INTRATE(DATE(2008,2,15), DATE(2008,5,15), 1000000, 1014420)"
+
+  - id: intrate_settlement_after_maturity_is_num
+    description: "INTRATE with settlement after maturity -> #NUM!"
+    formula: "=INTRATE(DATE(2008,5,15), DATE(2008,2,15), 1000000, 1014420, 2)"
+
+  # -- RECEIVED -----------------------------------------------------------
+  - id: received_basis_actual_360
+    description: "Microsoft docs example: RECEIVED with basis 2 ~ 1014584.65"
+    formula: "=RECEIVED(DATE(2008,2,15), DATE(2008,5,15), 1000000, 0.0575, 2)"
+
+  - id: received_default_basis
+    description: "RECEIVED with default basis 0"
+    formula: "=RECEIVED(DATE(2008,2,15), DATE(2008,5,15), 1000000, 0.0575)"
+
+  # -- TBILLPRICE ---------------------------------------------------------
+  - id: tbillprice_basic
+    description: "Microsoft docs example: TBILLPRICE ~ 98.45"
+    formula: "=TBILLPRICE(DATE(2008,3,31), DATE(2008,6,1), 0.09)"
+
+  - id: tbillprice_dsm_over_365_is_num
+    description: "TBILLPRICE with maturity > 1 year after settlement -> #NUM!"
+    formula: "=TBILLPRICE(DATE(2008,3,31), DATE(2010,3,31), 0.09)"
+
+  # -- TBILLYIELD ---------------------------------------------------------
+  - id: tbillyield_basic
+    description: "Microsoft docs example: TBILLYIELD ~ 0.09141"
+    formula: "=TBILLYIELD(DATE(2008,3,31), DATE(2008,6,1), 98.45)"
+
+  # -- TBILLEQ ------------------------------------------------------------
+  - id: tbilleq_short_branch
+    description: "Microsoft docs example: TBILLEQ short branch (DSM <= 182) ~ 0.09414"
+    formula: "=TBILLEQ(DATE(2008,3,31), DATE(2008,6,1), 0.0914)"
+
+  - id: tbilleq_long_branch
+    description: "TBILLEQ long branch (DSM > 182): semi-annual-compounding quadratic"
+    formula: "=TBILLEQ(DATE(2020,1,1), DATE(2020,10,27), 0.05)"
+
+  - id: tbilleq_dsm_over_365_is_num
+    description: "TBILLEQ with maturity > 1 year -> #NUM!"
+    formula: "=TBILLEQ(DATE(2008,3,31), DATE(2010,3,31), 0.09)"

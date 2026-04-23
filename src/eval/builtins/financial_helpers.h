@@ -164,6 +164,13 @@ Value Sln(const Value* args, std::uint32_t arity, Arena& arena);
 Value Syd(const Value* args, std::uint32_t arity, Arena& arena);
 Value Ddb(const Value* args, std::uint32_t arity, Arena& arena);
 Value Db(const Value* args, std::uint32_t arity, Arena& arena);
+Value Vdb(const Value* args, std::uint32_t arity, Arena& arena);
+Value Amordegrc(const Value* args, std::uint32_t arity, Arena& arena);
+Value Amorlinc(const Value* args, std::uint32_t arity, Arena& arena);
+
+// Value-returning builtins implemented in `financial_accrual.cpp`.
+Value Accrint(const Value* args, std::uint32_t arity, Arena& arena);
+Value Accrintm(const Value* args, std::uint32_t arity, Arena& arena);
 
 // Value-returning builtins implemented in `financial_misc.cpp`.
 Value DollarDe(const Value* args, std::uint32_t arity, Arena& arena);
@@ -174,6 +181,15 @@ Value FvSchedule(const Value* args, std::uint32_t arity, Arena& arena);
 Value PDuration(const Value* args, std::uint32_t arity, Arena& arena);
 Value Rri(const Value* args, std::uint32_t arity, Arena& arena);
 Value IsPmt(const Value* args, std::uint32_t arity, Arena& arena);
+
+// Value-returning builtins implemented in `financial_rates.cpp`
+// (security-rate and T-Bill family).
+Value Disc(const Value* args, std::uint32_t arity, Arena& arena);
+Value Intrate(const Value* args, std::uint32_t arity, Arena& arena);
+Value Received(const Value* args, std::uint32_t arity, Arena& arena);
+Value TBillPrice(const Value* args, std::uint32_t arity, Arena& arena);
+Value TBillYield(const Value* args, std::uint32_t arity, Arena& arena);
+Value TBillEq(const Value* args, std::uint32_t arity, Arena& arena);
 
 }  // namespace financial_detail
 }  // namespace eval

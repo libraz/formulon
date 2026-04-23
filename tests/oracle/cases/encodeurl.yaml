@@ -1,0 +1,29 @@
+suite: encodeurl
+description: ENCODEURL -- RFC 3986 percent-encoding with uppercase hex (Excel 365 Mac ja-JP)
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  - id: encodeurl_space
+    formula: "=ENCODEURL(\"hello world\")"
+
+  - id: encodeurl_query_string_chars
+    description: "Slash, space, question, equals, ampersand all percent-encode"
+    formula: "=ENCODEURL(\"a/b c?d=1&e=2\")"
+
+  - id: encodeurl_unreserved_passthrough
+    description: "RFC 3986 unreserved set passes through unchanged"
+    formula: "=ENCODEURL(\"ABCabc012-_.~\")"
+
+  - id: encodeurl_japanese_utf8
+    description: "日本語 -> UTF-8 bytes, uppercase hex"
+    formula: "=ENCODEURL(\"日本語\")"
+
+  - id: encodeurl_bool_true
+    formula: "=ENCODEURL(TRUE)"
+
+  - id: encodeurl_empty_string
+    formula: "=ENCODEURL(\"\")"
+
+  - id: encodeurl_percent_self_encodes
+    description: "'%' is not unreserved and encodes to %25"
+    formula: "=ENCODEURL(\"100%\")"

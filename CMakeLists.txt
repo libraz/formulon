@@ -84,13 +84,17 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins.cpp
   src/eval/builtins/aggregate.cpp
   src/eval/builtins/complex_num.cpp
+  src/eval/builtins/cube.cpp
   src/eval/builtins/datetime.cpp
   src/eval/builtins/distributions.cpp
   src/eval/builtins/engineering.cpp
   src/eval/builtins/engineering_special.cpp
   src/eval/builtins/financial.cpp
+  src/eval/builtins/financial_accrual.cpp
+  src/eval/builtins/financial_coupon.cpp
   src/eval/builtins/financial_depreciation.cpp
   src/eval/builtins/financial_misc.cpp
+  src/eval/builtins/financial_rates.cpp
   src/eval/builtins/info.cpp
   src/eval/builtins/logical.cpp
   src/eval/builtins/math.cpp
@@ -107,6 +111,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins/text_modern.cpp
   src/eval/builtins/text_format.cpp
   src/eval/builtins/text_width.cpp
+  src/eval/builtins/web.cpp
   src/eval/text_format/number_format.cpp
   src/eval/text_format/number_format_tokenizer.cpp
   src/eval/text_format/number_format_render.cpp
@@ -115,6 +120,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/eval_context.cpp
   src/eval/eval_state.cpp
   src/eval/criteria.cpp
+  src/eval/coupon_schedule.cpp
   src/eval/date_time.cpp
   src/eval/date_text_parse.cpp
   src/eval/range_args.cpp

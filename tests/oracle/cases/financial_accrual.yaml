@@ -1,0 +1,61 @@
+suite: financial_accrual
+description: Accrued-interest and specialized-depreciation financial builtins — ACCRINT / ACCRINTM / VDB / AMORDEGRC / AMORLINC. See `eval/builtins/financial_accrual.cpp` and `eval/builtins/financial_depreciation.cpp`.
+# Tolerances follow the other financial suites: VDB / accrual results are
+# small-to-mid magnitude (tens to low thousands), and xlwings reports
+# about 4 decimal digits. AMORDEGRC/AMORLINC are integer-valued in the
+# canonical French examples so we stay at the same shape.
+tolerance: { abs: 1.0e-3, rel: 1.0e-6 }
+locale: ja-JP
+cases:
+  # -- ACCRINT -------------------------------------------------------------
+  - id: accrint_ms_doc
+    description: "ACCRINT MS-doc canonical: issue 2008-03-01, settlement 2008-05-01 -> 16.6667"
+    formula: "=ACCRINT(DATE(2008,3,1), DATE(2008,8,31), DATE(2008,5,1), 0.1, 1000, 2, 0, TRUE)"
+
+  - id: accrint_calc_method_default
+    description: "ACCRINT without calc_method defaults to TRUE -> issue-to-settlement"
+    formula: "=ACCRINT(DATE(2008,3,1), DATE(2008,8,31), DATE(2008,5,1), 0.1, 1000, 2)"
+
+  - id: accrint_calc_method_false_first_interest
+    description: "ACCRINT calc_method=FALSE with settlement > first_interest uses first_interest as start"
+    formula: "=ACCRINT(DATE(2008,3,1), DATE(2008,5,1), DATE(2008,8,31), 0.1, 1000, 2, 0, FALSE)"
+
+  # -- ACCRINTM ------------------------------------------------------------
+  - id: accrintm_ms_doc
+    description: "ACCRINTM MS-doc canonical: basis 3 (actual/365) -> 20.5479"
+    formula: "=ACCRINTM(DATE(2008,4,1), DATE(2008,6,15), 0.1, 1000, 3)"
+
+  - id: accrintm_default_basis
+    description: "ACCRINTM default basis 0 (US 30/360) -> 20.5556"
+    formula: "=ACCRINTM(DATE(2008,4,1), DATE(2008,6,15), 0.1, 1000)"
+
+  # -- VDB -----------------------------------------------------------------
+  - id: vdb_single_day
+    description: "VDB one-day DDB: 2400/3650*2 ~ 1.3151"
+    formula: "=VDB(2400, 300, 10*365, 0, 1, 2, FALSE)"
+
+  - id: vdb_fractional_factor15
+    description: "VDB fractional end 0.875 * (2400 * 0.15) = 315.0"
+    formula: "=VDB(2400, 300, 10, 0, 0.875, 1.5, FALSE)"
+
+  - id: vdb_full_life_sums_to_depreciable
+    description: "VDB over [0, life] must equal cost - salvage = 2100"
+    formula: "=VDB(2400, 300, 10, 0, 10, 2, FALSE)"
+
+  - id: vdb_no_switch_true
+    description: "VDB with no_switch=TRUE keeps pure declining-balance throughout"
+    formula: "=VDB(2400, 300, 10, 0, 10, 2, TRUE)"
+
+  # -- AMORDEGRC -----------------------------------------------------------
+  - id: amordegrc_ms_doc
+    description: "AMORDEGRC MS-doc canonical: period 1 -> 776"
+    formula: "=AMORDEGRC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0.15, 1)"
+
+  # -- AMORLINC ------------------------------------------------------------
+  - id: amorlinc_ms_doc
+    description: "AMORLINC MS-doc canonical: flat second period = 360"
+    formula: "=AMORLINC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0.15, 1)"
+
+  - id: amorlinc_first_period_prorated
+    description: "AMORLINC first period (period 0) is YEARFRAC-prorated"
+    formula: "=AMORLINC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 0, 0.15, 1)"

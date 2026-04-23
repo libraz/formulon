@@ -1,0 +1,80 @@
+suite: financial_coupon
+description: Coupon-date financial builtins — COUPPCD / COUPNCD / COUPNUM / COUPDAYBS / COUPDAYSNC / COUPDAYS. See `eval/builtins/financial_coupon.cpp` and the shared engine in `eval/coupon_schedule.cpp`.
+# Coupon-date results are integer-valued serials / day counts (except
+# COUPDAYS at basis 3, which is 365/freq); the tolerance shape
+# matches `financial_rates.yaml`.
+tolerance: { abs: 1.0e-3, rel: 1.0e-6 }
+locale: ja-JP
+cases:
+  # -- Canonical bond example (Microsoft docs shape) ----------------------
+  - id: couppcd_canonical_semi_annual_basis_1
+    description: "COUPPCD canonical semi-annual bond, basis 1 -> 2010-11-15"
+    formula: "=COUPPCD(DATE(2011,1,25), DATE(2011,11,15), 2, 1)"
+
+  - id: coupncd_canonical_semi_annual_basis_1
+    description: "COUPNCD canonical semi-annual bond, basis 1 -> 2011-05-15"
+    formula: "=COUPNCD(DATE(2011,1,25), DATE(2011,11,15), 2, 1)"
+
+  - id: coupnum_canonical_semi_annual_basis_1
+    description: "COUPNUM canonical semi-annual bond, basis 1 -> 2"
+    formula: "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 2, 1)"
+
+  - id: coupdaybs_canonical_semi_annual_basis_1
+    description: "COUPDAYBS canonical semi-annual bond, basis 1 -> 71 days"
+    formula: "=COUPDAYBS(DATE(2011,1,25), DATE(2011,11,15), 2, 1)"
+
+  - id: coupdaysnc_canonical_semi_annual_basis_1
+    description: "COUPDAYSNC canonical semi-annual bond, basis 1 -> 110 days"
+    formula: "=COUPDAYSNC(DATE(2011,1,25), DATE(2011,11,15), 2, 1)"
+
+  - id: coupdays_canonical_semi_annual_basis_1
+    description: "COUPDAYS canonical semi-annual bond, basis 1 -> 181 days (ncd-pcd)"
+    formula: "=COUPDAYS(DATE(2011,1,25), DATE(2011,11,15), 2, 1)"
+
+  # -- Basis coverage: COUPDAYS period length depends on basis ------------
+  - id: coupdays_semi_annual_basis_0
+    description: "COUPDAYS basis 0 (US 30/360), semi-annual -> 180"
+    formula: "=COUPDAYS(DATE(2011,1,25), DATE(2011,11,15), 2, 0)"
+
+  - id: coupdays_semi_annual_basis_2
+    description: "COUPDAYS basis 2 (actual/360), semi-annual -> 180"
+    formula: "=COUPDAYS(DATE(2011,1,25), DATE(2011,11,15), 2, 2)"
+
+  - id: coupdays_semi_annual_basis_3
+    description: "COUPDAYS basis 3 (actual/365), semi-annual -> 182.5"
+    formula: "=COUPDAYS(DATE(2011,1,25), DATE(2011,11,15), 2, 3)"
+
+  - id: coupdays_semi_annual_basis_4
+    description: "COUPDAYS basis 4 (EU 30/360), semi-annual -> 180"
+    formula: "=COUPDAYS(DATE(2011,1,25), DATE(2011,11,15), 2, 4)"
+
+  # -- Frequency coverage -------------------------------------------------
+  - id: coupnum_annual
+    description: "COUPNUM annual frequency -> 1 coupon remaining"
+    formula: "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 1, 1)"
+
+  - id: coupnum_quarterly
+    description: "COUPNUM quarterly frequency -> 4 coupons remaining"
+    formula: "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 4, 1)"
+
+  # -- End-of-month clamp (maturity on last day of month) -----------------
+  - id: couppcd_end_of_month_may31
+    description: "COUPPCD with Aug-31 maturity quarterly: PCD = 2020-05-31 (not 2020-05-30)"
+    formula: "=COUPPCD(DATE(2020,6,1), DATE(2020,8,31), 4, 1)"
+
+  - id: couppcd_end_of_month_feb29_leap
+    description: "COUPPCD clamps Feb-31 to Feb-29 in leap year 2020"
+    formula: "=COUPPCD(DATE(2020,3,1), DATE(2020,8,31), 4, 1)"
+
+  # -- Error domain -------------------------------------------------------
+  - id: couppcd_settlement_after_maturity_is_num
+    description: "COUPPCD with settlement >= maturity -> #NUM!"
+    formula: "=COUPPCD(DATE(2011,11,15), DATE(2011,1,25), 2, 1)"
+
+  - id: couppcd_bad_frequency_is_num
+    description: "COUPPCD with frequency 3 (not in {1,2,4}) -> #NUM!"
+    formula: "=COUPPCD(DATE(2011,1,25), DATE(2011,11,15), 3, 1)"
+
+  - id: couppcd_bad_basis_is_num
+    description: "COUPPCD with basis 5 (not in {0..4}) -> #NUM!"
+    formula: "=COUPPCD(DATE(2011,1,25), DATE(2011,11,15), 2, 5)"

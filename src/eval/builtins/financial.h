@@ -21,9 +21,10 @@ class FunctionRegistry;
 
 /// Registers the eager financial built-ins (PV, FV, PMT, NPER, NPV,
 /// RATE, IPMT, PPMT, CUMIPMT, CUMPRINC, SLN, SYD, DDB, DB, DOLLARDE,
-/// DOLLARFR, EFFECT, NOMINAL, FVSCHEDULE, PDURATION, RRI, ISPMT) into
-/// `registry`. IRR and MIRR are wired separately via the lazy dispatch
-/// table in `tree_walker.cpp`; see `eval/financial_lazy.h`.
+/// DOLLARFR, EFFECT, NOMINAL, FVSCHEDULE, PDURATION, RRI, ISPMT, DISC,
+/// INTRATE, RECEIVED, TBILLPRICE, TBILLYIELD, TBILLEQ) into `registry`.
+/// IRR and MIRR are wired separately via the lazy dispatch table in
+/// `tree_walker.cpp`; see `eval/financial_lazy.h`.
 void register_financial_builtins(FunctionRegistry& registry);
 
 }  // namespace eval

@@ -1,19 +1,123 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// Implementation of the eager depreciation built-ins: SLN, SYD, DDB, DB.
-// Registered from `financial.cpp` via `register_financial_builtins`.
+// Implementation of the eager depreciation built-ins: SLN, SYD, DDB, DB,
+// VDB, AMORDEGRC, AMORLINC. Registered from `financial.cpp` via
+// `register_financial_builtins`.
+//
+// VDB extends DDB with (a) fractional period ranges and (b) a one-way
+// switch from declining-balance to straight-line when the latter would
+// deplete the remaining book value faster. AMORDEGRC / AMORLINC are the
+// French-accounting degressive and linear methods; they share the
+// "first period is YEARFRAC-prorated" pattern but diverge in later
+// periods.
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 
 #include "eval/builtins/financial_helpers.h"
+#include "eval/coerce.h"
+#include "eval/date_time.h"
 #include "utils/arena.h"
+#include "utils/expected.h"
 #include "value.h"
 
 namespace formulon {
 namespace eval {
 namespace financial_detail {
+namespace {
+
+// Computes YEARFRAC(start, end, basis) following the YEARFRAC builtin's
+// rules. Returns `#NUM!` on an unsupported basis or non-finite result.
+// Zero-length spans are allowed (unlike DISC/INTRATE which divide by
+// the year-fraction).
+Expected<double, ErrorCode> yearfrac_for_depreciation(double start, double end, int basis) {
+  if (basis < 0 || basis > 4) {
+    return ErrorCode::Num;
+  }
+  const double s = std::trunc(start);
+  const double e = std::trunc(end);
+  const date_time::YMD a = date_time::ymd_from_serial(s);
+  const date_time::YMD b = date_time::ymd_from_serial(e);
+  double yf = 0.0;
+  switch (basis) {
+    case 0:
+      yf = date_time::yearfrac_us30_360(a.y, a.m, a.d, b.y, b.m, b.d);
+      break;
+    case 1:
+      yf = date_time::yearfrac_actual_actual(a.y, a.m, a.d, b.y, b.m, b.d);
+      break;
+    case 2:
+      yf = (e - s) / 360.0;
+      break;
+    case 3:
+      yf = (e - s) / 365.0;
+      break;
+    case 4:
+      yf = date_time::yearfrac_eu30_360(a.y, a.m, a.d, b.y, b.m, b.d);
+      break;
+    default:
+      return ErrorCode::Num;
+  }
+  if (std::isnan(yf) || std::isinf(yf)) {
+    return ErrorCode::Num;
+  }
+  return yf;
+}
+
+// Reads the `basis` argument at `args[index]` if present, otherwise
+// returns 0. Truncates toward zero and validates against {0,1,2,3,4}.
+Expected<int, ErrorCode> read_basis_dep(const Value* args, std::uint32_t arity, std::uint32_t index) {
+  if (arity <= index) {
+    return 0;
+  }
+  auto raw = read_required_number(args, index);
+  if (!raw) {
+    return raw.error();
+  }
+  const int basis = static_cast<int>(std::trunc(raw.value()));
+  if (basis < 0 || basis > 4) {
+    return ErrorCode::Num;
+  }
+  return basis;
+}
+
+// Reads a required date argument, truncating toward zero. Negative
+// serials are rejected as `#NUM!`.
+Expected<double, ErrorCode> read_date_dep(const Value* args, std::uint32_t index) {
+  auto raw = read_required_number(args, index);
+  if (!raw) {
+    return raw.error();
+  }
+  const double t = std::trunc(raw.value());
+  if (t < 0.0) {
+    return ErrorCode::Num;
+  }
+  return t;
+}
+
+// The AMORDEGRC depreciation coefficient (French accounting code). The
+// "life" used here is 1/rate — a proxy for the estimated useful life of
+// the asset. The three buckets match the official French tax rule:
+//   * life in [3, 4]    -> 1.5
+//   * life in [5, 6]    -> 2.0
+//   * life >  6         -> 2.5
+// Excel rejects life < 3 or life in (4, 5) via #NUM!; callers surface
+// a 0.0 coefficient as the sentinel for that rejection.
+double amordegrc_coefficient(double life) noexcept {
+  if (life >= 3.0 && life <= 4.0) {
+    return 1.5;
+  }
+  if (life >= 5.0 && life <= 6.0) {
+    return 2.0;
+  }
+  if (life > 6.0) {
+    return 2.5;
+  }
+  return 0.0;
+}
+
+}  // namespace
 
 // --- SLN(cost, salvage, life) -------------------------------------------
 //
@@ -264,6 +368,342 @@ Value Db(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   // period == life + 1 (partial last year). Guarded above so month < 12.
   const double dep_last = (cost - total) * rate * (12.0 - month) / 12.0;
   return finalize(dep_last);
+}
+
+// --- VDB(cost, salvage, life, start_period, end_period, [factor=2],
+//         [no_switch=FALSE]) ------------------------------------------------
+//
+// Variable-declining-balance depreciation summed over the fractional
+// period range [start_period, end_period]. Two variants depending on
+// `no_switch`:
+//
+//   * no_switch == FALSE (default): declining-balance until the
+//     straight-line depreciation of the remaining book value over the
+//     remaining life exceeds the declining-balance charge, then switch
+//     (one-way) to straight-line for every subsequent period.
+//   * no_switch == TRUE: pure declining-balance for every period,
+//     capped by `book - salvage` in each period.
+//
+// Fractional endpoints are handled by linear prorating of the affected
+// period's full-period depreciation (this matches Excel's observed
+// behaviour, per the `VDB(2400, 300, 10, 0, 0.875, 1.5, FALSE)` = 315.0
+// reference).
+//
+// Domain:
+//   - cost     <  0                        ->  #NUM!
+//   - salvage  <  0                        ->  #NUM!
+//   - life    <=  0                        ->  #NUM!
+//   - start_period < 0                     ->  #NUM!
+//   - start_period >= end_period           ->  #NUM!
+//   - end_period  > life                   ->  #NUM!
+//   - factor  <=  0                        ->  #NUM!
+Value Vdb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  auto cost_e = read_required_number(args, 0);
+  if (!cost_e) {
+    return Value::error(cost_e.error());
+  }
+  auto salvage_e = read_required_number(args, 1);
+  if (!salvage_e) {
+    return Value::error(salvage_e.error());
+  }
+  auto life_e = read_required_number(args, 2);
+  if (!life_e) {
+    return Value::error(life_e.error());
+  }
+  auto start_e = read_required_number(args, 3);
+  if (!start_e) {
+    return Value::error(start_e.error());
+  }
+  auto end_e = read_required_number(args, 4);
+  if (!end_e) {
+    return Value::error(end_e.error());
+  }
+  auto factor_e = read_optional_number(args, arity, 5, 2.0);
+  if (!factor_e) {
+    return Value::error(factor_e.error());
+  }
+  auto no_switch_e = read_optional_number(args, arity, 6, 0.0);
+  if (!no_switch_e) {
+    return Value::error(no_switch_e.error());
+  }
+  const double cost = cost_e.value();
+  const double salvage = salvage_e.value();
+  const double life = life_e.value();
+  const double start_period = start_e.value();
+  const double end_period = end_e.value();
+  const double factor = factor_e.value();
+  const bool no_switch = no_switch_e.value() != 0.0;
+  if (cost < 0.0 || salvage < 0.0 || life <= 0.0 || factor <= 0.0) {
+    return Value::error(ErrorCode::Num);
+  }
+  if (start_period < 0.0 || start_period >= end_period || end_period > life) {
+    return Value::error(ErrorCode::Num);
+  }
+
+  // Walk integer periods 1..ceil(end_period), maintaining the running
+  // book value. Each integer period `t` covers the half-open segment
+  // (t-1, t]; we clip that segment to [start_period, end_period] and
+  // linearly prorate the full-period depreciation by the clipped
+  // length.
+  const auto last_iter = static_cast<std::int64_t>(std::ceil(end_period));
+  double book = cost;
+  double accumulated = 0.0;
+  bool switched = false;  // Sticky once we flip to straight-line.
+  double straight_line_dep = 0.0;
+
+  for (std::int64_t t = 1; t <= last_iter; ++t) {
+    // Full-period depreciation under the active method. Under
+    // no_switch=FALSE we compare DDB against the straight-line charge
+    // spread over the remaining life; once SL wins we stay on SL.
+    double dep = 0.0;
+    if (no_switch) {
+      dep = book * factor / life;
+    } else {
+      if (switched) {
+        dep = straight_line_dep;
+      } else {
+        const double ddb = book * factor / life;
+        const double remaining_life = life - static_cast<double>(t - 1);
+        const double sl_candidate = remaining_life > 0.0 ? (book - salvage) / remaining_life : 0.0;
+        if (sl_candidate > ddb) {
+          switched = true;
+          straight_line_dep = sl_candidate;
+          dep = sl_candidate;
+        } else {
+          dep = ddb;
+        }
+      }
+    }
+    // Salvage floor: never depreciate below salvage.
+    const double cap = book - salvage;
+    if (dep > cap) {
+      dep = cap;
+    }
+    if (dep < 0.0) {
+      dep = 0.0;
+    }
+
+    // Clip integer-period segment (t-1, t] to [start_period, end_period].
+    const double seg_lo = std::max(start_period, static_cast<double>(t - 1));
+    const double seg_hi = std::min(end_period, static_cast<double>(t));
+    if (seg_hi > seg_lo) {
+      accumulated += dep * (seg_hi - seg_lo);
+    }
+    book -= dep;
+    if (book <= salvage) {
+      // No further depreciation possible; remaining periods contribute 0.
+      break;
+    }
+  }
+  return finalize(accumulated);
+}
+
+// --- AMORDEGRC(cost, date_purchased, first_period, salvage, period,
+//               rate, [basis=0]) --------------------------------------------
+//
+// French degressive (declining-balance) depreciation. The algorithm
+// applies a life-dependent coefficient to `rate`:
+//
+//   life          = 1 / rate
+//   coefficient   = 1.5 if 3 <= life <= 4
+//                 = 2.0 if 5 <= life <= 6
+//                 = 2.5 if life > 6
+//   applied_rate  = rate * coefficient
+//
+// Depreciation schedule (period index is 0-based):
+//
+//   dep_0          = round(cost * applied_rate *
+//                          YEARFRAC(date_purchased, first_period, basis))
+//   dep_i (i>=1)   = round(book_i * applied_rate)
+//
+// The second-to-last full period's charge is forced to `book / 2` and
+// the final period zeros out the remainder — matching Excel's
+// observable behaviour for long asset lives.
+//
+// Domain:
+//   - cost <= 0 or salvage >= cost or rate <= 0  ->  #NUM!
+//   - period < 0                                 ->  #NUM!
+//   - basis not in {0, 1, 2, 3, 4}               ->  #NUM!
+//   - life (= 1/rate) in the rejected buckets    ->  #NUM!
+Value Amordegrc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  auto cost_e = read_required_number(args, 0);
+  if (!cost_e) {
+    return Value::error(cost_e.error());
+  }
+  auto date_purchased_e = read_date_dep(args, 1);
+  if (!date_purchased_e) {
+    return Value::error(date_purchased_e.error());
+  }
+  auto first_period_e = read_date_dep(args, 2);
+  if (!first_period_e) {
+    return Value::error(first_period_e.error());
+  }
+  auto salvage_e = read_required_number(args, 3);
+  if (!salvage_e) {
+    return Value::error(salvage_e.error());
+  }
+  auto period_e = read_required_number(args, 4);
+  if (!period_e) {
+    return Value::error(period_e.error());
+  }
+  auto rate_e = read_required_number(args, 5);
+  if (!rate_e) {
+    return Value::error(rate_e.error());
+  }
+  auto basis_e = read_basis_dep(args, arity, 6);
+  if (!basis_e) {
+    return Value::error(basis_e.error());
+  }
+  const double cost = cost_e.value();
+  const double salvage = salvage_e.value();
+  const double period = period_e.value();
+  const double rate = rate_e.value();
+  if (cost <= 0.0 || rate <= 0.0 || salvage >= cost || period < 0.0) {
+    return Value::error(ErrorCode::Num);
+  }
+  // Computed life drives the French coefficient table. A coefficient of
+  // 0 means the life bucket is invalid (Excel's #NUM! territory).
+  const double life = 1.0 / rate;
+  const double coef = amordegrc_coefficient(life);
+  if (coef == 0.0) {
+    return Value::error(ErrorCode::Num);
+  }
+  const double applied_rate = rate * coef;
+
+  // First-period year fraction (YEARFRAC from purchase to first period).
+  auto yf = yearfrac_for_depreciation(date_purchased_e.value(), first_period_e.value(), basis_e.value());
+  if (!yf) {
+    return Value::error(yf.error());
+  }
+
+  // Walk periods 0..period, rounding each period's depreciation to the
+  // nearest integer (Excel's observed AMORDEGRC behaviour). The schedule
+  // terminates early once book value reaches salvage.
+  const auto requested = static_cast<std::int64_t>(std::floor(period));
+  double book = cost;
+  double dep_i = 0.0;
+  // Integer estimate of the asset's life (in periods) used by the
+  // two-step end-of-schedule rule. Excel rounds life to the nearest
+  // integer for this calculation.
+  const auto life_int = static_cast<std::int64_t>(std::floor(life + 0.5));
+  for (std::int64_t i = 0; i <= requested; ++i) {
+    // End-of-schedule rule: the penultimate full period depreciates
+    // half of the remaining book value; the last period finishes the
+    // remainder. life_int here is a conservative integer proxy.
+    if (i == life_int - 1) {
+      dep_i = std::floor(book * 0.5 + 0.5);
+    } else if (i >= life_int) {
+      dep_i = book;
+    } else if (i == 0) {
+      dep_i = std::floor(cost * applied_rate * yf.value() + 0.5);
+    } else {
+      dep_i = std::floor(book * applied_rate + 0.5);
+    }
+    // Cap against the remaining depreciable book value (book - salvage).
+    const double cap = book - salvage;
+    if (dep_i > cap) {
+      dep_i = cap;
+    }
+    if (dep_i < 0.0) {
+      dep_i = 0.0;
+    }
+    book -= dep_i;
+    if (book <= salvage && i < requested) {
+      // Asset is fully depreciated; every remaining period returns 0.
+      dep_i = 0.0;
+      break;
+    }
+  }
+  return finalize(dep_i);
+}
+
+// --- AMORLINC(cost, date_purchased, first_period, salvage, period, rate,
+//              [basis=0]) ---------------------------------------------------
+//
+// French straight-line (linear) depreciation. The first period is
+// prorated by the year-fraction from the purchase date to the end of
+// the first accounting period; every subsequent period charges the
+// same flat amount (`cost * rate`) until the asset reaches salvage.
+//
+//   dep_0          = cost * rate * YEARFRAC(date_purchased, first_period, basis)
+//   dep_i (i>=1)   = cost * rate
+//
+// The last period is whatever remains to bring the book value down to
+// salvage. Unlike AMORDEGRC this implementation does not round each
+// period to an integer — AMORLINC returns the raw straight-line
+// amount, matching Excel.
+//
+// Domain: same as AMORDEGRC minus the life-bucket rejection (AMORLINC
+// is valid for every positive rate).
+Value Amorlinc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  auto cost_e = read_required_number(args, 0);
+  if (!cost_e) {
+    return Value::error(cost_e.error());
+  }
+  auto date_purchased_e = read_date_dep(args, 1);
+  if (!date_purchased_e) {
+    return Value::error(date_purchased_e.error());
+  }
+  auto first_period_e = read_date_dep(args, 2);
+  if (!first_period_e) {
+    return Value::error(first_period_e.error());
+  }
+  auto salvage_e = read_required_number(args, 3);
+  if (!salvage_e) {
+    return Value::error(salvage_e.error());
+  }
+  auto period_e = read_required_number(args, 4);
+  if (!period_e) {
+    return Value::error(period_e.error());
+  }
+  auto rate_e = read_required_number(args, 5);
+  if (!rate_e) {
+    return Value::error(rate_e.error());
+  }
+  auto basis_e = read_basis_dep(args, arity, 6);
+  if (!basis_e) {
+    return Value::error(basis_e.error());
+  }
+  const double cost = cost_e.value();
+  const double salvage = salvage_e.value();
+  const double period = period_e.value();
+  const double rate = rate_e.value();
+  if (cost <= 0.0 || rate <= 0.0 || salvage >= cost || period < 0.0) {
+    return Value::error(ErrorCode::Num);
+  }
+
+  auto yf = yearfrac_for_depreciation(date_purchased_e.value(), first_period_e.value(), basis_e.value());
+  if (!yf) {
+    return Value::error(yf.error());
+  }
+
+  const double dep_first = cost * rate * yf.value();
+  const double dep_flat = cost * rate;
+
+  const auto requested = static_cast<std::int64_t>(std::floor(period));
+  double book = cost;
+  double dep_i = 0.0;
+  for (std::int64_t i = 0; i <= requested; ++i) {
+    if (i == 0) {
+      dep_i = dep_first;
+    } else {
+      dep_i = dep_flat;
+    }
+    // Never push book value below salvage.
+    const double cap = book - salvage;
+    if (dep_i > cap) {
+      dep_i = cap;
+    }
+    if (dep_i < 0.0) {
+      dep_i = 0.0;
+    }
+    book -= dep_i;
+    if (book <= salvage && i < requested) {
+      dep_i = 0.0;
+      break;
+    }
+  }
+  return finalize(dep_i);
 }
 
 }  // namespace financial_detail
