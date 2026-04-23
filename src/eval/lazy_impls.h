@@ -14,10 +14,12 @@
 // This header exists as a seam so each family of lazy impls can live in
 // its own translation unit while the central dispatch table in
 // `tree_walker.cpp` keeps a single source of truth for name-to-impl
-// routing. Impls moved out of `tree_walker.cpp` are declared here with
-// external linkage; impls that have not yet been split out remain in
-// `tree_walker.cpp`'s anonymous namespace and the dispatch table refers
-// to them by unqualified name.
+// routing. It publishes only the shared vocabulary: the `LazyImpl`
+// function-pointer signature and the `eval_node` recursion entry point.
+// Each family of lazy impls declares its own externs in a sibling header
+// (`special_forms_lazy.h`, `conditional_aggregates.h`, and the
+// forthcoming lookup headers), and the dispatch table in
+// `tree_walker.cpp` includes all of them.
 
 #ifndef FORMULON_EVAL_LAZY_IMPLS_H_
 #define FORMULON_EVAL_LAZY_IMPLS_H_
@@ -46,20 +48,6 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
 /// this type.
 using LazyImpl = Value (*)(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                            const EvalContext& ctx);
-
-// ---------------------------------------------------------------------------
-// Special forms (src/eval/special_forms_lazy.cpp)
-// ---------------------------------------------------------------------------
-
-Value eval_if_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx);
-Value eval_iferror_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                        const EvalContext& ctx);
-Value eval_ifna_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                     const EvalContext& ctx);
-
-// TODO: additional externs will be added by later commits as the
-// conditional aggregators (`*IF` / `*IFS`) and the classic / XLOOKUP
-// family of lookups move out of `tree_walker.cpp` into their own TUs.
 
 }  // namespace eval
 }  // namespace formulon

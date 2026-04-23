@@ -6,6 +6,8 @@
 // header for the dispatch-table contract and the motivation for the
 // split.
 
+#include "eval/special_forms_lazy.h"
+
 #include <cstdint>
 
 #include "eval/coerce.h"
