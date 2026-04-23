@@ -1,0 +1,314 @@
+{
+  "suite": "math_trig",
+  "description": "SIN / COS / TAN / ASIN / ACOS / ATAN / ATAN2 / DEGREES / RADIANS",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-23T02:35:34Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "sin_of_zero",
+      "formula": "=SIN(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sin_of_pi_over_two",
+      "formula": "=SIN(PI()/2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "sin_of_pi",
+      "formula": "=SIN(PI())",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.2246467991473532e-16
+      }
+    },
+    {
+      "id": "cos_of_zero",
+      "formula": "=COS(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "cos_of_pi",
+      "formula": "=COS(PI())",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "cos_of_pi_over_two",
+      "formula": "=COS(PI()/2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.123233995736766e-17
+      }
+    },
+    {
+      "id": "tan_of_zero",
+      "formula": "=TAN(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "tan_of_pi_over_four",
+      "formula": "=TAN(PI()/4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.9999999999999999
+      }
+    },
+    {
+      "id": "tan_of_negative",
+      "formula": "=TAN(-PI()/4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.9999999999999999
+      }
+    },
+    {
+      "id": "asin_of_zero",
+      "formula": "=ASIN(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "asin_of_one",
+      "formula": "=ASIN(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "asin_of_neg_one",
+      "formula": "=ASIN(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.5707963267948966
+      }
+    },
+    {
+      "id": "asin_out_of_range_is_num",
+      "formula": "=ASIN(2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "acos_of_zero",
+      "formula": "=ACOS(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "acos_of_one",
+      "formula": "=ACOS(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "acos_of_neg_one",
+      "formula": "=ACOS(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "acos_out_of_range_is_num",
+      "formula": "=ACOS(-2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "atan_of_zero",
+      "formula": "=ATAN(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "atan_of_one",
+      "formula": "=ATAN(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.7853981633974483
+      }
+    },
+    {
+      "id": "atan_of_neg_one",
+      "formula": "=ATAN(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.7853981633974483
+      }
+    },
+    {
+      "id": "atan2_unit_y",
+      "formula": "=ATAN2(1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "atan2_unit_x",
+      "formula": "=ATAN2(0,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "atan2_quadrant2",
+      "formula": "=ATAN2(-1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.356194490192345
+      }
+    },
+    {
+      "id": "atan2_quadrant3",
+      "formula": "=ATAN2(-1,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.356194490192345
+      }
+    },
+    {
+      "id": "atan2_both_zero_is_div0",
+      "formula": "=ATAN2(0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "degrees_of_pi",
+      "formula": "=DEGREES(PI())",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "degrees_of_zero",
+      "formula": "=DEGREES(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "degrees_of_pi_over_two",
+      "formula": "=DEGREES(PI()/2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 90.0
+      }
+    },
+    {
+      "id": "radians_of_180",
+      "formula": "=RADIANS(180)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "radians_of_zero",
+      "formula": "=RADIANS(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "radians_of_90",
+      "formula": "=RADIANS(90)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "sin_of_asin_halfway",
+      "formula": "=SIN(ASIN(0.5))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "degrees_of_radians_roundtrip",
+      "formula": "=DEGREES(RADIANS(45))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45.0
+      }
+    }
+  ]
+}

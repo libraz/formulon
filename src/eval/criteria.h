@@ -141,6 +141,20 @@ bool wildcard_match(std::string_view pattern, std::string_view text);
 /// the first unescaped metacharacter encountered.
 bool scan_has_wildcard(std::string_view rhs);
 
+/// Returns the byte offset where `pattern` first matches a prefix of
+/// `text` starting at that offset (wildcards: `*`, `?`, `~` for escape).
+/// Returns `std::string_view::npos` when no position in `text` begins a
+/// match. The match is anchored at its start but not at its end — it
+/// succeeds as soon as `pattern` is consumed, regardless of any unmatched
+/// suffix in `text`. This mirrors the SEARCH contract where the pattern
+/// need only match somewhere inside the haystack.
+///
+/// Callers that need case-insensitive matching must lower-case both inputs
+/// first (the matcher is byte-exact). UTF-16 offset mapping is likewise the
+/// caller's responsibility; this helper only reports a byte offset into
+/// `text`.
+std::size_t wildcard_find(std::string_view pattern, std::string_view text);
+
 }  // namespace eval
 }  // namespace formulon
 

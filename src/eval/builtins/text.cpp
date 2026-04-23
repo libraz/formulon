@@ -20,6 +20,7 @@
 #include <string_view>
 
 #include "eval/coerce.h"
+#include "eval/criteria.h"
 #include "eval/function_registry.h"
 #include "eval/text_ops.h"
 #include "eval/utf8_length.h"
@@ -305,11 +306,11 @@ Value Find(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return Value::number(static_cast<double>(units + 1));
 }
 
-// SEARCH(find_text, within_text, [start_num]) - case-insensitive, no
-// wildcards in this MVP. Otherwise mirrors FIND. Wildcard support (`*`,
-// `?`, `~*`, `~?`) is a known limitation; with it, `SEARCH("a*c", "abc")`
-// would match. Today the call returns `#VALUE!` because the literal
-// substring `"a*c"` is not present.
+// SEARCH(find_text, within_text, [start_num]) - case-insensitive substring
+// search with DOS-style wildcards in `find_text`: `?` matches any single
+// UTF-16 unit, `*` matches zero or more units, and `~?` / `~*` match the
+// literal metacharacter. Otherwise mirrors FIND (which is strictly literal
+// and retains that contract).
 Value Search(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   auto needle = coerce_to_text(args[0]);
   if (!needle) {
@@ -337,7 +338,26 @@ Value Search(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const std::string lowered_haystack = to_lower_ascii(haystack.value());
   const std::string lowered_needle = to_lower_ascii(needle.value());
   const std::size_t start_byte = utf16_to_byte_offset(haystack.value(), static_cast<std::uint32_t>(start - 1));
-  const std::size_t pos = lowered_haystack.find(lowered_needle, start_byte);
+  // Fast path: when the pattern carries no metacharacter at all (no `*`,
+  // `?`, or `~`), use a plain substring search on the lower-cased buffers.
+  // This keeps the common wildcard-free case allocation-free beyond the
+  // two `to_lower_ascii` copies that case-insensitive matching already
+  // requires. A bare `~` still needs the wildcard path because `~?` / `~*`
+  // must be un-escaped when comparing.
+  std::size_t pos = std::string::npos;
+  const bool has_metachar = lowered_needle.find_first_of("*?~") != std::string::npos;
+  if (!has_metachar) {
+    pos = lowered_haystack.find(lowered_needle, start_byte);
+  } else {
+    // Wildcard path: scan the haystack suffix starting at `start_byte`. The
+    // byte offset returned by `wildcard_find` is relative to that suffix, so
+    // we add `start_byte` back to obtain an absolute byte position.
+    const std::string_view suffix = std::string_view(lowered_haystack).substr(start_byte);
+    const std::size_t rel = wildcard_find(lowered_needle, suffix);
+    if (rel != std::string_view::npos) {
+      pos = start_byte + rel;
+    }
+  }
   if (pos == std::string::npos) {
     return Value::error(ErrorCode::Value);
   }
@@ -558,7 +578,15 @@ void register_text_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"EXACT", 2u, 2u, &Exact});
 
   // Text manipulation, second batch.
-  registry.register_function(FunctionDef{"TEXTJOIN", 3u, kVariadic, &TextJoin});
+  {
+    FunctionDef def{"TEXTJOIN", 3u, kVariadic, &TextJoin};
+    // TEXTJOIN walks every cell in a range argument (row-major) and
+    // concatenates their text projections. `accepts_ranges` asks the
+    // dispatcher to flatten `Ref:Ref` arguments; blank cells coerce to "",
+    // which the `ignore_empty=TRUE` branch skips, matching Excel.
+    def.accepts_ranges = true;
+    registry.register_function(def);
+  }
   registry.register_function(FunctionDef{"UNICHAR", 1u, 1u, &Unichar});
   registry.register_function(FunctionDef{"UNICODE", 1u, 1u, &Unicode_});
   registry.register_function(FunctionDef{"CLEAN", 1u, 1u, &Clean});

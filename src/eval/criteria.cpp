@@ -104,12 +104,31 @@ bool scan_has_wildcard(std::string_view rhs) {
   return false;
 }
 
-bool wildcard_match(std::string_view pattern, std::string_view text) {
+namespace {
+
+// Core two-pointer wildcard matcher. When `prefix_match_ok` is false the
+// pattern must consume `text` exactly (SEARCH whole-string / criteria
+// equality semantics). When `prefix_match_ok` is true the match succeeds
+// as soon as the pattern is exhausted, even if `text` has unmatched bytes
+// remaining — used by `wildcard_find` to answer "does the pattern match a
+// prefix of this suffix?". When the match succeeds in prefix mode,
+// `*out_consumed` receives the number of `text` bytes the pattern
+// consumed.
+bool wildcard_match_impl(std::string_view pattern, std::string_view text, bool prefix_match_ok,
+                         std::size_t* out_consumed) {
   std::size_t pi = 0;
   std::size_t ti = 0;
   std::size_t star_pi = std::string_view::npos;
   std::size_t star_ti = 0;
   while (ti < text.size()) {
+    // Prefix mode: succeed as soon as the pattern is fully consumed, even
+    // if there is unmatched text remaining.
+    if (prefix_match_ok && pi == pattern.size()) {
+      if (out_consumed != nullptr) {
+        *out_consumed = ti;
+      }
+      return true;
+    }
     if (pi < pattern.size()) {
       const char pc = pattern[pi];
       if (pc == '~' && pi + 1 < pattern.size()) {
@@ -143,7 +162,31 @@ bool wildcard_match(std::string_view pattern, std::string_view text) {
   while (pi < pattern.size() && pattern[pi] == '*') {
     ++pi;
   }
-  return pi == pattern.size();
+  const bool ok = (pi == pattern.size());
+  if (ok && out_consumed != nullptr) {
+    *out_consumed = ti;
+  }
+  return ok;
+}
+
+}  // namespace
+
+bool wildcard_match(std::string_view pattern, std::string_view text) {
+  return wildcard_match_impl(pattern, text, /*prefix_match_ok=*/false, /*out_consumed=*/nullptr);
+}
+
+std::size_t wildcard_find(std::string_view pattern, std::string_view text) {
+  // Try each start offset in `text` and attempt a prefix match. Because `*`
+  // already permits zero-or-more bytes, a leading `*` in the pattern makes
+  // offset 0 always match — but the loop below is still correct in that
+  // case (it would find offset 0 on the first iteration).
+  for (std::size_t start = 0; start <= text.size(); ++start) {
+    if (wildcard_match_impl(pattern, text.substr(start), /*prefix_match_ok=*/true,
+                            /*out_consumed=*/nullptr)) {
+      return start;
+    }
+  }
+  return std::string_view::npos;
 }
 
 ParsedCriterion parse_criterion(const Value& criterion) {

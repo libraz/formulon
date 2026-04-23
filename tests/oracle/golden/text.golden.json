@@ -1,0 +1,468 @@
+{
+  "suite": "text",
+  "description": "LEN / LEFT / RIGHT / MID / CONCAT / EXACT / FIND / SEARCH / UPPER / LOWER / PROPER / TRIM / CLEAN / SUBSTITUTE / REPT / TEXTJOIN / UNICHAR / UNICODE",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-23T02:38:15Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "len_ascii",
+      "formula": "=LEN(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "len_empty_string",
+      "formula": "=LEN(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "len_bmp_japanese",
+      "formula": "=LEN(\"あいう\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "len_mixed",
+      "formula": "=LEN(\"abcあいう\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "len_coerces_number",
+      "formula": "=LEN(123)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "len_coerces_bool",
+      "formula": "=LEN(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "left_first_three",
+      "formula": "=LEFT(\"abcdef\",3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abc"
+      }
+    },
+    {
+      "id": "left_default_count",
+      "formula": "=LEFT(\"abcdef\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a"
+      }
+    },
+    {
+      "id": "left_more_than_length",
+      "formula": "=LEFT(\"ab\",10)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ab"
+      }
+    },
+    {
+      "id": "left_zero_count",
+      "formula": "=LEFT(\"abcdef\",0)",
+      "setup": {},
+      "skipped": "LEFT(\"abcdef\",0) -> \"\"; xlwings read-back classifies as blank. Formulon returns text(\"\")."
+    },
+    {
+      "id": "left_negative_is_value",
+      "formula": "=LEFT(\"abcdef\",-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "right_last_three",
+      "formula": "=RIGHT(\"abcdef\",3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "def"
+      }
+    },
+    {
+      "id": "right_default_count",
+      "formula": "=RIGHT(\"abcdef\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "f"
+      }
+    },
+    {
+      "id": "mid_middle",
+      "formula": "=MID(\"abcdef\",2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "bcd"
+      }
+    },
+    {
+      "id": "mid_start_beyond_length",
+      "formula": "=MID(\"ab\",10,3)",
+      "setup": {},
+      "skipped": "MID with start beyond length -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
+    },
+    {
+      "id": "mid_zero_length",
+      "formula": "=MID(\"abcdef\",2,0)",
+      "setup": {},
+      "skipped": "MID(...,n,0) -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
+    },
+    {
+      "id": "mid_start_zero_is_value",
+      "formula": "=MID(\"abcdef\",0,3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "concat_two_strings",
+      "formula": "=CONCAT(\"a\",\"b\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ab"
+      }
+    },
+    {
+      "id": "concat_many_mixed",
+      "formula": "=CONCAT(\"a\",1,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a1TRUE"
+      }
+    },
+    {
+      "id": "concatenate_two_strings",
+      "formula": "=CONCATENATE(\"x\",\"y\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "xy"
+      }
+    },
+    {
+      "id": "exact_same",
+      "formula": "=EXACT(\"abc\",\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "exact_different_case",
+      "formula": "=EXACT(\"ABC\",\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "exact_number_vs_text_number",
+      "formula": "=EXACT(1,\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "find_substring",
+      "formula": "=FIND(\"c\",\"abcdef\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "find_not_found_is_value",
+      "formula": "=FIND(\"z\",\"abcdef\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "find_case_sensitive",
+      "formula": "=FIND(\"A\",\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "find_with_start",
+      "formula": "=FIND(\"a\",\"abcabc\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "search_substring",
+      "formula": "=SEARCH(\"C\",\"abcdef\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "search_wildcard_q",
+      "formula": "=SEARCH(\"a?c\",\"zabcabc\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "search_wildcard_star",
+      "formula": "=SEARCH(\"a*c\",\"zabbbbc\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "upper_ascii",
+      "formula": "=UPPER(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "HELLO"
+      }
+    },
+    {
+      "id": "lower_ascii",
+      "formula": "=LOWER(\"HELLO\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hello"
+      }
+    },
+    {
+      "id": "proper_multiword",
+      "formula": "=PROPER(\"hello world\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Hello World"
+      }
+    },
+    {
+      "id": "trim_leading_trailing",
+      "formula": "=TRIM(\"  hello   world  \")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hello world"
+      }
+    },
+    {
+      "id": "clean_removes_ctrl",
+      "formula": "=CLEAN(\"ab\tcd\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abcd"
+      }
+    },
+    {
+      "id": "substitute_all",
+      "formula": "=SUBSTITUTE(\"banana\",\"a\",\"o\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "bonono"
+      }
+    },
+    {
+      "id": "substitute_nth_only",
+      "formula": "=SUBSTITUTE(\"banana\",\"a\",\"o\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "banona"
+      }
+    },
+    {
+      "id": "substitute_no_match_passthrough",
+      "formula": "=SUBSTITUTE(\"banana\",\"x\",\"o\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "banana"
+      }
+    },
+    {
+      "id": "rept_three_times",
+      "formula": "=REPT(\"ab\",3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ababab"
+      }
+    },
+    {
+      "id": "rept_zero_count",
+      "formula": "=REPT(\"ab\",0)",
+      "setup": {},
+      "skipped": "REPT(s,0) -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
+    },
+    {
+      "id": "rept_negative_is_value",
+      "formula": "=REPT(\"ab\",-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "textjoin_simple",
+      "formula": "=TEXTJOIN(\",\",TRUE,\"a\",\"b\",\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a,b,c"
+      }
+    },
+    {
+      "id": "textjoin_ignore_empty_true",
+      "formula": "=TEXTJOIN(\",\",TRUE,\"a\",\"\",\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a,c"
+      }
+    },
+    {
+      "id": "textjoin_ignore_empty_false",
+      "formula": "=TEXTJOIN(\",\",FALSE,\"a\",\"\",\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a,,c"
+      }
+    },
+    {
+      "id": "textjoin_range",
+      "formula": "=TEXTJOIN(\",\",TRUE,A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "c"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "a,b,c"
+      }
+    },
+    {
+      "id": "unichar_ascii_a",
+      "formula": "=UNICHAR(65)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "A"
+      }
+    },
+    {
+      "id": "unichar_japanese",
+      "formula": "=UNICHAR(12354)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "あ"
+      }
+    },
+    {
+      "id": "unichar_zero_is_value",
+      "formula": "=UNICHAR(0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "unicode_ascii",
+      "formula": "=UNICODE(\"A\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 65.0
+      }
+    },
+    {
+      "id": "unicode_japanese",
+      "formula": "=UNICODE(\"あ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12354.0
+      }
+    }
+  ]
+}

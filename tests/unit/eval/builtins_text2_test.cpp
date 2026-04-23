@@ -11,12 +11,17 @@
 #include <string>
 #include <string_view>
 
+#include "eval/eval_context.h"
+#include "eval/eval_state.h"
+#include "eval/function_registry.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "sheet.h"
 #include "utils/arena.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
@@ -36,6 +41,24 @@ Value EvalSource(std::string_view src) {
     return Value::error(ErrorCode::Name);
   }
   return evaluate(*root, eval_arena);
+}
+
+// Parses `src` and evaluates it against a bound workbook + current sheet.
+// Used by tests that exercise range expansion through `expand_range`.
+Value EvalSourceIn(std::string_view src, const Workbook& wb, const Sheet& current) {
+  static thread_local Arena parse_arena;
+  static thread_local Arena eval_arena;
+  parse_arena.reset();
+  eval_arena.reset();
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  EvalState state;
+  const EvalContext ctx(wb, current, state);
+  return evaluate(*root, eval_arena, default_registry(), ctx);
 }
 
 // ---------------------------------------------------------------------------
@@ -170,6 +193,30 @@ TEST(BuiltinsText2TextJoin, MultiByteDelimiterAndArgs) {
   const Value v = EvalSource("=TEXTJOIN(\"\xE3\x80\x81\", TRUE, \"\xE3\x81\x82\", \"\xE3\x81\x84\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "\xE3\x81\x82\xE3\x80\x81\xE3\x81\x84");
+}
+
+TEST(BuiltinsText2TextJoin, RangeArgument) {
+  // TEXTJOIN registers `accepts_ranges = true`, so A1:A3 should flatten to
+  // three text values and join as "a,b,c".
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::text("a"));
+  wb.sheet(0).set_cell_value(1, 0, Value::text("b"));
+  wb.sheet(0).set_cell_value(2, 0, Value::text("c"));
+  const Value v = EvalSourceIn("=TEXTJOIN(\",\", TRUE, A1:A3)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "a,b,c");
+}
+
+TEST(BuiltinsText2TextJoin, RangeArgumentSkipsBlanksWhenIgnoreEmpty) {
+  // A2 is blank: under ignore_empty=TRUE the range flattens as
+  // [a, "", c] and the empty projection of Blank is skipped.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::text("a"));
+  // row 1 left blank
+  wb.sheet(0).set_cell_value(2, 0, Value::text("c"));
+  const Value v = EvalSourceIn("=TEXTJOIN(\",\", TRUE, A1:A3)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "a,c");
 }
 
 // ---------------------------------------------------------------------------

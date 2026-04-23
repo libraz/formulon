@@ -1,0 +1,115 @@
+suite: math_trig
+description: SIN / COS / TAN / ASIN / ACOS / ATAN / ATAN2 / DEGREES / RADIANS
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # -- SIN / COS / TAN -----------------------------------------------------
+  - id: sin_of_zero
+    formula: "=SIN(0)"
+
+  - id: sin_of_pi_over_two
+    formula: "=SIN(PI()/2)"
+
+  - id: sin_of_pi
+    description: "Tiny but non-zero residue is expected (within 1e-12)"
+    formula: "=SIN(PI())"
+
+  - id: cos_of_zero
+    formula: "=COS(0)"
+
+  - id: cos_of_pi
+    formula: "=COS(PI())"
+
+  - id: cos_of_pi_over_two
+    formula: "=COS(PI()/2)"
+
+  - id: tan_of_zero
+    formula: "=TAN(0)"
+
+  - id: tan_of_pi_over_four
+    formula: "=TAN(PI()/4)"
+
+  - id: tan_of_negative
+    formula: "=TAN(-PI()/4)"
+
+  # -- ASIN / ACOS / ATAN --------------------------------------------------
+  - id: asin_of_zero
+    formula: "=ASIN(0)"
+
+  - id: asin_of_one
+    formula: "=ASIN(1)"
+
+  - id: asin_of_neg_one
+    formula: "=ASIN(-1)"
+
+  - id: asin_out_of_range_is_num
+    description: "|x| > 1 yields #NUM!"
+    formula: "=ASIN(2)"
+
+  - id: acos_of_zero
+    formula: "=ACOS(0)"
+
+  - id: acos_of_one
+    formula: "=ACOS(1)"
+
+  - id: acos_of_neg_one
+    formula: "=ACOS(-1)"
+
+  - id: acos_out_of_range_is_num
+    formula: "=ACOS(-2)"
+
+  - id: atan_of_zero
+    formula: "=ATAN(0)"
+
+  - id: atan_of_one
+    formula: "=ATAN(1)"
+
+  - id: atan_of_neg_one
+    formula: "=ATAN(-1)"
+
+  # -- ATAN2 ---------------------------------------------------------------
+  # Note: Excel ATAN2(x, y) takes X FIRST then Y, unlike C's atan2(y, x).
+  - id: atan2_unit_y
+    description: "Excel ATAN2(1, 0) = 0 (arg order: x, y). atan2-of-C(y=0,x=1) = 0."
+    formula: "=ATAN2(1,0)"
+
+  - id: atan2_unit_x
+    description: "Excel ATAN2(0, 1) = pi/2 (point at 90 degrees)"
+    formula: "=ATAN2(0,1)"
+
+  - id: atan2_quadrant2
+    formula: "=ATAN2(-1,1)"
+
+  - id: atan2_quadrant3
+    formula: "=ATAN2(-1,-1)"
+
+  - id: atan2_both_zero_is_div0
+    description: "Excel: ATAN2(0,0) -> #DIV/0!"
+    formula: "=ATAN2(0,0)"
+
+  # -- DEGREES / RADIANS ---------------------------------------------------
+  - id: degrees_of_pi
+    formula: "=DEGREES(PI())"
+
+  - id: degrees_of_zero
+    formula: "=DEGREES(0)"
+
+  - id: degrees_of_pi_over_two
+    formula: "=DEGREES(PI()/2)"
+
+  - id: radians_of_180
+    formula: "=RADIANS(180)"
+
+  - id: radians_of_zero
+    formula: "=RADIANS(0)"
+
+  - id: radians_of_90
+    formula: "=RADIANS(90)"
+
+  # -- Roundtrip -----------------------------------------------------------
+  - id: sin_of_asin_halfway
+    description: "SIN(ASIN(x)) == x for |x| <= 1"
+    formula: "=SIN(ASIN(0.5))"
+
+  - id: degrees_of_radians_roundtrip
+    formula: "=DEGREES(RADIANS(45))"

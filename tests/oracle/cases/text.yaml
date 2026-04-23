@@ -1,0 +1,183 @@
+suite: text
+description: LEN / LEFT / RIGHT / MID / CONCAT / EXACT / FIND / SEARCH / UPPER / LOWER / PROPER / TRIM / CLEAN / SUBSTITUTE / REPT / TEXTJOIN / UNICHAR / UNICODE
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  # -- LEN (UTF-16 unit count) --------------------------------------------
+  - id: len_ascii
+    formula: "=LEN(\"hello\")"
+
+  - id: len_empty_string
+    formula: "=LEN(\"\")"
+
+  - id: len_bmp_japanese
+    description: "Each BMP hiragana is 1 UTF-16 unit (so LEN = 3)"
+    formula: "=LEN(\"あいう\")"
+
+  - id: len_mixed
+    formula: "=LEN(\"abcあいう\")"
+
+  - id: len_coerces_number
+    description: "LEN coerces numbers to shortest-text form first"
+    formula: "=LEN(123)"
+
+  - id: len_coerces_bool
+    formula: "=LEN(TRUE)"
+
+  # -- LEFT / RIGHT / MID --------------------------------------------------
+  - id: left_first_three
+    formula: "=LEFT(\"abcdef\",3)"
+
+  - id: left_default_count
+    description: "Excel: LEFT without count defaults to 1"
+    formula: "=LEFT(\"abcdef\")"
+
+  - id: left_more_than_length
+    description: "Excel: asking for more chars than available returns full string"
+    formula: "=LEFT(\"ab\",10)"
+
+  - id: left_zero_count
+    formula: "=LEFT(\"abcdef\",0)"
+
+  - id: left_negative_is_value
+    formula: "=LEFT(\"abcdef\",-1)"
+
+  - id: right_last_three
+    formula: "=RIGHT(\"abcdef\",3)"
+
+  - id: right_default_count
+    formula: "=RIGHT(\"abcdef\")"
+
+  - id: mid_middle
+    formula: "=MID(\"abcdef\",2,3)"
+
+  - id: mid_start_beyond_length
+    description: "Excel: start > length yields empty string"
+    formula: "=MID(\"ab\",10,3)"
+
+  - id: mid_zero_length
+    formula: "=MID(\"abcdef\",2,0)"
+
+  - id: mid_start_zero_is_value
+    description: "Excel: MID(...,0,n) -> #VALUE! (start is 1-based)"
+    formula: "=MID(\"abcdef\",0,3)"
+
+  # -- CONCAT / CONCATENATE ------------------------------------------------
+  - id: concat_two_strings
+    formula: "=CONCAT(\"a\",\"b\")"
+
+  - id: concat_many_mixed
+    formula: "=CONCAT(\"a\",1,TRUE)"
+
+  - id: concatenate_two_strings
+    formula: "=CONCATENATE(\"x\",\"y\")"
+
+  # -- EXACT ---------------------------------------------------------------
+  - id: exact_same
+    formula: "=EXACT(\"abc\",\"abc\")"
+
+  - id: exact_different_case
+    description: "EXACT is case-SENSITIVE (unlike =)"
+    formula: "=EXACT(\"ABC\",\"abc\")"
+
+  - id: exact_number_vs_text_number
+    description: "EXACT coerces: 1 vs \"1\" -> TRUE"
+    formula: "=EXACT(1,\"1\")"
+
+  # -- FIND / SEARCH -------------------------------------------------------
+  - id: find_substring
+    formula: "=FIND(\"c\",\"abcdef\")"
+
+  - id: find_not_found_is_value
+    formula: "=FIND(\"z\",\"abcdef\")"
+
+  - id: find_case_sensitive
+    description: "FIND is case-sensitive; no match -> #VALUE!"
+    formula: "=FIND(\"A\",\"abc\")"
+
+  - id: find_with_start
+    formula: "=FIND(\"a\",\"abcabc\",2)"
+
+  - id: search_substring
+    description: "SEARCH is case-INSENSITIVE"
+    formula: "=SEARCH(\"C\",\"abcdef\")"
+
+  - id: search_wildcard_q
+    description: "SEARCH supports ? wildcard; FIND does not"
+    formula: "=SEARCH(\"a?c\",\"zabcabc\")"
+
+  - id: search_wildcard_star
+    formula: "=SEARCH(\"a*c\",\"zabbbbc\")"
+
+  # -- UPPER / LOWER / PROPER / TRIM / CLEAN -----------------------------
+  - id: upper_ascii
+    formula: "=UPPER(\"hello\")"
+
+  - id: lower_ascii
+    formula: "=LOWER(\"HELLO\")"
+
+  - id: proper_multiword
+    description: "PROPER capitalises each word"
+    formula: "=PROPER(\"hello world\")"
+
+  - id: trim_leading_trailing
+    description: "Excel TRIM removes leading/trailing/repeated internal spaces"
+    formula: "=TRIM(\"  hello   world  \")"
+
+  - id: clean_removes_ctrl
+    description: "CLEAN strips non-printable chars (< 32)"
+    formula: "=CLEAN(\"ab	cd\")"
+
+  # -- SUBSTITUTE ----------------------------------------------------------
+  - id: substitute_all
+    formula: "=SUBSTITUTE(\"banana\",\"a\",\"o\")"
+
+  - id: substitute_nth_only
+    description: "SUBSTITUTE(str,old,new,n) replaces only the n-th occurrence"
+    formula: "=SUBSTITUTE(\"banana\",\"a\",\"o\",2)"
+
+  - id: substitute_no_match_passthrough
+    formula: "=SUBSTITUTE(\"banana\",\"x\",\"o\")"
+
+  # -- REPT ----------------------------------------------------------------
+  - id: rept_three_times
+    formula: "=REPT(\"ab\",3)"
+
+  - id: rept_zero_count
+    formula: "=REPT(\"ab\",0)"
+
+  - id: rept_negative_is_value
+    formula: "=REPT(\"ab\",-1)"
+
+  # -- TEXTJOIN ------------------------------------------------------------
+  - id: textjoin_simple
+    formula: "=TEXTJOIN(\",\",TRUE,\"a\",\"b\",\"c\")"
+
+  - id: textjoin_ignore_empty_true
+    description: "ignore_empty=TRUE skips empty strings in the separator"
+    formula: "=TEXTJOIN(\",\",TRUE,\"a\",\"\",\"c\")"
+
+  - id: textjoin_ignore_empty_false
+    formula: "=TEXTJOIN(\",\",FALSE,\"a\",\"\",\"c\")"
+
+  - id: textjoin_range
+    setup: { A1: "a", A2: "b", A3: "c" }
+    formula: "=TEXTJOIN(\",\",TRUE,A1:A3)"
+
+  # -- UNICHAR / UNICODE ---------------------------------------------------
+  - id: unichar_ascii_a
+    formula: "=UNICHAR(65)"
+
+  - id: unichar_japanese
+    description: "0x3042 = あ"
+    formula: "=UNICHAR(12354)"
+
+  - id: unichar_zero_is_value
+    description: "Excel: UNICHAR(0) -> #VALUE!"
+    formula: "=UNICHAR(0)"
+
+  - id: unicode_ascii
+    formula: "=UNICODE(\"A\")"
+
+  - id: unicode_japanese
+    formula: "=UNICODE(\"あ\")"

@@ -62,6 +62,26 @@ entries:
     reason: "Same xlwings \"\" -> blank read-back gap as t_of_number."
     prefer: formulon
     first_noted: 2026-04-23
+  - id: left_zero_count
+    mode: skip-oracle
+    reason: "LEFT(\"abcdef\",0) -> \"\"; xlwings read-back classifies as blank. Formulon returns text(\"\")."
+    prefer: formulon
+    first_noted: 2026-04-23
+  - id: mid_start_beyond_length
+    mode: skip-oracle
+    reason: "MID with start beyond length -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
+    prefer: formulon
+    first_noted: 2026-04-23
+  - id: mid_zero_length
+    mode: skip-oracle
+    reason: "MID(...,n,0) -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
+    prefer: formulon
+    first_noted: 2026-04-23
+  - id: rept_zero_count
+    mode: skip-oracle
+    reason: "REPT(s,0) -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
+    prefer: formulon
+    first_noted: 2026-04-23
 
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect

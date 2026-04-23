@@ -1,0 +1,148 @@
+suite: ifs
+description: COUNTIFS / SUMIFS / AVERAGEIFS / MAXIFS / MINIFS multi-criterion aggregators
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # -- COUNTIFS ------------------------------------------------------------
+  - id: countifs_single_criterion
+    description: "With one range/criterion pair COUNTIFS should match COUNTIF"
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=COUNTIFS(A1:A3,\">15\")"
+
+  - id: countifs_two_criteria_and
+    description: "Two ranges ANDed: region==east AND amount>=100"
+    setup:
+      A1: "east"
+      A2: "west"
+      A3: "east"
+      A4: "east"
+      B1: 150
+      B2: 200
+      B3: 50
+      B4: 120
+    formula: "=COUNTIFS(A1:A4,\"east\",B1:B4,\">=100\")"
+
+  - id: countifs_no_match
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=COUNTIFS(A1:A3,\">100\")"
+
+  - id: countifs_wildcard_combined
+    setup:
+      A1: "apple"
+      A2: "apricot"
+      A3: "banana"
+      B1: 1
+      B2: 2
+      B3: 1
+    formula: "=COUNTIFS(A1:A3,\"ap*\",B1:B3,1)"
+
+  - id: countifs_mismatched_ranges_is_value
+    description: "All criteria ranges must be the same shape; otherwise #VALUE!"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 1, B2: 2 }
+    formula: "=COUNTIFS(A1:A3,1,B1:B2,1)"
+
+  # -- SUMIFS --------------------------------------------------------------
+  - id: sumifs_single_criterion
+    setup: { A1: 1, A2: 2, A3: 3, B1: 10, B2: 20, B3: 30 }
+    formula: "=SUMIFS(B1:B3,A1:A3,\">=2\")"
+
+  - id: sumifs_two_criteria
+    setup:
+      A1: "east"
+      A2: "east"
+      A3: "west"
+      A4: "east"
+      B1: 100
+      B2: 50
+      B3: 300
+      B4: 200
+      C1: 10
+      C2: 20
+      C3: 30
+      C4: 40
+    formula: "=SUMIFS(C1:C4,A1:A4,\"east\",B1:B4,\">=100\")"
+
+  - id: sumifs_no_match_returns_zero
+    setup: { A1: 1, A2: 2, B1: 10, B2: 20 }
+    formula: "=SUMIFS(B1:B2,A1:A2,\">100\")"
+
+  - id: sumifs_text_in_sum_range_skipped
+    description: "SUMIFS ignores text cells in the sum_range"
+    setup: { A1: "x", A2: "x", A3: "x", B1: 10, B2: "text", B3: 30 }
+    formula: "=SUMIFS(B1:B3,A1:A3,\"x\")"
+
+  # -- AVERAGEIFS ----------------------------------------------------------
+  - id: averageifs_single_criterion
+    setup: { A1: 1, A2: 2, A3: 3, B1: 10, B2: 20, B3: 30 }
+    formula: "=AVERAGEIFS(B1:B3,A1:A3,\">=2\")"
+
+  - id: averageifs_no_match_is_div0
+    setup: { A1: 1, A2: 2, B1: 10, B2: 20 }
+    formula: "=AVERAGEIFS(B1:B2,A1:A2,\">100\")"
+
+  - id: averageifs_two_criteria
+    setup:
+      A1: "east"
+      A2: "west"
+      A3: "east"
+      A4: "east"
+      B1: 100
+      B2: 200
+      B3: 300
+      B4: 400
+      C1: 1
+      C2: 2
+      C3: 3
+      C4: 4
+    formula: "=AVERAGEIFS(C1:C4,A1:A4,\"east\",B1:B4,\">=200\")"
+
+  # -- MAXIFS --------------------------------------------------------------
+  - id: maxifs_single_criterion
+    setup: { A1: 1, A2: 2, A3: 3, B1: 10, B2: 20, B3: 30 }
+    formula: "=MAXIFS(B1:B3,A1:A3,\">=2\")"
+
+  - id: maxifs_no_match_is_zero
+    description: "Excel: MAXIFS with no matches returns 0 (not #DIV/0! like AVERAGEIFS)"
+    setup: { A1: 1, A2: 2, B1: 10, B2: 20 }
+    formula: "=MAXIFS(B1:B2,A1:A2,\">100\")"
+
+  - id: maxifs_two_criteria
+    setup:
+      A1: "east"
+      A2: "west"
+      A3: "east"
+      A4: "east"
+      B1: 100
+      B2: 50
+      B3: 150
+      B4: 80
+      C1: 10
+      C2: 20
+      C3: 30
+      C4: 40
+    formula: "=MAXIFS(C1:C4,A1:A4,\"east\",B1:B4,\">=100\")"
+
+  # -- MINIFS --------------------------------------------------------------
+  - id: minifs_single_criterion
+    setup: { A1: 1, A2: 2, A3: 3, B1: 10, B2: 20, B3: 30 }
+    formula: "=MINIFS(B1:B3,A1:A3,\">=2\")"
+
+  - id: minifs_no_match_is_zero
+    setup: { A1: 1, A2: 2, B1: 10, B2: 20 }
+    formula: "=MINIFS(B1:B2,A1:A2,\">100\")"
+
+  - id: minifs_two_criteria
+    setup:
+      A1: "east"
+      A2: "west"
+      A3: "east"
+      A4: "east"
+      B1: 100
+      B2: 50
+      B3: 200
+      B4: 150
+      C1: 10
+      C2: 20
+      C3: 30
+      C4: 40
+    formula: "=MINIFS(C1:C4,A1:A4,\"east\",B1:B4,\">=100\")"

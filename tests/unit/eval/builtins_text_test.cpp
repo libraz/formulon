@@ -464,11 +464,50 @@ TEST(TextSearch, EmptyFindTextReturnsStart) {
   EXPECT_EQ(v.as_number(), 2.0);
 }
 
-// Pins the documented MVP limitation: SEARCH does not yet honour wildcards,
-// so `a*c` is searched as a literal three-character substring and is not
-// found in "abc".
-TEST(TextSearch, WildcardsNotYetSupported) {
-  const Value v = EvalSource("=SEARCH(\"a*c\", \"abc\")");
+// SEARCH honours Excel's DOS-style wildcards: `?` matches any single
+// unit, `*` matches zero-or-more units, `~?` / `~*` match the literal
+// metacharacters.
+TEST(TextSearch, WildcardQuestionMark) {
+  const Value v = EvalSource("=SEARCH(\"a?c\", \"zabcabc\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 2.0);
+}
+
+TEST(TextSearch, WildcardStarGreedy) {
+  const Value v = EvalSource("=SEARCH(\"a*c\", \"zabbbbc\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 2.0);
+}
+
+TEST(TextSearch, WildcardStarZeroWidth) {
+  // `a*c` with `*` matching the empty run: "ac" starts at UTF-16 position 1.
+  const Value v = EvalSource("=SEARCH(\"a*c\", \"ac\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1.0);
+}
+
+TEST(TextSearch, WildcardEscapedQuestionLiteral) {
+  // `~?` should match a literal `?`, so the pattern only matches at pos 4.
+  const Value v = EvalSource("=SEARCH(\"a~?c\", \"abcaa?c\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 5.0);
+}
+
+TEST(TextSearch, WildcardEscapedStarLiteral) {
+  const Value v = EvalSource("=SEARCH(\"a~*c\", \"abca*c\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 4.0);
+}
+
+TEST(TextSearch, WildcardNoMatchReturnsValueError) {
+  const Value v = EvalSource("=SEARCH(\"a?d\", \"abc\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+// FIND is strictly literal — confirm it does NOT gain wildcard semantics.
+TEST(TextFind, StarIsLiteralNotWildcard) {
+  const Value v = EvalSource("=FIND(\"a*c\", \"abc\")");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
