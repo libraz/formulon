@@ -16,8 +16,8 @@
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/lazy_impls.h"
-#include "eval/lookups_classic.h"
-#include "eval/lookups_xlookup.h"
+#include "eval/lookups/classic.h"
+#include "eval/lookups/xlookup.h"
 #include "eval/range_args.h"
 #include "eval/special_forms_lazy.h"
 #include "parser/ast.h"
@@ -265,11 +265,11 @@ Value apply_comparison(parser::BinOp op, const Value& lhs, const Value& rhs) {
 // The lazy impls themselves live in per-family translation units:
 //   IF / IFERROR / IFNA                        -> src/eval/special_forms_lazy.cpp
 //   COUNTIF / SUMIF / AVERAGEIF / *IFS         -> src/eval/conditional_aggregates.cpp
-//   CHOOSE / INDEX / MATCH / VLOOKUP / HLOOKUP -> src/eval/lookups_classic.cpp
-//   XLOOKUP / XMATCH                           -> src/eval/lookups_xlookup.cpp
+//   CHOOSE / INDEX / MATCH / VLOOKUP / HLOOKUP -> src/eval/lookups/classic.cpp
+//   XLOOKUP / XMATCH                           -> src/eval/lookups/xlookup.cpp
 // Each family publishes its externs via its own header
 // (`eval/special_forms_lazy.h`, `eval/conditional_aggregates.h`,
-// `eval/lookups_classic.h`, `eval/lookups_xlookup.h`), which the dispatch
+// `eval/lookups/classic.h`, `eval/lookups/xlookup.h`), which the dispatch
 // table below includes.
 
 // `LazyImpl` is declared in `eval/lazy_impls.h` so translation units that

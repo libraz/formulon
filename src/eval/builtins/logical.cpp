@@ -5,7 +5,7 @@
 // catalog: coerce arguments via `eval/coerce.h`, propagate the left-most
 // coercion error, and return a `Value`.
 
-#include "eval/builtins_logical.h"
+#include "eval/builtins/logical.h"
 
 #include <cstdint>
 

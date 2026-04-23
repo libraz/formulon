@@ -1,11 +1,11 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
 // Implementation of the classic lookup-family lazy impls (`CHOOSE`,
-// `INDEX`, `MATCH`, `VLOOKUP`, `HLOOKUP`). See `lookups_classic.h` for
+// `INDEX`, `MATCH`, `VLOOKUP`, `HLOOKUP`). See `lookups/classic.h` for
 // the dispatch-table contract and `eval/lazy_impls.h` for the shared
 // vocabulary.
 
-#include "eval/lookups_classic.h"
+#include "eval/lookups/classic.h"
 
 #include <cmath>
 #include <cstddef>

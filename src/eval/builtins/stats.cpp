@@ -10,7 +10,7 @@
 // dispatcher runs with `propagate_errors = true` so error-typed arguments
 // still short-circuit before the impl executes; once inside the body we
 // only need to filter the non-numeric non-error kinds. Contrast this with
-// `Sum` in `builtins_aggregate.cpp`, which coerces every argument through
+// `Sum` in `builtins/aggregate.cpp`, which coerces every argument through
 // `coerce_to_number` and surfaces `#VALUE!` on text like `"abc"`.
 //
 // For `LARGE`, `SMALL`, `PERCENTILE.INC`, and `QUARTILE.INC` the dispatcher
@@ -20,7 +20,7 @@
 // That trimming is done explicitly at each callsite (not in the helper)
 // so the slice boundary stays visible.
 
-#include "eval/builtins_stats.h"
+#include "eval/builtins/stats.h"
 
 #include <algorithm>
 #include <cmath>

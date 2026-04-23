@@ -6,7 +6,7 @@
 // LastToFirst / BinaryAsc / BinaryDesc), with binary-search-aware
 // scanning and their own wildcard / comparison semantics. They share no
 // helpers with the classic lookups, so they live in a sibling translation
-// unit (`lookups_xlookup.cpp`).
+// unit (`lookups/xlookup.cpp`).
 //
 // They are lazy (rather than eager like ordinary builtins) because the
 // lookup and return array arguments must reach the impl as AST so single-

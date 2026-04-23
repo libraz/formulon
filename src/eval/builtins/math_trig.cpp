@@ -7,7 +7,7 @@
 // left-most coercion error, and return a `Value`. Every function returns
 // `#NUM!` for any non-finite result; trigonometric inputs are radians.
 
-#include "eval/builtins_math_trig.h"
+#include "eval/builtins/math_trig.h"
 
 #include <cmath>
 #include <cstdint>

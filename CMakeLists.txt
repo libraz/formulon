@@ -79,13 +79,14 @@ set(FORMULON_CORE_SOURCES
   src/eval/text_ops.cpp
   src/eval/function_registry.cpp
   src/eval/builtins.cpp
-  src/eval/builtins_aggregate.cpp
-  src/eval/builtins_datetime.cpp
-  src/eval/builtins_logical.cpp
-  src/eval/builtins_math.cpp
-  src/eval/builtins_math_trig.cpp
-  src/eval/builtins_stats.cpp
-  src/eval/builtins_text.cpp
+  src/eval/builtins/aggregate.cpp
+  src/eval/builtins/datetime.cpp
+  src/eval/builtins/info.cpp
+  src/eval/builtins/logical.cpp
+  src/eval/builtins/math.cpp
+  src/eval/builtins/math_trig.cpp
+  src/eval/builtins/stats.cpp
+  src/eval/builtins/text.cpp
   src/eval/tree_walker.cpp
   src/eval/eval_context.cpp
   src/eval/eval_state.cpp
@@ -94,8 +95,8 @@ set(FORMULON_CORE_SOURCES
   src/eval/range_args.cpp
   src/eval/special_forms_lazy.cpp
   src/eval/conditional_aggregates.cpp
-  src/eval/lookups_classic.cpp
-  src/eval/lookups_xlookup.cpp
+  src/eval/lookups/classic.cpp
+  src/eval/lookups/xlookup.cpp
 )
 
 add_library(formulon_core OBJECT ${FORMULON_CORE_SOURCES})

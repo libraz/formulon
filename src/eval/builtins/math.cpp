@@ -6,7 +6,7 @@
 // coerce arguments via `eval/coerce.h`, propagate the left-most coercion
 // error, and return a `Value`.
 
-#include "eval/builtins_math.h"
+#include "eval/builtins/math.h"
 
 #include <cmath>
 #include <cstdint>

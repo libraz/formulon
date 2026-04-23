@@ -6,7 +6,7 @@
 // the builtin catalog: coerce arguments via `eval/coerce.h`, propagate the
 // left-most coercion error, and return a `Value`.
 
-#include "eval/builtins_aggregate.h"
+#include "eval/builtins/aggregate.h"
 
 #include <cmath>
 #include <cstdint>

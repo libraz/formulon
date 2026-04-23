@@ -4,7 +4,7 @@
 // `VLOOKUP`, and `HLOOKUP`. These builtins share the legacy row/column
 // scan model (linear walk along a chosen axis with approximate /
 // exact-with-wildcard modes) and a single private helper, `lookup_scan`,
-// which lives alongside the impls in `lookups_classic.cpp`.
+// which lives alongside the impls in `lookups/classic.cpp`.
 //
 // They are lazy (rather than eager like ordinary builtins) because the
 // lookup array argument must reach the impl as an AST node so a bare

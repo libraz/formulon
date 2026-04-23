@@ -1,10 +1,10 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
 // Implementation of the XLOOKUP / XMATCH family of lazy impls. See
-// `lookups_xlookup.h` for the dispatch-table contract and
+// `lookups/xlookup.h` for the dispatch-table contract and
 // `eval/lazy_impls.h` for the shared vocabulary.
 
-#include "eval/lookups_xlookup.h"
+#include "eval/lookups/xlookup.h"
 
 #include <cmath>
 #include <cstddef>

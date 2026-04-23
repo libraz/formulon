@@ -10,7 +10,7 @@
 // decomposition) live in `eval/date_time.h`; this file only layers Excel's
 // argument-shape and error-handling rules on top.
 
-#include "eval/builtins_datetime.h"
+#include "eval/builtins/datetime.h"
 
 #include <cmath>
 #include <cstdint>

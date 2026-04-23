@@ -11,7 +11,7 @@
 // `eval/text_ops.h`; the result text (when any) is interned into the
 // caller's arena so the returned `Value::text` payload is readable.
 
-#include "eval/builtins_text.h"
+#include "eval/builtins/text.h"
 
 #include <cmath>
 #include <cstddef>
