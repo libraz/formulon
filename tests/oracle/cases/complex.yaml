@@ -1,0 +1,95 @@
+suite: complex
+description: >
+  Excel's complex-number family: COMPLEX + the 24 IM* functions. Cases
+  focus on the formatting rules (pure real, pure imag, +/-1 coefficient
+  elision, alternate 'j' suffix), the arithmetic core (IMSUM / IMSUB /
+  IMPRODUCT / IMDIV / IMPOWER) including mixed-suffix error cases, and
+  exponential / logarithmic / root operations where floating-point drift
+  is most likely. Trigonometric and hyperbolic variants are exercised at
+  stable points (z=0, pure real) to keep goldens robust.
+tolerance: { abs: 1.0e-5, rel: 1.0e-5 }
+locale: ja-JP
+cases:
+  # -- COMPLEX: formatting table ------------------------------------------
+  - id: complex_full_default_suffix
+    formula: "=COMPLEX(3,4)"
+
+  - id: complex_full_j_suffix
+    formula: "=COMPLEX(3,4,\"j\")"
+
+  - id: complex_pure_imag_plus_one
+    description: "imag=+1 collapses to bare 'i'"
+    formula: "=COMPLEX(0,1)"
+
+  - id: complex_pure_imag_minus_one
+    description: "imag=-1 collapses to '-i'"
+    formula: "=COMPLEX(0,-1)"
+
+  - id: complex_pure_imag_five
+    formula: "=COMPLEX(0,5)"
+
+  - id: complex_pure_real
+    formula: "=COMPLEX(3,0)"
+
+  - id: complex_full_plus_one_imag
+    description: "full form, imag=+1 drops the coefficient"
+    formula: "=COMPLEX(3,1)"
+
+  - id: complex_full_minus_one_imag
+    formula: "=COMPLEX(3,-1)"
+
+  - id: complex_invalid_suffix_is_value
+    description: "Suffix other than i/j -> #VALUE!"
+    formula: "=COMPLEX(3,4,\"x\")"
+
+  # -- Inspectors ----------------------------------------------------------
+  - id: imabs_three_four
+    formula: "=IMABS(\"3+4i\")"
+
+  - id: imreal_three_four
+    formula: "=IMREAL(\"3+4i\")"
+
+  - id: imaginary_three_four
+    formula: "=IMAGINARY(\"3+4i\")"
+
+  - id: imconjugate_three_four
+    formula: "=IMCONJUGATE(\"3+4i\")"
+
+  - id: imargument_three_four
+    formula: "=IMARGUMENT(\"3+4i\")"
+
+  - id: imargument_zero_is_div0
+    formula: "=IMARGUMENT(\"0\")"
+
+  # -- Arithmetic ----------------------------------------------------------
+  - id: imsum_two_args
+    formula: "=IMSUM(\"1+i\",\"2+3i\")"
+
+  - id: imsum_mixed_suffix_is_value
+    description: "Mixing i and j is rejected with #VALUE!"
+    formula: "=IMSUM(\"1+i\",\"2+3j\")"
+
+  - id: imsub_basic
+    formula: "=IMSUB(\"5+3i\",\"2+i\")"
+
+  - id: improduct_two_args
+    description: "(2+i)(3+4i) = 2+11i"
+    formula: "=IMPRODUCT(\"2+i\",\"3+4i\")"
+
+  - id: imdiv_one_plus_i_over_one_minus_i
+    description: "(1+i)/(1-i) = i; snap_zeros keeps the real part clean"
+    formula: "=IMDIV(\"1+i\",\"1-i\")"
+
+  - id: impower_square
+    description: "(1+i)^2 = 2i"
+    formula: "=IMPOWER(\"1+i\",2)"
+
+  # -- Exponentials / logs / roots -----------------------------------------
+  - id: imln_one_plus_i
+    formula: "=IMLN(\"1+i\")"
+
+  - id: imsqrt_i
+    formula: "=IMSQRT(\"i\")"
+
+  - id: imexp_zero
+    formula: "=IMEXP(\"0\")"

@@ -1,0 +1,52 @@
+suite: width
+description: ASC / JIS / DBCS width-conversion functions for Japanese text (ja-JP)
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  # -- ASC: full-width ASCII -> half-width ASCII -----------------------------
+  - id: asc_fullwidth_letter
+    formula: "=ASC(\"Ａ\")"
+
+  - id: asc_fullwidth_ascii_with_space
+    description: "Full-width ASCII range plus ideographic space (U+3000)"
+    formula: "=ASC(\"ＡＢＣ　１２３\")"
+
+  # -- ASC: katakana decompose ---------------------------------------------
+  - id: asc_voiced_ga
+    description: "ガ decomposes into ｶ + dakuten (U+FF9E)"
+    formula: "=ASC(\"ガ\")"
+
+  - id: asc_semivoiced_row
+    description: "Pa-row decomposes into base + handakuten (U+FF9F)"
+    formula: "=ASC(\"パピプペポ\")"
+
+  - id: asc_voiced_vu
+    description: "ヴ decomposes into ｳ + dakuten"
+    formula: "=ASC(\"ヴ\")"
+
+  - id: asc_hiragana_passthrough
+    description: "Hiragana is unchanged by ASC"
+    formula: "=ASC(\"ひらがな\")"
+
+  # -- JIS: ASCII -> full-width --------------------------------------------
+  - id: jis_ascii_and_space
+    description: "ASCII space (0x20) maps to U+3000; other ASCII via +0xFEE0"
+    formula: "=JIS(\"ABC 123\")"
+
+  # -- JIS: katakana recompose --------------------------------------------
+  - id: jis_voiced_recompose
+    description: "ｶ + dakuten recomposes to ガ"
+    formula: "=JIS(\"ｶﾞ\")"
+
+  - id: jis_semivoiced_row
+    description: "ﾊ + handakuten etc. recomposes to パピプペポ"
+    formula: "=JIS(\"ﾊﾟﾋﾟﾌﾟﾍﾟﾎﾟ\")"
+
+  - id: jis_unvoiced_row
+    description: "Plain half-width katakana row maps 1:1 to full-width"
+    formula: "=JIS(\"ｱｲｳｴｵ\")"
+
+  # -- DBCS is an alias of JIS --------------------------------------------
+  - id: dbcs_alias_ascii
+    description: "DBCS = JIS (both names point at the same impl)"
+    formula: "=DBCS(\"ABC\")"

@@ -83,8 +83,11 @@ set(FORMULON_CORE_SOURCES
   src/eval/special_forms_catalog.cpp
   src/eval/builtins.cpp
   src/eval/builtins/aggregate.cpp
+  src/eval/builtins/complex_num.cpp
   src/eval/builtins/datetime.cpp
   src/eval/builtins/distributions.cpp
+  src/eval/builtins/engineering.cpp
+  src/eval/builtins/engineering_special.cpp
   src/eval/builtins/financial.cpp
   src/eval/builtins/financial_depreciation.cpp
   src/eval/builtins/financial_misc.cpp
@@ -103,6 +106,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins/text_dbcs.cpp
   src/eval/builtins/text_modern.cpp
   src/eval/builtins/text_format.cpp
+  src/eval/builtins/text_width.cpp
   src/eval/text_format/number_format.cpp
   src/eval/text_format/number_format_tokenizer.cpp
   src/eval/text_format/number_format_render.cpp
@@ -117,6 +121,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/special_forms_lazy.cpp
   src/eval/areas_lazy.cpp
   src/eval/conditional_aggregates.cpp
+  src/eval/database_lazy.cpp
   src/eval/shape_ops_lazy.cpp
   src/eval/workdays_lazy.cpp
   src/eval/financial_lazy.cpp

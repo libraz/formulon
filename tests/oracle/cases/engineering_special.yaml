@@ -1,0 +1,89 @@
+suite: engineering_special
+description: >
+  Continuous-math engineering built-ins: error function family (ERF,
+  ERF.PRECISE, ERFC, ERFC.PRECISE) and Bessel function family (BESSELJ,
+  BESSELY, BESSELI, BESSELK). Cases cover canonical handbook values,
+  oddness / integral form for ERF, order truncation for BESSEL*, and
+  singularity / negative-domain rejection for the second-kind Bessel
+  members. Tolerance is loose (1e-8) because BESSELK uses Abramowitz &
+  Stegun 9.8.5-9.8.8 polynomial approximations whose rated accuracy is
+  |epsilon| < 1.9e-7.
+tolerance: { abs: 1e-8, rel: 1e-8 }
+locale: ja-JP
+cases:
+  # -- ERF -----------------------------------------------------------------
+  - id: erf_zero
+    formula: "=ERF(0)"
+
+  - id: erf_one
+    formula: "=ERF(1)"
+
+  - id: erf_negative_one_odd
+    description: "erf(-x) = -erf(x)"
+    formula: "=ERF(-1)"
+
+  - id: erf_two_arg_from_zero
+    description: "2-arg form: erf(upper) - erf(lower)"
+    formula: "=ERF(0,1)"
+
+  - id: erf_two_arg_interval
+    description: "erf(2) - erf(1)"
+    formula: "=ERF(1,2)"
+
+  # -- ERF.PRECISE / ERFC / ERFC.PRECISE -----------------------------------
+  - id: erf_precise_one
+    formula: "=ERF.PRECISE(1)"
+
+  - id: erfc_zero
+    formula: "=ERFC(0)"
+
+  - id: erfc_one
+    description: "1 - erf(1) ~= 0.157299207"
+    formula: "=ERFC(1)"
+
+  - id: erfc_precise_one
+    formula: "=ERFC.PRECISE(1)"
+
+  # -- BESSELJ -------------------------------------------------------------
+  - id: besselj_zero_zero
+    description: "J_0(0) = 1"
+    formula: "=BESSELJ(0,0)"
+
+  - id: besselj_one_zero
+    description: "J_0(1)"
+    formula: "=BESSELJ(1,0)"
+
+  - id: besselj_one_one
+    description: "J_1(1)"
+    formula: "=BESSELJ(1,1)"
+
+  # -- BESSELY -------------------------------------------------------------
+  - id: bessely_one_zero
+    description: "Y_0(1)"
+    formula: "=BESSELY(1,0)"
+
+  - id: bessely_zero_singular
+    description: "Y_n(0) is singular -> #NUM!"
+    formula: "=BESSELY(0,0)"
+
+  # -- BESSELI -------------------------------------------------------------
+  - id: besseli_one_zero
+    description: "I_0(1)"
+    formula: "=BESSELI(1,0)"
+
+  - id: besseli_two_one
+    description: "I_1(2)"
+    formula: "=BESSELI(2,1)"
+
+  # -- BESSELK -------------------------------------------------------------
+  - id: besselk_one_zero
+    description: "K_0(1)"
+    formula: "=BESSELK(1,0)"
+
+  - id: besselk_two_one
+    description: "K_1(2)"
+    formula: "=BESSELK(2,1)"
+
+  - id: besselk_zero_singular
+    description: "K_n(0) is singular -> #NUM!"
+    formula: "=BESSELK(0,0)"

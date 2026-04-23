@@ -1,0 +1,393 @@
+suite: database
+description: DSUM / DCOUNT / DCOUNTA / DAVERAGE / DMAX / DMIN / DPRODUCT / DSTDEV / DSTDEVP / DVAR / DVARP / DGET
+tolerance: { abs: 1.0e-10, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # Canonical 3-column fruit-sales database in A1:C5:
+  #   A1=Fruit     B1=Region   C1=Sales
+  #   A2=Apple     B2=East     C2=100
+  #   A3=Apple     B3=West     C3=200
+  #   A4=Pear      B4=East     C4=50
+  #   A5=Banana    B5=West     C5=300
+  #
+  # Criterion block at E1:F3. Each case sets only the rows/cells it needs;
+  # unused cells remain blank, which the matcher treats as a wildcard on
+  # that criterion column. The header row at E1:F1 is always populated so
+  # `find_db_column` can map back into the database.
+
+  # -- DSUM ---------------------------------------------------------------
+  - id: dsum_single_text_match
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dsum_numeric_field_selector
+    description: "Field 3 selects the Sales column by 1-based index"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DSUM(A1:C5, 3, E1:E2)"
+
+  - id: dsum_comparator_criterion
+    description: "Sales >= 100 selects Apple/Apple/Banana -> 100+200+300"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Sales
+      E2: ">=100"
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dsum_wildcard_criterion
+    description: "Fruit = App* matches Apple/Apple"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: "App*"
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dsum_multi_column_and
+    description: "Fruit=Apple AND Region=East -> only row 2 (100)"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      F1: Region
+      E2: Apple
+      F2: East
+    formula: "=DSUM(A1:C5, \"Sales\", E1:F2)"
+
+  - id: dsum_multi_row_or
+    description: "Fruit=Apple OR Fruit=Pear -> 100+200+50"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+      E3: Pear
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E3)"
+
+  # -- DCOUNT / DCOUNTA --------------------------------------------------
+  - id: dcount_header_only_criteria
+    description: "Header-only criteria matches every record; 4 numeric Sales cells"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+    formula: "=DCOUNT(A1:C5, \"Sales\", E1:E1)"
+
+  - id: dcounta_all_records
+    description: "DCOUNTA counts every non-blank Sales cell (4 rows)"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+    formula: "=DCOUNTA(A1:C5, \"Sales\", E1:E1)"
+
+  # -- DAVERAGE / DMAX / DMIN / DPRODUCT ---------------------------------
+  - id: daverage_apple
+    description: "Mean of {100, 200} == 150"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DAVERAGE(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dmax_apple
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DMAX(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dmin_apple
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DMIN(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dproduct_apple
+    description: "Product of {100, 200} == 20000"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DPRODUCT(A1:C5, \"Sales\", E1:E2)"
+
+  # -- DSTDEV / DSTDEVP / DVAR / DVARP -----------------------------------
+  - id: dstdev_apple_vs_dstdevp_apple
+    description: "Sample SD of {100, 200} = sqrt(5000)"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DSTDEV(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dstdevp_apple
+    description: "Population SD of {100, 200} = 50"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DSTDEVP(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dvar_apple
+    description: "Sample variance of {100, 200} = 5000"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DVAR(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dvarp_apple
+    description: "Population variance of {100, 200} = 2500"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DVARP(A1:C5, \"Sales\", E1:E2)"
+
+  # -- DGET ---------------------------------------------------------------
+  - id: dget_unique_match
+    description: "Exactly one Pear record; DGET returns its Sales value"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Pear
+    formula: "=DGET(A1:C5, \"Sales\", E1:E2)"

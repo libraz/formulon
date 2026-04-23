@@ -387,3 +387,20 @@ cases:
   - id: textafter_match_end_at_end
     description: "match_end=1 + instance=-1 matches the end-of-text sentinel"
     formula: "=TEXTAFTER(\"abc\", \"-\", -1, 0, 1)"
+
+  # -- HYPERLINK -----------------------------------------------------------
+  - id: hyperlink_link_only
+    description: "Single-arg HYPERLINK returns link_location as text"
+    formula: "=HYPERLINK(\"http://example.com\")"
+
+  - id: hyperlink_with_friendly
+    description: "Two-arg HYPERLINK returns friendly_name"
+    formula: "=HYPERLINK(\"http://example.com\", \"Click here\")"
+
+  - id: hyperlink_numeric_friendly
+    description: "friendly_name numeric coerces to shortest text"
+    formula: "=HYPERLINK(\"x\", 42)"
+
+  - id: hyperlink_numeric_link
+    description: "link_location numeric coerces when friendly_name is absent"
+    formula: "=HYPERLINK(123)"

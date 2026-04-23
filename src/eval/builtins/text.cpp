@@ -647,6 +647,29 @@ Value Proper(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return Value::text(arena.intern(out));
 }
 
+// HYPERLINK(link_location, [friendly_name]) - Excel's hyperlink function
+// returns `friendly_name` (coerced to text) when the 2-arg form is used;
+// otherwise it returns `link_location` coerced to text. Formulon has no
+// concept of clickable cells, so the function exists purely to mirror
+// Excel's pure-value behaviour. Error arguments propagate through the
+// dispatcher's default short-circuit. An explicit empty `friendly_name`
+// argument (i.e. `""`) wins over `link_location` - Excel returns "" for
+// the two-arg form even when the friendly name is blank.
+Value Hyperlink(const Value* args, std::uint32_t arity, Arena& arena) {
+  if (arity >= 2) {
+    auto friendly = coerce_to_text(args[1]);
+    if (!friendly) {
+      return Value::error(friendly.error());
+    }
+    return Value::text(arena.intern(friendly.value()));
+  }
+  auto link = coerce_to_text(args[0]);
+  if (!link) {
+    return Value::error(link.error());
+  }
+  return Value::text(arena.intern(link.value()));
+}
+
 }  // namespace
 
 void register_text_builtins(FunctionRegistry& registry) {
@@ -691,6 +714,10 @@ void register_text_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"REPLACEB", 4u, 4u, &text_detail::ReplaceB_});
   registry.register_function(FunctionDef{"CHAR", 1u, 1u, &Char_});
   registry.register_function(FunctionDef{"CODE", 1u, 1u, &Code_});
+
+  // HYPERLINK: pure-value passthrough - returns the friendly name when
+  // provided, otherwise the link location as text.
+  registry.register_function(FunctionDef{"HYPERLINK", 1u, 2u, &Hyperlink});
 }
 
 }  // namespace eval

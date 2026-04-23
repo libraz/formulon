@@ -41,10 +41,12 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_text2_test.cpp
   unit/eval/builtins_textb_test.cpp
   unit/eval/builtins_text3_test.cpp
+  unit/eval/builtins_width_test.cpp
   unit/eval/text_format_number_test.cpp
   unit/eval/text_format_date_test.cpp
   unit/eval/value_numbervalue_test.cpp
   unit/eval/builtins_info_test.cpp
+  unit/eval/builtins_info_extra_test.cpp
   unit/eval/info_lazy_test.cpp
   unit/eval/builtins_count_test.cpp
   unit/eval/builtins_shape_test.cpp
@@ -60,6 +62,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/stats/incomplete_beta_test.cpp
   unit/eval/criteria_test.cpp
   unit/eval/builtins_countif_test.cpp
+  unit/eval/builtins_database_test.cpp
   unit/eval/builtins_ifs_test.cpp
   unit/eval/builtins_lookup_test.cpp
   unit/eval/builtins_references_test.cpp
@@ -81,6 +84,9 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/let_test.cpp
   unit/eval/builtins_misc_test.cpp
   unit/eval/builtins_rand_test.cpp
+  unit/eval/builtins_engineering_test.cpp
+  unit/eval/builtins_engineering_special_test.cpp
+  unit/eval/builtins_complex_test.cpp
   unit/registry_catalog_test.cpp
 )
 

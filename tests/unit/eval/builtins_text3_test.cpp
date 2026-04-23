@@ -44,7 +44,8 @@ Value EvalSource(std::string_view src) {
 
 TEST(BuiltinsText3Registry, AllNamesRegistered) {
   const FunctionRegistry& r = default_registry();
-  for (const char* name : {"REPLACE", "REPLACEB", "FINDB", "SEARCHB", "TEXTBEFORE", "TEXTAFTER", "FIXED", "DOLLAR"}) {
+  for (const char* name :
+       {"REPLACE", "REPLACEB", "FINDB", "SEARCHB", "TEXTBEFORE", "TEXTAFTER", "FIXED", "DOLLAR", "HYPERLINK"}) {
     EXPECT_NE(r.lookup(name), nullptr) << "missing registration: " << name;
   }
 }
@@ -427,6 +428,48 @@ TEST(BuiltinsText3Dollar, ErrorPropagates) {
   const Value v = EvalSource("=DOLLAR(#REF!)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+// ---------------------------------------------------------------------------
+// HYPERLINK
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsText3Hyperlink, OneArgReturnsLink) {
+  const Value v = EvalSource("=HYPERLINK(\"http://example.com\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "http://example.com");
+}
+
+TEST(BuiltinsText3Hyperlink, TwoArgReturnsFriendlyName) {
+  const Value v = EvalSource("=HYPERLINK(\"http://example.com\", \"Click here\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "Click here");
+}
+
+TEST(BuiltinsText3Hyperlink, EmptyFriendlyNameWins) {
+  // An explicit "" as friendly_name beats the link, matching Excel's
+  // two-arg semantics (the caller asked for the friendly name branch).
+  const Value v = EvalSource("=HYPERLINK(\"http://example.com\", \"\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "");
+}
+
+TEST(BuiltinsText3Hyperlink, NumericLinkCoercesToText) {
+  const Value v = EvalSource("=HYPERLINK(123)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "123");
+}
+
+TEST(BuiltinsText3Hyperlink, NumericFriendlyCoercesToText) {
+  const Value v = EvalSource("=HYPERLINK(\"x\", 42)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "42");
+}
+
+TEST(BuiltinsText3Hyperlink, ErrorInLinkPropagates) {
+  const Value v = EvalSource("=HYPERLINK(1/0)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
 }  // namespace

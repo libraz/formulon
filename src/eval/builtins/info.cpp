@@ -15,6 +15,8 @@
 
 #include <cmath>
 #include <cstdint>
+#include <string>
+#include <string_view>
 
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
@@ -272,6 +274,77 @@ Value ErrorType(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return Value::error(ErrorCode::NA);
 }
 
+// --- INFO(type_text) ----------------------------------------------------
+//
+// Returns a string describing aspects of the runtime environment. Excel's
+// real implementation probes the host OS, filesystem, and calc settings;
+// Formulon is deliberately host-agnostic (it runs embedded in WASM /
+// Python / CLI), so we return fixed, build-time-stable strings that are
+// correct for "a hypothetical calc-only sandbox".
+//
+// Divergence note: ja-JP Mac Excel 365 returns "mac" for INFO("system");
+// Formulon returns "pcdos" for all hosts. This matches Excel's historical
+// fallback on platforms without OS introspection and keeps results
+// reproducible across our build targets. The "directory", "numfile",
+// "osversion" values are similarly stubbed - the oracle corpus
+// intentionally skips INFO for this reason.
+//
+// `type_text` is compared ASCII-case-insensitively. Any unsupported
+// type_text - including a numeric argument or a non-text coercion - surfaces
+// as `#VALUE!`.
+
+// ASCII-lowercase helper for the INFO type_text lookup. Non-ASCII bytes
+// pass through unchanged; the supported keys are all ASCII so that's
+// sufficient.
+std::string ascii_tolower(std::string_view s) {
+  std::string out;
+  out.reserve(s.size());
+  for (char c : s) {
+    const auto u = static_cast<unsigned char>(c);
+    if (u >= 'A' && u <= 'Z') {
+      out.push_back(static_cast<char>(u + 32));
+    } else {
+      out.push_back(c);
+    }
+  }
+  return out;
+}
+
+Value Info(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  // INFO only accepts Text (and Blank -> ""); numeric / bool arguments
+  // surface as `#VALUE!` after the case-insensitive lookup fails. We
+  // still route through `coerce_to_text` to keep the contract uniform,
+  // but a Number coerces to its textual form ("5", "3.14", ...) which is
+  // never a valid info_type and therefore falls through to the #VALUE!
+  // default.
+  auto text = coerce_to_text(args[0]);
+  if (!text) {
+    return Value::error(text.error());
+  }
+  const std::string key = ascii_tolower(text.value());
+  std::string_view result;
+  if (key == "directory") {
+    result = "/";
+  } else if (key == "numfile") {
+    // The single bound workbook counts as one open file.
+    return Value::number(1.0);
+  } else if (key == "osversion") {
+    result = "Formulon";
+  } else if (key == "recalc") {
+    result = "Automatic";
+  } else if (key == "release") {
+    result = "Formulon 0.1";
+  } else if (key == "system") {
+    // Excel's conventional fallback on hosts without OS introspection.
+    // Mac Excel ja-JP returns "mac"; we diverge intentionally (see note
+    // above).
+    result = "pcdos";
+  } else {
+    return Value::error(ErrorCode::Value);
+  }
+  return Value::text(arena.intern(result));
+}
+
 // --- TYPE(value) --------------------------------------------------------
 //
 // Maps the argument's runtime kind to Excel's documented type code:
@@ -338,6 +411,10 @@ void register_info_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"ISNONTEXT", 1u, 1u, &IsNonText, /*propagate_errors=*/false});
   registry.register_function(FunctionDef{"ERROR.TYPE", 1u, 1u, &ErrorType, /*propagate_errors=*/false});
   registry.register_function(FunctionDef{"TYPE", 1u, 1u, &Type, /*propagate_errors=*/false});
+
+  // INFO returns build-time-stable environment strings (host-agnostic).
+  // Errors propagate; any non-matching type_text surfaces #VALUE!.
+  registry.register_function(FunctionDef{"INFO", 1u, 1u, &Info});
   // ROWS / COLUMNS / ROW / COLUMN are routed through the lazy dispatch
   // table in `tree_walker.cpp` (see `eval_rows_lazy` et al. in
   // `shape_ops_lazy.cpp`) because they must introspect each argument's

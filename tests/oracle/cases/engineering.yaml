@@ -1,0 +1,118 @@
+suite: engineering
+description: >
+  Simple integer-only engineering built-ins: base conversion (BIN/OCT/HEX
+  <-> DEC), bit operations (BITAND / BITOR / BITXOR / BITLSHIFT / BITRSHIFT),
+  and the two comparators DELTA and GESTEP. Cases focus on Excel-observable
+  semantic edges: two's complement decoding, lowercase hex input, `places`
+  padding, shift sign flipping, and #NUM! surfacing on out-of-range input.
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  # -- *2DEC ---------------------------------------------------------------
+  - id: bin2dec_positive
+    formula: "=BIN2DEC(\"1010\")"
+
+  - id: bin2dec_twos_complement_negative
+    description: "10-digit input with MSB=1 is two's complement: 1111111110 -> -2"
+    formula: "=BIN2DEC(\"1111111110\")"
+
+  - id: oct2dec_negative
+    description: "10-digit octal '7777777777' -> -1"
+    formula: "=OCT2DEC(\"7777777777\")"
+
+  - id: hex2dec_lowercase_accepted
+    description: "Excel accepts lowercase hex digits"
+    formula: "=HEX2DEC(\"ff\")"
+
+  - id: hex2dec_full_negative
+    description: "10-digit hex 'FFFFFFFFFF' -> -1"
+    formula: "=HEX2DEC(\"FFFFFFFFFF\")"
+
+  # -- DEC2* ---------------------------------------------------------------
+  - id: dec2bin_positive
+    formula: "=DEC2BIN(10)"
+
+  - id: dec2bin_negative
+    description: "-2 renders as 10-digit two's complement"
+    formula: "=DEC2BIN(-2)"
+
+  - id: dec2bin_places_pads
+    formula: "=DEC2BIN(2,4)"
+
+  - id: dec2bin_places_ignored_for_negative
+    description: "places is ignored when result is negative (always 10 digits)"
+    formula: "=DEC2BIN(-2,4)"
+
+  - id: dec2hex_minus_one
+    formula: "=DEC2HEX(-1)"
+
+  - id: dec2hex_positive_uppercase
+    description: "Hex output is uppercase"
+    formula: "=DEC2HEX(255)"
+
+  - id: dec2oct_positive
+    formula: "=DEC2OCT(15)"
+
+  # -- Cross-base ----------------------------------------------------------
+  - id: bin2oct_positive
+    formula: "=BIN2OCT(\"1010\")"
+
+  - id: hex2bin_positive_out_of_range
+    description: "HEX '200' = 512 exceeds BIN signed max (511) -> #NUM!"
+    formula: "=HEX2BIN(\"200\")"
+
+  # -- Validation errors ---------------------------------------------------
+  - id: bin2dec_invalid_digit
+    formula: "=BIN2DEC(\"102\")"
+
+  - id: dec2bin_out_of_range
+    formula: "=DEC2BIN(512)"
+
+  - id: dec2bin_places_too_small
+    description: "'10' requires 2 digits; places=1 -> #NUM!"
+    formula: "=DEC2BIN(2,1)"
+
+  # -- Bit operations ------------------------------------------------------
+  - id: bitand_basic
+    formula: "=BITAND(5,3)"
+
+  - id: bitor_basic
+    formula: "=BITOR(5,3)"
+
+  - id: bitxor_basic
+    formula: "=BITXOR(5,3)"
+
+  - id: bitlshift_basic
+    formula: "=BITLSHIFT(1,8)"
+
+  - id: bitrshift_basic
+    formula: "=BITRSHIFT(256,4)"
+
+  - id: bitlshift_negative_shift_rightward
+    description: "Negative shift reverses direction"
+    formula: "=BITLSHIFT(8,-2)"
+
+  - id: bitlshift_overflow_48
+    description: "1 << 48 exceeds the 48-bit window -> #NUM!"
+    formula: "=BITLSHIFT(1,48)"
+
+  - id: bitand_negative_input
+    formula: "=BITAND(-1,1)"
+
+  # -- Comparators ---------------------------------------------------------
+  - id: delta_equal
+    formula: "=DELTA(5,5)"
+
+  - id: delta_default_second_arg_zero
+    description: "Second argument defaults to 0"
+    formula: "=DELTA(3)"
+
+  - id: gestep_above_step
+    formula: "=GESTEP(5,4)"
+
+  - id: gestep_equal_step
+    description: "Equality counts as >= step"
+    formula: "=GESTEP(5,5)"
+
+  - id: gestep_default_step_zero
+    formula: "=GESTEP(-1)"
