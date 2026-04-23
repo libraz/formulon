@@ -1,8 +1,10 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
 // Implementation of Formulon's text built-in functions: UPPER, LOWER, TRIM,
-// LEFT, RIGHT, MID, REPT, SUBSTITUTE, FIND, SEARCH, VALUE, EXACT, TEXTJOIN,
-// UNICHAR, UNICODE, CLEAN, PROPER.
+// LEFT, RIGHT, MID, REPT, SUBSTITUTE, FIND, SEARCH, EXACT, TEXTJOIN,
+// UNICHAR, UNICODE, CLEAN, PROPER. VALUE (and its sibling converters TEXT /
+// NUMBERVALUE) live under `eval/builtins/text_format.{h,cpp}` alongside the
+// format-string engine they share with TEXT.
 //
 // Every text builtin coerces its inputs via `coerce_to_text` /
 // `coerce_to_number`. Errors among the inputs already short-circuit through
@@ -364,40 +366,6 @@ Value Search(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   }
   const std::uint32_t units = utf16_units_in(std::string_view(haystack.value()).substr(0, pos));
   return Value::number(static_cast<double>(units + 1));
-}
-
-// VALUE(text) - parse text as a number. Numeric inputs round-trip; bools
-// are rejected (Excel's VALUE deliberately disallows boolean inputs even
-// though they otherwise coerce to 1/0 in arithmetic). Text parse failure
-// -> `#VALUE!`. Errors propagate.
-Value Value_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  const Value& v = args[0];
-  switch (v.kind()) {
-    case ValueKind::Number:
-      return v;
-    case ValueKind::Bool:
-      return Value::error(ErrorCode::Value);
-    case ValueKind::Error:
-      return v;
-    case ValueKind::Blank:
-    case ValueKind::Text: {
-      auto text = coerce_to_text(v);
-      if (!text) {
-        return Value::error(text.error());
-      }
-      const Value as_text = Value::text(text.value());
-      auto num = coerce_to_number(as_text);
-      if (!num) {
-        return Value::error(num.error());
-      }
-      return Value::number(num.value());
-    }
-    case ValueKind::Array:
-    case ValueKind::Ref:
-    case ValueKind::Lambda:
-      return Value::error(ErrorCode::Value);
-  }
-  return Value::error(ErrorCode::Value);
 }
 
 // EXACT(text1, text2) - byte-wise (case-sensitive) equality.
@@ -932,7 +900,6 @@ void register_text_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"SUBSTITUTE", 3u, 4u, &Substitute});
   registry.register_function(FunctionDef{"FIND", 2u, 3u, &Find});
   registry.register_function(FunctionDef{"SEARCH", 2u, 3u, &Search});
-  registry.register_function(FunctionDef{"VALUE", 1u, 1u, &Value_});
   registry.register_function(FunctionDef{"EXACT", 2u, 2u, &Exact});
 
   // Text manipulation, second batch.

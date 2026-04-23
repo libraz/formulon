@@ -1,0 +1,128 @@
+suite: value_numbervalue
+description: VALUE and NUMBERVALUE text-to-number parsing (numeric forms, date/time, separator overrides)
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # -- VALUE: numeric strings ---------------------------------------------
+  - id: value_integer
+    formula: "=VALUE(\"123\")"
+
+  - id: value_decimal
+    formula: "=VALUE(\"3.14\")"
+
+  - id: value_negative
+    formula: "=VALUE(\"-42\")"
+
+  - id: value_leading_plus
+    formula: "=VALUE(\"+42\")"
+
+  - id: value_scientific_lower_e
+    formula: "=VALUE(\"1.5e2\")"
+
+  - id: value_scientific_upper_e
+    formula: "=VALUE(\"1.5E2\")"
+
+  - id: value_scientific_negative_exponent
+    formula: "=VALUE(\"2.5E-3\")"
+
+  # -- VALUE: thousands separator -----------------------------------------
+  - id: value_thousands
+    formula: "=VALUE(\"1,234\")"
+
+  - id: value_thousands_with_decimal
+    formula: "=VALUE(\"1,234.5\")"
+
+  # -- VALUE: currency prefix ---------------------------------------------
+  - id: value_dollar_prefix
+    formula: "=VALUE(\"$100\")"
+
+  - id: value_dollar_prefix_with_decimal
+    formula: "=VALUE(\"$1,234.56\")"
+
+  # -- VALUE: percent -----------------------------------------------------
+  - id: value_percent
+    formula: "=VALUE(\"50%\")"
+
+  - id: value_percent_with_decimal
+    formula: "=VALUE(\"12.5%\")"
+
+  # -- VALUE: whitespace --------------------------------------------------
+  - id: value_leading_whitespace
+    formula: "=VALUE(\"   42\")"
+
+  - id: value_trailing_whitespace
+    formula: "=VALUE(\"42   \")"
+
+  # -- VALUE: date strings ------------------------------------------------
+  - id: value_iso_date
+    formula: "=VALUE(\"2024-03-15\")"
+
+  - id: value_time_only
+    formula: "=VALUE(\"13:30\")"
+
+  - id: value_date_and_time
+    formula: "=VALUE(\"2024-03-15 13:30\")"
+
+  # -- VALUE: failure cases -----------------------------------------------
+  - id: value_non_numeric_is_value
+    formula: "=VALUE(\"abc\")"
+
+  - id: value_bool_is_value
+    description: "Excel's VALUE rejects bools"
+    formula: "=VALUE(TRUE)"
+
+  - id: value_empty_is_zero
+    description: "VALUE(\"\") returns 0"
+    formula: "=VALUE(\"\")"
+
+  - id: value_number_passthrough
+    formula: "=VALUE(42)"
+
+  # -- VALUE: error propagation -------------------------------------------
+  - id: value_error_propagates
+    formula: "=VALUE(#REF!)"
+
+  # -- NUMBERVALUE: default separators ------------------------------------
+  - id: numbervalue_basic
+    formula: "=NUMBERVALUE(\"1,234.5\")"
+
+  - id: numbervalue_plain_integer
+    formula: "=NUMBERVALUE(\"100\")"
+
+  # -- NUMBERVALUE: custom decimal separator ------------------------------
+  - id: numbervalue_european
+    description: "European-style: decimal \",\" and group \".\""
+    formula: "=NUMBERVALUE(\"1.234,5\", \",\", \".\")"
+
+  - id: numbervalue_comma_decimal_only
+    formula: "=NUMBERVALUE(\"3,14\", \",\")"
+
+  # -- NUMBERVALUE: percent -----------------------------------------------
+  - id: numbervalue_percent
+    formula: "=NUMBERVALUE(\"50%\")"
+
+  - id: numbervalue_multiple_percents_is_value
+    description: "Only one trailing percent is accepted"
+    formula: "=NUMBERVALUE(\"50%%\")"
+
+  # -- NUMBERVALUE: scientific --------------------------------------------
+  - id: numbervalue_scientific
+    formula: "=NUMBERVALUE(\"1.5E3\")"
+
+  # -- NUMBERVALUE: whitespace --------------------------------------------
+  - id: numbervalue_whitespace_trimmed
+    formula: "=NUMBERVALUE(\"  3.14  \")"
+
+  # -- NUMBERVALUE: failure cases -----------------------------------------
+  - id: numbervalue_rejects_date
+    description: "NUMBERVALUE does NOT recognise date strings"
+    formula: "=NUMBERVALUE(\"2024-03-15\")"
+
+  - id: numbervalue_rejects_non_numeric
+    formula: "=NUMBERVALUE(\"abc\")"
+
+  - id: numbervalue_same_separator_is_value
+    formula: "=NUMBERVALUE(\"1.5\", \".\", \".\")"
+
+  - id: numbervalue_empty_decimal_sep_is_value
+    formula: "=NUMBERVALUE(\"1.5\", \"\")"

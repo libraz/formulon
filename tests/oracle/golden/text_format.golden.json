@@ -1,0 +1,464 @@
+{
+  "suite": "text_format",
+  "description": "TEXT format-string engine (number + date/time formatting)",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-23T08:03:23Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "text_integer_zeropad",
+      "formula": "=TEXT(5, \"000\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "005"
+      }
+    },
+    {
+      "id": "text_integer_hash_trims_leading",
+      "formula": "=TEXT(5, \"###\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "5"
+      }
+    },
+    {
+      "id": "text_integer_negative_zeropad",
+      "formula": "=TEXT(-5, \"000\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-005"
+      }
+    },
+    {
+      "id": "text_integer_zero_with_zero_fmt",
+      "formula": "=TEXT(0, \"000\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "000"
+      }
+    },
+    {
+      "id": "text_thousands_basic",
+      "formula": "=TEXT(1234567, \"#,##0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1,234,567"
+      }
+    },
+    {
+      "id": "text_thousands_small_value",
+      "formula": "=TEXT(12, \"#,##0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "12"
+      }
+    },
+    {
+      "id": "text_thousands_with_decimals",
+      "formula": "=TEXT(1234.5, \"#,##0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1,234.50"
+      }
+    },
+    {
+      "id": "text_thousands_negative",
+      "formula": "=TEXT(-1234, \"#,##0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1,234"
+      }
+    },
+    {
+      "id": "text_decimal_two",
+      "formula": "=TEXT(3.14159, \"0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3.14"
+      }
+    },
+    {
+      "id": "text_decimal_round_up",
+      "formula": "=TEXT(3.145, \"0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3.15"
+      }
+    },
+    {
+      "id": "text_decimal_round_down",
+      "formula": "=TEXT(3.144, \"0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3.14"
+      }
+    },
+    {
+      "id": "text_decimal_hash_trims_trailing",
+      "formula": "=TEXT(1.5, \"#.##\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.5"
+      }
+    },
+    {
+      "id": "text_decimal_negative",
+      "formula": "=TEXT(-1.5, \"0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1.50"
+      }
+    },
+    {
+      "id": "text_percent_basic",
+      "formula": "=TEXT(0.5, \"0%\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "50%"
+      }
+    },
+    {
+      "id": "text_percent_two_decimals",
+      "formula": "=TEXT(0.1234, \"0.00%\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "12.34%"
+      }
+    },
+    {
+      "id": "text_percent_negative",
+      "formula": "=TEXT(-0.25, \"0%\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-25%"
+      }
+    },
+    {
+      "id": "text_scale_thousands",
+      "formula": "=TEXT(1200000, \"#,##0,\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1,200"
+      }
+    },
+    {
+      "id": "text_sci_basic",
+      "formula": "=TEXT(12345, \"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.23E+04"
+      }
+    },
+    {
+      "id": "text_sci_negative_exponent",
+      "formula": "=TEXT(0.0001234, \"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.23E-04"
+      }
+    },
+    {
+      "id": "text_sci_one_digit_mantissa",
+      "formula": "=TEXT(150000000000, \"0.0E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.5E+11"
+      }
+    },
+    {
+      "id": "text_suffix_yen",
+      "formula": "=TEXT(123, \"0円\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "123円"
+      }
+    },
+    {
+      "id": "text_quoted_literal",
+      "formula": "=TEXT(7, \"\"\"items: \"\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "items: 7"
+      }
+    },
+    {
+      "id": "text_backslash_escape",
+      "formula": "=TEXT(10, \"\\$0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "$10"
+      }
+    },
+    {
+      "id": "text_two_sections_negative_parens",
+      "formula": "=TEXT(-5, \"0.00;(0.00)\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "(5.00)"
+      }
+    },
+    {
+      "id": "text_two_sections_positive",
+      "formula": "=TEXT(5, \"0.00;(0.00)\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "5.00"
+      }
+    },
+    {
+      "id": "text_three_sections_zero_branch",
+      "formula": "=TEXT(0, \"0.00;(0.00);\"\"zero\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "zero"
+      }
+    },
+    {
+      "id": "text_date_iso",
+      "formula": "=TEXT(45366, \"yyyy-mm-dd\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024-03-15"
+      }
+    },
+    {
+      "id": "text_date_slash",
+      "formula": "=TEXT(45366, \"yyyy/m/d\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024/3/15"
+      }
+    },
+    {
+      "id": "text_date_kanji",
+      "formula": "=TEXT(45366, \"yyyy年m月d日\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024年3月15日"
+      }
+    },
+    {
+      "id": "text_date_yy_only",
+      "formula": "=TEXT(45366, \"yy\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "24"
+      }
+    },
+    {
+      "id": "text_date_mmm_japanese",
+      "formula": "=TEXT(45366, \"mmm\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Mar"
+      }
+    },
+    {
+      "id": "text_date_mmmm_japanese",
+      "formula": "=TEXT(45366, \"mmmm\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "March"
+      }
+    },
+    {
+      "id": "text_date_ddd_japanese",
+      "formula": "=TEXT(45292, \"ddd\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Mon"
+      }
+    },
+    {
+      "id": "text_date_dddd_japanese",
+      "formula": "=TEXT(45292, \"dddd\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Monday"
+      }
+    },
+    {
+      "id": "text_time_24h",
+      "formula": "=TEXT(0.5625, \"h:mm\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "13:30"
+      }
+    },
+    {
+      "id": "text_time_hh_mm_ss",
+      "formula": "=TEXT(45366.5625, \"h:mm:ss\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "13:30:00"
+      }
+    },
+    {
+      "id": "text_time_am",
+      "formula": "=TEXT(9.5/24, \"h:mm AM/PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "9:30 AM"
+      }
+    },
+    {
+      "id": "text_time_pm",
+      "formula": "=TEXT(13.5/24, \"h:mm AM/PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1:30 PM"
+      }
+    },
+    {
+      "id": "text_time_a_p",
+      "formula": "=TEXT(9.5/24, \"h:mm A/P\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "9:30 A"
+      }
+    },
+    {
+      "id": "text_datetime_combined",
+      "formula": "=TEXT(45366.5625, \"yyyy-mm-dd h:mm\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024-03-15 13:30"
+      }
+    },
+    {
+      "id": "text_elapsed_hours",
+      "formula": "=TEXT(1.5, \"[h]\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "36"
+      }
+    },
+    {
+      "id": "text_elapsed_minutes",
+      "formula": "=TEXT(1/24, \"[m]\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "60"
+      }
+    },
+    {
+      "id": "text_elapsed_seconds",
+      "formula": "=TEXT(1/1440, \"[s]\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "60"
+      }
+    },
+    {
+      "id": "text_color_red_discarded",
+      "formula": "=TEXT(5, \"[Red]0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_locale_prefix_discarded",
+      "formula": "=TEXT(5, \"[$-409]0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "5.00"
+      }
+    },
+    {
+      "id": "text_at_substitutes",
+      "formula": "=TEXT(\"abc\", \"text is @\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_empty_format",
+      "formula": "=TEXT(42, \"\")",
+      "setup": {},
+      "skipped": "=TEXT(42, \"\") -> \"\" which xlwings read-back classifies as blank. Formulon correctly returns text(\"\")."
+    },
+    {
+      "id": "text_bool_true_coerces",
+      "formula": "=TEXT(TRUE, \"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "TRUE"
+      }
+    },
+    {
+      "id": "text_bool_false_coerces",
+      "formula": "=TEXT(FALSE, \"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "FALSE"
+      }
+    },
+    {
+      "id": "text_error_propagates",
+      "formula": "=TEXT(#REF!, \"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    }
+  ]
+}

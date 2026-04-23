@@ -103,6 +103,13 @@ class FunctionRegistry {
   /// Returns the number of registered functions.
   std::size_t size() const noexcept;
 
+  /// Invokes `cb(name, ctx)` once for each registered function, where `name`
+  /// is the canonical UPPERCASE key under which the entry was stored. Order
+  /// is unspecified; callbacks must not mutate the registry. Exposed
+  /// primarily for drift-detection tooling (see
+  /// `tests/unit/registry_catalog_test.cpp` and `tools/catalog/status.py`).
+  void for_each_name(void (*cb)(std::string_view name, void* ctx), void* ctx) const;
+
  private:
   // PIMPL via unique_ptr<unordered_map<...>> to keep the header dep-light.
   struct Impl;

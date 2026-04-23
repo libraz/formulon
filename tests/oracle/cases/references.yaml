@@ -1,0 +1,223 @@
+suite: references
+description: ADDRESS / INDIRECT / OFFSET reference-manipulation builtins. ADDRESS is a pure scalar text builder; INDIRECT resolves runtime-constructed A1 text to a single cell; OFFSET synthesises a reference (scalar or range) that aggregator-family callers consume through the shared `resolve_range_arg` seam. Range-producing INDIRECT and R1C1 INDIRECT are deferred until `Value::Array` lands; those cases are deliberately absent here.
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  # -- ADDRESS ------------------------------------------------------------
+  - id: address_default
+    description: "Default abs_num=1 -> $A$1"
+    formula: "=ADDRESS(1,1)"
+
+  - id: address_abs_num_2
+    description: "abs_num=2 -> row absolute, column relative -> A$1"
+    formula: "=ADDRESS(1,1,2)"
+
+  - id: address_abs_num_3
+    description: "abs_num=3 -> column absolute, row relative -> $A1"
+    formula: "=ADDRESS(1,1,3)"
+
+  - id: address_abs_num_4
+    description: "abs_num=4 -> both relative -> A1"
+    formula: "=ADDRESS(1,1,4)"
+
+  - id: address_col_26_z
+    description: "Column 26 -> Z"
+    formula: "=ADDRESS(1,26,4)"
+
+  - id: address_col_27_aa
+    description: "Column 27 -> AA (base-26 wraparound)"
+    formula: "=ADDRESS(1,27,4)"
+
+  - id: address_col_702_zz
+    description: "Column 702 -> ZZ"
+    formula: "=ADDRESS(1,702,4)"
+
+  - id: address_col_703_aaa
+    description: "Column 703 -> AAA"
+    formula: "=ADDRESS(1,703,4)"
+
+  - id: address_col_max_xfd
+    description: "Column 16384 -> XFD (Excel's last column)"
+    formula: "=ADDRESS(1,16384,4)"
+
+  - id: address_row_beyond_grid
+    description: "Row 1048577 is beyond Excel's grid -> #VALUE!"
+    formula: "=ADDRESS(1048577,1)"
+
+  - id: address_col_zero
+    description: "Column 0 is invalid -> #VALUE!"
+    formula: "=ADDRESS(1,0)"
+
+  - id: address_abs_num_zero
+    description: "abs_num=0 is outside {1..4} -> #VALUE!"
+    formula: "=ADDRESS(1,1,0)"
+
+  - id: address_abs_num_five
+    description: "abs_num=5 is outside {1..4} -> #VALUE!"
+    formula: "=ADDRESS(1,1,5)"
+
+  - id: address_r1c1_absolute
+    description: "a1=FALSE, abs_num=1 -> R1C1"
+    formula: "=ADDRESS(1,1,1,FALSE)"
+
+  - id: address_r1c1_row_abs_col_rel
+    description: "a1=FALSE, abs_num=2 -> R1C[1]"
+    formula: "=ADDRESS(1,1,2,FALSE)"
+
+  - id: address_r1c1_row_rel_col_abs
+    description: "a1=FALSE, abs_num=3 -> R[1]C1"
+    formula: "=ADDRESS(1,1,3,FALSE)"
+
+  - id: address_r1c1_all_rel
+    description: "a1=FALSE, abs_num=4 -> R[1]C[1]"
+    formula: "=ADDRESS(1,1,4,FALSE)"
+
+  - id: address_with_sheet_bare
+    description: "Bare sheet name -> Sheet1!$A$1"
+    formula: "=ADDRESS(1,1,1,TRUE,\"Sheet1\")"
+
+  - id: address_with_sheet_spaces
+    description: "Sheet name with spaces forces quoting"
+    formula: "=ADDRESS(1,1,1,TRUE,\"Sheet 1\")"
+
+  - id: address_with_sheet_apostrophe
+    description: "Embedded apostrophe is doubled in the quoted form"
+    formula: "=ADDRESS(1,1,4,TRUE,\"O'Brien\")"
+
+  - id: address_with_sheet_empty
+    description: "Empty sheet argument -> no prefix"
+    formula: "=ADDRESS(1,1,4,TRUE,\"\")"
+
+  - id: address_r1c1_with_sheet
+    description: "R1C1 style with sheet name -> Data!R10C5"
+    formula: "=ADDRESS(10,5,1,FALSE,\"Data\")"
+
+  # -- INDIRECT -----------------------------------------------------------
+  - id: indirect_local_cell
+    description: "INDIRECT(\"A1\") resolves to the value at A1 on the current sheet"
+    setup: { A1: 42 }
+    formula: "=INDIRECT(\"A1\")"
+
+  - id: indirect_absolute_marker_ignored
+    description: "$-markers do not change the resolution target"
+    setup: { B3: 7.5 }
+    formula: "=INDIRECT(\"$B$3\")"
+
+  - id: indirect_concat_built_address
+    description: "The text arg may be built via concatenation"
+    setup: { A1: 111 }
+    formula: "=INDIRECT(\"A\" & \"1\")"
+
+  - id: indirect_empty_is_ref_error
+    description: "Empty text -> #REF!"
+    formula: "=INDIRECT(\"\")"
+
+  - id: indirect_garbage_is_ref_error
+    description: "Unparseable text -> #REF!"
+    formula: "=INDIRECT(\"not-a-ref\")"
+
+  - id: indirect_error_arg_propagates
+    description: "#DIV/0! in the text arg propagates unchanged"
+    formula: "=INDIRECT(1/0)"
+
+  # Range text (e.g. "A1:B2") is omitted: Excel would return an array,
+  # which requires the `Value::Array` runtime Formulon does not yet
+  # implement. Revisit once that lands.
+  #
+  # R1C1 style (a1=FALSE) is similarly deferred; Formulon returns #REF!
+  # while Excel resolves the runtime-built address. Skip until the R1C1
+  # parser is implemented.
+
+  # -- OFFSET (scalar) ----------------------------------------------------
+  - id: offset_scalar_row_col
+    description: "OFFSET(A1,1,2) -> cell at row 2, column 3 (C2)"
+    setup: { A1: 1, C2: 99 }
+    formula: "=OFFSET(A1,1,2)"
+
+  - id: offset_zero_offset
+    description: "OFFSET(E5,0,0) -> E5"
+    setup: { E5: 42 }
+    formula: "=OFFSET(E5,0,0)"
+
+  - id: offset_negative_into_grid
+    description: "Negative offsets walk back toward the origin"
+    setup: { A1: 10, C3: 99 }
+    formula: "=OFFSET(C3,-2,-2)"
+
+  - id: offset_out_of_grid_top
+    description: "OFFSET(A1,-1,0) walks above row 1 -> #REF!"
+    formula: "=OFFSET(A1,-1,0)"
+
+  - id: offset_out_of_grid_left
+    description: "OFFSET(A1,0,-1) walks left of column A -> #REF!"
+    formula: "=OFFSET(A1,0,-1)"
+
+  - id: offset_zero_height
+    description: "height=0 -> #REF!"
+    setup: { A1: 1 }
+    formula: "=OFFSET(A1,0,0,0,1)"
+
+  - id: offset_zero_width
+    description: "width=0 -> #REF!"
+    setup: { A1: 1 }
+    formula: "=OFFSET(A1,0,0,1,0)"
+
+  - id: offset_negative_height_single_row
+    description: "Negative height with |h|=1 collapses to a 1x1 rectangle at the base cell"
+    setup: { A1: 1 }
+    formula: "=OFFSET(A1,0,0,-1,1)"
+
+  - id: offset_negative_height_off_grid
+    description: "Negative height that would walk above row 1 -> #REF!"
+    setup: { A1: 1 }
+    formula: "=OFFSET(A1,0,0,-2,1)"
+
+  - id: offset_base_range_collapse_to_topleft_1x1
+    description: "OFFSET(A1:B2,0,0,1,1) collapses the base rectangle to its top-left cell"
+    setup: { A1: 100, B1: 200, A2: 300, B2: 400 }
+    formula: "=OFFSET(A1:B2,0,0,1,1)"
+
+  # -- OFFSET (range in aggregator) --------------------------------------
+  - id: offset_sum_3x3
+    description: "SUM over a 3x3 OFFSET rectangle = 1+2+3+4+5+6+7+8+9 = 45"
+    setup:
+      A1: 1
+      B1: 2
+      C1: 3
+      A2: 4
+      B2: 5
+      C2: 6
+      A3: 7
+      B3: 8
+      C3: 9
+    formula: "=SUM(OFFSET(A1,0,0,3,3))"
+
+  - id: offset_average_shifted_window
+    description: "AVERAGE(B1:C1) via OFFSET(A1,0,1,1,2) -> (20+30)/2 = 25"
+    setup: { A1: 10, B1: 20, C1: 30 }
+    formula: "=AVERAGE(OFFSET(A1,0,1,1,2))"
+
+  - id: offset_sum_shifted_window
+    description: "SUM over a column-shifted 1x3 window at row 1 -> 10+100+1000 = 1110"
+    setup: { A1: 1, B1: 10, C1: 100, D1: 1000 }
+    formula: "=SUM(OFFSET(A1,0,1,1,3))"
+
+  - id: offset_countif_range
+    description: "COUNTIF on a 4x1 OFFSET column counts cells equal to 5"
+    setup: { A1: 5, A2: 5, A3: 7, A4: 5 }
+    formula: "=COUNTIF(OFFSET(A1,0,0,4,1),5)"
+
+  - id: offset_sum_propagates_ref
+    description: "OFFSET out-of-grid inside SUM propagates #REF!"
+    setup: { A1: 1 }
+    formula: "=SUM(OFFSET(A1,-1,0,2,1))"
+
+  - id: offset_multi_cell_scalar_top_left
+    description: "Multi-cell OFFSET in scalar context spills (Excel 365 dynamic arrays); a reader sampling the anchor cell sees the top-left value"
+    setup: { A1: 1, B1: 2, A2: 3, B2: 4 }
+    formula: "=OFFSET(A1,0,0,2,2)"
+
+  - id: offset_negative_height_walks_up
+    description: "Negative height extends the rectangle upward with the base as the bottom edge"
+    setup: { C2: 42, C3: 99 }
+    formula: "=OFFSET(C3,0,0,-2,1)"

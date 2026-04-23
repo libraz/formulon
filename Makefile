@@ -16,7 +16,8 @@ CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 
 .PHONY: all build release test test-slow test-all fmt lint clean \
         wasm wasm-debug test-wasm test-python \
         oracle-setup oracle-gen oracle-verify \
-        fuzz-parser fuzz-xlsx fuzz-eval bench coverage
+        fuzz-parser fuzz-xlsx fuzz-eval bench coverage \
+        function-status
 
 all: build
 
@@ -146,3 +147,9 @@ bench:
 coverage:
 	@echo "coverage: not yet implemented (planned for M9)"
 	@exit 0
+
+# Function implementation coverage report. Scans src/eval/ for registered
+# and lazy-dispatched function names and diffs them against the canonical
+# catalog at tools/catalog/functions.txt. No build step required.
+function-status:
+	@python3 tools/catalog/status.py

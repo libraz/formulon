@@ -21,6 +21,7 @@
 #include "eval/lookups/xlookup.h"
 #include "eval/name_env.h"
 #include "eval/range_args.h"
+#include "eval/reference_lazy.h"
 #include "eval/regression_lazy.h"
 #include "eval/shape_ops_lazy.h"
 #include "eval/special_forms_lazy.h"
@@ -274,6 +275,7 @@ Value apply_comparison(parser::BinOp op, const Value& lhs, const Value& rhs) {
 //   XLOOKUP / XMATCH                           -> src/eval/lookups/xlookup.cpp
 //   ROWS / COLUMNS / ROW / COLUMN / SUMPRODUCT -> src/eval/shape_ops_lazy.cpp
 //   NETWORKDAYS / WORKDAY                      -> src/eval/workdays_lazy.cpp
+//   INDIRECT / OFFSET                          -> src/eval/reference_lazy.cpp
 //   CORREL / COVARIANCE.P / COVARIANCE.S /
 //   SLOPE / INTERCEPT / RSQ / FORECAST.LINEAR  -> src/eval/regression_lazy.cpp
 // Each family publishes its externs via its own header
@@ -311,12 +313,14 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"IFNA", &eval_ifna_lazy},
     {"IFS", &eval_ifs_lazy},
     {"INDEX", &eval_index_lazy},
+    {"INDIRECT", &eval_indirect_lazy},
     {"INTERCEPT", &eval_intercept_lazy},
     {"IRR", &eval_irr_lazy},
     {"MATCH", &eval_match_lazy},
     {"MAXIFS", &eval_maxifs_lazy},
     {"MINIFS", &eval_minifs_lazy},
     {"NETWORKDAYS", &eval_networkdays_lazy},
+    {"OFFSET", &eval_offset_lazy},
     {"ROW", &eval_row_lazy},
     {"ROWS", &eval_rows_lazy},
     {"RSQ", &eval_rsq_lazy},
@@ -455,6 +459,40 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       }
       continue;
     }
+    // Range-aware functions that receive `OFFSET(...)` as an argument see
+    // the rectangle OFFSET would synthesize, not the `#VALUE!` OFFSET
+    // itself returns in scalar context. We share the expansion helper
+    // with `resolve_range_arg` (lazy family) so the two paths cannot
+    // drift on cross-sheet / cycle / bounds semantics. Other calls (e.g.
+    // `INDIRECT("A1:B2")`) would need a `Value::Array` runtime to
+    // expand; they fall through to `eval_node` and surface whatever
+    // scalar result OFFSET / INDIRECT produces today.
+    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Call &&
+        strings::case_insensitive_eq(arg_node.as_call_name(), "OFFSET")) {
+      std::vector<Value> off_cells;
+      ErrorCode off_err = ErrorCode::Value;
+      if (!expand_offset_call(arg_node, arena, registry, ctx, &off_cells, &off_err, nullptr, nullptr)) {
+        const Value err = Value::error(off_err);
+        if (def->propagate_errors) {
+          return err;
+        }
+        values.push_back(err);
+        continue;
+      }
+      for (const Value& v : off_cells) {
+        if (def->propagate_errors && v.is_error()) {
+          return v;
+        }
+        if (def->range_filter_numeric_only && v.kind() != ValueKind::Number) {
+          continue;
+        }
+        if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
+          continue;
+        }
+        values.push_back(v);
+      }
+      continue;
+    }
     Value v = eval_node(arg_node, arena, registry, ctx);
     if (def->propagate_errors && v.is_error()) {
       return v;
@@ -467,6 +505,27 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
 }
 
 }  // namespace
+
+// Enumerates the canonical UPPERCASE names in `kLazyDispatch`. Kept in the
+// same translation unit as the dispatch table so the array it hands out
+// cannot drift from the actual routing decisions: the names are copied
+// once from `kLazyDispatch[i].name` into a nullptr-terminated buffer with
+// program lifetime. Declared in `eval/tree_walker.h`.
+const char* const* lazy_form_names() {
+  static constexpr std::size_t kCount = sizeof(kLazyDispatch) / sizeof(kLazyDispatch[0]);
+  // The storage itself has static duration and is initialized exactly once
+  // (C++11 magic statics); the lambda builds the nullptr-terminated view
+  // from the adjacent dispatch table. No allocation, no ordering concerns.
+  static const char* const* kTable = [] {
+    static const char* storage[kCount + 1] = {};
+    for (std::size_t i = 0; i < kCount; ++i) {
+      storage[i] = kLazyDispatch[i].name;
+    }
+    storage[kCount] = nullptr;
+    return static_cast<const char* const*>(storage);
+  }();
+  return kTable;
+}
 
 // Defined with external linkage (declared in `eval/lazy_impls.h`) so the
 // per-family lazy-impl TUs can recurse into the evaluator. The helpers it

@@ -68,8 +68,18 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
 /// `EvalContext::resolve_ref` for the resolution rules). When the context
 /// is unbound, references continue to surface as `#NAME?` exactly as the
 /// shorter overloads do.
-Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-               const EvalContext& ctx);
+Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx);
+
+/// Returns a pointer to an array of canonical UPPERCASE names for the
+/// evaluator's lazy / special-form dispatch table (IF, IFERROR, IFS,
+/// CHOOSE, SUMIF, VLOOKUP, OFFSET, INDIRECT, ...). These are routed by the
+/// tree walker before the `FunctionRegistry` is consulted, so they do NOT
+/// appear in `default_registry()`. Pair with `FunctionRegistry::for_each_name`
+/// to enumerate every function name the engine recognizes.
+///
+/// The returned array is terminated by a nullptr sentinel, has static
+/// storage duration, and must not be freed.
+const char* const* lazy_form_names();
 
 }  // namespace eval
 }  // namespace formulon

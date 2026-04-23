@@ -21,6 +21,7 @@
 #include <string_view>
 
 #include "eval/coerce.h"
+#include "eval/date_text_parse.h"
 #include "eval/date_time.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
@@ -675,369 +676,12 @@ Value Days_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // ---------------------------------------------------------------------------
 // DATEVALUE / TIMEVALUE text parsing
 //
-// The parsers below are intentionally hand-rolled: the engine ships without a
-// regex dependency (PCRE2 is reserved for user-visible REGEX* builtins), and
-// the grammar we need to recognise is small enough that a few scan loops
-// produce smaller code than any generic matcher.
-//
-// Accepted formats are documented in the `Datevalue_` / `Timevalue_` Doxygen
-// blocks; the helpers below deal only with UTF-8 byte streams of those
-// shapes. All non-kanji separators are ASCII and can be matched one byte at a
-// time; the three kanji the date parser recognises (年 / 月 / 日) are each a
-// fixed 3-byte UTF-8 sequence which we match as a raw byte triple so the
-// parser doesn't depend on an encoder library. Japanese time markers
-// (時 / 分 / 秒) and wareki era prefixes are out of scope; see the kKanji*
-// declarations below for the rationale.
+// The parse grammar (ISO dashed, slash, and kanji date forms; time-of-day
+// with optional fractional seconds and AM/PM markers) is implemented in
+// `src/eval/date_text_parse.{h,cpp}` so DATEVALUE / TIMEVALUE / VALUE all
+// funnel through the same recognizer. The helpers below only add the
+// Excel-level argument-shape rules on top of that shared parser.
 // ---------------------------------------------------------------------------
-
-// Returns true iff `s` begins with the UTF-8 byte sequence for the given
-// CJK character. `expected` is the 3-byte UTF-8 encoding (all characters we
-// care about fit in 3 bytes).
-bool starts_with_utf8(std::string_view s, const char (&expected)[4]) noexcept {
-  return s.size() >= 3 && s[0] == expected[0] && s[1] == expected[1] && s[2] == expected[2];
-}
-
-// UTF-8 byte sequences for the three kanji the date parser recognises:
-// `kKanjiNen` (年, year), `kKanjiGatsu` (月, month), `kKanjiNichi` (日, day).
-// Japanese time-of-day markers (時 / 分 / 秒) and the wareki era prefixes
-// (令和 / 平成 / ...) are intentionally NOT recognised here — Mac Excel
-// parses them in ja-JP, but supporting them would require an era table
-// and richer fullwidth-digit handling.
-//
-// Declared as 4-byte arrays (3 UTF-8 bytes + NUL) so they can be forwarded
-// into `starts_with_utf8` without array-decay pitfalls.
-constexpr char kKanjiNen[4] = {'\xE5', '\xB9', '\xB4', '\0'};    // 年
-constexpr char kKanjiGatsu[4] = {'\xE6', '\x9C', '\x88', '\0'};  // 月
-constexpr char kKanjiNichi[4] = {'\xE6', '\x97', '\xA5', '\0'};  // 日
-
-// Returns `s` with leading/trailing ASCII whitespace removed.
-//
-// We intentionally do NOT trim the Japanese fullwidth space (U+3000) at
-// this stage: Mac Excel 365 rejects `DATEVALUE("　2024-03-15　")` with
-// #VALUE! because leading U+3000 is not part of any recognisable date
-// token. Trailing U+3000 AFTER a successfully parsed token is tolerated
-// (see the tail cleanup inside `parse_date_time_text`).
-std::string_view trim_date_text(std::string_view s) noexcept {
-  auto is_ascii_ws = [](char c) {
-    const unsigned char uc = static_cast<unsigned char>(c);
-    return uc == ' ' || uc == '\t' || uc == '\n' || uc == '\r' || uc == '\v' || uc == '\f';
-  };
-  while (!s.empty() && is_ascii_ws(s.front())) {
-    s.remove_prefix(1);
-  }
-  while (!s.empty() && is_ascii_ws(s.back())) {
-    s.remove_suffix(1);
-  }
-  return s;
-}
-
-// Scans 1..`max_digits` ASCII digits from the head of `s`, writing the
-// parsed integer into `*out` and advancing `s` past them. Returns the count
-// of digits consumed, or 0 if `s` did not start with a digit.
-std::size_t scan_digits(std::string_view& s, int max_digits, int* out) noexcept {
-  std::size_t i = 0;
-  int value = 0;
-  while (i < s.size() && i < static_cast<std::size_t>(max_digits)) {
-    const char c = s[i];
-    if (c < '0' || c > '9') {
-      break;
-    }
-    value = value * 10 + (c - '0');
-    ++i;
-  }
-  if (i == 0) {
-    return 0;
-  }
-  *out = value;
-  s.remove_prefix(i);
-  return i;
-}
-
-// Excel's two-digit-year pivot for DATEVALUE: 00..29 -> 2000..2029,
-// 30..99 -> 1930..1999. The same rule applies for 3-digit years interpreted
-// as 3-digit Christian-era values; we keep the code simple by only expanding
-// 1-2 digit inputs. Callers that read 4 digits pass them through untouched.
-int expand_two_digit_year(int y, std::size_t digits) noexcept {
-  if (digits <= 2) {
-    return y < 30 ? (2000 + y) : (1900 + y);
-  }
-  return y;
-}
-
-// Parses a leading date token out of `s`. On success, writes the serial
-// into `*out_serial`, advances `*rest` to the unconsumed suffix, and
-// returns true. On any parse failure (malformed structure, out-of-range
-// month/day), returns false and leaves `*out_serial` / `*rest` untouched.
-//
-// Recognised shapes:
-//
-//     YYYY-MM-DD      YYYY/MM/DD      YYYY年M月D日
-//
-// The kanji form requires the trailing 日 terminator (matching Mac Excel's
-// behaviour: "2024年03月15" without 日 is rejected as #VALUE!). Month and
-// day are 1..2 digits; year is 1..4 digits. No partial forms (month-only,
-// day-only, year/month without day) are accepted here.
-bool parse_date_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
-  int year = 0;
-  const std::size_t year_digits = scan_digits(s, 4, &year);
-  if (year_digits == 0) {
-    return false;
-  }
-  // Separator after year: '-', '/', or 年.
-  bool kanji_form = false;
-  if (!s.empty() && (s[0] == '-' || s[0] == '/')) {
-    s.remove_prefix(1);
-  } else if (starts_with_utf8(s, kKanjiNen)) {
-    s.remove_prefix(3);
-    kanji_form = true;
-  } else {
-    return false;
-  }
-  int month = 0;
-  if (scan_digits(s, 2, &month) == 0) {
-    return false;
-  }
-  // Separator after month: must match the chosen form.
-  if (kanji_form) {
-    if (!starts_with_utf8(s, kKanjiGatsu)) {
-      return false;
-    }
-    s.remove_prefix(3);
-  } else {
-    if (s.empty() || (s[0] != '-' && s[0] != '/')) {
-      return false;
-    }
-    s.remove_prefix(1);
-  }
-  int day = 0;
-  if (scan_digits(s, 2, &day) == 0) {
-    return false;
-  }
-  // Required 日 terminator in the kanji form. Mac Excel 365 rejects
-  // "2024年03月15" (no 日) as #VALUE!; we mirror that.
-  if (kanji_form) {
-    if (!starts_with_utf8(s, kKanjiNichi)) {
-      return false;
-    }
-    s.remove_prefix(3);
-  }
-  // Validate ranges: month 1..12, day 1..days_in_month.
-  const int expanded_year = expand_two_digit_year(year, year_digits);
-  if (expanded_year < 1900 || expanded_year > 9999) {
-    return false;
-  }
-  if (month < 1 || month > 12) {
-    return false;
-  }
-  const unsigned dim = days_in_month(expanded_year, static_cast<unsigned>(month));
-  if (day < 1 || static_cast<unsigned>(day) > dim) {
-    return false;
-  }
-  *out_serial = date_time::serial_from_ymd(expanded_year, static_cast<unsigned>(month), static_cast<unsigned>(day));
-  *rest = s;
-  return true;
-}
-
-// Parses a leading time token out of `s`. On success, writes the fractional
-// day into `*out_frac` (may exceed 1.0 before wrap; caller decides) and
-// advances `*rest` past the consumed prefix. Recognised shapes:
-//
-//     H:MM            H:MM:SS            H:MM AM/PM           H:MM:SS AM/PM
-//
-// AM/PM suffix matching rules (mirrors Mac Excel 365):
-//   * case-insensitive ASCII "AM" / "PM"
-//   * MUST be preceded by at least one ASCII whitespace character (space,
-//     tab, etc.) — "1:30PM" is rejected as #VALUE!
-//   * Japanese "午前"/"午後" markers are NOT recognised.
-//
-// Carry semantics for M and S (matches the TIME() builtin and Mac Excel's
-// TIMEVALUE behaviour):
-//   * minutes >= 60 roll into hours (hours += minutes / 60; minutes %= 60)
-//   * seconds >= 60 roll into minutes (then re-roll into hours)
-// Any resulting fractional day above 1.0 is wrapped by the caller.
-//
-// Hour field accepts 1..3 digits (values above 24 are treated as durations
-// and wrap modulo 1.0 in the caller). Hours are non-negative ASCII digits;
-// there is no separate range check here.
-bool parse_time_text(std::string_view s, double* out_frac, std::string_view* rest) noexcept {
-  int hour = 0;
-  if (scan_digits(s, 3, &hour) == 0) {
-    return false;
-  }
-  if (s.empty() || s[0] != ':') {
-    return false;
-  }
-  s.remove_prefix(1);
-  int minute = 0;
-  // Accept 1..3 digits so "12:60" (carry into 13:00) parses; the value's
-  // upper bound is bounded by the 3-digit scan (<= 999).
-  if (scan_digits(s, 3, &minute) == 0 || minute < 0) {
-    return false;
-  }
-  int second = 0;
-  bool has_seconds = false;
-  if (!s.empty() && s[0] == ':') {
-    s.remove_prefix(1);
-    if (scan_digits(s, 3, &second) == 0 || second < 0) {
-      return false;
-    }
-    has_seconds = true;
-  }
-  // Optional fractional seconds (e.g. "12:34:56.789"). We don't return them
-  // separately but roll them into the total fractional-day count so values
-  // like "12:00:00.5" aren't silently truncated.
-  double sub_seconds = 0.0;
-  if (has_seconds && !s.empty() && s[0] == '.') {
-    s.remove_prefix(1);
-    double scale = 0.1;
-    bool any = false;
-    while (!s.empty() && s[0] >= '0' && s[0] <= '9') {
-      sub_seconds += (s[0] - '0') * scale;
-      scale *= 0.1;
-      s.remove_prefix(1);
-      any = true;
-    }
-    if (!any) {
-      return false;
-    }
-  }
-  // Optional AM/PM marker (ASCII, case-insensitive). A preceding ASCII
-  // whitespace is REQUIRED — "1:30PM" is rejected as #VALUE! to match
-  // Mac Excel 365.
-  bool pm = false;
-  bool have_ampm = false;
-  {
-    std::string_view tail = s;
-    std::size_t space_count = 0;
-    while (!tail.empty() && (tail[0] == ' ' || tail[0] == '\t')) {
-      tail.remove_prefix(1);
-      ++space_count;
-    }
-    if (space_count >= 1 && tail.size() >= 2) {
-      const char c0 = static_cast<char>(tail[0] >= 'a' && tail[0] <= 'z' ? tail[0] - ('a' - 'A') : tail[0]);
-      const char c1 = static_cast<char>(tail[1] >= 'a' && tail[1] <= 'z' ? tail[1] - ('a' - 'A') : tail[1]);
-      if ((c0 == 'A' || c0 == 'P') && c1 == 'M') {
-        pm = (c0 == 'P');
-        have_ampm = true;
-        tail.remove_prefix(2);
-        s = tail;
-      }
-    }
-  }
-  if (have_ampm) {
-    // 12-hour interpretation. Excel conventions (verified against Mac
-    // Excel 365):
-    //   * 12:xx AM -> 00:xx
-    //   *  h:xx PM (h < 12) -> (h + 12):xx
-    //   * 12:xx PM -> 12:xx
-    //   *  0:xx AM/PM -> 00:xx (hour 0 is accepted and treated as
-    //     midnight, AM/PM modifier ignored — matches Mac Excel's
-    //     "0:30 AM" -> 00:30 = 30/1440 result)
-    //   * hours > 12 with AM/PM: reject (Excel returns #VALUE!).
-    if (hour > 12) {
-      return false;
-    }
-    if (hour == 12 && !pm) {
-      hour = 0;
-    } else if (pm && hour >= 1 && hour < 12) {
-      hour += 12;
-    }
-    // hour == 0 or (pm && hour == 12): leave as-is.
-  }
-  // Carry semantics: normalise M into [0, 60) by rolling the overflow into
-  // hours; same for S into minutes (which may then cascade back into
-  // hours). The total_seconds expression already does the full carry in a
-  // single linear combination, so we don't need the intermediate integer
-  // normalisation — the double math is equivalent and keeps the code
-  // compact.
-  const double total_seconds = static_cast<double>(hour) * 3600.0 + static_cast<double>(minute) * 60.0 +
-                               static_cast<double>(second) + sub_seconds;
-  if (total_seconds < 0.0) {
-    return false;
-  }
-  *out_frac = total_seconds / 86400.0;
-  *rest = s;
-  return true;
-}
-
-// Top-level parse used by both DATEVALUE and TIMEVALUE. Recognises three
-// shapes:
-//   (A) date only
-//   (B) date followed by one or more ASCII spaces/tabs and a time
-//   (C) time only
-// Returns true on success; writes the integer part into `*out_date_serial`
-// (0 if no date was found) and the fractional day into `*out_time_frac`
-// (0 if no time was found). At least one component must parse successfully.
-//
-// The ISO 8601 'T' separator is NOT accepted: Mac Excel 365 rejects
-// "2024-03-15T00:00:00" as #VALUE!, so Formulon matches. Only ASCII
-// whitespace is valid between the date and time portions.
-bool parse_date_time_text(std::string_view s, double* out_date_serial, double* out_time_frac, bool* out_has_date,
-                          bool* out_has_time) noexcept {
-  std::string_view rest = s;
-  double serial = 0.0;
-  double frac = 0.0;
-  bool has_date = false;
-  bool has_time = false;
-  if (parse_date_text(rest, &serial, &rest)) {
-    has_date = true;
-    // One or more ASCII spaces/tabs required before the optional time
-    // portion. An ISO 'T' is NOT accepted here (Excel rejects it).
-    std::size_t space_count = 0;
-    while (!rest.empty() && (rest[0] == ' ' || rest[0] == '\t')) {
-      rest.remove_prefix(1);
-      ++space_count;
-    }
-    if (space_count >= 1 && !rest.empty()) {
-      std::string_view after = rest;
-      double f = 0.0;
-      if (parse_time_text(rest, &f, &after)) {
-        frac = f;
-        has_time = true;
-        rest = after;
-      }
-    }
-  } else {
-    // No leading date — try time-only.
-    std::string_view after = rest;
-    double f = 0.0;
-    if (parse_time_text(rest, &f, &after)) {
-      frac = f;
-      has_time = true;
-      rest = after;
-    }
-  }
-  if (!has_date && !has_time) {
-    return false;
-  }
-  // Tail cleanup: Mac Excel is lenient about trailing whitespace AFTER a
-  // successfully tokenised date/time, including the U+3000 fullwidth space
-  // (observed: `TIMEVALUE("13:30　")` returns 0.5625). We therefore strip
-  // both ASCII whitespace and U+3000 here, but only after the parse has
-  // succeeded — `trim_date_text` itself still refuses to trim U+3000 from
-  // the leading side because Excel rejects `DATEVALUE("　2024-03-15　")`.
-  while (!rest.empty()) {
-    const unsigned char uc = static_cast<unsigned char>(rest.front());
-    if (uc == ' ' || uc == '\t' || uc == '\n' || uc == '\r' || uc == '\v' || uc == '\f') {
-      rest.remove_prefix(1);
-      continue;
-    }
-    if (rest.size() >= 3 && static_cast<unsigned char>(rest[0]) == 0xE3 &&
-        static_cast<unsigned char>(rest[1]) == 0x80 && static_cast<unsigned char>(rest[2]) == 0x80) {
-      rest.remove_prefix(3);
-      continue;
-    }
-    break;
-  }
-  if (!rest.empty()) {
-    return false;
-  }
-  *out_date_serial = serial;
-  *out_time_frac = frac;
-  *out_has_date = has_date;
-  *out_has_time = has_time;
-  return true;
-}
 
 /// DATEVALUE(text). Parses `text` as a date string and returns the Excel
 /// serial for the date part (integer). Embedded time components are
@@ -1050,7 +694,7 @@ Value Datevalue_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!text) {
     return Value::error(text.error());
   }
-  const std::string_view trimmed = trim_date_text(text.value());
+  const std::string_view trimmed = date_parse::trim_date_text(text.value());
   if (trimmed.empty()) {
     return Value::error(ErrorCode::Value);
   }
@@ -1058,7 +702,7 @@ Value Datevalue_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   double frac = 0.0;
   bool has_date = false;
   bool has_time = false;
-  if (!parse_date_time_text(trimmed, &serial, &frac, &has_date, &has_time)) {
+  if (!date_parse::parse_date_time_text(trimmed, &serial, &frac, &has_date, &has_time)) {
     return Value::error(ErrorCode::Value);
   }
   if (!has_date) {
@@ -1081,7 +725,7 @@ Value Timevalue_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!text) {
     return Value::error(text.error());
   }
-  const std::string_view trimmed = trim_date_text(text.value());
+  const std::string_view trimmed = date_parse::trim_date_text(text.value());
   if (trimmed.empty()) {
     return Value::error(ErrorCode::Value);
   }
@@ -1089,7 +733,7 @@ Value Timevalue_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   double frac = 0.0;
   bool has_date = false;
   bool has_time = false;
-  if (!parse_date_time_text(trimmed, &serial, &frac, &has_date, &has_time)) {
+  if (!date_parse::parse_date_time_text(trimmed, &serial, &frac, &has_date, &has_time)) {
     return Value::error(ErrorCode::Value);
   }
   if (!has_time) {

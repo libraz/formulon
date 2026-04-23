@@ -78,6 +78,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/utf8_length.cpp
   src/eval/text_ops.cpp
   src/eval/function_registry.cpp
+  src/eval/special_forms_catalog.cpp
   src/eval/builtins.cpp
   src/eval/builtins/aggregate.cpp
   src/eval/builtins/datetime.cpp
@@ -87,20 +88,25 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins/logical.cpp
   src/eval/builtins/math.cpp
   src/eval/builtins/math_trig.cpp
+  src/eval/builtins/references.cpp
   src/eval/builtins/stats.cpp
   src/eval/builtins/text.cpp
+  src/eval/builtins/text_format.cpp
+  src/eval/text_format/number_format.cpp
   src/eval/stats/special_functions.cpp
   src/eval/tree_walker.cpp
   src/eval/eval_context.cpp
   src/eval/eval_state.cpp
   src/eval/criteria.cpp
   src/eval/date_time.cpp
+  src/eval/date_text_parse.cpp
   src/eval/range_args.cpp
   src/eval/special_forms_lazy.cpp
   src/eval/conditional_aggregates.cpp
   src/eval/shape_ops_lazy.cpp
   src/eval/workdays_lazy.cpp
   src/eval/financial_lazy.cpp
+  src/eval/reference_lazy.cpp
   src/eval/regression_lazy.cpp
   src/eval/lookups/classic.cpp
   src/eval/lookups/xlookup.cpp

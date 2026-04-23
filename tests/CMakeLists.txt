@@ -38,6 +38,9 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_text_test.cpp
   unit/eval/builtins_text2_test.cpp
   unit/eval/builtins_textb_test.cpp
+  unit/eval/text_format_number_test.cpp
+  unit/eval/text_format_date_test.cpp
+  unit/eval/value_numbervalue_test.cpp
   unit/eval/builtins_info_test.cpp
   unit/eval/builtins_count_test.cpp
   unit/eval/builtins_shape_test.cpp
@@ -52,6 +55,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_countif_test.cpp
   unit/eval/builtins_ifs_test.cpp
   unit/eval/builtins_lookup_test.cpp
+  unit/eval/builtins_references_test.cpp
   unit/eval/builtins_vlookup_test.cpp
   unit/eval/builtins_xlookup_test.cpp
   unit/eval/builtins_datetime_test.cpp
@@ -60,6 +64,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_regression_test.cpp
   unit/eval/text_ops_test.cpp
   unit/eval/let_test.cpp
+  unit/registry_catalog_test.cpp
 )
 
 add_executable(formulon_unit_tests ${FORMULON_UNIT_TEST_SOURCES})
@@ -76,6 +81,14 @@ target_include_directories(formulon_unit_tests
 )
 
 formulon_apply_warnings(formulon_unit_tests)
+
+# Drift-detection catalog path for tests/unit/registry_catalog_test.cpp.
+# The test opens this file at runtime and asserts that every registered /
+# lazy-dispatched function name appears in it.
+target_compile_definitions(formulon_unit_tests
+  PRIVATE
+    FORMULON_CATALOG_PATH="${CMAKE_SOURCE_DIR}/tools/catalog/functions.txt"
+)
 
 gtest_discover_tests(formulon_unit_tests)
 

@@ -1,0 +1,332 @@
+{
+  "suite": "value_numbervalue",
+  "description": "VALUE and NUMBERVALUE text-to-number parsing (numeric forms, date/time, separator overrides)",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-23T08:03:37Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "value_integer",
+      "formula": "=VALUE(\"123\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 123.0
+      }
+    },
+    {
+      "id": "value_decimal",
+      "formula": "=VALUE(\"3.14\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.14
+      }
+    },
+    {
+      "id": "value_negative",
+      "formula": "=VALUE(\"-42\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -42.0
+      }
+    },
+    {
+      "id": "value_leading_plus",
+      "formula": "=VALUE(\"+42\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "value_scientific_lower_e",
+      "formula": "=VALUE(\"1.5e2\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 150.0
+      }
+    },
+    {
+      "id": "value_scientific_upper_e",
+      "formula": "=VALUE(\"1.5E2\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 150.0
+      }
+    },
+    {
+      "id": "value_scientific_negative_exponent",
+      "formula": "=VALUE(\"2.5E-3\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0025
+      }
+    },
+    {
+      "id": "value_thousands",
+      "formula": "=VALUE(\"1,234\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1234.0
+      }
+    },
+    {
+      "id": "value_thousands_with_decimal",
+      "formula": "=VALUE(\"1,234.5\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1234.5
+      }
+    },
+    {
+      "id": "value_dollar_prefix",
+      "formula": "=VALUE(\"$100\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "value_dollar_prefix_with_decimal",
+      "formula": "=VALUE(\"$1,234.56\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1234.56
+      }
+    },
+    {
+      "id": "value_percent",
+      "formula": "=VALUE(\"50%\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "value_percent_with_decimal",
+      "formula": "=VALUE(\"12.5%\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.125
+      }
+    },
+    {
+      "id": "value_leading_whitespace",
+      "formula": "=VALUE(\"   42\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "value_trailing_whitespace",
+      "formula": "=VALUE(\"42   \")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "value_iso_date",
+      "formula": "=VALUE(\"2024-03-15\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45366.0
+      }
+    },
+    {
+      "id": "value_time_only",
+      "formula": "=VALUE(\"13:30\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5625
+      }
+    },
+    {
+      "id": "value_date_and_time",
+      "formula": "=VALUE(\"2024-03-15 13:30\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45366.5625
+      }
+    },
+    {
+      "id": "value_non_numeric_is_value",
+      "formula": "=VALUE(\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_bool_is_value",
+      "formula": "=VALUE(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_empty_is_zero",
+      "formula": "=VALUE(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_number_passthrough",
+      "formula": "=VALUE(42)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "value_error_propagates",
+      "formula": "=VALUE(#REF!)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "numbervalue_basic",
+      "formula": "=NUMBERVALUE(\"1,234.5\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1234.5
+      }
+    },
+    {
+      "id": "numbervalue_plain_integer",
+      "formula": "=NUMBERVALUE(\"100\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "numbervalue_european",
+      "formula": "=NUMBERVALUE(\"1.234,5\", \",\", \".\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1234.5
+      }
+    },
+    {
+      "id": "numbervalue_comma_decimal_only",
+      "formula": "=NUMBERVALUE(\"3,14\", \",\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.14
+      }
+    },
+    {
+      "id": "numbervalue_percent",
+      "formula": "=NUMBERVALUE(\"50%\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "numbervalue_multiple_percents_is_value",
+      "formula": "=NUMBERVALUE(\"50%%\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.005
+      }
+    },
+    {
+      "id": "numbervalue_scientific",
+      "formula": "=NUMBERVALUE(\"1.5E3\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1500.0
+      }
+    },
+    {
+      "id": "numbervalue_whitespace_trimmed",
+      "formula": "=NUMBERVALUE(\"  3.14  \")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.14
+      }
+    },
+    {
+      "id": "numbervalue_rejects_date",
+      "formula": "=NUMBERVALUE(\"2024-03-15\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45366.0
+      }
+    },
+    {
+      "id": "numbervalue_rejects_non_numeric",
+      "formula": "=NUMBERVALUE(\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "numbervalue_same_separator_is_value",
+      "formula": "=NUMBERVALUE(\"1.5\", \".\", \".\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "numbervalue_empty_decimal_sep_is_value",
+      "formula": "=NUMBERVALUE(\"1.5\", \"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

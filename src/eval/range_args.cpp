@@ -10,10 +10,12 @@
 #include <vector>
 
 #include "eval/eval_context.h"
+#include "eval/reference_lazy.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "utils/arena.h"
 #include "utils/error.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -22,6 +24,17 @@ namespace eval {
 bool resolve_range_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
                        std::uint32_t* out_rows, std::uint32_t* out_cols) {
+  // OFFSET(...) produces a rectangle that aggregator-family callers (SUM,
+  // AVERAGE, COUNTIF, …) must be able to iterate as if it were a literal
+  // `RangeOp`. Forward to `expand_offset_call` so the expansion shares the
+  // same `EvalContext::expand_range` path and cross-sheet / cycle
+  // guarantees. Any other Call (INDIRECT, a user-defined function, etc.)
+  // falls through to the scalar `#VALUE!` branch below because dynamic
+  // range construction requires a `Value::Array` runtime we do not yet
+  // have.
+  if (arg_node.kind() == parser::NodeKind::Call && strings::case_insensitive_eq(arg_node.as_call_name(), "OFFSET")) {
+    return expand_offset_call(arg_node, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+  }
   if (arg_node.kind() == parser::NodeKind::RangeOp) {
     const parser::AstNode& lhs_ast = arg_node.as_range_lhs();
     const parser::AstNode& rhs_ast = arg_node.as_range_rhs();

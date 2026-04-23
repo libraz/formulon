@@ -72,6 +72,15 @@ std::size_t FunctionRegistry::size() const noexcept {
   return impl_->table.size();
 }
 
+void FunctionRegistry::for_each_name(void (*cb)(std::string_view, void*), void* ctx) const {
+  if (cb == nullptr) {
+    return;
+  }
+  for (const auto& kv : impl_->table) {
+    cb(std::string_view(kv.first), ctx);
+  }
+}
+
 const FunctionRegistry& default_registry() {
   // Meyers singleton: thread-safe lazy initialization since C++11.
   static const FunctionRegistry instance = [] {

@@ -1,0 +1,186 @@
+suite: text_format
+description: TEXT format-string engine (number + date/time formatting)
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  # -- TEXT: plain integer rendering --------------------------------------
+  - id: text_integer_zeropad
+    formula: "=TEXT(5, \"000\")"
+
+  - id: text_integer_hash_trims_leading
+    formula: "=TEXT(5, \"###\")"
+
+  - id: text_integer_negative_zeropad
+    formula: "=TEXT(-5, \"000\")"
+
+  - id: text_integer_zero_with_zero_fmt
+    formula: "=TEXT(0, \"000\")"
+
+  # -- TEXT: thousands separator ------------------------------------------
+  - id: text_thousands_basic
+    formula: "=TEXT(1234567, \"#,##0\")"
+
+  - id: text_thousands_small_value
+    description: "Small values don't emit a separator even with the thousands format"
+    formula: "=TEXT(12, \"#,##0\")"
+
+  - id: text_thousands_with_decimals
+    formula: "=TEXT(1234.5, \"#,##0.00\")"
+
+  - id: text_thousands_negative
+    formula: "=TEXT(-1234, \"#,##0\")"
+
+  # -- TEXT: decimal ------------------------------------------------------
+  - id: text_decimal_two
+    formula: "=TEXT(3.14159, \"0.00\")"
+
+  - id: text_decimal_round_up
+    description: "3.145 rounds to 3.15 in Excel"
+    formula: "=TEXT(3.145, \"0.00\")"
+
+  - id: text_decimal_round_down
+    formula: "=TEXT(3.144, \"0.00\")"
+
+  - id: text_decimal_hash_trims_trailing
+    formula: "=TEXT(1.5, \"#.##\")"
+
+  - id: text_decimal_negative
+    formula: "=TEXT(-1.5, \"0.00\")"
+
+  # -- TEXT: percent ------------------------------------------------------
+  - id: text_percent_basic
+    formula: "=TEXT(0.5, \"0%\")"
+
+  - id: text_percent_two_decimals
+    formula: "=TEXT(0.1234, \"0.00%\")"
+
+  - id: text_percent_negative
+    formula: "=TEXT(-0.25, \"0%\")"
+
+  # -- TEXT: trailing commas (scale by 1000) ------------------------------
+  - id: text_scale_thousands
+    formula: "=TEXT(1200000, \"#,##0,\")"
+
+  # -- TEXT: scientific notation ------------------------------------------
+  - id: text_sci_basic
+    formula: "=TEXT(12345, \"0.00E+00\")"
+
+  - id: text_sci_negative_exponent
+    formula: "=TEXT(0.0001234, \"0.00E+00\")"
+
+  - id: text_sci_one_digit_mantissa
+    formula: "=TEXT(150000000000, \"0.0E+00\")"
+
+  # -- TEXT: literal passthrough ------------------------------------------
+  - id: text_suffix_yen
+    description: "Japanese yen suffix (literal passthrough)"
+    formula: "=TEXT(123, \"0円\")"
+
+  - id: text_quoted_literal
+    formula: "=TEXT(7, \"\"\"items: \"\"0\")"
+
+  - id: text_backslash_escape
+    formula: "=TEXT(10, \"\\$0\")"
+
+  # -- TEXT: section separators -------------------------------------------
+  - id: text_two_sections_negative_parens
+    formula: "=TEXT(-5, \"0.00;(0.00)\")"
+
+  - id: text_two_sections_positive
+    formula: "=TEXT(5, \"0.00;(0.00)\")"
+
+  - id: text_three_sections_zero_branch
+    formula: "=TEXT(0, \"0.00;(0.00);\"\"zero\"\"\")"
+
+  # -- TEXT: date rendering -----------------------------------------------
+  - id: text_date_iso
+    description: "ISO format yields yyyy-mm-dd"
+    formula: "=TEXT(45366, \"yyyy-mm-dd\")"
+
+  - id: text_date_slash
+    formula: "=TEXT(45366, \"yyyy/m/d\")"
+
+  - id: text_date_kanji
+    formula: "=TEXT(45366, \"yyyy年m月d日\")"
+
+  - id: text_date_yy_only
+    formula: "=TEXT(45366, \"yy\")"
+
+  - id: text_date_mmm_japanese
+    description: "mmm in ja-JP renders as `N月`"
+    formula: "=TEXT(45366, \"mmm\")"
+
+  - id: text_date_mmmm_japanese
+    description: "mmmm in ja-JP likely also renders as `N月` (check oracle)"
+    formula: "=TEXT(45366, \"mmmm\")"
+
+  - id: text_date_ddd_japanese
+    description: "ddd in ja-JP renders as single-kanji weekday"
+    formula: "=TEXT(45292, \"ddd\")"
+
+  - id: text_date_dddd_japanese
+    description: "dddd in ja-JP renders as `X曜日`"
+    formula: "=TEXT(45292, \"dddd\")"
+
+  # -- TEXT: time rendering -----------------------------------------------
+  - id: text_time_24h
+    description: "0.5625 = 13:30:00"
+    formula: "=TEXT(0.5625, \"h:mm\")"
+
+  - id: text_time_hh_mm_ss
+    description: "45366.5625 = 2024-03-15 13:30:00 -> 13:30:00"
+    formula: "=TEXT(45366.5625, \"h:mm:ss\")"
+
+  - id: text_time_am
+    formula: "=TEXT(9.5/24, \"h:mm AM/PM\")"
+
+  - id: text_time_pm
+    formula: "=TEXT(13.5/24, \"h:mm AM/PM\")"
+
+  - id: text_time_a_p
+    description: "Short A/P marker"
+    formula: "=TEXT(9.5/24, \"h:mm A/P\")"
+
+  # -- TEXT: combined date-time -------------------------------------------
+  - id: text_datetime_combined
+    formula: "=TEXT(45366.5625, \"yyyy-mm-dd h:mm\")"
+
+  # -- TEXT: elapsed brackets ---------------------------------------------
+  - id: text_elapsed_hours
+    description: "1.5 days = 36 hours elapsed"
+    formula: "=TEXT(1.5, \"[h]\")"
+
+  - id: text_elapsed_minutes
+    description: "1 hour = 60 minutes elapsed"
+    formula: "=TEXT(1/24, \"[m]\")"
+
+  - id: text_elapsed_seconds
+    description: "1 minute = 60 seconds elapsed"
+    formula: "=TEXT(1/1440, \"[s]\")"
+
+  # -- TEXT: bracket passthrough (colour / locale discarded) --------------
+  - id: text_color_red_discarded
+    formula: "=TEXT(5, \"[Red]0.00\")"
+
+  - id: text_locale_prefix_discarded
+    formula: "=TEXT(5, \"[$-409]0.00\")"
+
+  # -- TEXT: text input + @ substitution ----------------------------------
+  - id: text_at_substitutes
+    formula: "=TEXT(\"abc\", \"text is @\")"
+
+  # -- TEXT: empty format -------------------------------------------------
+  - id: text_empty_format
+    formula: "=TEXT(42, \"\")"
+
+  # -- TEXT: bool / blank coercion ----------------------------------------
+  - id: text_bool_true_coerces
+    description: "TRUE coerces to 1 for numeric formatting"
+    formula: "=TEXT(TRUE, \"0\")"
+
+  - id: text_bool_false_coerces
+    formula: "=TEXT(FALSE, \"0\")"
+
+  # -- TEXT: error propagation --------------------------------------------
+  - id: text_error_propagates
+    formula: "=TEXT(#REF!, \"0\")"

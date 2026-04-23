@@ -19,8 +19,10 @@
 #include "eval/builtins/logical.h"
 #include "eval/builtins/math.h"
 #include "eval/builtins/math_trig.h"
+#include "eval/builtins/references.h"
 #include "eval/builtins/stats.h"
 #include "eval/builtins/text.h"
+#include "eval/builtins/text_format.h"
 #include "eval/function_registry.h"
 
 namespace formulon {
@@ -33,10 +35,12 @@ void register_builtins(FunctionRegistry& registry) {
   register_math_trig_builtins(registry);
   register_stats_builtins(registry);
   register_text_builtins(registry);
+  register_text_format_builtins(registry);
   register_info_builtins(registry);
   register_datetime_builtins(registry);
   register_financial_builtins(registry);
   register_distribution_builtins(registry);
+  register_reference_builtins(registry);
 }
 
 }  // namespace eval

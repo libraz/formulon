@@ -92,6 +92,11 @@ entries:
     reason: "MIDB with start beyond length -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
     prefer: formulon
     first_noted: 2026-04-23
+  - id: text_empty_format
+    mode: skip-oracle
+    reason: "=TEXT(42, \"\") -> \"\" which xlwings read-back classifies as blank. Formulon correctly returns text(\"\")."
+    prefer: formulon
+    first_noted: 2026-04-23
 
   # -- CODE / CHAR: Mac Excel ja-JP uses CP932 / JIS X 0208 encoding ------
   # Mac Excel ja-JP's CODE / CHAR operate on the Shift-JIS (CP932)

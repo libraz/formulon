@@ -1,9 +1,10 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
 // End-to-end tests for the text built-in functions: UPPER, LOWER, TRIM,
-// LEFT, RIGHT, MID, REPT, SUBSTITUTE, FIND, SEARCH, VALUE, EXACT. Each
-// test parses a formula source, evaluates the AST through the default
-// registry, and asserts the resulting Value.
+// LEFT, RIGHT, MID, REPT, SUBSTITUTE, FIND, SEARCH, EXACT. Each test
+// parses a formula source, evaluates the AST through the default registry,
+// and asserts the resulting Value. TEXT / VALUE / NUMBERVALUE live in
+// `builtins_value_numbervalue_test.cpp` next to their shared format engine.
 
 #include <string_view>
 
@@ -512,47 +513,8 @@ TEST(TextFind, StarIsLiteralNotWildcard) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-// ---------------------------------------------------------------------------
-// VALUE
-// ---------------------------------------------------------------------------
-
-TEST(TextValue, IntegerString) {
-  const Value v = EvalSource("=VALUE(\"123\")");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), 123.0);
-}
-
-TEST(TextValue, ScientificString) {
-  const Value v = EvalSource("=VALUE(\"1.5e2\")");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), 150.0);
-}
-
-TEST(TextValue, NonNumericString) {
-  const Value v = EvalSource("=VALUE(\"abc\")");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
-}
-
-TEST(TextValue, NumberPassthrough) {
-  const Value v = EvalSource("=VALUE(5)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), 5.0);
-}
-
-TEST(TextValue, BoolRejected) {
-  // Excel's VALUE rejects boolean inputs even though bools coerce to 1/0
-  // in arithmetic contexts.
-  const Value v = EvalSource("=VALUE(TRUE)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
-}
-
-TEST(TextValue, ErrorPropagates) {
-  const Value v = EvalSource("=VALUE(#REF!)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
-}
+// VALUE tests live in `builtins_value_numbervalue_test.cpp` alongside
+// the format-string converters (TEXT / VALUE / NUMBERVALUE).
 
 // ---------------------------------------------------------------------------
 // EXACT
