@@ -87,6 +87,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/range_args.cpp
   src/eval/special_forms_lazy.cpp
   src/eval/conditional_aggregates.cpp
+  src/eval/lookups_classic.cpp
 )
 
 add_library(formulon_core OBJECT ${FORMULON_CORE_SOURCES})
