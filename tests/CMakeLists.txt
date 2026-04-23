@@ -38,6 +38,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_text2_test.cpp
   unit/eval/builtins_info_test.cpp
   unit/eval/builtins_count_test.cpp
+  unit/eval/builtins_shape_test.cpp
   unit/eval/builtins_stats_test.cpp
   unit/eval/criteria_test.cpp
   unit/eval/builtins_countif_test.cpp

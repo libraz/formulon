@@ -1,0 +1,95 @@
+suite: shape
+description: ROWS / COLUMNS / ROW / COLUMN / SUMPRODUCT lazy-dispatched builtins. Each requires per-argument AST shape (Ref / RangeOp / ArrayLiteral) so the eager dispatcher's Value-flattening path is bypassed.
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  # -- ROWS ---------------------------------------------------------------
+  - id: rows_of_rangeop_2x3
+    description: "3x2 rectangle -> ROWS returns 3"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 4, B2: 5, B3: 6 }
+    formula: "=ROWS(A1:B3)"
+
+  - id: rows_of_single_ref
+    description: "Single-cell Ref always 1 row"
+    formula: "=ROWS(A1)"
+
+  - id: rows_of_array_literal_column
+    description: "{1;2;3} is a 3x1 column literal"
+    formula: "=ROWS({1;2;3})"
+
+  - id: rows_of_array_literal_row
+    description: "{1,2,3} is a 1x3 row literal -> ROWS=1"
+    formula: "=ROWS({1,2,3})"
+
+  # -- COLUMNS ------------------------------------------------------------
+  - id: columns_of_rangeop_2x3
+    description: "3x2 rectangle -> COLUMNS returns 2"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 4, B2: 5, B3: 6 }
+    formula: "=COLUMNS(A1:B3)"
+
+  - id: columns_of_single_ref
+    description: "Single-cell Ref always 1 column"
+    formula: "=COLUMNS(A1)"
+
+  - id: columns_of_array_literal_row
+    description: "{1,2,3} is a 1x3 row literal -> COLUMNS=3"
+    formula: "=COLUMNS({1,2,3})"
+
+  # -- ROW / COLUMN (1-arg form) ------------------------------------------
+  - id: row_of_ref
+    description: "C5 -> 1-based row 5"
+    formula: "=ROW(C5)"
+
+  - id: column_of_ref
+    description: "C5 -> 1-based column 3"
+    formula: "=COLUMN(C5)"
+
+  - id: row_of_rangeop_first_row
+    description: "ROW on a rectangle returns the first row (1-based)"
+    formula: "=ROW(B2:D4)"
+
+  - id: column_of_rangeop_first_col
+    description: "COLUMN on a rectangle returns the first column (1-based)"
+    formula: "=COLUMN(B2:D4)"
+
+  # ROW on an array literal is a dynamic-array spill in Excel 365: the
+  # cell reads back as blank via the xlwings bridge rather than a scalar
+  # `#VALUE!` or `1`. Because Formulon does not implement spill yet (and
+  # returns `#VALUE!` on this shape, per the task spec), this case cannot
+  # match the oracle and is intentionally omitted. Revisit once spill is
+  # wired up; the expected answer will then be array-shaped.
+
+  # -- SUMPRODUCT ----------------------------------------------------------
+  - id: sumproduct_two_arrays
+    description: "[1,2,3] . [4,5,6] = 32"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 4, B2: 5, B3: 6 }
+    formula: "=SUMPRODUCT(A1:A3,B1:B3)"
+
+  - id: sumproduct_single_array
+    description: "Single-range SUMPRODUCT reduces to SUM"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 4, B2: 5, B3: 6 }
+    formula: "=SUMPRODUCT(A1:A3)"
+
+  - id: sumproduct_three_arrays
+    description: "1*3*5 + 2*4*6 = 63"
+    setup: { A1: 1, A2: 2, B1: 3, B2: 4, C1: 5, C2: 6 }
+    formula: "=SUMPRODUCT(A1:A2,B1:B2,C1:C2)"
+
+  - id: sumproduct_shape_mismatch_is_value
+    description: "Parallel-array shape mismatch -> #VALUE!"
+    setup: { A1: 1, A2: 2, B1: 3, B2: 4, B3: 5 }
+    formula: "=SUMPRODUCT(A1:A2,B1:B3)"
+
+  - id: sumproduct_text_treated_as_zero
+    description: "Text in range contributes 0; 1*10 + 0*20 + 3*30 = 100"
+    setup: { A1: 1, A2: "x", A3: 3, B1: 10, B2: 20, B3: 30 }
+    formula: "=SUMPRODUCT(A1:A3,B1:B3)"
+
+  - id: sumproduct_error_propagates
+    description: "Error cell in a SUMPRODUCT range propagates (#DIV/0!)"
+    setup: { A1: 1, A2: "=1/0", A3: 3, B1: 10, B2: 20, B3: 30 }
+    formula: "=SUMPRODUCT(A1:A3,B1:B3)"
+
+  - id: sumproduct_array_literal_mixed
+    description: "Array-literal variant of two_arrays; 1*4+2*5+3*6 = 32"
+    formula: "=SUMPRODUCT({1;2;3},{4;5;6})"

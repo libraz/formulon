@@ -155,6 +155,13 @@ void register_info_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"NA", 0u, 0u, &Na});
   registry.register_function(FunctionDef{"N", 1u, 1u, &N});
   registry.register_function(FunctionDef{"T", 1u, 1u, &T});
+  // ROWS / COLUMNS / ROW / COLUMN are routed through the lazy dispatch
+  // table in `tree_walker.cpp` (see `eval_rows_lazy` et al. in
+  // `shape_ops_lazy.cpp`) because they must introspect each argument's
+  // AST shape: a bare single-cell `Ref`, a `RangeOp`, and an inline
+  // `{...}` `ArrayLiteral` all produce different answers, and the eager
+  // dispatcher's pre-evaluation would erase that distinction.
+  // @formulon-todo: 0-arity ROW/COLUMN needs current-cell context
 }
 
 }  // namespace eval

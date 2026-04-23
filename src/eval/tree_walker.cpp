@@ -19,6 +19,7 @@
 #include "eval/lookups/classic.h"
 #include "eval/lookups/xlookup.h"
 #include "eval/range_args.h"
+#include "eval/shape_ops_lazy.h"
 #include "eval/special_forms_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -267,10 +268,11 @@ Value apply_comparison(parser::BinOp op, const Value& lhs, const Value& rhs) {
 //   COUNTIF / SUMIF / AVERAGEIF / *IFS         -> src/eval/conditional_aggregates.cpp
 //   CHOOSE / INDEX / MATCH / VLOOKUP / HLOOKUP -> src/eval/lookups/classic.cpp
 //   XLOOKUP / XMATCH                           -> src/eval/lookups/xlookup.cpp
+//   ROWS / COLUMNS / ROW / COLUMN / SUMPRODUCT -> src/eval/shape_ops_lazy.cpp
 // Each family publishes its externs via its own header
 // (`eval/special_forms_lazy.h`, `eval/conditional_aggregates.h`,
-// `eval/lookups/classic.h`, `eval/lookups/xlookup.h`), which the dispatch
-// table below includes.
+// `eval/lookups/classic.h`, `eval/lookups/xlookup.h`,
+// `eval/shape_ops_lazy.h`), which the dispatch table below includes.
 
 // `LazyImpl` is declared in `eval/lazy_impls.h` so translation units that
 // own individual lazy impls can publish matching function pointers.
@@ -283,6 +285,8 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"AVERAGEIF", &eval_averageif_lazy},
     {"AVERAGEIFS", &eval_averageifs_lazy},
     {"CHOOSE", &eval_choose_lazy},
+    {"COLUMN", &eval_column_lazy},
+    {"COLUMNS", &eval_columns_lazy},
     {"COUNT", &eval_count_lazy},
     {"COUNTIF", &eval_countif_lazy},
     {"COUNTIFS", &eval_countifs_lazy},
@@ -295,8 +299,11 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"MATCH", &eval_match_lazy},
     {"MAXIFS", &eval_maxifs_lazy},
     {"MINIFS", &eval_minifs_lazy},
+    {"ROW", &eval_row_lazy},
+    {"ROWS", &eval_rows_lazy},
     {"SUMIF", &eval_sumif_lazy},
     {"SUMIFS", &eval_sumifs_lazy},
+    {"SUMPRODUCT", &eval_sumproduct_lazy},
     {"SWITCH", &eval_switch_lazy},
     {"VLOOKUP", &eval_vlookup_lazy},
     {"XLOOKUP", &eval_xlookup_lazy},

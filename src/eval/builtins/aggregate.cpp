@@ -269,6 +269,13 @@ void register_aggregate_builtins(FunctionRegistry& registry) {
     registry.register_function(def);
   }
 
+  // SUMPRODUCT is routed through the lazy dispatch table (see
+  // `eval_sumproduct_lazy` in `shape_ops_lazy.cpp`) because it must
+  // preserve each argument's (rows, cols) shape to shape-check parallel
+  // rectangles, and must walk inline `{...}` array literals element by
+  // element. Pre-evaluating every arg via the eager path would erase
+  // both pieces of information.
+
   // Counting aggregators. Both are range-aware and opt out of the
   // dispatcher's left-most-error rule so the impl itself decides which
   // values to count. COUNT is registered as a lazy impl in

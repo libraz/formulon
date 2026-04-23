@@ -95,6 +95,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/range_args.cpp
   src/eval/special_forms_lazy.cpp
   src/eval/conditional_aggregates.cpp
+  src/eval/shape_ops_lazy.cpp
   src/eval/lookups/classic.cpp
   src/eval/lookups/xlookup.cpp
 )
