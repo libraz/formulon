@@ -1,9 +1,11 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
 // End-to-end tests for the date/time built-ins: DATE, TIME, YEAR, MONTH,
-// DAY, HOUR, MINUTE, SECOND, WEEKDAY, EDATE, EOMONTH, DAYS. Each test
-// parses a formula source, evaluates the AST through the default
-// registry, and asserts the resulting Value.
+// DAY, HOUR, MINUTE, SECOND, WEEKDAY, EDATE, EOMONTH, DAYS, WEEKNUM,
+// ISOWEEKNUM, YEARFRAC, DATEDIF, NETWORKDAYS, WORKDAY. Each test parses a
+// formula source, evaluates the AST through the default registry, and
+// asserts the resulting Value. NETWORKDAYS and WORKDAY tests use a bound
+// workbook so they can exercise range-sourced holiday lists.
 //
 // Serial values used in the assertions below were cross-checked by
 // independently running Howard Hinnant's `days_from_civil` algorithm and
@@ -21,12 +23,17 @@
 #include <cmath>
 #include <string_view>
 
+#include "eval/eval_context.h"
+#include "eval/eval_state.h"
+#include "eval/function_registry.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "sheet.h"
 #include "utils/arena.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
@@ -48,6 +55,25 @@ Value EvalSource(std::string_view src) {
     return Value::error(ErrorCode::Name);
   }
   return evaluate(*root, eval_arena);
+}
+
+// Bound-workbook variant used by NETWORKDAYS / WORKDAY tests: lets A1-style
+// refs in the formula resolve against the sheet's live cells so range-
+// sourced holiday lists exercise the same path as real workbooks.
+Value EvalSourceIn(std::string_view src, const Workbook& wb, const Sheet& current) {
+  static thread_local Arena parse_arena;
+  static thread_local Arena eval_arena;
+  parse_arena.reset();
+  eval_arena.reset();
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  EvalState state;
+  const EvalContext ctx(wb, current, state);
+  return evaluate(*root, eval_arena, default_registry(), ctx);
 }
 
 // ---------------------------------------------------------------------------
@@ -567,6 +593,308 @@ TEST(DateTimeRoundTrip, TimeExtractsItself) {
   EXPECT_EQ(h.as_number(), 7.0);
   EXPECT_EQ(m.as_number(), 15.0);
   EXPECT_EQ(s.as_number(), 30.0);
+}
+
+// ---------------------------------------------------------------------------
+// WEEKNUM / ISOWEEKNUM
+// ---------------------------------------------------------------------------
+
+TEST(DateTimeWeeknum, DefaultSundayType) {
+  // 2024-01-01 is a Monday. Default return_type=1 (Sunday start); week 1
+  // contains Jan 1, Jan 1 itself is the second day of that week.
+  const Value v = EvalSource("=WEEKNUM(DATE(2024,1,1))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1.0);
+}
+
+TEST(DateTimeWeeknum, MidYearDefault) {
+  // 2024-07-04 is a Thursday of ISO week 27; return_type=1 (Sun start)
+  // yields 27 as well.
+  const Value v = EvalSource("=WEEKNUM(DATE(2024,7,4))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 27.0);
+}
+
+TEST(DateTimeWeeknum, MondayTypeTwo) {
+  // 2024-01-01 is a Monday; with return_type=2 (Mon start) it is the
+  // first day of week 1.
+  const Value v = EvalSource("=WEEKNUM(DATE(2024,1,1),2)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1.0);
+}
+
+TEST(DateTimeWeeknum, Iso21Matches2024Jan1) {
+  // ISO 8601: 2024-01-01 is a Monday -> week 1 of 2024.
+  const Value v = EvalSource("=WEEKNUM(DATE(2024,1,1),21)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1.0);
+}
+
+TEST(DateTimeWeeknum, Iso21_2023Jan1_RollsToPrevYear) {
+  // 2023-01-01 is a Sunday -> ISO week 52 of 2022.
+  const Value v = EvalSource("=WEEKNUM(DATE(2023,1,1),21)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 52.0);
+}
+
+TEST(DateTimeWeeknum, InvalidReturnTypeIsNum) {
+  const Value v = EvalSource("=WEEKNUM(DATE(2024,1,1),99)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTimeWeeknum, NegativeSerialIsNum) {
+  const Value v = EvalSource("=WEEKNUM(-1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTimeIsoWeeknum, MidYear) {
+  // 2024-07-04 -> ISO week 27.
+  const Value v = EvalSource("=ISOWEEKNUM(DATE(2024,7,4))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 27.0);
+}
+
+TEST(DateTimeIsoWeeknum, Jan1_2023_IsWeek52OfPrevYear) {
+  const Value v = EvalSource("=ISOWEEKNUM(DATE(2023,1,1))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 52.0);
+}
+
+TEST(DateTimeIsoWeeknum, Dec31_2024_IsWeek1OfNextYear) {
+  // 2024-12-31 is a Tuesday -> ISO week 1 of 2025.
+  const Value v = EvalSource("=ISOWEEKNUM(DATE(2024,12,31))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1.0);
+}
+
+// ---------------------------------------------------------------------------
+// YEARFRAC
+// ---------------------------------------------------------------------------
+
+TEST(DateTimeYearfrac, Basis0_US30_360_HalfYear) {
+  // 2024-01-01 -> 2024-07-01 under 30/360 = 180/360 = 0.5 exactly.
+  const Value v = EvalSource("=YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 0.5, 1e-12);
+}
+
+TEST(DateTimeYearfrac, Basis1_ActualActual_OneFullLeapYear) {
+  // 2023-01-01 -> 2024-01-01 exact anniversary spanning 365 days across
+  // two calendar years -> 1.0 under the avg-year rule.
+  const Value v = EvalSource("=YEARFRAC(DATE(2023,1,1),DATE(2024,1,1),1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 1.0, 1e-12);
+}
+
+TEST(DateTimeYearfrac, Basis2_Actual360_HalfLeapYear) {
+  // 2024-01-01 -> 2024-07-01 is 182 days in 2024; 182/360.
+  const Value v = EvalSource("=YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),2)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 182.0 / 360.0, 1e-12);
+}
+
+TEST(DateTimeYearfrac, Basis3_Actual365_HalfLeapYear) {
+  const Value v = EvalSource("=YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),3)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 182.0 / 365.0, 1e-12);
+}
+
+TEST(DateTimeYearfrac, Basis4_EU30_360_HalfYear) {
+  const Value v = EvalSource("=YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),4)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 0.5, 1e-12);
+}
+
+TEST(DateTimeYearfrac, NegativeIntervalSwaps) {
+  // Oracle-documented behaviour: YEARFRAC is symmetric in its first two
+  // args (positive regardless of order).
+  const Value a = EvalSource("=YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),0)");
+  const Value b = EvalSource("=YEARFRAC(DATE(2024,7,1),DATE(2024,1,1),0)");
+  ASSERT_TRUE(a.is_number());
+  ASSERT_TRUE(b.is_number());
+  EXPECT_EQ(a.as_number(), b.as_number());
+}
+
+TEST(DateTimeYearfrac, InvalidBasisIsNum) {
+  const Value v = EvalSource("=YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),5)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+// ---------------------------------------------------------------------------
+// DATEDIF
+// ---------------------------------------------------------------------------
+
+TEST(DateTimeDatedif, YearsBetween) {
+  const Value v = EvalSource("=DATEDIF(DATE(2020,3,15),DATE(2024,7,1),\"Y\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 4.0);
+}
+
+TEST(DateTimeDatedif, MonthsBetween) {
+  // 2024-01-15 -> 2024-07-01: 5 complete months (d2 < d1 shaves one off).
+  const Value v = EvalSource("=DATEDIF(DATE(2024,1,15),DATE(2024,7,1),\"M\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 5.0);
+}
+
+TEST(DateTimeDatedif, DaysBetween) {
+  const Value v = EvalSource("=DATEDIF(DATE(2024,1,1),DATE(2024,1,15),\"D\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 14.0);
+}
+
+TEST(DateTimeDatedif, YmIgnoresYears) {
+  // 4 years 3 months 16 days -> YM = 3.
+  const Value v = EvalSource("=DATEDIF(DATE(2020,3,15),DATE(2024,7,1),\"YM\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 3.0);
+}
+
+TEST(DateTimeDatedif, YdIgnoresYearsSameCalendarPosition) {
+  // Same month/day pair: YD = 0 when the calendar positions align.
+  const Value v = EvalSource("=DATEDIF(DATE(2020,3,15),DATE(2024,3,15),\"YD\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+}
+
+TEST(DateTimeDatedif, MdDayOnlyDiff) {
+  // Same day-of-month -> MD = 0.
+  const Value v = EvalSource("=DATEDIF(DATE(2024,1,15),DATE(2024,7,15),\"MD\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+}
+
+TEST(DateTimeDatedif, EndBeforeStartIsNum) {
+  const Value v = EvalSource("=DATEDIF(DATE(2024,7,1),DATE(2020,3,15),\"Y\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTimeDatedif, UnknownUnitIsNum) {
+  const Value v = EvalSource("=DATEDIF(DATE(2024,1,1),DATE(2024,12,31),\"X\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+// ---------------------------------------------------------------------------
+// NETWORKDAYS / WORKDAY
+// ---------------------------------------------------------------------------
+
+TEST(DateTimeNetworkdays, OneCompleteWeek) {
+  // 2024-01-01 (Mon) .. 2024-01-05 (Fri) inclusive -> 5 business days.
+  const Value v = EvalSource("=NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,5))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 5.0);
+}
+
+TEST(DateTimeNetworkdays, TwoCompleteWeeks) {
+  // 2024-01-01 .. 2024-01-12 (Fri) inclusive -> 10 business days.
+  const Value v = EvalSource("=NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,12))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 10.0);
+}
+
+TEST(DateTimeNetworkdays, SingleWeekdayIsOne) {
+  // Mon .. Mon same day -> 1.
+  const Value v = EvalSource("=NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,1))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1.0);
+}
+
+TEST(DateTimeNetworkdays, SingleSaturdayIsZero) {
+  // 2024-01-06 is a Saturday. A weekend-only interval counts as zero.
+  const Value v = EvalSource("=NETWORKDAYS(DATE(2024,1,6),DATE(2024,1,6))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+}
+
+TEST(DateTimeNetworkdays, ArrayLiteralHolidays) {
+  // Drop Jan 1 and Jan 2 via an inline array literal; 2024-01-01..01-05
+  // has 5 business days, minus 2 holidays -> 3.
+  const Value v = EvalSource("=NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,5),{45292,45293})");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 3.0);
+}
+
+TEST(DateTimeNetworkdays, RangeHolidays) {
+  // Same setup as above but sourced from A1:A2 on a bound sheet.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(45292.0));  // 2024-01-01
+  wb.sheet(0).set_cell_value(1, 0, Value::number(45293.0));  // 2024-01-02
+  const Value v = EvalSourceIn("=NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,5),A1:A2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 3.0);
+}
+
+TEST(DateTimeNetworkdays, ReversedRangeNegates) {
+  // Excel 365 returns the negated business-day count when start > end.
+  const Value v = EvalSource("=NETWORKDAYS(DATE(2024,1,5),DATE(2024,1,1))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), -5.0);
+}
+
+TEST(DateTimeNetworkdays, ErrorPropagates) {
+  const Value v = EvalSource("=NETWORKDAYS(\"abc\",DATE(2024,1,5))");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(DateTimeWorkday, ForwardFiveDays) {
+  // 2024-01-01 (Mon). +5 business days -> 2024-01-08 (the next Monday,
+  // because Jan 6/7 are Sat/Sun and skip without counting).
+  const Value v = EvalSource("=WORKDAY(DATE(2024,1,1),5)");
+  const Value exp = EvalSource("=DATE(2024,1,8)");
+  ASSERT_TRUE(v.is_number());
+  ASSERT_TRUE(exp.is_number());
+  EXPECT_EQ(v.as_number(), exp.as_number());
+}
+
+TEST(DateTimeWorkday, BackwardFiveDays) {
+  // 2024-01-15 (Mon) - 5 business days -> 2024-01-08 (Mon).
+  const Value v = EvalSource("=WORKDAY(DATE(2024,1,15),-5)");
+  const Value exp = EvalSource("=DATE(2024,1,8)");
+  ASSERT_TRUE(v.is_number());
+  ASSERT_TRUE(exp.is_number());
+  EXPECT_EQ(v.as_number(), exp.as_number());
+}
+
+TEST(DateTimeWorkday, ZeroDaysReturnsStart) {
+  // Excel: WORKDAY(start, 0) returns start regardless of weekday status.
+  const Value v = EvalSource("=WORKDAY(DATE(2024,1,3),0)");
+  const Value exp = EvalSource("=DATE(2024,1,3)");
+  ASSERT_TRUE(v.is_number());
+  ASSERT_TRUE(exp.is_number());
+  EXPECT_EQ(v.as_number(), exp.as_number());
+}
+
+TEST(DateTimeWorkday, HolidaysExtendForward) {
+  // +5 business days from Mon with Tue / Wed as holidays -> Fri of next
+  // week (the 5 working days skipped the two holidays AND the weekend).
+  const Value v = EvalSource("=WORKDAY(DATE(2024,1,1),5,{45293,45294})");
+  const Value exp = EvalSource("=DATE(2024,1,10)");
+  ASSERT_TRUE(v.is_number());
+  ASSERT_TRUE(exp.is_number());
+  EXPECT_EQ(v.as_number(), exp.as_number());
+}
+
+TEST(DateTimeWorkday, RangeHolidays) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(45293.0));  // 2024-01-02
+  wb.sheet(0).set_cell_value(1, 0, Value::number(45294.0));  // 2024-01-03
+  const Value v = EvalSourceIn("=WORKDAY(DATE(2024,1,1),5,A1:A2)", wb, wb.sheet(0));
+  const Value exp = EvalSource("=DATE(2024,1,10)");
+  ASSERT_TRUE(v.is_number());
+  ASSERT_TRUE(exp.is_number());
+  EXPECT_EQ(v.as_number(), exp.as_number());
+}
+
+TEST(DateTimeWorkday, ErrorPropagates) {
+  const Value v = EvalSource("=WORKDAY(\"abc\",5)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 }  // namespace

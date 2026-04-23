@@ -14,6 +14,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <string_view>
 
 #include "eval/coerce.h"
 #include "eval/date_time.h"
@@ -309,6 +310,349 @@ Value Eomonth_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return Value::number(serial);
 }
 
+// ---------------------------------------------------------------------------
+// Week / year-fraction / date-diff helpers shared by WEEKNUM, ISOWEEKNUM,
+// YEARFRAC and DATEDIF.
+// ---------------------------------------------------------------------------
+
+// Returns the Sun=0..Sat=6 weekday index of the Gregorian date (y, m, d).
+// Uses the `(days_from_civil + 4) mod 7` trick anchored at the 1970-01-01
+// Thursday epoch; the `+ 7) % 7` guard protects against negative remainders
+// for pre-1970 proleptic dates (not exercised by Excel, but cheap insurance).
+int weekday_sun0(int y, unsigned m, unsigned d) noexcept {
+  const std::int64_t days = date_time::days_from_civil(y, m, d);
+  return static_cast<int>(((days % 7) + 4 + 7) % 7);
+}
+
+// Computes the ISO 8601 week number for an arbitrary Gregorian date.
+// Implements the standard "Thursday of the current week" algorithm:
+// shift to the Thursday (Mon=1..Sun=7 -> +3 / +2 / ... / -3), then the
+// ISO week number is `(day-of-year(Thursday) - 1) / 7 + 1`, and the ISO
+// year is that Thursday's calendar year.
+int iso_week_number(int y, unsigned m, unsigned d) noexcept {
+  const std::int64_t days = date_time::days_from_civil(y, m, d);
+  // ISO weekday: Mon=0..Sun=6. The 1970-01-01 epoch falls on a Thursday
+  // (days=0 -> Thursday -> mon0=3), so `(days + 3) mod 7` recovers the
+  // zero-based Monday-first index. The `+ 7) % 7` guard keeps the
+  // result non-negative for proleptic pre-1970 inputs.
+  const int mon0 = static_cast<int>(((days + 3) % 7 + 7) % 7);
+  // Thursday of this ISO week is `3 - mon0` days away (-3 .. +3).
+  const std::int64_t thu_days = days + (3 - mon0);
+  const date_time::YMD thu = date_time::civil_from_days(thu_days);
+  const std::int64_t jan1_days = date_time::days_from_civil(thu.y, 1, 1);
+  const int doy = static_cast<int>(thu_days - jan1_days) + 1;  // 1-based
+  return (doy - 1) / 7 + 1;
+}
+
+// Completed calendar months between the (y1,m1,d1) -> (y2,m2,d2) pair,
+// assuming end >= start (caller enforces). Excel counts a month as
+// "completed" iff d2 >= d1.
+long long completed_months(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept {
+  long long months = (static_cast<long long>(y2) - y1) * 12 + (static_cast<long long>(m2) - m1);
+  if (d2 < d1) {
+    months -= 1;
+  }
+  return months;
+}
+
+/// WEEKNUM(serial, [return_type]). Computes the calendar week number
+/// using one of Excel's ten supported return-type codes. Codes 1/2 are
+/// the classic Sunday- and Monday-start forms; 11..17 are the "new"
+/// codes that rotate the week start across all seven days; 21 is ISO
+/// 8601 (delegated to ISOWEEKNUM). Any other type yields `#NUM!`.
+///
+/// Algorithm for the non-ISO variants: let `ws` be the day-of-week the
+/// week starts on (Sun=0..Sat=6). The week number of any date d is
+/// `floor((doy(d) + (jan1_dow - ws + 7) % 7 - 1) / 7) + 1`, where
+/// `doy` is 1-based day-of-year and `jan1_dow` is the weekday of Jan 1.
+/// This is equivalent to the "roll Jan 1 to its week start, roll d to
+/// its week start, divide by 7" formulation but avoids two extra
+/// conversions through serial space.
+Value Weeknum_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  auto serial = coerce_serial(args[0]);
+  if (!serial) {
+    return Value::error(serial.error());
+  }
+  int return_type = 1;
+  if (arity >= 2) {
+    auto rt = coerce_to_number(args[1]);
+    if (!rt) {
+      return Value::error(rt.error());
+    }
+    return_type = static_cast<int>(std::trunc(rt.value()));
+  }
+  // Map return_type -> week-start weekday (Sun=0..Sat=6). -1 means invalid.
+  int ws = -1;
+  switch (return_type) {
+    case 1:
+    case 17:
+      ws = 0;  // Sun
+      break;
+    case 2:
+    case 11:
+      ws = 1;  // Mon
+      break;
+    case 12:
+      ws = 2;  // Tue
+      break;
+    case 13:
+      ws = 3;  // Wed
+      break;
+    case 14:
+      ws = 4;  // Thu
+      break;
+    case 15:
+      ws = 5;  // Fri
+      break;
+    case 16:
+      ws = 6;  // Sat
+      break;
+    case 21: {
+      // ISO 8601.
+      const date_time::YMD ymd = date_time::ymd_from_serial(std::floor(serial.value()));
+      return Value::number(static_cast<double>(iso_week_number(ymd.y, ymd.m, ymd.d)));
+    }
+    default:
+      return Value::error(ErrorCode::Num);
+  }
+  const date_time::YMD ymd = date_time::ymd_from_serial(std::floor(serial.value()));
+  const std::int64_t jan1_days = date_time::days_from_civil(ymd.y, 1, 1);
+  const std::int64_t d_days = date_time::days_from_civil(ymd.y, ymd.m, ymd.d);
+  const int jan1_sun0 = weekday_sun0(ymd.y, 1, 1);
+  // Offset of Jan 1 from its week start (0..6). Adding this to the zero-
+  // based day-of-year normalises Jan 1 so the first day of week 1 is day 0.
+  const int jan1_offset = (jan1_sun0 - ws + 7) % 7;
+  const int doy0 = static_cast<int>(d_days - jan1_days);  // 0-based day-of-year
+  const int week = (doy0 + jan1_offset) / 7 + 1;
+  return Value::number(static_cast<double>(week));
+}
+
+/// ISOWEEKNUM(serial). Returns 1..53 per ISO 8601.
+Value Isoweeknum_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto serial = coerce_serial(args[0]);
+  if (!serial) {
+    return Value::error(serial.error());
+  }
+  const date_time::YMD ymd = date_time::ymd_from_serial(std::floor(serial.value()));
+  return Value::number(static_cast<double>(iso_week_number(ymd.y, ymd.m, ymd.d)));
+}
+
+// ---------------------------------------------------------------------------
+// YEARFRAC day-count helpers
+// ---------------------------------------------------------------------------
+
+// Basis 0 (US 30/360 NASD). Returns signed day count under the NASD rule.
+// Callers pass `end >= start` after swap; the sign convention therefore
+// matches a positive yearfrac result.
+double yearfrac_us30_360(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept {
+  // NASD rule set (Excel's implementation):
+  //   if d1 == 31                         -> d1 = 30
+  //   if d2 == 31 and d1 >= 30            -> d2 = 30
+  //   if last-day-of-Feb(d1)              -> d1 = 30
+  //     and last-day-of-Feb(d2) too       -> d2 = 30
+  auto last_day_of_feb = [](int y, unsigned m, unsigned d) {
+    if (m != 2u) {
+      return false;
+    }
+    const bool leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
+    return d == (leap ? 29u : 28u);
+  };
+  const bool d1_last_feb = last_day_of_feb(y1, m1, d1);
+  const bool d2_last_feb = last_day_of_feb(y2, m2, d2);
+  if (d1_last_feb && d2_last_feb) {
+    d2 = 30;
+  }
+  if (d1_last_feb) {
+    d1 = 30;
+  }
+  if (d2 == 31u && d1 >= 30u) {
+    d2 = 30;
+  }
+  if (d1 == 31u) {
+    d1 = 30;
+  }
+  const double days = 360.0 * (y2 - y1) + 30.0 * (static_cast<double>(m2) - static_cast<double>(m1)) +
+                      (static_cast<double>(d2) - static_cast<double>(d1));
+  return days / 360.0;
+}
+
+// Basis 4 (European 30/360). Same skeleton as basis 0 but both days are
+// capped at 30 unconditionally.
+double yearfrac_eu30_360(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept {
+  if (d1 > 30u) {
+    d1 = 30;
+  }
+  if (d2 > 30u) {
+    d2 = 30;
+  }
+  const double days = 360.0 * (y2 - y1) + 30.0 * (static_cast<double>(m2) - static_cast<double>(m1)) +
+                      (static_cast<double>(d2) - static_cast<double>(d1));
+  return days / 360.0;
+}
+
+// Basis 1 (Actual/Actual). Excel's documented behaviour (matching
+// OpenFormula §6.11.23 and Excel 365's observed output):
+//
+//   - denominator = 366 if any Feb 29 falls strictly inside the interval
+//     [start, end) OR if both start and end are Feb 29 in a leap year;
+//   - denominator = 365 otherwise.
+//
+// This rule makes exact anniversary spans return an integer number of
+// years (e.g. 2023-01-01 -> 2024-01-01 = 1.0 because 2024-02-29 is past
+// the end), while sub-year intervals that straddle a leap day are scaled
+// by 366.
+double yearfrac_actual_actual(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept {
+  const std::int64_t days1 = date_time::days_from_civil(y1, m1, d1);
+  const std::int64_t days2 = date_time::days_from_civil(y2, m2, d2);
+  const double actual_days = static_cast<double>(days2 - days1);
+  // Scan every calendar year in [y1, y2] for a Feb 29 that lies inside
+  // the half-open interval [start, end). Only leap years can contribute.
+  bool includes_leap_day = false;
+  auto is_leap = [](int y) { return (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0); };
+  for (int y = y1; y <= y2; ++y) {
+    if (!is_leap(y)) {
+      continue;
+    }
+    const std::int64_t feb29 = date_time::days_from_civil(y, 2, 29);
+    if (feb29 >= days1 && feb29 < days2) {
+      includes_leap_day = true;
+      break;
+    }
+  }
+  const double denom = includes_leap_day ? 366.0 : 365.0;
+  return actual_days / denom;
+}
+
+/// YEARFRAC(start, end, [basis]). Returns the positive (sign-stripped)
+/// fraction of a year between two dates under one of five day-count
+/// conventions. Invalid basis codes yield `#NUM!`.
+Value Yearfrac_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  auto start = coerce_serial(args[0]);
+  if (!start) {
+    return Value::error(start.error());
+  }
+  auto end = coerce_serial(args[1]);
+  if (!end) {
+    return Value::error(end.error());
+  }
+  int basis = 0;
+  if (arity >= 3) {
+    auto b = coerce_to_number(args[2]);
+    if (!b) {
+      return Value::error(b.error());
+    }
+    basis = static_cast<int>(std::trunc(b.value()));
+  }
+  double s = std::floor(start.value());
+  double e = std::floor(end.value());
+  if (s > e) {
+    const double tmp = s;
+    s = e;
+    e = tmp;
+  }
+  const date_time::YMD a = date_time::ymd_from_serial(s);
+  const date_time::YMD b = date_time::ymd_from_serial(e);
+  switch (basis) {
+    case 0:
+      return Value::number(yearfrac_us30_360(a.y, a.m, a.d, b.y, b.m, b.d));
+    case 1:
+      return Value::number(yearfrac_actual_actual(a.y, a.m, a.d, b.y, b.m, b.d));
+    case 2:
+      // Actual/360 -- raw day diff honours the 1900 leap-bug so we compute
+      // it from the Excel serials (not days_from_civil) for parity.
+      return Value::number((e - s) / 360.0);
+    case 3:
+      return Value::number((e - s) / 365.0);
+    case 4:
+      return Value::number(yearfrac_eu30_360(a.y, a.m, a.d, b.y, b.m, b.d));
+    default:
+      return Value::error(ErrorCode::Num);
+  }
+}
+
+/// DATEDIF(start, end, unit). Returns the signed difference between two
+/// dates expressed in the requested unit. Unit strings are case-sensitive
+/// and uppercase-only in Excel's documented surface:
+///
+///   "Y"  - complete years between start and end
+///   "M"  - complete months between start and end
+///   "D"  - day difference (`floor(end) - floor(start)`)
+///   "YM" - complete months between, ignoring the year part
+///   "YD" - days between, treating start as if it fell in end's year
+///   "MD" - days between, ignoring months and years (known buggy in Excel)
+///
+/// `end < start` yields `#NUM!`; an unknown unit also yields `#NUM!`.
+Value Datedif_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  auto start = coerce_serial(args[0]);
+  if (!start) {
+    return Value::error(start.error());
+  }
+  auto end = coerce_serial(args[1]);
+  if (!end) {
+    return Value::error(end.error());
+  }
+  auto unit = coerce_to_text(args[2]);
+  if (!unit) {
+    return Value::error(unit.error());
+  }
+  const double s = std::floor(start.value());
+  const double e = std::floor(end.value());
+  if (e < s) {
+    return Value::error(ErrorCode::Num);
+  }
+  const date_time::YMD a = date_time::ymd_from_serial(s);
+  const date_time::YMD b = date_time::ymd_from_serial(e);
+  const std::string& u = unit.value();
+  if (u == "D") {
+    return Value::number(e - s);
+  }
+  if (u == "Y") {
+    const long long months = completed_months(a.y, a.m, a.d, b.y, b.m, b.d);
+    return Value::number(static_cast<double>(months / 12));
+  }
+  if (u == "M") {
+    return Value::number(static_cast<double>(completed_months(a.y, a.m, a.d, b.y, b.m, b.d)));
+  }
+  if (u == "YM") {
+    const long long months = completed_months(a.y, a.m, a.d, b.y, b.m, b.d);
+    return Value::number(static_cast<double>(months % 12));
+  }
+  if (u == "YD") {
+    // Shift `start` into the same or preceding year as `end` so the
+    // calendar anniversary logic falls out directly. If start's (m,d)
+    // has already passed in end's year, the anniversary for the "partial
+    // year" is in end's year; otherwise in the year before.
+    int anniversary_y = b.y;
+    // Calendar comparison (m,d) of start vs end.
+    if (a.m > b.m || (a.m == b.m && a.d > b.d)) {
+      anniversary_y = b.y - 1;
+    }
+    const std::int64_t anniv = date_time::days_from_civil(anniversary_y, a.m, a.d);
+    const std::int64_t end_days = date_time::days_from_civil(b.y, b.m, b.d);
+    return Value::number(static_cast<double>(end_days - anniv));
+  }
+  if (u == "MD") {
+    // Days ignoring months and years: pretend both dates share end's
+    // (year, month) and return `b.d - a.d`; if that would be negative,
+    // borrow a month (one full calendar month of end's previous month).
+    // This mirrors Excel's classic (and buggy) formulation rather than
+    // a "correct" calendar-difference algorithm.
+    long long diff = static_cast<long long>(b.d) - static_cast<long long>(a.d);
+    if (diff < 0) {
+      // Borrow the previous month's length relative to the END date.
+      int prev_y = b.y;
+      int prev_m = static_cast<int>(b.m) - 1;
+      if (prev_m == 0) {
+        prev_m = 12;
+        prev_y -= 1;
+      }
+      diff += static_cast<long long>(days_in_month(prev_y, static_cast<unsigned>(prev_m)));
+    }
+    return Value::number(static_cast<double>(diff));
+  }
+  return Value::error(ErrorCode::Num);
+}
+
 /// DAYS(end, start). Both arguments are truncated to their date component;
 /// the result is the signed day difference and may be negative.
 Value Days_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
@@ -343,6 +687,10 @@ void register_datetime_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"EDATE", 2u, 2u, &Edate_});
   registry.register_function(FunctionDef{"EOMONTH", 2u, 2u, &Eomonth_});
   registry.register_function(FunctionDef{"DAYS", 2u, 2u, &Days_});
+  registry.register_function(FunctionDef{"WEEKNUM", 1u, 2u, &Weeknum_});
+  registry.register_function(FunctionDef{"ISOWEEKNUM", 1u, 1u, &Isoweeknum_});
+  registry.register_function(FunctionDef{"YEARFRAC", 2u, 3u, &Yearfrac_});
+  registry.register_function(FunctionDef{"DATEDIF", 3u, 3u, &Datedif_});
 }
 
 }  // namespace eval

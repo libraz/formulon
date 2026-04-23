@@ -21,6 +21,7 @@
 #include "eval/range_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "eval/special_forms_lazy.h"
+#include "eval/workdays_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/expected.h"  // FM_CHECK
@@ -269,10 +270,12 @@ Value apply_comparison(parser::BinOp op, const Value& lhs, const Value& rhs) {
 //   CHOOSE / INDEX / MATCH / VLOOKUP / HLOOKUP -> src/eval/lookups/classic.cpp
 //   XLOOKUP / XMATCH                           -> src/eval/lookups/xlookup.cpp
 //   ROWS / COLUMNS / ROW / COLUMN / SUMPRODUCT -> src/eval/shape_ops_lazy.cpp
+//   NETWORKDAYS / WORKDAY                      -> src/eval/workdays_lazy.cpp
 // Each family publishes its externs via its own header
 // (`eval/special_forms_lazy.h`, `eval/conditional_aggregates.h`,
 // `eval/lookups/classic.h`, `eval/lookups/xlookup.h`,
-// `eval/shape_ops_lazy.h`), which the dispatch table below includes.
+// `eval/shape_ops_lazy.h`, `eval/workdays_lazy.h`), which the dispatch
+// table below includes.
 
 // `LazyImpl` is declared in `eval/lazy_impls.h` so translation units that
 // own individual lazy impls can publish matching function pointers.
@@ -299,6 +302,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"MATCH", &eval_match_lazy},
     {"MAXIFS", &eval_maxifs_lazy},
     {"MINIFS", &eval_minifs_lazy},
+    {"NETWORKDAYS", &eval_networkdays_lazy},
     {"ROW", &eval_row_lazy},
     {"ROWS", &eval_rows_lazy},
     {"SUMIF", &eval_sumif_lazy},
@@ -306,6 +310,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"SUMPRODUCT", &eval_sumproduct_lazy},
     {"SWITCH", &eval_switch_lazy},
     {"VLOOKUP", &eval_vlookup_lazy},
+    {"WORKDAY", &eval_workday_lazy},
     {"XLOOKUP", &eval_xlookup_lazy},
     {"XMATCH", &eval_xmatch_lazy},
 };
