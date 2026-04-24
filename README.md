@@ -3,29 +3,35 @@
 > **Status: Under active development. Not yet ready for production use.**
 > APIs, file layout, and packaging may change without notice until the first tagged release.
 
-Formulon aims to be a **headless Excel** — a C++17 calculation engine that
-evaluates Excel 365 formulas and reads/writes `.xlsx` workbooks without
-requiring Excel to be installed. The same engine is packaged for the browser
-(WebAssembly), for Python, and for native command-line use, so a workbook can
-be recalculated identically wherever it runs.
+Formulon is a headless, Excel-compatible calculation engine — a C++17 core
+that aims to be **bit-exact against Mac Excel 365 (ja-JP)**, with every known
+divergence explicitly tracked. The same engine is packaged for the browser
+(WebAssembly), for Python, and for native command-line use, so a workbook
+recalculates to the same values wherever it runs.
 
-## Goals
+No Excel installation, no Microsoft runtime, no COM automation required.
+Runs on macOS, Linux, Windows, in the browser, and in Node.
 
-- **Faithful Excel 365 semantics.** Mac Excel 365 (ja-JP locale) is treated as
-  the reference oracle. Known intentional differences are tracked explicitly
-  rather than hidden.
-- **Headless, embeddable.** No Excel installation, no GUI, no COM automation.
-  Just a library you can link, import, or load.
-- **One engine, many surfaces.** A single C++ core is shipped as:
-  - a **WebAssembly** module on npm, for use in browsers and Node,
-  - a **Python** wheel on PyPI,
-  - native **CLI** binaries for Linux, macOS, and Windows.
-- **Small WASM footprint.** The WebAssembly build targets a modest size
-  budget so Formulon can live inside a web application without dominating
-  the payload.
-- **Readable, reviewable code.** Structured error handling, RAII, no
-  exceptions, and a small, deliberate dependency set — so the engine stays
-  auditable as it grows.
+## Why Formulon
+
+- **Strict oracle, not aspirational compatibility.** Mac Excel 365 (ja-JP)
+  is the behavioral oracle. Outputs are checked for bit-level parity against
+  golden data regenerated from the real product; 17 intentional divergences
+  (transcendental ulp drift, volatile-function snapshots, etc.) are recorded
+  in [`tests/divergence.yaml`](tests/divergence.yaml) with a reason and the
+  last verified Excel build.
+- **One C++ core, identical results everywhere.** JS-only competitors re-run
+  the logic in the browser and the logic on the server. Formulon ships one
+  engine to every surface (WASM, Python, CLI) so there is no second
+  implementation to drift.
+- **Strict WASM size budget.** Target **1.65 MB uncompressed / 530 KB
+  Brotli**, hard ceiling **1.8 MB / 600 KB Brotli**. The budget is enforced
+  in CI, not aspirational; features ship within the budget or do not ship.
+- **Small dependency set.** Engine deps: `miniz` (zip), `pugixml` (XML +
+  XPath 1.0). That is the complete list for the core. Linear algebra,
+  number formatting, and UTF-8 handling are in-tree.
+- **Readable, reviewable code.** `Expected<T, Error>` error handling, RAII,
+  `-fno-exceptions -fno-rtti`, Google C++ style.
 
 ## What it is useful for
 
@@ -36,18 +42,38 @@ Anywhere a spreadsheet needs to be computed without booting Excel:
 - embedding calculation into internal tools, bots, or notebooks,
 - validating formulas and migrating legacy spreadsheets.
 
-## Scope
+## Non-goals (by design)
 
-Formulon focuses on the calculation engine and file I/O. It is not a
-spreadsheet UI. A light integration layer (formula bar, grid bindings) is
-planned to make it easy to build one on top.
+Formulon deliberately does **not** cover:
 
-## Status and roadmap
+| Area | Reason |
+|------|--------|
+| VBA execution | Security. `vbaProject.bin` is preserved byte-for-byte, never executed. |
+| Legacy `.xls` (BIFF8, Excel 97–2003) | Out of scope for Excel 365 compatibility. |
+| Chart / drawing rendering | Belongs to a rendering layer, not the engine. |
+| PowerQuery (M) / DAX | Separate engine, separate problem domain. |
+| Pivot cache recomputation | Structurally preserved; recomputation is out of scope. |
+| Spreadsheet UI | A thin UI integration layer is planned; rendering is yours. |
 
-The project is pre-release. The function catalog, OOXML I/O, and packaging
-are being built up milestone by milestone, and behavior is continuously
-checked against the Excel oracle. Expect rough edges until the first tagged
-release.
+These are **permanent** non-goals, not "not yet." The scope is finite on
+purpose.
+
+## Packaging
+
+| Surface | Name | Notes |
+|---------|------|-------|
+| npm | `@libraz/formulon` | WASM ESM module, type definitions included. Node 22+, browsers, workers. |
+| PyPI | _name pending_ | CPython 3.10–3.13 wheels for macOS / Linux / Windows. |
+| GitHub Releases | `formulon-cli-<os>-<arch>` | Standalone CLI binaries. |
+
+## Status
+
+As of 2026-04: formula parser and tree-walking evaluator are in place, with
+**458 / 520 Excel functions implemented (88.1%)** across Math & Trig, Stats,
+Logical, Text, Date/Time, Lookup, Financial, Engineering, Info, and
+Database families. **43 oracle categories** are defined, regenerated from
+Mac Excel 365 ja-JP. The OOXML reader, WASM/Python/npm packaging, CLI, and
+the bytecode VM are under active construction.
 
 Feedback, issue reports, and oracle divergence reports are welcome, but
 please do not rely on Formulon for production workloads yet.
