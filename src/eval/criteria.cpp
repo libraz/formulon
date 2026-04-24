@@ -141,6 +141,31 @@ namespace {
 // Character comparisons are ASCII case-insensitive to match Excel's
 // criteria semantics (e.g. `*blue` matches `BLUE`). Non-ASCII bytes are
 // compared byte-for-byte, consistent with `strings::case_insensitive_eq`.
+// UTF-8 continuation: returns the byte length of the code point that
+// starts at `text[i]`, capped at `text.size() - i`. A leading byte with
+// an invalid continuation pattern falls back to 1 byte (mirrors Excel's
+// lenient "one display unit" heuristic for broken UTF-8).
+std::size_t utf8_codepoint_bytes(std::string_view text, std::size_t i) {
+  if (i >= text.size()) {
+    return 0;
+  }
+  const auto lead = static_cast<unsigned char>(text[i]);
+  std::size_t len = 1;
+  if ((lead & 0x80u) == 0x00u) {
+    len = 1;
+  } else if ((lead & 0xE0u) == 0xC0u) {
+    len = 2;
+  } else if ((lead & 0xF0u) == 0xE0u) {
+    len = 3;
+  } else if ((lead & 0xF8u) == 0xF0u) {
+    len = 4;
+  }
+  if (i + len > text.size()) {
+    len = text.size() - i;
+  }
+  return len;
+}
+
 bool wildcard_match_impl(std::string_view pattern, std::string_view text, bool prefix_match_ok,
                          std::size_t* out_consumed) {
   std::size_t pi = 0;
@@ -167,12 +192,27 @@ bool wildcard_match_impl(std::string_view pattern, std::string_view text, bool p
           ++ti;
           continue;
         }
+      } else if (pc == '~' && pi + 1 == pattern.size()) {
+        // Trailing unpaired `~`: Excel treats it as a no-op (the escape
+        // consumes nothing of the text), so the remaining pattern is
+        // effectively empty — succeed if we're in prefix mode or if the
+        // text is also exhausted at this point.
+        ++pi;
+        continue;
       } else if (pc == '*') {
         star_pi = pi;
         star_ti = ti;
         ++pi;
         continue;
-      } else if (pc == '?' || strings::ascii_to_lower(pc) == strings::ascii_to_lower(text[ti])) {
+      } else if (pc == '?') {
+        // `?` matches exactly one UTF-8 code point (1-4 bytes) rather
+        // than a single byte, so multibyte scripts (CJK, emoji, combining
+        // marks treated as atomic) match as Excel users would expect.
+        const std::size_t cp_bytes = utf8_codepoint_bytes(text, ti);
+        ++pi;
+        ti += cp_bytes;
+        continue;
+      } else if (strings::ascii_to_lower(pc) == strings::ascii_to_lower(text[ti])) {
         ++pi;
         ++ti;
         continue;
@@ -187,8 +227,14 @@ bool wildcard_match_impl(std::string_view pattern, std::string_view text, bool p
     }
     return false;
   }
-  // Trailing `*`s in the pattern can consume nothing.
+  // Trailing `*`s consume nothing.
   while (pi < pattern.size() && pattern[pi] == '*') {
+    ++pi;
+  }
+  // A single unpaired trailing `~` also consumes nothing (Excel leniency).
+  // This must be the very last pattern char, otherwise it is part of an
+  // escape pair `~X` and that pair requires a text char to match.
+  if (pi + 1 == pattern.size() && pattern[pi] == '~') {
     ++pi;
   }
   const bool ok = (pi == pattern.size());
