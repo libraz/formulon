@@ -208,6 +208,14 @@ Value TextBefore_(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!opts) {
     return Value::error(opts.error());
   }
+  // Domain error: delimiter longer than text is a #VALUE! — but ONLY when
+  // the caller passed any optional argument. The 2-arg minimum form
+  // (`TEXTBEFORE(text, delim)`) treats an impossible delimiter as a
+  // regular "not found" and returns #N/A. Observed in Excel 365 /
+  // IronCalc; K19 / J19 in TEXTBEFORE_TEXTAFTER_Sheet1 pin this split.
+  if (arity >= 3 && delimiter.value().size() > text.value().size()) {
+    return Value::error(ErrorCode::Value);
+  }
   bool arg_err = false;
   const TextMatchResult hit = find_text_instance(text.value(), delimiter.value(), opts.value().instance_num,
                                                  opts.value().match_mode, opts.value().match_end, &arg_err);
@@ -244,6 +252,12 @@ Value TextAfter_(const Value* args, std::uint32_t arity, Arena& arena) {
   auto opts = read_tba_opts(args, arity);
   if (!opts) {
     return Value::error(opts.error());
+  }
+  // Same domain guard as TEXTBEFORE — delimiter > text is #VALUE! once
+  // any optional argument has been provided; the 2-arg form treats the
+  // same input as a regular not-found and returns #N/A.
+  if (arity >= 3 && delimiter.value().size() > text.value().size()) {
+    return Value::error(ErrorCode::Value);
   }
   bool arg_err = false;
   const TextMatchResult hit = find_text_instance(text.value(), delimiter.value(), opts.value().instance_num,
