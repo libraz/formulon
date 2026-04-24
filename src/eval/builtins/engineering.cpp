@@ -155,7 +155,12 @@ Expected<std::string, ErrorCode> encode_base_string(std::int64_t value, const Ba
 
 // Coerces a `places` argument: must be a finite number, truncated toward
 // zero, and in [1, 10]. Out-of-range / non-finite values yield #NUM!.
+// Excel rejects Bool directly for `places` with `#VALUE!` — strict-Bool
+// rejection mirroring the input-digit side of BIN2*/OCT2*/HEX2*.
 Expected<int, ErrorCode> coerce_places(const Value& v) {
+  if (v.kind() == ValueKind::Bool) {
+    return ErrorCode::Value;
+  }
   auto p = coerce_to_number(v);
   if (!p) {
     return p.error();
@@ -205,7 +210,10 @@ Expected<std::string, ErrorCode> input_digit_string(const Value& v) {
       // `#VALUE!` — mirrors the strict-Bool rejection in DEC2*.
       return ErrorCode::Value;
     case ValueKind::Blank:
-      return ErrorCode::Num;
+      // A blank cell reference coerces to 0 in numeric context, so Excel
+      // treats BIN2OCT(blank) as BIN2OCT(0) -> "0" (likewise for the other
+      // *2* conversions). Reproduced by IronCalc on calc_tests/Decimal I32.
+      return std::string("0");
     default:
       // Array / Ref / Lambda fall through. The eager dispatcher surfaces
       // scalar mismatches as #VALUE! -- mirror that here defensively.
