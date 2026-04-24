@@ -222,10 +222,16 @@ Value Syd(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 //   - period <  1  or period > life  ->  #NUM!
 //   - factor <= 0   ->  #NUM!
 //
-// Period is expected to be a positive integer; Excel's documented
-// behaviour for non-integer period is the integer-iteration schedule
-// (which is what we implement). If oracle testing ever surfaces a
-// fractional-period case that diverges, revisit here.
+// Period is expected to be a positive value; Excel 365 accepts fractional
+// `period`. For integer periods the formula matches the iterative
+// declining-balance schedule exactly (dep_p = cost * (1-rate)^(p-1) *
+// rate). Extending to fractional p by treating period as a continuous
+// variable preserves the same identity: dep(p) = cost * ((1-rate)^(p-1) -
+// (1-rate)^p). Integer iteration is kept for integer p to avoid any
+// floating-point drift in the existing regression corpus; fractional p
+// falls through to the closed-form expression. The salvage floor is
+// handled by clamping the cumulative depreciation at cost - salvage
+// before subtracting the previous-period total.
 Value Ddb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   auto cost_e = read_required_number(args, 0);
   if (!cost_e) {
@@ -259,10 +265,27 @@ Value Ddb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (rate >= 1.0) {
     rate = 1.0;
   }
+  // Fractional period: use the closed-form continuous declining-balance
+  // expression `dep(p) = cost * ((1-rate)^(p-1) - (1-rate)^p)` with the
+  // salvage floor applied via cumulative clamp. For integer periods the
+  // existing iterative schedule is preserved byte-for-byte.
+  const bool is_integer_period = std::floor(period) == period;
+  if (!is_integer_period) {
+    const double bv_prev = cost * std::pow(1.0 - rate, period - 1.0);
+    const double bv_curr = cost * std::pow(1.0 - rate, period);
+    // Clamp to salvage: a period whose start already sits at/below
+    // salvage cannot depreciate further; a period that crosses the
+    // salvage floor depreciates only down to salvage.
+    const double bv_prev_c = bv_prev < salvage ? salvage : bv_prev;
+    const double bv_curr_c = bv_curr < salvage ? salvage : bv_curr;
+    double dep = bv_prev_c - bv_curr_c;
+    if (dep < 0.0) {
+      dep = 0.0;
+    }
+    return finalize(dep);
+  }
   // Iterate integer periods up to (and including) the requested period.
-  // Using ceil() on the requested period lets a fractional period map
-  // to the same integer-iteration answer Excel produces in practice.
-  const auto iter_count = static_cast<std::int64_t>(std::ceil(period));
+  const auto iter_count = static_cast<std::int64_t>(period);
   double book_value = cost;
   double depreciation = 0.0;
   for (std::int64_t i = 1; i <= iter_count; ++i) {
