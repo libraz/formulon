@@ -383,10 +383,16 @@ Value Db(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     dep_i = (cost - total) * rate;
     total += dep_i;
   }
-  if (period <= life) {
+  // Partial-last-year formula fires only when `period` has crossed the
+  // life+1 threshold (i.e. is >= life + 1.0). Fractional periods strictly
+  // below life+1 (e.g. period=4.5 with life=4) are treated like period 4:
+  // Excel returns the integer-step schedule's last computed dep, without
+  // proration. Verified against IronCalc DB G39
+  // (`=DB(12, 10, 4, 4.5, 2)` → 0.488800, matching dep_4 exactly).
+  if (period < life + 1.0) {
     return finalize(dep_i);
   }
-  // period == life + 1 (partial last year). Guarded above so month_int < 12.
+  // period >= life + 1 (partial last year). Guarded above so month_int < 12.
   const double dep_last = (cost - total) * rate * (12.0 - month_int) / 12.0;
   return finalize(dep_last);
 }
