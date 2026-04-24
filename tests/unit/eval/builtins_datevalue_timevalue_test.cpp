@@ -451,6 +451,95 @@ TEST(TimevalueRoundTrip, AgreesWithTime) {
   EXPECT_NEAR(a.as_number(), b.as_number(), 1e-12);
 }
 
+// ---------------------------------------------------------------------------
+// DATEVALUE: d-mmm-yyyy / d mmm yyyy / d/mmm/yyyy forms.
+//
+// These unblock IronCalc oracle cases that feed Excel-style textual dates
+// through DATEVALUE / VALUE. The month must be spelled with English letters
+// (3-letter abbreviation or full name, case-insensitive). The separator must
+// be consistent on both sides of the month word.
+// ---------------------------------------------------------------------------
+
+TEST(DatevalueDmmm, DashGhostFeb29_1900) {
+  // Excel's Lotus-1-2-3 compatibility ghost day: 1900-02-29 = serial 60.
+  const Value v = EvalSource("=DATEVALUE(\"29-Feb-1900\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 60.0);
+}
+
+TEST(DatevalueDmmm, DashMar1_1900) {
+  // Day immediately after the ghost day.
+  const Value v = EvalSource("=DATEVALUE(\"1-Mar-1900\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 61.0);
+}
+
+TEST(DatevalueDmmm, DashFeb2_2026) {
+  // IronCalc VALUE("2-Feb-2026") -> 46055.
+  const Value v = EvalSource("=DATEVALUE(\"2-Feb-2026\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 46055.0);
+}
+
+TEST(DatevalueDmmm, SpaceSeparatedShortMonth) {
+  // "15 Dec 2024" = 2024-12-15 = 45641.
+  const Value v = EvalSource("=DATEVALUE(\"15 Dec 2024\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 45641.0);
+}
+
+TEST(DatevalueDmmm, DashFullMonthLongestMatchWins) {
+  // "1-January-2024" = 2024-01-01 = 45292. Ensures the full name is
+  // preferred over the 3-letter prefix ("Jan").
+  const Value v = EvalSource("=DATEVALUE(\"1-January-2024\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 45292.0);
+}
+
+TEST(DatevalueDmmm, SlashSeparatorAllowed) {
+  // Slashes must match on both sides of the month word.
+  const Value v = EvalSource("=DATEVALUE(\"15/Dec/2024\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 45641.0);
+}
+
+TEST(DatevalueDmmm, CaseInsensitiveMonthName) {
+  const Value v = EvalSource("=DATEVALUE(\"1-MAR-1900\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 61.0);
+}
+
+TEST(DatevalueDmmm, PurelyNumericDmyRejected) {
+  // "10-12-1999" has no letter month token and must NOT be accepted via the
+  // d-mmm-yyyy fall-back. The yyyy-first path also cannot consume it
+  // cleanly (the trailing "99" bytes leak through), so DATEVALUE returns
+  // #VALUE!.
+  const Value v = EvalSource("=DATEVALUE(\"10-12-1999\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(DatevalueDmmm, MixedSeparatorsRejected) {
+  // Dash before the month but slash after -> #VALUE!.
+  const Value v = EvalSource("=DATEVALUE(\"29-Feb/1900\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(DatevalueDmmm, MonthFirstOrderRejected) {
+  // Formulon intentionally does not accept "Feb-29-1900" (month-first).
+  const Value v = EvalSource("=DATEVALUE(\"Feb-29-1900\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(DatevalueDmmm, IsoPathStillWorks) {
+  // Regression guard: the primary yyyy-first path remains untouched.
+  const Value v = EvalSource("=DATEVALUE(\"2024-03-15\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 45366.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

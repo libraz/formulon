@@ -75,8 +75,80 @@ int expand_two_digit_year(int y, std::size_t digits) noexcept {
   return y;
 }
 
+// Case-insensitive ASCII equality for a single character.
+bool ci_equal_ascii(char a, char b) noexcept {
+  const char la = (a >= 'A' && a <= 'Z') ? static_cast<char>(a + ('a' - 'A')) : a;
+  const char lb = (b >= 'A' && b <= 'Z') ? static_cast<char>(b + ('a' - 'A')) : b;
+  return la == lb;
+}
+
+// Returns true iff `s[0..expected.size())` matches `expected` case-insensitively
+// (ASCII only).
+bool starts_with_ci(std::string_view s, std::string_view expected) noexcept {
+  if (s.size() < expected.size()) {
+    return false;
+  }
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    if (!ci_equal_ascii(s[i], expected[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Consumes a case-insensitive English month name from the head of `s` and
+// advances `s` past it. On success writes the 1..12 month index into
+// `*out_month` and returns true. Accepts both the three-letter abbreviation
+// (Jan..Dec) and the full name (January..December); prefers the longest match
+// so "June" is not cut to "Jun" + "e".
+bool parse_mmm_month(std::string_view& s, int* out_month) noexcept {
+  // Order matches Excel's short-form abbreviation. We try the full name first
+  // to honour the longest-match rule before falling back to the 3-letter form.
+  static constexpr std::string_view kFullNames[12] = {
+      "January", "February", "March",     "April",   "May",      "June",
+      "July",    "August",   "September", "October", "November", "December",
+  };
+  static constexpr std::string_view kShortNames[12] = {
+      "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  };
+  for (int i = 0; i < 12; ++i) {
+    if (starts_with_ci(s, kFullNames[i])) {
+      s.remove_prefix(kFullNames[i].size());
+      *out_month = i + 1;
+      return true;
+    }
+  }
+  for (int i = 0; i < 12; ++i) {
+    if (starts_with_ci(s, kShortNames[i])) {
+      s.remove_prefix(kShortNames[i].size());
+      *out_month = i + 1;
+      return true;
+    }
+  }
+  return false;
+}
+
+// Parses the yyyy-first variants: `YYYY-MM-DD`, `YYYY/MM/DD`, and the kanji
+// form `YYYY年MM月DD日`. Returns false if the text does not match this shape;
+// in that case the caller should try the d-mmm-yyyy fall-back.
+bool parse_ymd_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept;
+
+// Parses the alternate `d-mmm-yyyy` / `d mmm yyyy` / `d/mmm/yyyy` shapes,
+// where the month is an English word (3-letter abbreviation or full name).
+// The separator must be one of `-`, `/`, ` `, and must match on both sides of
+// the month token (no mixing). Purely-numeric d-m-yyyy is intentionally not
+// accepted here.
+bool parse_dmy_mmm_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept;
+
 // Parses a leading date token. See `parse_date_time_text` for the grammar.
 bool parse_date_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
+  if (parse_ymd_text(s, out_serial, rest)) {
+    return true;
+  }
+  return parse_dmy_mmm_text(s, out_serial, rest);
+}
+
+bool parse_ymd_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
   int year = 0;
   const std::size_t year_digits = scan_digits(s, 4, &year);
   if (year_digits == 0) {
@@ -128,6 +200,60 @@ bool parse_date_text(std::string_view s, double* out_serial, std::string_view* r
   // Excel preserves Lotus 1-2-3's fictitious 1900-02-29 (serial 60). The
   // Gregorian calendar says that day does not exist (1900 is divisible by
   // 100 but not 400), but DATEVALUE must still accept it for parity.
+  const bool is_excel_ghost_day = (expanded_year == 1900 && month == 2 && day == 29);
+  if (!is_excel_ghost_day && (day < 1 || static_cast<unsigned>(day) > dim)) {
+    return false;
+  }
+  *out_serial = date_time::serial_from_ymd(expanded_year, static_cast<unsigned>(month), static_cast<unsigned>(day));
+  *rest = s;
+  return true;
+}
+
+bool parse_dmy_mmm_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
+  // Leading day token: exactly one or two ASCII digits.
+  int day = 0;
+  const std::size_t day_digits = scan_digits(s, 2, &day);
+  if (day_digits == 0) {
+    return false;
+  }
+  // Separator before the month word: '-', '/', or a single ASCII space. The
+  // chosen separator is remembered and required again after the month word,
+  // so inputs like "29-Feb/1900" are rejected.
+  if (s.empty()) {
+    return false;
+  }
+  const char sep = s[0];
+  if (sep != '-' && sep != '/' && sep != ' ') {
+    return false;
+  }
+  s.remove_prefix(1);
+  // Month word: case-insensitive 3-letter abbreviation or full English name.
+  int month = 0;
+  if (!parse_mmm_month(s, &month)) {
+    return false;
+  }
+  // Trailing separator must match the leading one exactly.
+  if (s.empty() || s[0] != sep) {
+    return false;
+  }
+  s.remove_prefix(1);
+  // Year token: 1..4 ASCII digits. Two-digit values go through the same
+  // Excel 1900/2000 pivot as the yyyy-first path.
+  int year = 0;
+  const std::size_t year_digits = scan_digits(s, 4, &year);
+  if (year_digits == 0) {
+    return false;
+  }
+  const int expanded_year = expand_two_digit_year(year, year_digits);
+  if (expanded_year < 1900 || expanded_year > 9999) {
+    return false;
+  }
+  if (month < 1 || month > 12) {
+    return false;
+  }
+  const unsigned dim = days_in_month(expanded_year, static_cast<unsigned>(month));
+  // Reuse the same 1900-02-29 ghost-day escape as the yyyy-first path so
+  // `DATEVALUE("29-Feb-1900")` still resolves to serial 60.
   const bool is_excel_ghost_day = (expanded_year == 1900 && month == 2 && day == 29);
   if (!is_excel_ghost_day && (day < 1 || static_cast<unsigned>(day) > dim)) {
     return false;
