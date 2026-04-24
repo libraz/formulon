@@ -145,21 +145,39 @@ double yearfrac_actual_actual(int y1, unsigned m1, unsigned d1, int y2, unsigned
   const std::int64_t days1 = days_from_civil(y1, m1, d1);
   const std::int64_t days2 = days_from_civil(y2, m2, d2);
   const double actual_days = static_cast<double>(days2 - days1);
-  // Scan every calendar year in [y1, y2] for a Feb 29 that lies inside
-  // the half-open interval [start, end). Only leap years can contribute.
-  bool includes_leap_day = false;
-  auto is_leap = [](int y) { return (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0); };
-  for (int y = y1; y <= y2; ++y) {
-    if (!is_leap(y)) {
-      continue;
+  auto is_leap_year = [](int y) { return (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0); };
+  // Excel's basis=1 (actual/actual): the denominator depends on whether the
+  // span is contained in a single calendar year.
+  //
+  // Same-year span: denominator is 366 iff the year is a leap year, 365
+  // otherwise -- the position of Feb 29 relative to the range does not
+  // matter. (Observed behaviour: YEARFRAC("2008-03-01","2008-08-31",1) = 0.5
+  // even though Feb 29 2008 sits before the start of the range.)
+  //
+  // Cross-year span: denominator is the average calendar-year length over
+  // the inclusive year range [y1, y2], where a leap year contributes 366
+  // ONLY if its Feb 29 falls in the closed interval [start, end]. A span
+  // that straddles a leap-year boundary without crossing Feb 29 averages
+  // as if that leap year were a normal 365-day year.
+  double denom = 0.0;
+  if (y1 == y2) {
+    denom = is_leap_year(y1) ? 366.0 : 365.0;
+  } else {
+    const int total_years = y2 - y1 + 1;
+    int leap_years_in_span = 0;
+    for (int y = y1; y <= y2; ++y) {
+      if (!is_leap_year(y)) {
+        continue;
+      }
+      const std::int64_t feb29 = days_from_civil(y, 2, 29);
+      if (feb29 >= days1 && feb29 <= days2) {
+        ++leap_years_in_span;
+      }
     }
-    const std::int64_t feb29 = days_from_civil(y, 2, 29);
-    if (feb29 >= days1 && feb29 < days2) {
-      includes_leap_day = true;
-      break;
-    }
+    const int non_leap_years = total_years - leap_years_in_span;
+    denom = (static_cast<double>(leap_years_in_span) * 366.0 + static_cast<double>(non_leap_years) * 365.0) /
+            static_cast<double>(total_years);
   }
-  const double denom = includes_leap_day ? 366.0 : 365.0;
   return actual_days / denom;
 }
 

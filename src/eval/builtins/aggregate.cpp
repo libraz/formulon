@@ -253,10 +253,22 @@ void register_aggregate_builtins(FunctionRegistry& registry) {
     def.range_filter_numeric_only = true;
     registry.register_function(def);
   }
-  registry.register_function(FunctionDef{"CONCAT", 1u, kVariadic, &Concat});
-  // CONCATENATE is the legacy spelling kept by Excel for compatibility; it
-  // shares the implementation with CONCAT.
-  registry.register_function(FunctionDef{"CONCATENATE", 1u, kVariadic, &Concat});
+  {
+    // CONCAT accepts ranges: cells are coerced to text in row-major order,
+    // with blank cells rendering as "". No numeric-only filter - every cell
+    // (text, number, bool, blank) participates via `coerce_to_text`.
+    FunctionDef def{"CONCAT", 1u, kVariadic, &Concat};
+    def.accepts_ranges = true;
+    registry.register_function(def);
+  }
+  {
+    // CONCATENATE is the legacy spelling kept by Excel for compatibility.
+    // Excel 365 also accepts ranges (unlike the original CONCATENATE, which
+    // did an implicit intersection); match the 365 behaviour.
+    FunctionDef def{"CONCATENATE", 1u, kVariadic, &Concat};
+    def.accepts_ranges = true;
+    registry.register_function(def);
+  }
   registry.register_function(FunctionDef{"LEN", 1u, 1u, &Len});
 
   // Aggregates (min_arity = 1, variadic). Each is range-aware: a RangeOp

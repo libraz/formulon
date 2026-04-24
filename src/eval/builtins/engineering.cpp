@@ -344,9 +344,10 @@ Value Dec2Hex(const Value* args, std::uint32_t arity, Arena& arena) {
 constexpr std::uint64_t kBit48Max = (static_cast<std::uint64_t>(1) << 48u) - 1u;
 constexpr int kBitShiftMagnitudeMax = 53;
 
-// Coerces a BIT* integer argument: must be a finite non-negative number in
-// [0, 2^48 - 1] after truncation toward zero. Non-numeric -> #VALUE!;
-// out-of-range -> #NUM!.
+// Coerces a BIT* integer argument: must be a finite integer-valued number
+// in [0, 2^48 - 1]. Non-integer (e.g. 12.5) -> #NUM!; non-numeric -> #VALUE!;
+// out-of-range -> #NUM!. Excel rejects fractional inputs here rather than
+// silently truncating.
 Expected<std::uint64_t, ErrorCode> coerce_48_bit_unsigned(const Value& v) {
   auto n = coerce_to_number(v);
   if (!n) {
@@ -356,15 +357,19 @@ Expected<std::uint64_t, ErrorCode> coerce_48_bit_unsigned(const Value& v) {
   if (std::isnan(d) || std::isinf(d)) {
     return ErrorCode::Num;
   }
-  const double t = std::trunc(d);
-  if (t < 0.0 || t > static_cast<double>(kBit48Max)) {
+  if (d != std::trunc(d)) {
     return ErrorCode::Num;
   }
-  return static_cast<std::uint64_t>(t);
+  if (d < 0.0 || d > static_cast<double>(kBit48Max)) {
+    return ErrorCode::Num;
+  }
+  return static_cast<std::uint64_t>(d);
 }
 
-// Coerces a shift magnitude: finite number, truncated toward zero, in
-// [-53, 53]. Non-numeric -> #VALUE!; out-of-range -> #NUM!.
+// Coerces a shift magnitude: finite number truncated toward zero, in
+// [-53, 53]. Non-numeric -> #VALUE!; out-of-range -> #NUM!. Unlike the
+// value argument, the shift is Excel-truncated (34.67 -> 34) rather than
+// rejected.
 Expected<int, ErrorCode> coerce_shift(const Value& v) {
   auto n = coerce_to_number(v);
   if (!n) {
