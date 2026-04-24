@@ -380,6 +380,27 @@ TEST(CriteriaMatchBool, BoolCellDoesNotMatchNumericCriterion) {
   EXPECT_TRUE(matches_criterion(Value::number(1.0), c));
 }
 
+TEST(CriteriaMatchNumeric, NotEqNumericCriterionBroadensToOtherTypes) {
+  // "<>23" matches anything that isn't a Number equal to 23 — including
+  // Text, Bool, and Number cells with a different value. This broadening
+  // is specific to NotEq; ordering ops stay type-strict.
+  const ParsedCriterion c = parse_criterion(Value::text("<>23"));
+  EXPECT_TRUE(matches_criterion(Value::number(1.0), c));
+  EXPECT_FALSE(matches_criterion(Value::number(23.0), c));
+  EXPECT_TRUE(matches_criterion(Value::text("23"), c));       // type differs
+  EXPECT_TRUE(matches_criterion(Value::text("hey"), c));
+  EXPECT_TRUE(matches_criterion(Value::boolean(true), c));     // type differs
+  EXPECT_TRUE(matches_criterion(Value::boolean(false), c));
+}
+
+TEST(CriteriaMatchNumeric, OrderingNumericCriterionStaysTypeStrict) {
+  // ">0" still matches only Number cells; Text "5" and Bool TRUE do not.
+  const ParsedCriterion c = parse_criterion(Value::text(">0"));
+  EXPECT_TRUE(matches_criterion(Value::number(1.0), c));
+  EXPECT_FALSE(matches_criterion(Value::text("5"), c));
+  EXPECT_FALSE(matches_criterion(Value::boolean(true), c));
+}
+
 TEST(CriteriaMatchBool, BoolCellAgainstBoolCriterion) {
   // A Bool criterion matches only Bool cells with the same value.
   const ParsedCriterion c = parse_criterion(Value::boolean(true));

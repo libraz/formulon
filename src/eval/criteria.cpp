@@ -367,44 +367,28 @@ bool matches_text(const Value& cell, const ParsedCriterion& c) {
 }
 
 bool matches_numeric(const Value& cell, const ParsedCriterion& c) {
-  // Excel's type-strict rule: a numeric criterion only matches cells of
-  // the same scalar kind.
+  // Excel's type-strict rule: a numeric / bool criterion only matches
+  // cells of the same scalar kind, with one exception for `NotEq`.
   //
   //   * `rhs_from_bool` criterion (parsed from a literal TRUE / FALSE)
-  //     matches only Bool cells.
+  //     matches only Bool cells for Eq / ordering. For NotEq, any cell
+  //     whose value is not that same Bool counts — including Number and
+  //     Text cells (they have a different type so "<>TRUE" is true).
   //   * Otherwise the RHS is a genuine number and matches only Number
-  //     cells.
+  //     cells for Eq / ordering. For NotEq the same broadening applies.
   //
-  // Text that happens to parse as a number ("23") and Bool cells against
-  // a number criterion do NOT match — these would have been over-counted
-  // before. Text parses as number are matched against text criteria by
-  // the callers that resolve via `matches_text`.
-  if (c.rhs_from_bool) {
-    if (cell.kind() != ValueKind::Bool) {
-      return false;
-    }
-    const double x = cell.as_boolean() ? 1.0 : 0.0;
-    const double y = c.rhs_number;
-    switch (c.op) {
-      case CriteriaOp::Eq:
-        return x == y;
-      case CriteriaOp::NotEq:
-        return x != y;
-      case CriteriaOp::Lt:
-        return x < y;
-      case CriteriaOp::LtEq:
-        return x <= y;
-      case CriteriaOp::Gt:
-        return x > y;
-      case CriteriaOp::GtEq:
-        return x >= y;
-    }
-    return false;
+  // The NotEq broadening is why a `COUNTIF(range, "<>23")` over a mixed
+  // range counts strings, bools, and errors-in-cell (handled upstream)
+  // alongside number cells with a different value.
+  const ValueKind required_kind =
+      c.rhs_from_bool ? ValueKind::Bool : ValueKind::Number;
+  if (cell.kind() != required_kind) {
+    // Cross-kind cell. Only NotEq accepts it: different type ⇒ not equal.
+    return c.op == CriteriaOp::NotEq;
   }
-  if (cell.kind() != ValueKind::Number) {
-    return false;
-  }
-  const double x = cell.as_number();
+  const double x = (required_kind == ValueKind::Bool)
+                       ? (cell.as_boolean() ? 1.0 : 0.0)
+                       : cell.as_number();
   const double y = c.rhs_number;
   switch (c.op) {
     case CriteriaOp::Eq:
