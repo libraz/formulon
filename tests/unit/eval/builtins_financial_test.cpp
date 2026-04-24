@@ -707,6 +707,22 @@ TEST(FinancialCUMIPMT, FractionalTypeIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
+TEST(FinancialCumipmt, RejectsBoolStart) {
+  // Excel 365 rejects Bool in any position with #VALUE! (no silent
+  // coercion to 1.0). Mirrors the oracle's CUMPRINC_CUMIPMT G27/H27.
+  const Value v = EvalSource("=CUMIPMT(0.05, 10, 8000, TRUE, 10, 0)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(FinancialCumprinc, RejectsBoolType) {
+  // Oracle CUMPRINC_CUMIPMT G28/H28: Bool in the `type` position is
+  // rejected with #VALUE! rather than being folded to 1.
+  const Value v = EvalSource("=CUMPRINC(0.05, 10, 8000, 3, 10, TRUE)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 // ---------------------------------------------------------------------------
 // SLN — straight-line depreciation
 // ---------------------------------------------------------------------------

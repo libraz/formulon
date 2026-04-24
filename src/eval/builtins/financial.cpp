@@ -507,6 +507,14 @@ Value Ppmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //   - 1 <= start <= end <= nper
 // Violating any check returns `#NUM!`.
 Value Cumipmt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  // Excel 365 rejects Bool in any CUMIPMT position with #VALUE!. Guard
+  // before `read_required_number`, which would otherwise silently coerce
+  // TRUE/FALSE to 1.0/0.0.
+  for (std::uint32_t i = 0; i < 6; ++i) {
+    if (args[i].kind() == ValueKind::Bool) {
+      return Value::error(ErrorCode::Value);
+    }
+  }
   auto rate_e = read_required_number(args, 0);
   if (!rate_e) {
     return Value::error(rate_e.error());
@@ -576,6 +584,13 @@ Value Cumipmt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // Sum of principal paid from period `start` to `end` inclusive. Same
 // domain contract as CUMIPMT.
 Value Cumprinc(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  // See CUMIPMT: Excel rejects Bool in any position with #VALUE! rather
+  // than folding to 0/1 via numeric coercion.
+  for (std::uint32_t i = 0; i < 6; ++i) {
+    if (args[i].kind() == ValueKind::Bool) {
+      return Value::error(ErrorCode::Value);
+    }
+  }
   auto rate_e = read_required_number(args, 0);
   if (!rate_e) {
     return Value::error(rate_e.error());
