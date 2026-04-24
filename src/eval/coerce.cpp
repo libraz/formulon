@@ -19,6 +19,81 @@
 namespace formulon {
 namespace eval {
 
+namespace {
+
+// Parses `s` as a full double using std::strtod. Returns true iff the entire
+// input (no leftover bytes) parsed cleanly and the result is finite; the
+// finiteness guard lets callers treat true as "usable as a number". The stack
+// buffer is sized for any IEEE-754 literal including subnormals; longer
+// inputs take the heap path.
+bool strtod_full(std::string_view s, double* out) {
+  if (s.empty()) {
+    return false;
+  }
+  char stack_buf[64];
+  char* heap_buf = nullptr;
+  const std::size_t n = s.size();
+  char* buf = stack_buf;
+  if (n + 1 > sizeof(stack_buf)) {
+    heap_buf = static_cast<char*>(std::malloc(n + 1));
+    if (heap_buf == nullptr) {
+      return false;
+    }
+    buf = heap_buf;
+  }
+  std::memcpy(buf, s.data(), n);
+  buf[n] = '\0';
+  char* end_ptr = nullptr;
+  const double parsed = std::strtod(buf, &end_ptr);
+  const bool ok = end_ptr == buf + n;
+  if (heap_buf != nullptr) {
+    std::free(heap_buf);
+  }
+  if (!ok) {
+    return false;
+  }
+  *out = parsed;
+  return true;
+}
+
+// Currency symbols accepted by Mac Excel 365 for implicit numeric coercion.
+// Allowlist of single-codepoint UTF-8 byte sequences; no locale lookup.
+struct CurrencyToken {
+  const char* bytes;
+  std::size_t len;
+};
+constexpr CurrencyToken kCurrencyTokens[] = {
+    {"\x24", 1},                  // $  U+0024
+    {"\xC2\xA2", 2},              // cent  U+00A2
+    {"\xC2\xA3", 2},              // pound  U+00A3
+    {"\xC2\xA5", 2},              // yen  U+00A5
+    {"\xE2\x82\xAC", 3},          // euro  U+20AC
+    {"\xE2\x82\xA9", 3},          // won  U+20A9
+};
+
+bool try_strip_leading_currency(std::string_view s, std::string_view* out) {
+  for (const auto& tok : kCurrencyTokens) {
+    if (s.size() > tok.len && std::memcmp(s.data(), tok.bytes, tok.len) == 0) {
+      *out = s.substr(tok.len);
+      return true;
+    }
+  }
+  return false;
+}
+
+bool try_strip_trailing_currency(std::string_view s, std::string_view* out) {
+  for (const auto& tok : kCurrencyTokens) {
+    if (s.size() > tok.len &&
+        std::memcmp(s.data() + s.size() - tok.len, tok.bytes, tok.len) == 0) {
+      *out = s.substr(0, s.size() - tok.len);
+      return true;
+    }
+  }
+  return false;
+}
+
+}  // namespace
+
 Expected<double, ErrorCode> coerce_to_number(const Value& v) {
   switch (v.kind()) {
     case ValueKind::Number: {
@@ -42,55 +117,68 @@ Expected<double, ErrorCode> coerce_to_number(const Value& v) {
         // empty string is rejected here.
         return ErrorCode::Value;
       }
-      // Defensive copy into a NUL-terminated stack buffer; std::strtod
-      // requires a C string. 64 bytes is generous for any IEEE-754 double
-      // including subnormals. Longer inputs are forwarded to the heap path.
-      char stack_buf[64];
-      char* heap_buf = nullptr;
-      const std::size_t n = trimmed.size();
-      char* buf = stack_buf;
-      if (n + 1 > sizeof(stack_buf)) {
-        heap_buf = static_cast<char*>(std::malloc(n + 1));
-        if (heap_buf == nullptr) {
-          return ErrorCode::Value;
+      // Layered numeric-coercion fallback, in order:
+      //   1. strtod(trimmed)                    - plain numeric fast path
+      //   2. trailing '%' stripped, strtod, /100 - percent literals
+      //   3. leading currency stripped, strtod   - "$100", "€100", ...
+      //   4. trailing currency stripped, strtod  - "100$", "100€", ...
+      //   5. date / datetime fallback (raw text) - DATEVALUE-style shapes
+      //   6. #VALUE!
+      // Percent + currency combinations and currency-only markers remain
+      // rejected; the date fallback still runs against the raw, untrimmed
+      // text so padded date strings stay #VALUE! (see WhitespacePaddedDate
+      // rejection test).
+      double parsed = 0.0;
+      if (strtod_full(trimmed, &parsed)) {
+        if (std::isnan(parsed) || std::isinf(parsed)) {
+          return ErrorCode::Num;
         }
-        buf = heap_buf;
+        return parsed;
       }
-      std::memcpy(buf, trimmed.data(), n);
-      buf[n] = '\0';
-      char* end_ptr = nullptr;
-      const double parsed = std::strtod(buf, &end_ptr);
-      const bool ok = end_ptr == buf + n;
-      if (heap_buf != nullptr) {
-        std::free(heap_buf);
-      }
-      if (!ok) {
-        // Mac Excel 365 accepts date / datetime text wherever a number is
-        // expected: e.g. `=FLOOR(10, "2024-01-10")` coerces the second
-        // argument to its serial (45301). Reuse the shared DATEVALUE /
-        // TIMEVALUE / VALUE parser; only fires after strtod has rejected
-        // the input so plain numerics keep their fast path. The raw,
-        // un-trimmed text is passed: implicit numeric coercion is strict
-        // about whitespace around date strings (`=FLOOR(10, " 2024-01-10
-        // ")` -> #VALUE!), even though `strtod` and DATEVALUE both tolerate
-        // it.
-        double serial = 0.0;
-        double frac = 0.0;
-        bool has_date = false;
-        bool has_time = false;
-        if (date_parse::parse_date_time_text(v.as_text(), &serial, &frac, &has_date, &has_time)) {
-          const double combined = serial + frac;
-          if (std::isnan(combined) || std::isinf(combined)) {
+      if (trimmed.back() == '%') {
+        const std::string_view body = trimmed.substr(0, trimmed.size() - 1);
+        if (strtod_full(body, &parsed)) {
+          const double scaled = parsed / 100.0;
+          if (std::isnan(scaled) || std::isinf(scaled)) {
             return ErrorCode::Num;
           }
-          return combined;
+          return scaled;
         }
-        return ErrorCode::Value;
       }
-      if (std::isnan(parsed) || std::isinf(parsed)) {
-        return ErrorCode::Num;
+      std::string_view stripped;
+      if (try_strip_leading_currency(trimmed, &stripped) && strtod_full(stripped, &parsed)) {
+        if (std::isnan(parsed) || std::isinf(parsed)) {
+          return ErrorCode::Num;
+        }
+        return parsed;
       }
-      return parsed;
+      if (try_strip_trailing_currency(trimmed, &stripped) && strtod_full(stripped, &parsed)) {
+        if (std::isnan(parsed) || std::isinf(parsed)) {
+          return ErrorCode::Num;
+        }
+        return parsed;
+      }
+      // Mac Excel 365 accepts date / datetime text wherever a number is
+      // expected: e.g. `=FLOOR(10, "2024-01-10")` coerces the second
+      // argument to its serial (45301). Reuse the shared DATEVALUE /
+      // TIMEVALUE / VALUE parser; only fires after the numeric fallbacks
+      // have rejected the input so plain numerics keep their fast path.
+      // The raw, un-trimmed text is passed: implicit numeric coercion is
+      // strict about whitespace around date strings (`=FLOOR(10,
+      // " 2024-01-10 ")` -> #VALUE!), even though `strtod` and DATEVALUE
+      // both tolerate it.
+      double serial = 0.0;
+      double frac = 0.0;
+      bool has_date = false;
+      bool has_time = false;
+      if (date_parse::parse_date_time_text(v.as_text(), &serial, &frac, &has_date, &has_time)) {
+        const double combined = serial + frac;
+        if (std::isnan(combined) || std::isinf(combined)) {
+          return ErrorCode::Num;
+        }
+        return combined;
+      }
+      return ErrorCode::Value;
     }
     case ValueKind::Error:
       return v.as_error();

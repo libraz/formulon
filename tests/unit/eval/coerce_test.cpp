@@ -139,6 +139,129 @@ TEST(CoerceToNumberOtherKinds, ErrorPropagates) {
   EXPECT_EQ(r.error(), ErrorCode::NA);
 }
 
+// Percent-suffixed text: Mac Excel 365 divides by 100 after stripping a
+// trailing '%'. Leading '%' is not a percent literal and must stay #VALUE!.
+
+TEST(CoerceToNumberTextPercent, SingleDigit) {
+  auto r = coerce_to_number(Value::text("8%"));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), 0.08);
+}
+
+TEST(CoerceToNumberTextPercent, Hundred) {
+  auto r = coerce_to_number(Value::text("100%"));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), 1.0);
+}
+
+TEST(CoerceToNumberTextPercent, NegativeHalf) {
+  auto r = coerce_to_number(Value::text("-50%"));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), -0.5);
+}
+
+TEST(CoerceToNumberTextPercent, ScientificBody) {
+  auto r = coerce_to_number(Value::text("1.5e2%"));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), 1.5);
+}
+
+TEST(CoerceToNumberTextPercent, LeadingPercentRejected) {
+  auto r = coerce_to_number(Value::text("%5"));
+  ASSERT_FALSE(r.has_value());
+  EXPECT_EQ(r.error(), ErrorCode::Value);
+}
+
+// Currency-prefixed/suffixed text: Mac Excel 365 accepts the common symbols
+// `$ ¢ £ ¥ € ₩` on either side of a numeric body.
+
+TEST(CoerceToNumberTextCurrency, LeadingDollar) {
+  auto r = coerce_to_number(Value::text("$100"));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), 100.0);
+}
+
+TEST(CoerceToNumberTextCurrency, LeadingEuro) {
+  auto r = coerce_to_number(Value::text("\xE2\x82\xAC""100"));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), 100.0);
+}
+
+TEST(CoerceToNumberTextCurrency, LeadingYen) {
+  auto r = coerce_to_number(Value::text("\xC2\xA5""1000"));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), 1000.0);
+}
+
+TEST(CoerceToNumberTextCurrency, LeadingPoundWithFraction) {
+  auto r = coerce_to_number(Value::text("\xC2\xA3""42.5"));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), 42.5);
+}
+
+TEST(CoerceToNumberTextCurrency, LeadingDollarNegativeBody) {
+  auto r = coerce_to_number(Value::text("$-100"));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), -100.0);
+}
+
+TEST(CoerceToNumberTextCurrency, TrailingDollar) {
+  auto r = coerce_to_number(Value::text("100$"));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), 100.0);
+}
+
+TEST(CoerceToNumberTextCurrency, TrailingEuro) {
+  auto r = coerce_to_number(Value::text("100\xE2\x82\xAC"));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), 100.0);
+}
+
+TEST(CoerceToNumberTextCurrency, TrailingYen) {
+  auto r = coerce_to_number(Value::text("1000\xC2\xA5"));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), 1000.0);
+}
+
+TEST(CoerceToNumberTextCurrency, LeadingEuroPadded) {
+  // Outer ASCII trim strips the spaces; the currency strip handles `€`.
+  auto r = coerce_to_number(Value::text(" \xE2\x82\xAC""100 "));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), 100.0);
+}
+
+TEST(CoerceToNumberTextCurrency, TrailingEuroPadded) {
+  auto r = coerce_to_number(Value::text(" 100\xE2\x82\xAC "));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), 100.0);
+}
+
+TEST(CoerceToNumberTextCurrency, LeadingDollarPadded) {
+  auto r = coerce_to_number(Value::text("  $50  "));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), 50.0);
+}
+
+TEST(CoerceToNumberTextCurrency, BothEndsRejected) {
+  // Mismatched markers: strtod fails on either trim, so the whole input is
+  // #VALUE!. IronCalc behaviour is undefined here and Mac is conservative.
+  auto r = coerce_to_number(Value::text("$100\xE2\x82\xAC"));
+  ASSERT_FALSE(r.has_value());
+  EXPECT_EQ(r.error(), ErrorCode::Value);
+}
+
+TEST(CoerceToNumberTextCurrency, CurrencyOnlyRejected) {
+  auto r = coerce_to_number(Value::text("\xE2\x82\xAC"));
+  ASSERT_FALSE(r.has_value());
+  EXPECT_EQ(r.error(), ErrorCode::Value);
+}
+
+TEST(CoerceToNumberTextCurrency, NonNumericBodyRejected) {
+  auto r = coerce_to_number(Value::text("$abc"));
+  ASSERT_FALSE(r.has_value());
+  EXPECT_EQ(r.error(), ErrorCode::Value);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon
