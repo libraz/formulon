@@ -392,7 +392,20 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
         if (bailed_) {
           break;
         }
-        AstNode* arg = parse_expression(0, SyncContext::CallArg);
+        // Empty argument slot: Excel allows `FN(a,,b)` and treats the missing
+        // slot as blank / the function's documented default. Inject a Blank
+        // literal rather than invoking parse_expression (which has no grammar
+        // production for an empty arg).
+        AstNode* arg = nullptr;
+        const TokenKind here = peek_kind();
+        if (here == TokenKind::Comma || here == TokenKind::RParen) {
+          arg = make_literal(arena_, Value::blank());
+          if (arg != nullptr) {
+            arg->set_range(peek().range);
+          }
+        } else {
+          arg = parse_expression(0, SyncContext::CallArg);
+        }
         if (arg == nullptr) {
           return nullptr;
         }

@@ -6,6 +6,7 @@
 // reader (`read_tba_opts`) live in this file's anonymous namespace because
 // they are referenced only by TEXTBEFORE and TEXTAFTER.
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -91,23 +92,22 @@ TextMatchResult find_text_instance(std::string_view text, std::string_view delim
       }
     }
   }
-  // Virtual start/end sentinels when match_end=1.
-  const bool use_virtual = match_end == 1;
-  const std::size_t virtual_start_start = 0;
-  const std::size_t virtual_start_end = 0;
-  const std::size_t virtual_end_start = text.size();
-  const std::size_t virtual_end_end = text.size();
-  // Build the ordered list of candidate (start, end) pairs.
+  // Virtual sentinels when match_end=1: for positive instance_num the end of
+  // text counts as a match (searching forward), for negative instance_num the
+  // start of text counts as a match (searching backward from the end). Both
+  // sentinels are never active at the same time.
+  const bool use_virtual_end = match_end == 1 && instance_num > 0;
+  const bool use_virtual_start = match_end == 1 && instance_num < 0;
   std::vector<std::pair<std::size_t, std::size_t>> ordered;
-  ordered.reserve(hits.size() + (use_virtual ? 2u : 0u));
-  if (use_virtual) {
-    ordered.emplace_back(virtual_start_start, virtual_start_end);
+  ordered.reserve(hits.size() + 1u);
+  if (use_virtual_start) {
+    ordered.emplace_back(0u, 0u);
   }
   for (const auto& h : hits) {
     ordered.push_back(h);
   }
-  if (use_virtual) {
-    ordered.emplace_back(virtual_end_start, virtual_end_end);
+  if (use_virtual_end) {
+    ordered.emplace_back(text.size(), text.size());
   }
   if (ordered.empty()) {
     return {};
@@ -147,11 +147,17 @@ struct TextBeforeAfterOpts {
 Expected<TextBeforeAfterOpts, ErrorCode> read_tba_opts(const Value* args, std::uint32_t arity) {
   TextBeforeAfterOpts opts;
   if (arity >= 3) {
-    auto parsed = text_detail::read_int_arg(args[2]);
-    if (!parsed) {
-      return parsed.error();
+    // instance_num uses floor-toward-negative-infinity (Excel INT semantics),
+    // not truncation: -1.6 -> -2 selects the second-to-last occurrence.
+    auto coerced = coerce_to_number(args[2]);
+    if (!coerced) {
+      return coerced.error();
     }
-    opts.instance_num = parsed.value();
+    const double d = coerced.value();
+    if (std::isnan(d) || std::isinf(d)) {
+      return ErrorCode::Num;
+    }
+    opts.instance_num = static_cast<int>(std::floor(d));
   }
   if (arity >= 4) {
     auto parsed = text_detail::read_int_arg(args[3]);
@@ -168,11 +174,11 @@ Expected<TextBeforeAfterOpts, ErrorCode> read_tba_opts(const Value* args, std::u
     opts.match_end = parsed.value();
   }
   if (arity >= 6) {
+    // if_not_found is a passthrough fallback value: an error value here is
+    // only surfaced when the match actually fails. With propagate_errors=false
+    // on the registration, the dispatcher delivers it as a raw Value.
     opts.has_if_not_found = true;
     opts.if_not_found = args[5];
-    if (opts.if_not_found.is_error()) {
-      return opts.if_not_found.as_error();
-    }
   }
   return opts;
 }
@@ -183,6 +189,13 @@ namespace text_detail {
 
 // TEXTBEFORE(text, delimiter, [instance_num], [match_mode], [match_end], [if_not_found])
 Value TextBefore_(const Value* args, std::uint32_t arity, Arena& arena) {
+  // Registered with propagate_errors=false so if_not_found (args[5]) can pass
+  // through as an error fallback. Propagate errors manually for args 0-4.
+  for (std::uint32_t i = 0; i < arity && i < 5; ++i) {
+    if (args[i].is_error()) {
+      return args[i];
+    }
+  }
   auto text = coerce_to_text(args[0]);
   if (!text) {
     return Value::error(text.error());
@@ -213,6 +226,13 @@ Value TextBefore_(const Value* args, std::uint32_t arity, Arena& arena) {
 
 // TEXTAFTER(text, delimiter, [instance_num], [match_mode], [match_end], [if_not_found])
 Value TextAfter_(const Value* args, std::uint32_t arity, Arena& arena) {
+  // Registered with propagate_errors=false so if_not_found (args[5]) can pass
+  // through as an error fallback. Propagate errors manually for args 0-4.
+  for (std::uint32_t i = 0; i < arity && i < 5; ++i) {
+    if (args[i].is_error()) {
+      return args[i];
+    }
+  }
   auto text = coerce_to_text(args[0]);
   if (!text) {
     return Value::error(text.error());

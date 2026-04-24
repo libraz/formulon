@@ -86,12 +86,17 @@ TEST(ParserErrors, ArrayRowMismatch) {
   EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::ArrayRowMismatch));
 }
 
-TEST(ParserErrors, TrailingCommaInCallReportsExpression) {
+TEST(ParserErrors, TrailingCommaInCallIsBlankArg) {
+  // Excel accepts empty argument slots in function calls and treats them as
+  // blank (the function's documented default). `SUM(1,)` parses as arity-2
+  // with arg 2 = Blank - no diagnostic.
   Arena a;
   Parser p("=SUM(1,)", a);
-  (void)p.parse();
-  ASSERT_FALSE(p.errors().empty());
-  EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::ExpectedExpression));
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_TRUE(p.errors().empty());
+  const std::string s = dump_sexpr(*root);
+  EXPECT_NE(s.find("(blank)"), std::string::npos) << s;
 }
 
 TEST(ParserErrors, UnclosedCallParen) {
@@ -196,16 +201,20 @@ TEST(ParserErrors, TooManyErrorsAppendsSentinel) {
 // ---------------------------------------------------------------------------
 
 TEST(ParserRecovery, TwoBadCallArgs) {
+  // `?` is an unclassifiable byte - the lexer records LexerInvalidCharacter
+  // and drops the character, so from the parser's perspective the resulting
+  // empty slots between commas are injected as blanks. The diagnostic quality
+  // comes from the lexer-level errors, which the parser promotes via
+  // `promote_lexer_errors`.
   Arena a;
   Parser p("=SUM(?,?,3)", a);
   AstNode* root = p.parse();
   ASSERT_NE(root, nullptr);
-  // At least two ExpectedExpression diagnostics for the bad args.
-  EXPECT_GE(CountErrorCode(p.errors(), ParseErrorCode::ExpectedExpression), 2u);
-  // The third arg (3) should still appear in the AST.
+  EXPECT_GE(CountErrorCode(p.errors(), ParseErrorCode::LexerInvalidCharacter), 2u);
   const std::string s = dump_sexpr(*root);
   EXPECT_NE(s.find("(num 3)"), std::string::npos) << s;
-  EXPECT_NE(s.find("(error)"), std::string::npos) << s;
+  // Two blank slots from the stripped `?` characters.
+  EXPECT_NE(s.find("(blank)"), std::string::npos) << s;
 }
 
 TEST(ParserRecovery, BadFirstArgGoodSecond) {
@@ -213,10 +222,10 @@ TEST(ParserRecovery, BadFirstArgGoodSecond) {
   Parser p("=SUM(?,2)", a);
   AstNode* root = p.parse();
   ASSERT_NE(root, nullptr);
-  EXPECT_EQ(CountErrorCode(p.errors(), ParseErrorCode::ExpectedExpression), 1u);
+  EXPECT_EQ(CountErrorCode(p.errors(), ParseErrorCode::LexerInvalidCharacter), 1u);
   const std::string s = dump_sexpr(*root);
   EXPECT_NE(s.find("(num 2)"), std::string::npos) << s;
-  EXPECT_NE(s.find("(error)"), std::string::npos) << s;
+  EXPECT_NE(s.find("(blank)"), std::string::npos) << s;
 }
 
 TEST(ParserRecovery, BadInsideParens) {

@@ -241,20 +241,22 @@ TEST(BuiltinsText3TextBefore, CaseInsensitive) {
   EXPECT_EQ(v.as_text(), "A");
 }
 
-TEST(BuiltinsText3TextBefore, MatchEndVirtualMatchAtStart) {
-  // With match_end=1, the start of text counts as a virtual match.
-  // instance 1 -> matches the start sentinel -> everything before it is "".
+TEST(BuiltinsText3TextBefore, MatchEndPositiveInstanceUsesEndSentinel) {
+  // match_end=1 with positive instance: only the end-of-text virtual match is
+  // active. No actual "-" in "abc", so the Nth=1 match is the end sentinel
+  // and TEXTBEFORE returns the full text.
   const Value v = EvalSource("=TEXTBEFORE(\"abc\", \"-\", 1, 0, 1)");
   ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "");
+  EXPECT_EQ(v.as_text(), "abc");
 }
 
-TEST(BuiltinsText3TextBefore, MatchEndVirtualMatchAtEnd) {
-  // match_end=1 AND instance=-1 -> last sentinel is end-of-text, so
-  // TEXTBEFORE returns the full "abc".
+TEST(BuiltinsText3TextBefore, MatchEndNegativeInstanceUsesStartSentinel) {
+  // match_end=1 with negative instance: only the start-of-text virtual match
+  // is active. The Nth=-1 match from the end is the start sentinel, so
+  // TEXTBEFORE returns everything before position 0 = "".
   const Value v = EvalSource("=TEXTBEFORE(\"abc\", \"-\", -1, 0, 1)");
   ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "abc");
+  EXPECT_EQ(v.as_text(), "");
 }
 
 TEST(BuiltinsText3TextBefore, NotFoundDefaultIsNA) {
@@ -297,11 +299,12 @@ TEST(BuiltinsText3TextAfter, NegativeInstanceLast) {
   EXPECT_EQ(v.as_text(), "ghi");
 }
 
-TEST(BuiltinsText3TextAfter, MatchEndAtEnd) {
-  // match_end=1 with instance=-1 -> matches end-of-text sentinel -> "".
+TEST(BuiltinsText3TextAfter, MatchEndNegativeInstanceUsesStartSentinel) {
+  // match_end=1 with negative instance: only the start-of-text sentinel is
+  // active. TEXTAFTER of the start sentinel returns the full text "abc".
   const Value v = EvalSource("=TEXTAFTER(\"abc\", \"-\", -1, 0, 1)");
   ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "");
+  EXPECT_EQ(v.as_text(), "abc");
 }
 
 TEST(BuiltinsText3TextAfter, NotFoundDefaultIsNA) {

@@ -688,8 +688,20 @@ void register_text_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"REPLACE", 4u, 4u, &Replace_});
   registry.register_function(FunctionDef{"FINDB", 2u, 3u, &text_detail::FindB_});
   registry.register_function(FunctionDef{"SEARCHB", 2u, 3u, &text_detail::SearchB_});
-  registry.register_function(FunctionDef{"TEXTBEFORE", 2u, 6u, &text_detail::TextBefore_});
-  registry.register_function(FunctionDef{"TEXTAFTER", 2u, 6u, &text_detail::TextAfter_});
+  {
+    // propagate_errors=false: if_not_found (arg 6) must pass through as a raw
+    // Value even when it is an error type, so the callee can return it as the
+    // fallback on match failure. The impls handle error propagation for
+    // args 0-4 manually.
+    FunctionDef def{"TEXTBEFORE", 2u, 6u, &text_detail::TextBefore_};
+    def.propagate_errors = false;
+    registry.register_function(def);
+  }
+  {
+    FunctionDef def{"TEXTAFTER", 2u, 6u, &text_detail::TextAfter_};
+    def.propagate_errors = false;
+    registry.register_function(def);
+  }
 
   // Text manipulation, second batch.
   {
