@@ -200,19 +200,62 @@ TEST(NumberFormatSections, FourSectionsNumericValueUsesFirst) {
 }
 
 // ---------------------------------------------------------------------------
-// Bracketed specifiers: colour names rejected, locale-currency discarded.
+// Bracketed specifiers: named colours tolerated, locale-currency discarded,
+// unknown qualifiers rejected.
 // ---------------------------------------------------------------------------
 
-TEST(NumberFormatBracketed, ColorRedIsValueError) {
-  // Mac Excel ja-JP rejects bracketed colour names in TEXT.
+TEST(NumberFormatBracketed, NamedColorSilentlyDropped) {
+  // Mac Excel 365 and IronCalc silently discard colour qualifiers in TEXT
+  // and format the value with the rest of the section.
+  EXPECT_EQ(Render(5.0, "[Red]0.00"), "5.00");
+  EXPECT_EQ(Render(5.0, "[Blue]0.00"), "5.00");
+  EXPECT_EQ(Render(5.0, "[green]0.00"), "5.00");
+}
+
+TEST(NumberFormatBracketed, IndexedColorSilentlyDropped) {
+  // `[ColorN]` for N in 1..56 is also dropped silently.
+  EXPECT_EQ(Render(5.0, "[Color12]0.00"), "5.00");
+  EXPECT_EQ(Render(5.0, "[Color1]0.00"), "5.00");
+  EXPECT_EQ(Render(5.0, "[Color56]0.00"), "5.00");
+}
+
+TEST(NumberFormatBracketed, IndexedColorOutOfRangeIsValueError) {
+  // `[Color57]` (and higher) is not a recognised colour -> invalid.
   std::string out;
-  const FormatStatus s = apply_format(5.0, "[Red]0.00", out);
-  EXPECT_EQ(s, FormatStatus::kValueError);
+  EXPECT_EQ(apply_format(5.0, "[Color57]0.00", out), FormatStatus::kValueError);
+}
+
+TEST(NumberFormatBracketed, ConditionalBracketStillRejected) {
+  // Conditional qualifiers such as `[>100]` are not implemented.
+  std::string out;
+  EXPECT_EQ(apply_format(5.0, "[>100]0.00", out), FormatStatus::kValueError);
 }
 
 TEST(NumberFormatBracketed, LocaleCurrencyDiscarded) {
   // `[$...]` locale-currency markers are accepted and silently dropped.
   EXPECT_EQ(Render(5.0, "[$-409]0.00"), "5.00");
+}
+
+// ---------------------------------------------------------------------------
+// Underscore-skip `_X`: emits a single space placeholder.
+// ---------------------------------------------------------------------------
+
+TEST(NumberFormatUnderscoreSkip, AccountingParens) {
+  // Classic accounting format; positive branch renders a trailing space so
+  // the digits line up with the parenthesised negative branch.
+  EXPECT_EQ(Render(1234.0, "#,##0_);(#,##0)"), "1,234 ");
+  EXPECT_EQ(Render(-1234.0, "#,##0_);(#,##0)"), "(1,234)");
+}
+
+TEST(NumberFormatUnderscoreSkip, SpaceBeforeDigits) {
+  // `_(` in front of digits reserves a leading space.
+  EXPECT_EQ(Render(5.0, "_(0.00"), " 5.00");
+}
+
+TEST(NumberFormatUnderscoreSkip, TrailingUnderscoreIsLiteral) {
+  // A dangling `_` at end-of-format has no following byte to reserve;
+  // it falls back to the single-byte literal path.
+  EXPECT_EQ(Render(5.0, "0_"), "5_");
 }
 
 // ---------------------------------------------------------------------------

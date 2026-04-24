@@ -38,6 +38,69 @@ std::size_t scan_run(std::string_view fmt, std::size_t& i, char letter) noexcept
   return i - start;
 }
 
+// Returns true if `body` is one of Excel's well-known color qualifiers:
+// either a named color (`Red`, `Blue`, `Green`, `Black`, `White`, `Yellow`,
+// `Cyan`, `Magenta`) or the `ColorN` form with N in 1..56. Matching is
+// case-insensitive and locale-agnostic. Mac Excel 365 silently discards
+// these specifiers inside TEXT, so we treat them the same as `[$...]`.
+bool is_color_specifier(std::string_view body) noexcept {
+  if (body.empty()) {
+    return false;
+  }
+  auto eq_ci = [](std::string_view a, const char* b) {
+    std::size_t n = 0;
+    while (b[n] != '\0') {
+      ++n;
+    }
+    if (a.size() != n) {
+      return false;
+    }
+    for (std::size_t k = 0; k < n; ++k) {
+      char ac = a[k];
+      char bc = b[k];
+      if (ac >= 'A' && ac <= 'Z') {
+        ac = static_cast<char>(ac + 32);
+      }
+      if (bc >= 'A' && bc <= 'Z') {
+        bc = static_cast<char>(bc + 32);
+      }
+      if (ac != bc) {
+        return false;
+      }
+    }
+    return true;
+  };
+  static const char* kNames[] = {"red", "blue", "green", "black", "white", "yellow", "cyan", "magenta"};
+  for (const char* name : kNames) {
+    if (eq_ci(body, name)) {
+      return true;
+    }
+  }
+  // `Color` followed by an integer in 1..56.
+  if (body.size() < 6) {
+    return false;
+  }
+  const std::string_view prefix = body.substr(0, 5);
+  if (!eq_ci(prefix, "color")) {
+    return false;
+  }
+  const std::string_view num = body.substr(5);
+  if (num.empty()) {
+    return false;
+  }
+  int value = 0;
+  for (char ch : num) {
+    if (ch < '0' || ch > '9') {
+      return false;
+    }
+    value = value * 10 + (ch - '0');
+    if (value > 56) {
+      return false;
+    }
+  }
+  return value >= 1 && value <= 56;
+}
+
 // Returns true if `tok` is a date-family token (including elapsed brackets).
 bool is_date_tok(Tok t) noexcept {
   switch (t) {
@@ -153,6 +216,10 @@ std::vector<std::string_view> split_sections(std::string_view fmt) {
       i += 2;  // Skip escape + next byte.
       continue;
     }
+    if (c == '_' && i + 1 < fmt.size()) {
+      i += 2;  // Skip underscore-skip pair; the trailing byte is reserved.
+      continue;
+    }
     if (c == '[') {
       // Skip to matching `]` so e.g. `[Red]` does not interact with `;`.
       while (i < fmt.size() && fmt[i] != ']') {
@@ -210,10 +277,11 @@ void tokenize_section(std::string_view fmt, Section& out) {
     // Bracketed specifier. Recognised kinds:
     //   `[h]` / `[m]` / `[s]`   -> elapsed-time tokens (any run length).
     //   `[$...]`                -> locale-currency marker; silently dropped.
-    // Anything else (`[Red]`, `[Blue]`, `[>100]`, `[DBNum1]`, ...) is a
-    // rejection: Mac Excel ja-JP returns #VALUE! for TEXT with a colour
-    // qualifier, so we flag the section as invalid and let `apply_format`
-    // surface that as kValueError.
+    //   `[Red]` / `[Blue]` / ...-> named color qualifier; silently dropped
+    //                               (Mac Excel 365 / IronCalc ignore color).
+    //   `[ColorN]` (N in 1..56) -> indexed color qualifier; silently dropped.
+    // Anything else (`[>100]`, `[DBNum1]`, unknown qualifiers) still trips
+    // the invalid-bracket flag and surfaces as #VALUE!.
     if (c == '[') {
       std::size_t j = i + 1;
       while (j < fmt.size() && fmt[j] != ']') {
@@ -256,11 +324,26 @@ void tokenize_section(std::string_view fmt, Section& out) {
         t.kind = Tok::DateElapsedS;
         t.width = static_cast<std::uint8_t>(body.size());
         toks.push_back(t);
+      } else if (is_color_specifier(body)) {
+        // Named colour (`[Red]`) or indexed colour (`[Color12]`). Mac Excel
+        // 365 and IronCalc silently discard these inside TEXT; we do the
+        // same (the rest of the section continues to format the value).
       } else {
-        // Anything else - colour names, conditional tests, DBNum digits,
+        // Anything else - conditional tests (`[>100]`), DBNum digits,
         // unknown qualifiers - trips the invalid-bracket flag.
         out.has_invalid_bracket = true;
       }
+      continue;
+    }
+    // Underscore-skip `_X`: Excel reserves the width of character `X` and
+    // emits a matching amount of whitespace. TEXT's output uses a single
+    // space regardless of `X`. If `_` is the last byte of the format with
+    // nothing following, fall through to the single-byte literal path.
+    if (c == '_' && i + 1 < fmt.size()) {
+      Token t;
+      t.kind = Tok::Space;
+      toks.push_back(t);
+      i += 2;
       continue;
     }
     // AM/PM (case-insensitive). Match the longest valid prefix. We treat

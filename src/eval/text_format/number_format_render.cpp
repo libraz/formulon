@@ -342,6 +342,10 @@ void render_numeric(const Section& section, std::string_view fmt, double value, 
           result.append(fmt.data() + tk.lit_begin, tk.lit_end - tk.lit_begin);
         }
         break;
+      case Tok::Space:
+        // `_X` underscore-skip: emit a single space placeholder.
+        result.push_back(' ');
+        break;
       case Tok::SciPlus:
       case Tok::SciMinus:
         // Scientific path handled above; should not reach here.
@@ -511,6 +515,10 @@ void render_date(const Section& section, std::string_view fmt, double serial, st
           out.append(fmt.data() + tk.lit_begin, tk.lit_end - tk.lit_begin);
         }
         break;
+      case Tok::Space:
+        // `_X` underscore-skip: emit a single space placeholder.
+        out.push_back(' ');
+        break;
       default:
         break;
     }
@@ -555,6 +563,12 @@ void render_text_section(const Section& /*section*/, std::string_view fmt, std::
     if (c == '@') {
       out.append(original);
       ++i;
+      continue;
+    }
+    if (c == '_' && i + 1 < fmt.size()) {
+      // `_X` underscore-skip: emit a single space and consume both bytes.
+      out.push_back(' ');
+      i += 2;
       continue;
     }
     out.push_back(c);

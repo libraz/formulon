@@ -52,6 +52,7 @@ enum class Tok : std::uint8_t {
   AP,             // `A/P` / `a/p`
   FracSecDigits,  // `.0` / `.00` / ... when following a second token
   Literal,        // Arbitrary passthrough bytes (quoted / escaped / other)
+  Space,          // `_X` underscore-skip: emits a single space placeholder.
   DateM,          // After disambiguation: month.
   DateMM,         // After disambiguation: 2-digit month.
   DateMin,        // After disambiguation: minute.
