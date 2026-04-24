@@ -166,10 +166,13 @@ TEST(TreeWalkerCoerce, BoolPlusNumber) {
   EXPECT_EQ(EvalSource("=FALSE+1").as_number(), 1.0);
 }
 
-TEST(TreeWalkerCoerce, EmptyStringIsZeroInArith) {
+TEST(TreeWalkerCoerce, EmptyStringIsValueErrorInArith) {
+  // Mac Excel 365: every numeric-coercion context rejects the literal
+  // empty string with #VALUE!, arithmetic operators included. Blank cells
+  // still coerce to 0 (separate ValueKind branch).
   const Value v = EvalSource("=\"\"+1");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), 1.0);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(TreeWalkerCoerce, NonNumericTextIsValueError) {

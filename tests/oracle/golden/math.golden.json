@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-23T03:03:48Z"
+    "generated_at": "2026-04-24T18:52:54Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -374,6 +374,51 @@
       }
     },
     {
+      "id": "exp_of_empty_string",
+      "formula": "=EXP(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sign_of_empty_string",
+      "formula": "=SIGN(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "abs_of_empty_string",
+      "formula": "=ABS(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "int_of_empty_string",
+      "formula": "=INT(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sqrt_of_empty_string",
+      "formula": "=SQRT(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
       "id": "pi_value",
       "formula": "=PI()",
       "setup": {},
@@ -596,6 +641,140 @@
       "expect": {
         "kind": "number",
         "value": -4.0
+      }
+    },
+    {
+      "id": "sumsq_basic",
+      "formula": "=SUMSQ(3, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 25.0
+      }
+    },
+    {
+      "id": "sumsq_range",
+      "formula": "=SUMSQ(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "sumsq_skips_text_in_range",
+      "formula": "=SUMSQ(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 34.0
+      }
+    },
+    {
+      "id": "sumsq_direct_text_is_value",
+      "formula": "=SUMSQ(3, \"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumx2py2_basic",
+      "formula": "=SUMX2PY2({1;2;3}, {4;5;6})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 91.0
+      }
+    },
+    {
+      "id": "sumx2my2_basic",
+      "formula": "=SUMX2MY2({1;2;3}, {4;5;6})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -63.0
+      }
+    },
+    {
+      "id": "sumxmy2_basic",
+      "formula": "=SUMXMY2({1;2;3}, {4;5;6})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 27.0
+      }
+    },
+    {
+      "id": "sumx2py2_shape_mismatch_is_na",
+      "formula": "=SUMX2PY2({1;2;3}, {4;5})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumx2my2_single_point",
+      "formula": "=SUMX2MY2({2}, {5})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -21.0
+      }
+    },
+    {
+      "id": "seriessum_binary_polynomial",
+      "formula": "=SERIESSUM(2, 0, 1, {1;1;1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "seriessum_step_two",
+      "formula": "=SERIESSUM(2, 2, 2, {1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "seriessum_x_equals_one",
+      "formula": "=SERIESSUM(1, 0, 1, {5;5;5})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 15.0
       }
     }
   ]

@@ -161,6 +161,13 @@ Value apply_unary(parser::UnaryOp op, const Value& operand) {
   if (operand.is_error()) {
     return operand;
   }
+  // Unary `+` in Excel 365 is an identity operation — it does NOT coerce.
+  // `=+""` evaluates to the empty string (not #VALUE!); `=+TRUE` stays
+  // TRUE; numbers are returned unchanged. This diverges from Minus and
+  // Percent, which explicitly require a numeric coercion.
+  if (op == parser::UnaryOp::Plus) {
+    return operand;
+  }
   auto coerced = coerce_to_number(operand);
   if (!coerced) {
     return Value::error(coerced.error());

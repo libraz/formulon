@@ -102,6 +102,11 @@ entries:
     reason: "ROMAN(0) -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
     prefer: formulon
     first_noted: 2026-04-23
+  - id: unary_plus_empty_string
+    mode: skip-oracle
+    reason: "=+\"\" -> \"\" (unary plus is identity); xlwings reads the empty string back as blank. Formulon returns text(\"\")."
+    prefer: formulon
+    first_noted: 2026-04-25
 
   # -- CODE / CHAR: Mac Excel ja-JP uses CP932 / JIS X 0208 encoding ------
   # Mac Excel ja-JP's CODE / CHAR operate on the Shift-JIS (CP932)

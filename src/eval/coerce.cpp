@@ -34,9 +34,12 @@ Expected<double, ErrorCode> coerce_to_number(const Value& v) {
     case ValueKind::Text: {
       const std::string_view trimmed = strings::trim(v.as_text());
       if (trimmed.empty()) {
-        // Excel treats an empty / whitespace-only text as 0 in arithmetic
-        // contexts (matches "=\"\"+1" behaviour observed in 365).
-        return 0.0;
+        // Empty / whitespace-only text is #VALUE! in every numeric-coercion
+        // context Mac Excel 365 was tested against (`=""+1`, `=SIN("")`,
+        // `=EXP("")`, ... all yield #VALUE!). Blank cells still coerce to
+        // 0 via the `ValueKind::Blank` branch above; only the explicit
+        // empty string is rejected here.
+        return ErrorCode::Value;
       }
       // Defensive copy into a NUL-terminated stack buffer; std::strtod
       // requires a C string. 64 bytes is generous for any IEEE-754 double

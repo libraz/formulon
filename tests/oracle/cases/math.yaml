@@ -139,6 +139,26 @@ cases:
   - id: log10_of_100
     formula: "=LOG10(100)"
 
+  # -- Empty-string function-arg coercion ---------------------------------
+  # Probe whether Excel rejects "" in numeric function contexts. Used to
+  # decide whether coerce_to_number("") returns 0 or #VALUE! for the
+  # function-arg path (separate from the arithmetic-operator path tested
+  # in operators.yaml).
+  - id: exp_of_empty_string
+    formula: "=EXP(\"\")"
+
+  - id: sign_of_empty_string
+    formula: "=SIGN(\"\")"
+
+  - id: abs_of_empty_string
+    formula: "=ABS(\"\")"
+
+  - id: int_of_empty_string
+    formula: "=INT(\"\")"
+
+  - id: sqrt_of_empty_string
+    formula: "=SQRT(\"\")"
+
   # -- PI ------------------------------------------------------------------
   - id: pi_value
     formula: "=PI()"

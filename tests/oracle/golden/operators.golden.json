@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-23T02:19:15Z"
+    "generated_at": "2026-04-24T18:55:55Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -308,6 +308,84 @@
       "expect": {
         "kind": "text",
         "value": "3.14"
+      }
+    },
+    {
+      "id": "empty_string_plus_number",
+      "formula": "=\"\"+1",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "empty_string_minus_number",
+      "formula": "=\"\"-1",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "empty_string_times_number",
+      "formula": "=\"\"*2",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "empty_string_divide_number",
+      "formula": "=\"\"/2",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "unary_minus_empty_string",
+      "formula": "=-\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "unary_plus_empty_string",
+      "formula": "=+\"\"",
+      "setup": {},
+      "skipped": "=+\"\" -> \"\" (unary plus is identity); xlwings reads the empty string back as blank. Formulon returns text(\"\")."
+    },
+    {
+      "id": "number_plus_empty_string",
+      "formula": "=1+\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "empty_string_concat_number",
+      "formula": "=\"\"&1",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "empty_string_eq_zero",
+      "formula": "=\"\"=0",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
       }
     },
     {

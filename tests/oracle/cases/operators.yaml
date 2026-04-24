@@ -115,6 +115,39 @@ cases:
   - id: concat_float
     formula: "=3.14&\"\""
 
+  # -- Empty-string coercion in arithmetic --------------------------------
+  # These probe whether Excel coerces a literal empty string to 0 in
+  # arithmetic contexts or rejects it with #VALUE!. Used to decide whether
+  # `coerce_to_number("")` should be 0 or an error in the calc engine.
+  - id: empty_string_plus_number
+    formula: "=\"\"+1"
+
+  - id: empty_string_minus_number
+    formula: "=\"\"-1"
+
+  - id: empty_string_times_number
+    formula: "=\"\"*2"
+
+  - id: empty_string_divide_number
+    formula: "=\"\"/2"
+
+  - id: unary_minus_empty_string
+    formula: "=-\"\""
+
+  - id: unary_plus_empty_string
+    formula: "=+\"\""
+
+  - id: number_plus_empty_string
+    formula: "=1+\"\""
+
+  - id: empty_string_concat_number
+    description: "Concat always coerces number to shortest text, so \"\"&1 -> \"1\""
+    formula: "=\"\"&1"
+
+  - id: empty_string_eq_zero
+    description: "Equality: is \"\" equal to 0?"
+    formula: "=\"\"=0"
+
   # -- Error propagation --------------------------------------------------
   - id: error_propagates_through_add
     formula: "=1/0+1"
