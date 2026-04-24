@@ -992,10 +992,25 @@ TEST(FinancialDB, ZeroMonthIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(FinancialDB, ZeroCostIsNum) {
-  const Value v = EvalSource("=DB(0, 0, 5, 1)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+TEST(FinancialDb, MonthIsFlooredToInteger) {
+  // Mac Excel 365 evaluates DB using INT(month), not the raw fractional
+  // month argument. With month=9.2222 the formula reduces to rate=0.438,
+  // dep_1=32.85, dep_2=29.4117, dep_3=(100-32.85-29.4117)*0.438 =
+  // 16.5293754 — the same value Mac Excel and the IronCalc G10 oracle
+  // produce. Prior to the INT(month) fix this evaluated to ~16.329735
+  // because the fractional month fed directly into the rate-prorated
+  // first period.
+  const Value v = EvalSource("=DB(100, 10, 4, 3, 9.2222)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 16.5293754, 1e-6);
+}
+
+TEST(FinancialDb, ZeroCostReturnsZero) {
+  // Excel short-circuits zero-cost assets to zero depreciation to avoid
+  // the `(salvage/0)^(1/life)` blow-up. Verified against IronCalc G30.
+  const Value v = EvalSource("=DB(0, 10, 4, 1, 2)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
 }
 
 }  // namespace

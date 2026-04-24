@@ -283,27 +283,37 @@ Value Ddb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // Fixed-rate declining-balance depreciation with Excel's quirky
 // 3-decimal rate rounding and partial-first-year proration:
 //
-//   rate   = round((1 - (salvage/cost)^(1/life)) * 1000) / 1000
-//   dep_1  = cost * rate * (month / 12)
-//   dep_i  = (cost - total_prior_dep) * rate               (2 <= i <= life)
-//   dep_L+1= (cost - total_prior_dep) * rate * (12 - month) / 12
+//   month_int = INT(month)              (floored to an integer; Excel 365
+//                                        Mac passes INT(month) into the
+//                                        9-decimal DB formula even though
+//                                        the argument boundary accepts a
+//                                        fractional value.)
+//   rate      = round((1 - (salvage/cost)^(1/life)) * 1000) / 1000
+//   dep_1     = cost * rate * (month_int / 12)
+//   dep_i     = (cost - total_prior_dep) * rate            (2 <= i <= life)
+//   dep_L+1   = (cost - total_prior_dep) * rate * (12 - month_int) / 12
 //                                                           (only when
-//                                                            month < 12)
+//                                                            month_int < 12)
 //
-// Domain:
-//   - cost   <= 0    ->  #NUM!
+// Domain (checks use month_int, the floored value):
+//   - cost   <  0    ->  #NUM!
 //   - salvage<  0    ->  #NUM!
 //   - life  <= 0     ->  #NUM!
 //   - period<  1     ->  #NUM!
-//   - month <  1  or month > 12  ->  #NUM!
-//   - period == life+1 is only valid when month < 12 (the partial first
-//     year leaves a partial last year); otherwise #NUM!.
+//   - month_int <  1  or month_int > 12  ->  #NUM!
+//   - period == life+1 is only valid when month_int < 12 (the partial
+//     first year leaves a partial last year); otherwise #NUM!.
 //   - period >  life+1 -> #NUM! regardless of month.
 //
 // Edge cases:
+//   - `cost == 0`: short-circuits to 0 depreciation. Computing the rate
+//     as `pow(salvage/0, 1/life)` would go through `pow(inf, 1/life) =
+//     inf` and poison the result with #NUM!, so we return a zero charge
+//     directly — matching Mac Excel 365's observed behaviour for
+//     zero-cost assets (including boolean FALSE / numeric 0).
 //   - `salvage == 0`: `pow(0, 1/life) = 0`, so rate = round(1) = 1.000
 //     and the entire cost depreciates in the first period (prorated by
-//     `month / 12`). Subsequent periods charge nothing.
+//     `month_int / 12`). Subsequent periods charge nothing.
 //   - `salvage > cost`: the inner base is > 1, so the raw rate is
 //     negative; rounding then yields a negative rate and Excel returns
 //     a negative depreciation. No special-cased error path here — we
@@ -333,24 +343,33 @@ Value Db(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const double salvage = salvage_e.value();
   const double life = life_e.value();
   const double period = period_e.value();
-  const double month = month_e.value();
-  if (cost <= 0.0 || salvage < 0.0 || life <= 0.0 || period < 1.0 || month < 1.0 || month > 12.0) {
+  // Excel 365 Mac floors `month` before every downstream use (domain
+  // checks, first-period proration, and the partial-last-year factor).
+  const double month_int = std::floor(month_e.value());
+  if (cost < 0.0 || salvage < 0.0 || life <= 0.0 || period < 1.0 || month_int < 1.0 || month_int > 12.0) {
     return Value::error(ErrorCode::Num);
   }
+  // Zero-cost asset: salvage/cost would be +inf and pow(inf, 1/life) also
+  // +inf, poisoning the subsequent arithmetic with #NUM!. Mac Excel 365
+  // returns a zero depreciation here (verified via G30/G32/G33/G34 in
+  // the IronCalc DB oracle), so short-circuit before the rate formula.
+  if (cost == 0.0) {
+    return Value::number(0.0);
+  }
   // Only valid period values: [1, life] for any month; life+1 only when
-  // month < 12 (partial-first-year case); anything beyond is #NUM!.
+  // month_int < 12 (partial-first-year case); anything beyond is #NUM!.
   if (period > life + 1.0) {
     return Value::error(ErrorCode::Num);
   }
-  if (period > life && month >= 12.0) {
+  if (period > life && month_int >= 12.0) {
     return Value::error(ErrorCode::Num);
   }
   // Rate: (1 - (salvage/cost)^(1/life)), rounded to 3 decimals. When
   // salvage == 0, pow(0, 1/life) == 0 -> rate = 1.000 exactly.
   double rate_raw = 1.0 - std::pow(salvage / cost, 1.0 / life);
   const double rate = std::floor(rate_raw * 1000.0 + 0.5) / 1000.0;
-  // First period: prorated by (month/12).
-  const double dep_1 = cost * rate * month / 12.0;
+  // First period: prorated by (month_int/12).
+  const double dep_1 = cost * rate * month_int / 12.0;
   if (period < 2.0) {
     return finalize(dep_1);
   }
@@ -365,8 +384,8 @@ Value Db(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (period <= life) {
     return finalize(dep_i);
   }
-  // period == life + 1 (partial last year). Guarded above so month < 12.
-  const double dep_last = (cost - total) * rate * (12.0 - month) / 12.0;
+  // period == life + 1 (partial last year). Guarded above so month_int < 12.
+  const double dep_last = (cost - total) * rate * (12.0 - month_int) / 12.0;
   return finalize(dep_last);
 }
 
