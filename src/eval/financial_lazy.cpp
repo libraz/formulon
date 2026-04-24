@@ -6,10 +6,12 @@
 
 #include "eval/financial_lazy.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include "eval/coerce.h"
@@ -315,19 +317,32 @@ Value eval_mirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
 //      `values`. Excel enforces equal total cell counts between the two;
 //      we implement this as a row-major flatten of each argument and a
 //      hard size check before any math runs.
-//   2. A per-pair filter that is more permissive than IRR's: Excel
-//      silently SKIPS any pair where `values[i]` is blank (not coerced
-//      to zero), matching the way SUM / NPV treat blank cells in a
-//      range. A pair where `dates[i]` is blank is also skipped because
-//      an undated cash flow has no place in the schedule.
+//   2. A per-pair filter whose rules diverge between the two functions.
+//      The asymmetry is empirical, measured against the IronCalc oracle:
+//        * XIRR silently drops a pair whose value cell is Blank, sorts
+//          the surviving pairs by date ascending (so the schedule is
+//          normalised even when the input columns are shuffled), and
+//          rejects non-numeric value cells (Bool, Text) with #VALUE!.
+//        * XNPV rejects any Blank or non-numeric value cell with #NUM!,
+//          matching Excel's habit of folding malformed XNPV inputs into
+//          a single catch-all error. It also rejects rates < 0 and any
+//          schedule with a negative date.
+//      A blank date cell disqualifies the pair in both functions.
 //   3. A date-to-offset transform: `t_i = (dates[i] - dates[0]) / 365`,
 //      with `dates[i]` truncated toward zero (`std::trunc`) to match
-//      Excel's serial-date conversion rule.
+//      Excel's serial-date conversion rule. Dates are taken from the
+//      sorted schedule, so `dates[0]` is always the earliest surviving
+//      date.
 //
 // The two impls share the collection pipeline so a single bug in the
 // filter cannot drift XIRR away from XNPV.
 
 namespace {
+
+// Which of the two functions is driving the (value, date) collection.
+// The per-cell rules diverge in Bool / Text / Blank handling and XNPV
+// additionally enforces a rate >= 0 check upstream.
+enum class XFinKind { Xirr, Xnpv };
 
 // Row-major flatten of a single range/Ref/ArrayLiteral argument into a
 // vector of cells. `out_cells` is cleared on entry; on failure returns
@@ -361,15 +376,15 @@ bool collect_range_cells(const parser::AstNode& arg, Arena& arena, const Functio
   return false;
 }
 
-// Collects filtered (value, date) pairs from the two parallel ranges.
-// Rules:
-//   * Error cells on either side propagate as the call's result.
-//   * Pairs where either side is Blank are silently skipped.
-//   * Pairs where either side fails numeric coercion surface #VALUE!.
-//   * Dates are truncated toward zero (Excel serial rule).
-// Writes `*out_err` and returns false on any failure that should
-// propagate out as the final result.
-bool collect_xpairs(const parser::AstNode& values_arg, const parser::AstNode& dates_arg, Arena& arena,
+// Collects filtered (value, date) pairs from the two parallel ranges
+// with the kind-specific rule set described at the top of this section.
+// The resulting pairs are sorted by date ascending so downstream code
+// can treat `dates[0]` as the schedule anchor unconditionally.
+//
+// Returns false with `*out_err` set when the call should surface an
+// error; on success `*out_values` and `*out_dates` hold the filtered,
+// sorted schedule (possibly empty).
+bool collect_xpairs(XFinKind which, const parser::AstNode& values_arg, const parser::AstNode& dates_arg, Arena& arena,
                     const FunctionRegistry& registry, const EvalContext& ctx, std::vector<double>* out_values,
                     std::vector<double>* out_dates, Value* out_err) {
   std::vector<Value> value_cells;
@@ -387,10 +402,10 @@ bool collect_xpairs(const parser::AstNode& values_arg, const parser::AstNode& da
     *out_err = Value::error(ErrorCode::Num);
     return false;
   }
-  out_values->clear();
-  out_dates->clear();
-  out_values->reserve(value_cells.size());
-  out_dates->reserve(date_cells.size());
+  // Collect into a paired vector first so the final sort does not
+  // desynchronise values and dates.
+  std::vector<std::pair<double, double>> pairs;  // (date, value)
+  pairs.reserve(value_cells.size());
   for (std::size_t i = 0; i < value_cells.size(); ++i) {
     const Value& v = value_cells[i];
     const Value& d = date_cells[i];
@@ -402,14 +417,35 @@ bool collect_xpairs(const parser::AstNode& values_arg, const parser::AstNode& da
       *out_err = d;
       return false;
     }
-    // A blank cell on either side disqualifies the pair; matches
-    // Excel's treatment of blank cells in cash-flow ranges.
-    if (v.is_blank() || d.is_blank()) {
+    // Blank on the date side always skips the pair — an undated cash
+    // flow has no schedule slot. The value-side rule differs between
+    // XIRR (skip) and XNPV (#NUM!).
+    if (d.is_blank()) {
       continue;
+    }
+    if (v.is_blank()) {
+      if (which == XFinKind::Xnpv) {
+        *out_err = Value::error(ErrorCode::Num);
+        return false;
+      }
+      continue;  // XIRR: drop the pair.
+    }
+    // Non-numeric value cells: XIRR surfaces #VALUE!, XNPV surfaces
+    // #NUM! — matches Mac Excel 365 / IronCalc oracle observations.
+    if (v.is_boolean() || v.is_text()) {
+      *out_err = Value::error(which == XFinKind::Xirr ? ErrorCode::Value : ErrorCode::Num);
+      return false;
     }
     auto v_num = coerce_to_number(v);
     if (!v_num) {
       *out_err = Value::error(v_num.error());
+      return false;
+    }
+    // Date cells must coerce cleanly; Bool / Text on the date side is
+    // #VALUE! for both functions (`std::pow` has nothing useful to do
+    // with a string schedule entry).
+    if (d.is_boolean() || d.is_text()) {
+      *out_err = Value::error(ErrorCode::Value);
       return false;
     }
     auto d_num = coerce_to_number(d);
@@ -417,8 +453,29 @@ bool collect_xpairs(const parser::AstNode& values_arg, const parser::AstNode& da
       *out_err = Value::error(d_num.error());
       return false;
     }
-    out_values->push_back(v_num.value());
-    out_dates->push_back(std::trunc(d_num.value()));
+    pairs.emplace_back(std::trunc(d_num.value()), v_num.value());
+  }
+  // Excel rejects pre-1900 / negative serial dates; the oracle treats
+  // this as #NUM! for both functions.
+  for (const auto& p : pairs) {
+    if (p.first < 0.0) {
+      *out_err = Value::error(ErrorCode::Num);
+      return false;
+    }
+  }
+  // Sort by date ascending. Stable-sort keeps the original row order
+  // for same-day entries, which matches Excel's behaviour when two
+  // cash flows share a serial.
+  std::stable_sort(
+      pairs.begin(), pairs.end(),
+      [](const std::pair<double, double>& a, const std::pair<double, double>& b) { return a.first < b.first; });
+  out_values->clear();
+  out_dates->clear();
+  out_values->reserve(pairs.size());
+  out_dates->reserve(pairs.size());
+  for (const auto& p : pairs) {
+    out_dates->push_back(p.first);
+    out_values->push_back(p.second);
   }
   return true;
 }
@@ -448,6 +505,126 @@ double xnpv_dsum(const std::vector<double>& values, const std::vector<double>& d
   return total;
 }
 
+// Runs Newton-Raphson on xnpv_sum starting from `guess`. Returns NaN on
+// failure (iterate leaves the domain rate > -1, derivative collapses,
+// or the iteration cap is exhausted without converging); otherwise the
+// converged rate.
+double xirr_newton(const std::vector<double>& values, const std::vector<double>& dates, double guess) noexcept {
+  constexpr int kMaxIter = 100;
+  constexpr double kTolerance = 1.0e-10;
+  double rate = guess;
+  for (int iter = 0; iter < kMaxIter; ++iter) {
+    if (rate <= -1.0) {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
+    const double fval = xnpv_sum(values, dates, rate);
+    if (std::isnan(fval) || std::isinf(fval)) {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
+    if (std::fabs(fval) < kTolerance) {
+      return rate;
+    }
+    const double dval = xnpv_dsum(values, dates, rate);
+    if (dval == 0.0 || std::isnan(dval) || std::isinf(dval)) {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
+    const double new_rate = rate - fval / dval;
+    if (std::isnan(new_rate) || std::isinf(new_rate)) {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
+    if (std::fabs(new_rate - rate) < kTolerance) {
+      return new_rate;
+    }
+    rate = new_rate;
+  }
+  return std::numeric_limits<double>::quiet_NaN();
+}
+
+// Bracketed fallback for XIRR when Newton diverges or can't cross the
+// r=-1 singularity. Samples f(rate) on a log-linear grid spanning the
+// domain rate > -1, looks for an adjacent sign change, and bisects.
+// The grid pattern is:
+//
+//   grid_near_minus_1 = { -1 + 10^k for k in [-10, -1] }   // [~-1, -0.9]
+//   grid_mid           = { -0.8, -0.5, -0.2, 0.0, 0.1, 0.2, 0.5, 1.0 }
+//   grid_large         = { 10^k for k in [1, 6] }          // [10, 1e6]
+//
+// Combined (sorted ascending), this produces ~30 samples which are
+// enough to bracket the XIRR root on every fixture in the oracle
+// corpus. Bisection then drives the bracket width below 1e-12 or
+// |f(mid)| below 1e-10, whichever comes first.
+double xirr_bracket(const std::vector<double>& values, const std::vector<double>& dates) noexcept {
+  // Build the sample grid once; numbers chosen so neighbouring samples
+  // are close enough to catch even the R17-style root at r ~= -0.912.
+  std::vector<double> grid;
+  grid.reserve(40);
+  for (int k = -10; k <= -1; ++k) {
+    grid.push_back(-1.0 + std::pow(10.0, static_cast<double>(k)));
+  }
+  for (double m : {-0.8, -0.5, -0.2, 0.0, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0}) {
+    grid.push_back(m);
+  }
+  for (int k = 1; k <= 6; ++k) {
+    grid.push_back(std::pow(10.0, static_cast<double>(k)));
+  }
+  std::sort(grid.begin(), grid.end());
+  // Scan for an adjacent sign change.
+  double prev_r = grid[0];
+  double prev_f = xnpv_sum(values, dates, prev_r);
+  if (std::isfinite(prev_f) && std::fabs(prev_f) < 1.0e-10) {
+    return prev_r;
+  }
+  for (std::size_t i = 1; i < grid.size(); ++i) {
+    const double r = grid[i];
+    const double f = xnpv_sum(values, dates, r);
+    if (!std::isfinite(f)) {
+      prev_r = r;
+      prev_f = f;
+      continue;
+    }
+    if (std::fabs(f) < 1.0e-10) {
+      return r;
+    }
+    if (std::isfinite(prev_f) && ((prev_f < 0.0 && f > 0.0) || (prev_f > 0.0 && f < 0.0))) {
+      // Bisect on [prev_r, r].
+      double lo = prev_r;
+      double hi = r;
+      double f_lo = prev_f;
+      for (int iter = 0; iter < 200; ++iter) {
+        const double mid = 0.5 * (lo + hi);
+        const double f_mid = xnpv_sum(values, dates, mid);
+        if (!std::isfinite(f_mid)) {
+          // Numerical blow-up mid-bracket; narrow from the other end.
+          hi = mid;
+          continue;
+        }
+        if (std::fabs(f_mid) < 1.0e-12) {
+          return mid;
+        }
+        if ((f_lo < 0.0 && f_mid < 0.0) || (f_lo > 0.0 && f_mid > 0.0)) {
+          lo = mid;
+          f_lo = f_mid;
+        } else {
+          hi = mid;
+        }
+        if (std::fabs(hi - lo) < 1.0e-14) {
+          return 0.5 * (lo + hi);
+        }
+      }
+      // Refine the final bracket midpoint with Newton; usually just
+      // polishes the converged root to full double precision.
+      const double refined = xirr_newton(values, dates, 0.5 * (lo + hi));
+      if (std::isfinite(refined)) {
+        return refined;
+      }
+      return 0.5 * (lo + hi);
+    }
+    prev_r = r;
+    prev_f = f;
+  }
+  return std::numeric_limits<double>::quiet_NaN();
+}
+
 }  // namespace
 
 Value eval_xirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -460,7 +637,8 @@ Value eval_xirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   std::vector<double> values;
   std::vector<double> dates;
   Value err = Value::blank();
-  if (!collect_xpairs(call.as_call_arg(0), call.as_call_arg(1), arena, registry, ctx, &values, &dates, &err)) {
+  if (!collect_xpairs(XFinKind::Xirr, call.as_call_arg(0), call.as_call_arg(1), arena, registry, ctx, &values, &dates,
+                      &err)) {
     return err;
   }
 
@@ -483,7 +661,7 @@ Value eval_xirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return Value::error(ErrorCode::Num);
   }
 
-  double rate = 0.1;  // default guess per Excel.
+  double guess = 0.1;  // default guess per Excel.
   if (arity == 3U) {
     const Value guess_v = eval_node(call.as_call_arg(2), arena, registry, ctx);
     if (guess_v.is_error()) {
@@ -495,40 +673,26 @@ Value eval_xirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
       if (!coerced) {
         return Value::error(coerced.error());
       }
-      rate = coerced.value();
+      guess = coerced.value();
     }
   }
-  if (rate <= -1.0) {
+  if (guess <= -1.0) {
     return Value::error(ErrorCode::Num);
   }
 
-  // Newton-Raphson, same iteration cap and tolerance as IRR so oracle
-  // expectations on the two impls stay aligned.
-  constexpr int kMaxIter = 100;
-  constexpr double kTolerance = 1.0e-10;
-  for (int iter = 0; iter < kMaxIter; ++iter) {
-    if (rate <= -1.0) {
-      return Value::error(ErrorCode::Num);
-    }
-    const double fval = xnpv_sum(values, dates, rate);
-    if (std::isnan(fval) || std::isinf(fval)) {
-      return Value::error(ErrorCode::Num);
-    }
-    if (std::fabs(fval) < kTolerance) {
-      return Value::number(rate);
-    }
-    const double dval = xnpv_dsum(values, dates, rate);
-    if (dval == 0.0 || std::isnan(dval) || std::isinf(dval)) {
-      return Value::error(ErrorCode::Num);
-    }
-    const double new_rate = rate - fval / dval;
-    if (std::isnan(new_rate) || std::isinf(new_rate)) {
-      return Value::error(ErrorCode::Num);
-    }
-    if (std::fabs(new_rate - rate) < kTolerance) {
-      return Value::number(new_rate);
-    }
-    rate = new_rate;
+  // Try Newton-Raphson first; it converges quickly for the well-posed
+  // schedules (positive roots, guess near the answer). When it fails —
+  // typically because the true root is near the rate == -1 singularity
+  // and Newton can't cross it — fall back to a bracket + bisection
+  // scan over the full rate > -1 domain. LibreOffice and gnumeric use
+  // the same hybrid strategy.
+  const double newton_rate = xirr_newton(values, dates, guess);
+  if (std::isfinite(newton_rate)) {
+    return Value::number(newton_rate);
+  }
+  const double bracket_rate = xirr_bracket(values, dates);
+  if (std::isfinite(bracket_rate)) {
+    return Value::number(bracket_rate);
   }
   return Value::error(ErrorCode::Num);
 }
@@ -550,14 +714,18 @@ Value eval_xnpv_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (!rate) {
     return Value::error(rate.error());
   }
-  if (rate.value() <= -1.0) {
+  // Excel / IronCalc reject any negative rate for XNPV. rate == 0 is
+  // still allowed — the discount factors collapse to 1 and the sum
+  // degenerates to the undiscounted total, which is well-defined.
+  if (rate.value() < 0.0) {
     return Value::error(ErrorCode::Num);
   }
 
   std::vector<double> values;
   std::vector<double> dates;
   Value err = Value::blank();
-  if (!collect_xpairs(call.as_call_arg(1), call.as_call_arg(2), arena, registry, ctx, &values, &dates, &err)) {
+  if (!collect_xpairs(XFinKind::Xnpv, call.as_call_arg(1), call.as_call_arg(2), arena, registry, ctx, &values, &dates,
+                      &err)) {
     return err;
   }
 
