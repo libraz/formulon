@@ -89,6 +89,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_misc_test.cpp
   unit/eval/builtins_rand_test.cpp
   unit/eval/builtins_engineering_test.cpp
+  unit/eval/builtins_engineering_convert_test.cpp
   unit/eval/builtins_engineering_special_test.cpp
   unit/eval/builtins_complex_test.cpp
   unit/eval/builtins_web_test.cpp

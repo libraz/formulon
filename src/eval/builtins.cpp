@@ -17,6 +17,7 @@
 #include "eval/builtins/datetime.h"
 #include "eval/builtins/distributions.h"
 #include "eval/builtins/engineering.h"
+#include "eval/builtins/engineering_convert.h"
 #include "eval/builtins/engineering_special.h"
 #include "eval/builtins/financial.h"
 #include "eval/builtins/financial_coupon.h"
@@ -55,6 +56,7 @@ void register_builtins(FunctionRegistry& registry) {
   register_financial_coupon_builtins(registry);
   register_distribution_builtins(registry);
   register_engineering_builtins(registry);
+  register_engineering_convert_builtins(registry);
   register_engineering_special_builtins(registry);
   register_complex_num_builtins(registry);
   register_reference_builtins(registry);
