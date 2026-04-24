@@ -44,12 +44,16 @@ namespace {
 //   * `days_in_month` returns the last valid day-of-month for a given
 //     (year, month) pair, respecting the Gregorian leap rule. Used by
 //     EDATE / EOMONTH when clamping the day field after a month shift.
+// Excel's maximum serial value: 2958465 = 9999-12-31. Serial 2958466 would
+// map to 10000-01-01 which is outside the representable range.
+constexpr double kExcelMaxSerial = 2958465.0;
+
 Expected<double, ErrorCode> coerce_serial(const Value& v) {
   auto n = coerce_to_number(v);
   if (!n) {
     return n.error();
   }
-  if (n.value() < 0.0) {
+  if (n.value() < 0.0 || n.value() >= kExcelMaxSerial + 1.0) {
     return ErrorCode::Num;
   }
   return n.value();
@@ -150,11 +154,15 @@ Value Time_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 }
 
 /// YEAR(serial). Returns the 4-digit Gregorian year. Extracts the date
-/// portion (fractional part discarded).
+/// portion (fractional part discarded). Serial 0 is Excel's fictitious
+/// "1/0/1900": YEAR=1900, MONTH=1, DAY=0.
 Value Year_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto serial = coerce_serial(args[0]);
   if (!serial) {
     return Value::error(serial.error());
+  }
+  if (std::floor(serial.value()) == 0.0) {
+    return Value::number(1900.0);
   }
   const date_time::YMD ymd = date_time::ymd_from_serial(serial.value());
   return Value::number(static_cast<double>(ymd.y));
@@ -166,15 +174,21 @@ Value Month_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!serial) {
     return Value::error(serial.error());
   }
+  if (std::floor(serial.value()) == 0.0) {
+    return Value::number(1.0);
+  }
   const date_time::YMD ymd = date_time::ymd_from_serial(serial.value());
   return Value::number(static_cast<double>(ymd.m));
 }
 
-/// DAY(serial). Returns 1..31.
+/// DAY(serial). Returns 0..31 (0 only for the fictitious serial 0 alias).
 Value Day_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto serial = coerce_serial(args[0]);
   if (!serial) {
     return Value::error(serial.error());
+  }
+  if (std::floor(serial.value()) == 0.0) {
+    return Value::number(0.0);
   }
   const date_time::YMD ymd = date_time::ymd_from_serial(serial.value());
   return Value::number(static_cast<double>(ymd.d));

@@ -271,18 +271,25 @@ Value Npv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const double rate = rate_e.value();
   double total = 0.0;
   double discount = 1.0 + rate;
-  // Walk value1..valueN. `position` starts at 1 (period 1) and
-  // increments for every value that made it through range filtering.
+  // Walk value1..valueN. NPV skips every non-numeric value regardless of
+  // how it arrived: range-sourced bool/text/blank cells were already dropped
+  // by the dispatcher's numeric-only filter, and the same rule applies to
+  // direct scalar arguments (TRUE, FALSE, blanks, and text literals do not
+  // contribute a cash flow and do not advance the period). `period_discount`
+  // only steps forward when a numeric cash flow is actually consumed.
   double period_discount = discount;
   for (std::uint32_t i = 1; i < arity; ++i) {
-    auto coerced = coerce_to_number(args[i]);
-    if (!coerced) {
-      return Value::error(coerced.error());
+    const Value& v = args[i];
+    if (v.is_error()) {
+      return v;
+    }
+    if (!v.is_number()) {
+      continue;
     }
     if (period_discount == 0.0) {
       return Value::error(ErrorCode::Num);
     }
-    total += coerced.value() / period_discount;
+    total += v.as_number() / period_discount;
     period_discount *= discount;
   }
   return finalize(total);

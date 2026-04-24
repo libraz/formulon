@@ -445,13 +445,16 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       return Value::error(ErrorCode::NA);
     }
     if (lookup.is_number() || lookup.is_blank()) {
-      const double target = lookup.is_blank() ? 0.0 : lookup.as_number();
+      // Blank as lookup_value never matches anything in exact mode (Excel
+      // behaviour: blank search values short-circuit to #N/A even when the
+      // array contains blank cells).
+      if (lookup.is_blank()) {
+        return Value::error(ErrorCode::NA);
+      }
+      const double target = lookup.as_number();
       for (std::size_t i = 0; i < n; ++i) {
         const Value& cell = cells[i];
         if (cell.is_number() && cell.as_number() == target) {
-          return Value::number(static_cast<double>(i + 1));
-        }
-        if (cell.is_blank() && target == 0.0) {
           return Value::number(static_cast<double>(i + 1));
         }
       }
