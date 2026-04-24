@@ -61,6 +61,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_f_test.cpp
   unit/eval/stats/special_functions_test.cpp
   unit/eval/stats/incomplete_beta_test.cpp
+  unit/eval/coerce_test.cpp
   unit/eval/criteria_test.cpp
   unit/eval/builtins_countif_test.cpp
   unit/eval/builtins_database_test.cpp

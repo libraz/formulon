@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 
+#include "eval/date_text_parse.h"
 #include "utils/double_format.h"
 #include "utils/expected.h"
 #include "utils/strings.h"
@@ -64,6 +65,26 @@ Expected<double, ErrorCode> coerce_to_number(const Value& v) {
         std::free(heap_buf);
       }
       if (!ok) {
+        // Mac Excel 365 accepts date / datetime text wherever a number is
+        // expected: e.g. `=FLOOR(10, "2024-01-10")` coerces the second
+        // argument to its serial (45301). Reuse the shared DATEVALUE /
+        // TIMEVALUE / VALUE parser; only fires after strtod has rejected
+        // the input so plain numerics keep their fast path. The raw,
+        // un-trimmed text is passed: implicit numeric coercion is strict
+        // about whitespace around date strings (`=FLOOR(10, " 2024-01-10
+        // ")` -> #VALUE!), even though `strtod` and DATEVALUE both tolerate
+        // it.
+        double serial = 0.0;
+        double frac = 0.0;
+        bool has_date = false;
+        bool has_time = false;
+        if (date_parse::parse_date_time_text(v.as_text(), &serial, &frac, &has_date, &has_time)) {
+          const double combined = serial + frac;
+          if (std::isnan(combined) || std::isinf(combined)) {
+            return ErrorCode::Num;
+          }
+          return combined;
+        }
         return ErrorCode::Value;
       }
       if (std::isnan(parsed) || std::isinf(parsed)) {
