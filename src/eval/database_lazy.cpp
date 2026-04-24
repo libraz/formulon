@@ -171,7 +171,12 @@ bool record_matches_criterion_row(std::uint32_t r, std::uint32_t cr, const std::
       return false;
     }
     const Value& db_cell = db_cells[(static_cast<std::size_t>(r) * db_cols) + db_col];
-    const ParsedCriterion parsed = parse_criterion(cell);
+    // Per Excel docs, D-function plain-text criteria are prefix-matched
+    // (case-insensitive): "Sm" finds rows that begin with "Sm" such as
+    // "Smith" and "Smithfield". `parse_criterion_dfunc` preserves every
+    // other criterion shape (numeric, comparator-prefixed, wildcard,
+    // error, blank).
+    const ParsedCriterion parsed = parse_criterion_dfunc(cell);
     if (!matches_criterion(db_cell, parsed)) {
       return false;
     }

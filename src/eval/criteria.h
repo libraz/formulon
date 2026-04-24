@@ -83,6 +83,14 @@ struct ParsedCriterion {
   /// but uses it as a filter over error cells in the range.
   bool rhs_is_error = false;
   ErrorCode rhs_error_code = ErrorCode::NA;
+  /// True when a plain-text criterion should be interpreted as "cell text
+  /// begins with `rhs_text` (case-insensitive)" rather than full equality.
+  /// Set by `parse_criterion_dfunc` for D-function criteria per Excel's
+  /// documented behavior ("Sm" matches "Smith" / "Smithfield"). Under
+  /// `Op::Eq` the matcher uses `case_insensitive_starts_with`; under
+  /// `Op::NotEq` it negates the prefix test. Never set by the ordinary
+  /// `parse_criterion` used for `COUNTIF` / `SUMIF` / `AVERAGEIF`.
+  bool prefix_match = false;
 
   // `rhs_text` may alias `rhs_storage` (owning) or the caller-provided
   // `Value::text` view (non-owning). When `rhs_storage` holds the buffer,
@@ -112,6 +120,7 @@ struct ParsedCriterion {
   bool rhs_text_owns_storage_ = false;
 
   friend ParsedCriterion parse_criterion(const Value&);
+  friend ParsedCriterion parse_criterion_dfunc(const Value&);
 };
 
 /// Parses a scalar `Value` into a `ParsedCriterion`.
@@ -130,6 +139,19 @@ struct ParsedCriterion {
 /// Error `Value`s must be rejected by the caller before invoking this
 /// helper; this function assumes the input is not an error.
 ParsedCriterion parse_criterion(const Value& criterion);
+
+/// D-function variant of `parse_criterion`. Identical to the base parser
+/// except that a plain-text criterion (no leading `<` / `>` / `=`
+/// comparator, no wildcards, not parsed to a numeric or date RHS) is
+/// marked with `prefix_match = true` so the matcher treats the RHS as a
+/// "begins-with" pattern rather than a full-equality literal. Excel's
+/// DCOUNT / DSUM / DMIN / DAVERAGE / etc. use prefix semantics for plain
+/// text ("Sm" finds rows that begin with "Sm" such as "Smith" and
+/// "Smithfield"); the user escapes to full equality via `="Sm"`.
+///
+/// All other criterion shapes (numeric scalar, comparator-prefixed text,
+/// wildcard text, error, blank) behave identically to `parse_criterion`.
+ParsedCriterion parse_criterion_dfunc(const Value& criterion);
 
 /// Tests whether a cell `Value` matches a parsed criterion.
 ///

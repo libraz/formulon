@@ -637,6 +637,122 @@ TEST(BuiltinsDatabase, DCountFieldSingleScalarWorksAsScalarRef) {
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
 
+// ---------------------------------------------------------------------------
+// Excel's documented "begins-with" semantics for plain text criteria
+//
+// Per Microsoft Support "Examples of criteria":
+//   - "Sm" finds rows that begin with "Sm" such as "Smith" and "Smithfield".
+//   - "Davolio" finds rows that contain "Davolio", "DAVOLIO", "davolio".
+// Formulon's D-functions therefore interpret a plain-text criterion as a
+// case-insensitive prefix match. An explicit "=Sm" opts out and requests
+// exact equality (Excel strips the "="). Wildcards / comparators / numeric
+// criteria keep their existing semantics.
+//
+// Shared layout (sheet 0):
+//   A1=Tag    B1=Sales
+//   A2=b      B2=10
+//   A3=B      B3=20
+//   A4=BB     B4=30
+//   A5=balpha B5=40
+//   A6=cherry B6=50
+//   D1=Tag   (criterion header reused for every test)
+//   D2=<per-test criterion cell>
+Workbook MakeBeginsWithWorkbook() {
+  Workbook wb = Workbook::create();
+  auto& s = wb.sheet(0);
+  s.set_cell_value(0, 0, Value::text("Tag"));
+  s.set_cell_value(0, 1, Value::text("Sales"));
+  s.set_cell_value(1, 0, Value::text("b"));
+  s.set_cell_value(1, 1, Value::number(10.0));
+  s.set_cell_value(2, 0, Value::text("B"));
+  s.set_cell_value(2, 1, Value::number(20.0));
+  s.set_cell_value(3, 0, Value::text("BB"));
+  s.set_cell_value(3, 1, Value::number(30.0));
+  s.set_cell_value(4, 0, Value::text("balpha"));
+  s.set_cell_value(4, 1, Value::number(40.0));
+  s.set_cell_value(5, 0, Value::text("cherry"));
+  s.set_cell_value(5, 1, Value::number(50.0));
+  s.set_cell_value(0, 3, Value::text("Tag"));
+  return wb;
+}
+
+TEST(BuiltinsDatabase, DCountPlainTextIsPrefixMatch) {
+  Workbook wb = MakeBeginsWithWorkbook();
+  wb.sheet(0).set_cell_value(1, 3, Value::text("b"));
+  // Prefix "b" matches b, B, BB, balpha (case-insensitive): 4 rows.
+  const Value v = EvalIn("=DCOUNT(A1:B6, \"Sales\", D1:D2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << "got error code " << static_cast<int>(v.as_error());
+  EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
+}
+
+TEST(BuiltinsDatabase, DSumPlainTextIsPrefixMatch) {
+  Workbook wb = MakeBeginsWithWorkbook();
+  wb.sheet(0).set_cell_value(1, 3, Value::text("b"));
+  // 10 + 20 + 30 + 40 = 100 over the four prefix-matching rows.
+  const Value v = EvalIn("=DSUM(A1:B6, \"Sales\", D1:D2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << "got error code " << static_cast<int>(v.as_error());
+  EXPECT_DOUBLE_EQ(v.as_number(), 100.0);
+}
+
+TEST(BuiltinsDatabase, DMinPlainTextIsPrefixMatch) {
+  Workbook wb = MakeBeginsWithWorkbook();
+  wb.sheet(0).set_cell_value(1, 3, Value::text("b"));
+  const Value v = EvalIn("=DMIN(A1:B6, \"Sales\", D1:D2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << "got error code " << static_cast<int>(v.as_error());
+  EXPECT_DOUBLE_EQ(v.as_number(), 10.0);
+}
+
+TEST(BuiltinsDatabase, DMaxPlainTextIsPrefixMatch) {
+  Workbook wb = MakeBeginsWithWorkbook();
+  wb.sheet(0).set_cell_value(1, 3, Value::text("b"));
+  const Value v = EvalIn("=DMAX(A1:B6, \"Sales\", D1:D2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << "got error code " << static_cast<int>(v.as_error());
+  EXPECT_DOUBLE_EQ(v.as_number(), 40.0);
+}
+
+TEST(BuiltinsDatabase, DSumExplicitEqualsIsExactMatch) {
+  Workbook wb = MakeBeginsWithWorkbook();
+  // `="b"` escapes to exact equality (case-insensitive): matches "b" and
+  // "B" only (10 + 20 = 30), not "BB" or "balpha".
+  wb.sheet(0).set_cell_value(1, 3, Value::text("=b"));
+  const Value v = EvalIn("=DSUM(A1:B6, \"Sales\", D1:D2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << "got error code " << static_cast<int>(v.as_error());
+  EXPECT_DOUBLE_EQ(v.as_number(), 30.0);
+}
+
+TEST(BuiltinsDatabase, DSumWildcardIsUnchanged) {
+  Workbook wb = MakeBeginsWithWorkbook();
+  // "B*" is a wildcard pattern: same four prefix-matching rows as plain "b".
+  wb.sheet(0).set_cell_value(1, 3, Value::text("B*"));
+  const Value v = EvalIn("=DSUM(A1:B6, \"Sales\", D1:D2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << "got error code " << static_cast<int>(v.as_error());
+  EXPECT_DOUBLE_EQ(v.as_number(), 100.0);
+}
+
+TEST(BuiltinsDatabase, DSumLongerPrefixDoesNotMatchShorterCells) {
+  Workbook wb = MakeBeginsWithWorkbook();
+  // Prefix "ba" matches only "balpha" (cells "b" and "B" are shorter than
+  // the prefix and cannot begin with "ba").
+  wb.sheet(0).set_cell_value(1, 3, Value::text("ba"));
+  const Value v = EvalIn("=DSUM(A1:B6, \"Sales\", D1:D2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << "got error code " << static_cast<int>(v.as_error());
+  EXPECT_DOUBLE_EQ(v.as_number(), 40.0);
+}
+
+TEST(BuiltinsDatabase, DSumNotEqualComparatorIsExact) {
+  Workbook wb = MakeBeginsWithWorkbook();
+  // `<>b` is a NotEq comparator — NOT a prefix test. Only "cherry" is
+  // textually unequal to "b"; the other four ("b", "B", "BB", "balpha")
+  // are compared exactly, and "b" / "B" are case-insensitively equal to
+  // "b" so they fail the predicate. "BB" and "balpha" are unequal though,
+  // so they pass.
+  //   cherry (50) + BB (30) + balpha (40) = 120.
+  wb.sheet(0).set_cell_value(1, 3, Value::text("<>b"));
+  const Value v = EvalIn("=DSUM(A1:B6, \"Sales\", D1:D2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << "got error code " << static_cast<int>(v.as_error());
+  EXPECT_DOUBLE_EQ(v.as_number(), 120.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

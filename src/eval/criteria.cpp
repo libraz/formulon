@@ -273,6 +273,7 @@ ParsedCriterion::ParsedCriterion(const ParsedCriterion& other)
       rhs_from_bool(other.rhs_from_bool),
       rhs_is_error(other.rhs_is_error),
       rhs_error_code(other.rhs_error_code),
+      prefix_match(other.prefix_match),
       rhs_storage(other.rhs_storage),
       rhs_text_owns_storage_(other.rhs_text_owns_storage_) {
   if (rhs_text_owns_storage_) {
@@ -289,6 +290,7 @@ ParsedCriterion::ParsedCriterion(ParsedCriterion&& other) noexcept
       rhs_from_bool(other.rhs_from_bool),
       rhs_is_error(other.rhs_is_error),
       rhs_error_code(other.rhs_error_code),
+      prefix_match(other.prefix_match),
       rhs_storage(std::move(other.rhs_storage)),
       rhs_text_owns_storage_(other.rhs_text_owns_storage_) {
   if (rhs_text_owns_storage_) {
@@ -305,6 +307,7 @@ ParsedCriterion& ParsedCriterion::operator=(const ParsedCriterion& other) {
     rhs_from_bool = other.rhs_from_bool;
     rhs_is_error = other.rhs_is_error;
     rhs_error_code = other.rhs_error_code;
+    prefix_match = other.prefix_match;
     rhs_storage = other.rhs_storage;
     rhs_text_owns_storage_ = other.rhs_text_owns_storage_;
     rhs_text = rhs_text_owns_storage_ ? std::string_view(rhs_storage) : other.rhs_text;
@@ -321,6 +324,7 @@ ParsedCriterion& ParsedCriterion::operator=(ParsedCriterion&& other) noexcept {
     rhs_from_bool = other.rhs_from_bool;
     rhs_is_error = other.rhs_is_error;
     rhs_error_code = other.rhs_error_code;
+    prefix_match = other.prefix_match;
     rhs_storage = std::move(other.rhs_storage);
     rhs_text_owns_storage_ = other.rhs_text_owns_storage_;
     rhs_text = rhs_text_owns_storage_ ? std::string_view(rhs_storage) : other.rhs_text;
@@ -434,6 +438,48 @@ ParsedCriterion parse_criterion(const Value& criterion) {
   return parsed;
 }
 
+ParsedCriterion parse_criterion_dfunc(const Value& criterion) {
+  ParsedCriterion p = parse_criterion(criterion);
+  // Prefix-match applies only to plain-text criteria. Skip for:
+  //   * non-text Values (number / bool / blank / error / array / ref /
+  //     lambda): `parse_criterion` already encoded the correct shape.
+  //   * text criteria that resolved to a numeric or date RHS (e.g. "5",
+  //     "2024-07-01"): numeric comparison, no prefix semantics.
+  //   * text criteria with wildcards (user explicitly wrote a pattern).
+  //   * text criteria with a leading comparator (`<`, `>`, `<=`, `>=`,
+  //     `<>`): these produce a non-Eq op and are already handled by the
+  //     matcher.
+  //   * error criteria and blank criteria (empty rhs_text): preserve
+  //     existing blank-matching semantics.
+  //
+  // The one remaining source of ambiguity is `Op::Eq` originating from an
+  // explicit `=foo` prefix. `strip_comparator` consumes the leading `=`,
+  // so we must inspect the raw text to distinguish "=foo" (explicit
+  // equality, no prefix match) from "foo" (plain text, prefix match).
+  if (criterion.kind() != ValueKind::Text) {
+    return p;
+  }
+  if (p.rhs_is_number || p.rhs_is_error) {
+    return p;
+  }
+  if (p.has_wildcard) {
+    return p;
+  }
+  if (p.op != CriteriaOp::Eq) {
+    return p;
+  }
+  if (p.rhs_text.empty()) {
+    return p;
+  }
+  const std::string_view raw = criterion.as_text();
+  if (!raw.empty() && raw[0] == '=') {
+    // Explicit `=foo`: user is asking for exact match.
+    return p;
+  }
+  p.prefix_match = true;
+  return p;
+}
+
 namespace {
 
 // Applies the ordering comparator `op` given an integer sign (`-1`, `0`,
@@ -479,6 +525,15 @@ bool matches_text(const Value& cell, const ParsedCriterion& c) {
         return wildcard_match(rhs, cell_text);
       }
       const std::string literal = unescape_literal(rhs);
+      if (c.prefix_match) {
+        // D-function "begins-with" semantics: cell text starts with
+        // the literal (case-insensitive ASCII). Per Excel docs, the
+        // plain-text criterion "Sm" matches "Smith" and "Smithfield".
+        if (cell_text.size() < literal.size()) {
+          return false;
+        }
+        return strings::case_insensitive_eq(std::string_view(cell_text).substr(0, literal.size()), literal);
+      }
       return strings::case_insensitive_eq(cell_text, literal);
     }
     case CriteriaOp::NotEq: {
@@ -492,6 +547,19 @@ bool matches_text(const Value& cell, const ParsedCriterion& c) {
         return !wildcard_match(rhs, cell_text);
       }
       const std::string literal = unescape_literal(rhs);
+      if (c.prefix_match) {
+        // D-function "does-NOT-begin-with" semantics: negation of the
+        // prefix test. Reachable only via `parse_criterion_dfunc`, and
+        // only when the original raw text started with "<>" (which maps
+        // to `CriteriaOp::NotEq` but otherwise leaves the RHS alone).
+        // Note: the current `parse_criterion_dfunc` never sets
+        // `prefix_match` for `Op::NotEq`, so this branch is reserved for
+        // future parity should Excel document a different behaviour.
+        if (cell_text.size() < literal.size()) {
+          return true;
+        }
+        return !strings::case_insensitive_eq(std::string_view(cell_text).substr(0, literal.size()), literal);
+      }
       return !strings::case_insensitive_eq(cell_text, literal);
     }
     case CriteriaOp::Lt:
