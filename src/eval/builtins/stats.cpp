@@ -60,7 +60,7 @@ std::vector<double> collect_numerics(const Value* args, std::uint32_t count) {
   return out;
 }
 
-std::vector<double> collect_a(const Value* args, std::uint32_t count) {
+Expected<std::vector<double>, ErrorCode> collect_a(const Value* args, std::uint32_t count) {
   std::vector<double> out;
   out.reserve(count);
   for (std::uint32_t i = 0; i < count; ++i) {
@@ -72,9 +72,18 @@ std::vector<double> collect_a(const Value* args, std::uint32_t count) {
       case ValueKind::Bool:
         out.push_back(v.as_boolean() ? 1.0 : 0.0);
         break;
-      case ValueKind::Text:
-        out.push_back(0.0);
+      case ValueKind::Text: {
+        // Direct Text arguments use strict numeric coercion: `"-1"` becomes
+        // -1, `"Hola"` surfaces #VALUE!. Range-sourced Text cells were
+        // already coerced to 0 by the dispatcher's range_filter_a_coerce,
+        // so by the time we see a Text here it is always a direct arg.
+        auto coerced = coerce_to_number(v);
+        if (!coerced) {
+          return coerced.error();
+        }
+        out.push_back(coerced.value());
         break;
+      }
       case ValueKind::Blank:
         // Direct Blank arguments (e.g. =AVERAGEA(A1, 1) where A1 is blank)
         // count as 0 per Excel's direct-coercion rule. Range-sourced Blanks
@@ -519,7 +528,11 @@ static Value StdevP(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // ---------------------------------------------------------------------------
 
 static Value AverageA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_a(args, arity);
+  auto collected = collect_a(args, arity);
+  if (!collected) {
+    return Value::error(collected.error());
+  }
+  const std::vector<double>& xs = collected.value();
   if (xs.empty()) {
     return Value::error(ErrorCode::Div0);
   }
@@ -535,7 +548,11 @@ static Value AverageA(const Value* args, std::uint32_t arity, Arena& /*arena*/) 
 }
 
 static Value MaxA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_a(args, arity);
+  auto collected = collect_a(args, arity);
+  if (!collected) {
+    return Value::error(collected.error());
+  }
+  const std::vector<double>& xs = collected.value();
   if (xs.empty()) {
     return Value::number(0.0);
   }
@@ -552,7 +569,11 @@ static Value MaxA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 }
 
 static Value MinA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_a(args, arity);
+  auto collected = collect_a(args, arity);
+  if (!collected) {
+    return Value::error(collected.error());
+  }
+  const std::vector<double>& xs = collected.value();
   if (xs.empty()) {
     return Value::number(0.0);
   }
@@ -569,7 +590,11 @@ static Value MinA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 }
 
 static Value VarA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_a(args, arity);
+  auto collected = collect_a(args, arity);
+  if (!collected) {
+    return Value::error(collected.error());
+  }
+  const std::vector<double>& xs = collected.value();
   if (xs.size() < 2u) {
     return Value::error(ErrorCode::Div0);
   }
@@ -582,7 +607,11 @@ static Value VarA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 }
 
 static Value VarPA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_a(args, arity);
+  auto collected = collect_a(args, arity);
+  if (!collected) {
+    return Value::error(collected.error());
+  }
+  const std::vector<double>& xs = collected.value();
   if (xs.empty()) {
     return Value::error(ErrorCode::Div0);
   }
@@ -595,7 +624,11 @@ static Value VarPA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 }
 
 static Value StdevA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_a(args, arity);
+  auto collected = collect_a(args, arity);
+  if (!collected) {
+    return Value::error(collected.error());
+  }
+  const std::vector<double>& xs = collected.value();
   if (xs.size() < 2u) {
     return Value::error(ErrorCode::Div0);
   }
@@ -609,7 +642,11 @@ static Value StdevA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 }
 
 static Value StdevPA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_a(args, arity);
+  auto collected = collect_a(args, arity);
+  if (!collected) {
+    return Value::error(collected.error());
+  }
+  const std::vector<double>& xs = collected.value();
   if (xs.empty()) {
     return Value::error(ErrorCode::Div0);
   }

@@ -34,13 +34,14 @@ inline constexpr double kStatsPi = 3.14159265358979323846;
 std::vector<double> collect_numerics(const Value* args, std::uint32_t count);
 
 // "A"-family value collector for AVERAGEA / MAXA / MINA / VARA / VARPA /
-// STDEVA / STDEVPA. For these functions Excel evaluates text as 0, Bool as
-// 0 / 1, and still skips Blank cells. The dispatcher has already performed
-// the range-sourced transformation (Bool -> 0/1, Text -> 0, Blank dropped)
-// when `range_filter_a_coerce = true`; this helper applies the same rules
-// to direct scalar arguments so the full behaviour matches regardless of
-// provenance.
-std::vector<double> collect_a(const Value* args, std::uint32_t count);
+// STDEVA / STDEVPA. The dispatcher has already transformed range-sourced
+// values (Bool -> 0/1, Text -> 0, Blank dropped) via `range_filter_a_coerce`;
+// this helper handles direct scalar arguments. Direct Bool is coerced to
+// 0/1, direct Blank to 0, and direct Text is strictly coerced via
+// `coerce_to_number` -- numeric-looking text becomes its numeric value and
+// non-numeric text surfaces as `#VALUE!`. Errors never reach this helper
+// because the dispatcher short-circuits with `propagate_errors = true`.
+Expected<std::vector<double>, ErrorCode> collect_a(const Value* args, std::uint32_t count);
 
 // (mean, sum_of_squared_deviations) pair returned by `compute_mean_ss`.
 struct MeanSS {

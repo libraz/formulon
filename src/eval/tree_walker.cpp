@@ -627,6 +627,33 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
     if (def->propagate_errors && v.is_error()) {
       return v;
     }
+    // Provenance-aware filter also applies to a single-cell `Ref` argument
+    // for range-aware aggregators. Excel treats `MIN(A1, A2, A3)` the same
+    // way it treats `MIN(A1:A3)`: Text / Bool / Blank cells are silently
+    // skipped for `range_filter_numeric_only`, coerced for the A-family,
+    // etc. Direct scalar literals (numbers, bool literals, text literals)
+    // still use strict coercion in the impl.
+    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Ref) {
+      if (def->range_filter_numeric_only && v.kind() != ValueKind::Number) {
+        continue;
+      }
+      if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
+        continue;
+      }
+      if (def->range_filter_a_coerce) {
+        if (v.kind() == ValueKind::Blank) {
+          continue;
+        }
+        if (v.kind() == ValueKind::Bool) {
+          values.push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
+          continue;
+        }
+        if (v.kind() == ValueKind::Text) {
+          values.push_back(Value::number(0.0));
+          continue;
+        }
+      }
+    }
     values.push_back(v);
   }
   // Hand the post-expansion size to the impl; aggregator bodies walk the
