@@ -403,6 +403,9 @@ Value Floor(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // with ties rounded away from zero. Opposite-signed inputs yield #NUM!;
 // `multiple = 0` returns 0 (Excel's documented quirk).
 Value MRound(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  if (is_empty_text(args[0]) || is_empty_text(args[1])) {
+    return Value::error(ErrorCode::Value);
+  }
   auto number = coerce_to_number(args[0]);
   if (!number) {
     return Value::error(number.error());
