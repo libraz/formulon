@@ -201,7 +201,9 @@ Expected<std::string, ErrorCode> input_digit_string(const Value& v) {
       return std::string(buf);
     }
     case ValueKind::Bool:
-      return std::string(v.as_boolean() ? "1" : "0");
+      // Excel rejects a direct Bool argument to BIN2*/OCT2*/HEX2* with
+      // `#VALUE!` — mirrors the strict-Bool rejection in DEC2*.
+      return ErrorCode::Value;
     case ValueKind::Blank:
       return ErrorCode::Num;
     default:
