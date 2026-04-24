@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Sheet1",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-23T17:36:56Z"
+    "generated_at": "2026-04-24T04:56:20Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -17,6 +17,30 @@
       "id": "Q2",
       "formula": "=XNPV(O2,A2:F2,H2:M2)",
       "setup": {
+        "M2": {
+          "kind": "number",
+          "value": 45139.0
+        },
+        "L2": {
+          "kind": "number",
+          "value": 45108.0
+        },
+        "K2": {
+          "kind": "number",
+          "value": 45078.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 45017.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 44986.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 44958.0
+        },
         "F2": {
           "kind": "number",
           "value": 5.0
@@ -55,6 +79,30 @@
       "id": "R2",
       "formula": "=XIRR(A2:F2,H2:M2)",
       "setup": {
+        "M2": {
+          "kind": "number",
+          "value": 45139.0
+        },
+        "L2": {
+          "kind": "number",
+          "value": 45108.0
+        },
+        "K2": {
+          "kind": "number",
+          "value": 45078.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 45017.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 44986.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 44958.0
+        },
         "F2": {
           "kind": "number",
           "value": 5.0
@@ -89,6 +137,30 @@
       "id": "S2",
       "formula": "=XNPV(0.1, A2:E2,H2:M2)",
       "setup": {
+        "M2": {
+          "kind": "number",
+          "value": 45139.0
+        },
+        "L2": {
+          "kind": "number",
+          "value": 45108.0
+        },
+        "K2": {
+          "kind": "number",
+          "value": 45078.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 45017.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 44986.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 44958.0
+        },
         "E2": {
           "kind": "number",
           "value": 5.0
@@ -359,6 +431,30 @@
       "id": "Q5",
       "formula": "=XNPV(O5,A5:F5,H5:M5)",
       "setup": {
+        "M5": {
+          "kind": "number",
+          "value": 46179.0
+        },
+        "L5": {
+          "kind": "number",
+          "value": 45782.0
+        },
+        "K5": {
+          "kind": "number",
+          "value": 45386.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 45353.0
+        },
+        "I5": {
+          "kind": "number",
+          "value": 45323.0
+        },
+        "H5": {
+          "kind": "number",
+          "value": 45292.0
+        },
         "F5": {
           "kind": "number",
           "value": 5.0
@@ -397,6 +493,30 @@
       "id": "R5",
       "formula": "=XIRR(A5:F5,H5:M5)",
       "setup": {
+        "M5": {
+          "kind": "number",
+          "value": 46179.0
+        },
+        "L5": {
+          "kind": "number",
+          "value": 45782.0
+        },
+        "K5": {
+          "kind": "number",
+          "value": 45386.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 45353.0
+        },
+        "I5": {
+          "kind": "number",
+          "value": 45323.0
+        },
+        "H5": {
+          "kind": "number",
+          "value": 45292.0
+        },
         "F5": {
           "kind": "number",
           "value": 5.0
@@ -431,6 +551,30 @@
       "id": "Q6",
       "formula": "=XNPV(O6,A6:F6,H6:M6)",
       "setup": {
+        "M6": {
+          "kind": "number",
+          "value": 45139.0
+        },
+        "L6": {
+          "kind": "number",
+          "value": 45108.0
+        },
+        "K6": {
+          "kind": "number",
+          "value": 45078.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 45017.0
+        },
+        "I6": {
+          "kind": "number",
+          "value": 44986.0
+        },
+        "H6": {
+          "kind": "number",
+          "value": 44958.0
+        },
         "F6": {
           "kind": "number",
           "value": 5.0
@@ -469,6 +613,30 @@
       "id": "R6",
       "formula": "=XIRR(A6:F6,H6:M6)",
       "setup": {
+        "M6": {
+          "kind": "number",
+          "value": 45139.0
+        },
+        "L6": {
+          "kind": "number",
+          "value": 45108.0
+        },
+        "K6": {
+          "kind": "number",
+          "value": 45078.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 45017.0
+        },
+        "I6": {
+          "kind": "number",
+          "value": 44986.0
+        },
+        "H6": {
+          "kind": "number",
+          "value": 44958.0
+        },
         "F6": {
           "kind": "number",
           "value": 5.0
@@ -503,6 +671,30 @@
       "id": "Q7",
       "formula": "=XNPV(O7,A7:F7,H7:M7)",
       "setup": {
+        "M7": {
+          "kind": "number",
+          "value": 45139.0
+        },
+        "L7": {
+          "kind": "number",
+          "value": 45108.0
+        },
+        "K7": {
+          "kind": "number",
+          "value": 45078.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 45017.0
+        },
+        "I7": {
+          "kind": "number",
+          "value": 44986.0
+        },
+        "H7": {
+          "kind": "number",
+          "value": 44958.0
+        },
         "F7": {
           "kind": "number",
           "value": 5.0
@@ -537,6 +729,30 @@
       "id": "R7",
       "formula": "=XIRR(A7:F7,H7:M7)",
       "setup": {
+        "M7": {
+          "kind": "number",
+          "value": 45139.0
+        },
+        "L7": {
+          "kind": "number",
+          "value": 45108.0
+        },
+        "K7": {
+          "kind": "number",
+          "value": 45078.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 45017.0
+        },
+        "I7": {
+          "kind": "number",
+          "value": 44986.0
+        },
+        "H7": {
+          "kind": "number",
+          "value": 44958.0
+        },
         "F7": {
           "kind": "number",
           "value": 5.0
@@ -567,6 +783,30 @@
       "id": "Q8",
       "formula": "=XNPV(O8,A8:F8,H8:M8)",
       "setup": {
+        "M8": {
+          "kind": "number",
+          "value": 45139.0
+        },
+        "L8": {
+          "kind": "number",
+          "value": 45108.0
+        },
+        "K8": {
+          "kind": "number",
+          "value": 45078.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 45017.0
+        },
+        "I8": {
+          "kind": "number",
+          "value": 44986.0
+        },
+        "H8": {
+          "kind": "number",
+          "value": 44958.0
+        },
         "F8": {
           "kind": "number",
           "value": 5.0
@@ -605,6 +845,30 @@
       "id": "R8",
       "formula": "=XIRR(A8:F8,H8:M8)",
       "setup": {
+        "M8": {
+          "kind": "number",
+          "value": 45139.0
+        },
+        "L8": {
+          "kind": "number",
+          "value": 45108.0
+        },
+        "K8": {
+          "kind": "number",
+          "value": 45078.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 45017.0
+        },
+        "I8": {
+          "kind": "number",
+          "value": 44986.0
+        },
+        "H8": {
+          "kind": "number",
+          "value": 44958.0
+        },
         "F8": {
           "kind": "number",
           "value": 5.0
@@ -639,6 +903,30 @@
       "id": "Q9",
       "formula": "=XNPV(O9,A9:F9,H9:M9)",
       "setup": {
+        "M9": {
+          "kind": "number",
+          "value": 45139.0
+        },
+        "L9": {
+          "kind": "number",
+          "value": 45108.0
+        },
+        "K9": {
+          "kind": "number",
+          "value": 45078.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 45017.0
+        },
+        "I9": {
+          "kind": "number",
+          "value": 44986.0
+        },
+        "H9": {
+          "kind": "number",
+          "value": 44958.0
+        },
         "F9": {
           "kind": "number",
           "value": 5.0
@@ -677,6 +965,30 @@
       "id": "R9",
       "formula": "=XIRR(A9:F9,H9:M9)",
       "setup": {
+        "M9": {
+          "kind": "number",
+          "value": 45139.0
+        },
+        "L9": {
+          "kind": "number",
+          "value": 45108.0
+        },
+        "K9": {
+          "kind": "number",
+          "value": 45078.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 45017.0
+        },
+        "I9": {
+          "kind": "number",
+          "value": 44986.0
+        },
+        "H9": {
+          "kind": "number",
+          "value": 44958.0
+        },
         "F9": {
           "kind": "number",
           "value": 5.0
@@ -720,6 +1032,30 @@
       "id": "Q10",
       "formula": "=XNPV(O10,A10:F10,H10:M10)",
       "setup": {
+        "M10": {
+          "kind": "number",
+          "value": 45139.0
+        },
+        "L10": {
+          "kind": "number",
+          "value": 45108.0
+        },
+        "K10": {
+          "kind": "number",
+          "value": 45078.0
+        },
+        "J10": {
+          "kind": "number",
+          "value": 45017.0
+        },
+        "I10": {
+          "kind": "number",
+          "value": 44986.0
+        },
+        "H10": {
+          "kind": "number",
+          "value": 44958.0
+        },
         "F10": {
           "kind": "number",
           "value": 1.0
@@ -758,6 +1094,30 @@
       "id": "R10",
       "formula": "=XIRR(A10:F10,H10:M10)",
       "setup": {
+        "M10": {
+          "kind": "number",
+          "value": 45139.0
+        },
+        "L10": {
+          "kind": "number",
+          "value": 45108.0
+        },
+        "K10": {
+          "kind": "number",
+          "value": 45078.0
+        },
+        "J10": {
+          "kind": "number",
+          "value": 45017.0
+        },
+        "I10": {
+          "kind": "number",
+          "value": 44986.0
+        },
+        "H10": {
+          "kind": "number",
+          "value": 44958.0
+        },
         "F10": {
           "kind": "number",
           "value": 1.0

@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Sheet1",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-23T17:36:56Z"
+    "generated_at": "2026-04-24T04:56:20Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -53,6 +53,100 @@
       "expect": {
         "kind": "number",
         "value": 11.0
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=DATE(C2,D2,B2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 32111.0
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=DAY(A2)"
+        },
+        "D2": {
+          "kind": "formula",
+          "formula": "=MONTH(A2)"
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=YEAR(A2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 32111.0
+      }
+    },
+    {
+      "id": "H2",
+      "formula": "=EDATE(E2,F2)",
+      "setup": {
+        "F2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 32111.0
+        },
+        "E2": {
+          "kind": "formula",
+          "formula": "=DATE(C2,D2,B2)"
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=DAY(A2)"
+        },
+        "D2": {
+          "kind": "formula",
+          "formula": "=MONTH(A2)"
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=YEAR(A2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 32263.0
+      }
+    },
+    {
+      "id": "I2",
+      "formula": "=EDATE(E2,G2)",
+      "setup": {
+        "G2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 32111.0
+        },
+        "E2": {
+          "kind": "formula",
+          "formula": "=DATE(C2,D2,B2)"
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=DAY(A2)"
+        },
+        "D2": {
+          "kind": "formula",
+          "formula": "=MONTH(A2)"
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=YEAR(A2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 31958.0
       }
     },
     {
@@ -141,6 +235,130 @@
       }
     },
     {
+      "id": "E3",
+      "formula": "=DATE(C3,D3,B3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 32112.0
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DAY(A3)"
+        },
+        "D3": {
+          "kind": "formula",
+          "formula": "=MONTH(A3)"
+        },
+        "C3": {
+          "kind": "formula",
+          "formula": "=YEAR(A3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 32112.0
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=EDATE(E3,F3)",
+      "setup": {
+        "F3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 32112.0
+        },
+        "E3": {
+          "kind": "formula",
+          "formula": "=DATE(C3,D3,B3)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DAY(A3)"
+        },
+        "D3": {
+          "kind": "formula",
+          "formula": "=MONTH(A3)"
+        },
+        "C3": {
+          "kind": "formula",
+          "formula": "=YEAR(A3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 32417.0
+      }
+    },
+    {
+      "id": "I3",
+      "formula": "=EDATE(E3,G3)",
+      "setup": {
+        "G3": {
+          "kind": "number",
+          "value": -235.5
+        },
+        "A3": {
+          "kind": "number",
+          "value": 32112.0
+        },
+        "E3": {
+          "kind": "formula",
+          "formula": "=DATE(C3,D3,B3)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DAY(A3)"
+        },
+        "D3": {
+          "kind": "formula",
+          "formula": "=MONTH(A3)"
+        },
+        "C3": {
+          "kind": "formula",
+          "formula": "=YEAR(A3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 24959.0
+      }
+    },
+    {
+      "id": "K3",
+      "formula": "=EDATE(E3,J3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 32112.0
+        },
+        "E3": {
+          "kind": "formula",
+          "formula": "=DATE(C3,D3,B3)"
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=DAY(A3)"
+        },
+        "D3": {
+          "kind": "formula",
+          "formula": "=MONTH(A3)"
+        },
+        "C3": {
+          "kind": "formula",
+          "formula": "=YEAR(A3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 32112.0
+      }
+    },
+    {
       "id": "B4",
       "formula": "=DAY(A4)",
       "setup": {
@@ -183,6 +401,100 @@
       }
     },
     {
+      "id": "E4",
+      "formula": "=DATE(C4,D4,B4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 32113.0
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=DAY(A4)"
+        },
+        "D4": {
+          "kind": "formula",
+          "formula": "=MONTH(A4)"
+        },
+        "C4": {
+          "kind": "formula",
+          "formula": "=YEAR(A4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 32113.0
+      }
+    },
+    {
+      "id": "H4",
+      "formula": "=EDATE(E4,F4)",
+      "setup": {
+        "F4": {
+          "kind": "number",
+          "value": 112.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 32113.0
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=DATE(C4,D4,B4)"
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=DAY(A4)"
+        },
+        "D4": {
+          "kind": "formula",
+          "formula": "=MONTH(A4)"
+        },
+        "C4": {
+          "kind": "formula",
+          "formula": "=YEAR(A4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 35522.0
+      }
+    },
+    {
+      "id": "I4",
+      "formula": "=EDATE(E4,G4)",
+      "setup": {
+        "G4": {
+          "kind": "number",
+          "value": -11.2
+        },
+        "A4": {
+          "kind": "number",
+          "value": 32113.0
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=DATE(C4,D4,B4)"
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=DAY(A4)"
+        },
+        "D4": {
+          "kind": "formula",
+          "formula": "=MONTH(A4)"
+        },
+        "C4": {
+          "kind": "formula",
+          "formula": "=YEAR(A4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 31779.0
+      }
+    },
+    {
       "id": "B5",
       "formula": "=DAY(A5)",
       "setup": {
@@ -222,6 +534,100 @@
       "expect": {
         "kind": "number",
         "value": 10.0
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=DATE(C5,D5,B5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 12344.0
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=DAY(A5)"
+        },
+        "D5": {
+          "kind": "formula",
+          "formula": "=MONTH(A5)"
+        },
+        "C5": {
+          "kind": "formula",
+          "formula": "=YEAR(A5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12344.0
+      }
+    },
+    {
+      "id": "H5",
+      "formula": "=EDATE(E5,F5)",
+      "setup": {
+        "F5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 12344.0
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=DATE(C5,D5,B5)"
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=DAY(A5)"
+        },
+        "D5": {
+          "kind": "formula",
+          "formula": "=MONTH(A5)"
+        },
+        "C5": {
+          "kind": "formula",
+          "formula": "=YEAR(A5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12344.0
+      }
+    },
+    {
+      "id": "I5",
+      "formula": "=EDATE(E5,G5)",
+      "setup": {
+        "G5": {
+          "kind": "number",
+          "value": -2.7
+        },
+        "A5": {
+          "kind": "number",
+          "value": 12344.0
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=DATE(C5,D5,B5)"
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=DAY(A5)"
+        },
+        "D5": {
+          "kind": "formula",
+          "formula": "=MONTH(A5)"
+        },
+        "C5": {
+          "kind": "formula",
+          "formula": "=YEAR(A5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12283.0
       }
     },
     {
@@ -412,6 +818,100 @@
       }
     },
     {
+      "id": "E8",
+      "formula": "=DATE(C8,D8,B8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 32112.5
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=DAY(A8)"
+        },
+        "D8": {
+          "kind": "formula",
+          "formula": "=MONTH(A8)"
+        },
+        "C8": {
+          "kind": "formula",
+          "formula": "=YEAR(A8)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 32112.0
+      }
+    },
+    {
+      "id": "H8",
+      "formula": "=EDATE(E8,F8)",
+      "setup": {
+        "F8": {
+          "kind": "number",
+          "value": 82.33
+        },
+        "A8": {
+          "kind": "number",
+          "value": 32112.5
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=DATE(C8,D8,B8)"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=DAY(A8)"
+        },
+        "D8": {
+          "kind": "formula",
+          "formula": "=MONTH(A8)"
+        },
+        "C8": {
+          "kind": "formula",
+          "formula": "=YEAR(A8)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 34608.0
+      }
+    },
+    {
+      "id": "I8",
+      "formula": "=EDATE(E8,G8)",
+      "setup": {
+        "G8": {
+          "kind": "number",
+          "value": 82.9
+        },
+        "A8": {
+          "kind": "number",
+          "value": 32112.5
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=DATE(C8,D8,B8)"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=DAY(A8)"
+        },
+        "D8": {
+          "kind": "formula",
+          "formula": "=MONTH(A8)"
+        },
+        "C8": {
+          "kind": "formula",
+          "formula": "=YEAR(A8)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 34608.0
+      }
+    },
+    {
       "id": "B9",
       "formula": "=DAY(A9)",
       "setup": {
@@ -451,6 +951,32 @@
       "expect": {
         "kind": "number",
         "value": 7.0
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=DATE(C9,D9,B9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 40000.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=DAY(A9)"
+        },
+        "D9": {
+          "kind": "formula",
+          "formula": "=MONTH(A9)"
+        },
+        "C9": {
+          "kind": "formula",
+          "formula": "=YEAR(A9)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 40000.0
       }
     },
     {
@@ -564,6 +1090,32 @@
       }
     },
     {
+      "id": "E11",
+      "formula": "=DATE(C11,D11,B11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 40040.0
+        },
+        "B11": {
+          "kind": "formula",
+          "formula": "=DAY(A11)"
+        },
+        "D11": {
+          "kind": "formula",
+          "formula": "=MONTH(A11)"
+        },
+        "C11": {
+          "kind": "formula",
+          "formula": "=YEAR(A11)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 40040.0
+      }
+    },
+    {
       "id": "B12",
       "formula": "=DAY(A12)",
       "setup": {
@@ -603,6 +1155,32 @@
       "expect": {
         "kind": "number",
         "value": 8.0
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=DATE(C12,D12,B12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 40041.0
+        },
+        "B12": {
+          "kind": "formula",
+          "formula": "=DAY(A12)"
+        },
+        "D12": {
+          "kind": "formula",
+          "formula": "=MONTH(A12)"
+        },
+        "C12": {
+          "kind": "formula",
+          "formula": "=YEAR(A12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 40041.0
       }
     },
     {
@@ -648,6 +1226,32 @@
       }
     },
     {
+      "id": "E13",
+      "formula": "=DATE(C13,D13,B13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 123452.0
+        },
+        "B13": {
+          "kind": "formula",
+          "formula": "=DAY(A13)"
+        },
+        "D13": {
+          "kind": "formula",
+          "formula": "=MONTH(A13)"
+        },
+        "C13": {
+          "kind": "formula",
+          "formula": "=YEAR(A13)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 123452.0
+      }
+    },
+    {
       "id": "B15",
       "formula": "=DAY(A15)",
       "setup": {
@@ -687,6 +1291,66 @@
       "expect": {
         "kind": "number",
         "value": 3.0
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=DATE(C15,D15,B15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 61.0
+        },
+        "B15": {
+          "kind": "formula",
+          "formula": "=DAY(A15)"
+        },
+        "D15": {
+          "kind": "formula",
+          "formula": "=MONTH(A15)"
+        },
+        "C15": {
+          "kind": "formula",
+          "formula": "=YEAR(A15)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 61.0
+      }
+    },
+    {
+      "id": "H15",
+      "formula": "=EDATE(E15,F15)",
+      "setup": {
+        "F15": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 61.0
+        },
+        "E15": {
+          "kind": "formula",
+          "formula": "=DATE(C15,D15,B15)"
+        },
+        "B15": {
+          "kind": "formula",
+          "formula": "=DAY(A15)"
+        },
+        "D15": {
+          "kind": "formula",
+          "formula": "=MONTH(A15)"
+        },
+        "C15": {
+          "kind": "formula",
+          "formula": "=YEAR(A15)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 214.0
       }
     },
     {

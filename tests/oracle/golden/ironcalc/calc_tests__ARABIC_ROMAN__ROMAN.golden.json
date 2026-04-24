@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "ROMAN",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-23T17:36:56Z"
+    "generated_at": "2026-04-24T04:56:20Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -4297,7 +4297,12 @@
     {
       "id": "B28",
       "formula": "=ROMAN(A28)",
-      "setup": {},
+      "setup": {
+        "A28": {
+          "kind": "number",
+          "value": 126.0
+        }
+      },
       "expect": {
         "kind": "text",
         "value": "CXXVI"
@@ -4306,7 +4311,12 @@
     {
       "id": "C28",
       "formula": "=ROMAN($A28,1)",
-      "setup": {},
+      "setup": {
+        "A28": {
+          "kind": "number",
+          "value": 126.0
+        }
+      },
       "expect": {
         "kind": "text",
         "value": "CXXVI"
@@ -4315,7 +4325,12 @@
     {
       "id": "D28",
       "formula": "=ROMAN($A28,2)",
-      "setup": {},
+      "setup": {
+        "A28": {
+          "kind": "number",
+          "value": 126.0
+        }
+      },
       "expect": {
         "kind": "text",
         "value": "CXXVI"
@@ -4324,7 +4339,12 @@
     {
       "id": "E28",
       "formula": "=ROMAN($A28,3)",
-      "setup": {},
+      "setup": {
+        "A28": {
+          "kind": "number",
+          "value": 126.0
+        }
+      },
       "expect": {
         "kind": "text",
         "value": "CXXVI"
@@ -4333,7 +4353,12 @@
     {
       "id": "F28",
       "formula": "=ROMAN($A28,4)",
-      "setup": {},
+      "setup": {
+        "A28": {
+          "kind": "number",
+          "value": 126.0
+        }
+      },
       "expect": {
         "kind": "text",
         "value": "CXXVI"
@@ -4346,6 +4371,10 @@
         "J1": {
           "kind": "number",
           "value": 0.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": 126.0
         }
       },
       "expect": {
@@ -4360,6 +4389,10 @@
         "K1": {
           "kind": "number",
           "value": 5.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": 126.0
         }
       },
       "expect": {
@@ -4374,6 +4407,10 @@
         "L1": {
           "kind": "bool",
           "value": true
+        },
+        "A28": {
+          "kind": "number",
+          "value": 126.0
         }
       },
       "expect": {
@@ -4388,6 +4425,10 @@
         "M1": {
           "kind": "bool",
           "value": false
+        },
+        "A28": {
+          "kind": "number",
+          "value": 126.0
         }
       },
       "expect": {
@@ -4402,6 +4443,10 @@
         "N1": {
           "kind": "text",
           "value": "hello"
+        },
+        "A28": {
+          "kind": "number",
+          "value": 126.0
         }
       },
       "expect": {
@@ -4416,6 +4461,10 @@
         "O1": {
           "kind": "text",
           "value": "2"
+        },
+        "A28": {
+          "kind": "number",
+          "value": 126.0
         }
       },
       "expect": {
@@ -4426,7 +4475,12 @@
     {
       "id": "B29",
       "formula": "=ROMAN(A29)",
-      "setup": {},
+      "setup": {
+        "A29": {
+          "kind": "number",
+          "value": 45854.0
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
@@ -4435,7 +4489,12 @@
     {
       "id": "C29",
       "formula": "=ROMAN($A29,1)",
-      "setup": {},
+      "setup": {
+        "A29": {
+          "kind": "number",
+          "value": 45854.0
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
@@ -4444,7 +4503,12 @@
     {
       "id": "D29",
       "formula": "=ROMAN($A29,2)",
-      "setup": {},
+      "setup": {
+        "A29": {
+          "kind": "number",
+          "value": 45854.0
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
@@ -4453,7 +4517,12 @@
     {
       "id": "E29",
       "formula": "=ROMAN($A29,3)",
-      "setup": {},
+      "setup": {
+        "A29": {
+          "kind": "number",
+          "value": 45854.0
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
@@ -4462,7 +4531,12 @@
     {
       "id": "F29",
       "formula": "=ROMAN($A29,4)",
-      "setup": {},
+      "setup": {
+        "A29": {
+          "kind": "number",
+          "value": 45854.0
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
@@ -4475,6 +4549,10 @@
         "J1": {
           "kind": "number",
           "value": 0.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 45854.0
         }
       },
       "expect": {
@@ -4489,6 +4567,10 @@
         "K1": {
           "kind": "number",
           "value": 5.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 45854.0
         }
       },
       "expect": {
@@ -4503,6 +4585,10 @@
         "L1": {
           "kind": "bool",
           "value": true
+        },
+        "A29": {
+          "kind": "number",
+          "value": 45854.0
         }
       },
       "expect": {
@@ -4517,6 +4603,10 @@
         "M1": {
           "kind": "bool",
           "value": false
+        },
+        "A29": {
+          "kind": "number",
+          "value": 45854.0
         }
       },
       "expect": {
@@ -4531,6 +4621,10 @@
         "N1": {
           "kind": "text",
           "value": "hello"
+        },
+        "A29": {
+          "kind": "number",
+          "value": 45854.0
         }
       },
       "expect": {
@@ -4545,6 +4639,10 @@
         "O1": {
           "kind": "text",
           "value": "2"
+        },
+        "A29": {
+          "kind": "number",
+          "value": 45854.0
         }
       },
       "expect": {

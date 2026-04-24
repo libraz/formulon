@@ -6,13 +6,35 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Sheet1",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-23T17:36:56Z"
+    "generated_at": "2026-04-24T04:56:20Z"
   },
   "tolerance": {
     "abs": 5e-08,
     "rel": 0.0
   },
   "cases": [
+    {
+      "id": "D2",
+      "formula": "=TIME(A2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.12640046296296295
+      }
+    },
     {
       "id": "E2",
       "formula": "=D2",
@@ -115,6 +137,28 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=TIME(A3,B3,C3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 24.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0014236111111111112
       }
     },
     {
@@ -222,6 +266,28 @@
       }
     },
     {
+      "id": "D4",
+      "formula": "=TIME(A4,B4,C4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 16.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7086111111111111
+      }
+    },
+    {
       "id": "E4",
       "formula": "=D4",
       "setup": {
@@ -323,6 +389,28 @@
       "expect": {
         "kind": "number",
         "value": 24.0
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=TIME(A5,B5,C5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 0.9
+        },
+        "B5": {
+          "kind": "number",
+          "value": 20.7
+        },
+        "A5": {
+          "kind": "number",
+          "value": 3.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.1388888888888889
       }
     },
     {
@@ -430,6 +518,28 @@
       }
     },
     {
+      "id": "D6",
+      "formula": "=TIME(A6,B6,C6)",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 59.999999
+        },
+        "B6": {
+          "kind": "number",
+          "value": 59.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.999988425925926
+      }
+    },
+    {
       "id": "E6",
       "formula": "=D6",
       "setup": {
@@ -534,6 +644,15 @@
       }
     },
     {
+      "id": "D7",
+      "formula": "=TIME(A7,B7,C7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
       "id": "E7",
       "formula": "=D7",
       "setup": {
@@ -587,6 +706,20 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=TIME(A8,B8,C8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9583333333333334
       }
     },
     {
@@ -662,6 +795,20 @@
       }
     },
     {
+      "id": "D9",
+      "formula": "=TIME(A9,B9,C9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.01597222222222222
+      }
+    },
+    {
       "id": "E9",
       "formula": "=D9",
       "setup": {
@@ -731,6 +878,20 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=TIME(A10,B10,C10)",
+      "setup": {
+        "C10": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0002662037037037037
       }
     },
     {
@@ -932,6 +1093,28 @@
       }
     },
     {
+      "id": "D12",
+      "formula": "=TIME(A12,B12,C12)",
+      "setup": {
+        "C12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.49872685185185184
+      }
+    },
+    {
       "id": "E12",
       "formula": "=D12",
       "setup": {
@@ -1033,6 +1216,28 @@
       "expect": {
         "kind": "number",
         "value": 10.0
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=TIME(A13,B13,C13)",
+      "setup": {
+        "C13": {
+          "kind": "number",
+          "value": -30.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": -20.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 13.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5274305555555555
       }
     },
     {
@@ -1140,6 +1345,28 @@
       }
     },
     {
+      "id": "D14",
+      "formula": "=TIME(A14,B14,C14)",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 34.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.41738425925925926
+      }
+    },
+    {
       "id": "E14",
       "formula": "=D14",
       "setup": {
@@ -1241,6 +1468,28 @@
       "expect": {
         "kind": "number",
         "value": 2.0
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=TIME(A15,B15,C15)",
+      "setup": {
+        "C15": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": 61.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.45905092592592595
       }
     },
     {
@@ -1348,6 +1597,28 @@
       }
     },
     {
+      "id": "D16",
+      "formula": "=TIME(A16,B16,C16)",
+      "setup": {
+        "C16": {
+          "kind": "number",
+          "value": 62.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4180787037037037
+      }
+    },
+    {
       "id": "E16",
       "formula": "=D16",
       "setup": {
@@ -1449,6 +1720,28 @@
       "expect": {
         "kind": "number",
         "value": 2.0
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=TIME(A17,B17,C17)",
+      "setup": {
+        "C17": {
+          "kind": "number",
+          "value": 32767.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 32767.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 32767.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.425775462962963
       }
     },
     {
@@ -2615,6 +2908,28 @@
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D26",
+      "formula": "=TIME(A26,B26,C26)",
+      "setup": {
+        "C26": {
+          "kind": "bool",
+          "value": true
+        },
+        "B26": {
+          "kind": "bool",
+          "value": false
+        },
+        "A26": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.04167824074074074
       }
     },
     {

@@ -114,6 +114,10 @@ namespace {
 // prefix of this suffix?". When the match succeeds in prefix mode,
 // `*out_consumed` receives the number of `text` bytes the pattern
 // consumed.
+//
+// Character comparisons are ASCII case-insensitive to match Excel's
+// criteria semantics (e.g. `*blue` matches `BLUE`). Non-ASCII bytes are
+// compared byte-for-byte, consistent with `strings::case_insensitive_eq`.
 bool wildcard_match_impl(std::string_view pattern, std::string_view text, bool prefix_match_ok,
                          std::size_t* out_consumed) {
   std::size_t pi = 0;
@@ -132,8 +136,10 @@ bool wildcard_match_impl(std::string_view pattern, std::string_view text, bool p
     if (pi < pattern.size()) {
       const char pc = pattern[pi];
       if (pc == '~' && pi + 1 < pattern.size()) {
-        // Escaped literal: match the next pattern byte exactly.
-        if (pattern[pi + 1] == text[ti]) {
+        // Escaped literal: match the next pattern byte case-insensitively
+        // (Excel preserves the overall case-insensitive rule even for
+        // escape-protected characters).
+        if (strings::ascii_to_lower(pattern[pi + 1]) == strings::ascii_to_lower(text[ti])) {
           pi += 2;
           ++ti;
           continue;
@@ -143,7 +149,7 @@ bool wildcard_match_impl(std::string_view pattern, std::string_view text, bool p
         star_ti = ti;
         ++pi;
         continue;
-      } else if (pc == '?' || pc == text[ti]) {
+      } else if (pc == '?' || strings::ascii_to_lower(pc) == strings::ascii_to_lower(text[ti])) {
         ++pi;
         ++ti;
         continue;

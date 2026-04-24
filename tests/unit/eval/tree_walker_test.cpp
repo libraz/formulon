@@ -742,6 +742,50 @@ TEST(TreeWalkerRanges, CycleViaAggregator_ReturnsRef) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
+// ---------------------------------------------------------------------------
+// _xlfn. / _xlfn._xlws. prefix stripping
+// ---------------------------------------------------------------------------
+//
+// The xlsx format tags post-2007 functions with `_xlfn.` and modern
+// worksheet-only ones with `_xlfn._xlws.` as a storage-side compatibility
+// marker. Dispatch must treat those the same as the bare name.
+
+TEST(TreeWalkerXlfnPrefix, EagerRegistryName) {
+  // `CONCAT` is a regular (eager) entry in the function registry.
+  const Value bare = EvalSource("=CONCAT(\"a\",\"b\",\"c\")");
+  const Value tagged = EvalSource("=_xlfn.CONCAT(\"a\",\"b\",\"c\")");
+  ASSERT_TRUE(bare.is_text());
+  ASSERT_TRUE(tagged.is_text());
+  EXPECT_EQ(bare.as_text(), tagged.as_text());
+}
+
+TEST(TreeWalkerXlfnPrefix, LazyDispatchName) {
+  // `IFS` is handled through the lazy dispatch table.
+  const Value bare = EvalSource("=IFS(TRUE,1,TRUE,2)");
+  const Value tagged = EvalSource("=_xlfn.IFS(TRUE,1,TRUE,2)");
+  ASSERT_TRUE(bare.is_number());
+  ASSERT_TRUE(tagged.is_number());
+  EXPECT_EQ(bare.as_number(), tagged.as_number());
+}
+
+TEST(TreeWalkerXlfnPrefix, XlwsPrefixedName) {
+  // `_xlfn._xlws.` is the double-prefix form used for worksheet-only modern
+  // functions; still an eager registry name (`SORT` chosen as an available
+  // case-compat sample — fall through to #NAME? if unimplemented is fine).
+  const Value tagged_ifs = EvalSource("=_xlfn._xlws.IFS(TRUE,1,TRUE,2)");
+  const Value bare_ifs = EvalSource("=IFS(TRUE,1,TRUE,2)");
+  ASSERT_TRUE(bare_ifs.is_number());
+  ASSERT_TRUE(tagged_ifs.is_number());
+  EXPECT_EQ(bare_ifs.as_number(), tagged_ifs.as_number());
+}
+
+TEST(TreeWalkerXlfnPrefix, UnknownAfterStripStillNameError) {
+  // Stripping the prefix must not mask a genuinely unknown function.
+  const Value v = EvalSource("=_xlfn.NOSUCHFN(1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

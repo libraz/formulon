@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "INT",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-23T17:36:56Z"
+    "generated_at": "2026-04-24T04:56:20Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -362,6 +362,15 @@
       }
     },
     {
+      "id": "A26",
+      "formula": "=DATE(2024,1,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45301.0
+      }
+    },
+    {
       "id": "B26",
       "formula": "=INT(A26)",
       "setup": {
@@ -422,6 +431,15 @@
       }
     },
     {
+      "id": "A29",
+      "formula": "=TIME(2,30,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.10416666666666667
+      }
+    },
+    {
       "id": "B29",
       "formula": "=INT(A29)",
       "setup": {
@@ -433,6 +451,15 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      }
+    },
+    {
+      "id": "A30",
+      "formula": "=-TIME(2,30,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.10416666666666663
       }
     },
     {

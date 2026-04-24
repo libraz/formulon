@@ -84,7 +84,12 @@ target_compile_definitions(formulon_ironcalc_oracle_tests
 
 formulon_apply_warnings(formulon_ironcalc_oracle_tests)
 
-gtest_discover_tests(formulon_ironcalc_oracle_tests
-  DISCOVERY_MODE PRE_TEST
-  PROPERTIES LABELS "ironcalc"
-)
+# Single-shot ctest entry: the IronCalc suite registers ~12,500 parameterized
+# gtest cases, and registering each as its own ctest test makes `ctest` spend
+# ~0.2 s of process-launch overhead per case (377 s wall total, vs ~0.2 s
+# when the binary runs once and lets gtest iterate internally). For iteration
+# speed we register one ctest entry that invokes the binary directly; gtest
+# still prints per-case failures in `--output-on-failure`.
+add_test(NAME formulon_ironcalc_oracle
+         COMMAND formulon_ironcalc_oracle_tests --gtest_brief=1)
+set_tests_properties(formulon_ironcalc_oracle PROPERTIES LABELS "ironcalc")

@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "EXP_SIGN",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-23T17:36:56Z"
+    "generated_at": "2026-04-24T04:56:20Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -914,6 +914,15 @@
       }
     },
     {
+      "id": "A32",
+      "formula": "=DATE(2024,1,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45301.0
+      }
+    },
+    {
       "id": "B32",
       "formula": "=EXP(A32)",
       "setup": {
@@ -1013,6 +1022,15 @@
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A35",
+      "formula": "=TIME(14,30,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6041666666666666
       }
     },
     {

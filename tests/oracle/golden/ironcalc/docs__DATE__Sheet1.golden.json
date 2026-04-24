@@ -6,13 +6,35 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Sheet1",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-23T17:36:56Z"
+    "generated_at": "2026-04-24T04:56:20Z"
   },
   "tolerance": {
     "abs": 5e-08,
     "rel": 0.0
   },
   "cases": [
+    {
+      "id": "D2",
+      "formula": "=DATE(A2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1905.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1828.0
+      }
+    },
     {
       "id": "E2",
       "formula": "=D2",
@@ -37,6 +59,28 @@
       "expect": {
         "kind": "number",
         "value": 1828.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=DATE(A3,B3,C3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 36692.0
       }
     },
     {
@@ -66,6 +110,28 @@
       }
     },
     {
+      "id": "D4",
+      "formula": "=DATE(A4,B4,C4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 25.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2024.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45651.0
+      }
+    },
+    {
       "id": "E4",
       "formula": "=D4",
       "setup": {
@@ -92,6 +158,28 @@
       }
     },
     {
+      "id": "D5",
+      "formula": "=DATE(A5,B5,C5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 25.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 2025.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 46016.0
+      }
+    },
+    {
       "id": "E5",
       "formula": "=D5",
       "setup": {
@@ -110,6 +198,28 @@
         "D5": {
           "kind": "formula",
           "formula": "=DATE(A5,B5,C5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 46016.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=DATE(A6,B6,C6)",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 25.9
+        },
+        "B6": {
+          "kind": "number",
+          "value": 12.9
+        },
+        "A6": {
+          "kind": "number",
+          "value": 2025.9
         }
       },
       "expect": {
@@ -144,6 +254,28 @@
       }
     },
     {
+      "id": "D7",
+      "formula": "=DATE(A7,B7,C7)",
+      "setup": {
+        "C7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2030.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 47484.0
+      }
+    },
+    {
       "id": "E7",
       "formula": "=D7",
       "setup": {
@@ -170,6 +302,28 @@
       }
     },
     {
+      "id": "D8",
+      "formula": "=DATE(A8,B8,C8)",
+      "setup": {
+        "C8": {
+          "kind": "number",
+          "value": 31.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 9999.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2958465.0
+      }
+    },
+    {
       "id": "E8",
       "formula": "=D8",
       "setup": {
@@ -193,6 +347,15 @@
       "expect": {
         "kind": "number",
         "value": 2958465.0
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=DATE(2024, 11, 22)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45618.0
       }
     },
     {

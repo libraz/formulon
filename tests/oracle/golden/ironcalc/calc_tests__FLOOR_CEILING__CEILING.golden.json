@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "CEILING",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-23T17:36:56Z"
+    "generated_at": "2026-04-24T04:56:20Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -104,6 +104,15 @@
       }
     },
     {
+      "id": "AE2",
+      "formula": "=DATE(2024,1,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45301.0
+      }
+    },
+    {
       "id": "AF2",
       "formula": "=\"2024-01-10\"",
       "setup": {},
@@ -119,6 +128,15 @@
       "expect": {
         "kind": "text",
         "value": " 2024-01-10 "
+      }
+    },
+    {
+      "id": "AH2",
+      "formula": "=TIME(14,30,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6041666666666666
       }
     },
     {
@@ -6970,38 +6988,6 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
-      }
-    },
-    {
-      "id": "N14",
-      "formula": "=CEILING($A14,N$2)",
-      "setup": {
-        "N2": {
-          "kind": "number",
-          "value": 1e-307
-        },
-        "A14": {
-          "kind": "bool",
-          "value": true
-        }
-      },
-      "expect": {
-        "kind": "number",
-        "value": 0.9999999999999999
-      }
-    },
-    {
-      "id": "O14",
-      "formula": "=CEILING($A14,O$2)",
-      "setup": {
-        "A14": {
-          "kind": "bool",
-          "value": true
-        }
-      },
-      "expect": {
-        "kind": "number",
-        "value": 0.0
       }
     }
   ]

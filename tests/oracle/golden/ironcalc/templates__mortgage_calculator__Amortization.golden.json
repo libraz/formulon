@@ -1,10 +1,10 @@
 {
-  "suite": "ironcalc_calc_tests_range_operator_Sheet2",
-  "description": "Derived from IronCalc fixture calc_tests/range_operator.xlsx, sheet 'Sheet2'.",
+  "suite": "ironcalc_templates_mortgage_calculator_Amortization",
+  "description": "Derived from IronCalc fixture templates/mortgage_calculator.xlsx, sheet '📊 Amortization'.",
   "environment": {
     "source": "ironcalc",
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
-    "sheet": "Sheet2",
+    "sheet": "📊 Amortization",
     "excel_locale": "unknown",
     "generated_at": "2026-04-24T04:56:20Z"
   },
@@ -14,17 +14,17 @@
   },
   "cases": [
     {
-      "id": "A1",
-      "formula": "=SUM(B1:OFFSET(B1,3,0))",
+      "id": "B8",
+      "formula": "=C5",
       "setup": {
-        "B1": {
+        "C5": {
           "kind": "number",
-          "value": 12.0
+          "value": 46023.0
         }
       },
       "expect": {
         "kind": "number",
-        "value": 40.0
+        "value": 46023.0
       }
     }
   ]

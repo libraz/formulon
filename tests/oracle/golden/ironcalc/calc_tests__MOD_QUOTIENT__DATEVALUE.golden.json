@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "DATEVALUE",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-23T17:36:56Z"
+    "generated_at": "2026-04-24T04:56:20Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -1182,6 +1182,10 @@
         "B34": {
           "kind": "number",
           "value": 2.0
+        },
+        "A34": {
+          "kind": "number",
+          "value": 45854.0
         }
       },
       "expect": {
@@ -1196,6 +1200,10 @@
         "B34": {
           "kind": "number",
           "value": 2.0
+        },
+        "A34": {
+          "kind": "number",
+          "value": 45854.0
         }
       },
       "expect": {

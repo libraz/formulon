@@ -499,11 +499,85 @@ Value NumberValue_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return Value::error(ErrorCode::Value);
 }
 
+// VALUETOTEXT(value, [format])
+//
+// Converts `value` to text, exactly as Excel 365 does when the user types
+// `=VALUETOTEXT(x)` into a cell. The `format` second argument is 0
+// ("concise", the default) or 1 ("strict").
+//
+//   concise:
+//     * Numbers → General format (same as `coerce_to_text`).
+//     * Bools   → "TRUE" / "FALSE".
+//     * Text    → unchanged, no quoting.
+//     * Blank   → "".
+//   strict:
+//     * Text    → wrapped in double-quotes; embedded `"` become `""`.
+//     * Booleans, numbers, blanks → same as concise.
+//
+// Errors are NOT suppressed — they propagate as the function's result
+// (matching Excel's behaviour where `VALUETOTEXT(#DIV/0!)` returns
+// `#DIV/0!`, not the text "#DIV/0!").
+Value ValueToText_(const Value* args, std::uint32_t arity, Arena& arena) {
+  const Value& v = args[0];
+  if (v.is_error()) {
+    return v;
+  }
+  bool strict = false;
+  if (arity >= 2) {
+    const Value& fmt = args[1];
+    if (fmt.is_error()) {
+      return fmt;
+    }
+    auto n = coerce_to_number(fmt);
+    if (!n) {
+      return Value::error(n.error());
+    }
+    const double nv = n.value();
+    if (nv == 0.0) {
+      strict = false;
+    } else if (nv == 1.0) {
+      strict = true;
+    } else {
+      return Value::error(ErrorCode::Value);
+    }
+  }
+  if (strict && v.is_text()) {
+    const std::string_view src = v.as_text();
+    std::string out;
+    out.reserve(src.size() + 2);
+    out.push_back('"');
+    for (char c : src) {
+      if (c == '"') {
+        out.push_back('"');
+      }
+      out.push_back(c);
+    }
+    out.push_back('"');
+    return Value::text(arena.intern(out));
+  }
+  auto text = coerce_to_text(v);
+  if (!text) {
+    return Value::error(text.error());
+  }
+  return Value::text(arena.intern(text.value()));
+}
+
+// ARRAYTOTEXT(array, [format]) — for a scalar input this is a thin
+// alias for VALUETOTEXT. Arrays are not fully modelled yet; when an
+// array AST reaches here it has already been reduced to its first
+// element by the eager dispatcher, so the behavioural difference only
+// shows up in the as-yet-unimplemented spill pipeline.
+Value ArrayToText_(const Value* args, std::uint32_t arity, Arena& arena) {
+  return ValueToText_(args, arity, arena);
+}
+
 }  // namespace
 
 void register_text_format_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"TEXT", 2u, 2u, &Text_});
   registry.register_function(FunctionDef{"VALUE", 1u, 1u, &Value_});
+  registry.register_function(FunctionDef{"VALUETOTEXT", 1u, 2u, &ValueToText_});
+  registry.register_function(FunctionDef{"ARRAYTOTEXT", 1u, 2u, &ArrayToText_});
   registry.register_function(FunctionDef{"NUMBERVALUE", 1u, 3u, &NumberValue_});
   registry.register_function(FunctionDef{"FIXED", 1u, 3u, &Fixed_});
   registry.register_function(FunctionDef{"DOLLAR", 1u, 2u, &Dollar_});

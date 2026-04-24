@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Sheet1",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-23T17:36:56Z"
+    "generated_at": "2026-04-24T04:56:20Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -135,7 +135,12 @@
     {
       "id": "B7",
       "formula": "=YEAR(A7)",
-      "setup": {},
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
       "expect": {
         "kind": "number",
         "value": 1900.0
@@ -145,6 +150,10 @@
       "id": "C7",
       "formula": "=_xlfn.FORMULATEXT(B7)",
       "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 1.0
+        },
         "B7": {
           "kind": "formula",
           "formula": "=YEAR(A7)"
@@ -158,7 +167,12 @@
     {
       "id": "B8",
       "formula": "=YEAR(A8)",
-      "setup": {},
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
       "expect": {
         "kind": "number",
         "value": 1900.0
@@ -168,6 +182,10 @@
       "id": "C8",
       "formula": "=_xlfn.FORMULATEXT(B8)",
       "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 2.0
+        },
         "B8": {
           "kind": "formula",
           "formula": "=YEAR(A8)"
@@ -181,7 +199,12 @@
     {
       "id": "B9",
       "formula": "=YEAR(A9)",
-      "setup": {},
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 46016.0
+        }
+      },
       "expect": {
         "kind": "number",
         "value": 2025.0
@@ -191,6 +214,10 @@
       "id": "C9",
       "formula": "=_xlfn.FORMULATEXT(B9)",
       "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 46016.0
+        },
         "B9": {
           "kind": "formula",
           "formula": "=YEAR(A9)"
@@ -204,7 +231,12 @@
     {
       "id": "B10",
       "formula": "=YEAR(A10)",
-      "setup": {},
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 2958465.999988426
+        }
+      },
       "expect": {
         "kind": "number",
         "value": 9999.0
@@ -214,6 +246,10 @@
       "id": "C10",
       "formula": "=_xlfn.FORMULATEXT(B10)",
       "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 2958465.999988426
+        },
         "B10": {
           "kind": "formula",
           "formula": "=YEAR(A10)"

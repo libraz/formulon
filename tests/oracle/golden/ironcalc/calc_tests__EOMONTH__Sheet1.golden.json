@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Sheet1",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-23T17:36:56Z"
+    "generated_at": "2026-04-24T04:56:20Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -14,12 +14,178 @@
   },
   "cases": [
     {
+      "id": "C2",
+      "formula": "=EOMONTH(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 44987.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45230.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=EOMONTH(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 44987.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45107.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=EOMONTH(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": -7.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 44987.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 44804.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=EOMONTH(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": -123.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 44987.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 41274.0
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=EOMONTH(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 44987.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 48760.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=EOMONTH(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 4.5
+        },
+        "A7": {
+          "kind": "number",
+          "value": 44987.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45138.0
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=EOMONTH(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": -4.7
+        },
+        "A8": {
+          "kind": "number",
+          "value": 44987.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 44895.0
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=EOMONTH(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": -4.2
+        },
+        "A9": {
+          "kind": "number",
+          "value": 44987.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 44895.0
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=EOMONTH(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 77.8
+        },
+        "A10": {
+          "kind": "number",
+          "value": 44987.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 47361.0
+      }
+    },
+    {
       "id": "C11",
       "formula": "=EOMONTH(A11,B11)",
       "setup": {
         "B11": {
           "kind": "bool",
           "value": true
+        },
+        "A11": {
+          "kind": "number",
+          "value": 44987.0
         }
       },
       "expect": {
@@ -34,11 +200,169 @@
         "B12": {
           "kind": "bool",
           "value": false
+        },
+        "A12": {
+          "kind": "number",
+          "value": 44987.0
         }
       },
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=EOMONTH(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 44987.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45016.0
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=EOMONTH(A14,B14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 44987.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45016.0
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=EOMONTH(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A15": {
+          "kind": "number",
+          "value": 44987.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45077.0
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=EOMONTH(A16,B16)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": 44987.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45016.0
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=EOMONTH(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 1230.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 20881.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 58348.0
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=EOMONTH(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": -1240.333
+        },
+        "A18": {
+          "kind": "number",
+          "value": 44987.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7274.0
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=EOMONTH(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 45231.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45291.0
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=EOMONTH(A20,B20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 45260.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45291.0
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=EOMONTH(A21,B21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 45231.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45322.0
       }
     }
   ]

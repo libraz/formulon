@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "FLOOR",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-23T17:36:56Z"
+    "generated_at": "2026-04-24T04:56:20Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -104,6 +104,15 @@
       }
     },
     {
+      "id": "AC2",
+      "formula": "=DATE(2024,1,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45301.0
+      }
+    },
+    {
       "id": "AD2",
       "formula": "=\"2024-01-10\"",
       "setup": {},
@@ -119,6 +128,15 @@
       "expect": {
         "kind": "text",
         "value": " 2024-01-10 "
+      }
+    },
+    {
+      "id": "AF2",
+      "formula": "=TIME(14,30,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6041666666666666
       }
     },
     {
@@ -7154,42 +7172,6 @@
       "expect": {
         "kind": "number",
         "value": 0.0
-      }
-    },
-    {
-      "id": "W14",
-      "formula": "=FLOOR($A14,W$2)",
-      "setup": {
-        "A14": {
-          "kind": "bool",
-          "value": true
-        },
-        "W2": {
-          "kind": "formula",
-          "formula": "=1/0"
-        }
-      },
-      "expect": {
-        "kind": "error",
-        "code": "#DIV/0!"
-      }
-    },
-    {
-      "id": "X14",
-      "formula": "=FLOOR($A14,X$2)",
-      "setup": {
-        "A14": {
-          "kind": "bool",
-          "value": true
-        },
-        "X2": {
-          "kind": "formula",
-          "formula": "=NA()"
-        }
-      },
-      "expect": {
-        "kind": "error",
-        "code": "#N/A"
       }
     }
   ]

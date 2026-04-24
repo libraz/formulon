@@ -338,6 +338,11 @@ constexpr LazyEntry kLazyDispatch[] = {
     // its impl and arity are identical to FORECAST.LINEAR.
     {"FORECAST", &eval_forecast_linear_lazy},
     {"FORECAST.LINEAR", &eval_forecast_linear_lazy},
+    // FORMULATEXT returns the source text of the referenced cell's formula,
+    // so it must inspect the un-evaluated Ref AST and the bound Sheet's
+    // `formula_text` directly — the eager path would flatten the argument
+    // to a Value before we could see the reference.
+    {"FORMULATEXT", &eval_formulatext_lazy},
     // FTEST is the pre-2010 legacy spelling of F.TEST; same impl.
     {"FTEST", &eval_f_test_lazy},
     {"HLOOKUP", &eval_hlookup_lazy},
@@ -413,6 +418,26 @@ const LazyEntry* find_lazy(std::string_view name) noexcept {
   return nullptr;
 }
 
+// Strips the xlsx-only `_xlfn.` and `_xlfn._xlws.` prefixes from a function
+// name. These prefixes are a storage artifact: xlsx tags post-2007 functions
+// with `_xlfn.` and modern worksheet-only ones (FILTER, XLOOKUP, LET, ...)
+// with `_xlfn._xlws.` so older Excel versions don't accidentally try to
+// evaluate them. Excel itself transparently strips the tag on load, so the
+// canonical name is the only thing the registry knows about.
+//
+// Matches ASCII case-insensitively to tolerate `_xlfn.` vs `_XLFN.` casing.
+std::string_view strip_future_prefix(std::string_view name) noexcept {
+  constexpr std::string_view kXlws = "_xlfn._xlws.";
+  constexpr std::string_view kXlfn = "_xlfn.";
+  if (name.size() > kXlws.size() && strings::case_insensitive_eq(name.substr(0, kXlws.size()), kXlws)) {
+    return name.substr(kXlws.size());
+  }
+  if (name.size() > kXlfn.size() && strings::case_insensitive_eq(name.substr(0, kXlfn.size()), kXlfn)) {
+    return name.substr(kXlfn.size());
+  }
+  return name;
+}
+
 // Special-cased function-call dispatch.
 //
 // Lazy entries (`IF`, `IFERROR`, `IFNA`, the `*IF`/`*IFS` aggregators) are
@@ -427,7 +452,7 @@ const LazyEntry* find_lazy(std::string_view name) noexcept {
 // error values among its arguments.
 Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                     const EvalContext& ctx) {
-  const std::string_view name = node.as_call_name();
+  const std::string_view name = strip_future_prefix(node.as_call_name());
   const std::uint32_t arity = node.as_call_arity();
 
   if (const LazyEntry* lazy = find_lazy(name); lazy != nullptr) {

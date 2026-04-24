@@ -37,6 +37,16 @@ class FunctionRegistry;
 Value eval_isformula_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                           const EvalContext& ctx);
 
+/// `FORMULATEXT(reference)` — returns the raw formula source string of
+/// the referenced single-cell, including the leading `=`. The argument
+/// must be a literal single-cell reference; anything else (literal,
+/// RangeOp, non-reference call) surfaces `#VALUE!`. When the cell
+/// carries no formula (empty `formula_text`, or the cell slot is
+/// absent) the result is `#N/A`, matching Excel 365. A broken sheet
+/// qualifier propagates as `#REF!` / `#NAME?` exactly like ISFORMULA.
+Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx);
+
 /// `ISREF(value)` — returns TRUE iff the argument AST is a reference
 /// shape (Ref / RangeOp / ExternalRef / StructuredRef / NameRef) or a
 /// reference-returning call (INDIRECT / OFFSET / INDEX / CHOOSE) that

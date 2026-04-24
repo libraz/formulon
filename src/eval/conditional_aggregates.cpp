@@ -194,8 +194,13 @@ Value eval_sumif_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       continue;
     }
     const Value& sv = sum_cells[i];
-    // Skip non-numeric sum-side cells (text/bool/blank/error). Matches
-    // Excel's SUMIF which sums only numbers.
+    // Excel propagates errors that live at a matching position in the
+    // sum range (e.g. a `#N/A` cell whose criterion-side row matches).
+    // Non-matching errors are ignored, and non-numeric matches (text /
+    // bool / blank) are silently skipped, same as Excel's SUMIF.
+    if (sv.is_error()) {
+      return sv;
+    }
     if (!sv.is_number()) {
       continue;
     }
@@ -248,6 +253,10 @@ Value eval_averageif_lazy(const parser::AstNode& call, Arena& arena, const Funct
       continue;
     }
     const Value& av = avg_cells[i];
+    if (av.is_error()) {
+      // Errors at matching positions propagate, matching Excel AVERAGEIF.
+      return av;
+    }
     if (!av.is_number()) {
       continue;
     }
@@ -341,6 +350,9 @@ Value eval_sumifs_lazy(const parser::AstNode& call, Arena& arena, const Function
       continue;
     }
     const Value& sv = sum_cells[i];
+    if (sv.is_error()) {
+      return sv;
+    }
     if (!sv.is_number()) {
       continue;
     }
@@ -384,6 +396,9 @@ Value eval_averageifs_lazy(const parser::AstNode& call, Arena& arena, const Func
       continue;
     }
     const Value& av = avg_cells[i];
+    if (av.is_error()) {
+      return av;
+    }
     if (!av.is_number()) {
       continue;
     }
@@ -431,6 +446,9 @@ Value eval_maxifs_lazy(const parser::AstNode& call, Arena& arena, const Function
       continue;
     }
     const Value& mv = max_cells[i];
+    if (mv.is_error()) {
+      return mv;
+    }
     if (!mv.is_number()) {
       continue;
     }
@@ -479,6 +497,9 @@ Value eval_minifs_lazy(const parser::AstNode& call, Arena& arena, const Function
       continue;
     }
     const Value& mv = min_cells[i];
+    if (mv.is_error()) {
+      return mv;
+    }
     if (!mv.is_number()) {
       continue;
     }

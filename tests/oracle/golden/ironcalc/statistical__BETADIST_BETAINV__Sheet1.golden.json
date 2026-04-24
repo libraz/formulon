@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Sheet1",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-23T17:36:56Z"
+    "generated_at": "2026-04-24T04:56:20Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -3481,6 +3481,14 @@
       "id": "G52",
       "formula": "=_xlfn.BETA.DIST(A52,B52,C52,D52,E52,F52)",
       "setup": {
+        "F52": {
+          "kind": "number",
+          "value": 46100.0
+        },
+        "E52": {
+          "kind": "number",
+          "value": 45900.0
+        },
         "D52": {
           "kind": "number",
           "value": 6.0
@@ -3492,6 +3500,10 @@
         "B52": {
           "kind": "number",
           "value": 23.0
+        },
+        "A52": {
+          "kind": "number",
+          "value": 46000.0
         }
       },
       "expect": {
@@ -3503,6 +3515,14 @@
       "id": "H52",
       "formula": "=_xlfn.BETA.INV(G52,B52,C52,E52,F52)",
       "setup": {
+        "F52": {
+          "kind": "number",
+          "value": 46100.0
+        },
+        "E52": {
+          "kind": "number",
+          "value": 45900.0
+        },
         "C52": {
           "kind": "number",
           "value": 45.0
@@ -3514,6 +3534,10 @@
         "D52": {
           "kind": "number",
           "value": 6.0
+        },
+        "A52": {
+          "kind": "number",
+          "value": 46000.0
         },
         "G52": {
           "kind": "formula",

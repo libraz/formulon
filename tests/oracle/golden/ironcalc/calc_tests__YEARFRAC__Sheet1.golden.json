@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Sheet1",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-23T17:36:56Z"
+    "generated_at": "2026-04-24T04:56:20Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -20,6 +20,14 @@
         "C2": {
           "kind": "number",
           "value": 0.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39691.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 39508.0
         }
       },
       "expect": {
@@ -34,6 +42,14 @@
         "C3": {
           "kind": "number",
           "value": 1.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 39691.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 39508.0
         }
       },
       "expect": {
@@ -48,6 +64,14 @@
         "C4": {
           "kind": "number",
           "value": 2.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 39691.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 39508.0
         }
       },
       "expect": {
@@ -62,6 +86,14 @@
         "C5": {
           "kind": "number",
           "value": 3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 39691.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 39508.0
         }
       },
       "expect": {
@@ -76,6 +108,14 @@
         "C6": {
           "kind": "number",
           "value": 4.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 39691.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 39508.0
         }
       },
       "expect": {
@@ -90,6 +130,14 @@
         "C7": {
           "kind": "number",
           "value": 0.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 39325.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 39142.0
         }
       },
       "expect": {
@@ -104,11 +152,28 @@
         "C8": {
           "kind": "number",
           "value": 1.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 39325.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 39142.0
         }
       },
       "expect": {
         "kind": "number",
         "value": 0.5013698630136987
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
       }
     },
     {
@@ -118,6 +183,10 @@
         "C9": {
           "kind": "number",
           "value": 0.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 42769.0
         },
         "B9": {
           "kind": "formula",
@@ -130,12 +199,25 @@
       }
     },
     {
+      "id": "B10",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
       "id": "D10",
       "formula": "=YEARFRAC(A10,B10,C10)",
       "setup": {
         "C10": {
           "kind": "number",
           "value": 1.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 42769.0
         },
         "B10": {
           "kind": "formula",
@@ -148,12 +230,25 @@
       }
     },
     {
+      "id": "B11",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
       "id": "D11",
       "formula": "=YEARFRAC(A11,B11,C11)",
       "setup": {
         "C11": {
           "kind": "number",
           "value": 2.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 42769.0
         },
         "B11": {
           "kind": "formula",
@@ -166,12 +261,25 @@
       }
     },
     {
+      "id": "B12",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
       "id": "D12",
       "formula": "=YEARFRAC(A12,B12,C12)",
       "setup": {
         "C12": {
           "kind": "number",
           "value": 3.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 42769.0
         },
         "B12": {
           "kind": "formula",
@@ -184,12 +292,25 @@
       }
     },
     {
+      "id": "B13",
+      "formula": "=DATE(2017,12,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43070.0
+      }
+    },
+    {
       "id": "D13",
       "formula": "=YEARFRAC(A13,B13,C13)",
       "setup": {
         "C13": {
           "kind": "number",
           "value": 4.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 42769.0
         },
         "B13": {
           "kind": "formula",
@@ -208,6 +329,14 @@
         "C14": {
           "kind": "number",
           "value": 0.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 39301.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 39177.0
         }
       },
       "expect": {
@@ -222,6 +351,14 @@
         "C15": {
           "kind": "number",
           "value": 1.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": 39301.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 39177.0
         }
       },
       "expect": {
@@ -236,6 +373,14 @@
         "C16": {
           "kind": "number",
           "value": 2.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": 39301.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 39177.0
         }
       },
       "expect": {
@@ -250,6 +395,14 @@
         "C17": {
           "kind": "number",
           "value": 3.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 39301.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 39177.0
         }
       },
       "expect": {
@@ -264,6 +417,14 @@
         "C18": {
           "kind": "number",
           "value": 4.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": 39301.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 39177.0
         }
       },
       "expect": {
@@ -278,6 +439,14 @@
         "C19": {
           "kind": "number",
           "value": 0.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": 46179.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 34824.0
         }
       },
       "expect": {
@@ -292,6 +461,14 @@
         "C20": {
           "kind": "number",
           "value": 1.0
+        },
+        "B20": {
+          "kind": "number",
+          "value": 46179.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 34824.0
         }
       },
       "expect": {
@@ -306,6 +483,14 @@
         "C21": {
           "kind": "number",
           "value": 2.0
+        },
+        "B21": {
+          "kind": "number",
+          "value": 46179.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 34824.0
         }
       },
       "expect": {
@@ -320,6 +505,14 @@
         "C22": {
           "kind": "number",
           "value": 3.0
+        },
+        "B22": {
+          "kind": "number",
+          "value": 46179.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 34824.0
         }
       },
       "expect": {
@@ -334,6 +527,14 @@
         "C23": {
           "kind": "number",
           "value": 4.0
+        },
+        "B23": {
+          "kind": "number",
+          "value": 46179.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 34824.0
         }
       },
       "expect": {
@@ -348,6 +549,14 @@
         "C25": {
           "kind": "number",
           "value": 0.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": 46084.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 46179.0
         }
       },
       "expect": {
@@ -362,6 +571,14 @@
         "C28": {
           "kind": "number",
           "value": 1.0
+        },
+        "B28": {
+          "kind": "number",
+          "value": 45386.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": 36015.0
         }
       },
       "expect": {
@@ -376,6 +593,14 @@
         "C29": {
           "kind": "number",
           "value": 1.0
+        },
+        "B29": {
+          "kind": "number",
+          "value": 45350.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 44988.0
         }
       },
       "expect": {
@@ -390,6 +615,14 @@
         "C30": {
           "kind": "number",
           "value": 1.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 45351.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 44594.0
         }
       },
       "expect": {

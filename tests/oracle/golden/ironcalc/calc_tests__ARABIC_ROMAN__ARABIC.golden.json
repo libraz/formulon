@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "ARABIC",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-23T17:36:56Z"
+    "generated_at": "2026-04-24T04:56:20Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -459,7 +459,12 @@
     {
       "id": "B34",
       "formula": "=_xlfn.ARABIC(A34)",
-      "setup": {},
+      "setup": {
+        "A34": {
+          "kind": "number",
+          "value": 126.0
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
@@ -468,7 +473,12 @@
     {
       "id": "B35",
       "formula": "=_xlfn.ARABIC(A35)",
-      "setup": {},
+      "setup": {
+        "A35": {
+          "kind": "number",
+          "value": 45854.0
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#VALUE!"

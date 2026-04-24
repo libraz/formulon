@@ -62,6 +62,7 @@ from openpyxl.cell.cell import Cell
 from openpyxl.formula.tokenizer import Tokenizer
 from openpyxl.utils import column_index_from_string, get_column_letter
 from openpyxl.utils.cell import coordinate_from_string
+from openpyxl.utils.datetime import to_excel as _datetime_to_excel_serial
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -170,9 +171,23 @@ def _value_to_record(value: Any, *, where: str) -> Dict[str, Any]:
         if value.startswith("#") and value in EXCEL_ERROR_NAMES:
             return {"kind": "error", "code": value}
         return {"kind": "text", "value": value}
-    # Datetime / time / timedelta: translate to Excel serial so the
-    # setup lands as a plain number. For now we skip rather than guess
-    # since IronCalc fixtures generally use raw serials.
+    # openpyxl auto-converts any cell carrying a date-style number format
+    # into a datetime/date/time object — e.g. YEARFRAC.xlsx A2 arrives as
+    # `datetime(2008, 3, 1)` even though the XML stores `<v>39508</v>`.
+    # Re-encode back to the Excel serial so Formulon sees the underlying
+    # number, which is what the formula actually consumes.
+    if isinstance(value, _dt.datetime):
+        serial = _datetime_to_excel_serial(value)
+        return {"kind": "number", "value": float(serial)}
+    if isinstance(value, _dt.date):
+        serial = _datetime_to_excel_serial(_dt.datetime.combine(value, _dt.time()))
+        return {"kind": "number", "value": float(serial)}
+    if isinstance(value, _dt.time):
+        # A pure time-of-day becomes the fractional day (0 <= v < 1).
+        seconds = value.hour * 3600 + value.minute * 60 + value.second + value.microsecond / 1e6
+        return {"kind": "number", "value": seconds / 86400.0}
+    if isinstance(value, _dt.timedelta):
+        return {"kind": "number", "value": value.total_seconds() / 86400.0}
     raise ValueError(f"{where}: unsupported value type {type(value).__name__}")
 
 

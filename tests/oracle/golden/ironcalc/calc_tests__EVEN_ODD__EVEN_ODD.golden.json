@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "EVEN_ODD",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-23T17:36:56Z"
+    "generated_at": "2026-04-24T04:56:20Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -883,7 +883,12 @@
     {
       "id": "B33",
       "formula": "=EVEN(A33)",
-      "setup": {},
+      "setup": {
+        "A33": {
+          "kind": "number",
+          "value": 45854.0
+        }
+      },
       "expect": {
         "kind": "number",
         "value": 45854.0
@@ -892,7 +897,12 @@
     {
       "id": "C33",
       "formula": "=ODD(A33)",
-      "setup": {},
+      "setup": {
+        "A33": {
+          "kind": "number",
+          "value": 45854.0
+        }
+      },
       "expect": {
         "kind": "number",
         "value": 45855.0

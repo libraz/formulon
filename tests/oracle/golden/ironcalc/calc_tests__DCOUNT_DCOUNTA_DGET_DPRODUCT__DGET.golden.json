@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "DGET",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-23T17:36:56Z"
+    "generated_at": "2026-04-24T04:56:20Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -3073,6 +3073,10 @@
       "id": "B32",
       "formula": "=DGET(A1:G11,F1,L14:L15)",
       "setup": {
+        "L15": {
+          "kind": "number",
+          "value": 45474.0
+        },
         "L14": {
           "kind": "text",
           "value": "Date"

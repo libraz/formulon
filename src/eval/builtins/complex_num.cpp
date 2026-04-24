@@ -409,7 +409,9 @@ Value Complex_fn(const Value* args, std::uint32_t arity, Arena& arena) {
       suffix = 'i';
     } else if (s.is_text()) {
       const std::string_view sv = s.as_text();
-      if (sv == "i") {
+      if (sv.empty() || sv == "i") {
+        // Excel treats "" (including the result of `=""`) the same as
+        // omitted / blank — both default the suffix to "i".
         suffix = 'i';
       } else if (sv == "j") {
         suffix = 'j';
