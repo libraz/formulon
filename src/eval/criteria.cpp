@@ -492,6 +492,16 @@ bool matches_criterion(const Value& cell, const ParsedCriterion& c) {
     return !cell.is_blank();
   }
 
+  // Bare ordering comparator with nothing after it (e.g. `"<"`, `"<="`,
+  // `">="`) is not a meaningful criterion in Excel: COUNTIF returns 0,
+  // matching no cells — not even the literal empty-string. Without this
+  // guard the empty `rhs_text` would compare lexicographically against
+  // every cell's text projection and incorrectly match blanks / "".
+  if (!c.rhs_is_number && c.rhs_text.empty() &&
+      (c.op == CriteriaOp::Lt || c.op == CriteriaOp::LtEq || c.op == CriteriaOp::Gt || c.op == CriteriaOp::GtEq)) {
+    return false;
+  }
+
   // Blank-cell special cases. Excel's rule: `=""` matches blanks (see
   // also the sentinel branch above for the mirror case). For every other
   // op against a blank cell we need to report the Excel-observed outcome
