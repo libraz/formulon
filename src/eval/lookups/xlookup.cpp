@@ -385,10 +385,19 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   const auto search_mode = static_cast<XSearchMode>(search_raw);
   const std::size_t off = xlookup_scan(lookup_cells, lookup, match_mode, search_mode);
 
-  // 7) No match: evaluate if_not_found lazily, else #N/A.
+  // 7) No match: evaluate if_not_found lazily, else #N/A. A blank-literal
+  //    slot (`XLOOKUP(..., ..., ..., , , -1)`) is treated as "no
+  //    if_not_found supplied" per Excel 365 — the parser injects a
+  //    Blank literal for the empty comma slot, but the function should
+  //    fall through to #N/A rather than returning that blank.
   if (off == SIZE_MAX) {
     if (arity >= 4U) {
-      return eval_node(call.as_call_arg(3), arena, registry, ctx);
+      const parser::AstNode& if_arg = call.as_call_arg(3);
+      const bool is_empty_slot =
+          if_arg.kind() == parser::NodeKind::Literal && if_arg.as_literal().is_blank();
+      if (!is_empty_slot) {
+        return eval_node(if_arg, arena, registry, ctx);
+      }
     }
     return Value::error(ErrorCode::NA);
   }
