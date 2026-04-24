@@ -1,0 +1,256 @@
+suite: countif_edges
+description: >
+  COUNTIF / SUMIF criteria-engine edge cases observed in IronCalc's
+  COUNTIF_Rows / COUNTIF_Columns / COUNTIFS_Rows2 suites. Each case here
+  probes a specific semantic question that the existing `countif.yaml`
+  coverage does not answer, so we can confirm whether Mac Excel 365 (ja-JP)
+  agrees with Formulon, with IronCalc, or with neither. The author-side
+  `expect:` value below each case is Formulon's current return, included as
+  a documentation aid; the verifier compares against the Excel-observed
+  golden JSON (not this field) once oracle-gen has been run.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  # ---------------------------------------------------------------------
+  # A) Error criterion over a range with matching literal-error cells.
+  # IronCalc's Y-column scenario: range has two #N/A cells plus a
+  # #DIV/0!, criterion is a literal #N/A. Three possibilities:
+  #   * Excel propagates the error: result is #N/A.
+  #   * Excel counts matching-code cells: result is 2.
+  #   * Excel counts only non-formula error cells: result is 1.
+  - id: countif_error_criterion_na_over_two_na
+    description: "COUNTIF with #N/A criterion over range with 2 x #N/A + 1 x #DIV/0!"
+    setup:
+      A1: { kind: error, code: "#N/A" }
+      A2: 12
+      A3: { kind: error, code: "#DIV/0!" }
+      A4: { kind: error, code: "#N/A" }
+      B1: { kind: error, code: "#N/A" }
+    formula: "=COUNTIF(A1:A4,B1)"
+
+  - id: countif_error_criterion_div0_over_div0
+    description: "COUNTIF with #DIV/0! criterion over range with 2 x #DIV/0!"
+    setup:
+      A1: { kind: error, code: "#DIV/0!" }
+      A2: 12
+      A3: { kind: error, code: "#DIV/0!" }
+      A4: 7
+      B1: { kind: error, code: "#DIV/0!" }
+    formula: "=COUNTIF(A1:A4,B1)"
+
+  # B) Error criterion where some range cells are formula-produced errors.
+  # Mirrors IronCalc's T12/T13 setup (=1/0 alongside a literal #DIV/0!).
+  # If Mac behaves consistently, formula-produced #DIV/0! should match
+  # the same criterion as a literal one.
+  - id: countif_error_criterion_div0_mixed_source
+    description: "Range has 1 literal + 2 formula-produced #DIV/0!"
+    setup:
+      A1: "=1/0"
+      A2: { kind: error, code: "#DIV/0!" }
+      A3: "=1/0"
+      A4: 5
+      B1: { kind: error, code: "#DIV/0!" }
+    formula: "=COUNTIF(A1:A4,B1)"
+
+  # C) Text lexicographic less-than criterion. IronCalc D20 / V4.
+  # Range contains names starting with letters around 'b'. The question
+  # is whether Excel case-insensitively compares "Mr. Brown" vs "brown"
+  # (first char m>b) and how blanks / errors participate.
+  - id: countif_lex_lt_brown_names
+    description: "<brown over Albert/Bernanrd/Mr. Brown/Mrs. Brown/Steven"
+    setup:
+      A1: "Steven"
+      A2: "Albert"
+      A3: "Bernanrd"
+      A4: "Mr. Brown"
+      A5: "Mrs. Brown"
+      A6: "Albert"
+    formula: "=COUNTIF(A1:A6,\"<brown\")"
+
+  - id: countif_lex_lt_brown_with_errors_blank
+    description: "<brown over names + error cells + blanks"
+    setup:
+      A1: "Albert"
+      A2: "Bernanrd"
+      A3: "Steven"
+      A4: { kind: error, code: "#N/A" }
+      A5: { kind: error, code: "#DIV/0!" }
+    formula: "=COUNTIF(A1:A6,\"<brown\")"
+
+  - id: countif_lex_gte_brown
+    description: ">=brown over the name set"
+    setup:
+      A1: "Steven"
+      A2: "Albert"
+      A3: "Bernanrd"
+      A4: "Mr. Brown"
+      A5: "Mrs. Brown"
+    formula: "=COUNTIF(A1:A5,\">=brown\")"
+
+  # D) Bool criterion vs text / number cells.
+  # IronCalc AG column: range mixes bool TRUE/FALSE, number 1/0, and
+  # text "TRUE". Criterion text "TRUE" expected to match bool cells in
+  # Excel (display-form coercion) or only the text cell (type-strict).
+  - id: countif_text_true_over_mixed
+    description: "Text criterion \"TRUE\" over bool/number/text range"
+    setup:
+      A1: true
+      A2: 1
+      A3: 0
+      A4: false
+      A5: "TRUE"
+      A6: true
+      A7: true
+      A8: false
+    formula: "=COUNTIF(A1:A8,\"TRUE\")"
+
+  - id: countif_text_true_lowercase
+    description: "Lowercase \"true\" text criterion over same range"
+    setup:
+      A1: true
+      A2: 1
+      A3: 0
+      A4: false
+      A5: "TRUE"
+      A6: true
+      A7: true
+      A8: false
+    formula: "=COUNTIF(A1:A8,\"true\")"
+
+  - id: countif_bool_true_over_mixed
+    description: "Bool criterion TRUE (unquoted) over same range"
+    setup:
+      A1: true
+      A2: 1
+      A3: 0
+      A4: false
+      A5: "TRUE"
+      A6: true
+      A7: true
+      A8: false
+    formula: "=COUNTIF(A1:A8,TRUE)"
+
+  - id: countif_notequal_true_over_mixed
+    description: "NotEq text criterion \"<>TRUE\" over same range"
+    setup:
+      A1: true
+      A2: 1
+      A3: 0
+      A4: false
+      A5: "TRUE"
+      A6: true
+      A7: true
+      A8: false
+    formula: "=COUNTIF(A1:A8,\"<>TRUE\")"
+
+  # E) Ordering ops against error / blank cells.
+  - id: countif_lt_number_over_mixed
+    description: "<5 over mixed number/text/error range"
+    setup:
+      A1: 3
+      A2: 10
+      A3: "apple"
+      A4: { kind: error, code: "#N/A" }
+      A5: 0
+    formula: "=COUNTIF(A1:A5,\"<5\")"
+
+  - id: countif_ne_text_over_errors
+    description: "<>text criterion over range containing errors"
+    setup:
+      A1: "apple"
+      A2: "banana"
+      A3: { kind: error, code: "#N/A" }
+      A4: "apple"
+    formula: "=COUNTIF(A1:A4,\"<>apple\")"
+
+  # F) CONCAT building a criterion from an error value. The question is
+  # whether CONCAT propagates the error (so the criterion argument is
+  # itself #N/A) or coerces the error to the display string "#N/A" (so
+  # the criterion becomes the text "<>#N/A").
+  - id: countif_concat_ne_error_text_range
+    description: "COUNTIF with CONCAT(<>, err) over text range"
+    setup:
+      A1: "apple"
+      A2: "banana"
+      A3: { kind: error, code: "#N/A" }
+      A4: "cherry"
+      B1: { kind: error, code: "#N/A" }
+    formula: "=COUNTIF(A1:A4,CONCAT(\"<>\",B1))"
+
+  - id: countif_concat_ne_error_mixed_range
+    description: "COUNTIF with CONCAT(<>, #N/A) over range incl errors"
+    setup:
+      A1: { kind: error, code: "#N/A" }
+      A2: 12
+      A3: { kind: error, code: "#DIV/0!" }
+      A4: { kind: error, code: "#N/A" }
+      A5: 0
+      B1: { kind: error, code: "#N/A" }
+    formula: "=COUNTIF(A1:A5,CONCAT(\"<>\",B1))"
+
+  - id: concat_of_ne_and_error_alone
+    description: "What does CONCAT(<>, #N/A) return standalone?"
+    setup:
+      A1: { kind: error, code: "#N/A" }
+    formula: "=CONCAT(\"<>\",A1)"
+
+  # G) Blank vs empty string vs literal "" formula result.
+  # IronCalc G25/H25 are =""; we include one here so we can compare
+  # COUNTIF("=", formula-empty-string) directly.
+  - id: countif_empty_vs_formula_empty
+    description: "COUNTIF(=\"\") over blank + formula-empty + text ranges"
+    setup:
+      A1: "=\"\""
+      A2: ""
+      A3: null
+      A4: "apple"
+    formula: "=COUNTIF(A1:A4,\"\")"
+
+  - id: countif_notequal_empty_over_mixed
+    description: "COUNTIF(<>) over same range (non-blank filter)"
+    setup:
+      A1: "=\"\""
+      A2: ""
+      A3: null
+      A4: "apple"
+    formula: "=COUNTIF(A1:A4,\"<>\")"
+
+  # H) Numeric criterion from a cell holding a bool — Excel treats bool
+  # cell criterion differently than a number criterion.
+  - id: countif_cell_criterion_bool_true
+    description: "Cell criterion holds bool TRUE; range has bool + 1"
+    setup:
+      A1: true
+      A2: 1
+      A3: false
+      A4: true
+      B1: true
+    formula: "=COUNTIF(A1:A4,B1)"
+
+  - id: countif_cell_criterion_number_one
+    description: "Cell criterion holds number 1; range has bool + 1"
+    setup:
+      A1: true
+      A2: 1
+      A3: false
+      A4: true
+      B1: 1
+    formula: "=COUNTIF(A1:A4,B1)"
+
+  # Additional: bool criterion via CELL reference, range includes text
+  # "TRUE". Distinguishes literal-TRUE vs cell-TRUE semantics observed
+  # in IronCalc's AI3 case: IronCalc expects 3 here (type-strict), but
+  # Mac behavior is the source of truth.
+  - id: countif_cell_criterion_bool_true_with_text
+    description: "Cell criterion bool TRUE; range has bool + number + text TRUE"
+    setup:
+      A1: true
+      A2: 1
+      A3: 0
+      A4: false
+      A5: "TRUE"
+      A6: true
+      A7: true
+      A8: false
+      B1: true
+    formula: "=COUNTIF(A1:A8,B1)"

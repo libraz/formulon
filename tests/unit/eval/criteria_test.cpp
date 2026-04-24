@@ -415,6 +415,58 @@ TEST(CriteriaMatchBool, BoolCellAgainstBoolCriterion) {
   EXPECT_FALSE(matches_criterion(Value::number(1.0), c));
 }
 
+TEST(CriteriaMatchBool, BoolTrueCriterionMatchesTextTrueCaseInsensitive) {
+  // Mac Excel 365 (ja-JP) extends Bool Eq criteria to also match Text
+  // cells whose display form is "TRUE" / "FALSE" case-insensitively.
+  // Verified via tests/oracle/golden/countif_edges.golden.json cases
+  // countif_bool_true_over_mixed and countif_cell_criterion_bool_true_with_text.
+  const ParsedCriterion c = parse_criterion(Value::boolean(true));
+  EXPECT_TRUE(matches_criterion(Value::text("TRUE"), c));
+  EXPECT_TRUE(matches_criterion(Value::text("true"), c));
+  EXPECT_TRUE(matches_criterion(Value::text("True"), c));
+}
+
+TEST(CriteriaMatchBool, BoolTrueCriterionRejectsUnrelatedCells) {
+  // The bool-to-text broadening is narrow: only literal "TRUE" /
+  // "FALSE" Text cells match. Text "FALSE", Text "1", and Number 1 do
+  // NOT match a TRUE bool criterion.
+  const ParsedCriterion c = parse_criterion(Value::boolean(true));
+  EXPECT_FALSE(matches_criterion(Value::text("FALSE"), c));
+  EXPECT_FALSE(matches_criterion(Value::text("1"), c));
+  EXPECT_FALSE(matches_criterion(Value::number(1.0), c));
+}
+
+TEST(CriteriaMatchBool, BoolFalseCriterionMatchesTextFalseCaseInsensitive) {
+  const ParsedCriterion c = parse_criterion(Value::boolean(false));
+  EXPECT_TRUE(matches_criterion(Value::text("FALSE"), c));
+  EXPECT_TRUE(matches_criterion(Value::text("false"), c));
+  EXPECT_TRUE(matches_criterion(Value::text("False"), c));
+  // And does NOT match Text "TRUE" or Number 0.
+  EXPECT_FALSE(matches_criterion(Value::text("TRUE"), c));
+  EXPECT_FALSE(matches_criterion(Value::number(0.0), c));
+}
+
+TEST(CriteriaMatchBool, BoolCriterionNotEqUnchangedForText) {
+  // NotEq + cross-kind returns `true` unconditionally (see
+  // NotEqNumericCriterionBroadensToOtherTypes). The new Eq-only branch
+  // MUST NOT run for NotEq, so a bool-from-cell NotEq against a Text
+  // "TRUE" cell still returns true (cell type differs from Bool).
+  //
+  // `parse_criterion` always produces Eq for a Bool literal, so we build
+  // the ParsedCriterion by hand to reach the NotEq + rhs_from_bool path
+  // that `*IF` callers can synthesise via argument plumbing.
+  ParsedCriterion c;
+  c.op = CriteriaOp::NotEq;
+  c.rhs_is_number = true;
+  c.rhs_from_bool = true;
+  c.rhs_number = 1.0;
+  EXPECT_TRUE(matches_criterion(Value::text("TRUE"), c));
+  EXPECT_TRUE(matches_criterion(Value::text("FALSE"), c));
+  EXPECT_TRUE(matches_criterion(Value::number(1.0), c));
+  EXPECT_FALSE(matches_criterion(Value::boolean(true), c));
+  EXPECT_TRUE(matches_criterion(Value::boolean(false), c));
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

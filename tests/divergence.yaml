@@ -107,6 +107,11 @@ entries:
     reason: "=+\"\" -> \"\" (unary plus is identity); xlwings reads the empty string back as blank. Formulon returns text(\"\")."
     prefer: formulon
     first_noted: 2026-04-25
+  - id: countif_notequal_empty_over_mixed
+    mode: skip-oracle
+    reason: "xlwings writes \"\" as a blank cell, so Excel's COUNTIF(range, \"<>\") over a range with a literal-\"\" cell sees one fewer populated cell than Formulon's in-memory model. Formulon returns 3, Mac records 2 due to the xlwings round-trip gap."
+    prefer: formulon
+    first_noted: 2026-04-25
 
   # -- CODE / CHAR: Mac Excel ja-JP uses CP932 / JIS X 0208 encoding ------
   # Mac Excel ja-JP's CODE / CHAR operate on the Shift-JIS (CP932)

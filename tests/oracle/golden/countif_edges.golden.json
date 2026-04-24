@@ -1,0 +1,656 @@
+{
+  "suite": "countif_edges",
+  "description": "COUNTIF / SUMIF criteria-engine edge cases observed in IronCalc's COUNTIF_Rows / COUNTIF_Columns / COUNTIFS_Rows2 suites. Each case here probes a specific semantic question that the existing `countif.yaml` coverage does not answer, so we can confirm whether Mac Excel 365 (ja-JP) agrees with Formulon, with IronCalc, or with neither. The author-side `expect:` value below each case is Formulon's current return, included as a documentation aid; the verifier compares against the Excel-observed golden JSON (not this field) once oracle-gen has been run.\n",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-24T20:34:21Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "countif_error_criterion_na_over_two_na",
+      "formula": "=COUNTIF(A1:A4,B1)",
+      "setup": {
+        "A1": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#N/A"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_error_criterion_div0_over_div0",
+      "formula": "=COUNTIF(A1:A4,B1)",
+      "setup": {
+        "A1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_error_criterion_div0_mixed_source",
+      "formula": "=COUNTIF(A1:A4,B1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "countif_lex_lt_brown_names",
+      "formula": "=COUNTIF(A1:A6,\"<brown\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Bernanrd"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Mr. Brown"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Mrs. Brown"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Albert"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "countif_lex_lt_brown_with_errors_blank",
+      "formula": "=COUNTIF(A1:A6,\"<brown\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Bernanrd"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_lex_gte_brown",
+      "formula": "=COUNTIF(A1:A5,\">=brown\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Bernanrd"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Mr. Brown"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Mrs. Brown"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "countif_text_true_over_mixed",
+      "formula": "=COUNTIF(A1:A8,\"TRUE\")",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": false
+        },
+        "A5": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "A6": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "bool",
+          "value": true
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "countif_text_true_lowercase",
+      "formula": "=COUNTIF(A1:A8,\"true\")",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": false
+        },
+        "A5": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "A6": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "bool",
+          "value": true
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "countif_bool_true_over_mixed",
+      "formula": "=COUNTIF(A1:A8,TRUE)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": false
+        },
+        "A5": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "A6": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "bool",
+          "value": true
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "countif_notequal_true_over_mixed",
+      "formula": "=COUNTIF(A1:A8,\"<>TRUE\")",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": false
+        },
+        "A5": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "A6": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "bool",
+          "value": true
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "countif_lt_number_over_mixed",
+      "formula": "=COUNTIF(A1:A5,\"<5\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_ne_text_over_errors",
+      "formula": "=COUNTIF(A1:A4,\"<>apple\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_concat_ne_error_text_range",
+      "formula": "=COUNTIF(A1:A4,CONCAT(\"<>\",B1))",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "cherry"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#N/A"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "countif_concat_ne_error_mixed_range",
+      "formula": "=COUNTIF(A1:A5,CONCAT(\"<>\",B1))",
+      "setup": {
+        "A1": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#N/A"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "concat_of_ne_and_error_alone",
+      "formula": "=CONCAT(\"<>\",A1)",
+      "setup": {
+        "A1": {
+          "kind": "error",
+          "code": "#N/A"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "countif_empty_vs_formula_empty",
+      "formula": "=COUNTIF(A1:A4,\"\")",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "A2": {
+          "kind": "text",
+          "value": ""
+        },
+        "A3": {
+          "kind": "blank"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "countif_notequal_empty_over_mixed",
+      "formula": "=COUNTIF(A1:A4,\"<>\")",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "A2": {
+          "kind": "text",
+          "value": ""
+        },
+        "A3": {
+          "kind": "blank"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "apple"
+        }
+      },
+      "skipped": "xlwings writes \"\" as a blank cell, so Excel's COUNTIF(range, \"<>\") over a range with a literal-\"\" cell sees one fewer populated cell than Formulon's in-memory model. Formulon returns 3, Mac records 2 due to the xlwings round-trip gap."
+    },
+    {
+      "id": "countif_cell_criterion_bool_true",
+      "formula": "=COUNTIF(A1:A4,B1)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "bool",
+          "value": false
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "B1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_cell_criterion_number_one",
+      "formula": "=COUNTIF(A1:A4,B1)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "bool",
+          "value": false
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "countif_cell_criterion_bool_true_with_text",
+      "formula": "=COUNTIF(A1:A8,B1)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": false
+        },
+        "A5": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "A6": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "bool",
+          "value": true
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "B1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    }
+  ]
+}

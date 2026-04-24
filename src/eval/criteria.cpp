@@ -438,9 +438,11 @@ bool matches_numeric(const Value& cell, const ParsedCriterion& c) {
   //   * Cross-kind cell for Eq: a numeric criterion `=N` matches Text
   //     cells whose string form coerces to N (Excel-visible behavior,
   //     observed on COUNTIF with mixed-type ranges — e.g. text "23"
-  //     matches numeric criterion 23). Bool cells are still type-strict
-  //     (a bool never matches a numeric Eq, and non-bool cells never
-  //     match a bool criterion's Eq).
+  //     matches numeric criterion 23). For bool criteria, Text cells
+  //     whose display form matches `TRUE`/`FALSE` (case-insensitive)
+  //     also match Eq; other non-Bool kinds still don't (a bool never
+  //     matches a purely numeric Eq, and Number cells never match a
+  //     bool criterion's Eq).
   //   * Cross-kind cell for ordering ops: no match (Excel does not
   //     implicitly coerce across kinds for ordering).
   const ValueKind required_kind =
@@ -455,6 +457,16 @@ bool matches_numeric(const Value& cell, const ParsedCriterion& c) {
         return false;
       }
       return coerced.value() == c.rhs_number;
+    }
+    if (c.op == CriteriaOp::Eq && c.rhs_from_bool && cell.kind() == ValueKind::Text) {
+      // Mac Excel 365 bool criterion also matches Text cells whose display
+      // string equals "TRUE" / "FALSE" case-insensitively. Verified via
+      // tests/oracle/golden/countif_edges.golden.json cases
+      // countif_bool_true_over_mixed (literal TRUE) and
+      // countif_cell_criterion_bool_true_with_text (cell-ref TRUE) — both
+      // yield 4 in Mac on a range with 3 bool TRUE + 1 text "TRUE".
+      const std::string_view needle = (c.rhs_number != 0.0) ? "TRUE" : "FALSE";
+      return strings::case_insensitive_eq(cell.as_text(), needle);
     }
     return false;
   }
