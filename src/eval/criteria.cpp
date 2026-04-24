@@ -230,6 +230,7 @@ ParsedCriterion parse_criterion(const Value& criterion) {
     case ValueKind::Bool: {
       parsed.op = CriteriaOp::Eq;
       parsed.rhs_is_number = true;
+      parsed.rhs_from_bool = true;
       parsed.rhs_number = criterion.as_boolean() ? 1.0 : 0.0;
       return parsed;
     }
@@ -366,14 +367,44 @@ bool matches_text(const Value& cell, const ParsedCriterion& c) {
 }
 
 bool matches_numeric(const Value& cell, const ParsedCriterion& c) {
-  const auto num_exp = coerce_to_number(cell);
-  if (!num_exp) {
-    // Non-numeric cells simply do not match a numeric criterion. Errors
-    // from non-parseable text here are NOT propagated — the caller has
-    // already decided that criterion-driven walks swallow per-cell errors.
+  // Excel's type-strict rule: a numeric criterion only matches cells of
+  // the same scalar kind.
+  //
+  //   * `rhs_from_bool` criterion (parsed from a literal TRUE / FALSE)
+  //     matches only Bool cells.
+  //   * Otherwise the RHS is a genuine number and matches only Number
+  //     cells.
+  //
+  // Text that happens to parse as a number ("23") and Bool cells against
+  // a number criterion do NOT match — these would have been over-counted
+  // before. Text parses as number are matched against text criteria by
+  // the callers that resolve via `matches_text`.
+  if (c.rhs_from_bool) {
+    if (cell.kind() != ValueKind::Bool) {
+      return false;
+    }
+    const double x = cell.as_boolean() ? 1.0 : 0.0;
+    const double y = c.rhs_number;
+    switch (c.op) {
+      case CriteriaOp::Eq:
+        return x == y;
+      case CriteriaOp::NotEq:
+        return x != y;
+      case CriteriaOp::Lt:
+        return x < y;
+      case CriteriaOp::LtEq:
+        return x <= y;
+      case CriteriaOp::Gt:
+        return x > y;
+      case CriteriaOp::GtEq:
+        return x >= y;
+    }
     return false;
   }
-  const double x = num_exp.value();
+  if (cell.kind() != ValueKind::Number) {
+    return false;
+  }
+  const double x = cell.as_number();
   const double y = c.rhs_number;
   switch (c.op) {
     case CriteriaOp::Eq:

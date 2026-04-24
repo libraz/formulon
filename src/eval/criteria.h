@@ -70,6 +70,12 @@ struct ParsedCriterion {
   double rhs_number = 0.0;
   std::string_view rhs_text;  ///< Valid when `!rhs_is_number`; may be empty.
   bool has_wildcard = false;  ///< Unescaped `*` or `?` present in `rhs_text`.
+  /// True when the numeric RHS originated from a Bool criterion (the caller
+  /// passed `TRUE` or `FALSE`, not a number or `">1"`). Excel's criterion
+  /// matching is type-strict: a Bool criterion matches only Bool cells, and
+  /// a Number criterion matches only Number cells. The matcher branches on
+  /// this flag in the numeric path.
+  bool rhs_from_bool = false;
 
  private:
   /// Owns the re-buffered RHS when the parser needed to strip a comparator

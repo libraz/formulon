@@ -222,10 +222,13 @@ TEST(CriteriaMatchNumeric, NonNumericTextDoesNotMatchNumericCriterion) {
   EXPECT_FALSE(matches_criterion(Value::text("banana"), c));
 }
 
-TEST(CriteriaMatchNumeric, NumericTextCoercesForNumericCriterion) {
-  // Cell is "10" (Text). Against >5 this coerces to 10.0 and matches.
+TEST(CriteriaMatchNumeric, NumericTextDoesNotMatchNumericCriterion) {
+  // Mac Excel 365 is type-strict: a numeric criterion (">5") matches only
+  // Number cells. A Text cell whose string happens to parse as a number
+  // (e.g. "10") does NOT match. This matches COUNTIF's oracle behaviour.
   const ParsedCriterion c = parse_criterion(Value::text(">5"));
-  EXPECT_TRUE(matches_criterion(Value::text("10"), c));
+  EXPECT_FALSE(matches_criterion(Value::text("10"), c));
+  EXPECT_TRUE(matches_criterion(Value::number(10.0), c));
 }
 
 // ---------------------------------------------------------------------------
@@ -367,17 +370,23 @@ TEST(CriteriaMatchError, ErrorCellNeverMatches) {
 // matches_criterion: bool folding
 // ---------------------------------------------------------------------------
 
-TEST(CriteriaMatchBool, BoolCellAgainstNumericCriterion) {
-  // Under the numeric-criterion path, TRUE coerces to 1.0.
+TEST(CriteriaMatchBool, BoolCellDoesNotMatchNumericCriterion) {
+  // Type-strict rule: a Number criterion matches only Number cells. A
+  // Bool cell (TRUE / FALSE) does not match a Number criterion of 1.0,
+  // even though both coerce to 1 numerically.
   const ParsedCriterion c = parse_criterion(Value::number(1.0));
-  EXPECT_TRUE(matches_criterion(Value::boolean(true), c));
+  EXPECT_FALSE(matches_criterion(Value::boolean(true), c));
   EXPECT_FALSE(matches_criterion(Value::boolean(false), c));
+  EXPECT_TRUE(matches_criterion(Value::number(1.0), c));
 }
 
 TEST(CriteriaMatchBool, BoolCellAgainstBoolCriterion) {
+  // A Bool criterion matches only Bool cells with the same value.
   const ParsedCriterion c = parse_criterion(Value::boolean(true));
   EXPECT_TRUE(matches_criterion(Value::boolean(true), c));
   EXPECT_FALSE(matches_criterion(Value::boolean(false), c));
+  // And does not match a Number cell with value 1.0 (type mismatch).
+  EXPECT_FALSE(matches_criterion(Value::number(1.0), c));
 }
 
 }  // namespace
