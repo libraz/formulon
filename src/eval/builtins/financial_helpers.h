@@ -132,8 +132,20 @@ inline double fv_scalar(double rate, double nper, double pmt, double pv, double 
 //
 // If `rate == 0`, no interest ever accrues, so IPMT is 0 for any period.
 // Returns NaN on degenerate inputs (propagated up as `#NUM!`).
+//
+// Note: Mac Excel 365 (and the IronCalc oracle) reject `per < 1` and
+// integer `per > nper` (an "out-of-schedule" amortisation period) with
+// `#NUM!`, but evaluate the closed-form formula directly when `per` is
+// fractional — even for `per > nper`. We mirror that: a fractional `per`
+// is always accepted as long as it is >= 1. CUMIPMT / CUMPRINC apply their
+// own tighter range checks before calling this helper.
 inline double ipmt_scalar(double rate, double per, double nper, double pv, double fv, double type) noexcept {
-  if (per < 1.0 || per > nper) {
+  if (per < 1.0) {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  // Reject integer per > nper as an out-of-schedule period. Fractional per
+  // is accepted for any value >= 1 (matches Mac Excel 365 oracle).
+  if (per > nper && std::floor(per) == per) {
     return std::numeric_limits<double>::quiet_NaN();
   }
   if (rate == 0.0) {

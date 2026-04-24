@@ -464,10 +464,27 @@ TEST(FinancialIPMT, LastPeriodInterestNearZero) {
   EXPECT_LT(v.as_number(), 0.0);  // still negative (interest payment)
 }
 
-TEST(FinancialIPMT, PerOutOfRangeIsNum) {
+TEST(FinancialIPMT, IntegerPerBeyondNperIsNum) {
+  // Integer per > nper is an out-of-schedule period: Mac Excel 365 (and
+  // the IronCalc oracle) return #NUM! in this case.
   const Value v = EvalSource("=IPMT(0.05/12, 61, 60, 25000)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialIPMT, FractionalPerBeyondNperMatchesOracle) {
+  // IronCalc / Mac Excel 365 oracle value for a fractional per > nper case
+  // at type == 0.
+  const Value v = EvalSource("=IPMT(0.1, 3.9, 3, 8000)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), -30.51485756246893, 1e-9);
+}
+
+TEST(FinancialIPMT, FractionalPerBeyondNperType1) {
+  // Same fractional per > nper case with fv=10 and annuity-due (type=1).
+  const Value v = EvalSource("=IPMT(0.1, 3.9, 3, 8000, 10, 1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), -26.866364667656, 1e-9);
 }
 
 TEST(FinancialIPMT, PerZeroIsNum) {
@@ -527,10 +544,19 @@ TEST(FinancialPPMT, IdentityAcrossAllPeriods) {
   }
 }
 
-TEST(FinancialPPMT, PerOutOfRangeIsNum) {
+TEST(FinancialPPMT, IntegerPerBeyondNperIsNum) {
+  // Mirrors FinancialIPMT.IntegerPerBeyondNperIsNum — integer per > nper
+  // is still rejected as #NUM! to match the Mac Excel 365 oracle.
   const Value v = EvalSource("=PPMT(0.05/12, 61, 60, 25000)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialPPMT, FractionalPerBeyondNperMatchesOracle) {
+  // IronCalc / Mac Excel 365 oracle value for a fractional per > nper case.
+  const Value v = EvalSource("=PPMT(0.1, 3.9, 3, 8000)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), -3186.4035714405495, 1e-9);
 }
 
 TEST(FinancialPPMT, ZeroRatePrincipalEqualsPmt) {

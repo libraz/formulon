@@ -24,6 +24,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include "eval/builtins/financial_bond_full.h"
 #include "eval/builtins/financial_bond_simple.h"
 #include "eval/builtins/financial_helpers.h"
 #include "eval/coerce.h"
@@ -444,8 +445,11 @@ Value Ipmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 
 // --- PPMT(rate, per, nper, pv, [fv=0], [type=0]) ------------------------
 //
-// Principal portion of the period-`per` payment = PMT - IPMT. Both
-// components share the same `per` domain check (per in [1, nper]).
+// Principal portion of the period-`per` payment = PMT - IPMT. PPMT shares
+// IPMT's domain: `per < 1` and integer `per > nper` surface as `#NUM!`,
+// but a fractional `per > nper` evaluates the closed form (matches Mac
+// Excel 365 / IronCalc oracle). The integer-per > nper check is applied
+// inside `ipmt_scalar`, so PPMT itself only needs to reject `per < 1`.
 Value Ppmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   auto rate_e = read_required_number(args, 0);
   if (!rate_e) {
@@ -477,7 +481,7 @@ Value Ppmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const double pv = pv_e.value();
   const double fv = fv_e.value();
   const double type = normalize_type(type_e.value());
-  if (per < 1.0 || per > nper) {
+  if (per < 1.0) {
     return Value::error(ErrorCode::Num);
   }
   const double pmt = pmt_scalar(rate, nper, pv, fv, type);
@@ -730,6 +734,15 @@ void register_financial_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"PRICEMAT", 5u, 6u, &financial_detail::PriceMat});
   registry.register_function(FunctionDef{"YIELDDISC", 4u, 5u, &financial_detail::YieldDisc});
   registry.register_function(FunctionDef{"YIELDMAT", 5u, 6u, &financial_detail::YieldMat});
+
+  // Full-schedule bond pricing / yield / duration. All eager scalar, no
+  // range support. Implementations live in `financial_bond_full.cpp`.
+  //   PRICE / YIELD:          6 required + optional basis (min 6, max 7).
+  //   DURATION / MDURATION:   5 required + optional basis (min 5, max 6).
+  registry.register_function(FunctionDef{"PRICE", 6u, 7u, &financial_detail::Price});
+  registry.register_function(FunctionDef{"YIELD", 6u, 7u, &financial_detail::Yield});
+  registry.register_function(FunctionDef{"DURATION", 5u, 6u, &financial_detail::Duration});
+  registry.register_function(FunctionDef{"MDURATION", 5u, 6u, &financial_detail::MDuration});
 
   // STOCKHISTORY: stub returning #VALUE!. Formulon is a pure calc engine
   // and does not perform network / market-data I/O. Accepts any tail of
