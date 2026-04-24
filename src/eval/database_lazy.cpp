@@ -219,6 +219,26 @@ bool resolve_common(const parser::AstNode& call, Arena& arena, const FunctionReg
     *out_err = Value::error(ErrorCode::Value);
     return false;
   }
+  // D-functions reject a multi-cell range as the field arg per Mac Excel
+  // 365: =DCOUNT(_, $E$1:$F$1, _) yields #VALUE! rather than projecting to
+  // a spill anchor. Without this guard, the post-spill RangeOp evaluator
+  // would silently swallow the multi-cell shape into the top-left value.
+  // Verified against `tests/oracle/cases/dfunc_field_range_arg.yaml`.
+  {
+    const parser::AstNode& field_node = call.as_call_arg(1);
+    if (field_node.kind() == parser::NodeKind::RangeOp) {
+      const parser::AstNode& lhs = field_node.as_range_lhs();
+      const parser::AstNode& rhs = field_node.as_range_rhs();
+      if (lhs.kind() == parser::NodeKind::Ref && rhs.kind() == parser::NodeKind::Ref) {
+        const auto& lhs_ref = lhs.as_ref();
+        const auto& rhs_ref = rhs.as_ref();
+        if (lhs_ref.row != rhs_ref.row || lhs_ref.col != rhs_ref.col) {
+          *out_err = Value::error(ErrorCode::Value);
+          return false;
+        }
+      }
+    }
+  }
   // The `field` argument is a scalar; evaluate it eagerly so any error
   // in the subtree propagates with its real code.
   const Value field_val = eval_node(call.as_call_arg(1), arena, registry, ctx);

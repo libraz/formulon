@@ -1,0 +1,149 @@
+suite: implicit_intersection
+description: >
+  Implicit intersection semantics for Mac Excel 365 (ja-JP). The xlwings
+  driver places the formula under test at cell Z1 (row 1, column Z=26)
+  on a fresh sheet per case. We use that fixed position to design
+  differential tests: ranges that either include or exclude Z1's row /
+  column. The two candidate behaviors are:
+
+    * Pre-365 implicit intersection: range -> single cell at the row /
+      column that aligns with the formula cell, or #VALUE! if no axis
+      aligns.
+    * Excel 365 dynamic-array spill: range stays as an array, and
+      xlwings reads back the spill anchor (top-left of the rectangle
+      placed at the formula cell).
+
+  Mac Excel 365 with @-prefix auto-conversion on legacy files lands on
+  implicit intersection; fresh formulas typed in the formula bar use
+  spill. This suite probes which behavior surfaces through xlwings.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  # ---------------------------------------------------------------------
+  # A) Bare column range, formula cell row INCLUDED in range.
+  # Both behaviors should return the row-1 cell (A1=42), so this case
+  # does not differentiate but pins the "trivial" case.
+  - id: bare_col_range_row_included
+    description: "=A1:A5 at Z1; row 1 is in A1:A5; A1=42"
+    setup:
+      A1: 42
+      A2: 99
+      A3: 100
+      A4: 101
+      A5: 102
+    formula: "=A1:A5"
+
+  # B) Bare column range, formula cell row EXCLUDED from range.
+  # Implicit intersection: #VALUE! (no row alignment).
+  # Spill: A3 (anchor of spill placed at Z1, but the spill anchor is
+  # the top-left of the range itself when read-back). xlwings reads Z1.
+  # Z1 anchors the spill rectangle starting at Z1, so Z1 = A3 (top of range).
+  - id: bare_col_range_row_excluded
+    description: "=A3:A8 at Z1; row 1 NOT in 3..8"
+    setup:
+      A3: 30
+      A4: 40
+      A5: 50
+      A6: 60
+      A7: 70
+      A8: 80
+    formula: "=A3:A8"
+
+  # C) Bare row range, formula cell column INCLUDED in range.
+  # Z1 column is Z (26). =A1:AZ1 includes Z (range A..AZ = cols 1..52).
+  # Implicit intersection -> Z1 itself = circular. Skip; would need the
+  # range to contain Z1 without Z1 being the formula cell, which is
+  # impossible at the fixed Z1 result-cell position. Instead we test
+  # the EXCLUDED case below.
+
+  # D) Bare row range, formula cell column EXCLUDED from range.
+  # Implicit intersection: #VALUE! (Z not in A..Y).
+  # Spill: A1 (anchor of horizontal spill placed at Z1).
+  - id: bare_row_range_col_excluded
+    description: "=A1:Y1 at Z1; column Z NOT in A..Y (=cols 1..25)"
+    setup:
+      A1: 1
+      B1: 2
+      C1: 3
+      M1: 13
+      Y1: 25
+    formula: "=A1:Y1"
+
+  # E) Function arg, scalar-expecting function, range NOT aligned.
+  # If implicit intersection: ROUND(#VALUE!, 2) -> #VALUE!.
+  # If spill: ROUND({array}, 2) at Z1 -> first element rounded = ROUND(1.234, 2) = 1.23.
+  - id: round_col_range_row_excluded
+    description: "=ROUND(A3:A8, 2) at Z1; A3=1.234, row 1 NOT in 3..8"
+    setup:
+      A3: 1.234
+      A4: 2.345
+      A5: 3.456
+      A6: 4.567
+    formula: "=ROUND(A3:A8, 2)"
+
+  # F) Function arg, scalar-expecting, row range, column NOT aligned.
+  - id: round_row_range_col_excluded
+    description: "=ROUND(A1:Y1, 2) at Z1; A1=1.234, col Z NOT in A..Y"
+    setup:
+      A1: 1.234
+      B1: 2.345
+      C1: 3.456
+    formula: "=ROUND(A1:Y1, 2)"
+
+  # G) Function arg, scalar-expecting, range INCLUDES row 1 (col-projection).
+  # Both behaviors return ROUND(A1, 2) = 1.23 since the spill anchor at
+  # Z1 = A1 (top of range), and implicit intersection picks A1 (row 1).
+  # Documents the "trivial" alignment.
+  - id: round_col_range_row_included
+    description: "=ROUND(A1:A5, 2) at Z1; A1=1.234, row 1 in 1..5"
+    setup:
+      A1: 1.234
+      A2: 2.345
+      A3: 3.456
+      A4: 4.567
+      A5: 5.678
+    formula: "=ROUND(A1:A5, 2)"
+
+  # H) Explicit @ prefix: should always do implicit intersection.
+  # Excluded case -> #VALUE! per the IIE contract.
+  - id: at_prefix_col_range_row_excluded
+    description: "=@A3:A8 at Z1; @ + row 1 NOT in 3..8"
+    setup:
+      A3: 30
+      A4: 40
+      A5: 50
+    formula: "=@A3:A8"
+
+  - id: at_prefix_col_range_row_included
+    description: "=@A1:A5 at Z1; @ + row 1 in 1..5; A1=42"
+    setup:
+      A1: 42
+      A2: 99
+      A3: 100
+    formula: "=@A1:A5"
+
+  # I) 2D range as bare expression: spill behavior produces a rectangle.
+  # Implicit intersection on 2D needs both axes aligned -> typically #VALUE!.
+  - id: bare_2d_range_no_alignment
+    description: "=A3:B8 at Z1; row 1 NOT in 3..8, col Z NOT in A..B"
+    setup:
+      A3: 11
+      B3: 12
+      A4: 21
+      B4: 22
+    formula: "=A3:B8"
+
+  # J) Single-cell range: degenerate, both behaviors return the cell.
+  - id: bare_single_cell_range
+    description: "=A1:A1 at Z1; A1=42"
+    setup:
+      A1: 42
+    formula: "=A1:A1"
+
+  # K) Function arg with @ prefix to force implicit intersection.
+  - id: round_at_col_range_excluded
+    description: "=ROUND(@A3:A8, 2) at Z1; @ + row 1 NOT in 3..8"
+    setup:
+      A3: 1.234
+      A4: 2.345
+    formula: "=ROUND(@A3:A8, 2)"

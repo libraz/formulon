@@ -1,0 +1,365 @@
+{
+  "suite": "dfunc_field_range_arg",
+  "description": "D-functions (DCOUNT, DGET, DSUM, etc.) accept a `field` argument that is conventionally a single cell or a column index. IronCalc's fixtures pass a multi-cell range like `$E$1:$F$1` as the field argument and expect `#VALUE!`. Pre-Excel-365 implicit-intersection rejects this shape, but Excel 365 dynamic-array spill projects to the top-left. This suite probes Mac Excel 365 (ja-JP) behavior to decide whether Formulon's new spill-anchor semantics are correct.\n",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-24T22:25:26Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "dcount_field_range_two_cells",
+      "formula": "=DCOUNT(A1:H11,$E$1:$F$1,A14:A15)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Salesperson"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Quarter"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Year"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Revenue"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Quantity"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "Bonus"
+        },
+        "H1": {
+          "kind": "text",
+          "value": "Notes"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "Alice"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Q1"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2024.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 12000.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "Bob"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Q1"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 2024.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 9600.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 500.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "Cara"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Q2"
+        },
+        "D4": {
+          "kind": "number",
+          "value": 2024.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 20000.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "G4": {
+          "kind": "number",
+          "value": 1500.0
+        },
+        "A14": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "East"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "dcount_field_single_cell",
+      "formula": "=DCOUNT(A1:E11,$E$1,A14:A15)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Salesperson"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Revenue"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "Alice"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 12000.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "Bob"
+        },
+        "E3": {
+          "kind": "number",
+          "value": 9600.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "Cara"
+        },
+        "E4": {
+          "kind": "number",
+          "value": 20000.0
+        },
+        "A14": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "East"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "dget_field_range_two_cells",
+      "formula": "=DGET(A1:F11,$E$1:$F$1,A14:A15)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Salesperson"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Revenue"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Quantity"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "Alice"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 12000.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "Bob"
+        },
+        "E3": {
+          "kind": "number",
+          "value": 9600.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "Cara"
+        },
+        "E4": {
+          "kind": "number",
+          "value": 20000.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A14": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "West"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "dsum_field_range_two_cells",
+      "formula": "=DSUM(A1:F11,$E$1:$F$1,A14:A15)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Revenue"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Quantity"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "East"
+        },
+        "E3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "West"
+        },
+        "E4": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A14": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "East"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+suite: dfunc_field_range_arg
+description: >
+  D-functions (DCOUNT, DGET, DSUM, etc.) accept a `field` argument that
+  is conventionally a single cell or a column index. IronCalc's fixtures
+  pass a multi-cell range like `$E$1:$F$1` as the field argument and
+  expect `#VALUE!`. Pre-Excel-365 implicit-intersection rejects this
+  shape, but Excel 365 dynamic-array spill projects to the top-left.
+  This suite probes Mac Excel 365 (ja-JP) behavior to decide whether
+  Formulon's new spill-anchor semantics are correct.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  # Reproduces the IronCalc DCOUNT B70 regression scenario.
+  # Field arg is a 1x2 range. If Mac says #VALUE!, IronCalc is correct
+  # and Formulon's new spill-anchor semantic is buggy in this context.
+  # If Mac returns a number, Formulon is correct and IronCalc is testing
+  # pre-365 behavior.
+  - id: dcount_field_range_two_cells
+    description: "DCOUNT with field=$E$1:$F$1 (multi-cell) - reject or project to E1?"
+    setup:
+      A1: Region
+      B1: Salesperson
+      C1: Quarter
+      D1: Year
+      E1: Revenue
+      F1: Quantity
+      G1: Bonus
+      H1: Notes
+      A2: East
+      B2: Alice
+      C2: Q1
+      D2: 2024
+      E2: 12000
+      F2: 100
+      G2: 1000
+      A3: West
+      B3: Bob
+      C3: Q1
+      D3: 2024
+      E3: 9600
+      F3: 80
+      G3: 500
+      A4: East
+      B4: Cara
+      C4: Q2
+      D4: 2024
+      E4: 20000
+      F4: 200
+      G4: 1500
+      A14: Region
+      A15: East
+    formula: "=DCOUNT(A1:H11,$E$1:$F$1,A14:A15)"
+
+  # Same data, but field is a single cell (canonical) - should always
+  # work. Documents the "happy path".
+  - id: dcount_field_single_cell
+    description: "DCOUNT with field=$E$1 (single cell) - canonical form"
+    setup:
+      A1: Region
+      B1: Salesperson
+      E1: Revenue
+      A2: East
+      B2: Alice
+      E2: 12000
+      A3: West
+      B3: Bob
+      E3: 9600
+      A4: East
+      B4: Cara
+      E4: 20000
+      A14: Region
+      A15: East
+    formula: "=DCOUNT(A1:E11,$E$1,A14:A15)"
+
+  # Same setup, DGET test - returns the value if exactly one match.
+  - id: dget_field_range_two_cells
+    description: "DGET with field=$E$1:$F$1 - reject or project?"
+    setup:
+      A1: Region
+      B1: Salesperson
+      E1: Revenue
+      F1: Quantity
+      A2: East
+      B2: Alice
+      E2: 12000
+      F2: 100
+      A3: West
+      B3: Bob
+      E3: 9600
+      F3: 80
+      A4: East
+      B4: Cara
+      E4: 20000
+      F4: 200
+      A14: Region
+      A15: West
+    formula: "=DGET(A1:F11,$E$1:$F$1,A14:A15)"
+
+  # DSUM with multi-cell field range.
+  - id: dsum_field_range_two_cells
+    description: "DSUM with field=$E$1:$F$1 - reject or project?"
+    setup:
+      A1: Region
+      E1: Revenue
+      F1: Quantity
+      A2: East
+      E2: 100
+      F2: 1
+      A3: East
+      E3: 200
+      F3: 2
+      A4: West
+      E4: 300
+      F4: 3
+      A14: Region
+      A15: East
+    formula: "=DSUM(A1:F11,$E$1:$F$1,A14:A15)"

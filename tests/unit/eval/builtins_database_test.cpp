@@ -547,6 +547,96 @@ TEST(BuiltinsDatabase, FieldErrorPropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
+// ---------------------------------------------------------------------------
+// Field-arg shape rejection (multi-cell RangeOp)
+//
+// Mac Excel 365 surfaces `#VALUE!` when the `field` argument is a multi-
+// cell range (e.g. `$E$1:$F$1`), rather than projecting it through dynamic-
+// array spill semantics to the top-left cell. These guards live in
+// `resolve_common`; the regression they protect against came from the
+// `RangeOp` evaluator now returning a spill anchor instead of `#VALUE!`.
+//
+// The shared layout for these tests:
+//   A1 = "Fruit"  B1 = "Region"  C1 = "Sales"  D1 = "Qty"  E1 = "Year"
+//   A2 = "Apple"  B2 = "East"    C2 = 100      D2 = 5      E2 = 2024
+//   ... (4 data rows)
+//   A14 = "Fruit"
+//   A15 = "Apple"
+// This puts the criterion block at A14:A15 and lets `$E$1:$F$1` denote
+// the multi-cell field range used in the oracle case.
+Workbook MakeFruitWorkbookWide() {
+  Workbook wb = Workbook::create();
+  auto& s = wb.sheet(0);
+  s.set_cell_value(0, 0, Value::text("Fruit"));
+  s.set_cell_value(0, 1, Value::text("Region"));
+  s.set_cell_value(0, 2, Value::text("Sales"));
+  s.set_cell_value(0, 3, Value::text("Qty"));
+  s.set_cell_value(0, 4, Value::text("Year"));
+  s.set_cell_value(1, 0, Value::text("Apple"));
+  s.set_cell_value(1, 1, Value::text("East"));
+  s.set_cell_value(1, 2, Value::number(100.0));
+  s.set_cell_value(1, 3, Value::number(5.0));
+  s.set_cell_value(1, 4, Value::number(2024.0));
+  s.set_cell_value(2, 0, Value::text("Apple"));
+  s.set_cell_value(2, 1, Value::text("West"));
+  s.set_cell_value(2, 2, Value::number(200.0));
+  s.set_cell_value(2, 3, Value::number(8.0));
+  s.set_cell_value(2, 4, Value::number(2024.0));
+  s.set_cell_value(3, 0, Value::text("Pear"));
+  s.set_cell_value(3, 1, Value::text("East"));
+  s.set_cell_value(3, 2, Value::number(50.0));
+  s.set_cell_value(3, 3, Value::number(3.0));
+  s.set_cell_value(3, 4, Value::number(2023.0));
+  s.set_cell_value(4, 0, Value::text("Banana"));
+  s.set_cell_value(4, 1, Value::text("West"));
+  s.set_cell_value(4, 2, Value::number(300.0));
+  s.set_cell_value(4, 3, Value::number(10.0));
+  s.set_cell_value(4, 4, Value::number(2025.0));
+  // Criterion block at A14:A15 (Fruit == Apple).
+  s.set_cell_value(13, 0, Value::text("Fruit"));
+  s.set_cell_value(14, 0, Value::text("Apple"));
+  return wb;
+}
+
+TEST(BuiltinsDatabase, DCountFieldMultiCellRangeRejectsWithValue) {
+  Workbook wb = MakeFruitWorkbookWide();
+  // `$E$1:$F$1` spans two cells horizontally — Mac rejects with #VALUE!.
+  const Value v = EvalIn("=DCOUNT(A1:E11, $E$1:$F$1, A14:A15)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsDatabase, DGetFieldMultiCellRangeRejectsWithValue) {
+  Workbook wb = MakeFruitWorkbookWide();
+  const Value v = EvalIn("=DGET(A1:F11, $E$1:$F$1, A14:A15)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsDatabase, DSumFieldMultiCellRangeRejectsWithValue) {
+  Workbook wb = MakeFruitWorkbookWide();
+  const Value v = EvalIn("=DSUM(A1:F11, $E$1:$F$1, A14:A15)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsDatabase, DCountFieldSingleCellRangeWorksAsScalarRef) {
+  Workbook wb = MakeFruitWorkbookWide();
+  // 1x1 RangeOp `$E$1:$E$1` must pass through as the scalar header "Year".
+  // Two Apple rows; both have numeric Year values -> count is 2.
+  const Value v = EvalIn("=DCOUNT(A1:E11, $E$1:$E$1, A14:A15)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << "got error code " << static_cast<int>(v.as_error());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
+TEST(BuiltinsDatabase, DCountFieldSingleScalarWorksAsScalarRef) {
+  Workbook wb = MakeFruitWorkbookWide();
+  // Plain Ref `$E$1` (no RangeOp) — canonical case, regression guard.
+  const Value v = EvalIn("=DCOUNT(A1:E11, $E$1, A14:A15)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << "got error code " << static_cast<int>(v.as_error());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

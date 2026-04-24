@@ -310,13 +310,21 @@ TEST_P(OracleTest, Matches) {
   eval::EvalState state;
   eval::EvalContext ctx(wb, sheet, state);
   // Anchor the formula at its own cell so zero-arg ROW() / COLUMN() return
-  // the case's row / column. Ignore malformed addresses silently (they would
-  // already have failed the setup loop above if any cell-addressed setup was
-  // present); ad-hoc case ids still evaluate without an anchor.
+  // the case's row / column. Cases whose `id` is an A1 address (e.g. "A1",
+  // "C5") use that address; all other cases (descriptive ids like
+  // "at_prefix_col_range_row_excluded") fall back to Z1, which matches the
+  // xlwings driver convention: every oracle-generated formula is placed at
+  // cell Z1 on a fresh sheet. The Z1 anchor is what differentiates spill
+  // (top-left) from implicit intersection (row/col projection) for the
+  // `implicit_intersection` suite and for any other suite that uses
+  // `@`-prefixed range arguments.
   std::uint32_t case_row = 0;
   std::uint32_t case_col = 0;
   if (a1_to_row_col(param.case_id, &case_row, &case_col)) {
     ctx = ctx.with_formula_cell(case_row, case_col);
+  } else {
+    // Z1 = (row=0, col=25). Match the xlwings driver convention.
+    ctx = ctx.with_formula_cell(0U, 25U);
   }
   Value actual = eval::evaluate(*root, eval_arena, registry, ctx);
 

@@ -381,7 +381,10 @@ TEST(TreeWalkerUnsupported, ArrayLiteralReturnsValue) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(TreeWalkerUnsupported, RangeOpReturnsValue) {
+TEST(TreeWalkerUnsupported, RangeOpUnboundContextIsName) {
+  // With no sheet bound the top-left endpoint reference resolves to
+  // #NAME? -- the dynamic-array spill anchor still falls through
+  // EvalContext::resolve_ref, which surfaces #NAME? on the unbound shape.
   Arena ast_arena;
   Arena out_arena;
   parser::Parser p("=A1:B2", ast_arena);
@@ -389,7 +392,7 @@ TEST(TreeWalkerUnsupported, RangeOpReturnsValue) {
   ASSERT_NE(root, nullptr);
   const Value v = evaluate(*root, out_arena);
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
 }
 
 // ---------------------------------------------------------------------------
@@ -723,14 +726,16 @@ TEST(TreeWalkerRanges, ReversedRangeSameResult) {
   EXPECT_EQ(reversed.as_number(), forward.as_number());
 }
 
-TEST(TreeWalkerRanges, RangeInNonAggregatorStillValue) {
+TEST(TreeWalkerRanges, RangeInNonAggregatorSpillsTopLeft) {
   Sheet sheet("Sheet1");
   sheet.set_cell_value(0, 0, Value::number(1.0));
   sheet.set_cell_value(1, 0, Value::number(2.0));
-  // LEN is not range-aware; its RangeOp argument still surfaces #VALUE!.
+  // LEN is not range-aware: under Excel 365 dynamic-array spill semantics
+  // the bare RangeOp argument resolves to the top-left endpoint (A1=1),
+  // and LEN("1") = 1.
   const Value v = EvalInSheet(sheet, "=LEN(A1:A3)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1.0);
 }
 
 TEST(TreeWalkerRanges, CycleViaAggregator_ReturnsRef) {

@@ -1,0 +1,291 @@
+{
+  "suite": "implicit_intersection",
+  "description": "Implicit intersection semantics for Mac Excel 365 (ja-JP). The xlwings driver places the formula under test at cell Z1 (row 1, column Z=26) on a fresh sheet per case. We use that fixed position to design differential tests: ranges that either include or exclude Z1's row / column. The two candidate behaviors are:\n\n  * Pre-365 implicit intersection: range -> single cell at the row /\n    column that aligns with the formula cell, or #VALUE! if no axis\n    aligns.\n  * Excel 365 dynamic-array spill: range stays as an array, and\n    xlwings reads back the spill anchor (top-left of the rectangle\n    placed at the formula cell).\n\nMac Excel 365 with @-prefix auto-conversion on legacy files lands on implicit intersection; fresh formulas typed in the formula bar use spill. This suite probes which behavior surfaces through xlwings.\n",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-24T22:08:03Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "bare_col_range_row_included",
+      "formula": "=A1:A5",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 102.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "bare_col_range_row_excluded",
+      "formula": "=A3:A8",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "bare_row_range_col_excluded",
+      "formula": "=A1:Y1",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "M1": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "Y1": {
+          "kind": "number",
+          "value": 25.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "round_col_range_row_excluded",
+      "formula": "=ROUND(A3:A8, 2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 1.234
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.345
+        },
+        "A5": {
+          "kind": "number",
+          "value": 3.456
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.567
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.23
+      }
+    },
+    {
+      "id": "round_row_range_col_excluded",
+      "formula": "=ROUND(A1:Y1, 2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.234
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.345
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.456
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.23
+      }
+    },
+    {
+      "id": "round_col_range_row_included",
+      "formula": "=ROUND(A1:A5, 2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.234
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.345
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.456
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.567
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.678
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.23
+      }
+    },
+    {
+      "id": "at_prefix_col_range_row_excluded",
+      "formula": "=@A3:A8",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "at_prefix_col_range_row_included",
+      "formula": "=@A1:A5",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "bare_2d_range_no_alignment",
+      "formula": "=A3:B8",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 22.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "bare_single_cell_range",
+      "formula": "=A1:A1",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "round_at_col_range_excluded",
+      "formula": "=ROUND(@A3:A8, 2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 1.234
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.345
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

@@ -5,6 +5,7 @@
 
 #include "eval/tree_walker.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -757,10 +758,84 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       // than #NAME? since the original tokens are unavailable.
       return Value::error(ErrorCode::Name);
 
-    case parser::NodeKind::ImplicitIntersection:
-      // Identity for scalars. Once arrays land this becomes the contraction
-      // operator (1x1 selection from a column / row at the call site).
-      return eval_node(node.as_implicit_intersection_operand(), arena, registry, ctx);
+    case parser::NodeKind::RangeOp: {
+      // Excel 365 dynamic-array spill: a bare range used in scalar context
+      // spills into the calling cell and adjacent cells. The xlwings driver
+      // (and any reader that samples only the formula cell) sees the spill
+      // anchor, which equals the top-left of the source range. Resolve the
+      // top-left endpoint and return its value.
+      // Verified Mac semantics: tests/oracle/cases/implicit_intersection.yaml.
+      const auto& lhs = node.as_range_lhs();
+      const auto& rhs = node.as_range_rhs();
+      if (lhs.kind() != parser::NodeKind::Ref || rhs.kind() != parser::NodeKind::Ref) {
+        // Complex range expressions (OFFSET-based, INDIRECT, named ranges)
+        // are not yet resolved at this level; surface #VALUE! as before.
+        return Value::error(ErrorCode::Value);
+      }
+      const auto& lhs_ref = lhs.as_ref();
+      const auto& rhs_ref = rhs.as_ref();
+      parser::Reference top_left{};
+      top_left.sheet = lhs_ref.sheet;  // RangeOp inherits left's sheet
+      top_left.row = std::min(lhs_ref.row, rhs_ref.row);
+      top_left.col = std::min(lhs_ref.col, rhs_ref.col);
+      return ctx.resolve_ref(top_left, arena, registry);
+    }
+
+    case parser::NodeKind::ImplicitIntersection: {
+      const auto& operand = node.as_implicit_intersection_operand();
+      if (operand.kind() == parser::NodeKind::RangeOp) {
+        // Implicit intersection on a range: project onto the formula cell's
+        // row or column. Single-column range -> requires formula row in
+        // range; single-row range -> requires formula col in range. 2D
+        // ranges and any non-aligned cases return #VALUE!.
+        const auto& lhs_ast = operand.as_range_lhs();
+        const auto& rhs_ast = operand.as_range_rhs();
+        if (lhs_ast.kind() != parser::NodeKind::Ref || rhs_ast.kind() != parser::NodeKind::Ref) {
+          return Value::error(ErrorCode::Value);
+        }
+        if (!ctx.has_formula_cell()) {
+          // No formula-cell context (top-level evaluator entry) -> degrade to
+          // top-left, matching the bare-range fallback. Production calls
+          // through Workbook always supply a formula cell, so this branch
+          // only fires for parser-driven smoke tests.
+          return eval_node(operand, arena, registry, ctx);
+        }
+        const auto& lhs_ref = lhs_ast.as_ref();
+        const auto& rhs_ref = rhs_ast.as_ref();
+        const std::uint32_t r1 = std::min(lhs_ref.row, rhs_ref.row);
+        const std::uint32_t r2 = std::max(lhs_ref.row, rhs_ref.row);
+        const std::uint32_t c1 = std::min(lhs_ref.col, rhs_ref.col);
+        const std::uint32_t c2 = std::max(lhs_ref.col, rhs_ref.col);
+        const std::uint32_t fr = ctx.formula_row();
+        const std::uint32_t fc = ctx.formula_col();
+        parser::Reference target{};
+        target.sheet = lhs_ref.sheet;
+        if (c1 == c2) {
+          // Single-column range: project formula row.
+          if (fr < r1 || fr > r2) {
+            return Value::error(ErrorCode::Value);
+          }
+          target.row = fr;
+          target.col = c1;
+        } else if (r1 == r2) {
+          // Single-row range: project formula column.
+          if (fc < c1 || fc > c2) {
+            return Value::error(ErrorCode::Value);
+          }
+          target.row = r1;
+          target.col = fc;
+        } else {
+          // 2D range: implicit intersection requires both axes to align,
+          // and Excel returns #VALUE! when the formula cell isn't covered
+          // by both spans. Verified Mac behavior pending; conservative
+          // default for now.
+          return Value::error(ErrorCode::Value);
+        }
+        return ctx.resolve_ref(target, arena, registry);
+      }
+      // Non-range operands: identity (current pass-through behavior).
+      return eval_node(operand, arena, registry, ctx);
+    }
 
     case parser::NodeKind::UnaryOp:
       return apply_unary(node.as_unary_op(), eval_node(node.as_unary_operand(), arena, registry, ctx));
@@ -864,7 +939,6 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       return Value::error(ErrorCode::Name);
 
     // -- Unsupported: range-producing operators / array literals ----------
-    case parser::NodeKind::RangeOp:
     case parser::NodeKind::UnionOp:
     case parser::NodeKind::IntersectOp:
     case parser::NodeKind::ArrayLiteral:
