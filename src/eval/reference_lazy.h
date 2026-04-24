@@ -78,6 +78,23 @@ bool expand_offset_call(const parser::AstNode& call, Arena& arena, const Functio
                         const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
                         std::uint32_t* out_rows, std::uint32_t* out_cols);
 
+/// Attempts to resolve `node` as a reference-returning call, producing a
+/// rectangular reference without dereferencing. Recognises INDIRECT (A1-style)
+/// and nested OFFSET. On success writes the rectangle (0-based, inclusive)
+/// into `*out_top_row`/`*out_left_col`/`*out_bottom_row`/`*out_right_col` with
+/// the sheet qualifier (empty = bound sheet) in `*out_sheet`. Returns true
+/// on success. On failure returns false and sets `*out_err` to the Excel
+/// error code to surface. `*out_is_range` is set to true when the resolved
+/// reference covers more than one cell.
+///
+/// The return value does NOT carry a Value; callers decide how to map the
+/// rectangle (ROW returns top row, ROWS returns height, OFFSET-base treats
+/// it as its input rectangle, etc.).
+bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                            std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                            bool* out_is_range, ErrorCode* out_err);
+
 namespace refs_internal {
 
 /// Output of `parse_a1_ref`: sheet qualifier (empty if unqualified),

@@ -26,6 +26,7 @@
 #include "utils/expected.h"
 #include "utils/strings.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
@@ -231,10 +232,6 @@ A1Parse parse_a1_ref(std::string_view text) {
   return out;
 }
 
-}  // namespace refs_internal
-
-namespace {
-
 // Converts a signed offset plus a non-negative base (both measured in
 // row / column units) into a 0-based grid coordinate, returning `false`
 // if the result falls outside [0, max). `max` is `Sheet::kMaxRows` or
@@ -273,12 +270,25 @@ struct OffsetBase {
   std::uint32_t cols = 1;
 };
 
-// Normalises the base reference from OFFSET's first argument. Only
-// literal Ref and `Ref:Ref` RangeOp shapes are accepted; any other
-// arg shape (nested INDIRECT, OFFSET-of-OFFSET, array literal, scalar)
-// surfaces as `#VALUE!` here. Cross-sheet qualification is preserved so
-// `OFFSET(Sheet2!A1, …)` routes through the right workbook sheet.
-bool resolve_offset_base(const parser::AstNode& arg, OffsetBase* out, ErrorCode* out_err) {
+}  // namespace refs_internal
+
+// Forward-declared for `refs_internal::resolve_offset_base`'s Call-branch.
+bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                            std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                            bool* out_is_range, ErrorCode* out_err);
+
+namespace refs_internal {
+
+// Normalises the base reference from OFFSET's first argument. Literal
+// Ref and `Ref:Ref` RangeOp shapes are accepted directly; INDIRECT /
+// OFFSET nested calls go through `resolve_reference_call` so
+// `OFFSET(INDIRECT("A1"), …)` and `OFFSET(OFFSET(A1,0,0,2,2), …)`
+// resolve without dereferencing the base. Cross-sheet qualification is
+// preserved so `OFFSET(Sheet2!A1, …)` routes through the right
+// workbook sheet.
+bool resolve_offset_base(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx, OffsetBase* out, ErrorCode* out_err) {
   const parser::NodeKind k = arg.kind();
   if (k == parser::NodeKind::Ref) {
     const parser::Reference& r = arg.as_ref();
@@ -329,8 +339,30 @@ bool resolve_offset_base(const parser::AstNode& arg, OffsetBase* out, ErrorCode*
     out->cols = c_hi - c_lo + 1U;
     return true;
   }
-  // Anything else (literal, scalar expr, nested call, named ref) is not
-  // a valid reference shape for OFFSET. Excel returns `#VALUE!`.
+  if (k == parser::NodeKind::Call) {
+    // Nested INDIRECT / OFFSET as OFFSET's base: resolve to a rectangle
+    // without dereferencing, then adopt it as the base shape.
+    std::string_view sheet;
+    std::uint32_t top = 0;
+    std::uint32_t left = 0;
+    std::uint32_t bottom = 0;
+    std::uint32_t right = 0;
+    bool is_range = false;
+    ErrorCode err = ErrorCode::Value;
+    if (!eval::resolve_reference_call(arg, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &is_range,
+                                      &err)) {
+      *out_err = err;
+      return false;
+    }
+    out->sheet = sheet;
+    out->row = top;
+    out->col = left;
+    out->rows = bottom - top + 1U;
+    out->cols = right - left + 1U;
+    return true;
+  }
+  // Anything else (literal, scalar expr, array literal, named ref) is
+  // not a valid reference shape for OFFSET. Excel returns `#VALUE!`.
   *out_err = ErrorCode::Value;
   return false;
 }
@@ -348,7 +380,7 @@ bool compute_offset_rect(const parser::AstNode& call, Arena& arena, const Functi
     *out_err = ErrorCode::Value;
     return false;
   }
-  if (!resolve_offset_base(call.as_call_arg(0), out_base, out_err)) {
+  if (!resolve_offset_base(call.as_call_arg(0), arena, registry, ctx, out_base, out_err)) {
     return false;
   }
 
@@ -436,7 +468,7 @@ bool compute_offset_rect(const parser::AstNode& call, Arena& arena, const Functi
   return true;
 }
 
-}  // namespace
+}  // namespace refs_internal
 
 Value eval_indirect_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx) {
@@ -505,13 +537,14 @@ Value eval_indirect_lazy(const parser::AstNode& call, Arena& arena, const Functi
 
 Value eval_offset_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
-  OffsetBase base{};
+  refs_internal::OffsetBase base{};
   std::uint32_t top_row = 0;
   std::uint32_t left_col = 0;
   std::uint32_t height = 0;
   std::uint32_t width = 0;
   ErrorCode err = ErrorCode::Value;
-  if (!compute_offset_rect(call, arena, registry, ctx, &base, &top_row, &left_col, &height, &width, &err)) {
+  if (!refs_internal::compute_offset_rect(call, arena, registry, ctx, &base, &top_row, &left_col, &height, &width,
+                                          &err)) {
     return Value::error(err);
   }
   // Scalar context for a multi-cell OFFSET: Excel 365 dynamic-array
@@ -531,13 +564,14 @@ Value eval_offset_lazy(const parser::AstNode& call, Arena& arena, const Function
 bool expand_offset_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
                         std::uint32_t* out_rows, std::uint32_t* out_cols) {
-  OffsetBase base{};
+  refs_internal::OffsetBase base{};
   std::uint32_t top_row = 0;
   std::uint32_t left_col = 0;
   std::uint32_t height = 0;
   std::uint32_t width = 0;
   ErrorCode err = ErrorCode::Value;
-  if (!compute_offset_rect(call, arena, registry, ctx, &base, &top_row, &left_col, &height, &width, &err)) {
+  if (!refs_internal::compute_offset_rect(call, arena, registry, ctx, &base, &top_row, &left_col, &height, &width,
+                                          &err)) {
     *out_err_code = err;
     return false;
   }
@@ -565,6 +599,126 @@ bool expand_offset_call(const parser::AstNode& call, Arena& arena, const Functio
     *out_cols = width;
   }
   return true;
+}
+
+bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                            std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                            bool* out_is_range, ErrorCode* out_err) {
+  // Callers are expected to handle Ref / RangeOp / ArrayLiteral before
+  // falling through here; anything that isn't a call is out of scope.
+  if (node.kind() != parser::NodeKind::Call) {
+    *out_err = ErrorCode::Value;
+    return false;
+  }
+  const std::string_view name = node.as_call_name();
+  if (strings::case_insensitive_eq(name, "INDIRECT")) {
+    const std::uint32_t arity = node.as_call_arity();
+    if (arity < 1U || arity > 2U) {
+      *out_err = ErrorCode::Value;
+      return false;
+    }
+    // Evaluate `ref_text` first so errors in the subtree propagate.
+    const Value ref_val = eval_node(node.as_call_arg(0), arena, registry, ctx);
+    if (ref_val.is_error()) {
+      *out_err = ref_val.as_error();
+      return false;
+    }
+    auto text_exp = coerce_to_text(ref_val);
+    if (!text_exp) {
+      *out_err = text_exp.error();
+      return false;
+    }
+    bool a1_style = true;
+    if (arity == 2U) {
+      const Value a1_val = eval_node(node.as_call_arg(1), arena, registry, ctx);
+      if (a1_val.is_error()) {
+        *out_err = a1_val.as_error();
+        return false;
+      }
+      auto b = coerce_to_bool(a1_val);
+      if (!b) {
+        *out_err = b.error();
+        return false;
+      }
+      a1_style = b.value();
+    }
+    if (!a1_style) {
+      // R1C1 style not yet supported by the A1 parser.
+      *out_err = ErrorCode::Ref;
+      return false;
+    }
+    const std::string& src = text_exp.value();
+    if (src.empty()) {
+      *out_err = ErrorCode::Ref;
+      return false;
+    }
+    refs_internal::A1Parse parsed = refs_internal::parse_a1_ref(src);
+    if (!parsed.valid) {
+      *out_err = ErrorCode::Ref;
+      return false;
+    }
+    // A sheet qualifier is only valid if the workbook actually holds a
+    // matching sheet. Without this check a caller like `ROW(INDIRECT(
+    // "NonExistent!A1"))` would happily report row 1 for a sheet that
+    // doesn't exist; Excel surfaces `#REF!` in that case.
+    if (!parsed.sheet.empty()) {
+      const Workbook* wb = ctx.workbook();
+      if (wb == nullptr || wb->sheet_by_name(parsed.sheet) == nullptr) {
+        *out_err = ErrorCode::Ref;
+        return false;
+      }
+    }
+    // Intern the sheet qualifier: `parse_a1_ref` parks quoted sheet
+    // names in thread-local scratch that dies on the next call.
+    if (!parsed.sheet.empty()) {
+      *out_sheet = arena.intern(parsed.sheet);
+    } else {
+      *out_sheet = std::string_view{};
+    }
+    if (parsed.is_range) {
+      const std::uint32_t r_lo = std::min(parsed.row, parsed.row2);
+      const std::uint32_t r_hi = std::max(parsed.row, parsed.row2);
+      const std::uint32_t c_lo = std::min(parsed.col, parsed.col2);
+      const std::uint32_t c_hi = std::max(parsed.col, parsed.col2);
+      *out_top_row = r_lo;
+      *out_left_col = c_lo;
+      *out_bottom_row = r_hi;
+      *out_right_col = c_hi;
+      *out_is_range = (r_lo != r_hi) || (c_lo != c_hi);
+    } else {
+      *out_top_row = parsed.row;
+      *out_left_col = parsed.col;
+      *out_bottom_row = parsed.row;
+      *out_right_col = parsed.col;
+      *out_is_range = false;
+    }
+    return true;
+  }
+  if (strings::case_insensitive_eq(name, "OFFSET")) {
+    refs_internal::OffsetBase base{};
+    std::uint32_t top_row = 0;
+    std::uint32_t left_col = 0;
+    std::uint32_t height = 0;
+    std::uint32_t width = 0;
+    ErrorCode err = ErrorCode::Value;
+    if (!refs_internal::compute_offset_rect(node, arena, registry, ctx, &base, &top_row, &left_col, &height, &width,
+                                            &err)) {
+      *out_err = err;
+      return false;
+    }
+    *out_sheet = base.sheet;
+    *out_top_row = top_row;
+    *out_left_col = left_col;
+    *out_bottom_row = top_row + height - 1U;
+    *out_right_col = left_col + width - 1U;
+    *out_is_range = (height > 1U) || (width > 1U);
+    return true;
+  }
+  // Any other call name is not a reference-returning builtin we know
+  // how to handle here.
+  *out_err = ErrorCode::Value;
+  return false;
 }
 
 }  // namespace eval

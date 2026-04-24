@@ -19,6 +19,7 @@
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_args.h"
+#include "eval/reference_lazy.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "utils/arena.h"
@@ -56,6 +57,25 @@ bool resolve_shape(const parser::AstNode& arg_node, Arena& arena, const Function
     *out_rows = arg_node.as_array_rows();
     *out_cols = arg_node.as_array_cols();
     return true;
+  }
+  if (k == parser::NodeKind::Call) {
+    // Recognise reference-returning builtins (INDIRECT, OFFSET) so
+    // `ROWS(INDIRECT("A1:B3"))` reports 3 rather than degrading to the
+    // 1x1 scalar fallback.
+    std::string_view sheet;
+    std::uint32_t top = 0;
+    std::uint32_t left = 0;
+    std::uint32_t bottom = 0;
+    std::uint32_t right = 0;
+    bool is_range = false;
+    ErrorCode err = ErrorCode::Value;
+    if (resolve_reference_call(arg_node, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &is_range, &err)) {
+      *out_rows = bottom - top + 1U;
+      *out_cols = right - left + 1U;
+      return true;
+    }
+    // Fall through to the scalar fallback below so subtree errors
+    // propagate and non-reference calls degrade to 1x1.
   }
   // Scalar fallback. We still evaluate so an error argument propagates
   // with the correct code instead of silently producing 1.
@@ -183,6 +203,24 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
     const std::uint32_t b = want_row ? rhs.row : rhs.col;
     const std::uint32_t lo = a < b ? a : b;
     return Value::number(static_cast<double>(lo + 1U));
+  }
+  if (k == parser::NodeKind::Call) {
+    // Reference-returning builtins (INDIRECT, OFFSET) nested inside
+    // ROW/COLUMN must be inspected without dereferencing so
+    // `ROW(INDIRECT("A5"))` returns 5 rather than the value at A5.
+    std::string_view sheet;
+    std::uint32_t top = 0;
+    std::uint32_t left = 0;
+    std::uint32_t bottom = 0;
+    std::uint32_t right = 0;
+    bool is_range = false;
+    ErrorCode err = ErrorCode::Value;
+    if (resolve_reference_call(arg, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &is_range, &err)) {
+      const std::uint32_t idx = want_row ? top : left;
+      return Value::number(static_cast<double>(idx + 1U));
+    }
+    // Fall through to the scalar fallback so subtree errors propagate
+    // and non-reference calls still surface `#VALUE!`.
   }
   // Evaluate to surface errors from the subtree verbatim; otherwise
   // reject non-references as `#VALUE!` (matches Excel for ROW(literal)
