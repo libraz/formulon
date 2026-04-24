@@ -343,14 +343,23 @@ ParsedCriterion parse_criterion(const Value& criterion) {
           (parsed.op == CriteriaOp::Eq || parsed.op == CriteriaOp::NotEq) && scan_has_wildcard(parsed.rhs_text);
       return parsed;
     }
-    case ValueKind::Error:
+    case ValueKind::Error: {
+      // Error criteria count cells matching the specific error code: e.g.
+      // `COUNTIF(range, #N/A)` counts #N/A cells in `range`. This does not
+      // propagate the error out of COUNTIF the way an ordinary argument
+      // error would; the caller is responsible for passing the Value
+      // through rather than short-circuiting on `is_error()`.
+      parsed.op = CriteriaOp::Eq;
+      parsed.rhs_is_error = true;
+      parsed.rhs_error_code = criterion.as_error();
+      return parsed;
+    }
     case ValueKind::Array:
     case ValueKind::Ref:
     case ValueKind::Lambda:
-      // Contract: callers reject errors before calling this helper. For the
-      // remaining non-scalar kinds there is no Excel-visible criterion
-      // shape today; fall back to `Op::Eq` / text "" which matches nothing
-      // interesting and keeps the function total.
+      // For the remaining non-scalar kinds there is no Excel-visible
+      // criterion shape today; fall back to `Op::Eq` / text "" which matches
+      // nothing interesting and keeps the function total.
       parsed.op = CriteriaOp::Eq;
       parsed.rhs_is_number = false;
       parsed.rhs_text = std::string_view{};
@@ -473,6 +482,16 @@ bool matches_numeric(const Value& cell, const ParsedCriterion& c) {
 }  // namespace
 
 bool matches_criterion(const Value& cell, const ParsedCriterion& c) {
+  // Error criterion (e.g. `COUNTIF(range, #N/A)`): match only cells whose
+  // error code is identical. Mirrors Excel 365 which treats an error value
+  // passed as the criterion as a filter over error cells rather than
+  // propagating. Non-error cells never satisfy this form.
+  if (c.rhs_is_error) {
+    if (!cell.is_error()) {
+      return false;
+    }
+    return cell.as_error() == c.rhs_error_code;
+  }
   // Error cells in the criteria range never propagate out as the call's
   // result (criteria walks are error-tolerant by design, diverging
   // intentionally from the eager dispatcher's `propagate_errors` default).

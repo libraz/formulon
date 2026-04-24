@@ -158,16 +158,19 @@ TEST(BuiltinsCountIfs, ZeroArityIsValueError) {
   EXPECT_EQ(EvalSource("=COUNTIFS()").as_error(), ErrorCode::Value);
 }
 
-TEST(BuiltinsCountIfs, CriterionErrorPropagates) {
-  // An error-valued criterion propagates, even on the second pair.
+TEST(BuiltinsCountIfs, CriterionErrorFiltersMatchingErrorCells) {
+  // An error criterion in COUNTIFS is not propagated — it filters cells with
+  // the same error code at the matching position. Matches Excel 365.
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
   wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
-  wb.sheet(0).set_cell_value(0, 1, Value::number(10.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(3.0));
+  wb.sheet(0).set_cell_formula(0, 1, "=1/0");
   wb.sheet(0).set_cell_value(1, 1, Value::number(20.0));
-  const Value v = EvalSourceIn("=COUNTIFS(A1:A2, \">0\", B1:B2, #DIV/0!)", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+  wb.sheet(0).set_cell_formula(2, 1, "=1/0");
+  const Value v = EvalSourceIn("=COUNTIFS(A1:A3, \">0\", B1:B3, #DIV/0!)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
 
 TEST(BuiltinsCountIfs, CrossSheetRangesBothQualified) {

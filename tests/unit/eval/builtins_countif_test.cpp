@@ -209,13 +209,18 @@ TEST(BuiltinsCountIf, ScalarFirstArgIsValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(BuiltinsCountIf, CriterionIsErrorPropagates) {
+TEST(BuiltinsCountIf, CriterionIsErrorFiltersMatchingErrorCells) {
+  // An error criterion is not propagated; it counts cells with the same
+  // error code. Matches Excel 365 behaviour verified against IronCalc
+  // golden COUNTIF_Columns G20 (#N/A) and H20 (#DIV/0!).
   Workbook wb = Workbook::create();
-  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_formula(0, 0, "=1/0");
   wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
-  const Value v = EvalSourceIn("=COUNTIF(A1:A2, #DIV/0!)", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+  wb.sheet(0).set_cell_formula(2, 0, "=1/0");
+  wb.sheet(0).set_cell_formula(3, 0, "=NA()");
+  const Value v = EvalSourceIn("=COUNTIF(A1:A4, #DIV/0!)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
 
 TEST(BuiltinsCountIf, ErrorCellInRangeIsSkipped) {

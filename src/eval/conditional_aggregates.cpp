@@ -73,11 +73,10 @@ bool resolve_criteria_pairs(const parser::AstNode& call, std::uint32_t first_pai
       *out_err_value = Value::error(ErrorCode::Value);
       return false;
     }
+    // An error-valued criterion is NOT propagated: Excel's *IFS functions
+    // accept an error criterion as a filter over error cells with the
+    // matching code (see `parse_criterion` ValueKind::Error branch).
     const Value crit_val = eval_node(call.as_call_arg(crit_idx), arena, registry, ctx);
-    if (crit_val.is_error()) {
-      *out_err_value = crit_val;
-      return false;
-    }
     auto parsed = std::make_unique<ParsedCriterion>(parse_criterion(crit_val));
     out_cell_arrays->push_back(std::move(cells));
     out_parsed->push_back(std::move(parsed));
@@ -127,10 +126,9 @@ Value eval_countif_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &cells, &range_err)) {
     return Value::error(range_err);
   }
+  // An error-valued criterion (e.g. `COUNTIF(range, #N/A)`) is NOT
+  // propagated: `parse_criterion` turns it into an error-match filter.
   const Value criterion_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
-  if (criterion_val.is_error()) {
-    return criterion_val;
-  }
   const ParsedCriterion parsed = parse_criterion(criterion_val);
   double count = 0.0;
   for (const Value& cell : cells) {
@@ -166,10 +164,9 @@ Value eval_sumif_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &criteria_cells, &range_err)) {
     return Value::error(range_err);
   }
+  // Error criterion is NOT propagated; `parse_criterion` converts it to a
+  // filter over error cells with the same code.
   const Value criterion_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
-  if (criterion_val.is_error()) {
-    return criterion_val;
-  }
   const ParsedCriterion parsed = parse_criterion(criterion_val);
 
   // Choose the effective sum range: either the explicit third arg, or a
@@ -226,10 +223,9 @@ Value eval_averageif_lazy(const parser::AstNode& call, Arena& arena, const Funct
   if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &criteria_cells, &range_err)) {
     return Value::error(range_err);
   }
+  // Error criterion is NOT propagated; `parse_criterion` converts it to a
+  // filter over error cells with the same code.
   const Value criterion_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
-  if (criterion_val.is_error()) {
-    return criterion_val;
-  }
   const ParsedCriterion parsed = parse_criterion(criterion_val);
 
   const std::vector<Value>* avg_cells_ptr = nullptr;
@@ -290,10 +286,9 @@ Value eval_countifs_lazy(const parser::AstNode& call, Arena& arena, const Functi
     return Value::error(range_err);
   }
   const std::size_t expected_size = first_cells.size();
+  // Error criterion is NOT propagated; it filters error cells (see
+  // `parse_criterion` ValueKind::Error).
   const Value first_crit = eval_node(call.as_call_arg(1), arena, registry, ctx);
-  if (first_crit.is_error()) {
-    return first_crit;
-  }
   criteria_cells.push_back(std::move(first_cells));
   parsed.push_back(std::make_unique<ParsedCriterion>(parse_criterion(first_crit)));
 

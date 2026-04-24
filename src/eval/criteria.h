@@ -76,6 +76,13 @@ struct ParsedCriterion {
   /// a Number criterion matches only Number cells. The matcher branches on
   /// this flag in the numeric path.
   bool rhs_from_bool = false;
+  /// True when the criterion itself is an error Value (e.g. a cell holding
+  /// `#N/A` passed as `COUNTIF(range, #N/A)`). The matcher counts cells whose
+  /// error code equals `rhs_error_code` and every other kind is a miss.
+  /// Observed in Excel 365: `COUNTIF` does not propagate an error criterion
+  /// but uses it as a filter over error cells in the range.
+  bool rhs_is_error = false;
+  ErrorCode rhs_error_code = ErrorCode::NA;
 
  private:
   /// Owns the re-buffered RHS when the parser needed to strip a comparator
