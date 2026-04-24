@@ -309,6 +309,15 @@ TEST_P(OracleTest, Matches) {
   const eval::FunctionRegistry& registry = eval::default_registry();
   eval::EvalState state;
   eval::EvalContext ctx(wb, sheet, state);
+  // Anchor the formula at its own cell so zero-arg ROW() / COLUMN() return
+  // the case's row / column. Ignore malformed addresses silently (they would
+  // already have failed the setup loop above if any cell-addressed setup was
+  // present); ad-hoc case ids still evaluate without an anchor.
+  std::uint32_t case_row = 0;
+  std::uint32_t case_col = 0;
+  if (a1_to_row_col(param.case_id, &case_row, &case_col)) {
+    ctx = ctx.with_formula_cell(case_row, case_col);
+  }
   Value actual = eval::evaluate(*root, eval_arena, registry, ctx);
 
   std::string diff =

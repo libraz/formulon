@@ -148,9 +148,18 @@ namespace {
 
 Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx, bool want_row) {
+  if (call.as_call_arity() == 0U) {
+    // ROW() / COLUMN() with no argument returns the formula cell's own
+    // row / column (1-based). When no formula cell is bound — e.g. ad-hoc
+    // `eval` CLI invocations with no anchoring address — surface `#VALUE!`
+    // because the result is genuinely undefined in that context.
+    if (!ctx.has_formula_cell()) {
+      return Value::error(ErrorCode::Value);
+    }
+    const std::uint32_t idx = want_row ? ctx.formula_row() : ctx.formula_col();
+    return Value::number(static_cast<double>(idx + 1U));
+  }
   if (call.as_call_arity() != 1U) {
-    // 0-arity would need the current cell address, which EvalContext
-    // does not carry today.
     return Value::error(ErrorCode::Value);
   }
   const parser::AstNode& arg = call.as_call_arg(0);

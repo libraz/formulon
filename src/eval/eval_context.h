@@ -211,11 +211,44 @@ class EvalContext {
     return copy;
   }
 
+  /// Sentinel row / column value meaning "no formula cell is bound". Chosen
+  /// beyond `Sheet::kMaxRows` / `kMaxCols` so it never collides with a valid
+  /// 0-based address.
+  static constexpr std::uint32_t kNoFormulaCell = static_cast<std::uint32_t>(-1);
+
+  /// Returns a copy of `*this` anchored at the formula cell located at
+  /// (row, col) 0-based on the current sheet. Zero-argument position
+  /// functions (ROW(), COLUMN()) read this address to return the row / column
+  /// of the cell that owns the formula. During recursive `resolve_ref`
+  /// evaluation the anchor is updated to the resolved target cell so that
+  /// ROW() / COLUMN() inside a referenced formula report the referenced
+  /// cell's coordinates, not the caller's.
+  EvalContext with_formula_cell(std::uint32_t row, std::uint32_t col) const noexcept {
+    EvalContext copy = *this;
+    copy.formula_row_ = row;
+    copy.formula_col_ = col;
+    return copy;
+  }
+
+  /// Returns the 0-based row of the formula cell that owns the currently
+  /// evaluated expression, or `kNoFormulaCell` when no cell is bound (e.g.
+  /// ad-hoc expression evaluation in the CLI).
+  std::uint32_t formula_row() const noexcept { return formula_row_; }
+
+  /// Returns the 0-based column of the formula cell that owns the currently
+  /// evaluated expression, or `kNoFormulaCell` when no cell is bound.
+  std::uint32_t formula_col() const noexcept { return formula_col_; }
+
+  /// True when the context is anchored at a specific formula cell.
+  bool has_formula_cell() const noexcept { return formula_row_ != kNoFormulaCell; }
+
  private:
   const Sheet* current_sheet_ = nullptr;
   EvalState* state_ = nullptr;
   const Workbook* workbook_ = nullptr;
   const NameEnv* name_env_ = nullptr;
+  std::uint32_t formula_row_ = kNoFormulaCell;
+  std::uint32_t formula_col_ = kNoFormulaCell;
 };
 
 }  // namespace eval

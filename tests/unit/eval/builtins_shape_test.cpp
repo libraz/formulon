@@ -221,12 +221,45 @@ TEST(BuiltinsRow, ErrorSubtreePropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
-TEST(BuiltinsRow, ZeroArgIsArityViolation) {
-  // 0-arity would need the caller-cell address, which EvalContext does
-  // not currently expose.
+TEST(BuiltinsRow, ZeroArgWithoutAnchorIsValue) {
+  // Without a formula-cell anchor the 0-arg form has no meaningful answer,
+  // so surface #VALUE! rather than inventing a row number.
   const Value v = EvalSource("=ROW()");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsRow, ZeroArgReturnsAnchorRowOneBased) {
+  // The oracle harness anchors each formula at its own cell so ROW() / COLUMN()
+  // can report the containing cell's coordinates. Mirror that here by
+  // constructing an EvalContext with the anchor explicitly.
+  Workbook wb = Workbook::create();
+  Arena parse_arena;
+  Arena eval_arena;
+  parser::Parser p("=ROW()", parse_arena);
+  parser::AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  EvalState state;
+  const EvalContext ctx =
+      EvalContext(wb, wb.sheet(0), state).with_formula_cell(4U, 2U);  // C5
+  const Value v = evaluate(*root, eval_arena, default_registry(), ctx);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 5.0);
+}
+
+TEST(BuiltinsColumn, ZeroArgReturnsAnchorColumnOneBased) {
+  Workbook wb = Workbook::create();
+  Arena parse_arena;
+  Arena eval_arena;
+  parser::Parser p("=COLUMN()", parse_arena);
+  parser::AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  EvalState state;
+  const EvalContext ctx =
+      EvalContext(wb, wb.sheet(0), state).with_formula_cell(4U, 2U);  // C5
+  const Value v = evaluate(*root, eval_arena, default_registry(), ctx);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
 }
 
 // ---------------------------------------------------------------------------

@@ -420,8 +420,9 @@ void register_info_builtins(FunctionRegistry& registry) {
   // `shape_ops_lazy.cpp`) because they must introspect each argument's
   // AST shape: a bare single-cell `Ref`, a `RangeOp`, and an inline
   // `{...}` `ArrayLiteral` all produce different answers, and the eager
-  // dispatcher's pre-evaluation would erase that distinction.
-  // @formulon-todo: 0-arity ROW/COLUMN needs current-cell context
+  // dispatcher's pre-evaluation would erase that distinction. Zero-arg
+  // ROW() / COLUMN() read the formula-cell anchor that the recalc driver
+  // attaches to `EvalContext` via `with_formula_cell`.
 }
 
 }  // namespace eval

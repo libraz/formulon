@@ -183,7 +183,11 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena,
     // evaluator's handling of `ErrorPlaceholder`, so both paths agree.
     result = Value::error(ErrorCode::Name);
   } else {
-    result = evaluate(*root, arena, registry, *this);
+    // Anchor the recursive evaluation at the target cell so ROW() / COLUMN()
+    // inside the referenced formula return the referenced cell's coordinates
+    // rather than inheriting the caller's anchor.
+    result = evaluate(*root, arena, registry,
+                      this->with_formula_cell(prefix.row, prefix.col));
   }
 
   state_->pop_cell(prefix.target_sheet, prefix.row, prefix.col);
