@@ -104,6 +104,12 @@ FormatStatus apply_format(double value, std::string_view format, std::string_vie
     return FormatStatus::kOk;
   }
   if (section.is_date) {
+    // Excel rejects out-of-range date serials from TEXT: the valid range is
+    // [0, 2958465] (the latter is 9999-12-31). Surface as #VALUE! rather than
+    // silently emitting an empty string.
+    if (render_value < 0.0 || render_value > 2958465.0) {
+      return FormatStatus::kValueError;
+    }
     number_format_detail::render_date(section, raw_fmt, render_value, out);
     return FormatStatus::kOk;
   }

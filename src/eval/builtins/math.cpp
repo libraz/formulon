@@ -617,6 +617,11 @@ Value Odd(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // `denominator == 0` -> `#DIV/0!`. Very large quotients fall through the
 // finite-check and surface `#NUM!`.
 Value Quotient(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  // Excel's QUOTIENT rejects boolean operands (#VALUE!) even though MOD and
+  // arithmetic operators accept them. Verified against Mac Excel 365 / IronCalc.
+  if (args[0].kind() == ValueKind::Bool || args[1].kind() == ValueKind::Bool) {
+    return Value::error(ErrorCode::Value);
+  }
   auto num = coerce_to_number(args[0]);
   if (!num) {
     return Value::error(num.error());
