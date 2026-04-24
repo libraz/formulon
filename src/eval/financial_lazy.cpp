@@ -123,6 +123,116 @@ double irr_dnpv(const std::vector<double>& flows, double rate) noexcept {
   return total;
 }
 
+// Runs Newton-Raphson on irr_npv starting from `guess`. Returns NaN on
+// failure (the iterate wanders past rate <= -1, derivative collapses, or
+// the iteration cap is exhausted without converging); otherwise the
+// converged rate. Used as the fast path for IRR; a bracket + bisection
+// fallback (`irr_bracket`) picks up cases where Newton diverges.
+double irr_newton(const std::vector<double>& flows, double guess) noexcept {
+  constexpr int kMaxIter = 100;
+  constexpr double kTolerance = 1.0e-10;
+  double rate = guess;
+  for (int iter = 0; iter < kMaxIter; ++iter) {
+    if (rate <= -1.0) {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
+    const double npv = irr_npv(flows, rate);
+    const double dnpv = irr_dnpv(flows, rate);
+    if (dnpv == 0.0 || std::isnan(dnpv) || std::isinf(dnpv)) {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
+    const double new_rate = rate - npv / dnpv;
+    if (std::isnan(new_rate) || std::isinf(new_rate)) {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
+    if (std::fabs(new_rate - rate) < kTolerance) {
+      return new_rate;
+    }
+    rate = new_rate;
+  }
+  return std::numeric_limits<double>::quiet_NaN();
+}
+
+// Bracketed fallback for IRR when Newton diverges or can't cross the
+// rate = -1 singularity. Mirrors `xirr_bracket`: samples f(rate) on a
+// log-linear grid spanning the domain rate > -1, looks for an adjacent
+// sign change, and bisects.
+//
+//   grid_near_minus_1 = { -1 + 10^k for k in [-10, -1] }   // [~-1, -0.9]
+//   grid_mid           = { -0.8, -0.5, -0.2, 0.0, 0.1, 0.2, 0.5, 1.0,
+//                          2.0, 5.0 }
+//   grid_large         = { 10^k for k in [1, 6] }          // [10, 1e6]
+//
+// Combined (sorted ascending), this catches the roots in schedules that
+// Newton-Raphson walks off from — typically short schedules whose root
+// lies near the rate = -1 boundary.
+double irr_bracket(const std::vector<double>& flows) noexcept {
+  std::vector<double> grid;
+  grid.reserve(40);
+  for (int k = -10; k <= -1; ++k) {
+    grid.push_back(-1.0 + std::pow(10.0, static_cast<double>(k)));
+  }
+  for (double m : {-0.8, -0.5, -0.2, 0.0, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0}) {
+    grid.push_back(m);
+  }
+  for (int k = 1; k <= 6; ++k) {
+    grid.push_back(std::pow(10.0, static_cast<double>(k)));
+  }
+  std::sort(grid.begin(), grid.end());
+  // Scan for an adjacent sign change.
+  double prev_r = grid[0];
+  double prev_f = irr_npv(flows, prev_r);
+  if (std::isfinite(prev_f) && std::fabs(prev_f) < 1.0e-10) {
+    return prev_r;
+  }
+  for (std::size_t i = 1; i < grid.size(); ++i) {
+    const double r = grid[i];
+    const double f = irr_npv(flows, r);
+    if (!std::isfinite(f)) {
+      prev_r = r;
+      prev_f = f;
+      continue;
+    }
+    if (std::fabs(f) < 1.0e-10) {
+      return r;
+    }
+    if (std::isfinite(prev_f) && ((prev_f < 0.0 && f > 0.0) || (prev_f > 0.0 && f < 0.0))) {
+      double lo = prev_r;
+      double hi = r;
+      double f_lo = prev_f;
+      for (int iter = 0; iter < 200; ++iter) {
+        const double mid = 0.5 * (lo + hi);
+        const double f_mid = irr_npv(flows, mid);
+        if (!std::isfinite(f_mid)) {
+          hi = mid;
+          continue;
+        }
+        if (std::fabs(f_mid) < 1.0e-12) {
+          return mid;
+        }
+        if ((f_lo < 0.0 && f_mid < 0.0) || (f_lo > 0.0 && f_mid > 0.0)) {
+          lo = mid;
+          f_lo = f_mid;
+        } else {
+          hi = mid;
+        }
+        if (std::fabs(hi - lo) < 1.0e-14) {
+          return 0.5 * (lo + hi);
+        }
+      }
+      // Polish the final bracket midpoint with Newton for full precision.
+      const double refined = irr_newton(flows, 0.5 * (lo + hi));
+      if (std::isfinite(refined)) {
+        return refined;
+      }
+      return 0.5 * (lo + hi);
+    }
+    prev_r = r;
+    prev_f = f;
+  }
+  return std::numeric_limits<double>::quiet_NaN();
+}
+
 // Closed-form MIRR helper. `flows` must already have been validated to
 // contain at least one positive and at least one negative value. Returns
 // NaN on a degenerate ratio (e.g. all-positive or all-negative schedule
@@ -218,35 +328,29 @@ Value eval_irr_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
         return Value::error(coerced.error());
       }
       rate = coerced.value();
+      // An explicit out-of-domain guess (the NPV expansion needs
+      // 1 + rate > 0) is an input error, not an iteration failure, so
+      // Excel surfaces #VALUE! here rather than the #NUM! the in-loop
+      // boundary check uses when Newton walks past -1 on its own.
+      if (rate <= -1.0) {
+        return Value::error(ErrorCode::Value);
+      }
     }
   }
 
-  // Newton-Raphson with a fixed iteration cap. The Excel specification
-  // uses 20 iterations; we use 100 to match common open-source
-  // implementations and give the method a wider convergence basin. The
-  // tolerance 1e-10 on |delta rate| matches the oracle's expectations.
-  constexpr int kMaxIter = 100;
-  constexpr double kTolerance = 1.0e-10;
-  for (int iter = 0; iter < kMaxIter; ++iter) {
-    if (rate <= -1.0) {
-      // (1 + rate) must stay positive for the NPV expansion to be
-      // meaningful; Excel returns #NUM! when the iterate wanders past
-      // that boundary.
-      return Value::error(ErrorCode::Num);
-    }
-    const double npv = irr_npv(flows, rate);
-    const double dnpv = irr_dnpv(flows, rate);
-    if (dnpv == 0.0 || std::isnan(dnpv) || std::isinf(dnpv)) {
-      return Value::error(ErrorCode::Num);
-    }
-    const double new_rate = rate - npv / dnpv;
-    if (std::isnan(new_rate) || std::isinf(new_rate)) {
-      return Value::error(ErrorCode::Num);
-    }
-    if (std::fabs(new_rate - rate) < kTolerance) {
-      return Value::number(new_rate);
-    }
-    rate = new_rate;
+  // Try Newton-Raphson first; it converges quickly for the well-posed
+  // schedules (single positive root, guess near the answer). When it
+  // fails — typically because the true root lies near the rate = -1
+  // singularity and Newton walks past it — fall back to a bracket +
+  // bisection scan over the full rate > -1 domain. Mirrors the XIRR
+  // hybrid strategy used below.
+  const double newton_rate = irr_newton(flows, rate);
+  if (std::isfinite(newton_rate)) {
+    return Value::number(newton_rate);
+  }
+  const double bracket_rate = irr_bracket(flows);
+  if (std::isfinite(bracket_rate)) {
+    return Value::number(bracket_rate);
   }
   return Value::error(ErrorCode::Num);
 }
