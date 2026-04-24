@@ -175,10 +175,35 @@ TEST(BuiltinsAnd, ZeroMakesFalse) {
   EXPECT_FALSE(v.as_boolean());
 }
 
-TEST(BuiltinsAnd, NumericTextCoerces) {
+TEST(BuiltinsAnd, NumericTextIsValue) {
+  // AND / OR / XOR use a stricter logical-coercion rule than NOT: a
+  // numeric text like "1" is NOT accepted. Only the literal strings
+  // "TRUE" / "FALSE" (case-insensitive, trimmed) map to a bool. Matches
+  // Mac Excel 365's IronCalc-oracle behaviour.
   const Value v = EvalSource("=AND(\"1\", 2)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsAnd, BoolLiteralTextCoerces) {
+  const Value v = EvalSource("=AND(\"TRUE\", 2)");
   ASSERT_TRUE(v.is_boolean());
   EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(BuiltinsAnd, EmptyStringIsSkipped) {
+  // An empty text is treated as "no value here"; since the remaining
+  // TRUE is the only real input the result is TRUE.
+  const Value v = EvalSource("=AND(\"\", TRUE)");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(BuiltinsAnd, AllEmptyIsValue) {
+  // Every argument is skipped -> no logical value produced -> #VALUE!.
+  const Value v = EvalSource("=AND(\"\", \"\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsAnd, NonNumericTextYieldsValue) {
@@ -227,10 +252,24 @@ TEST(BuiltinsOr, AnyNonZeroIsTrue) {
   EXPECT_TRUE(v.as_boolean());
 }
 
-TEST(BuiltinsOr, NumericTextCoerces) {
+TEST(BuiltinsOr, NumericTextIsValue) {
+  // Same strict-coercion rule as AND: numeric text "0"/"1" does not map
+  // to a bool, so the left-most failure surfaces #VALUE!.
   const Value v = EvalSource("=OR(\"0\", \"0\", \"1\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsOr, EmptyStringIsSkipped) {
+  const Value v = EvalSource("=OR(\"\", TRUE)");
   ASSERT_TRUE(v.is_boolean());
   EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(BuiltinsOr, AllEmptyIsValue) {
+  const Value v = EvalSource("=OR(\"\", \"\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsOr, ErrorPropagates) {
