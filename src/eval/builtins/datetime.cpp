@@ -120,6 +120,14 @@ Value Date_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   }
   yy += year_shift;
   mm = rem + 1;
+  // Excel rejects DATE whose post-month-shift year falls outside [1900, 9999]
+  // even if a negative `day` argument would rewind it back into range.
+  // `DATE(9999, 13, -1)` nominally resolves to 9999-12-30 after day rewind,
+  // but the intermediate month step pushed the year to 10000, so Excel
+  // returns #NUM! before day normalisation runs.
+  if (yy < 1900 || yy > 9999) {
+    return Value::error(ErrorCode::Num);
+  }
   const double serial = date_time::serial_from_ymd(static_cast<int>(yy), static_cast<unsigned>(mm),
                                                    static_cast<unsigned>(static_cast<long long>(d)));
   if (serial < 0.0) {
