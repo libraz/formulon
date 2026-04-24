@@ -204,6 +204,15 @@ TEST(FinancialTBillPrice, DsmOver365IsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
+TEST(FinancialTBillPrice, RejectsMoreThanOneCalendarYear) {
+  // Settlement 1902-09-26 (serial 1000) -> maturity 1903-09-27 (serial
+  // 1366). The anniversary serial is 1365 (1903-09-26), so maturity is
+  // one day past it; Excel returns #NUM! even though the raw DSM is 366.
+  const Value v = EvalSource("=TBILLPRICE(1000, 1366, 0.5)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
 TEST(FinancialTBillPrice, DiscountNonPositiveIsNum) {
   const Value v = EvalSource("=TBILLPRICE(DATE(2008,3,31), DATE(2008,6,1), 0)");
   ASSERT_TRUE(v.is_error());
@@ -215,6 +224,13 @@ TEST(FinancialTBillPrice, OverLargeDiscountYieldsNonPositivePrice) {
   const Value v = EvalSource("=TBILLPRICE(DATE(2008,1,1), DATE(2008,12,31), 1.5)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialTBillPrice, RejectsBoolSettlement) {
+  // Bool settlement must surface #VALUE! rather than coerce to 1/0.
+  const Value v = EvalSource("=TBILLPRICE(TRUE, DATE(2008,6,1), 0.09)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 // ---------------------------------------------------------------------------
@@ -245,6 +261,13 @@ TEST(FinancialTBillYield, PriceNonPositiveIsNum) {
   const Value v = EvalSource("=TBILLYIELD(DATE(2008,3,31), DATE(2008,6,1), 0)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialTBillYield, RejectsBoolPrice) {
+  // Bool `pr` must surface #VALUE! rather than coerce TRUE/FALSE to 1/0.
+  const Value v = EvalSource("=TBILLYIELD(DATE(2008,3,31), DATE(2008,6,1), TRUE)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 // ---------------------------------------------------------------------------
@@ -301,6 +324,52 @@ TEST(FinancialTBillEq, NonNumericIsValue) {
   const Value v = EvalSource("=TBILLEQ(\"oops\", DATE(2008,6,1), 0.09)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(FinancialTBillEq, LongBranchMatchesMicrosoftFormula) {
+  // DSM = 360 days, rate = 0.8 -> exercises the long-branch quadratic.
+  // Per the Microsoft TBILLEQ formula:
+  //   a     = 360 / 365
+  //   price = 1 - 0.8 * 360 / 360 = 0.2
+  //   disc  = a^2 - (2a - 1) * (1 - 1/price)
+  //   res   = (-a + sqrt(disc)) / (a - 0.5)
+  // which evaluates to ~2.506604825374815 (verified against Excel/IronCalc).
+  const Value v = EvalSource("=TBILLEQ(DATE(2020,1,1), DATE(2020,12,26), 0.8)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 2.506604825374815, 1e-6);
+}
+
+TEST(FinancialTBillEq, AcceptsLeapYearDsm366) {
+  // A 366-day span (e.g. a one-year maturity across a leap-year boundary)
+  // must not be rejected. 2020 is a leap year so DATE(2020,1,1) ->
+  // DATE(2020,12,31) is exactly 365 days; use 2019-12-31 -> 2020-12-31 to
+  // get a 366-day span. The calendar-year anniversary of 2019-12-31 is
+  // 2020-12-31, exactly matching maturity, so the span is accepted.
+  const Value v = EvalSource("=TBILLEQ(DATE(2019,12,31), DATE(2020,12,31), 0.05)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_GT(v.as_number(), 0.0);
+}
+
+TEST(FinancialTBillEq, RejectsMoreThanOneCalendarYear) {
+  // Settlement 1902-09-26 (serial 1000) -> maturity 1903-09-27 (serial
+  // 1366). Anniversary is 1903-09-26 (serial 1365); maturity is one day
+  // past it. Raw DSM is 366 but Excel applies a calendar-year rule and
+  // returns #NUM!.
+  const Value v = EvalSource("=TBILLEQ(1000, 1366, 0.5)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialTBillEq, AcceptsExactOneYearOnLeapAnniversary) {
+  // Settlement 1940-02-16 (serial 14640, inside a leap year) ->
+  // maturity 1941-02-16 (serial 15006). The calendar span is exactly one
+  // year and the raw DSM is 366 (1940 is a leap year). Anniversary is
+  // 1941-02-16 (serial 15006), so maturity == anniversary and the span
+  // is accepted. The closed-form long-branch result is ~0.85229613 (from
+  // the IronCalc oracle).
+  const Value v = EvalSource("=TBILLEQ(14640, 15006, 0.5)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 0.8522961312491701, 1e-6);
 }
 
 }  // namespace

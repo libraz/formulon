@@ -9,8 +9,11 @@
 //     is taken with `std::trunc` before use.
 //   * `settlement < maturity` is required; otherwise `#NUM!`.
 //   * `basis` (where present) must be in {0, 1, 2, 3, 4} after truncation.
-//   * T-Bill entries additionally require `maturity - settlement <= 365`
-//     (a T-Bill cannot mature more than one year after settlement).
+//   * T-Bill entries additionally require that maturity falls no more
+//     than one *calendar* year after settlement (Excel uses the
+//     "same month + day next year" anniversary rule, not a day-count
+//     cutoff). A span that crosses the anniversary serial by even one
+//     day yields `#NUM!`, even if the raw DSM is 366.
 //
 // DISC / INTRATE / RECEIVED reuse the day-count helpers in
 // `eval/date_time.h` (moved there from `datetime.cpp` so the financial
@@ -257,10 +260,19 @@ Value Received(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //
 // Domain per Microsoft docs:
 //   - settlement >= maturity        ->  #NUM!
-//   - maturity > settlement + 365   ->  #NUM! (T-Bill < 1 year)
+//   - maturity > settlement + 1 calendar year  ->  #NUM!
+//     (Excel checks against the same-month/day anniversary serial, so
+//     e.g. 1902-09-26 -> 1903-09-27 is rejected even though DSM = 366.)
 //   - discount <= 0                 ->  #NUM!
 //   - result <= 0 (discount * DSM/360 >= 1)  ->  #NUM!
 Value TBillPrice(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  // Excel-quirk: T-Bill functions reject a direct Bool for settlement,
+  // maturity, or the numeric rate/price argument with `#VALUE!` rather
+  // than coercing TRUE/FALSE to 1/0. See the DEC2BIN precedent in
+  // `engineering.cpp::convert_from_dec`.
+  if (args[0].kind() == ValueKind::Bool || args[1].kind() == ValueKind::Bool || args[2].kind() == ValueKind::Bool) {
+    return Value::error(ErrorCode::Value);
+  }
   auto settlement = read_date(args, 0);
   if (!settlement) {
     return Value::error(settlement.error());
@@ -277,7 +289,13 @@ Value TBillPrice(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (dsm <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  if (dsm > 365.0) {
+  // Calendar-year rule: reject maturities past the "same month + day next
+  // year" anniversary of settlement, regardless of raw day count. This
+  // matches Excel 365 (and is stricter than the naive `dsm > 366` rule,
+  // which accepted 366-day spans that actually cross the anniversary).
+  const auto s_ymd = date_time::ymd_from_serial(std::floor(settlement.value()));
+  const double anniversary = date_time::serial_from_ymd(s_ymd.y + 1, s_ymd.m, s_ymd.d);
+  if (std::floor(maturity.value()) > anniversary) {
     return Value::error(ErrorCode::Num);
   }
   if (discount.value() <= 0.0) {
@@ -299,9 +317,14 @@ Value TBillPrice(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 //
 // Domain per Microsoft docs:
 //   - settlement >= maturity       ->  #NUM!
-//   - maturity > settlement + 365  ->  #NUM!
+//   - maturity > settlement + 1 calendar year  ->  #NUM!
+//     (same anniversary rule as TBILLPRICE).
 //   - pr <= 0                      ->  #NUM!
 Value TBillYield(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  // See TBillPrice for the rationale behind rejecting direct Bool args.
+  if (args[0].kind() == ValueKind::Bool || args[1].kind() == ValueKind::Bool || args[2].kind() == ValueKind::Bool) {
+    return Value::error(ErrorCode::Value);
+  }
   auto settlement = read_date(args, 0);
   if (!settlement) {
     return Value::error(settlement.error());
@@ -318,7 +341,10 @@ Value TBillYield(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (dsm <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  if (dsm > 365.0) {
+  // Same calendar-year anniversary rule as TBILLPRICE.
+  const auto s_ymd = date_time::ymd_from_serial(std::floor(settlement.value()));
+  const double anniversary = date_time::serial_from_ymd(s_ymd.y + 1, s_ymd.m, s_ymd.d);
+  if (std::floor(maturity.value()) > anniversary) {
     return Value::error(ErrorCode::Num);
   }
   if (pr.value() <= 0.0) {
@@ -335,11 +361,11 @@ Value TBillYield(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 //   if DSM <= 182:
 //       TBILLEQ = (365 * discount) / (360 - discount * DSM)
 //
-//   if 182 < DSM <= 365:
+//   if DSM > 182:
+//       a = DSM / 365
 //       price = 1 - discount * DSM / 360
-//       A = DSM / 365
-//       discriminant = (2A - 1)^2 - (2A^2 - 1) * (1 - 1/price) * 4A
-//       TBILLEQ = (-2A + 1 + sqrt(discriminant)) / (2A - 1)
+//       disc = a^2 - (2a - 1) * (1 - 1/price)
+//       TBILLEQ = (-a + sqrt(disc)) / (a - 0.5)
 //
 // The long branch solves the quadratic arising from semi-annual
 // compounding on the bond-equivalent side; see Microsoft's TBILLEQ
@@ -348,9 +374,14 @@ Value TBillYield(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 //
 // Domain:
 //   - settlement >= maturity       ->  #NUM!
-//   - maturity > settlement + 365  ->  #NUM!
+//   - maturity > settlement + 1 calendar year  ->  #NUM!
+//     (same anniversary rule as TBILLPRICE / TBILLYIELD).
 //   - discount <= 0                ->  #NUM!
 Value TBillEq(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  // See TBillPrice for the rationale behind rejecting direct Bool args.
+  if (args[0].kind() == ValueKind::Bool || args[1].kind() == ValueKind::Bool || args[2].kind() == ValueKind::Bool) {
+    return Value::error(ErrorCode::Value);
+  }
   auto settlement = read_date(args, 0);
   if (!settlement) {
     return Value::error(settlement.error());
@@ -367,7 +398,10 @@ Value TBillEq(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (dsm <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  if (dsm > 365.0) {
+  // Same calendar-year anniversary rule as TBILLPRICE / TBILLYIELD.
+  const auto s_ymd = date_time::ymd_from_serial(std::floor(settlement.value()));
+  const double anniversary = date_time::serial_from_ymd(s_ymd.y + 1, s_ymd.m, s_ymd.d);
+  if (std::floor(maturity.value()) > anniversary) {
     return Value::error(ErrorCode::Num);
   }
   if (discount.value() <= 0.0) {
@@ -381,21 +415,30 @@ Value TBillEq(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     }
     return finalize((365.0 * rate) / denom);
   }
-  // Long branch: 182 < DSM <= 365. Semi-annual-compounding quadratic.
+  // Long branch: 182 < DSM. Semi-annual-compounding quadratic per the
+  // Microsoft TBILLEQ documentation:
+  //
+  //   a = DSM / 365   (or DSM / 366 when DSM > 365, i.e. the span is
+  //                   exactly a one-year maturity across a leap-year
+  //                   anniversary — see D6 in the IronCalc oracle,
+  //                   14640 (1940-02-16) -> 15006 (1941-02-16))
+  //   price = 1 - rate * DSM / 360
+  //   disc = a^2 - (2a - 1) * (1 - 1/price)
+  //   TBILLEQ = (-a + sqrt(disc)) / (a - 0.5)
+  const double a = dsm / (dsm > 365.0 ? 366.0 : 365.0);
   const double price = 1.0 - rate * dsm / 360.0;
   if (price <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double a = dsm / 365.0;
-  const double disc = (2.0 * a - 1.0) * (2.0 * a - 1.0) - (2.0 * a * a - 1.0) * (1.0 - 1.0 / price) * 4.0 * a;
+  const double disc = a * a - (2.0 * a - 1.0) * (1.0 - 1.0 / price);
   if (disc < 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double denom = 2.0 * a - 1.0;
+  const double denom = a - 0.5;
   if (denom == 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double result = (-2.0 * a + 1.0 + std::sqrt(disc)) / denom;
+  const double result = (-a + std::sqrt(disc)) / denom;
   return finalize(result);
 }
 
