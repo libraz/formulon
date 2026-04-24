@@ -102,9 +102,17 @@ namespace refs_internal {
 /// fields are meaningless. `is_range` is true when the source text
 /// contained a `:` separator; the second endpoint populates
 /// `row2` / `col2`.
+///
+/// Full-column (`D:D`, `$FF:FG`) and full-row (`5:5`, `$12:$23`) shapes
+/// set `is_full_col` / `is_full_row` respectively; in those cases
+/// `is_range` is also true and `row`/`row2`/`col`/`col2` are populated
+/// with the resulting rectangle (full-column: rows span
+/// `0..Sheet::kMaxRows-1`; full-row: cols span `0..Sheet::kMaxCols-1`).
 struct A1Parse {
   bool valid = false;
   bool is_range = false;
+  bool is_full_col = false;
+  bool is_full_row = false;
   std::string_view sheet;
   std::uint32_t row = 0;
   std::uint32_t col = 0;
@@ -117,8 +125,10 @@ struct A1Parse {
 /// ignored for evaluation purposes (INDIRECT does not preserve
 /// absolute/relative distinction because the return path does not need
 /// them). Supports single-quoted sheet names (`'Sheet 1'!A1`) with
-/// doubled-quote escaping (`'O''Brien'!A1`). Returns an `A1Parse` with
-/// `valid = false` for any malformed input.
+/// doubled-quote escaping (`'O''Brien'!A1`). Also recognises full-column
+/// (`D:D`, `$FF:FG`) and full-row (`5:5`, `$12:$23`) shapes, setting
+/// `is_full_col` / `is_full_row` and expanding to the implied rectangle.
+/// Returns an `A1Parse` with `valid = false` for any malformed input.
 A1Parse parse_a1_ref(std::string_view text);
 
 /// Writes the uppercase A1 column letters for the 1-based column `col`

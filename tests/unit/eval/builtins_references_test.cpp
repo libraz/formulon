@@ -317,6 +317,98 @@ TEST(BuiltinsIndirect, ErrorTextPropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
+// Full-column / full-row INDIRECT shapes. In scalar context these still
+// surface as #REF! (matching Mac Excel 365 observed behaviour; the
+// rectangle does not reduce to a scalar). The ROW / COLUMN family below
+// exercises the rectangle-aware path.
+TEST(BuiltinsIndirect, FullColumnTextIsRefError) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=INDIRECT(\"D:D\")", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+TEST(BuiltinsIndirect, FullRowTextIsRefError) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=INDIRECT(\"5:5\")", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+TEST(BuiltinsIndirectFullColRow, RowOfFullColumn) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=ROW(INDIRECT(\"D:D\"))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+}
+
+TEST(BuiltinsIndirectFullColRow, ColumnOfFullColumn) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=COLUMN(INDIRECT(\"D:D\"))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
+}
+
+TEST(BuiltinsIndirectFullColRow, RowOfFullRow) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=ROW(INDIRECT(\"5:5\"))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 5.0);
+}
+
+TEST(BuiltinsIndirectFullColRow, ColumnOfFullRow) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=COLUMN(INDIRECT(\"5:5\"))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+}
+
+TEST(BuiltinsIndirectFullColRow, AbsoluteMixedFullColumn) {
+  // `$FF:FG` -> leftmost column is FF = 162.
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=COLUMN(INDIRECT(\"$FF:FG\"))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 162.0);
+}
+
+TEST(BuiltinsIndirectFullColRow, ReversedFullColumnNormalisedByMin) {
+  // `C:A` should report column 1 (A) as leftmost.
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=COLUMN(INDIRECT(\"C:A\"))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+}
+
+TEST(BuiltinsIndirectFullColRow, AbsoluteFullRow) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=ROW(INDIRECT(\"$12:$23\"))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 12.0);
+}
+
+TEST(BuiltinsIndirectFullColRow, LastColumnXfd) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=COLUMN(INDIRECT(\"XFD:XFD\"))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 16384.0);
+}
+
+TEST(BuiltinsIndirectFullColRow, LowercaseColumn) {
+  // `s:s` -> column 19 (S).
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=COLUMN(INDIRECT(\"s:s\"))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 19.0);
+}
+
+TEST(BuiltinsIndirectFullColRow, LeadingZeroRow) {
+  // `05:05` -> row 5 (leading zeros tolerated in the row part).
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=ROW(INDIRECT(\"05:05\"))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 5.0);
+}
+
 // ---------------------------------------------------------------------------
 // OFFSET (scalar form)
 // ---------------------------------------------------------------------------

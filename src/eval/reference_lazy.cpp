@@ -88,6 +88,85 @@ std::uint32_t parse_row_digits(std::string_view text, std::size_t* i) {
   return static_cast<std::uint32_t>(row);
 }
 
+// Attempts to parse `text[start..]` as a full-column shape
+// `[$]?<letters>:[$]?<letters>` consuming the entire remainder. On
+// success sets `out->is_full_col` / `out->is_range`, populates
+// `col`/`col2` with the min/max 0-based columns, and fills
+// `row`/`row2` with the full-column row span, then returns true. On
+// failure leaves `*out` untouched and returns false.
+bool try_parse_full_col(std::string_view text, std::size_t start, A1Parse* out) {
+  std::size_t i = start;
+  if (i < text.size() && text[i] == '$') {
+    ++i;
+  }
+  const std::uint32_t c1 = parse_column_letters(text, &i);
+  if (c1 == 0) {
+    return false;
+  }
+  if (i >= text.size() || text[i] != ':') {
+    return false;
+  }
+  ++i;
+  if (i < text.size() && text[i] == '$') {
+    ++i;
+  }
+  const std::uint32_t c2 = parse_column_letters(text, &i);
+  if (c2 == 0) {
+    return false;
+  }
+  if (i != text.size()) {
+    return false;
+  }
+  const std::uint32_t lo = std::min(c1, c2) - 1U;
+  const std::uint32_t hi = std::max(c1, c2) - 1U;
+  out->col = lo;
+  out->col2 = hi;
+  out->row = 0;
+  out->row2 = Sheet::kMaxRows - 1U;
+  out->is_full_col = true;
+  out->is_range = true;
+  return true;
+}
+
+// Attempts to parse `text[start..]` as a full-row shape
+// `[$]?<digits>:[$]?<digits>` consuming the entire remainder. On
+// success sets `out->is_full_row` / `out->is_range`, populates
+// `row`/`row2` with the min/max 0-based rows, and fills `col`/`col2`
+// with the full-row column span, then returns true.
+bool try_parse_full_row(std::string_view text, std::size_t start, A1Parse* out) {
+  std::size_t i = start;
+  if (i < text.size() && text[i] == '$') {
+    ++i;
+  }
+  const std::uint32_t r1 = parse_row_digits(text, &i);
+  if (r1 == 0) {
+    return false;
+  }
+  if (i >= text.size() || text[i] != ':') {
+    return false;
+  }
+  ++i;
+  if (i < text.size() && text[i] == '$') {
+    ++i;
+  }
+  const std::uint32_t r2 = parse_row_digits(text, &i);
+  if (r2 == 0) {
+    return false;
+  }
+  if (i != text.size()) {
+    return false;
+  }
+  const std::uint32_t lo = std::min(r1, r2) - 1U;
+  const std::uint32_t hi = std::max(r1, r2) - 1U;
+  out->row = lo;
+  out->row2 = hi;
+  out->col = 0;
+  out->col2 = Sheet::kMaxCols - 1U;
+  out->is_full_row = true;
+  out->is_range = true;
+  return true;
+}
+
 // Parses a single A1 endpoint (optional `$` markers, letters, digits).
 // Returns `false` on any malformed shape; on success writes 0-based
 // row/col to `*out_row` / `*out_col` and advances `*i`.
@@ -208,6 +287,19 @@ A1Parse parse_a1_ref(std::string_view text) {
       out.sheet = text.substr(0, j);
       i = j + 1;
     }
+  }
+
+  // Full-column / full-row shapes (`D:D`, `$FF:FG`, `5:5`, `$12:$23`)
+  // are tried before the single-endpoint path because they never share a
+  // prefix with a valid single-cell reference (the latter always has a
+  // digit immediately after the letter run, never a `:`).
+  if (try_parse_full_col(text, i, &out)) {
+    out.valid = true;
+    return out;
+  }
+  if (try_parse_full_row(text, i, &out)) {
+    out.valid = true;
+    return out;
   }
 
   // Parse the first endpoint.
