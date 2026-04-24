@@ -139,11 +139,13 @@ TEST(BuiltinsCount, BooleanLiteralIsCountedAsDirectArg) {
   EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
 }
 
-TEST(BuiltinsCount, NumericTextIsSkipped) {
-  // COUNT does NOT coerce numeric-looking text, which differs from SUM.
+TEST(BuiltinsCount, NumericTextLiteralIsCoerced) {
+  // Excel pin: a direct text-literal argument that parses as a finite
+  // number counts. Verified against Mac Excel 365 and the IronCalc oracle
+  // fixture calc_tests/COUNT.xlsx F27 (`=COUNT("23")` -> 1).
   const Value v = EvalSource("=COUNT(\"5\")");
   ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
 }
 
 TEST(BuiltinsCount, NonNumericTextIsSkipped) {
@@ -160,13 +162,49 @@ TEST(BuiltinsCount, DirectErrorArgIsSkipped) {
   EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
 }
 
-TEST(BuiltinsCount, MixedDirectArgsCountsNumbersAndBooleans) {
-  // Direct-arg rule: numbers AND booleans count; text and errors skip.
-  // Of the seven args below, {1, 3, 4.5} are numbers and {TRUE, FALSE}
-  // are booleans -> 5. The two quoted numeric-looking strings skip.
+TEST(BuiltinsCount, MixedDirectArgsCountsNumbersBoolsAndCoercibleText) {
+  // Direct-arg rule: numbers, booleans, and numeric-looking text all
+  // count; non-coercible text and errors skip. Of the seven args below,
+  // {1, 3, 4.5} are numbers, {TRUE, FALSE} are booleans, and "2" parses
+  // as a finite number -> 6. "text" fails coercion and is skipped.
   const Value v = EvalSource("=COUNT(1, TRUE, \"2\", 3, FALSE, \"text\", 4.5)");
   ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 5.0);
+  EXPECT_DOUBLE_EQ(v.as_number(), 6.0);
+}
+
+TEST(BuiltinsCount, SingleCellBoolRefNotCounted) {
+  // Excel pin: a single-cell Ref to a Bool behaves like a Bool inside a
+  // range -- it does NOT count, even though a direct Bool literal does.
+  // IronCalc oracle fixture calc_tests/COUNT.xlsx B16 codifies this:
+  // `=COUNT(B2,...,B10)` with B5=TRUE yields 3, not 4.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::boolean(true));
+  const Value v = EvalSourceIn("=COUNT(A1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+}
+
+TEST(BuiltinsCount, DirectLiteralTextCoerced) {
+  // Excel pin: a text literal that parses as a finite number counts.
+  // IronCalc oracle fixture calc_tests/COUNT.xlsx F27 (`=COUNT("23")` -> 1).
+  const Value v = EvalSource("=COUNT(\"23\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+}
+
+TEST(BuiltinsCount, DirectLiteralTextNotCoerced) {
+  // A text literal that cannot be parsed as a number is skipped.
+  const Value v = EvalSource("=COUNT(\"Hello\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+}
+
+TEST(BuiltinsCount, DirectLiteralBoolCounted) {
+  // Excel pin (duplicate of BooleanLiteralIsCountedAsDirectArg under the
+  // requested naming): a direct Bool literal counts.
+  const Value v = EvalSource("=COUNT(TRUE)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
 }
 
 TEST(BuiltinsCount, BlankCellInRangeIsSkipped) {

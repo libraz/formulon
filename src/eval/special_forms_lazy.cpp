@@ -90,15 +90,22 @@ Value eval_ifna_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   return fallback;
 }
 
-// COUNT(value, ...) - Excel's rule is provenance-sensitive:
-//   * A direct scalar argument that evaluates to a Number OR Bool counts.
-//   * A cell referenced inside a range contributes only if it holds a
-//     Number; range-sourced Bools and text are skipped.
-// Implementing this correctly requires per-arg AST inspection, so COUNT is
-// routed through the lazy dispatch table. Text, blanks, and errors never
-// count in either shape. A direct-arg error is silently skipped (COUNT is
-// registered with `propagate_errors = false` in the eager path; this lazy
-// impl mirrors that behaviour).
+// COUNT(value, ...) - Excel's rule is provenance-sensitive, so the per-arg
+// AST shape decides what counts:
+//   * Range argument (A1:B2 etc.): count only Number cells. Range-sourced
+//     Bool / Text / Blank / Error are skipped.
+//   * Single-cell Ref argument (e.g. `COUNT(B3)`): treat the referenced
+//     cell identically to a range cell -- only Number counts. A Bool, Text,
+//     Blank, or Error sitting in a referenced cell is skipped.
+//   * Any other argument shape (number/bool/text literal, arithmetic
+//     subexpression, function call producing a scalar): count if the
+//     result is a Number or Bool, or if it is Text that `coerce_to_number`
+//     parses to a finite value (so `COUNT("23")` -> 1 but
+//     `COUNT("Hola")` -> 0). Blank / Error / Array / Lambda are skipped.
+// Implementing this correctly requires per-arg AST inspection, which is
+// why COUNT is routed through the lazy dispatch table. A direct-arg error
+// is silently skipped (COUNT is registered with `propagate_errors = false`
+// in the eager path; this lazy impl mirrors that behaviour).
 Value eval_count_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -128,10 +135,28 @@ Value eval_count_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       }
       continue;
     }
-    // Direct argument: count Number AND Bool. Text / Blank / Error skip.
+    if (arg_node.kind() == parser::NodeKind::Ref) {
+      // Single-cell Ref: match range semantics -- only a Number in the
+      // referenced cell counts. Bool / Text / Blank / Error skip.
+      const Value v = eval_node(arg_node, arena, registry, ctx);
+      if (v.is_number()) {
+        total += 1.0;
+      }
+      continue;
+    }
+    // Direct (literal / expression) argument: Number and Bool count, and
+    // Text counts when it parses as a finite number. Blank / Error /
+    // Array / Lambda are skipped.
     const Value v = eval_node(arg_node, arena, registry, ctx);
     if (v.is_number() || v.is_boolean()) {
       total += 1.0;
+      continue;
+    }
+    if (v.is_text()) {
+      auto as_num = coerce_to_number(v);
+      if (as_num) {
+        total += 1.0;
+      }
     }
   }
   return Value::number(total);
