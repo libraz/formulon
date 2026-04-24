@@ -91,15 +91,36 @@ TEST(BuiltinsEngineeringSpecial, ErfTwoArgInterval) {
   EXPECT_NEAR(v.as_number(), 0.152621472, 1e-9);
 }
 
-TEST(BuiltinsEngineeringSpecial, ErfBoolCoerces) {
-  // TRUE coerces to 1 -> erf(1).
+TEST(EngineeringErf, RejectsBoolArg) {
+  // Excel 365 rejects Bool for the ERF family: ERF(TRUE) -> #VALUE!.
   const Value v = EvalSource("=ERF(TRUE)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_NEAR(v.as_number(), 0.8427007929, 1e-9);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsEngineeringSpecial, ErfNonNumericReturnsValue) {
   const Value v = EvalSource("=ERF(\"not a number\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(EngineeringErfc, RejectsBoolArg) {
+  // Excel 365 rejects Bool for ERFC: ERFC(TRUE) -> #VALUE!.
+  const Value v = EvalSource("=ERFC(TRUE)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(EngineeringBesselI, RejectsBoolX) {
+  // Excel 365 rejects Bool as the `x` argument of BESSELI.
+  const Value v = EvalSource("=BESSELI(TRUE, 1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(EngineeringBesselJ, RejectsBoolOrder) {
+  // Excel 365 rejects Bool as the `n` (order) argument of BESSELJ.
+  const Value v = EvalSource("=BESSELJ(1, TRUE)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }

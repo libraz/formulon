@@ -47,17 +47,24 @@ namespace {
 // Shared coercion helpers
 // ---------------------------------------------------------------------------
 
-// Coerces an ERF / BESSEL numeric argument. Bool -> 0/1, Text -> parse via
-// coerce_to_number, Blank -> 0. NaN / Inf are left to the caller to
-// interpret (most call sites treat NaN as #NUM! at the result stage).
+// Coerces an ERF / BESSEL numeric argument. Bool is rejected with #VALUE!
+// (Excel 365 rejects TRUE/FALSE for the ERF and BESSEL families), Text is
+// parsed via coerce_to_number, Blank -> 0. NaN / Inf are left to the caller
+// to interpret (most call sites treat NaN as #NUM! at the result stage).
 Expected<double, ErrorCode> coerce_real_arg(const Value& v) {
+  if (v.kind() == ValueKind::Bool) {
+    return ErrorCode::Value;
+  }
   return coerce_to_number(v);
 }
 
 // Coerces a BESSEL order argument. Must be a finite number >= 0 after
 // truncation toward zero; returns the integer order. Negative or non-finite
-// -> #NUM!.
+// -> #NUM!. Bool is rejected with #VALUE! to match Excel 365.
 Expected<int, ErrorCode> coerce_bessel_order(const Value& v) {
+  if (v.kind() == ValueKind::Bool) {
+    return ErrorCode::Value;
+  }
   auto n = coerce_to_number(v);
   if (!n) {
     return n.error();
