@@ -281,9 +281,15 @@ ParsedCriterion parse_criterion(const Value& criterion) {
       return parsed;
     }
     case ValueKind::Blank: {
+      // Excel coerces a blank-cell reference to the numeric 0 criterion:
+      // `COUNTIF(range, B1)` with B1 empty counts cells whose value equals
+      // 0, not cells that are themselves blank. (A literal empty-string
+      // criterion `""` is a Text value and still takes the empty-rhs path
+      // that matches blank cells via the `Eq && rhs_text.empty()` branch
+      // in matches_criterion.)
       parsed.op = CriteriaOp::Eq;
-      parsed.rhs_is_number = false;
-      parsed.rhs_text = std::string_view{};
+      parsed.rhs_is_number = true;
+      parsed.rhs_number = 0.0;
       return parsed;
     }
     case ValueKind::Text: {

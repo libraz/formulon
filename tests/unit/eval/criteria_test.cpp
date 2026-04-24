@@ -42,11 +42,14 @@ TEST(CriteriaParse, BareBoolFalseBecomesEqZero) {
   EXPECT_DOUBLE_EQ(c.rhs_number, 0.0);
 }
 
-TEST(CriteriaParse, BlankBecomesEqEmptyText) {
+TEST(CriteriaParse, BlankBecomesEqNumericZero) {
+  // A blank criterion (e.g. `COUNTIF(range, B1)` with B1 empty) coerces to
+  // the numeric 0 criterion, not the empty-text one. Matches Excel 365's
+  // "empty cell reference is 0" rule.
   const ParsedCriterion c = parse_criterion(Value::blank());
   EXPECT_EQ(c.op, CriteriaOp::Eq);
-  EXPECT_FALSE(c.rhs_is_number);
-  EXPECT_EQ(c.rhs_text, std::string_view{});
+  EXPECT_TRUE(c.rhs_is_number);
+  EXPECT_DOUBLE_EQ(c.rhs_number, 0.0);
 }
 
 TEST(CriteriaParse, TextWithoutPrefixIsEqText) {
