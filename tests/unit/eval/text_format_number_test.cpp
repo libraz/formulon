@@ -269,6 +269,57 @@ TEST(NumberFormatEmpty, EmptyFormatYieldsEmpty) {
   EXPECT_EQ(out, "");
 }
 
+// ---------------------------------------------------------------------------
+// `General` keyword -- 11-character-wide Excel default display.
+// ---------------------------------------------------------------------------
+
+TEST(NumberFormatGeneral, IntegerPositiveAndNegative) {
+  // Whole numbers round-trip via the integer fast path: no decimal, sign
+  // propagated by the outer walker.
+  EXPECT_EQ(Render(12.0, "General"), "12");
+  EXPECT_EQ(Render(-12.0, "General"), "-12");
+  // Large-but-still-integral values skip scientific notation when they fit
+  // within the fixed-width budget.
+  EXPECT_EQ(Render(1234567890.0, "General"), "1234567890");
+}
+
+TEST(NumberFormatGeneral, FractionTrimmedAndScientific) {
+  // 1/3 prints 9 fractional digits (exactly what Mac Excel / IronCalc
+  // goldens emit), with trailing zeros trimmed.
+  EXPECT_EQ(Render(1.0 / 3.0, "General"), "0.333333333");
+  // Large magnitudes switch to scientific with an exponent zero-padded to
+  // two digits; trailing mantissa zeros still collapse.
+  EXPECT_EQ(Render(250000000000.0, "General"), "2.5E+11");
+  EXPECT_EQ(Render(123456789012.0, "General"), "1.23457E+11");
+}
+
+// ---------------------------------------------------------------------------
+// Interleaved digit + literal positional rendering.
+// ---------------------------------------------------------------------------
+
+TEST(NumberFormatInterleavedDigits, DashSeparatedDigits) {
+  // The eight `0` tokens consume the eight right-aligned digits of `12`,
+  // leaving the interleaved `-` literals in their original positions.
+  EXPECT_EQ(Render(12.0, "00-00-00-00"), "00-00-00-12");
+  EXPECT_EQ(Render(12345678.0, "00-00-00-00"), "12-34-56-78");
+}
+
+// ---------------------------------------------------------------------------
+// Signed-zero suppression.
+// ---------------------------------------------------------------------------
+
+TEST(NumberFormatSignedZero, TwoSectionAccountingZero) {
+  // `0` is exactly zero; the positive section (including the `_)` trailing
+  // space placeholder) must render, not the negative branch.
+  EXPECT_EQ(Render(0.0, "#,##0_);(#,##0)"), "0 ");
+  // `-0.0` is IEEE-754-signed zero: signbit is true, value is still zero.
+  // The format must still pick the positive section.
+  EXPECT_EQ(Render(-0.0, "#,##0_);(#,##0)"), "0 ");
+  // A tiny negative value that rounds to zero under the format must also
+  // strip the leading minus sign (Excel's "effective zero" rule).
+  EXPECT_EQ(Render(-1.0 / 3.0, "0"), "0");
+}
+
 }  // namespace
 }  // namespace text_format
 }  // namespace eval

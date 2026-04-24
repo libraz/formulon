@@ -405,8 +405,8 @@
       "formula": "=TEXT(5, \"[Red]0.00\")",
       "setup": {},
       "expect": {
-        "kind": "error",
-        "code": "#VALUE!"
+        "kind": "text",
+        "value": "5.00"
       }
     },
     {

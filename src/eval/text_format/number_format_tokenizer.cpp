@@ -347,6 +347,39 @@ void tokenize_section(std::string_view fmt, Section& out) {
       i += 2;
       continue;
     }
+    // `General` keyword (case-insensitive). Must be a standalone "word":
+    // we only accept it when the following byte (if any) is not an ASCII
+    // letter, so `Generally` and similar words pass through as literals.
+    if (c == 'G' || c == 'g') {
+      auto match_general = [&](std::size_t start) -> bool {
+        static const char kWord[] = "general";
+        if (start + 7 > fmt.size()) {
+          return false;
+        }
+        for (std::size_t k = 0; k < 7; ++k) {
+          const char fc = fmt[start + k];
+          const char fc_lower = (fc >= 'A' && fc <= 'Z') ? static_cast<char>(fc + 32) : fc;
+          if (fc_lower != kWord[k]) {
+            return false;
+          }
+        }
+        // Boundary check: next byte must not be a letter.
+        if (start + 7 < fmt.size()) {
+          const char nx = fmt[start + 7];
+          if ((nx >= 'A' && nx <= 'Z') || (nx >= 'a' && nx <= 'z')) {
+            return false;
+          }
+        }
+        return true;
+      };
+      if (match_general(i)) {
+        Token t;
+        t.kind = Tok::GeneralNumber;
+        toks.push_back(t);
+        i += 7;
+        continue;
+      }
+    }
     // AM/PM (case-insensitive). Match the longest valid prefix. We treat
     // `AM/PM`, `am/pm`, `A/P`, `a/p` as indivisible markers.
     if (c == 'A' || c == 'a' || c == 'P' || c == 'p') {
@@ -526,6 +559,15 @@ void classify(Section& section) noexcept {
   int last_digit_index = -1;
 
   auto is_digit_tok = [](Tok k) { return k == Tok::DigitZero || k == Tok::DigitOpt || k == Tok::DigitPad; };
+
+  bool has_general = false;
+  for (const Token& tk : section.tokens) {
+    if (tk.kind == Tok::GeneralNumber) {
+      has_general = true;
+      break;
+    }
+  }
+  section.has_general = has_general;
 
   // First locate the decimal point (if any).
   int point_index = -1;

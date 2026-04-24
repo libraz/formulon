@@ -54,6 +54,7 @@ enum class Tok : std::uint8_t {
   FracSecDigits,  // `.0` / `.00` / ... when following a second token
   Literal,        // Arbitrary passthrough bytes (quoted / escaped / other)
   Space,          // `_X` underscore-skip: emits a single space placeholder.
+  GeneralNumber,  // `General` keyword: renders value via format_double().
   DateM,          // After disambiguation: month.
   DateMM,         // After disambiguation: 2-digit month.
   DateMin,        // After disambiguation: minute.
@@ -86,6 +87,10 @@ struct Section {
   // Precomputed summary for numeric classification. Populated by `classify`.
   bool is_date = false;
   bool is_text = false;
+  // Set if the section contains at least one `General` keyword token. The
+  // renderer emits `format_double(abs(value))` for such tokens; no digit
+  // accounting is performed (General is self-contained).
+  bool has_general = false;
   int integer_zero_digits = 0;
   int integer_opt_digits = 0;
   int integer_pad_digits = 0;
