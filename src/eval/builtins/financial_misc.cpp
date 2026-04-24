@@ -278,7 +278,7 @@ Value Rri(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const double nper = nper_e.value();
   const double pv = pv_e.value();
   const double fv = fv_e.value();
-  if (nper <= 0.0 || pv <= 0.0 || fv <= 0.0) {
+  if (nper <= 0.0 || pv <= 0.0 || fv < 0.0) {
     return Value::error(ErrorCode::Num);
   }
   const double result = std::pow(fv / pv, 1.0 / nper) - 1.0;

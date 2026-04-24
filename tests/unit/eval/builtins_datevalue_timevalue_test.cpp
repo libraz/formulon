@@ -56,6 +56,15 @@ TEST(Datevalue, IsoDash) {
   EXPECT_EQ(v.as_number(), 45366.0);
 }
 
+TEST(Datevalue, AcceptsExcelGhostFeb29_1900) {
+  // Excel preserves Lotus 1-2-3's fictitious 1900-02-29 as serial 60. The
+  // Gregorian calendar says 1900 is not a leap year, but DATEVALUE must
+  // still accept "29-Feb-1900" for parity with Excel 365.
+  const Value v = EvalSource("=DATEVALUE(\"1900-2-29\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 60.0);
+}
+
 TEST(Datevalue, IsoDashSingleDigitMonthDay) {
   // "2024-3-5" should parse identically to "2024-03-05".
   const Value v = EvalSource("=DATEVALUE(\"2024-3-5\")");

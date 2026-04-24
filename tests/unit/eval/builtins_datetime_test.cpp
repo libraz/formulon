@@ -516,6 +516,18 @@ TEST(DateTimeEomonth, Century2100NotLeap) {
   EXPECT_EQ(a.as_number(), b.as_number());
 }
 
+TEST(DateTimeEomonth, RejectsBooleanArgument) {
+  // Excel 365 rejects Booleans in EOMONTH with #VALUE! (unlike EDATE, which
+  // coerces them to 0/1). Guard both positional arguments.
+  const Value v_start = EvalSource("=EOMONTH(TRUE, 0)");
+  ASSERT_TRUE(v_start.is_error());
+  EXPECT_EQ(v_start.as_error(), ErrorCode::Value);
+
+  const Value v_months = EvalSource("=EOMONTH(44987, TRUE)");
+  ASSERT_TRUE(v_months.is_error());
+  EXPECT_EQ(v_months.as_error(), ErrorCode::Value);
+}
+
 TEST(DateTimeEomonth, Century2000IsLeap) {
   // 2000 is divisible by 400 -> IS a leap year.
   const Value a = EvalSource("=EOMONTH(DATE(2000, 2, 15), 0)");

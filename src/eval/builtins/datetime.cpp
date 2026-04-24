@@ -322,6 +322,11 @@ Value Edate_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 /// EOMONTH(start, months). Returns the serial of the last day of the
 /// target month.
 Value Eomonth_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  // Excel 365 rejects Boolean arguments to EOMONTH (unlike EDATE, which
+  // coerces them). Guard both the start-date and month-offset arguments.
+  if (args[0].is_boolean() || args[1].is_boolean()) {
+    return Value::error(ErrorCode::Value);
+  }
   auto shifted = shift_months(args);
   if (!shifted) {
     return Value::error(shifted.error());

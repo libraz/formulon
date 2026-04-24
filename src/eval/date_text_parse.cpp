@@ -125,7 +125,11 @@ bool parse_date_text(std::string_view s, double* out_serial, std::string_view* r
     return false;
   }
   const unsigned dim = days_in_month(expanded_year, static_cast<unsigned>(month));
-  if (day < 1 || static_cast<unsigned>(day) > dim) {
+  // Excel preserves Lotus 1-2-3's fictitious 1900-02-29 (serial 60). The
+  // Gregorian calendar says that day does not exist (1900 is divisible by
+  // 100 but not 400), but DATEVALUE must still accept it for parity.
+  const bool is_excel_ghost_day = (expanded_year == 1900 && month == 2 && day == 29);
+  if (!is_excel_ghost_day && (day < 1 || static_cast<unsigned>(day) > dim)) {
     return false;
   }
   *out_serial = date_time::serial_from_ymd(expanded_year, static_cast<unsigned>(month), static_cast<unsigned>(day));

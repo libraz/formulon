@@ -73,11 +73,21 @@ Value eval_ifna_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (call.as_call_arity() != 2) {
     return Value::error(ErrorCode::Value);
   }
+  // Excel's IFNA coerces a Blank result to number 0 on both the pass-through
+  // and the fallback path, matching the implicit Blank->0 promotion that
+  // applies when a formula cell's ultimate value is returned to the grid.
   const Value primary = eval_node(call.as_call_arg(0), arena, registry, ctx);
   if (!(primary.is_error() && primary.as_error() == ErrorCode::NA)) {
+    if (primary.is_blank()) {
+      return Value::number(0.0);
+    }
     return primary;
   }
-  return eval_node(call.as_call_arg(1), arena, registry, ctx);
+  const Value fallback = eval_node(call.as_call_arg(1), arena, registry, ctx);
+  if (fallback.is_blank()) {
+    return Value::number(0.0);
+  }
+  return fallback;
 }
 
 // COUNT(value, ...) - Excel's rule is provenance-sensitive:

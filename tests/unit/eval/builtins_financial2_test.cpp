@@ -307,6 +307,14 @@ TEST(FinancialRri, NegativePvIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
+TEST(FinancialRri, ZeroFvReturnsMinusOne) {
+  // Excel 365 accepts fv = 0: (0/pv)^(1/nper) - 1 = -1.
+  // Previously this rejected fv <= 0 as #NUM!, diverging from the oracle.
+  const Value v = EvalSource("=RRI(2, 3, 0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), -1.0);
+}
+
 TEST(FinancialRri, RoundTripWithPDuration) {
   // RRI(PDURATION(r, pv, fv), pv, fv) == r. Numeric round-trip check.
   const Value v = EvalSource("=RRI(7.272540897, 1000, 2000)");

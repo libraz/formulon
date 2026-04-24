@@ -401,6 +401,23 @@ TEST(BuiltinsIfna, OneArgIsArityViolation) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(BuiltinsIfna, BlankPrimaryPromotedToZero) {
+  // Excel treats the final value of a formula cell by coercing Blank to 0
+  // in numeric contexts. IFNA passes a non-#N/A primary through, so when
+  // the primary is Blank the result promotes to number 0.
+  const Value v = EvalSource("=IFNA(,\"fallback\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+}
+
+TEST(BuiltinsIfna, BlankFallbackPromotedToZero) {
+  // When #N/A triggers the fallback path and the fallback itself evaluates
+  // to Blank, the same Blank->0 promotion applies.
+  const Value v = EvalSource("=IFNA(#N/A,)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+}
+
 TEST(BuiltinsIfna, ThreeArgsIsArityViolation) {
   const Value v = EvalSource("=IFNA(1,2,3)");
   ASSERT_TRUE(v.is_error());
