@@ -262,16 +262,17 @@ TEST(BuiltinsDatabase, DCountEmptyMatchIsZero) {
   EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
 }
 
-TEST(BuiltinsDatabase, DCountCountsBoolAsNumeric) {
+TEST(BuiltinsDatabase, DCountSkipsBoolFieldCells) {
   Workbook wb = MakeFruitWorkbook();
   auto& s = wb.sheet(0);
-  // Replace one Sales with a Bool; DCOUNT treats it as numeric (coerce_to_number
-  // maps TRUE/FALSE to 1.0/0.0).
+  // Replace one Sales with a Bool; DCOUNT skips non-Number cells in the
+  // field column (matches SUM / COUNT's range-argument rule and IronCalc
+  // oracle `DCOUNT_DCOUNTA B54`).
   s.set_cell_value(1, 2, Value::boolean(true));
   s.set_cell_value(0, 4, Value::text("Fruit"));
   const Value v = EvalIn("=DCOUNT(A1:C5, \"Sales\", E1:E1)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
 }
 
 TEST(BuiltinsDatabase, DCountAIncludesTextAndBool) {

@@ -255,17 +255,22 @@ std::vector<Value> collect_matching_field_values(const std::vector<Value>& db_ce
 // Cells that fail to coerce (e.g. non-numeric text) or that carry an
 // error are silently dropped, matching the SUM-over-range behaviour.
 std::vector<double> collect_matching_numbers(const std::vector<Value>& field_values) {
+  // Excel's range-aware numeric aggregators (SUM, AVERAGE, COUNT, MIN,
+  // MAX, …) skip non-Number cells outright: Bool, Text (including numeric
+  // text), Blank, and Error are all ignored. The D-family mirrors that
+  // rule, so we reject anything that isn't a pure Number here instead of
+  // piping through `coerce_to_number`, which would fold Bool -> 1/0.
   std::vector<double> out;
   out.reserve(field_values.size());
   for (const Value& v : field_values) {
-    if (v.is_error()) {
+    if (v.kind() != ValueKind::Number) {
       continue;
     }
-    auto n = coerce_to_number(v);
-    if (!n) {
+    const double d = v.as_number();
+    if (std::isnan(d) || std::isinf(d)) {
       continue;
     }
-    out.push_back(n.value());
+    out.push_back(d);
   }
   return out;
 }
