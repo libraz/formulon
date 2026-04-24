@@ -249,6 +249,13 @@ Value convert_bases(const Value* args, std::uint32_t arity, Arena& arena, const 
 // Dispatches a DEC -> * conversion. Takes a numeric input (truncated toward
 // zero), range-checks against `dst`, and encodes.
 Value convert_from_dec(const Value* args, std::uint32_t arity, Arena& arena, const BaseSpec& dst) {
+  // Excel-quirk: DEC2BIN / DEC2OCT / DEC2HEX reject a direct Bool argument
+  // with `#VALUE!` rather than coercing TRUE/FALSE to 1/0. Matches EFFECT /
+  // NOMINAL's strict-Bool rejection (see `financial_misc.cpp`). Bool inside
+  // a range cell would have been flattened earlier; direct scalars only.
+  if (args[0].kind() == ValueKind::Bool) {
+    return Value::error(ErrorCode::Value);
+  }
   auto n = coerce_to_number(args[0]);
   if (!n) {
     return Value::error(n.error());

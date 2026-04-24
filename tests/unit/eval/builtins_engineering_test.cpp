@@ -194,11 +194,26 @@ TEST(BuiltinsEngineering, Dec2OctNegative) {
   EXPECT_EQ(v.as_text(), "7777777777");
 }
 
-TEST(BuiltinsEngineering, Dec2BinBoolInput) {
-  // TRUE coerces to 1.
+TEST(BuiltinsEngineering, Dec2BinBoolInputIsValue) {
+  // Mac Excel 365 rejects a direct Bool argument to DEC2BIN / DEC2OCT /
+  // DEC2HEX with `#VALUE!` instead of coercing TRUE/FALSE to 1/0 as the
+  // general numeric rule would. Matches the EFFECT / NOMINAL strict-Bool
+  // quirk.
   const Value v = EvalSource("=DEC2BIN(TRUE)");
-  ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "1");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsEngineering, Dec2OctBoolInputIsValue) {
+  const Value v = EvalSource("=DEC2OCT(TRUE)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsEngineering, Dec2HexBoolInputIsValue) {
+  const Value v = EvalSource("=DEC2HEX(FALSE)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 // ---------------------------------------------------------------------------
