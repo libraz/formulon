@@ -353,17 +353,19 @@ TEST(CriteriaMatchBlank, OrderingAgainstBlankFails) {
 }
 
 // ---------------------------------------------------------------------------
-// matches_criterion: error cells always skipped
+// matches_criterion: error cells -- error is unequal to any concrete value
+// so NotEq matches, every other op fails.
 // ---------------------------------------------------------------------------
 
-TEST(CriteriaMatchError, ErrorCellNeverMatches) {
+TEST(CriteriaMatchError, ErrorCellMatchesNotEqOnly) {
   const ParsedCriterion c_eq = parse_criterion(Value::text(""));
   const ParsedCriterion c_gt = parse_criterion(Value::text(">0"));
   const ParsedCriterion c_neq = parse_criterion(Value::text("<>0"));
   EXPECT_FALSE(matches_criterion(Value::error(ErrorCode::Div0), c_eq));
   EXPECT_FALSE(matches_criterion(Value::error(ErrorCode::Div0), c_gt));
-  EXPECT_FALSE(matches_criterion(Value::error(ErrorCode::Div0), c_neq));
+  EXPECT_TRUE(matches_criterion(Value::error(ErrorCode::Div0), c_neq));
   EXPECT_FALSE(matches_criterion(Value::error(ErrorCode::NA), c_eq));
+  EXPECT_TRUE(matches_criterion(Value::error(ErrorCode::NA), c_neq));
 }
 
 // ---------------------------------------------------------------------------

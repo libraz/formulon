@@ -467,12 +467,14 @@ bool matches_numeric(const Value& cell, const ParsedCriterion& c) {
 }  // namespace
 
 bool matches_criterion(const Value& cell, const ParsedCriterion& c) {
-  // Errors in the criteria range are silently skipped. This matches Excel
-  // and diverges intentionally from the eager dispatcher's
-  // `propagate_errors` default — criteria walks never fail on per-cell
-  // errors, they just do not count them.
+  // Error cells in the criteria range never propagate out as the call's
+  // result (criteria walks are error-tolerant by design, diverging
+  // intentionally from the eager dispatcher's `propagate_errors` default).
+  // They still have a match/no-match verdict though: an error cell is
+  // unequal to any concrete value, so it matches NotEq and fails every
+  // other comparator.
   if (cell.is_error()) {
-    return false;
+    return c.op == CriteriaOp::NotEq;
   }
 
   // Sentinel "non-blank" filter: bare `"<>"` (NotEq with empty text RHS)
