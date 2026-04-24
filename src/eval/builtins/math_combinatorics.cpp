@@ -564,16 +564,21 @@ Value Roman(const Value* args, std::uint32_t arity, Arena& arena) {
   }
   int form = 0;
   if (arity >= 2) {
-    auto f_v = coerce_to_number(args[1]);
-    if (!f_v) {
-      return Value::error(f_v.error());
+    // TRUE / FALSE map to the two ends of the scale (Classic / Most simplified),
+    // not 1 / 0 as `coerce_to_number` would give.
+    if (args[1].is_boolean()) {
+      form = args[1].as_boolean() ? 0 : 4;
+    } else {
+      auto f_v = coerce_to_number(args[1]);
+      if (!f_v) {
+        return Value::error(f_v.error());
+      }
+      const double f = std::trunc(f_v.value());
+      if (std::isnan(f) || std::isinf(f) || f < 0.0 || f > 4.0) {
+        return Value::error(ErrorCode::Value);
+      }
+      form = static_cast<int>(f);
     }
-    // Excel also accepts TRUE / FALSE for form: 0 / 1 under coerce_to_number.
-    const double f = std::trunc(f_v.value());
-    if (std::isnan(f) || std::isinf(f) || f < 0.0 || f > 4.0) {
-      return Value::error(ErrorCode::Value);
-    }
-    form = static_cast<int>(f);
   }
   const double raw = n_v.value();
   if (std::isnan(raw) || std::isinf(raw)) {
