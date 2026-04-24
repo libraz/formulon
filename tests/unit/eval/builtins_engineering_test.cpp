@@ -492,6 +492,19 @@ TEST(BuiltinsEngineering, DeltaNonNumericReturnsValue) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(EngineeringDelta, RejectsBoolFirstArg) {
+  // Excel 365 / IronCalc oracle: Bool is not coerced to 0/1 here.
+  const Value v = EvalSource("=DELTA(TRUE, 1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(EngineeringDelta, RejectsBoolSecondArg) {
+  const Value v = EvalSource("=DELTA(1, TRUE)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 // ---------------------------------------------------------------------------
 // GESTEP
 // ---------------------------------------------------------------------------
@@ -529,6 +542,13 @@ TEST(BuiltinsEngineering, GestepDefaultStepZeroBelow) {
 
 TEST(BuiltinsEngineering, GestepNonNumericReturnsValue) {
   const Value v = EvalSource("=GESTEP(\"a\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(EngineeringGestep, RejectsBoolArg) {
+  // Excel 365 / IronCalc oracle: Bool is not coerced to 0/1 here.
+  const Value v = EvalSource("=GESTEP(TRUE)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }

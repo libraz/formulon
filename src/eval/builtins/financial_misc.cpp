@@ -63,6 +63,11 @@ Expected<double, ErrorCode> dollar_scale_from_denom(double denom_raw) {
 // Example: DOLLARDE(1.1, 16) treats 1.1 as "1 + 10/16 = 1.625" because
 // scale = 100 and frac = 0.1 -> 0.1 * 100 / 16 = 0.625.
 Value DollarDe(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  // Excel-quirk: DOLLARDE rejects a direct Bool argument with `#VALUE!`
+  // rather than coercing it to 0/1. Matches Excel 365 / IronCalc oracle.
+  if (args[0].kind() == ValueKind::Bool || args[1].kind() == ValueKind::Bool) {
+    return Value::error(ErrorCode::Value);
+  }
   auto price_e = read_required_number(args, 0);
   if (!price_e) {
     return Value::error(price_e.error());
@@ -90,6 +95,11 @@ Value DollarDe(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 //   result = trunc(price) + frac * denom / scale
 //           where frac = price - trunc(price) and scale as above.
 Value DollarFr(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  // Excel-quirk: DOLLARFR rejects a direct Bool argument with `#VALUE!`
+  // rather than coercing it to 0/1. Matches Excel 365 / IronCalc oracle.
+  if (args[0].kind() == ValueKind::Bool || args[1].kind() == ValueKind::Bool) {
+    return Value::error(ErrorCode::Value);
+  }
   auto price_e = read_required_number(args, 0);
   if (!price_e) {
     return Value::error(price_e.error());

@@ -501,6 +501,14 @@ Value BitRShift(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // ---------------------------------------------------------------------------
 
 Value Delta(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  // Excel-quirk: DELTA rejects a direct Bool argument with `#VALUE!`
+  // rather than coercing it to 0/1. Matches Excel 365 / IronCalc oracle.
+  if (args[0].kind() == ValueKind::Bool) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (arity >= 2 && args[1].kind() == ValueKind::Bool) {
+    return Value::error(ErrorCode::Value);
+  }
   auto a = coerce_to_number(args[0]);
   if (!a) {
     return Value::error(a.error());
@@ -517,6 +525,14 @@ Value Delta(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 }
 
 Value Gestep(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  // Excel-quirk: GESTEP rejects a direct Bool argument with `#VALUE!`
+  // rather than coercing it to 0/1. Matches Excel 365 / IronCalc oracle.
+  if (args[0].kind() == ValueKind::Bool) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (arity >= 2 && args[1].kind() == ValueKind::Bool) {
+    return Value::error(ErrorCode::Value);
+  }
   auto a = coerce_to_number(args[0]);
   if (!a) {
     return Value::error(a.error());

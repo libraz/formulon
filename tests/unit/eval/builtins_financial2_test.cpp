@@ -114,6 +114,14 @@ TEST(FinancialDollarDe, FractionalDenomTruncates) {
   EXPECT_NEAR(v.as_number(), 1.125, 1e-10);
 }
 
+TEST(FinancialDollarDe, RejectsBoolPrice) {
+  // Excel 365 / IronCalc oracle: Bool in the price slot yields #VALUE!
+  // (not silent coerce to 0/1).
+  const Value v = EvalSource("=DOLLARDE(TRUE, 2)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 // ---------------------------------------------------------------------------
 // DOLLARFR
 // ---------------------------------------------------------------------------
@@ -141,6 +149,14 @@ TEST(FinancialDollarFr, ZeroDenomIsDiv0) {
   const Value v = EvalSource("=DOLLARFR(1.5, 0)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+TEST(FinancialDollarFr, RejectsBoolDenom) {
+  // Excel 365 / IronCalc oracle: Bool in the denom slot yields #VALUE!
+  // (not silent coerce to 0/1).
+  const Value v = EvalSource("=DOLLARFR(1.5, TRUE)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 // ---------------------------------------------------------------------------
