@@ -285,10 +285,18 @@ Value RoundUp(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 
 // --- Significance-aware rounding (legacy CEILING / FLOOR / MROUND) ------
 //
-// The legacy forms share one awkward quirk: if `number` and `significance`
-// have opposite signs (and neither is zero), Excel returns #NUM!. The
-// modern `*.MATH` variants (below) drop this rule and use `|significance|`
-// unconditionally. `MROUND` inherits the opposite-sign #NUM! rule.
+// Mac Excel 365 applies an *asymmetric* sign-mismatch rule to the legacy
+// CEILING / FLOOR forms:
+//
+//   * number > 0 AND significance < 0  -> #NUM!
+//   * number < 0 AND significance > 0  -> numeric result via math ceil/floor
+//   * signs match                      -> magnitude operation on |n|, |s|
+//
+// The pre-365 rule was symmetric #NUM! on either mismatch direction; Mac
+// 365 dropped it only for the (negative-number, positive-significance)
+// direction. `MROUND` still inherits the fully-symmetric #NUM! rule. The
+// modern `*.MATH` variants (below) drop this rule entirely and use
+// `|significance|` unconditionally.
 
 // CEILING / FLOOR / MROUND treat empty-string text as `#VALUE!` rather
 // than coercing it to zero (which is what the general arithmetic rule in
@@ -340,15 +348,16 @@ inline double signum(double x) {
 // `|significance|` in the direction determined by sign matching:
 //
 //   * number == 0  -> 0
+//   * number > 0 AND significance < 0  -> #NUM! (Mac 365 asymmetric rule).
 //   * significance == 0 -> 0 (no #DIV/0!, unlike FLOOR)
 //   * sign(number) == sign(significance)  -> round AWAY from zero
 //     (magnitude ceil on the positive half-line).
-//   * sign(number) != sign(significance)  -> round toward +infinity
+//   * number < 0 AND significance > 0  -> round toward +infinity
 //     (math ceil on the signed value, matching CEILING.MATH defaults).
 //
-// Excel 365 Mac no longer returns #NUM! on sign mismatch; that behaviour
-// was the pre-365 legacy rule. See the corresponding oracle suite for the
-// exact values used as reference.
+// Mac Excel 365 kept #NUM! for the (pos-num, neg-sig) direction only; the
+// reverse (neg-num, pos-sig) produces a numeric result. See the oracle
+// suite `floor_ceiling_edges.yaml` for the reference values.
 Value Ceiling(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (is_empty_text(args[0]) || is_empty_text(args[1])) {
     return Value::error(ErrorCode::Value);
@@ -365,6 +374,14 @@ Value Ceiling(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const double s = significance.value();
   if (n == 0.0) {
     return Value::number(0.0);
+  }
+  // Mac Excel 365 asymmetric sign-mismatch rule: positive number with
+  // negative significance is #NUM!. The reverse direction (negative
+  // number, positive significance) falls through to the math-ceil branch
+  // below and yields a numeric result. Must run before the `s == 0.0`
+  // check so the rule applies cleanly (s < 0 implies s != 0).
+  if (n > 0.0 && s < 0.0) {
+    return Value::error(ErrorCode::Num);
   }
   if (s == 0.0) {
     // Legacy CEILING: significance of zero yields zero (no #DIV/0!).
@@ -389,10 +406,13 @@ Value Ceiling(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // image of CEILING above, with two differences:
 //
 //   * significance == 0 -> #DIV/0! (Excel-documented quirk).
-//   * Direction in mismatched-sign case is toward -infinity (math floor).
+//   * Direction in the (neg-num, pos-sig) case is toward -infinity
+//     (math floor).
 //
-// As with CEILING, Excel 365 Mac no longer treats a sign mismatch as
-// #NUM!; this impl tracks the current oracle.
+// As with CEILING, Mac Excel 365 applies the asymmetric sign-mismatch
+// rule: `number > 0 AND significance < 0` yields #NUM!; the reverse
+// direction falls through to the math-floor branch and returns a numeric
+// value. See oracle suite `floor_ceiling_edges.yaml` for reference.
 Value Floor(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (is_empty_text(args[0]) || is_empty_text(args[1])) {
     return Value::error(ErrorCode::Value);
@@ -409,6 +429,13 @@ Value Floor(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const double s = significance.value();
   if (n == 0.0) {
     return Value::number(0.0);
+  }
+  // Mac Excel 365 asymmetric sign-mismatch rule: positive number with
+  // negative significance is #NUM!. Mirrors the CEILING branch above and
+  // must run before the `s == 0.0` short-circuit (which returns #DIV/0!
+  // for FLOOR) because s < 0 implies s != 0.
+  if (n > 0.0 && s < 0.0) {
+    return Value::error(ErrorCode::Num);
   }
   if (s == 0.0) {
     return Value::error(ErrorCode::Div0);

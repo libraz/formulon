@@ -1,0 +1,264 @@
+{
+  "suite": "floor_ceiling_edges",
+  "description": "FLOOR / CEILING edge cases mirroring IronCalc's calc_tests/FLOOR_CEILING fixture. The existing math.yaml covers (neg-num, pos-sig) sign mismatch but not the asymmetric (pos-num, neg-sig) direction, blank significance, date-text significance, or range-as-significance arguments. Each case probes a specific semantic question so we can confirm whether Mac Excel 365 (ja-JP) agrees with Formulon, with IronCalc, or with neither. The author-side `expect:` value is Formulon's current return for cross-check; the verifier compares against the Excel-observed golden once oracle-gen has run.\n",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-24T21:36:48Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "floor_pos_num_neg_sig_simple",
+      "formula": "=FLOOR(10,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "floor_pos_num_neg_sig_fraction",
+      "formula": "=FLOOR(7.1,-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "floor_pos_num_neg_sig_irrational",
+      "formula": "=FLOOR(10,-0.21)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "floor_pos_num_neg_sig_large",
+      "formula": "=FLOOR(10,-7)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "floor_pos_num_neg_sig_tiny",
+      "formula": "=FLOOR(10,-1e-12)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "ceiling_pos_num_neg_sig_simple",
+      "formula": "=CEILING(10,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "ceiling_pos_num_neg_sig_fraction",
+      "formula": "=CEILING(7.1,-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "floor_neg_num_neg_sig_seven_one",
+      "formula": "=FLOOR(-7.1,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -7.0
+      }
+    },
+    {
+      "id": "floor_neg_num_neg_sig_seven_nine",
+      "formula": "=FLOOR(-7.9,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -7.0
+      }
+    },
+    {
+      "id": "ceiling_neg_num_neg_sig_seven_one",
+      "formula": "=CEILING(-7.1,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -8.0
+      }
+    },
+    {
+      "id": "floor_zero_neg_sig",
+      "formula": "=FLOOR(0,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "ceiling_zero_neg_sig",
+      "formula": "=CEILING(0,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "floor_pos_num_blank_sig",
+      "formula": "=FLOOR(A1,B1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ceiling_pos_num_blank_sig",
+      "formula": "=CEILING(A1,B1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "floor_date_text_sig",
+      "formula": "=FLOOR(10,\"2024-01-10\")",
+      "setup": {},
+      "skipped": "Mac coerces \"2024-01-10\" to date serial 45301; Formulon's coerce_to_number rejects it with #VALUE! pending date-string parse support."
+    },
+    {
+      "id": "ceiling_date_text_sig",
+      "formula": "=CEILING(10,\"2024-01-10\")",
+      "setup": {},
+      "skipped": "Same as floor_date_text_sig: Mac coerces date-text to serial."
+    },
+    {
+      "id": "floor_neg_num_date_text_sig",
+      "formula": "=FLOOR(-10,\"2024-01-10\")",
+      "setup": {},
+      "skipped": "Same as floor_date_text_sig: Mac coerces date-text to serial."
+    },
+    {
+      "id": "floor_numeric_text_sig",
+      "formula": "=FLOOR(10,\"3\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "ceiling_numeric_text_sig",
+      "formula": "=CEILING(10,\"3\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "floor_bool_true_neg_sig",
+      "formula": "=FLOOR(TRUE,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "floor_bool_false_neg_sig",
+      "formula": "=FLOOR(FALSE,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "floor_range_sig_via_atref",
+      "formula": "=FLOOR(10,@A1:E1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "floor_huge_pos_neg_sig",
+      "formula": "=FLOOR(9999999999999,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "floor_tiny_pos_neg_sig",
+      "formula": "=FLOOR(1e-12,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "floor_tiny_neg_neg_sig",
+      "formula": "=FLOOR(-1e-12,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    }
+  ]
+}

@@ -1,0 +1,146 @@
+suite: floor_ceiling_edges
+description: >
+  FLOOR / CEILING edge cases mirroring IronCalc's calc_tests/FLOOR_CEILING
+  fixture. The existing math.yaml covers (neg-num, pos-sig) sign mismatch
+  but not the asymmetric (pos-num, neg-sig) direction, blank significance,
+  date-text significance, or range-as-significance arguments. Each case
+  probes a specific semantic question so we can confirm whether Mac Excel
+  365 (ja-JP) agrees with Formulon, with IronCalc, or with neither. The
+  author-side `expect:` value is Formulon's current return for cross-check;
+  the verifier compares against the Excel-observed golden once
+  oracle-gen has run.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  # ---------------------------------------------------------------------
+  # A) Positive number with negative significance.
+  # Excel docs (pre-365) say this returns #NUM!, but Mac Excel 365 might
+  # use FLOOR.MATH semantics (|sig|). IronCalc says #NUM!. Existing
+  # math.yaml only verifies the (neg-num, pos-sig) direction.
+  - id: floor_pos_num_neg_sig_simple
+    description: "FLOOR(10,-1) - positive number, negative significance"
+    formula: "=FLOOR(10,-1)"
+
+  - id: floor_pos_num_neg_sig_fraction
+    description: "FLOOR(7.1,-0.1) - positive non-integer, small negative sig"
+    formula: "=FLOOR(7.1,-0.1)"
+
+  - id: floor_pos_num_neg_sig_irrational
+    description: "FLOOR(10,-0.21)"
+    formula: "=FLOOR(10,-0.21)"
+
+  - id: floor_pos_num_neg_sig_large
+    description: "FLOOR(10,-7) - sig magnitude exceeds num"
+    formula: "=FLOOR(10,-7)"
+
+  - id: floor_pos_num_neg_sig_tiny
+    description: "FLOOR(10,-1e-12) - tiny negative sig"
+    formula: "=FLOOR(10,-1e-12)"
+
+  - id: ceiling_pos_num_neg_sig_simple
+    description: "CEILING(10,-1) - positive number, negative significance"
+    formula: "=CEILING(10,-1)"
+
+  - id: ceiling_pos_num_neg_sig_fraction
+    description: "CEILING(7.1,-0.1)"
+    formula: "=CEILING(7.1,-0.1)"
+
+  # B) Negative number with negative significance (sanity / regression).
+  # Existing math.yaml has CEILING(-4.3,-1) and FLOOR(-4.3,-1) but only
+  # for one specific value. Add a couple more to nail down the direction.
+  - id: floor_neg_num_neg_sig_seven_one
+    description: "FLOOR(-7.1,-1) - signs match negative"
+    formula: "=FLOOR(-7.1,-1)"
+
+  - id: floor_neg_num_neg_sig_seven_nine
+    description: "FLOOR(-7.9,-1)"
+    formula: "=FLOOR(-7.9,-1)"
+
+  - id: ceiling_neg_num_neg_sig_seven_one
+    description: "CEILING(-7.1,-1)"
+    formula: "=CEILING(-7.1,-1)"
+
+  # C) Zero number, regardless of sig sign.
+  - id: floor_zero_neg_sig
+    description: "FLOOR(0,-1) - zero short-circuits"
+    formula: "=FLOOR(0,-1)"
+
+  - id: ceiling_zero_neg_sig
+    description: "CEILING(0,-1)"
+    formula: "=CEILING(0,-1)"
+
+  # D) Blank cell as significance. IronCalc reports #NAME? for this; that
+  # is unlikely to be Mac's behavior (blank typically coerces to 0).
+  - id: floor_pos_num_blank_sig
+    description: "FLOOR(10,B1) where B1 is blank -> blank coerces to 0"
+    setup:
+      A1: 10
+    formula: "=FLOOR(A1,B1)"
+
+  - id: ceiling_pos_num_blank_sig
+    description: "CEILING(10,B1) where B1 is blank"
+    setup:
+      A1: 10
+    formula: "=CEILING(A1,B1)"
+
+  # E) Date-text as significance. IronCalc coerces "2024-01-10" -> 45301
+  # (date serial), Mac may instead reject it with #VALUE!.
+  - id: floor_date_text_sig
+    description: "FLOOR(10,\"2024-01-10\") - date-string sig"
+    formula: "=FLOOR(10,\"2024-01-10\")"
+
+  - id: ceiling_date_text_sig
+    description: "CEILING(10,\"2024-01-10\")"
+    formula: "=CEILING(10,\"2024-01-10\")"
+
+  - id: floor_neg_num_date_text_sig
+    description: "FLOOR(-10,\"2024-01-10\") - sig is date-text 45301"
+    formula: "=FLOOR(-10,\"2024-01-10\")"
+
+  # F) Numeric-text as significance (pure digits, no date format).
+  # Compare with the date-text behavior above.
+  - id: floor_numeric_text_sig
+    description: "FLOOR(10,\"3\") - text \"3\" coerces to 3"
+    formula: "=FLOOR(10,\"3\")"
+
+  - id: ceiling_numeric_text_sig
+    description: "CEILING(10,\"3\")"
+    formula: "=CEILING(10,\"3\")"
+
+  # G) Bool as number argument. IronCalc says #NUM! for FLOOR(TRUE, -1).
+  # Excel's Bool->1 coercion would mean (1, -1) sign-mismatch, so #NUM!
+  # is plausible. Cross-check on Mac.
+  - id: floor_bool_true_neg_sig
+    description: "FLOOR(TRUE,-1) - Bool->1, negative sig"
+    formula: "=FLOOR(TRUE,-1)"
+
+  - id: floor_bool_false_neg_sig
+    description: "FLOOR(FALSE,-1) - Bool->0, negative sig (zero short-circuits)"
+    formula: "=FLOOR(FALSE,-1)"
+
+  # H) Range as significance argument. IronCalc tests range arg via
+  # implicit intersection; modern Excel 365 spills, so behavior depends
+  # on whether implicit intersection is invoked. With explicit single
+  # cell, no spill needed.
+  - id: floor_range_sig_via_atref
+    description: "FLOOR(10,@A1:E1) - explicit @ implicit intersection"
+    setup:
+      A1: 1
+      B1: 2
+      C1: 3
+      D1: 4
+      E1: 5
+    formula: "=FLOOR(10,@A1:E1)"
+
+  # I) Tiny / large / boundary numbers with negative sig.
+  - id: floor_huge_pos_neg_sig
+    description: "FLOOR(9999999999999,-1)"
+    formula: "=FLOOR(9999999999999,-1)"
+
+  - id: floor_tiny_pos_neg_sig
+    description: "FLOOR(1e-12,-1)"
+    formula: "=FLOOR(1e-12,-1)"
+
+  - id: floor_tiny_neg_neg_sig
+    description: "FLOOR(-1e-12,-1) - signs match"
+    formula: "=FLOOR(-1e-12,-1)"

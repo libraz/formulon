@@ -33,6 +33,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/function_registry_test.cpp
   unit/eval/builtins_test.cpp
   unit/eval/builtins_logical_test.cpp
+  unit/eval/builtins_floor_ceiling_test.cpp
   unit/eval/builtins_math_test.cpp
   unit/eval/builtins_math2_test.cpp
   unit/eval/builtins_math3_test.cpp
