@@ -300,11 +300,66 @@ TEST(BuiltinsLarge, KFractionalTruncates) {
   EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
 }
 
-TEST(BuiltinsLarge, NonNumericDataSkipped) {
-  // Only 10, 20, 30 are numeric. k=1 -> 30.
+TEST(BuiltinsLarge, DirectScalarTextUnparseableIsValue) {
+  // Direct scalar Text arguments go through strict numeric coercion, so an
+  // unparseable `"a"` surfaces #VALUE! rather than being silently skipped.
+  // Matches Mac Excel 365 and IronCalc's SMALL_LARGE fixture (see J4
+  // `=SMALL("Hello", 1)` -> #VALUE!). This replaces the previous lenient
+  // behaviour where non-numeric scalars were dropped.
   const Value v = EvalSource("=LARGE(10, \"a\", 20, TRUE, 30, 1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsLarge, DirectScalarBoolCoerces) {
+  // Direct scalar Bool arguments coerce to 1 / 0 (TRUE -> 1, FALSE -> 0)
+  // for SMALL / LARGE, matching the Mac Excel 365 oracle.
+  //   data = [10, 1, 20, 30] after coercion; k=1 -> max = 30.
+  const Value v = EvalSource("=LARGE(10, TRUE, 20, 30, 1)");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 30.0);
+}
+
+TEST(BuiltinsLarge, DirectScalarNumericTextCoerces) {
+  // Direct scalar numeric-looking Text coerces to its number; `"3.4"` -> 3.4.
+  const Value v = EvalSource("=LARGE(\"3.4\", 1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 3.4);
+}
+
+TEST(BuiltinsSmall, DirectScalarNumericTextCoerces) {
+  // Mirror of LARGE; IronCalc fixture J3 `=SMALL("3.4", 1)` -> 3.4.
+  const Value v = EvalSource("=SMALL(\"3.4\", 1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 3.4);
+}
+
+TEST(BuiltinsSmall, DirectScalarBoolCoerces) {
+  // IronCalc fixture H4 `=SMALL(TRUE, 1)` -> 1.0.
+  const Value v = EvalSource("=SMALL(TRUE, 1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+}
+
+TEST(BuiltinsSmall, DirectScalarTextUnparseableIsValue) {
+  // IronCalc fixture J4 `=SMALL("Hello", 1)` -> #VALUE!.
+  const Value v = EvalSource("=SMALL(\"Hello\", 1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsSmall, ArrayLiteralNonNumericSkipped) {
+  // Array-literal elements are treated like range cells: non-Number
+  // elements are dropped silently by `range_filter_numeric_only` inside
+  // the ArrayLiteral dispatch branch. Here `{1, FALSE, TRUE}` reduces to
+  // xs=[1.0], so SMALL(..., 1) -> 1.0. IronCalc's F10 fixture uses a Text
+  // element (`{1, "-1"}`) which the parser does not yet accept inside a
+  // brace literal; see backup/plans/02-calc-engine.md on array literal
+  // grammar limits. When parser support for Text/scalar expressions in
+  // array literals lands, an equivalent `{1,"-1"}` case can be added.
+  const Value v = EvalSource("=SMALL({1, FALSE, TRUE}, 1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
 }
 
 TEST(BuiltinsLarge, RangeAndScalarK) {

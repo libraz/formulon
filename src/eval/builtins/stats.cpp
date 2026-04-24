@@ -60,6 +60,49 @@ std::vector<double> collect_numerics(const Value* args, std::uint32_t count) {
   return out;
 }
 
+// Direct-scalar-aware collector for SMALL / LARGE. Mirrors the "A"-family
+// rule for direct scalar arguments but differs for the "anything else"
+// category: range-sourced Text / Bool / Blank cells have already been
+// dropped by the dispatcher's `range_filter_numeric_only` filter, so by
+// the time they reach this helper a Text or Bool kind can only come from
+// a direct scalar literal (e.g. `SMALL("3.4", 1)` or `SMALL(TRUE, 1)`)
+// or from an array-literal element that survived the filter (it cannot --
+// the filter drops those too, so those never appear here either).
+// Direct Number -> kept as-is; direct Bool -> 1.0 / 0.0;
+// direct Text -> strict `coerce_to_number` (propagates #VALUE! on
+// unparseable text like `"Hello"`). Anything else (Blank left over from
+// a dropped optional argument, unresolved Ref, Array, Lambda) is skipped
+// silently, matching AVERAGE-family leniency.
+Expected<std::vector<double>, ErrorCode> collect_small_large(const Value* args, std::uint32_t count) {
+  std::vector<double> out;
+  out.reserve(count);
+  for (std::uint32_t i = 0; i < count; ++i) {
+    const Value& v = args[i];
+    switch (v.kind()) {
+      case ValueKind::Number:
+        out.push_back(v.as_number());
+        break;
+      case ValueKind::Bool:
+        out.push_back(v.as_boolean() ? 1.0 : 0.0);
+        break;
+      case ValueKind::Text: {
+        auto coerced = coerce_to_number(v);
+        if (!coerced) {
+          return coerced.error();
+        }
+        out.push_back(coerced.value());
+        break;
+      }
+      default:
+        // Blank / Error / Array / Ref / Lambda: skip. Errors never reach
+        // here because the dispatcher short-circuits with
+        // `propagate_errors = true`.
+        break;
+    }
+  }
+  return out;
+}
+
 Expected<std::vector<double>, ErrorCode> collect_a(const Value* args, std::uint32_t count) {
   std::vector<double> out;
   out.reserve(count);
@@ -280,6 +323,11 @@ static Value Mode(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // LARGE(array, k) - k-th largest numeric. k is truncated toward zero; any
 // fractional part is discarded. k must be in [1, numeric_count], else
 // `#NUM!`. An empty numeric slice trivially fails the upper bound.
+//
+// Direct scalar Text / Bool arguments coerce through `collect_small_large`
+// (Bool -> 1 / 0, Text -> strict numeric coercion with #VALUE! on failure).
+// Range-sourced and array-literal-sourced non-Number cells are dropped by
+// the dispatcher via `range_filter_numeric_only` before reaching this impl.
 static Value Large(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const std::uint32_t data_count = arity - 1u;
   auto k_raw = read_kth_arg(args[arity - 1u]);
@@ -287,7 +335,11 @@ static Value Large(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(k_raw.error());
   }
   const double k_floor = std::floor(k_raw.value());
-  std::vector<double> xs = collect_numerics(args, data_count);
+  auto xs_e = collect_small_large(args, data_count);
+  if (!xs_e) {
+    return Value::error(xs_e.error());
+  }
+  std::vector<double>& xs = xs_e.value();
   if (xs.empty() || k_floor < 1.0 || k_floor > static_cast<double>(xs.size())) {
     return Value::error(ErrorCode::Num);
   }
@@ -304,7 +356,11 @@ static Value Small(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(k_raw.error());
   }
   const double k_floor = std::floor(k_raw.value());
-  std::vector<double> xs = collect_numerics(args, data_count);
+  auto xs_e = collect_small_large(args, data_count);
+  if (!xs_e) {
+    return Value::error(xs_e.error());
+  }
+  std::vector<double>& xs = xs_e.value();
   if (xs.empty() || k_floor < 1.0 || k_floor > static_cast<double>(xs.size())) {
     return Value::error(ErrorCode::Num);
   }
@@ -932,13 +988,22 @@ void register_stats_builtins(FunctionRegistry& registry) {
     // LARGE(array, k) - trailing scalar k lives at `args[arity - 1]` after
     // the dispatcher has expanded any leading range; the impl trims the
     // slice explicitly before collecting numerics.
+    //
+    // `range_filter_numeric_only = true` drops range-sourced and array-
+    // literal-sourced non-Number cells silently, matching Excel's "skip
+    // text/bool/blank from ranges" rule. Direct scalar Text / Bool
+    // arguments still reach the impl, where `collect_small_large` applies
+    // the direct-coercion rule (Bool -> 1 / 0, Text -> strict numeric
+    // coercion, surfaces #VALUE! on failure).
     FunctionDef def{"LARGE", 2u, kVariadic, &stats_detail::Large};
     def.accepts_ranges = true;
+    def.range_filter_numeric_only = true;
     registry.register_function(def);
   }
   {
     FunctionDef def{"SMALL", 2u, kVariadic, &stats_detail::Small};
     def.accepts_ranges = true;
+    def.range_filter_numeric_only = true;
     registry.register_function(def);
   }
   {

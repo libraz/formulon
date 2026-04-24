@@ -503,6 +503,31 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
             short_circuit = true;
             break;
           }
+          // Provenance-aware filtering for array-literal-sourced values.
+          // An element inside a `{...}` literal is treated the same way as
+          // a cell inside a range: non-numeric elements are dropped for
+          // `range_filter_numeric_only`, coerced for the A-family, etc.
+          // Direct scalar arguments (handled in the fall-through branch
+          // below) still coerce through the impl's strict rules.
+          if (def->range_filter_numeric_only && v.kind() != ValueKind::Number) {
+            continue;
+          }
+          if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
+            continue;
+          }
+          if (def->range_filter_a_coerce) {
+            if (v.kind() == ValueKind::Blank) {
+              continue;
+            }
+            if (v.kind() == ValueKind::Bool) {
+              values.push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
+              continue;
+            }
+            if (v.kind() == ValueKind::Text) {
+              values.push_back(Value::number(0.0));
+              continue;
+            }
+          }
           values.push_back(v);
         }
       }
