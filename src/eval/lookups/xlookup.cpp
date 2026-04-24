@@ -41,14 +41,17 @@ enum class XMatchMode : std::int8_t { Exact = 0, Smaller = -1, Larger = 1, Wildc
 // Excel 365 search-mode codes for XLOOKUP / XMATCH. `FirstToLast` /
 // `LastToFirst` are linear scans in the obvious direction. `BinaryAsc` /
 // `BinaryDesc` assume the caller's array is already sorted (Excel does not
-// validate the sort order — neither do we) and use a lower-bound style
-// search.
+// validate the sort order — neither do we) and drive an upper-bound
+// style search so duplicates resolve to the LAST matching index.
 enum class XSearchMode : std::int8_t { FirstToLast = 1, LastToFirst = -1, BinaryAsc = 2, BinaryDesc = -2 };
 
-// Three-way compare of (cell - lookup) with XLOOKUP's accepted divergence:
-// cross-type pairings are reported as incomparable rather than ordered by
-// value-kind (Excel actually orders kinds). Returns `true` on success with
-// the sign in `*out_cmp`; `false` when the pair cannot be compared.
+// Three-way compare of (cell - lookup) honouring Excel 365's cross-type
+// ordering for XLOOKUP approximate-match: kind-rank first, value second.
+// Rank 0 = Number / Blank (Blank acts as 0.0), Rank 1 = Text (case-insensitive
+// ASCII compare), Rank 2 = Bool (FALSE < TRUE). Anything else (Error, Array,
+// Ref, Lambda) is incomparable and the function returns `false` so callers
+// can decide how to handle it. On success writes the sign to `*out_cmp` and
+// returns `true`.
 bool xlookup_cmp(const Value& cell, const Value& lookup, int* out_cmp) {
   auto cmp_numeric = [](double x, double y) -> int {
     if (x < y) {
@@ -59,23 +62,46 @@ bool xlookup_cmp(const Value& cell, const Value& lookup, int* out_cmp) {
     }
     return 0;
   };
-  if (lookup.is_text() && cell.is_text()) {
+  auto rank_of = [](const Value& v, int* rank) -> bool {
+    if (v.is_number() || v.is_blank()) {
+      *rank = 0;
+      return true;
+    }
+    if (v.is_text()) {
+      *rank = 1;
+      return true;
+    }
+    if (v.is_boolean()) {
+      *rank = 2;
+      return true;
+    }
+    return false;
+  };
+  int cell_rank = 0;
+  int lookup_rank = 0;
+  if (!rank_of(cell, &cell_rank) || !rank_of(lookup, &lookup_rank)) {
+    return false;
+  }
+  if (cell_rank != lookup_rank) {
+    *out_cmp = cmp_numeric(static_cast<double>(cell_rank), static_cast<double>(lookup_rank));
+    return true;
+  }
+  // Same kind — compare values directly.
+  if (cell_rank == 1) {
     *out_cmp = strings::case_insensitive_compare(cell.as_text(), lookup.as_text());
     return true;
   }
-  if ((lookup.is_number() || lookup.is_blank()) && (cell.is_number() || cell.is_blank())) {
-    const double lv = lookup.is_blank() ? 0.0 : lookup.as_number();
-    const double cv = cell.is_blank() ? 0.0 : cell.as_number();
-    *out_cmp = cmp_numeric(cv, lv);
-    return true;
-  }
-  if (lookup.is_boolean() && cell.is_boolean()) {
+  if (cell_rank == 2) {
     const int lb = lookup.as_boolean() ? 1 : 0;
     const int cb = cell.as_boolean() ? 1 : 0;
     *out_cmp = cmp_numeric(cb, lb);
     return true;
   }
-  return false;
+  // Rank 0: Number or Blank.
+  const double lv = lookup.is_blank() ? 0.0 : lookup.as_number();
+  const double cv = cell.is_blank() ? 0.0 : cell.as_number();
+  *out_cmp = cmp_numeric(cv, lv);
+  return true;
 }
 
 // Exact-equality test with optional DOS-style wildcard expansion on Text vs
@@ -120,8 +146,8 @@ bool xlookup_exact_eq(const Value& cell, const Value& lookup, bool wildcards) {
 //
 // For `BinaryAsc` / `BinaryDesc`, the caller must guarantee the array is
 // sorted in the implied direction; we do not validate. Cross-type compares
-// count as non-match (same accepted divergence the linear-mode MATCH path
-// documents). Wildcards are only honoured when `match_mode ==
+// follow Excel 365's kind-rank ordering (see `xlookup_cmp`): Number/Blank <
+// Text < Bool. Wildcards are only honoured when `match_mode ==
 // XMatchMode::Wildcard`; in every other mode `*` / `?` in the pattern are
 // treated as literal characters.
 std::size_t xlookup_scan(const std::vector<Value>& cells, const Value& lookup_value, XMatchMode match_mode,
@@ -195,77 +221,93 @@ std::size_t xlookup_scan(const std::vector<Value>& cells, const Value& lookup_va
     return best;
   }
 
-  // Binary search. The caller promises the array is sorted. We bound-search
-  // with a lower-bound-style loop on the ordering implied by the mode.
-  // Incomparable (cross-type) cells are treated as "greater than" the
-  // lookup so the search keeps narrowing down — this preserves the
-  // invariant that a pure-kind prefix will still be found when the array
-  // is clean.
+  // Binary search. The caller promises the array is sorted in the direction
+  // implied by `search_mode`. We run a single upper-bound pass in the
+  // effective (flipped-for-desc) view: `hi_eff` becomes the first index
+  // whose effective cell > target. Cells that are incomparable with the
+  // lookup (Error / Array / Ref / Lambda) are treated as > target so the
+  // search continues to narrow down; with all-clean arrays this is a
+  // no-op and with a foreign cell it keeps the upper-bound monotone.
   const bool descending = search_mode == XSearchMode::BinaryDesc;
-  std::size_t lo = 0;
-  std::size_t hi = n;  // half-open
-  while (lo < hi) {
-    const std::size_t mid = lo + ((hi - lo) / 2U);
-    int cmp = 0;  // sign of (cells[mid] - lookup)
-    if (!xlookup_cmp(cells[mid], lookup_value, &cmp)) {
-      // Treat incomparable as "greater than" the lookup.
-      cmp = 1;
+  std::size_t hi_eff = 0;
+  {
+    std::size_t lo = 0;
+    std::size_t hi = n;  // half-open
+    while (lo < hi) {
+      const std::size_t mid = lo + ((hi - lo) / 2U);
+      int cmp = 0;
+      const bool cmp_ok = xlookup_cmp(cells[mid], lookup_value, &cmp);
+      if (!cmp_ok) {
+        // Incomparable — treat as greater than target.
+        cmp = 1;
+      }
+      if (descending) {
+        cmp = -cmp;
+      }
+      // Upper-bound: advance `lo` while effective cell <= target.
+      if (cmp <= 0) {
+        lo = mid + 1U;
+      } else {
+        hi = mid;
+      }
     }
-    if (descending) {
-      cmp = -cmp;
+    hi_eff = lo;
+  }
+
+  // Exact / Wildcard: candidate is the last cell with effective value <=
+  // target, i.e. `hi_eff - 1`. Run the literal equality test; anything
+  // else is a miss.
+  if (match_mode == XMatchMode::Exact || match_mode == XMatchMode::Wildcard) {
+    if (hi_eff == 0) {
+      return SIZE_MAX;
     }
-    if (cmp < 0) {
-      lo = mid + 1U;
-    } else {
-      hi = mid;
+    if (xlookup_exact_eq(cells[hi_eff - 1U], lookup_value, wildcards)) {
+      return hi_eff - 1U;
+    }
+    return SIZE_MAX;
+  }
+
+  // Smaller / Larger: short-circuit on an exact hit at `hi_eff - 1` so the
+  // LAST duplicate wins (matches Excel 365).
+  if (hi_eff > 0) {
+    int cmp = 0;
+    if (xlookup_cmp(cells[hi_eff - 1U], lookup_value, &cmp) && cmp == 0) {
+      return hi_eff - 1U;
     }
   }
 
-  // `lo` is now the first index whose (adjusted) cell >= lookup.
-  if (match_mode == XMatchMode::Exact || match_mode == XMatchMode::Wildcard) {
-    if (lo < n && xlookup_exact_eq(cells[lo], lookup_value, wildcards)) {
-      return lo;
-    }
-    return SIZE_MAX;
-  }
   if (match_mode == XMatchMode::Smaller) {
-    // Exact hit at `lo` wins; otherwise fall back to the cell just below it
-    // (in the original ordering that's `lo - 1` for ascending, `lo - 1`
-    // still for descending because we flipped the compare sign).
-    if (lo < n) {
-      int cmp = 0;
-      if (xlookup_cmp(cells[lo], lookup_value, &cmp) && cmp == 0) {
-        return lo;
+    if (!descending) {
+      // Ascending with no exact match: the largest cell < target sits at
+      // `hi_eff - 1` (lower_bound and upper_bound coincide in this case).
+      if (hi_eff == 0) {
+        return SIZE_MAX;
       }
+      return hi_eff - 1U;
     }
-    if (lo == 0) {
+    // Descending with no exact match: cells at `hi_eff..n-1` are < target
+    // (in real terms); values decrease with index, so the LARGEST of those
+    // sits at position `hi_eff`.
+    if (hi_eff >= n) {
       return SIZE_MAX;
     }
-    return lo - 1U;
+    return hi_eff;
   }
-  // Larger: `lo` is already the first cell >= lookup in the adjusted
-  // ordering. In ascending order that IS the first cell >= lookup; in
-  // descending order it's the first cell <= lookup, which per the Desc
-  // contract is the next-larger candidate (values decrease with index, so
-  // "next larger" sits at a smaller index and was walked past — this means
-  // for Desc + Larger we actually want `lo - 1` unless `cells[lo]` is an
-  // exact hit).
-  if (lo < n) {
-    int cmp = 0;
-    if (xlookup_cmp(cells[lo], lookup_value, &cmp) && cmp == 0) {
-      return lo;
-    }
-  }
-  if (descending) {
-    if (lo == 0) {
+
+  // Larger, no exact.
+  if (!descending) {
+    // Ascending: the smallest cell > target is at `hi_eff`.
+    if (hi_eff >= n) {
       return SIZE_MAX;
     }
-    return lo - 1U;
+    return hi_eff;
   }
-  if (lo >= n) {
+  // Descending: cells at `0..hi_eff-1` are > target (in real terms); values
+  // decrease with index, so the SMALLEST of those sits at `hi_eff - 1`.
+  if (hi_eff == 0) {
     return SIZE_MAX;
   }
-  return lo;
+  return hi_eff - 1U;
 }
 
 // Coerce `v` to an int that must lie in the caller's whitelist. Truncates
@@ -383,6 +425,15 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
   const auto match_mode = static_cast<XMatchMode>(match_raw);
   const auto search_mode = static_cast<XSearchMode>(search_raw);
+
+  // Excel 365 rejects the Wildcard (+2) match_mode combined with either
+  // Binary search_mode (±2) as #VALUE!: binary search has no defined
+  // meaning when the pattern contains `*` / `?` metacharacters.
+  if (match_mode == XMatchMode::Wildcard &&
+      (search_mode == XSearchMode::BinaryAsc || search_mode == XSearchMode::BinaryDesc)) {
+    return Value::error(ErrorCode::Value);
+  }
+
   const std::size_t off = xlookup_scan(lookup_cells, lookup, match_mode, search_mode);
 
   // 7) No match: evaluate if_not_found lazily, else #N/A. A blank-literal
@@ -466,6 +517,15 @@ Value eval_xmatch_lazy(const parser::AstNode& call, Arena& arena, const Function
 
   const auto match_mode = static_cast<XMatchMode>(match_raw);
   const auto search_mode = static_cast<XSearchMode>(search_raw);
+
+  // Excel 365 rejects the Wildcard (+2) match_mode combined with either
+  // Binary search_mode (±2) as #VALUE!: binary search has no defined
+  // meaning when the pattern contains `*` / `?` metacharacters.
+  if (match_mode == XMatchMode::Wildcard &&
+      (search_mode == XSearchMode::BinaryAsc || search_mode == XSearchMode::BinaryDesc)) {
+    return Value::error(ErrorCode::Value);
+  }
+
   const std::size_t off = xlookup_scan(cells, lookup, match_mode, search_mode);
   if (off == SIZE_MAX) {
     return Value::error(ErrorCode::NA);
