@@ -73,8 +73,29 @@ int compare_values(const Value& lhs, const Value& rhs, bool* out_unordered) {
     }
   };
 
-  const int lr = rank(lhs.kind());
-  const int rr = rank(rhs.kind());
+  // Blank is chameleonic in Excel equality comparisons: `blank = 0` is
+  // TRUE (already handled by the numeric rank above), and `blank = ""` is
+  // also TRUE. For the text-side comparison we treat a Blank operand as
+  // the empty string so `IF(A1="","Empty",...)` fires on unset cells.
+  const ValueKind lk = lhs.kind();
+  const ValueKind rk = rhs.kind();
+  if (lk == ValueKind::Blank && rk == ValueKind::Text) {
+    const std::string_view b = rhs.as_text();
+    if (b.empty()) {
+      return 0;
+    }
+    return -1;  // Blank (as "") sorts before any non-empty string.
+  }
+  if (rk == ValueKind::Blank && lk == ValueKind::Text) {
+    const std::string_view a = lhs.as_text();
+    if (a.empty()) {
+      return 0;
+    }
+    return 1;
+  }
+
+  const int lr = rank(lk);
+  const int rr = rank(rk);
   if (lr != rr) {
     return lr < rr ? -1 : 1;
   }
