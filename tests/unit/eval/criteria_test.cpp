@@ -150,6 +150,41 @@ TEST(CriteriaParse, WildcardInOrderingOpIgnoredForFlag) {
   EXPECT_FALSE(c.has_wildcard);
 }
 
+TEST(CriteriaParse, IsoDateStringCoercesToNumericSerial) {
+  // "2024-07-01" is Excel serial 45474. The criterion should be numeric so
+  // COUNTIFS / SUMIFS / D-functions compare against date-serial cells.
+  const ParsedCriterion c = parse_criterion(Value::text(">=2024-07-01"));
+  EXPECT_EQ(c.op, CriteriaOp::GtEq);
+  EXPECT_TRUE(c.rhs_is_number);
+  EXPECT_DOUBLE_EQ(c.rhs_number, 45474.0);
+}
+
+TEST(CriteriaParse, SlashDateStringCoercesToNumericSerial) {
+  const ParsedCriterion c = parse_criterion(Value::text("<2024/7/1"));
+  EXPECT_EQ(c.op, CriteriaOp::Lt);
+  EXPECT_TRUE(c.rhs_is_number);
+  EXPECT_DOUBLE_EQ(c.rhs_number, 45474.0);
+}
+
+TEST(CriteriaParse, DateLikeButWildcardStaysText) {
+  // A wildcard in the RHS is a strong signal that the user wants byte-wise
+  // text matching; skip the date-serial fallback even when the prefix parses
+  // as a date.
+  const ParsedCriterion c = parse_criterion(Value::text("2024-*"));
+  EXPECT_EQ(c.op, CriteriaOp::Eq);
+  EXPECT_FALSE(c.rhs_is_number);
+  EXPECT_EQ(c.rhs_text, "2024-*");
+  EXPECT_TRUE(c.has_wildcard);
+}
+
+TEST(CriteriaParse, UnparseableTextStaysText) {
+  // "banana" is neither numeric nor a date; stay on the text path.
+  const ParsedCriterion c = parse_criterion(Value::text(">banana"));
+  EXPECT_EQ(c.op, CriteriaOp::Gt);
+  EXPECT_FALSE(c.rhs_is_number);
+  EXPECT_EQ(c.rhs_text, "banana");
+}
+
 // ---------------------------------------------------------------------------
 // matches_criterion: numeric
 // ---------------------------------------------------------------------------

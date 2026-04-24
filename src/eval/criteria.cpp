@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include "eval/coerce.h"
+#include "eval/date_text_parse.h"
 #include "utils/strings.h"
 #include "value.h"
 
@@ -68,6 +69,28 @@ bool probe_number(std::string_view rhs, double* out_number) {
     return false;
   }
   *out_number = result.value();
+  return true;
+}
+
+// Attempts to parse `rhs` as a date / time token, returning the Excel serial
+// on success. Used as a second-chance probe after `probe_number` fails so a
+// criterion like ">=2024-07-01" compares numerically against date-serial
+// cells rather than performing a byte-wise text compare. Matches Excel's
+// long-standing behaviour where COUNTIFS / SUMIFS / AVERAGEIFS treat
+// date-string criteria as numeric date comparisons.
+bool probe_date(std::string_view rhs, double* out_number) {
+  double date_serial = 0.0;
+  double time_frac = 0.0;
+  bool has_date = false;
+  bool has_time = false;
+  const std::string_view trimmed = date_parse::trim_date_text(rhs);
+  if (!date_parse::parse_date_time_text(trimmed, &date_serial, &time_frac, &has_date, &has_time)) {
+    return false;
+  }
+  if (!has_date && !has_time) {
+    return false;
+  }
+  *out_number = date_serial + time_frac;
   return true;
 }
 
@@ -235,6 +258,19 @@ ParsedCriterion parse_criterion(const Value& criterion) {
           parsed.rhs_text = std::string_view{};
           return parsed;
         }
+        parsed.rhs_is_number = true;
+        parsed.rhs_number = num;
+        return parsed;
+      }
+      // Second-chance probe: date / time strings such as "2024-07-01" or
+      // "2024/7/1 12:00" become numeric date serials so a criterion like
+      // ">=2024-07-01" compares against date-serial cells rather than
+      // performing byte-wise text comparison. Mirrors Mac Excel 365's
+      // handling of date criteria in COUNTIFS / SUMIFS / AVERAGEIFS and the
+      // D-functions (DMIN / DMAX / etc.). Wildcards in the RHS are a strong
+      // signal that the user wants byte-wise matching, so skip the date
+      // fallback in that case.
+      if (!scan_has_wildcard(rhs_view) && probe_date(rhs_view, &num)) {
         parsed.rhs_is_number = true;
         parsed.rhs_number = num;
         return parsed;
