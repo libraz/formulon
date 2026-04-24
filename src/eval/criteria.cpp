@@ -264,6 +264,70 @@ std::size_t wildcard_find(std::string_view pattern, std::string_view text) {
   return std::string_view::npos;
 }
 
+ParsedCriterion::ParsedCriterion(const ParsedCriterion& other)
+    : op(other.op),
+      rhs_is_number(other.rhs_is_number),
+      rhs_number(other.rhs_number),
+      rhs_text(other.rhs_text),
+      has_wildcard(other.has_wildcard),
+      rhs_from_bool(other.rhs_from_bool),
+      rhs_is_error(other.rhs_is_error),
+      rhs_error_code(other.rhs_error_code),
+      rhs_storage(other.rhs_storage),
+      rhs_text_owns_storage_(other.rhs_text_owns_storage_) {
+  if (rhs_text_owns_storage_) {
+    rhs_text = rhs_storage;
+  }
+}
+
+ParsedCriterion::ParsedCriterion(ParsedCriterion&& other) noexcept
+    : op(other.op),
+      rhs_is_number(other.rhs_is_number),
+      rhs_number(other.rhs_number),
+      rhs_text(other.rhs_text),
+      has_wildcard(other.has_wildcard),
+      rhs_from_bool(other.rhs_from_bool),
+      rhs_is_error(other.rhs_is_error),
+      rhs_error_code(other.rhs_error_code),
+      rhs_storage(std::move(other.rhs_storage)),
+      rhs_text_owns_storage_(other.rhs_text_owns_storage_) {
+  if (rhs_text_owns_storage_) {
+    rhs_text = rhs_storage;
+  }
+}
+
+ParsedCriterion& ParsedCriterion::operator=(const ParsedCriterion& other) {
+  if (this != &other) {
+    op = other.op;
+    rhs_is_number = other.rhs_is_number;
+    rhs_number = other.rhs_number;
+    has_wildcard = other.has_wildcard;
+    rhs_from_bool = other.rhs_from_bool;
+    rhs_is_error = other.rhs_is_error;
+    rhs_error_code = other.rhs_error_code;
+    rhs_storage = other.rhs_storage;
+    rhs_text_owns_storage_ = other.rhs_text_owns_storage_;
+    rhs_text = rhs_text_owns_storage_ ? std::string_view(rhs_storage) : other.rhs_text;
+  }
+  return *this;
+}
+
+ParsedCriterion& ParsedCriterion::operator=(ParsedCriterion&& other) noexcept {
+  if (this != &other) {
+    op = other.op;
+    rhs_is_number = other.rhs_is_number;
+    rhs_number = other.rhs_number;
+    has_wildcard = other.has_wildcard;
+    rhs_from_bool = other.rhs_from_bool;
+    rhs_is_error = other.rhs_is_error;
+    rhs_error_code = other.rhs_error_code;
+    rhs_storage = std::move(other.rhs_storage);
+    rhs_text_owns_storage_ = other.rhs_text_owns_storage_;
+    rhs_text = rhs_text_owns_storage_ ? std::string_view(rhs_storage) : other.rhs_text;
+  }
+  return *this;
+}
+
 ParsedCriterion parse_criterion(const Value& criterion) {
   ParsedCriterion parsed;
   switch (criterion.kind()) {
@@ -336,8 +400,10 @@ ParsedCriterion parse_criterion(const Value& criterion) {
       if (prefix_stripped) {
         parsed.rhs_storage.assign(rhs_view);
         parsed.rhs_text = parsed.rhs_storage;
+        parsed.rhs_text_owns_storage_ = true;
       } else {
         parsed.rhs_text = rhs_view;
+        parsed.rhs_text_owns_storage_ = false;
       }
       parsed.has_wildcard =
           (parsed.op == CriteriaOp::Eq || parsed.op == CriteriaOp::NotEq) && scan_has_wildcard(parsed.rhs_text);
@@ -401,6 +467,15 @@ bool matches_text(const Value& cell, const ParsedCriterion& c) {
   switch (c.op) {
     case CriteriaOp::Eq: {
       if (c.has_wildcard) {
+        // Mac Excel 365: wildcard equality criteria match only Text cells.
+        // A Number or Bool cell never satisfies `"12*"` or `"*foo*"` even
+        // when its display form would literally match. Verified via
+        // tests/oracle/cases/countif_edges.yaml case
+        // `countif_wildcard_matches_text_cells_only` (Mac=1 over one text
+        // "12 Oak Street" + one number 1213).
+        if (cell.kind() != ValueKind::Text) {
+          return false;
+        }
         return wildcard_match(rhs, cell_text);
       }
       const std::string literal = unescape_literal(rhs);
@@ -408,6 +483,12 @@ bool matches_text(const Value& cell, const ParsedCriterion& c) {
     }
     case CriteriaOp::NotEq: {
       if (c.has_wildcard) {
+        // Mirror of the Eq branch: a non-text cell is never "equal" to a
+        // wildcard text pattern, so `<>12*` against a Number cell is
+        // trivially true.
+        if (cell.kind() != ValueKind::Text) {
+          return true;
+        }
         return !wildcard_match(rhs, cell_text);
       }
       const std::string literal = unescape_literal(rhs);

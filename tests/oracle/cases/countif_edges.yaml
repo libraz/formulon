@@ -254,3 +254,228 @@ cases:
       A8: false
       B1: true
     formula: "=COUNTIF(A1:A8,B1)"
+
+  # ---------------------------------------------------------------------
+  # I) Wildcard criterion vs Number cells. Mirrors IronCalc's
+  # SUMIF_AVERAGE_IF J6/K6 scenario: criterion "12*" over a range that
+  # mixes Text cells (clearly non-numeric, e.g. "12 Oak Street") and
+  # Number cells (1213 as number). The question is whether Excel applies
+  # wildcard matching to Number cells (coercing to their display text)
+  # or only to genuine Text cells. We avoid the digit-only text literal
+  # ("1213") because xlwings would coerce that to a Number on write.
+  - id: countif_wildcard_matches_text_cells_only
+    description: "Wildcard 12* over mixed text/number range"
+    setup:
+      A1: "12 Oak Street"
+      A2: "Alemania"
+      A3: "Argentina"
+      A4: "Paraguay"
+      A5: "XYZ"
+      A6: "QWERTY"
+      A7: 1213
+      A8: "tron"
+    formula: "=COUNTIF(A1:A8,\"12*\")"
+
+  # Companion: SUMIF using the same pattern, with an error-producing
+  # formula in the sum_range at the position aligned with the Number cell
+  # A7. If Formulon counts A7 as a match (wrong), the SUMIF visits B7 and
+  # may propagate the error it holds. If wildcard-text-only is honoured,
+  # B7 is never visited and SUMIF returns B1 = 3.
+  - id: sumif_wildcard_text_only_skips_number_match
+    description: "SUMIF wildcard 12* ignores Number cells so error in sum_range is skipped"
+    setup:
+      A1: "12 Oak Street"
+      A2: "Alemania"
+      A3: "Argentina"
+      A4: "Paraguay"
+      A5: "XYZ"
+      A6: "QWERTY"
+      A7: 1213
+      A8: "tron"
+      B1: 3
+      B2: 4
+      B3: 5
+      B4: 6
+      B5: -3
+      B6: 12
+      B7: "=1/0"
+      B8: "=NA()"
+    formula: "=SUMIF(A1:A8,\"12*\",B1:B8)"
+
+  - id: averageif_wildcard_text_only_skips_number_match
+    description: "AVERAGEIF wildcard 12* over mixed range returns average of text matches only"
+    setup:
+      A1: "12 Oak Street"
+      A2: "Alemania"
+      A3: "Argentina"
+      A4: "Paraguay"
+      A5: "XYZ"
+      A6: "QWERTY"
+      A7: 1213
+      A8: "tron"
+      B1: 3
+      B2: 4
+      B3: 5
+      B4: 6
+      B5: -3
+      B6: 12
+      B7: "=1/0"
+      B8: "=NA()"
+    formula: "=AVERAGEIF(A1:A8,\"12*\",B1:B8)"
+
+  # ---------------------------------------------------------------------
+  # J) Text-lex ordering criterion (">c") with matching sum_range errors.
+  # Mirrors IronCalc's SUMIFS D13 / H13 / I13: criterion ">c" matches
+  # many rows by lex compare, and one of those rows has an error in the
+  # sum_range. The question is whether SUMIFS / MINIFS / MAXIFS propagate
+  # the error from a lex-matched row the same way they do for a
+  # literal-text-match row (which Formulon already does).
+  - id: sumifs_gt_text_propagates_sum_range_error
+    description: "SUMIFS with >c criterion and error in matching sum_range row"
+    setup:
+      A1: 10
+      A2: "=1/0"
+      A3: 20
+      B1: "red"
+      B2: "white"
+      B3: "blue"
+    formula: "=SUMIFS(A1:A3,B1:B3,\">c\")"
+
+  - id: minifs_gt_text_propagates_sum_range_error
+    description: "MINIFS with >c criterion and error in matching sum_range row"
+    setup:
+      A1: 10
+      A2: "=1/0"
+      A3: 20
+      B1: "red"
+      B2: "white"
+      B3: "blue"
+    formula: "=MINIFS(A1:A3,B1:B3,\">c\")"
+
+  - id: maxifs_gt_text_propagates_sum_range_error
+    description: "MAXIFS with >c criterion and error in matching sum_range row"
+    setup:
+      A1: 10
+      A2: "=1/0"
+      A3: 20
+      B1: "red"
+      B2: "white"
+      B3: "blue"
+    formula: "=MAXIFS(A1:A3,B1:B3,\">c\")"
+
+  # Full reproduction of IronCalc SUMIFS Sheet1 D13 with all 19 rows so we
+  # can see whether a mid-range #N/A or "" formula perturbs the iteration
+  # before the #DIV/0! at row 10 can propagate.
+  - id: sumifs_gt_text_full_ironcalc_setup
+    description: "SUMIFS >c over full 19-row IronCalc range with mixed formula cells"
+    setup:
+      A1: 13
+      A2: 17
+      A3: -23
+      A4: 5
+      A5: 7
+      A6: -3
+      # A7 left blank (matches IronCalc A8).
+      A8: "=NA()"
+      A9: "=1/0"
+      A10: "=\"\""
+      A11: 113
+      A12: "123"
+      A13: true
+      A14: 14
+      A15: 77
+      A16: 34
+      # A17 left blank (matches IronCalc A18).
+      A18: 0
+      A19: "string"
+      B1: "red"
+      B2: "BLUE"
+      B3: "yellow"
+      B4: "dark blue"
+      B5: "light blue"
+      B6: "light yellow"
+      B7: "dark yellow"
+      B8: "brown"
+      B9: "white"
+      B10: "Mr. White"
+      B11: "brown"
+      B12: "blue"
+      B13: "blue"
+      B14: "white dark"
+      B15: "red-ish"
+      B16: "blue-ish"
+      B17: "magenta"
+      B18: "magenta"
+      B19: "yellow"
+    formula: "=SUMIFS(A1:A19,B1:B19,\">c\")"
+
+  # ---------------------------------------------------------------------
+  # K) Cell-ref text "TRUE" criterion vs literal "TRUE". Mirrors
+  # IronCalc's COUNTIF_Rows AI6 / AI10: criterion is a Text cell (not a
+  # literal). Distinguishes whether Excel's display-form coercion between
+  # Bool cells and the Text "TRUE"/"FALSE" needle depends on whether the
+  # criterion arrived as a literal or a cell value.
+  - id: countif_cellref_text_true_uppercase
+    description: "Cell criterion Text \"TRUE\" over mixed bool/number/text range"
+    setup:
+      A1: true
+      A2: 1
+      A3: 0
+      A4: false
+      A5: "TRUE"
+      A6: true
+      A7: true
+      A8: false
+      B1: "TRUE"
+    formula: "=COUNTIF(A1:A8,B1)"
+
+  - id: countif_cellref_text_true_lowercase
+    description: "Cell criterion Text \"true\" (lowercase) over same range"
+    setup:
+      A1: true
+      A2: 1
+      A3: 0
+      A4: false
+      A5: "TRUE"
+      A6: true
+      A7: true
+      A8: false
+      B1: "true"
+    formula: "=COUNTIF(A1:A8,B1)"
+
+  # ---------------------------------------------------------------------
+  # L) CONCAT("<>", bool TRUE) criterion over bool+number+text range
+  # that also includes blank cells. Mirrors IronCalc's COUNTIF_Rows AJ3
+  # pattern: CONCAT coerces the bool to text "TRUE", producing the
+  # criterion "<>TRUE". The question is whether Excel COUNTIF:
+  #   * Counts blank cells as "<>TRUE" (they are not equal to TRUE).
+  #   * Excludes text "TRUE" cells (display-form equality to the needle).
+  # Range has 8 populated cells (3 bool TRUE, 1 text "TRUE", 2 bool
+  # FALSE, 2 numbers) + 2 blank rows spanning the rectangle.
+  - id: countif_concat_ne_bool_true_over_range_with_blanks
+    description: "CONCAT(<>, TRUE) over range with blanks + bool TRUE + text TRUE"
+    setup:
+      A1: true
+      A2: 1
+      A3: 0
+      A4: false
+      A5: "TRUE"
+      A6: true
+      A7: true
+      A8: false
+      # A9 and A10 are left blank (no entry).
+      B1: true
+    formula: "=COUNTIF(A1:A10,_xlfn.CONCAT(\"<>\",B1))"
+
+  - id: countif_concat_ne_text_true_over_range_with_blanks
+    description: "CONCAT(<>, \"TRUE\") over range with blanks + bool TRUE + text TRUE"
+    setup:
+      A1: true
+      A2: 1
+      A3: 0
+      A4: false
+      A5: "TRUE"
+      A6: true
+      A7: true
+      A8: false
+    formula: "=COUNTIF(A1:A10,_xlfn.CONCAT(\"<>\",\"TRUE\"))"

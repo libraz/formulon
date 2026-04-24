@@ -467,6 +467,54 @@ TEST(CriteriaMatchBool, BoolCriterionNotEqUnchangedForText) {
   EXPECT_TRUE(matches_criterion(Value::boolean(false), c));
 }
 
+// ---------------------------------------------------------------------------
+// ParsedCriterion copy / move: rhs_text must rebind when aliasing rhs_storage.
+// Without an explicit special-member set the default move would leave
+// `rhs_text` pointing at the moved-from object's SSO buffer, which becomes
+// empty after move. This silently breaks `COUNTIFS`/`SUMIFS` when the
+// aggregator stores each parsed criterion in a `unique_ptr` via a prvalue
+// move, yielding false ">" / "<" matches that propagate sibling errors.
+// ---------------------------------------------------------------------------
+
+TEST(ParsedCriterionMove, TextRhsSurvivesMoveAndCopy) {
+  ParsedCriterion src = parse_criterion(Value::text(">c"));
+  ASSERT_EQ(src.op, CriteriaOp::Gt);
+  ASSERT_EQ(src.rhs_text, "c");
+  ParsedCriterion moved(std::move(src));
+  EXPECT_EQ(moved.op, CriteriaOp::Gt);
+  EXPECT_EQ(moved.rhs_text, "c");
+  ParsedCriterion assigned;
+  assigned = parse_criterion(Value::text("<=5"));
+  EXPECT_EQ(assigned.op, CriteriaOp::LtEq);
+  EXPECT_TRUE(assigned.rhs_is_number);
+  ParsedCriterion copied(moved);
+  EXPECT_EQ(copied.rhs_text, "c");
+}
+
+// ---------------------------------------------------------------------------
+// Wildcard criteria in Mac Excel 365 match only Text cells. A Number or
+// Bool cell never satisfies a wildcard pattern, even when its display form
+// would literally match. See tests/oracle/cases/countif_edges.yaml case
+// `countif_wildcard_matches_text_cells_only`.
+// ---------------------------------------------------------------------------
+
+TEST(WildcardCriterion, DoesNotMatchNumberCells) {
+  const ParsedCriterion c = parse_criterion(Value::text("12*"));
+  ASSERT_TRUE(c.has_wildcard);
+  EXPECT_TRUE(matches_criterion(Value::text("12 Oak Street"), c));
+  EXPECT_FALSE(matches_criterion(Value::number(1213.0), c));
+  EXPECT_FALSE(matches_criterion(Value::number(12.0), c));
+  EXPECT_FALSE(matches_criterion(Value::boolean(true), c));
+}
+
+TEST(WildcardCriterion, NotEqPatternCountsNonTextCells) {
+  const ParsedCriterion c = parse_criterion(Value::text("<>12*"));
+  ASSERT_TRUE(c.has_wildcard);
+  EXPECT_FALSE(matches_criterion(Value::text("12 Oak"), c));
+  EXPECT_TRUE(matches_criterion(Value::text("hello"), c));
+  EXPECT_TRUE(matches_criterion(Value::number(1213.0), c));
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

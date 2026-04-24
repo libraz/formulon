@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-24T20:34:21Z"
+    "generated_at": "2026-04-24T21:08:14Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -650,6 +650,632 @@
       "expect": {
         "kind": "number",
         "value": 4.0
+      }
+    },
+    {
+      "id": "countif_wildcard_matches_text_cells_only",
+      "formula": "=COUNTIF(A1:A8,\"12*\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "12 Oak Street"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Alemania"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Argentina"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Paraguay"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "XYZ"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "QWERTY"
+        },
+        "A7": {
+          "kind": "number",
+          "value": 1213.0
+        },
+        "A8": {
+          "kind": "text",
+          "value": "tron"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "sumif_wildcard_text_only_skips_number_match",
+      "formula": "=SUMIF(A1:A8,\"12*\",B1:B8)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "12 Oak Street"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Alemania"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Argentina"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Paraguay"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "XYZ"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "QWERTY"
+        },
+        "A7": {
+          "kind": "number",
+          "value": 1213.0
+        },
+        "A8": {
+          "kind": "text",
+          "value": "tron"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "averageif_wildcard_text_only_skips_number_match",
+      "formula": "=AVERAGEIF(A1:A8,\"12*\",B1:B8)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "12 Oak Street"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Alemania"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Argentina"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Paraguay"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "XYZ"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "QWERTY"
+        },
+        "A7": {
+          "kind": "number",
+          "value": 1213.0
+        },
+        "A8": {
+          "kind": "text",
+          "value": "tron"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "sumifs_gt_text_propagates_sum_range_error",
+      "formula": "=SUMIFS(A1:A3,B1:B3,\">c\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "red"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "white"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "blue"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "minifs_gt_text_propagates_sum_range_error",
+      "formula": "=MINIFS(A1:A3,B1:B3,\">c\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "red"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "white"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "blue"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "maxifs_gt_text_propagates_sum_range_error",
+      "formula": "=MAXIFS(A1:A3,B1:B3,\">c\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "red"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "white"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "blue"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "sumifs_gt_text_full_ironcalc_setup",
+      "formula": "=SUMIFS(A1:A19,B1:B19,\">c\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 17.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "A11": {
+          "kind": "number",
+          "value": 113.0
+        },
+        "A12": {
+          "kind": "text",
+          "value": "123"
+        },
+        "A13": {
+          "kind": "bool",
+          "value": true
+        },
+        "A14": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 77.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 34.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A19": {
+          "kind": "text",
+          "value": "string"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "red"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "B9": {
+          "kind": "text",
+          "value": "white"
+        },
+        "B10": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "B11": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "B12": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "B13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "B14": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "B15": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "B16": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "yellow"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "countif_cellref_text_true_uppercase",
+      "formula": "=COUNTIF(A1:A8,B1)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": false
+        },
+        "A5": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "A6": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "bool",
+          "value": true
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "B1": {
+          "kind": "text",
+          "value": "TRUE"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "countif_cellref_text_true_lowercase",
+      "formula": "=COUNTIF(A1:A8,B1)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": false
+        },
+        "A5": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "A6": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "bool",
+          "value": true
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "B1": {
+          "kind": "text",
+          "value": "true"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "countif_concat_ne_bool_true_over_range_with_blanks",
+      "formula": "=COUNTIF(A1:A10,_xlfn.CONCAT(\"<>\",B1))",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": false
+        },
+        "A5": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "A6": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "bool",
+          "value": true
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "B1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "countif_concat_ne_text_true_over_range_with_blanks",
+      "formula": "=COUNTIF(A1:A10,_xlfn.CONCAT(\"<>\",\"TRUE\"))",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": false
+        },
+        "A5": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "A6": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "bool",
+          "value": true
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
       }
     }
   ]

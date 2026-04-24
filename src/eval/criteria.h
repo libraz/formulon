@@ -84,11 +84,32 @@ struct ParsedCriterion {
   bool rhs_is_error = false;
   ErrorCode rhs_error_code = ErrorCode::NA;
 
+  // `rhs_text` may alias `rhs_storage` (owning) or the caller-provided
+  // `Value::text` view (non-owning). When `rhs_storage` holds the buffer,
+  // copying or moving this struct must re-bind `rhs_text` to the new
+  // object's own `rhs_storage` — otherwise the view would dangle into the
+  // source object's (possibly moved-from) inline SSO buffer. The default
+  // compiler-synthesised copy/move would preserve the stale pointer, so
+  // we provide explicit special members that check `rhs_text_owns_storage_`
+  // and rebind. Without this, `COUNTIF`/`SUMIF`/`AVERAGEIF` aggregators
+  // store the parsed criterion in a `unique_ptr` via a prvalue move and
+  // silently read zero-length `rhs_text` afterwards.
+  ParsedCriterion() = default;
+  ParsedCriterion(const ParsedCriterion& other);
+  ParsedCriterion(ParsedCriterion&& other) noexcept;
+  ParsedCriterion& operator=(const ParsedCriterion& other);
+  ParsedCriterion& operator=(ParsedCriterion&& other) noexcept;
+  ~ParsedCriterion() = default;
+
  private:
   /// Owns the re-buffered RHS when the parser needed to strip a comparator
   /// prefix from an interned `Value::text` view. External callers should
   /// not read this directly; use `rhs_text` instead.
   std::string rhs_storage;
+  /// True when `rhs_text` was bound to `rhs_storage` (owning branch); used
+  /// by the copy/move special members to rebind the view to the new
+  /// object's own `rhs_storage`. See comment above.
+  bool rhs_text_owns_storage_ = false;
 
   friend ParsedCriterion parse_criterion(const Value&);
 };
