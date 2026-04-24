@@ -89,9 +89,10 @@ inline double normalize_type(double t) noexcept {
 // Internal PMT formula; returns NaN if the inputs are degenerate.
 // Callers must check `std::isnan(result)` before returning to the user.
 inline double pmt_scalar(double rate, double nper, double pv, double fv, double type) noexcept {
-  if (rate <= -1.0) {
-    // Excel rejects rate <= -1 outright (domain error), even though the
-    // closed form would evaluate to a finite number for some inputs.
+  if (rate == -1.0) {
+    // Denominator (1+rate)*(pow_term-1) vanishes; caller surfaces as #NUM!
+    // (scalar layer cannot distinguish DIV/0 from NUM — the Value-level
+    // impls catch the rate==-1 case explicitly to return #DIV/0!).
     return std::numeric_limits<double>::quiet_NaN();
   }
   if (rate == 0.0) {
@@ -111,8 +112,10 @@ inline double pmt_scalar(double rate, double nper, double pv, double fv, double 
 // Internal FV formula. Matches the Fv() public impl above; extracted so
 // IPMT / PPMT can compute balances mid-schedule without re-parsing args.
 inline double fv_scalar(double rate, double nper, double pmt, double pv, double type) noexcept {
-  if (rate <= -1.0) {
-    // Excel rejects rate <= -1 outright (domain error).
+  if (rate == -1.0) {
+    // Division by rate in the closed form; caller surfaces as #NUM!
+    // (scalar callers — IPMT/PPMT/CUMIPMT/CUMPRINC — treat the degenerate
+    // rate identically to other NaN-producing inputs).
     return std::numeric_limits<double>::quiet_NaN();
   }
   if (rate == 0.0) {

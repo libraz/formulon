@@ -191,18 +191,38 @@ TEST(FinancialPmt, RateBelowMinusOneIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(FinancialPv, RateAtMinusOneIsNum) {
-  // Mirrors the PMT guard: PV also rejects rate <= -1.
+TEST(FinancialPv, RateAtMinusOneIsDiv0) {
+  // Excel 365 / IronCalc oracle (docs__PV A14): rate == -1 makes (1+r)^n
+  // vanish so the closed form divides by zero; Excel surfaces this as
+  // #DIV/0!, not the generic #NUM! used by PMT.
   const Value v = EvalSource("=PV(-1, 5, 100)");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
-TEST(FinancialFv, RateAtMinusOneIsNum) {
-  // Mirrors the PMT guard: FV also rejects rate <= -1.
+TEST(FinancialPv, RateBelowMinusOneIntegerNperIsFinite) {
+  // calc_tests__PV F8/G8: PV accepts rate < -1 as long as nper is an
+  // integer (the negative base to an integer power yields a real number).
+  const Value v = EvalSource("=PV(-3, 5, 100)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 34.375);
+}
+
+TEST(FinancialFv, RateAtMinusOneIsDiv0) {
+  // Excel 365 / IronCalc oracle (FV Sheet2 A1 and docs FV A14): rate == -1
+  // collapses (1+r)^n to 0 or infinity depending on nper sign; Excel
+  // surfaces both with #DIV/0!.
   const Value v = EvalSource("=FV(-1, 5, 100)");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+TEST(FinancialFv, RateBelowMinusOneIntegerNperIsFinite) {
+  // calc_tests__FV Sheet1 G8: FV accepts rate < -1 as long as nper is an
+  // integer. FV(-3, 5, 100) = -pmt * ((-2)^5 - 1)/-3 = -100 * -33/-3.
+  const Value v = EvalSource("=FV(-3, 5, 100)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), -1100.0);
 }
 
 // ---------------------------------------------------------------------------
