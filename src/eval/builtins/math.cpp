@@ -117,7 +117,16 @@ Value Trunc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::number(0.0);
   }
   const double factor = std::pow(10.0, d);
-  const double r = std::trunc(value.value() * factor) / factor;
+  // Overflow on `value * factor` would truncate a no-op operation into a
+  // spurious `#NUM!`. When the product overflows, the double's mantissa
+  // already has no precision left for a fractional tail at this scale, so
+  // truncation is a no-op and we return the input unchanged. Verified
+  // against IronCalc TRUNC C57: `TRUNC(9.99999e+307, 5)` → 9.99999e+307.
+  const double product = value.value() * factor;
+  if (std::isinf(product)) {
+    return Value::number(value.value());
+  }
+  const double r = std::trunc(product) / factor;
   if (std::isnan(r) || std::isinf(r)) {
     return Value::error(ErrorCode::Num);
   }
@@ -423,6 +432,12 @@ Value Floor(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // `multiple = 0` returns 0 (Excel's documented quirk).
 Value MRound(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (is_empty_text(args[0]) || is_empty_text(args[1])) {
+    return Value::error(ErrorCode::Value);
+  }
+  // Excel 365 rejects direct Bool arguments to MROUND with #VALUE!
+  // (mirrors the strict-Bool rejection in BIN2*/OCT2*/HEX2*). Number
+  // and Text arguments still coerce normally.
+  if (args[0].kind() == ValueKind::Bool || args[1].kind() == ValueKind::Bool) {
     return Value::error(ErrorCode::Value);
   }
   auto number = coerce_to_number(args[0]);
