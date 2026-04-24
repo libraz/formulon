@@ -249,6 +249,42 @@ Value RoundUp(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // modern `*.MATH` variants (below) drop this rule and use `|significance|`
 // unconditionally. `MROUND` inherits the opposite-sign #NUM! rule.
 
+// CEILING / FLOOR / MROUND treat empty-string text as `#VALUE!` rather
+// than coercing it to zero (which is what the general arithmetic rule in
+// `coerce_to_number` does). This matters because the subsequent `s == 0`
+// branch would otherwise convert `FLOOR(10, "")` to `#DIV/0!` -- Excel's
+// observed behaviour is `#VALUE!`.
+inline bool is_empty_text(const Value& v) {
+  if (v.kind() != ValueKind::Text) return false;
+  const std::string_view t = v.as_text();
+  for (char c : t) {
+    if (c != ' ' && c != '\t') return false;
+  }
+  return true;
+}
+
+// Snap a floating-point quotient to its nearest integer when the deviation
+// is within ~a few ULPs. CEILING / FLOOR would otherwise return `n - s`
+// for inputs like `FLOOR(7.1, 0.1)` because 7.1 / 0.1 in IEEE-754 is
+// 70.999... rather than exactly 71; Excel recognises this as an exact
+// multiple and returns `n` itself. The tolerance is small enough that
+// genuinely small-but-nonzero quotients (e.g. `CEILING(1e-12, 1)` where
+// the quotient is 1e-12, far more than 1 ULP away from 0) are not
+// mistaken for exact integers.
+inline double snap_to_integer(double q) {
+  const double nearest = std::round(q);
+  // Tolerance scales with |q| because FP error in `n / s` is proportional
+  // to |q|. A relative tolerance of 2e-15 (~9 ULPs) is tight enough that
+  // legitimate non-integer quotients like `9999999999999 / 0.21`
+  // (fractional part 0.143) are not snapped, while absorbing the 5-ULP
+  // error in `7.1 / 0.1`. No `max(1.0, ...)` floor: snapping a tiny
+  // non-zero quotient to 0 would corrupt `CEILING(1e-12, 1) -> 1`.
+  if (std::fabs(q - nearest) < 2e-15 * std::fabs(q)) {
+    return nearest;
+  }
+  return q;
+}
+
 inline double signum(double x) {
   if (x > 0.0) {
     return 1.0;
@@ -273,6 +309,9 @@ inline double signum(double x) {
 // was the pre-365 legacy rule. See the corresponding oracle suite for the
 // exact values used as reference.
 Value Ceiling(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  if (is_empty_text(args[0]) || is_empty_text(args[1])) {
+    return Value::error(ErrorCode::Value);
+  }
   auto number = coerce_to_number(args[0]);
   if (!number) {
     return Value::error(number.error());
@@ -292,9 +331,12 @@ Value Ceiling(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   }
   const double abs_s = std::fabs(s);
   // Matching signs: magnitude away-from-zero, then restore sign.
-  // Mismatched signs: math ceiling on the signed value.
-  const double r =
-      (signum(n) == signum(s)) ? signum(n) * std::ceil(std::fabs(n) / abs_s) * abs_s : std::ceil(n / abs_s) * abs_s;
+  // Mismatched signs: math ceiling on the signed value. `snap_to_integer`
+  // absorbs the floating-point noise that would otherwise make e.g.
+  // `CEILING(-7.1, 0.1)` return `-7` instead of `-7.1`.
+  const double r = (signum(n) == signum(s))
+                       ? signum(n) * std::ceil(snap_to_integer(std::fabs(n) / abs_s)) * abs_s
+                       : std::ceil(snap_to_integer(n / abs_s)) * abs_s;
   if (std::isnan(r) || std::isinf(r)) {
     return Value::error(ErrorCode::Num);
   }
@@ -311,6 +353,9 @@ Value Ceiling(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // As with CEILING, Excel 365 Mac no longer treats a sign mismatch as
 // #NUM!; this impl tracks the current oracle.
 Value Floor(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  if (is_empty_text(args[0]) || is_empty_text(args[1])) {
+    return Value::error(ErrorCode::Value);
+  }
   auto number = coerce_to_number(args[0]);
   if (!number) {
     return Value::error(number.error());
@@ -329,9 +374,12 @@ Value Floor(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   }
   const double abs_s = std::fabs(s);
   // Matching signs: magnitude toward-zero, then restore sign.
-  // Mismatched signs: math floor on the signed value.
-  const double r =
-      (signum(n) == signum(s)) ? signum(n) * std::floor(std::fabs(n) / abs_s) * abs_s : std::floor(n / abs_s) * abs_s;
+  // Mismatched signs: math floor on the signed value. `snap_to_integer`
+  // absorbs the floating-point noise that would otherwise make e.g.
+  // `FLOOR(7.1, 0.1)` return `7` instead of `7.1`.
+  const double r = (signum(n) == signum(s))
+                       ? signum(n) * std::floor(snap_to_integer(std::fabs(n) / abs_s)) * abs_s
+                       : std::floor(snap_to_integer(n / abs_s)) * abs_s;
   if (std::isnan(r) || std::isinf(r)) {
     return Value::error(ErrorCode::Num);
   }
