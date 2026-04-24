@@ -493,23 +493,26 @@ inline std::string roman_render(int n, int form) {
       {95, "VC"},
       {45, "VL"},
   };
-  // Form 2 additions: allows X as the subtracted glyph two decades down
-  // (XM=990, XD=490, IL=49).
+  // Form 2 additions: allows X and I as subtracted glyphs two decades up
+  // (XM=990, XD=490, IC=99, IL=49). Mac Excel 365 places IC/IL in form 2,
+  // not form 4 as the Microsoft docs' 499/1999 examples might suggest — the
+  // oracle fixture is the authoritative reference here.
   static constexpr Pair kForm2Adds[] = {
       {990, "XM"},
       {490, "XD"},
+      {99, "IC"},
       {49, "IL"},
   };
-  // Form 3 additions: allows V two decades down (VM=995, VD=495).
+  // Form 3 additions: allows V two decades up (VM=995, VD=495).
   static constexpr Pair kForm3Adds[] = {
       {995, "VM"},
       {495, "VD"},
   };
-  // Form 4 additions: allows I three decades down (IM=999, ID=499, IC=99).
+  // Form 4 additions: allows I three decades up (IM=999, ID=499). The two
+  // decade-up I pairs (IC, IL) already ship in form 2.
   static constexpr Pair kForm4Adds[] = {
       {999, "IM"},
       {499, "ID"},
-      {99, "IC"},
   };
 
   // Build a single ordered table by merging all enabled additions into the

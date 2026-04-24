@@ -404,6 +404,27 @@ TEST(BuiltinsMath4Roman, FormSimplifiedIs1999Mim) {
   EXPECT_EQ(v.as_text(), "MIM");
 }
 
+TEST(BuiltinsMath4Roman, NinetyNineFormTwoIsIC) {
+  // Mac Excel 365 places IC in form 2 (not 4 as the Microsoft 499/1999
+  // examples might imply). Oracle fixtures confirm ROMAN(99,2) = "IC".
+  const Value v = EvalSource("=ROMAN(99, 2)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "IC");
+}
+
+TEST(BuiltinsMath4Roman, NinetyNineFormOneIsVCIV) {
+  // Form 1 only enables V-subtracted pairs (VC=95), so 99 = 95+4 = VC+IV.
+  const Value v = EvalSource("=ROMAN(99, 1)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "VCIV");
+}
+
+TEST(BuiltinsMath4Roman, NinetyNineClassicIsXCIX) {
+  const Value v = EvalSource("=ROMAN(99, 0)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "XCIX");
+}
+
 // ---------------------------------------------------------------------------
 // BASE
 // ---------------------------------------------------------------------------
