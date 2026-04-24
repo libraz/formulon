@@ -109,6 +109,7 @@ bool is_date_tok(Tok t) noexcept {
     case Tok::DateMOrMin:
     case Tok::DateMMM:
     case Tok::DateMMMM:
+    case Tok::DateMMMMM:
     case Tok::DateD:
     case Tok::DateDD:
     case Tok::DateDDD:
@@ -394,8 +395,12 @@ void tokenize_section(std::string_view fmt, Section& out) {
           t.kind = (run <= 2) ? Tok::DateY2 : Tok::DateY4;
           break;
         case 'm':
-          // Month/minute disambiguation happens in pass 2.
-          if (run >= 4) {
+          // Month/minute disambiguation happens in pass 2. A run of 5 or
+          // more `m` characters means "first letter of the English month
+          // name" (Excel's `mmmmm` convention).
+          if (run >= 5) {
+            t.kind = Tok::DateMMMMM;
+          } else if (run == 4) {
             t.kind = Tok::DateMMMM;
           } else if (run == 3) {
             t.kind = Tok::DateMMM;
@@ -673,6 +678,14 @@ void classify(Section& section) noexcept {
   section.has_scientific = saw_sci;
   section.sci_plus = sci_plus;
   section.sci_digits = sci_digits;
+
+  // Excel rejects formats that mix date tokens with number-digit tokens in
+  // the same section (e.g. `mm###`). Mac Excel 365 and IronCalc both
+  // surface `#VALUE!` here. Reuse the `has_invalid_bracket` channel so
+  // `apply_format` already converts the section to the value-error path.
+  if (section.is_date && (int_zero + int_opt + int_pad + frac_zero + frac_opt + frac_pad) > 0) {
+    section.has_invalid_bracket = true;
+  }
 }
 
 }  // namespace number_format_detail

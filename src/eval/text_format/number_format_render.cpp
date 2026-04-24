@@ -435,6 +435,16 @@ void render_date(const Section& section, std::string_view fmt, double serial, st
       case Tok::DateMMMM:
         out.append(month_long(ymd.m));
         break;
+      case Tok::DateMMMMM: {
+        // `mmmmm` (run length >= 5) emits the first letter of the English
+        // month name. The month-name table only contains ASCII letters, so
+        // the first byte is a complete UTF-8 code point.
+        const char* name = month_long(ymd.m);
+        if (name[0] != '\0') {
+          out.push_back(name[0]);
+        }
+        break;
+      }
       case Tok::DateD:
         out.append(std::to_string(ymd.d));
         break;

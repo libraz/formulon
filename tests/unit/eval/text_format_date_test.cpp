@@ -182,6 +182,47 @@ TEST(DateFormatFractionalSeconds, OneDigit) {
   EXPECT_EQ(Render(frac, "h:mm:ss.0"), "12:00:00.3");
 }
 
+// ---------------------------------------------------------------------------
+// Single-letter month (`mmmmm`, run length >= 5)
+// ---------------------------------------------------------------------------
+
+TEST(DateFormatMonth, SingleLetterSeptember) {
+  // 2024-09-15: the 259th day of 2024 -> serial 45292 + 258 = 45550.
+  EXPECT_EQ(Render(45550.0, "mmmmm"), "S");
+}
+
+TEST(DateFormatMonth, SingleLetterJanuary) {
+  // 2024-01-01 -> serial 45292.
+  EXPECT_EQ(Render(45292.0, "mmmmm"), "J");
+}
+
+TEST(DateFormatMonth, SingleLetterLongRunStillFirstLetter) {
+  // Runs longer than 5 `m` characters are also first-letter.
+  EXPECT_EQ(Render(45292.0, "mmmmmm"), "J");
+}
+
+TEST(DateFormatMonth, FullAndSingleLetterComposite) {
+  // `ddddd/mmmmm/yyyyy` on a Saturday in 2012.
+  // 2012-03-31 is a Saturday. Serial = 40999.
+  EXPECT_EQ(Render(40999.0, "ddddd/mmmmm/yyyyy"), "Saturday/M/2012");
+}
+
+// ---------------------------------------------------------------------------
+// Mixed date + number-digit tokens must surface `#VALUE!`.
+// ---------------------------------------------------------------------------
+
+TEST(DateFormatMixedRejection, MonthAndOptionalDigits) {
+  std::string out;
+  const FormatStatus s = apply_format(45292.0, "mm###", out);
+  EXPECT_EQ(s, FormatStatus::kValueError);
+}
+
+TEST(DateFormatMixedRejection, MonthAndZeroDigit) {
+  std::string out;
+  const FormatStatus s = apply_format(45292.0, "mm000", out);
+  EXPECT_EQ(s, FormatStatus::kValueError);
+}
+
 }  // namespace
 }  // namespace text_format
 }  // namespace eval

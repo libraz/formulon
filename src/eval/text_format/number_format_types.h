@@ -37,6 +37,7 @@ enum class Tok : std::uint8_t {
   DateMOrMin,     // `m` or `mm` (month or minute; disambiguated in pass 2)
   DateMMM,        // `mmm` (month name short)
   DateMMMM,       // `mmmm` (month name long)
+  DateMMMMM,      // `mmmmm` (month name first letter; run length >= 5)
   DateD,          // `d`
   DateDD,         // `dd`
   DateDDD,        // `ddd` (weekday short)
