@@ -123,6 +123,21 @@ TEST(BuiltinsDatabase, DSumEmptyMatchReturnsZero) {
   EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
 }
 
+TEST(BuiltinsDatabase, HeaderOnlyDatabaseReturnsValueError) {
+  // A database range that contains only the header row (no data rows)
+  // surfaces `#VALUE!` — Mac Excel 365 treats the record-less range as
+  // malformed rather than as "0 matches". The check short-circuits before
+  // field / criteria resolution, so every D-function behaves the same way.
+  Workbook wb = MakeFruitWorkbook();
+  SetSingleFruitCriterion(wb, "Apple");
+  for (const char* fn : {"DSUM", "DMIN", "DMAX", "DAVERAGE", "DPRODUCT"}) {
+    const std::string src = std::string("=") + fn + "(A1:C1, \"Sales\", E1:E2)";
+    const Value v = EvalIn(src, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_error()) << "function: " << fn;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << "function: " << fn;
+  }
+}
+
 TEST(BuiltinsDatabase, DSumFieldOutOfRangeReturnsValueError) {
   Workbook wb = MakeFruitWorkbook();
   SetSingleFruitCriterion(wb, "Apple");

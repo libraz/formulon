@@ -210,6 +210,15 @@ bool resolve_common(const parser::AstNode& call, Arena& arena, const FunctionReg
   if (!resolve_table_arg(call.as_call_arg(0), arena, registry, ctx, out_db, out_db_rows, out_db_cols, out_err)) {
     return false;
   }
+  // A D-function requires a database with at least one data row beneath
+  // the header row; a single-row range (just the labels) surfaces
+  // `#VALUE!` per Mac Excel 365. This also short-circuits the subsequent
+  // field / criteria resolution, which would otherwise do useful work
+  // before discovering there is nothing to aggregate.
+  if (*out_db_rows < 2U) {
+    *out_err = Value::error(ErrorCode::Value);
+    return false;
+  }
   // The `field` argument is a scalar; evaluate it eagerly so any error
   // in the subtree propagates with its real code.
   const Value field_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
