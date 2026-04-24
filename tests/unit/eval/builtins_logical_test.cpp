@@ -444,6 +444,44 @@ TEST(BuiltinsLogicalCoerce, IfRejectsLiteralTrueText) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+// ---------------------------------------------------------------------------
+// IFS — stricter logical coercion than IF: numeric-text conditions surface
+// `#VALUE!` (matching Mac Excel 365's AND / OR / XOR rule), while the
+// literal strings "TRUE" / "FALSE" (case-insensitive, trimmed) are
+// accepted. See `src/eval/logical_coerce.h`.
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsIfs, NumericTextConditionIsValue) {
+  // IF("1", ...) -> truthy (coerce_to_bool accepts numeric text) but
+  // IFS must reject the same input with #VALUE!.
+  const Value v = EvalSource("=IFS(\"1\", 34)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsIfs, NumericTextConditionSecondPositionIsValue) {
+  // Second condition is numeric-text: the first branch is FALSE so we walk
+  // into the second condition, and the strict rule surfaces #VALUE! there.
+  const Value v = EvalSource("=IFS(FALSE, \"first\", \"1\", 7)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsIfs, LiteralTrueTextConditionAccepted) {
+  // The case-insensitive literal "TRUE" is the allowed text form.
+  const Value v = EvalSource("=IFS(\"TRUE\", 42)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 42.0);
+}
+
+TEST(BuiltinsIfs, LiteralFalseTextConditionSkipped) {
+  // Lower-case "false" is a valid FALSE, so the first branch is skipped
+  // and the trailing `TRUE, "catchall"` pair wins.
+  const Value v = EvalSource("=IFS(\"false\", 1, TRUE, \"catchall\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "catchall");
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

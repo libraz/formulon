@@ -14,6 +14,7 @@
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/logical_coerce.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/strings.h"
@@ -168,6 +169,19 @@ Value eval_count_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
 // an evaluated condition propagate. When no condition matches (including
 // the degenerate odd-arity case) the result is #N/A, matching Excel's
 // documented "if none match" behaviour.
+//
+// Conditions use the *strict* logical coercion shared with AND / OR / XOR
+// (`eval/logical_coerce.h`), NOT the generic `coerce_to_bool` used by IF:
+//
+//   * Bool / finite Number / "TRUE" / "FALSE" text (case-insensitive,
+//     trimmed) carry a bool value.
+//   * Numeric-text like "0" / "1" surfaces `#VALUE!` — this is the Mac
+//     Excel 365 rule that distinguishes IFS from IF.
+//   * Blank is treated as FALSE (IFS walks past blank conditions rather
+//     than rejecting them).
+//   * Empty / whitespace-only text is also treated as FALSE, matching the
+//     AND-family "Skip" path (IFS collapses Skip to the false branch so
+//     `IFS("", 1, TRUE, 2)` hits the catchall instead of erroring).
 Value eval_ifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                     const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -182,11 +196,15 @@ Value eval_ifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
     if (cond.is_error()) {
       return cond;
     }
-    auto coerced = coerce_to_bool(cond);
-    if (!coerced) {
-      return Value::error(coerced.error());
+    bool truth = false;
+    ErrorCode err = ErrorCode::Value;
+    const LogicalCoerce lc = logical_coerce(cond, &truth, &err);
+    if (lc == LogicalCoerce::Error) {
+      return Value::error(err);
     }
-    if (coerced.value()) {
+    // Skip (Blank / empty-text) is treated as FALSE: fall through to the
+    // next branch.
+    if (lc == LogicalCoerce::HasValue && truth) {
       return eval_node(call.as_call_arg(i + 1), arena, registry, ctx);
     }
   }
