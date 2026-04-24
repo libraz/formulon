@@ -413,24 +413,35 @@ bool matches_text(const Value& cell, const ParsedCriterion& c) {
 }
 
 bool matches_numeric(const Value& cell, const ParsedCriterion& c) {
-  // Excel's type-strict rule: a numeric / bool criterion only matches
-  // cells of the same scalar kind, with one exception for `NotEq`.
+  // Excel's rule for a numeric / bool criterion:
   //
-  //   * `rhs_from_bool` criterion (parsed from a literal TRUE / FALSE)
-  //     matches only Bool cells for Eq / ordering. For NotEq, any cell
-  //     whose value is not that same Bool counts — including Number and
-  //     Text cells (they have a different type so "<>TRUE" is true).
-  //   * Otherwise the RHS is a genuine number and matches only Number
-  //     cells for Eq / ordering. For NotEq the same broadening applies.
-  //
-  // The NotEq broadening is why a `COUNTIF(range, "<>23")` over a mixed
-  // range counts strings, bools, and errors-in-cell (handled upstream)
-  // alongside number cells with a different value.
+  //   * Same-kind cell (Number vs numeric RHS, Bool vs bool RHS): compare
+  //     the numeric projection with the criterion operator.
+  //   * Cross-kind cell: for NotEq, different type ⇒ not equal, so always
+  //     true (this is why `COUNTIF(range, "<>23")` over a mixed range
+  //     counts strings, bools, and non-matching numbers alike).
+  //   * Cross-kind cell for Eq: a numeric criterion `=N` matches Text
+  //     cells whose string form coerces to N (Excel-visible behavior,
+  //     observed on COUNTIF with mixed-type ranges — e.g. text "23"
+  //     matches numeric criterion 23). Bool cells are still type-strict
+  //     (a bool never matches a numeric Eq, and non-bool cells never
+  //     match a bool criterion's Eq).
+  //   * Cross-kind cell for ordering ops: no match (Excel does not
+  //     implicitly coerce across kinds for ordering).
   const ValueKind required_kind =
       c.rhs_from_bool ? ValueKind::Bool : ValueKind::Number;
   if (cell.kind() != required_kind) {
-    // Cross-kind cell. Only NotEq accepts it: different type ⇒ not equal.
-    return c.op == CriteriaOp::NotEq;
+    if (c.op == CriteriaOp::NotEq) {
+      return true;
+    }
+    if (c.op == CriteriaOp::Eq && !c.rhs_from_bool && cell.kind() == ValueKind::Text) {
+      const auto coerced = coerce_to_number(cell);
+      if (!coerced) {
+        return false;
+      }
+      return coerced.value() == c.rhs_number;
+    }
+    return false;
   }
   const double x = (required_kind == ValueKind::Bool)
                        ? (cell.as_boolean() ? 1.0 : 0.0)
