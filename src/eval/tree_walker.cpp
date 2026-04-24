@@ -359,6 +359,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"ISFORMULA", &eval_isformula_lazy},
     {"ISREF", &eval_isref_lazy},
     {"IRR", &eval_irr_lazy},
+    {"LOOKUP", &eval_lookup_lazy},
     {"MATCH", &eval_match_lazy},
     {"MAXIFS", &eval_maxifs_lazy},
     {"MINIFS", &eval_minifs_lazy},

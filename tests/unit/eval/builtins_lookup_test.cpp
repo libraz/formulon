@@ -441,6 +441,90 @@ TEST(BuiltinsChoose, ZeroArityIsValueError) {
   EXPECT_EQ(EvalSource("=CHOOSE(1)").as_error(), ErrorCode::Value);
 }
 
+// ---------------------------------------------------------------------------
+// LOOKUP (vector form)
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsLookup, VectorFormExactMatch) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::text("one"));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
+  wb.sheet(0).set_cell_value(1, 1, Value::text("two"));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(3.0));
+  wb.sheet(0).set_cell_value(2, 1, Value::text("three"));
+  const Value v = EvalSourceIn("=LOOKUP(3, A1:A3, B1:B3)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "three");
+}
+
+TEST(BuiltinsLookup, VectorFormApproximateBetween) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::text("a"));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(3.0));
+  wb.sheet(0).set_cell_value(1, 1, Value::text("b"));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(5.0));
+  wb.sheet(0).set_cell_value(2, 1, Value::text("c"));
+  // 4 falls between 3 and 5; the last cell with lookup <= 4 is row 2 -> "b".
+  const Value v = EvalSourceIn("=LOOKUP(4, A1:A3, B1:B3)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "b");
+}
+
+TEST(BuiltinsLookup, VectorFormBelowFirstIsNA) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(10.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::text("x"));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(20.0));
+  wb.sheet(0).set_cell_value(1, 1, Value::text("y"));
+  const Value v = EvalSourceIn("=LOOKUP(1, A1:A2, B1:B2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsLookup, VectorFormAboveAllClampsToLastMatch) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::text("a"));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
+  wb.sheet(0).set_cell_value(1, 1, Value::text("b"));
+  const Value v = EvalSourceIn("=LOOKUP(99, A1:A2, B1:B2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "b");
+}
+
+TEST(BuiltinsLookup, ErrorInLookupValuePropagates) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::text("a"));
+  const Value v = EvalSourceIn("=LOOKUP(1/0, A1:A1, B1:B1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+TEST(BuiltinsLookup, BlankLookupValueIsNA) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::text("a"));
+  // A99 is blank; LOOKUP of blank surfaces `#N/A` even when the vector is
+  // numeric and could otherwise compare blank as 0.
+  const Value v = EvalSourceIn("=LOOKUP(A99, A1:A1, B1:B1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsLookup, TwoArgFormReturnsLookupVectorCell) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(3.0));
+  // No result-vector arg: the matched lookup cell itself is the result.
+  const Value v = EvalSourceIn("=LOOKUP(2.5, A1:A3)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

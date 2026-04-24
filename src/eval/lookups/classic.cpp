@@ -684,5 +684,87 @@ Value eval_hlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   return cells[flat];
 }
 
+// LOOKUP(lookup_value, lookup_vector, [result_vector])   -- vector form.
+//
+// Legacy approximate-match search: the lookup vector is assumed to be in
+// ascending order and LOOKUP returns the result-vector cell whose parallel
+// position is the last one whose lookup cell is <= `lookup_value`. Exact
+// mode does not exist for LOOKUP; the match is always approximate. If
+// `result_vector` is omitted the result cells come from `lookup_vector`
+// itself.
+//
+// Axis: Excel picks the longer dimension of `lookup_vector`. When the
+// vector is taller than wide, scan is vertical (treat as column); when
+// wider than tall, scan is horizontal (treat as row). A square or
+// single-cell vector defaults to column orientation.
+//
+// Errors / edge cases:
+//   * `lookup_value` is an error: propagate unchanged.
+//   * `lookup_value` is blank or text that never sorts before any vector
+//     cell: `#N/A`.
+//   * `result_vector` shorter than `lookup_vector`: we still index by the
+//     matched offset and fall back to `#N/A` if the index is out of range
+//     (Excel's observable behaviour).
+//
+// The array form `LOOKUP(lookup_value, array)` is intentionally not yet
+// implemented -- it is deprecated, and the IronCalc oracle only covers the
+// vector form.
+Value eval_lookup_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity != 2 && arity != 3) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  const Value lookup = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (lookup.is_error()) {
+    return lookup;
+  }
+  if (lookup.is_blank()) {
+    return Value::error(ErrorCode::NA);
+  }
+
+  std::vector<Value> lookup_cells;
+  std::uint32_t lrows = 0;
+  std::uint32_t lcols = 0;
+  ErrorCode range_err = ErrorCode::Value;
+  if (!resolve_range_arg(call.as_call_arg(1), arena, registry, ctx, &lookup_cells, &range_err, &lrows, &lcols)) {
+    return Value::error(range_err);
+  }
+  if (lrows == 0U || lcols == 0U) {
+    return Value::error(ErrorCode::Ref);
+  }
+
+  const LookupAxis axis = lrows >= lcols ? LookupAxis::Column : LookupAxis::Row;
+  const std::size_t off = lookup_scan(lookup_cells, lrows, lcols, axis, lookup, /*approximate=*/true);
+  if (off == SIZE_MAX) {
+    return Value::error(ErrorCode::NA);
+  }
+
+  if (arity == 2) {
+    // Result comes from lookup_vector itself at the matched axis position.
+    const std::size_t flat = axis == LookupAxis::Column ? (off * static_cast<std::size_t>(lcols))
+                                                        : off;  // Row -> first-row strip index
+    return flat < lookup_cells.size() ? lookup_cells[flat] : Value::error(ErrorCode::NA);
+  }
+
+  std::vector<Value> result_cells;
+  std::uint32_t rrows = 0;
+  std::uint32_t rcols = 0;
+  if (!resolve_range_arg(call.as_call_arg(2), arena, registry, ctx, &result_cells, &range_err, &rrows, &rcols)) {
+    return Value::error(range_err);
+  }
+  if (rrows == 0U || rcols == 0U) {
+    return Value::error(ErrorCode::Ref);
+  }
+  // Index the result vector along its own long axis. Excel treats the
+  // result vector as parallel to the lookup vector, so the "axis position"
+  // maps to the same offset regardless of orientation.
+  const LookupAxis raxis = rrows >= rcols ? LookupAxis::Column : LookupAxis::Row;
+  const std::size_t flat =
+      raxis == LookupAxis::Column ? (off * static_cast<std::size_t>(rcols)) : off;
+  return flat < result_cells.size() ? result_cells[flat] : Value::error(ErrorCode::NA);
+}
+
 }  // namespace eval
 }  // namespace formulon

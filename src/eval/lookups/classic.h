@@ -41,6 +41,8 @@ Value eval_vlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
                         const EvalContext& ctx);
 Value eval_hlookup_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx);
+Value eval_lookup_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx);
 
 }  // namespace eval
 }  // namespace formulon
