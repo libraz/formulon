@@ -164,10 +164,12 @@ Value Sln(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 //
 // Domain:
 //   - life   <= 0                         ->  #NUM!
-//   - period <  1  or  period > life      ->  #NUM!
+//   - period <= 0  or  period > life      ->  #NUM!
 //
 // `period` and `life` are used as-is (non-integer values are accepted);
-// Excel does not floor them before the arithmetic.
+// Excel does not floor them before the arithmetic. Excel 365 accepts
+// fractional `period` values like 0.1 (the formula is a simple linear
+// schedule so fractional periods evaluate naturally).
 Value Syd(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto cost_e = read_required_number(args, 0);
   if (!cost_e) {
@@ -189,7 +191,7 @@ Value Syd(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const double salvage = salvage_e.value();
   const double life = life_e.value();
   const double period = period_e.value();
-  if (life <= 0.0 || period < 1.0 || period > life) {
+  if (life <= 0.0 || period <= 0.0 || period > life) {
     return Value::error(ErrorCode::Num);
   }
   const double result = (cost - salvage) * (life - period + 1.0) * 2.0 / (life * (life + 1.0));

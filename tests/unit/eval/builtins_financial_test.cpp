@@ -853,10 +853,20 @@ TEST(FinancialSYD, PeriodOutOfRangeIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(FinancialSYD, PeriodBelowOneIsNum) {
+TEST(FinancialSYD, PeriodZeroIsNum) {
   const Value v = EvalSource("=SYD(10000, 1000, 5, 0)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialSYD, FractionalPeriodAccepted) {
+  // Excel 365 accepts fractional periods: the SYD formula is a linear
+  // schedule so period=0.1 evaluates naturally. Regression guard for the
+  // relaxation of the `period < 1` rejection.
+  //   (290-2)*(5-0.1+1)*2 / (5*6) = 288 * 5.9 * 2 / 30 = 113.28
+  const Value v = EvalSource("=SYD(290, 2, 5, 0.1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 113.28);
 }
 
 TEST(FinancialSYD, LifeZeroIsNum) {
