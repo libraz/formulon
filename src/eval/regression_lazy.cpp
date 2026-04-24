@@ -123,8 +123,13 @@ std::variant<Value, NumericPairs> collect_numeric_pairs(const parser::AstNode& y
   }
 
   // Shape mismatch — the regression family uses #N/A (unlike
-  // SUMPRODUCT, which reports #VALUE!).
-  if (y_arr.rows != x_arr.rows || y_arr.cols != x_arr.cols) {
+  // SUMPRODUCT, which reports #VALUE!). Excel accepts a row-vs-column
+  // pairing (e.g. A1:A3 vs `{1,2,3}`) when the total cell counts match:
+  // the two arrays are effectively 1-D sequences paired in row-major
+  // scan order, and the transpose is implicit.
+  const std::size_t y_total = static_cast<std::size_t>(y_arr.rows) * y_arr.cols;
+  const std::size_t x_total = static_cast<std::size_t>(x_arr.rows) * x_arr.cols;
+  if (y_total != x_total) {
     return Value{Value::error(ErrorCode::NA)};
   }
 
