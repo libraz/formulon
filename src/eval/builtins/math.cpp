@@ -86,6 +86,18 @@ Expected<int, ErrorCode> read_digits(const Value* args, std::uint32_t arity, std
 // negative (e.g. `TRUNC(1234.5, -1) = 1230`). A non-finite scale factor
 // (caused by very large `|digits|`) yields `#NUM!`.
 Value Trunc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  // Empty-string arguments surface #VALUE! rather than coercing to 0, same
+  // rule as CEILING / FLOOR / MROUND.
+  auto is_empty = [](const Value& v) {
+    if (v.kind() != ValueKind::Text) return false;
+    for (char c : v.as_text()) {
+      if (c != ' ' && c != '\t') return false;
+    }
+    return true;
+  };
+  if (is_empty(args[0]) || (arity >= 2 && is_empty(args[1]))) {
+    return Value::error(ErrorCode::Value);
+  }
   auto value = coerce_to_number(args[0]);
   if (!value) {
     return Value::error(value.error());
@@ -94,10 +106,17 @@ Value Trunc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!digits) {
     return Value::error(digits.error());
   }
-  const double factor = std::pow(10.0, digits.value());
-  if (std::isnan(factor) || std::isinf(factor)) {
-    return Value::error(ErrorCode::Num);
+  // Clamp extreme `digits` values so `10^digits` doesn't overflow to ±Inf.
+  // Positive digits beyond ~15 cannot truncate a double anyway (the mantissa
+  // runs out); negative digits below ~-308 would zero the number out.
+  const int d = digits.value();
+  if (d >= 308) {
+    return Value::number(value.value());  // Truncation is a no-op.
   }
+  if (d <= -308) {
+    return Value::number(0.0);
+  }
+  const double factor = std::pow(10.0, d);
   const double r = std::trunc(value.value() * factor) / factor;
   if (std::isnan(r) || std::isinf(r)) {
     return Value::error(ErrorCode::Num);
