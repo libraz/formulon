@@ -39,6 +39,37 @@ namespace {
 // (HLOOKUP).
 enum class LookupAxis : std::uint8_t { Column, Row };
 
+// Resolve VLOOKUP / HLOOKUP's `table_array` argument with scalar fallback.
+// A numeric or bool literal (e.g. `HLOOKUP(M, 3, 1)` or `HLOOKUP(M, TRUE, 1)`)
+// is wrapped into a 1x1 table so the subsequent scan produces `#N/A` on
+// mismatch rather than the `#VALUE!` that a strict range-only resolver
+// returns. Text scalars remain `#VALUE!` per Excel (`HLOOKUP(M,"Nothing",1)`
+// -> `#VALUE!`), and errors from the node evaluation propagate unchanged.
+bool resolve_table_array(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
+                         std::uint32_t* out_rows, std::uint32_t* out_cols) {
+  if (resolve_range_arg(arg_node, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols)) {
+    return true;
+  }
+  if (*out_err_code != ErrorCode::Value) {
+    return false;
+  }
+  const Value scalar = eval_node(arg_node, arena, registry, ctx);
+  if (scalar.is_error()) {
+    *out_err_code = scalar.as_error();
+    return false;
+  }
+  if (scalar.kind() != ValueKind::Number && scalar.kind() != ValueKind::Bool) {
+    *out_err_code = ErrorCode::Value;
+    return false;
+  }
+  out_cells->clear();
+  out_cells->push_back(scalar);
+  *out_rows = 1U;
+  *out_cols = 1U;
+  return true;
+}
+
 // Linear scan for VLOOKUP / HLOOKUP. Walks the first column (axis=Column) or
 // the first row (axis=Row) of the `flat` rectangle (rows x cols, row-major)
 // for `lookup_value`, using approximate (largest <= value) or exact (first
@@ -564,7 +595,7 @@ Value eval_vlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
   ErrorCode range_err = ErrorCode::Value;
-  if (!resolve_range_arg(call.as_call_arg(1), arena, registry, ctx, &cells, &range_err, &rows, &cols)) {
+  if (!resolve_table_array(call.as_call_arg(1), arena, registry, ctx, &cells, &range_err, &rows, &cols)) {
     return Value::error(range_err);
   }
   if (rows == 0U || cols == 0U) {
@@ -636,7 +667,7 @@ Value eval_hlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
   ErrorCode range_err = ErrorCode::Value;
-  if (!resolve_range_arg(call.as_call_arg(1), arena, registry, ctx, &cells, &range_err, &rows, &cols)) {
+  if (!resolve_table_array(call.as_call_arg(1), arena, registry, ctx, &cells, &range_err, &rows, &cols)) {
     return Value::error(range_err);
   }
   if (rows == 0U || cols == 0U) {
