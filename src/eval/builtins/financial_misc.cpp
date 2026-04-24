@@ -123,6 +123,12 @@ Value DollarFr(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 //
 // `npery` is truncated to an integer before the arithmetic.
 Value Effect(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  // Excel-quirk: EFFECT / NOMINAL reject a direct Bool argument with
+  // `#VALUE!` rather than coercing it to 0/1. Without this guard the
+  // `nominal <= 0` branch below would report `#NUM!` instead.
+  if (args[0].kind() == ValueKind::Bool || args[1].kind() == ValueKind::Bool) {
+    return Value::error(ErrorCode::Value);
+  }
   auto nom_e = read_required_number(args, 0);
   if (!nom_e) {
     return Value::error(nom_e.error());
@@ -149,6 +155,10 @@ Value Effect(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 //
 // Same domain constraints as EFFECT.
 Value Nominal(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  // See EFFECT above -- same Bool-rejection quirk.
+  if (args[0].kind() == ValueKind::Bool || args[1].kind() == ValueKind::Bool) {
+    return Value::error(ErrorCode::Value);
+  }
   auto eff_e = read_required_number(args, 0);
   if (!eff_e) {
     return Value::error(eff_e.error());
