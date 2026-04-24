@@ -650,6 +650,37 @@ TEST(FinancialCUMPRINC, ArityTooFew) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(FinancialCUMPRINC, FractionalStartRoundsUp) {
+  // Mac Excel 365 ceils `start_period` and floors `end_period` before
+  // iterating; start=1.2 therefore skips period 1 and begins at period 2.
+  const Value ref = EvalSource("=CUMPRINC(0.01, 36, 8000, 2, 8, 1)");
+  const Value frac = EvalSource("=CUMPRINC(0.01, 36, 8000, 1.2, 8.53, 1)");
+  ASSERT_TRUE(ref.is_number());
+  ASSERT_TRUE(frac.is_number());
+  EXPECT_DOUBLE_EQ(frac.as_number(), ref.as_number());
+}
+
+TEST(FinancialCUMPRINC, FractionalTypeIsNum) {
+  // `type` must be strictly 0 or 1; fractional values yield #NUM!.
+  const Value v = EvalSource("=CUMPRINC(0.01, 36, 8000, 1, 10, 0.7)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialCUMIPMT, FractionalStartRoundsUp) {
+  const Value ref = EvalSource("=CUMIPMT(0.01, 36, 8000, 2, 8, 1)");
+  const Value frac = EvalSource("=CUMIPMT(0.01, 36, 8000, 1.2, 8.53, 1)");
+  ASSERT_TRUE(ref.is_number());
+  ASSERT_TRUE(frac.is_number());
+  EXPECT_DOUBLE_EQ(frac.as_number(), ref.as_number());
+}
+
+TEST(FinancialCUMIPMT, FractionalTypeIsNum) {
+  const Value v = EvalSource("=CUMIPMT(0.01, 36, 8000, 1, 10, 1.2)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
 // ---------------------------------------------------------------------------
 // SLN — straight-line depreciation
 // ---------------------------------------------------------------------------

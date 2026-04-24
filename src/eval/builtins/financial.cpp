@@ -533,6 +533,13 @@ Value Cumipmt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const double pv = pv_e.value();
   const double start = start_e.value();
   const double end = end_e.value();
+  // CUMIPMT validates `type` strictly: only the literal values 0 or 1 are
+  // accepted. Fractional or other numeric values yield `#NUM!`. This is
+  // stricter than the PMT / PV / FV family where any non-zero value folds
+  // to 1 through `normalize_type`.
+  if (type_e.value() != 0.0 && type_e.value() != 1.0) {
+    return Value::error(ErrorCode::Num);
+  }
   const double type = normalize_type(type_e.value());
   if (rate <= 0.0 || nper <= 0.0 || pv <= 0.0) {
     return Value::error(ErrorCode::Num);
@@ -541,10 +548,16 @@ Value Cumipmt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   double total = 0.0;
-  // Truncate start/end to integers; Excel treats fractional period
-  // indices as their floor in the range-iteration family.
-  const auto start_i = static_cast<std::int64_t>(std::floor(start));
+  // Normalise fractional period indices: Mac Excel 365 rounds `start` UP
+  // (ceil) and `end` DOWN (floor) before iterating, so a fractional
+  // `start_period = 1.2` skips period 1. This diverges from Microsoft's
+  // "truncated to integer" documentation but matches the oracle across the
+  // CUMIPMT / CUMPRINC fixture rows.
+  const auto start_i = static_cast<std::int64_t>(std::ceil(start));
   const auto end_i = static_cast<std::int64_t>(std::floor(end));
+  if (start_i > end_i) {
+    return Value::error(ErrorCode::Num);
+  }
   for (std::int64_t p = start_i; p <= end_i; ++p) {
     const double interest = ipmt_scalar(rate, static_cast<double>(p), nper, pv, 0.0, type);
     if (std::isnan(interest) || std::isinf(interest)) {
@@ -589,6 +602,10 @@ Value Cumprinc(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const double pv = pv_e.value();
   const double start = start_e.value();
   const double end = end_e.value();
+  // See CUMIPMT: CUMPRINC mirrors the strict 0-or-1 `type` validation.
+  if (type_e.value() != 0.0 && type_e.value() != 1.0) {
+    return Value::error(ErrorCode::Num);
+  }
   const double type = normalize_type(type_e.value());
   if (rate <= 0.0 || nper <= 0.0 || pv <= 0.0) {
     return Value::error(ErrorCode::Num);
@@ -601,8 +618,13 @@ Value Cumprinc(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   double total = 0.0;
-  const auto start_i = static_cast<std::int64_t>(std::floor(start));
+  // See CUMIPMT above: ceil(start), floor(end) matches Mac Excel 365's
+  // fractional-period behaviour.
+  const auto start_i = static_cast<std::int64_t>(std::ceil(start));
   const auto end_i = static_cast<std::int64_t>(std::floor(end));
+  if (start_i > end_i) {
+    return Value::error(ErrorCode::Num);
+  }
   for (std::int64_t p = start_i; p <= end_i; ++p) {
     const double interest = ipmt_scalar(rate, static_cast<double>(p), nper, pv, 0.0, type);
     if (std::isnan(interest) || std::isinf(interest)) {
