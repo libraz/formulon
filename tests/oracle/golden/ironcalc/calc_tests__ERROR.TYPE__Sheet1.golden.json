@@ -1,0 +1,198 @@
+{
+  "suite": "ironcalc_calc_tests_ERROR.TYPE_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/ERROR.TYPE.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "A2",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B2",
+      "formula": "=ERROR.TYPE(A2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=ERROR.TYPE(A3)",
+      "setup": {
+        "A3": {
+          "kind": "error",
+          "code": "#VALUE!"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=ERROR.TYPE(A4)",
+      "setup": {
+        "A4": {
+          "kind": "error",
+          "code": "#REF!"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=ERROR.TYPE(A6)",
+      "setup": {
+        "A6": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "A7",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=ERROR.TYPE(A7)",
+      "setup": {
+        "A7": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=ERROR.TYPE(A8)",
+      "setup": {
+        "A8": {
+          "kind": "error",
+          "code": "#VALUE!"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 14.0
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=ERROR.TYPE(A9)",
+      "setup": {
+        "A9": {
+          "kind": "text",
+          "value": "not an error"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=ERROR.TYPE(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=ERROR.TYPE(A11)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=ERROR.TYPE(A12)",
+      "setup": {
+        "A12": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=ERROR.TYPE(A13)",
+      "setup": {
+        "A13": {
+          "kind": "error",
+          "code": "#NULL!"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=ERROR.TYPE(A14)",
+      "setup": {
+        "A14": {
+          "kind": "error",
+          "code": "#VALUE!"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    }
+  ]
+}

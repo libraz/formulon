@@ -1,0 +1,4111 @@
+{
+  "suite": "ironcalc_calc_tests_COUNTIFS_Rows1",
+  "description": "Derived from IronCalc fixture calc_tests/COUNTIFS.xlsx, sheet 'Rows1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Rows1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=COUNTIFS($A$2:$A$20,B2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=COUNTIF( $A$2:$A$20, B2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "L2",
+      "formula": "=COUNTIFS($I$2:$I$20,J2,$I$2:$I$20,K2)",
+      "setup": {
+        "K2": {
+          "kind": "text",
+          "value": "<5"
+        },
+        "I14": {
+          "kind": "bool",
+          "value": false
+        },
+        "I13": {
+          "kind": "bool",
+          "value": true
+        },
+        "I10": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I8": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I6": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "I5": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "I3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J2": {
+          "kind": "text",
+          "value": ">0"
+        },
+        "I7": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=COUNTIFS($A$2:$A$20,B3)",
+      "setup": {
+        "B3": {
+          "kind": "text",
+          "value": "*blue"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=COUNTIF( $A$2:$A$20, B3)",
+      "setup": {
+        "B3": {
+          "kind": "text",
+          "value": "*blue"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "L3",
+      "formula": "=COUNTIFS($I$2:$I$20,J3,$I$2:$I$20,K3)",
+      "setup": {
+        "K3": {
+          "kind": "text",
+          "value": "<=9"
+        },
+        "I14": {
+          "kind": "bool",
+          "value": false
+        },
+        "I13": {
+          "kind": "bool",
+          "value": true
+        },
+        "I10": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I8": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I6": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "I5": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "I3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J3": {
+          "kind": "text",
+          "value": ">=1"
+        },
+        "I7": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=COUNTIFS($A$2:$A$20,B4)",
+      "setup": {
+        "B4": {
+          "kind": "text",
+          "value": "*o*"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=COUNTIF( $A$2:$A$20, B4)",
+      "setup": {
+        "B4": {
+          "kind": "text",
+          "value": "*o*"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "L4",
+      "formula": "=COUNTIFS($I$2:$I$20,J4,$I$2:$I$20,K4)",
+      "setup": {
+        "K4": {
+          "kind": "text",
+          "value": "<89"
+        },
+        "I14": {
+          "kind": "bool",
+          "value": false
+        },
+        "I13": {
+          "kind": "bool",
+          "value": true
+        },
+        "I10": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I8": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I6": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "I5": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "I3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "text",
+          "value": ">-4"
+        },
+        "I7": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=COUNTIFS($A$2:$A$20,B5)",
+      "setup": {
+        "B5": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=COUNTIF( $A$2:$A$20, B5)",
+      "setup": {
+        "B5": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "L5",
+      "formula": "=COUNTIFS($I$2:$I$20,J5,$I$2:$I$20,K5)",
+      "setup": {
+        "K5": {
+          "kind": "text",
+          "value": "<1"
+        },
+        "I14": {
+          "kind": "bool",
+          "value": false
+        },
+        "I13": {
+          "kind": "bool",
+          "value": true
+        },
+        "I10": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I8": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I6": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "I5": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "I3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J5": {
+          "kind": "text",
+          "value": ">100"
+        },
+        "I7": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=COUNTIFS($A$2:$A$20,B6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=COUNTIF( $A$2:$A$20, B6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "L6",
+      "formula": "=COUNTIFS($I$2:$I$20,J6,$I$2:$I$20,K6)",
+      "setup": {
+        "K6": {
+          "kind": "text",
+          "value": "<100"
+        },
+        "I14": {
+          "kind": "bool",
+          "value": false
+        },
+        "I13": {
+          "kind": "bool",
+          "value": true
+        },
+        "I10": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I8": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I6": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "I5": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "I3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J6": {
+          "kind": "text",
+          "value": ">20"
+        },
+        "I7": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=COUNTIFS($A$2:$A$20,B7)",
+      "setup": {
+        "B7": {
+          "kind": "text",
+          "value": "dark*"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=COUNTIF( $A$2:$A$20, B7)",
+      "setup": {
+        "B7": {
+          "kind": "text",
+          "value": "dark*"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "I7",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "J7",
+      "formula": "=7",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "L7",
+      "formula": "=COUNTIFS($I$2:$I$20,J7,$I$2:$I$20,K7)",
+      "setup": {
+        "K7": {
+          "kind": "text",
+          "value": "<9"
+        },
+        "I14": {
+          "kind": "bool",
+          "value": false
+        },
+        "I13": {
+          "kind": "bool",
+          "value": true
+        },
+        "I10": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I8": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I6": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "I5": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "I3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "I7": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "J7": {
+          "kind": "formula",
+          "formula": "=7"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=COUNTIFS($A$2:$A$20,B8)",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "*-ish"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=COUNTIF( $A$2:$A$20, B8)",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "*-ish"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "L8",
+      "formula": "=COUNTIFS($I$2:$I$20,J8,$I$2:$I$20,K8)",
+      "setup": {
+        "K8": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "I14": {
+          "kind": "bool",
+          "value": false
+        },
+        "I13": {
+          "kind": "bool",
+          "value": true
+        },
+        "I10": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I8": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I6": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "I5": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "I3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "I7": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=COUNTIFS($A$2:$A$20,B9)",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=COUNTIF( $A$2:$A$20, B9)",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "L9",
+      "formula": "=COUNTIFS($I$2:$I$20,J9,$I$2:$I$20,K9)",
+      "setup": {
+        "K9": {
+          "kind": "text",
+          "value": "<9"
+        },
+        "I14": {
+          "kind": "bool",
+          "value": false
+        },
+        "I13": {
+          "kind": "bool",
+          "value": true
+        },
+        "I10": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I8": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I6": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "I5": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "I3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J9": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "I7": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=COUNTIFS($A$2:$A$20,B10)",
+      "setup": {
+        "B10": {
+          "kind": "text",
+          "value": "*ll*"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=COUNTIF( $A$2:$A$20, B10)",
+      "setup": {
+        "B10": {
+          "kind": "text",
+          "value": "*ll*"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "L10",
+      "formula": "=COUNTIFS($I$2:$I$20,J10,$I$2:$I$20,K10)",
+      "setup": {
+        "I14": {
+          "kind": "bool",
+          "value": false
+        },
+        "I13": {
+          "kind": "bool",
+          "value": true
+        },
+        "I10": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I8": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I6": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "I5": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "I3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "I7": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=COUNTIFS($A$2:$A$20,B11)",
+      "setup": {
+        "B11": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=COUNTIF( $A$2:$A$20, B11)",
+      "setup": {
+        "B11": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "L11",
+      "formula": "=COUNTIFS($I$2:$I$20,J11,$I$2:$I$20,K11)",
+      "setup": {
+        "I14": {
+          "kind": "bool",
+          "value": false
+        },
+        "I13": {
+          "kind": "bool",
+          "value": true
+        },
+        "I10": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I8": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I6": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "I5": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "I3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "I7": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=COUNTIFS($A$2:$A$20,B12)",
+      "setup": {
+        "B12": {
+          "kind": "text",
+          "value": "???-ish"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=COUNTIF( $A$2:$A$20, B12)",
+      "setup": {
+        "B12": {
+          "kind": "text",
+          "value": "???-ish"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "L12",
+      "formula": "=COUNTIFS($I$2:$I$20,J12,$I$2:$I$20,K12)",
+      "setup": {
+        "I14": {
+          "kind": "bool",
+          "value": false
+        },
+        "I13": {
+          "kind": "bool",
+          "value": true
+        },
+        "I10": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I8": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I6": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "I5": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "I3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "I7": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=COUNTIFS($A$2:$A$20,B13)",
+      "setup": {
+        "B13": {
+          "kind": "text",
+          "value": ">c"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 13.0
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=COUNTIF( $A$2:$A$20, B13)",
+      "setup": {
+        "B13": {
+          "kind": "text",
+          "value": ">c"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 13.0
+      }
+    },
+    {
+      "id": "L13",
+      "formula": "=COUNTIFS($I$2:$I$20,J13,$I$2:$I$20,K13)",
+      "setup": {
+        "I14": {
+          "kind": "bool",
+          "value": false
+        },
+        "I13": {
+          "kind": "bool",
+          "value": true
+        },
+        "I10": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I8": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I6": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "I5": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "I3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "I7": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=COUNTIFS($A$2:$A$20,B14)",
+      "setup": {
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=COUNTIF( $A$2:$A$20, B14)",
+      "setup": {
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=COUNTIFS($A$2:$A$20,B15)",
+      "setup": {
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=COUNTIF( $A$2:$A$20, B15)",
+      "setup": {
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=COUNTIFS($A$2:$A$20,B16)",
+      "setup": {
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=COUNTIF( $A$2:$A$20, B16)",
+      "setup": {
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=COUNTIFS($A$2:$A$20,B17)",
+      "setup": {
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=COUNTIF( $A$2:$A$20, B17)",
+      "setup": {
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=COUNTIFS($A$2:$A$20,B18)",
+      "setup": {
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=COUNTIF( $A$2:$A$20, B18)",
+      "setup": {
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=COUNTIFS($A$2:$A$20,B19)",
+      "setup": {
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=COUNTIF( $A$2:$A$20, B19)",
+      "setup": {
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=COUNTIFS($A$2:$A$20,B20)",
+      "setup": {
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=COUNTIF( $A$2:$A$20, B20)",
+      "setup": {
+        "A20": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "magenta"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "blue-ish"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "red-ish"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "white dark"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Mr. White"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "white"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "brown"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "dark yellow"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "light yellow"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "light blue"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "dark blue"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "BLUE"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "red"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    }
+  ]
+}

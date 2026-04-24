@@ -1,0 +1,217 @@
+{
+  "suite": "ironcalc_statistical_BINOM_Sheet1",
+  "description": "Derived from IronCalc fixture statistical/BINOM.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "E2",
+      "formula": "=_xlfn.BINOM.DIST(A2,B2,C2,D2)",
+      "setup": {
+        "D2": {
+          "kind": "bool",
+          "value": true
+        },
+        "C2": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.94235199
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=_xlfn.BINOM.DIST.RANGE(B2,C2,A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.19765031999999993
+      }
+    },
+    {
+      "id": "H2",
+      "formula": "=_xlfn.BINOM.INV(B2,C2,E2)",
+      "setup": {
+        "D2": {
+          "kind": "bool",
+          "value": true
+        },
+        "C2": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E2": {
+          "kind": "formula",
+          "formula": "=_xlfn.BINOM.DIST(A2,B2,C2,D2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "I2",
+      "formula": "=_xlfn.NEGBINOM.DIST(A2,B2,C2,D2)",
+      "setup": {
+        "D2": {
+          "kind": "bool",
+          "value": true
+        },
+        "C2": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "B2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.949987459946224
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=_xlfn.BINOM.DIST(A3,B3,C3,D3)",
+      "setup": {
+        "D3": {
+          "kind": "bool",
+          "value": false
+        },
+        "C3": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "B3": {
+          "kind": "number",
+          "value": 17.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.23925373020405763
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=_xlfn.BINOM.DIST.RANGE(B3,C3,A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "B3": {
+          "kind": "number",
+          "value": 17.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.23925373020405763
+      }
+    },
+    {
+      "id": "I3",
+      "formula": "=_xlfn.NEGBINOM.DIST(A3,2,C3,D3)",
+      "setup": {
+        "D3": {
+          "kind": "bool",
+          "value": false
+        },
+        "C3": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.08191999999999998
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=_xlfn.BINOM.DIST.RANGE(B4,C4,A4,D4)",
+      "setup": {
+        "D4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "B4": {
+          "kind": "number",
+          "value": 34.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.27705296149613096
+      }
+    }
+  ]
+}

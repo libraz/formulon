@@ -1,0 +1,819 @@
+{
+  "suite": "ironcalc_calc_tests_CONVERT_Weight",
+  "description": "Derived from IronCalc fixture calc_tests/CONVERT.xlsx, sheet 'Weight'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Weight",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=CONVERT(1,B2,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=\"M\"&B2",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mg"
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=CONVERT(0.05,F2,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "F2": {
+          "kind": "formula",
+          "formula": "=\"M\"&B2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50000.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=CONVERT(1,B3,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "sg"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 14593.902937206363
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=\"M\"&B3",
+      "setup": {
+        "B3": {
+          "kind": "text",
+          "value": "sg"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Msg"
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=CONVERT(0.05,F3,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "sg"
+        },
+        "F3": {
+          "kind": "formula",
+          "formula": "=\"M\"&B3"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=CONVERT(1,B4,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "lbm"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 453.59237
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=\"M\"&B4",
+      "setup": {
+        "B4": {
+          "kind": "text",
+          "value": "lbm"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mlbm"
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=CONVERT(0.05,F4,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "lbm"
+        },
+        "F4": {
+          "kind": "formula",
+          "formula": "=\"M\"&B4"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=CONVERT(1,B5,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "u"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.660538782e-24
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=\"M\"&B5",
+      "setup": {
+        "B5": {
+          "kind": "text",
+          "value": "u"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mu"
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=CONVERT(0.05,F5,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "u"
+        },
+        "F5": {
+          "kind": "formula",
+          "formula": "=\"M\"&B5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.30269391e-20
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=CONVERT(1,B6,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "ozm"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 28.349523125
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=\"M\"&B6",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "ozm"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mozm"
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=CONVERT(0.05,F6,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "ozm"
+        },
+        "F6": {
+          "kind": "formula",
+          "formula": "=\"M\"&B6"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=CONVERT(1,B7,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "grain"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.06479891
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=\"M\"&B7",
+      "setup": {
+        "B7": {
+          "kind": "text",
+          "value": "grain"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mgrain"
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=CONVERT(0.05,F7,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "grain"
+        },
+        "F7": {
+          "kind": "formula",
+          "formula": "=\"M\"&B7"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=CONVERT(1,B8,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "cwt"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45359.237
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=\"M\"&B8",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "cwt"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mcwt"
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=CONVERT(0.05,F8,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "cwt"
+        },
+        "F8": {
+          "kind": "formula",
+          "formula": "=\"M\"&B8"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=CONVERT(1,B9,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B9": {
+          "kind": "text",
+          "value": "shweight"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45359.237
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=\"M\"&B9",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "shweight"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mshweight"
+      }
+    },
+    {
+      "id": "G9",
+      "formula": "=CONVERT(0.05,F9,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B9": {
+          "kind": "text",
+          "value": "shweight"
+        },
+        "F9": {
+          "kind": "formula",
+          "formula": "=\"M\"&B9"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=CONVERT(1,B10,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B10": {
+          "kind": "text",
+          "value": "uk_cwt"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50802.34544
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=\"M\"&B10",
+      "setup": {
+        "B10": {
+          "kind": "text",
+          "value": "uk_cwt"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Muk_cwt"
+      }
+    },
+    {
+      "id": "G10",
+      "formula": "=CONVERT(0.05,F10,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B10": {
+          "kind": "text",
+          "value": "uk_cwt"
+        },
+        "F10": {
+          "kind": "formula",
+          "formula": "=\"M\"&B10"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=CONVERT(1,B11,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B11": {
+          "kind": "text",
+          "value": "lcwt"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50802.34544
+      }
+    },
+    {
+      "id": "F11",
+      "formula": "=\"M\"&B11",
+      "setup": {
+        "B11": {
+          "kind": "text",
+          "value": "lcwt"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mlcwt"
+      }
+    },
+    {
+      "id": "G11",
+      "formula": "=CONVERT(0.05,F11,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B11": {
+          "kind": "text",
+          "value": "lcwt"
+        },
+        "F11": {
+          "kind": "formula",
+          "formula": "=\"M\"&B11"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=CONVERT(1,B12,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B12": {
+          "kind": "text",
+          "value": "stone"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6350.29318
+      }
+    },
+    {
+      "id": "F12",
+      "formula": "=\"M\"&B12",
+      "setup": {
+        "B12": {
+          "kind": "text",
+          "value": "stone"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mstone"
+      }
+    },
+    {
+      "id": "G12",
+      "formula": "=CONVERT(0.05,F12,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B12": {
+          "kind": "text",
+          "value": "stone"
+        },
+        "F12": {
+          "kind": "formula",
+          "formula": "=\"M\"&B12"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=CONVERT(1,B13,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B13": {
+          "kind": "text",
+          "value": "ton"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 907184.74
+      }
+    },
+    {
+      "id": "F13",
+      "formula": "=\"M\"&B13",
+      "setup": {
+        "B13": {
+          "kind": "text",
+          "value": "ton"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mton"
+      }
+    },
+    {
+      "id": "G13",
+      "formula": "=CONVERT(0.05,F13,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B13": {
+          "kind": "text",
+          "value": "ton"
+        },
+        "F13": {
+          "kind": "formula",
+          "formula": "=\"M\"&B13"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=CONVERT(1,B14,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B14": {
+          "kind": "text",
+          "value": "brton"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1016046.9088
+      }
+    },
+    {
+      "id": "F14",
+      "formula": "=\"M\"&B14",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "brton"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mbrton"
+      }
+    },
+    {
+      "id": "G14",
+      "formula": "=CONVERT(0.05,F14,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B14": {
+          "kind": "text",
+          "value": "brton"
+        },
+        "F14": {
+          "kind": "formula",
+          "formula": "=\"M\"&B14"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=CONVERT(1,B15,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B15": {
+          "kind": "text",
+          "value": "LTON"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1016046.9088
+      }
+    },
+    {
+      "id": "F15",
+      "formula": "=\"M\"&B15",
+      "setup": {
+        "B15": {
+          "kind": "text",
+          "value": "LTON"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MLTON"
+      }
+    },
+    {
+      "id": "G15",
+      "formula": "=CONVERT(0.05,F15,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B15": {
+          "kind": "text",
+          "value": "LTON"
+        },
+        "F15": {
+          "kind": "formula",
+          "formula": "=\"M\"&B15"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=CONVERT(1,B16,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B16": {
+          "kind": "text",
+          "value": "uk_ton"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1016046.9088
+      }
+    },
+    {
+      "id": "F16",
+      "formula": "=\"M\"&B16",
+      "setup": {
+        "B16": {
+          "kind": "text",
+          "value": "uk_ton"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Muk_ton"
+      }
+    },
+    {
+      "id": "G16",
+      "formula": "=CONVERT(0.05,F16,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "g"
+        },
+        "B16": {
+          "kind": "text",
+          "value": "uk_ton"
+        },
+        "F16": {
+          "kind": "formula",
+          "formula": "=\"M\"&B16"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

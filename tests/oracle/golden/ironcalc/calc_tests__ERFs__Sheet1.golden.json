@@ -1,0 +1,1375 @@
+{
+  "suite": "ironcalc_calc_tests_ERFs_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/ERFs.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 1e-07,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=ERF(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999999999984626
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=ERF(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=ERFC(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=_xlfn.ERF.PRECISE(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=_xlfn.ERFC.PRECISE(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=ERF(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.1572992070502851
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=ERF(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8427007929497149
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=ERFC(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.15729920705028513
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=_xlfn.ERF.PRECISE(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8427007929497149
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=_xlfn.ERFC.PRECISE(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.15729920705028513
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=ERF(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.004677734981047288
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=ERF(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9953222650189527
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=ERFC(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0046777349810472645
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=_xlfn.ERF.PRECISE(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9953222650189527
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=_xlfn.ERFC.PRECISE(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0046777349810472645
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=ERF(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.2090496998639075e-05
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=ERF(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999779095030014
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=ERFC(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.209049699858544e-05
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=_xlfn.ERF.PRECISE(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999779095030014
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=_xlfn.ERFC.PRECISE(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.209049699858544e-05
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=ERF(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=ERF(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999999845827421
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=ERFC(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.5417257900280017e-08
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=_xlfn.ERF.PRECISE(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999999845827421
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=_xlfn.ERFC.PRECISE(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.5417257900280017e-08
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=ERF(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.541572047791817e-08
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=ERF(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999999999984626
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=ERFC(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.537459794428034e-12
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=_xlfn.ERF.PRECISE(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999999999984626
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=_xlfn.ERFC.PRECISE(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.537459794428034e-12
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=ERF(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.9999779095030012
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=ERF(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=ERFC(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.1519736712498925e-17
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=_xlfn.ERF.PRECISE(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=_xlfn.ERFC.PRECISE(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.1519736712498925e-17
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=ERF(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.9953222650189528
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=ERF(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.9953222650189527
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=ERFC(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.9953222650189528
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=_xlfn.ERF.PRECISE(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.9953222650189527
+      }
+    },
+    {
+      "id": "G9",
+      "formula": "=_xlfn.ERFC.PRECISE(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.9953222650189528
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=ERF(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=ERF(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=ERFC(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=_xlfn.ERF.PRECISE(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "G10",
+      "formula": "=_xlfn.ERFC.PRECISE(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=ERF(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 0.745
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.7079289200957377
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=ERF(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 0.745
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7079289200957377
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=ERFC(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 0.745
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.29207107990426234
+      }
+    },
+    {
+      "id": "F11",
+      "formula": "=_xlfn.ERF.PRECISE(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 0.745
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7079289200957377
+      }
+    },
+    {
+      "id": "G11",
+      "formula": "=_xlfn.ERFC.PRECISE(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 0.745
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.29207107990426234
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=ERF(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.9102918877326367
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=ERF(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.9103139782296353
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=ERFC(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.9103139782296354
+      }
+    },
+    {
+      "id": "F12",
+      "formula": "=_xlfn.ERF.PRECISE(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.9103139782296353
+      }
+    },
+    {
+      "id": "G12",
+      "formula": "=_xlfn.ERFC.PRECISE(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.9103139782296354
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=ERF(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 1000000.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.004677734981047288
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=ERF(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9953222650189527
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=ERFC(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0046777349810472645
+      }
+    },
+    {
+      "id": "F13",
+      "formula": "=_xlfn.ERF.PRECISE(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9953222650189527
+      }
+    },
+    {
+      "id": "G13",
+      "formula": "=_xlfn.ERFC.PRECISE(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0046777349810472645
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=ERF(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": -100000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=ERF(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": -100000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=ERFC(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": -100000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "F14",
+      "formula": "=_xlfn.ERF.PRECISE(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": -100000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "G14",
+      "formula": "=_xlfn.ERFC.PRECISE(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": -100000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=ERF(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A15": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=ERF(A15)",
+      "setup": {
+        "A15": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=ERFC(A15)",
+      "setup": {
+        "A15": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F15",
+      "formula": "=_xlfn.ERF.PRECISE(A15)",
+      "setup": {
+        "A15": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G15",
+      "formula": "=_xlfn.ERFC.PRECISE(A15)",
+      "setup": {
+        "A15": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=ERF(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.15262147206923782
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=ERF(A16)",
+      "setup": {
+        "A16": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8427007929497149
+      }
+    },
+    {
+      "id": "E16",
+      "formula": "=ERFC(A16)",
+      "setup": {
+        "A16": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.15729920705028513
+      }
+    },
+    {
+      "id": "F16",
+      "formula": "=_xlfn.ERF.PRECISE(A16)",
+      "setup": {
+        "A16": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8427007929497149
+      }
+    },
+    {
+      "id": "G16",
+      "formula": "=_xlfn.ERFC.PRECISE(A16)",
+      "setup": {
+        "A16": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.15729920705028513
+      }
+    },
+    {
+      "id": "A17",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=ERF(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=ERF(A17)",
+      "setup": {
+        "A17": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "E17",
+      "formula": "=ERFC(A17)",
+      "setup": {
+        "A17": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F17",
+      "formula": "=_xlfn.ERF.PRECISE(A17)",
+      "setup": {
+        "A17": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "G17",
+      "formula": "=_xlfn.ERFC.PRECISE(A17)",
+      "setup": {
+        "A17": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=ERF(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8427007929497149
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=ERF(A18)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=ERFC(A18)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "F18",
+      "formula": "=_xlfn.ERF.PRECISE(A18)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G18",
+      "formula": "=_xlfn.ERFC.PRECISE(A18)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=ERF(A19,B19)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=ERF(A19)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E19",
+      "formula": "=ERFC(A19)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "F19",
+      "formula": "=_xlfn.ERF.PRECISE(A19)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G19",
+      "formula": "=_xlfn.ERFC.PRECISE(A19)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=ERF(A20,B20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=ERF(A20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E20",
+      "formula": "=ERFC(A20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.1838256077794166e-23
+      }
+    },
+    {
+      "id": "F20",
+      "formula": "=_xlfn.ERF.PRECISE(A20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G20",
+      "formula": "=_xlfn.ERFC.PRECISE(A20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.1838256077794166e-23
+      }
+    }
+  ]
+}

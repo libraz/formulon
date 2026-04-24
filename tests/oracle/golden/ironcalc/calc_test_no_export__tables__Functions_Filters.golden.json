@@ -1,0 +1,40 @@
+{
+  "suite": "ironcalc_calc_test_no_export_tables_Functions_Filters",
+  "description": "Derived from IronCalc fixture calc_test_no_export/tables.xlsx, sheet 'Functions Filters'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Functions Filters",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "D19",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D27",
+      "formula": "=H27",
+      "setup": {
+        "H27": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    }
+  ]
+}

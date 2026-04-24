@@ -395,8 +395,10 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"VLOOKUP", &eval_vlookup_lazy},
     {"WORKDAY", &eval_workday_lazy},
     {"WORKDAY.INTL", &eval_workday_intl_lazy},
+    {"XIRR", &eval_xirr_lazy},
     {"XLOOKUP", &eval_xlookup_lazy},
     {"XMATCH", &eval_xmatch_lazy},
+    {"XNPV", &eval_xnpv_lazy},
     {"Z.TEST", &eval_z_test_lazy},
     // ZTEST is the pre-2010 legacy spelling of Z.TEST; same impl.
     {"ZTEST", &eval_z_test_lazy},

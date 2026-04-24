@@ -1,0 +1,49 @@
+{
+  "suite": "ironcalc_templates_mortgage_calculator_Overview",
+  "description": "Derived from IronCalc fixture templates/mortgage_calculator.xlsx, sheet '📋 Overview'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "📋 Overview",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "E6",
+      "formula": "=TEXT(C6/C5,\"0.00%\")&\" of total price\"",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 400000.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 150000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "37.50% of total price"
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=TEXT(C8/12,\"0.00%\")&\" monthly rate\"",
+      "setup": {
+        "C8": {
+          "kind": "number",
+          "value": 2.55
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "21.25% monthly rate"
+      }
+    }
+  ]
+}

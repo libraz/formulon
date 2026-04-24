@@ -1,0 +1,805 @@
+{
+  "suite": "ironcalc_calc_tests_SUMSQ_SUMSQ",
+  "description": "Derived from IronCalc fixture calc_tests/SUMSQ.xlsx, sheet 'SUMSQ'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "SUMSQ",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B6",
+      "formula": "=SUMSQ(A2:A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 55.0
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=SUMSQ(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 36.0
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=SUMSQ(A8:A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=SUMSQ(A10:A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "A10": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.13
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=SUMSQ(A12:A15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "A14": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "A13": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A12": {
+          "kind": "number",
+          "value": 0.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.04000000000000001
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=SUMSQ(A16:A17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=SUMSQ(A18:A19)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=SUMSQ(A20:A21)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 8.0000001
+        },
+        "A20": {
+          "kind": "number",
+          "value": 7.999999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 127.999985600001
+      }
+    },
+    {
+      "id": "B23",
+      "formula": "=SUMSQ(A22:A23)",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 9999999999999.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.999999999998e+25
+      }
+    },
+    {
+      "id": "B24",
+      "formula": "=SUMSQ(A24:A24)",
+      "setup": {
+        "A24": {
+          "kind": "number",
+          "value": 1e+154
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1e+308
+      }
+    },
+    {
+      "id": "B25",
+      "formula": "=SUMSQ(A25:A25)",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": 2e+154
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B27",
+      "formula": "=SUMSQ(A26:A27)",
+      "setup": {
+        "A27": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "A26": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2e-24
+      }
+    },
+    {
+      "id": "B28",
+      "formula": "=SUMSQ(A28:A28)",
+      "setup": {
+        "A28": {
+          "kind": "number",
+          "value": 1e-307
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B30",
+      "formula": "=SUMSQ(A29:A30)",
+      "setup": {
+        "A30": {
+          "kind": "bool",
+          "value": false
+        },
+        "A29": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B32",
+      "formula": "=SUMSQ(A31:A32)",
+      "setup": {
+        "A32": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A31": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B34",
+      "formula": "=SUMSQ(A33:A34)",
+      "setup": {
+        "A34": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B35",
+      "formula": "=SUMSQ(A35:A35)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B36",
+      "formula": "=SUMSQ(A36:A36)",
+      "setup": {
+        "A36": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A37",
+      "formula": "=\"8\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "8"
+      }
+    },
+    {
+      "id": "B37",
+      "formula": "=SUMSQ(A37:A37)",
+      "setup": {
+        "A37": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B38",
+      "formula": "=SUMSQ(A38:A38)",
+      "setup": {
+        "A38": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "A39",
+      "formula": "=\" 10 \"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " 10 "
+      }
+    },
+    {
+      "id": "B39",
+      "formula": "=SUMSQ(A39:A39)",
+      "setup": {
+        "A39": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A40",
+      "formula": "=\"0\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "B40",
+      "formula": "=SUMSQ(A40:A40)",
+      "setup": {
+        "A40": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A41",
+      "formula": "=\"10.0\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "10.0"
+      }
+    },
+    {
+      "id": "B41",
+      "formula": "=SUMSQ(A41:A41)",
+      "setup": {
+        "A41": {
+          "kind": "formula",
+          "formula": "=\"10.0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A42",
+      "formula": "=\"008\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "008"
+      }
+    },
+    {
+      "id": "B42",
+      "formula": "=SUMSQ(A42:A42)",
+      "setup": {
+        "A42": {
+          "kind": "formula",
+          "formula": "=\"008\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B43",
+      "formula": "=SUMSQ(A43:A43)",
+      "setup": {
+        "A43": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B44",
+      "formula": "=SUMSQ(A44:A44)",
+      "setup": {
+        "A44": {
+          "kind": "text",
+          "value": "Banana"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A45",
+      "formula": "=\"@\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "@"
+      }
+    },
+    {
+      "id": "B45",
+      "formula": "=SUMSQ(A45:A45)",
+      "setup": {
+        "A45": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A46",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B46",
+      "formula": "=SUMSQ(A46:A46)",
+      "setup": {
+        "A46": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A47",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B47",
+      "formula": "=SUMSQ(A47:A47)",
+      "setup": {
+        "A47": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B48",
+      "formula": "=SUMSQ(A48:A48)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "A49",
+      "formula": "=SQRT(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B49",
+      "formula": "=SUMSQ(A49:A49)",
+      "setup": {
+        "A49": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A50",
+      "formula": "=\"x\"+1",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B50",
+      "formula": "=SUMSQ(A50:A50)",
+      "setup": {
+        "A50": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B51",
+      "formula": "=SUMSQ(A51:A51)",
+      "setup": {
+        "A51": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2052180601.0
+      }
+    },
+    {
+      "id": "A52",
+      "formula": "=\"2024-01-10\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024-01-10"
+      }
+    },
+    {
+      "id": "B52",
+      "formula": "=SUMSQ(A52:A52)",
+      "setup": {
+        "A52": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A53",
+      "formula": "=\" 2024-01-10 \"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " 2024-01-10 "
+      }
+    },
+    {
+      "id": "B53",
+      "formula": "=SUMSQ(A53:A53)",
+      "setup": {
+        "A53": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B54",
+      "formula": "=SUMSQ(A54:A54)",
+      "setup": {
+        "A54": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.36501736111111105
+      }
+    },
+    {
+      "id": "A56",
+      "formula": "=PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "B56",
+      "formula": "=SUMSQ(A56)",
+      "setup": {
+        "A56": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.869604401089358
+      }
+    },
+    {
+      "id": "B57",
+      "formula": "=SUMSQ(A2:A6,A10:A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "A10": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 55.13
+      }
+    },
+    {
+      "id": "B58",
+      "formula": "=SUMSQ(G51:G54,10,A16)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "G54": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G53": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "G52": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G51": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 139.0
+      }
+    },
+    {
+      "id": "B59",
+      "formula": "=SUMSQ({1,2,3;4,5,6})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 91.0
+      }
+    },
+    {
+      "id": "B60",
+      "formula": "=SUMSQ({1,2,3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.0
+      }
+    },
+    {
+      "id": "B61",
+      "formula": "=SUMSQ({1;2;3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.0
+      }
+    }
+  ]
+}

@@ -1,0 +1,737 @@
+{
+  "suite": "ironcalc_calc_tests_simple_functions_SUM",
+  "description": "Derived from IronCalc fixture calc_tests/simple_functions.xlsx, sheet 'SUM'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "SUM",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "A1",
+      "formula": "=D6",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 12.67
+        },
+        "B3": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 0.45
+        },
+        "D5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=SUM(D1:D4,D5,B1:B5)+34"
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=SUM(B1:B4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 91.24
+      }
+    },
+    {
+      "id": "F1",
+      "formula": "=MAX(D1,B1,A1)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 12.67
+        },
+        "B3": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 0.45
+        },
+        "D5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=D6"
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=SUM(D1:D4,D5,B1:B5)+34"
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=SUM(B1:B4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 91.24
+      }
+    },
+    {
+      "id": "G1",
+      "formula": "=MIN(D1,B1,A1)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 12.67
+        },
+        "B3": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 0.45
+        },
+        "D5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=D6"
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=SUM(D1:D4,D5,B1:B5)+34"
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=SUM(B1:B4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.45
+      }
+    },
+    {
+      "id": "L1",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "M1",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=MAX(D2,B2,A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=MIN(D2,B2,A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=MAX(D3,B3,A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=MIN(D3,B3,A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "L3",
+      "formula": "=SUM(L1,L4)",
+      "setup": {
+        "L2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "L4": {
+          "kind": "formula",
+          "formula": "=SUM(L1:L2)"
+        },
+        "L1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "M3",
+      "formula": "=SUM(M1,M4)",
+      "setup": {
+        "M2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "M4": {
+          "kind": "formula",
+          "formula": "=SUM(M1:M2)"
+        },
+        "M1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=MAX(D4,B4,A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 12.67
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.67
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=MIN(D4,B4,A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 12.67
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "L4",
+      "formula": "=SUM(L1:L2)",
+      "setup": {
+        "L2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "L1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "M4",
+      "formula": "=SUM(M1:M2)",
+      "setup": {
+        "M2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "M1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "A5",
+      "formula": "=SUM(A1:A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 12.67
+        },
+        "B3": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 0.45
+        },
+        "D5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=D6"
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=SUM(D1:D4,D5,B1:B5)+34"
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=SUM(B1:B4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.24
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=SUM(B1:B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 12.67
+        },
+        "B3": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 0.45
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 17.12
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=MAX(D5,B5,A5)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 12.67
+        },
+        "B3": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 0.45
+        },
+        "D5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=SUM(A1:A4)"
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=D6"
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=SUM(D1:D4,D5,B1:B5)+34"
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=SUM(B1:B4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.24
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=MIN(D5,B5,A5)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 12.67
+        },
+        "B3": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 0.45
+        },
+        "D5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=SUM(A1:A4)"
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=D6"
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=SUM(D1:D4,D5,B1:B5)+34"
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=SUM(B1:B4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=SUM(D1:D4,D5,B1:B5)+34",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 12.67
+        },
+        "B3": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 0.45
+        },
+        "D5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=SUM(B1:B4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 91.24
+      }
+    },
+    {
+      "id": "I6",
+      "formula": "=SUM(I1:I5)",
+      "setup": {
+        "I4": {
+          "kind": "text",
+          "value": "1"
+        },
+        "I3": {
+          "kind": "text",
+          "value": "true"
+        },
+        "I2": {
+          "kind": "bool",
+          "value": true
+        },
+        "I1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    }
+  ]
+}

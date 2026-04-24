@@ -1,0 +1,185 @@
+{
+  "suite": "ironcalc_statistical_CHISQ_Sheet1",
+  "description": "Derived from IronCalc fixture statistical/CHISQ.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "E2",
+      "formula": "=_xlfn.CHISQ.DIST(A2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "bool",
+          "value": true
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.3
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9847456053442304
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=_xlfn.CHISQ.DIST.RT(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.3
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.015254394655769613
+      }
+    },
+    {
+      "id": "I2",
+      "formula": "=_xlfn.CHISQ.INV(E2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.3
+        },
+        "E2": {
+          "kind": "formula",
+          "formula": "=_xlfn.CHISQ.DIST(A2,B2,C2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.299999999999997
+      }
+    },
+    {
+      "id": "J2",
+      "formula": "=_xlfn.CHISQ.INV.RT(G2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.3
+        },
+        "G2": {
+          "kind": "formula",
+          "formula": "=_xlfn.CHISQ.DIST.RT(A2,B2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.3
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=_xlfn.CHISQ.DIST(A3,B3,C3)",
+      "setup": {
+        "C3": {
+          "kind": "bool",
+          "value": true
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.34
+        },
+        "A3": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9539882943107687
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=_xlfn.CHISQ.DIST.RT(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 3.34
+        },
+        "A3": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.04601170568923137
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=_xlfn.CHISQ.DIST(A4,B4,C4)",
+      "setup": {
+        "C4": {
+          "kind": "bool",
+          "value": false
+        },
+        "B4": {
+          "kind": "number",
+          "value": 7.2
+        },
+        "A4": {
+          "kind": "number",
+          "value": 12.3
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.030107210682426052
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=_xlfn.CHISQ.DIST.RT(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 7.2
+        },
+        "A4": {
+          "kind": "number",
+          "value": 12.3
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.09111488600031305
+      }
+    }
+  ]
+}

@@ -1,0 +1,737 @@
+{
+  "suite": "ironcalc_calc_tests_LOG_LOG10_LN_LOG",
+  "description": "Derived from IronCalc fixture calc_tests/LOG_LOG10_LN.xlsx, sheet 'LOG'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "LOG",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=LOG(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=LOG(E2,F2)",
+      "setup": {
+        "F2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=LOG(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=LOG(E3,F3)",
+      "setup": {
+        "F3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=LOG(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=LOG(E4,F4)",
+      "setup": {
+        "F4": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=LOG(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=LOG(E5,F5)",
+      "setup": {
+        "F5": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "E5": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.33333333333333337
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=LOG(A6)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=LOG(E6,F6)",
+      "setup": {
+        "F6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "E6": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=LOG(A7)",
+      "setup": {
+        "A7": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=LOG(E7,F7)",
+      "setup": {
+        "F7": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "E7": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=LOG(A8)",
+      "setup": {
+        "A8": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=LOG(E8,F8)",
+      "setup": {
+        "F8": {
+          "kind": "bool",
+          "value": true
+        },
+        "E8": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=LOG(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G9",
+      "formula": "=LOG(E9,F9)",
+      "setup": {
+        "F9": {
+          "kind": "bool",
+          "value": false
+        },
+        "E9": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=LOG(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G10",
+      "formula": "=LOG(E10,F10)",
+      "setup": {
+        "F10": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "E10": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=LOG(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G11",
+      "formula": "=LOG(E11,F11)",
+      "setup": {
+        "E11": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=LOG(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 0.004
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.3979400086720375
+      }
+    },
+    {
+      "id": "G12",
+      "formula": "=LOG(E12,F12)",
+      "setup": {
+        "F12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E12": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=LOG(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1.3
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.11394335230683679
+      }
+    },
+    {
+      "id": "G13",
+      "formula": "=LOG(E13,F13)",
+      "setup": {
+        "F13": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E13": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=LOG(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.3617278360175928
+      }
+    },
+    {
+      "id": "F14",
+      "formula": "=-1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G14",
+      "formula": "=LOG(E14,F14)",
+      "setup": {
+        "E14": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "F14": {
+          "kind": "formula",
+          "formula": "=-1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A15",
+      "formula": "=\"10\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "10"
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=LOG(A15)",
+      "setup": {
+        "A15": {
+          "kind": "formula",
+          "formula": "=\"10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G15",
+      "formula": "=LOG(E15,F15)",
+      "setup": {
+        "F15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E15": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=LOG(A16)",
+      "setup": {
+        "A16": {
+          "kind": "text",
+          "value": "100"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "G16",
+      "formula": "=LOG(E16,F16)",
+      "setup": {
+        "F16": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E16": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A17",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=LOG(A17)",
+      "setup": {
+        "A17": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G17",
+      "formula": "=LOG(E17,F17)",
+      "setup": {
+        "F17": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E17": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=LOG(A18)",
+      "setup": {
+        "A18": {
+          "kind": "text",
+          "value": "Helllo"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G18",
+      "formula": "=LOG(E18,F18)",
+      "setup": {
+        "F18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E18": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=LOG(A19)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G19",
+      "formula": "=LOG(E19,F19)",
+      "setup": {
+        "F19": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E19": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=LOG(A20)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G20",
+      "formula": "=LOG(E20,F20)",
+      "setup": {
+        "F20": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E20": {
+          "kind": "number",
+          "value": 0.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.045757490560675115
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=LOG(A21)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G21",
+      "formula": "=LOG(E21,F21)",
+      "setup": {
+        "F21": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E21": {
+          "kind": "number",
+          "value": 0.11
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.9586073148417749
+      }
+    },
+    {
+      "id": "G22",
+      "formula": "=LOG(E22,F22)",
+      "setup": {
+        "F22": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E22": {
+          "kind": "text",
+          "value": "hello"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G23",
+      "formula": "=LOG(E23,F23)",
+      "setup": {
+        "F23": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E23": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G24",
+      "formula": "=LOG(E24,F24)",
+      "setup": {
+        "F24": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E24": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G25",
+      "formula": "=LOG(E25,F25)",
+      "setup": {
+        "F25": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G26",
+      "formula": "=LOG(E26,F26)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    }
+  ]
+}

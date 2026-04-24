@@ -1,0 +1,828 @@
+{
+  "suite": "ironcalc_calc_tests_simple_functions_LOOKUP",
+  "description": "Derived from IronCalc fixture calc_tests/simple_functions.xlsx, sheet 'LOOKUP'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "LOOKUP",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "D2",
+      "formula": "=LOOKUP(4.19, A2:A6,B2:B6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "green"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "red"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 6.39
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.77
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.17
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.19
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.14
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "orange"
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=LOOKUP(C3, $A$2:$A$6,$B$2:$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "green"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "red"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 6.39
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.77
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.17
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.19
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.14
+        },
+        "C3": {
+          "kind": "number",
+          "value": 5.16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "orange"
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=LOOKUP(C4, $A$2:$A$6,$B$2:$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "green"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "red"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 6.39
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.77
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.17
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.19
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.14
+        },
+        "C4": {
+          "kind": "number",
+          "value": 5.2
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "yellow"
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=LOOKUP(C5, $A$2:$A$6,$B$2:$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "green"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "red"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 6.39
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.77
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.17
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.19
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.14
+        },
+        "C5": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "green"
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=LOOKUP(C6, $A$2:$A$6,$B$2:$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "green"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "red"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 6.39
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.77
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.17
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.19
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.14
+        },
+        "C6": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "blue"
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=LOOKUP(C7, $A$2:$A$6,$B$2:$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "green"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "red"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 6.39
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.77
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.17
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.19
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.14
+        },
+        "C7": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "blue"
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=LOOKUP(C8, $A$2:$A$6,$B$2:$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "green"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "red"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 6.39
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.77
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.17
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.19
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.14
+        },
+        "C8": {
+          "kind": "number",
+          "value": -4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=LOOKUP(C9, $A$2:$A$6,$B$2:$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "green"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "red"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 6.39
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.77
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.17
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.19
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.14
+        },
+        "C9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=LOOKUP(C10, $A$2:$A$6,$B$2:$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "green"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "red"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 6.39
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.77
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.17
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.19
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.14
+        },
+        "C10": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=LOOKUP(C11, $A$2:$A$6,$B$2:$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "green"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "red"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 6.39
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.77
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.17
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.19
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.14
+        },
+        "C11": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=LOOKUP(C12, $A$2:$A$6,$B$2:$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "green"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "red"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 6.39
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.77
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.17
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.19
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.14
+        },
+        "C12": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=LOOKUP(C13, $A$2:$A$6,$B$2:$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "green"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "red"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 6.39
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.77
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.17
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.19
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.14
+        },
+        "C13": {
+          "kind": "number",
+          "value": 4.14
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "red"
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=LOOKUP(C14, $A$2:$A$6,$B$2:$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "green"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "red"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 6.39
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.77
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.17
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.19
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.14
+        },
+        "C14": {
+          "kind": "number",
+          "value": 4.2
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "orange"
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=LOOKUP(C15, $A$2:$A$6,$B$2:$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "green"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "red"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 6.39
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.77
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.17
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.19
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.14
+        },
+        "C15": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=LOOKUP(C16, $A$2:$A$6,$B$2:$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "blue"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "green"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "yellow"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "red"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 6.39
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.77
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.17
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.19
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.14
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

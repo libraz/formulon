@@ -1,0 +1,1112 @@
+{
+  "suite": "ironcalc_calc_tests_ROW_COLUM_OFFSET",
+  "description": "Derived from IronCalc fixture calc_tests/ROW_COLUM.xlsx, sheet 'OFFSET'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "OFFSET",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B1",
+      "formula": "=OFFSET(A1,3,3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 88.0
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=SUM(OFFSET(C3:C10,-1,-2))",
+      "setup": {
+        "C10": {
+          "kind": "text",
+          "value": "<=This is not implicit intersection"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 77.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "J5",
+      "formula": "=P2:P16",
+      "setup": {
+        "P16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "P8": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "P5": {
+          "kind": "number",
+          "value": -23.7
+        },
+        "P4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "P3": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -23.7
+      }
+    },
+    {
+      "id": "U5",
+      "formula": "=N2:P16",
+      "setup": {
+        "P16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "P8": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "P5": {
+          "kind": "number",
+          "value": -23.7
+        },
+        "P4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "P3": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "T8",
+      "formula": "=P1:P16",
+      "setup": {
+        "P16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "P8": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "P5": {
+          "kind": "number",
+          "value": -23.7
+        },
+        "P4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "P3": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "P1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 13.0
+      }
+    },
+    {
+      "id": "J9",
+      "formula": "=H1:O1",
+      "setup": {
+        "O1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "M1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "L1": {
+          "kind": "number",
+          "value": 12.5
+        },
+        "J1": {
+          "kind": "number",
+          "value": 5.7
+        },
+        "H1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.7
+      }
+    },
+    {
+      "id": "M9",
+      "formula": "=H1:O1",
+      "setup": {
+        "O1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "M1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "L1": {
+          "kind": "number",
+          "value": 12.5
+        },
+        "J1": {
+          "kind": "number",
+          "value": 5.7
+        },
+        "H1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=D1:D1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "M10",
+      "formula": "=SUM(H1:O1)",
+      "setup": {
+        "O1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "M1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "L1": {
+          "kind": "number",
+          "value": 12.5
+        },
+        "J1": {
+          "kind": "number",
+          "value": 5.7
+        },
+        "H1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 25.2
+      }
+    },
+    {
+      "id": "M11",
+      "formula": "=SUM(OFFSET(A1,0,7,1,8))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 25.2
+      }
+    },
+    {
+      "id": "I12",
+      "formula": "=H1:O3",
+      "setup": {
+        "C10": {
+          "kind": "text",
+          "value": "<=This is not implicit intersection"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 77.0
+        },
+        "O1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "M1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "L1": {
+          "kind": "number",
+          "value": 12.5
+        },
+        "J1": {
+          "kind": "number",
+          "value": 5.7
+        },
+        "H1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H3": {
+          "kind": "formula",
+          "formula": "=SUM(OFFSET(C3:C10,-1,-2))"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "M12",
+      "formula": "=OFFSET(A1,0,7,1,3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J19",
+      "formula": "=P2:P16",
+      "setup": {
+        "P16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "P8": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "P5": {
+          "kind": "number",
+          "value": -23.7
+        },
+        "P4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "P3": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E24",
+      "formula": "=SUM(OFFSET($C$23, (ROW()-24)*5,0,5,1))",
+      "setup": {
+        "C23": {
+          "kind": "number",
+          "value": 45.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 225.0
+      }
+    },
+    {
+      "id": "F24",
+      "formula": "=SUM(C23:C27)",
+      "setup": {
+        "C27": {
+          "kind": "number",
+          "value": -67.0
+        },
+        "C26": {
+          "kind": "number",
+          "value": 91.0
+        },
+        "C25": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "C24": {
+          "kind": "number",
+          "value": 33.0
+        },
+        "C23": {
+          "kind": "number",
+          "value": 45.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 225.0
+      }
+    },
+    {
+      "id": "E25",
+      "formula": "=SUM(OFFSET($C$23, (ROW()-24)*5,0,5,1))",
+      "setup": {
+        "C23": {
+          "kind": "number",
+          "value": 45.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 107.0
+      }
+    },
+    {
+      "id": "F25",
+      "formula": "=SUM(C28:C32)",
+      "setup": {
+        "C32": {
+          "kind": "number",
+          "value": -87.0
+        },
+        "C31": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "C30": {
+          "kind": "number",
+          "value": 57.0
+        },
+        "C29": {
+          "kind": "number",
+          "value": 43.0
+        },
+        "C28": {
+          "kind": "number",
+          "value": 82.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 107.0
+      }
+    },
+    {
+      "id": "E26",
+      "formula": "=SUM(OFFSET($C$23, (ROW()-24)*5,0,5,1))",
+      "setup": {
+        "C23": {
+          "kind": "number",
+          "value": 45.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -14.200000000000003
+      }
+    },
+    {
+      "id": "F26",
+      "formula": "=SUM(C33:C37)",
+      "setup": {
+        "C37": {
+          "kind": "number",
+          "value": 44.0
+        },
+        "C36": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "C35": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "C34": {
+          "kind": "number",
+          "value": 45.8
+        },
+        "C33": {
+          "kind": "number",
+          "value": -123.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -14.200000000000003
+      }
+    },
+    {
+      "id": "K36",
+      "formula": "=OFFSET(K33,-2,-2)",
+      "setup": {
+        "K33": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "K37",
+      "formula": "=OFFSET(K33,-2.3,-2.8)",
+      "setup": {
+        "K33": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "K38",
+      "formula": "=OFFSET(RS33,2,2, -10, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "K39",
+      "formula": "=OFFSET(RS33,2,2, 2, -2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "K40",
+      "formula": "=OFFSET(W39,2,2)",
+      "setup": {
+        "W39": {
+          "kind": "text",
+          "value": "W39"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "K41",
+      "formula": "=OFFSET(W39, 2,2,1,1)",
+      "setup": {
+        "W39": {
+          "kind": "text",
+          "value": "W39"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "D42",
+      "formula": "=OFFSET(INDIRECT(A42),B42,C42)",
+      "setup": {
+        "C42": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B42": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "A1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "E42",
+      "formula": "=COLUMN(OFFSET(INDIRECT(A42),B42,C42))",
+      "setup": {
+        "C42": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B42": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "A1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "F42",
+      "formula": "=ROW(OFFSET(INDIRECT(A42),B42,C42))",
+      "setup": {
+        "C42": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B42": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A42": {
+          "kind": "text",
+          "value": "A1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "K42",
+      "formula": "=OFFSET(W39,2,2,1)",
+      "setup": {
+        "W39": {
+          "kind": "text",
+          "value": "W39"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "D43",
+      "formula": "=OFFSET(INDIRECT(A43),B43,C43)",
+      "setup": {
+        "C43": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B43": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A43": {
+          "kind": "text",
+          "value": "A1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "E43",
+      "formula": "=COLUMN(OFFSET(INDIRECT(A43),B43,C43))",
+      "setup": {
+        "C43": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B43": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A43": {
+          "kind": "text",
+          "value": "A1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "F43",
+      "formula": "=ROW(OFFSET(INDIRECT(A43),B43,C43))",
+      "setup": {
+        "C43": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B43": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A43": {
+          "kind": "text",
+          "value": "A1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "K43",
+      "formula": "=OFFSET(W39,2,2,2)",
+      "setup": {
+        "W39": {
+          "kind": "text",
+          "value": "W39"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D44",
+      "formula": "=OFFSET(INDIRECT(A44),B44,C44)",
+      "setup": {
+        "A44": {
+          "kind": "text",
+          "value": "A1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "E44",
+      "formula": "=COLUMN(OFFSET(INDIRECT(A44),B44,C44))",
+      "setup": {
+        "A44": {
+          "kind": "text",
+          "value": "A1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "F44",
+      "formula": "=ROW(OFFSET(INDIRECT(A44),B44,C44))",
+      "setup": {
+        "A44": {
+          "kind": "text",
+          "value": "A1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "K44",
+      "formula": "=SUM(OFFSET(W39,2,2,3,4))",
+      "setup": {
+        "W39": {
+          "kind": "text",
+          "value": "W39"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 65.5
+      }
+    },
+    {
+      "id": "D45",
+      "formula": "=OFFSET(INDIRECT(A45),B45,C45)",
+      "setup": {
+        "C45": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "B45": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A45": {
+          "kind": "text",
+          "value": "A1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "E45",
+      "formula": "=COLUMN(OFFSET(INDIRECT(A45),B45,C45))",
+      "setup": {
+        "C45": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "B45": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A45": {
+          "kind": "text",
+          "value": "A1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "F45",
+      "formula": "=ROW(OFFSET(INDIRECT(A45),B45,C45))",
+      "setup": {
+        "C45": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "B45": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A45": {
+          "kind": "text",
+          "value": "A1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "K45",
+      "formula": "=SUM(OFFSET(W39,2,2,3,4.2))",
+      "setup": {
+        "W39": {
+          "kind": "text",
+          "value": "W39"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 65.5
+      }
+    },
+    {
+      "id": "D46",
+      "formula": "=OFFSET(INDIRECT(A46),B46,C46)",
+      "setup": {
+        "C46": {
+          "kind": "number",
+          "value": 56.0
+        },
+        "B46": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A46": {
+          "kind": "text",
+          "value": "AA23"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E46",
+      "formula": "=COLUMN(OFFSET(INDIRECT(A46),B46,C46))",
+      "setup": {
+        "C46": {
+          "kind": "number",
+          "value": 56.0
+        },
+        "B46": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A46": {
+          "kind": "text",
+          "value": "AA23"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 83.0
+      }
+    },
+    {
+      "id": "F46",
+      "formula": "=ROW(OFFSET(INDIRECT(A46),B46,C46))",
+      "setup": {
+        "C46": {
+          "kind": "number",
+          "value": 56.0
+        },
+        "B46": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A46": {
+          "kind": "text",
+          "value": "AA23"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 35.0
+      }
+    },
+    {
+      "id": "K46",
+      "formula": "=SUM(OFFSET(W39,2,2,3.1,3.99))",
+      "setup": {
+        "W39": {
+          "kind": "text",
+          "value": "W39"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 58.5
+      }
+    },
+    {
+      "id": "D47",
+      "formula": "=OFFSET(INDIRECT(A47),B47,C47)",
+      "setup": {
+        "C47": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B47": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A47": {
+          "kind": "text",
+          "value": "XFD12"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E47",
+      "formula": "=COLUMN(OFFSET(INDIRECT(A47),B47,C47))",
+      "setup": {
+        "C47": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B47": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A47": {
+          "kind": "text",
+          "value": "XFD12"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16384.0
+      }
+    },
+    {
+      "id": "F47",
+      "formula": "=ROW(OFFSET(INDIRECT(A47),B47,C47))",
+      "setup": {
+        "C47": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B47": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A47": {
+          "kind": "text",
+          "value": "XFD12"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "K47",
+      "formula": "=SUM(OFFSET(W39,2,2,3,0))",
+      "setup": {
+        "W39": {
+          "kind": "text",
+          "value": "W39"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "D48",
+      "formula": "=OFFSET(INDIRECT(A48),B48,C48)",
+      "setup": {
+        "C48": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B48": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A48": {
+          "kind": "text",
+          "value": "XFD12"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "E48",
+      "formula": "=COLUMN(OFFSET(INDIRECT(A48),B48,C48))",
+      "setup": {
+        "C48": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B48": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A48": {
+          "kind": "text",
+          "value": "XFD12"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "F48",
+      "formula": "=ROW(OFFSET(INDIRECT(A48),B48,C48))",
+      "setup": {
+        "C48": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B48": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A48": {
+          "kind": "text",
+          "value": "XFD12"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "K48",
+      "formula": "=SUM(OFFSET(W39,2,2,3,0.9))",
+      "setup": {
+        "W39": {
+          "kind": "text",
+          "value": "W39"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "K50",
+      "formula": "=SUM(OFFSET(W39,2,2,3,1))",
+      "setup": {
+        "W39": {
+          "kind": "text",
+          "value": "W39"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "K51",
+      "formula": "=SUM(OFFSET(W39,2,2,3,1.2))",
+      "setup": {
+        "W39": {
+          "kind": "text",
+          "value": "W39"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    }
+  ]
+}

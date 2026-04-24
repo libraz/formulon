@@ -1,0 +1,389 @@
+{
+  "suite": "ironcalc_docs_MONTH_Sheet1",
+  "description": "Derived from IronCalc fixture docs/MONTH.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=MONTH(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 45651.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=_xlfn.FORMULATEXT(B2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 45651.0
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=MONTH(A2)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=MONTH(A2)"
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=MONTH(DATE(2024,12,25))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=_xlfn.FORMULATEXT(B3)",
+      "setup": {
+        "B3": {
+          "kind": "formula",
+          "formula": "=MONTH(DATE(2024,12,25))"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=MONTH(DATE(2024,12,25))"
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=MONTH(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 45651.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=_xlfn.FORMULATEXT(B4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 45651.0
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=MONTH(A4)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=MONTH(A4)"
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=MONTH(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 45651.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=_xlfn.FORMULATEXT(B5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 45651.9
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=MONTH(A5)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=MONTH(A5)"
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=MONTH(A7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=_xlfn.FORMULATEXT(B7)",
+      "setup": {
+        "B7": {
+          "kind": "formula",
+          "formula": "=MONTH(A7)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=MONTH(A7)"
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=MONTH(A8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=_xlfn.FORMULATEXT(B8)",
+      "setup": {
+        "B8": {
+          "kind": "formula",
+          "formula": "=MONTH(A8)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=MONTH(A8)"
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=MONTH(A9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=_xlfn.FORMULATEXT(B9)",
+      "setup": {
+        "B9": {
+          "kind": "formula",
+          "formula": "=MONTH(A9)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=MONTH(A9)"
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=MONTH(A10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=_xlfn.FORMULATEXT(B10)",
+      "setup": {
+        "B10": {
+          "kind": "formula",
+          "formula": "=MONTH(A10)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=MONTH(A10)"
+      }
+    },
+    {
+      "id": "A14",
+      "formula": "=MONTH(SQRT(-1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=_xlfn.FORMULATEXT(A14)",
+      "setup": {
+        "A14": {
+          "kind": "formula",
+          "formula": "=MONTH(SQRT(-1))"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=MONTH(SQRT(-1))"
+      }
+    },
+    {
+      "id": "A15",
+      "formula": "=MONTH(\"str\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=_xlfn.FORMULATEXT(A15)",
+      "setup": {
+        "A15": {
+          "kind": "formula",
+          "formula": "=MONTH(\"str\")"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=MONTH(\"str\")"
+      }
+    },
+    {
+      "id": "A16",
+      "formula": "=MONTH(10/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=_xlfn.FORMULATEXT(A16)",
+      "setup": {
+        "A16": {
+          "kind": "formula",
+          "formula": "=MONTH(10/0)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=MONTH(10/0)"
+      }
+    },
+    {
+      "id": "A17",
+      "formula": "=MONTH(-5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=_xlfn.FORMULATEXT(A17)",
+      "setup": {
+        "A17": {
+          "kind": "formula",
+          "formula": "=MONTH(-5)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=MONTH(-5)"
+      }
+    },
+    {
+      "id": "A18",
+      "formula": "=MONTH(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=_xlfn.FORMULATEXT(A18)",
+      "setup": {
+        "A18": {
+          "kind": "formula",
+          "formula": "=MONTH(0)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=MONTH(0)"
+      }
+    },
+    {
+      "id": "A19",
+      "formula": "=MONTH(2958466)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=_xlfn.FORMULATEXT(A19)",
+      "setup": {
+        "A19": {
+          "kind": "formula",
+          "formula": "=MONTH(2958466)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=MONTH(2958466)"
+      }
+    },
+    {
+      "id": "A20",
+      "formula": "=MONTH(DATE(1900,2,29))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=_xlfn.FORMULATEXT(A20)",
+      "setup": {
+        "A20": {
+          "kind": "formula",
+          "formula": "=MONTH(DATE(1900,2,29))"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=MONTH(DATE(1900,2,29))"
+      }
+    }
+  ]
+}

@@ -1,0 +1,677 @@
+{
+  "suite": "ironcalc_calc_tests_SMALL_LARGE_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/SMALL_LARGE.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C1",
+      "formula": "=SMALL($A$1:$A$6,B1)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "D1",
+      "formula": "=LARGE($A$1:$A$6,B1)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=SMALL($A$1:$A$6,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=LARGE($A$1:$A$6,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=SMALL({1,2,3,-8},1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -8.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=SMALL($A$1:$A$6,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=LARGE($A$1:$A$6,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=SMALL(3.4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.4
+      }
+    },
+    {
+      "id": "J3",
+      "formula": "=SMALL(\"3.4\", 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.4
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=SMALL($A$1:$A$6,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 3.4
+        },
+        "A6": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=LARGE($A$1:$A$6,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 3.4
+        },
+        "A6": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "H4",
+      "formula": "=SMALL(TRUE, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=SMALL(\"Hello\", 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=SMALL($A$1:$A$6,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=LARGE($A$1:$A$6,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=SMALL($A$1:$A$6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=LARGE($A$1:$A$6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K9",
+      "formula": "=\"13\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "13"
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=SMALL(A10:A13, 1)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=\"-1\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=SMALL(A10:A14, 1)",
+      "setup": {
+        "A14": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=\"-1\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=SMALL(A10:A15, 1)",
+      "setup": {
+        "A15": {
+          "kind": "bool",
+          "value": false
+        },
+        "A14": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=\"-1\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=SMALL({1,\"-1\"}, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "I10",
+      "formula": "=SMALL(I9,1)",
+      "setup": {
+        "I9": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J10",
+      "formula": "=SMALL(J9,1)",
+      "setup": {
+        "J9": {
+          "kind": "text",
+          "value": "Hello"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K10",
+      "formula": "=SMALL(K9,1)",
+      "setup": {
+        "K9": {
+          "kind": "formula",
+          "formula": "=\"13\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A13",
+      "formula": "=\"-1\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1"
+      }
+    }
+  ]
+}

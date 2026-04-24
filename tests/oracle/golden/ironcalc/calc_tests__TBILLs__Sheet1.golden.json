@@ -1,0 +1,4890 @@
+{
+  "suite": "ironcalc_calc_tests_TBILLs_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/TBILLs.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "D2",
+      "formula": "=TBILLEQ(A2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20182.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6784386617100372
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=365*C2/(360-C2*(B2-A2))",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 20000.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20182.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6784386617100372
+      }
+    },
+    {
+      "id": "J2",
+      "formula": "=B2-A2",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 20000.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20182.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 182.0
+      }
+    },
+    {
+      "id": "L2",
+      "formula": "=(360-365*C2/D2)/C2",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20182.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20000.0
+        },
+        "D2": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A2,B2,C2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 182.0
+      }
+    },
+    {
+      "id": "N2",
+      "formula": "=TBILLPRICE(A2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20182.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 74.72222222222223
+      }
+    },
+    {
+      "id": "O2",
+      "formula": "=100*(1-C2*J2/360)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 20000.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20182.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "J2": {
+          "kind": "formula",
+          "formula": "=B2-A2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 74.72222222222223
+      }
+    },
+    {
+      "id": "R2",
+      "formula": "=TBILLYIELD(A2,B2,Q2)",
+      "setup": {
+        "Q2": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20182.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.989010989010989
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=TBILLEQ(A3,B3,C3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.4038461538461537
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=365*C3/(360-C3*(B3-A3))",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.4038461538461537
+      }
+    },
+    {
+      "id": "J3",
+      "formula": "=B3-A3",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 200.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "L3",
+      "formula": "=(360-365*C3/D3)/C3",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D3": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A3,B3,C3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "N3",
+      "formula": "=TBILLPRICE(A3,B3,C3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 72.22222222222221
+      }
+    },
+    {
+      "id": "O3",
+      "formula": "=100*(1-C3*J3/360)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J3": {
+          "kind": "formula",
+          "formula": "=B3-A3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 72.22222222222221
+      }
+    },
+    {
+      "id": "R3",
+      "formula": "=TBILLYIELD(A3,B3,Q3)",
+      "setup": {
+        "Q3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=TBILLEQ(A4,B4,C4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B4": {
+          "kind": "number",
+          "value": 2400.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2040.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.5066048253748145
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=365*C4/(360-C4*(B4-A4))",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 2040.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 2400.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 0.8
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.055555555555555
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=B4-A4",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 2040.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 2400.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 360.0
+      }
+    },
+    {
+      "id": "L4",
+      "formula": "=(360-365*C4/D4)/C4",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B4": {
+          "kind": "number",
+          "value": 2400.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2040.0
+        },
+        "D4": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A4,B4,C4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 304.38470543699634
+      }
+    },
+    {
+      "id": "N4",
+      "formula": "=TBILLPRICE(A4,B4,C4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B4": {
+          "kind": "number",
+          "value": 2400.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2040.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 19.999999999999996
+      }
+    },
+    {
+      "id": "O4",
+      "formula": "=100*(1-C4*J4/360)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 2040.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 2400.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "J4": {
+          "kind": "formula",
+          "formula": "=B4-A4"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 19.999999999999996
+      }
+    },
+    {
+      "id": "R4",
+      "formula": "=TBILLYIELD(A4,B4,Q4)",
+      "setup": {
+        "Q4": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 2400.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2040.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=A5+365",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 14640.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15005.0
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=TBILLEQ(A5,B5,C5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A5": {
+          "kind": "number",
+          "value": 14640.0
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=A5+365"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8482759796652481
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=365*C5/(360-C5*(B5-A5))",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 14640.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=A5+365"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.028169014084507
+      }
+    },
+    {
+      "id": "J5",
+      "formula": "=B5-A5",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 14640.0
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=A5+365"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 365.0
+      }
+    },
+    {
+      "id": "L5",
+      "formula": "=(360-365*C5/D5)/C5",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A5": {
+          "kind": "number",
+          "value": 14640.0
+        },
+        "D5": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A5,B5,C5)"
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=A5+365"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 289.7155068047093
+      }
+    },
+    {
+      "id": "N5",
+      "formula": "=TBILLPRICE(A5,B5,C5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A5": {
+          "kind": "number",
+          "value": 14640.0
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=A5+365"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 49.30555555555556
+      }
+    },
+    {
+      "id": "O5",
+      "formula": "=100*(1-C5*J5/360)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 14640.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "J5": {
+          "kind": "formula",
+          "formula": "=B5-A5"
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=A5+365"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 49.30555555555556
+      }
+    },
+    {
+      "id": "R5",
+      "formula": "=TBILLYIELD(A5,B5,Q5)",
+      "setup": {
+        "Q5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 14640.0
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=A5+365"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A6",
+      "formula": "=A5",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 14640.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 14640.0
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=A6+366",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 14640.0
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15006.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=TBILLEQ(A6,B6,C6)",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A5": {
+          "kind": "number",
+          "value": 14640.0
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=A6+366"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8522961312491701
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=365*C6/(360-C6*(B6-A6))",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 14640.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5"
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=A6+366"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0310734463276836
+      }
+    },
+    {
+      "id": "J6",
+      "formula": "=B6-A6",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 14640.0
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5"
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=A6+366"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 366.0
+      }
+    },
+    {
+      "id": "L6",
+      "formula": "=(360-365*C6/D6)/C6",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A5": {
+          "kind": "number",
+          "value": 14640.0
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A6,B6,C6)"
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=A6+366"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 291.74509349815213
+      }
+    },
+    {
+      "id": "N6",
+      "formula": "=TBILLPRICE(A6,B6,C6)",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A5": {
+          "kind": "number",
+          "value": 14640.0
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=A6+366"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 49.16666666666667
+      }
+    },
+    {
+      "id": "O6",
+      "formula": "=100*(1-C6*J6/360)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 14640.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "J6": {
+          "kind": "formula",
+          "formula": "=B6-A6"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5"
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=A6+366"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 49.16666666666667
+      }
+    },
+    {
+      "id": "R6",
+      "formula": "=TBILLYIELD(A6,B6,Q6)",
+      "setup": {
+        "Q6": {
+          "kind": "number",
+          "value": 3000.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 14640.0
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=A6+366"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.9508196721311475
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=TBILLEQ(A7,B7,C7)",
+      "setup": {
+        "C7": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B7": {
+          "kind": "number",
+          "value": 1365.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8482759796652481
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=365*C7/(360-C7*(B7-A7))",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 1365.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.028169014084507
+      }
+    },
+    {
+      "id": "J7",
+      "formula": "=B7-A7",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 1365.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 365.0
+      }
+    },
+    {
+      "id": "L7",
+      "formula": "=(360-365*C7/D7)/C7",
+      "setup": {
+        "C7": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B7": {
+          "kind": "number",
+          "value": 1365.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "D7": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A7,B7,C7)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 289.7155068047093
+      }
+    },
+    {
+      "id": "N7",
+      "formula": "=TBILLPRICE(A7,B7,C7)",
+      "setup": {
+        "C7": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B7": {
+          "kind": "number",
+          "value": 1365.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 49.30555555555556
+      }
+    },
+    {
+      "id": "O7",
+      "formula": "=100*(1-C7*J7/360)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 1365.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "J7": {
+          "kind": "formula",
+          "formula": "=B7-A7"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 49.30555555555556
+      }
+    },
+    {
+      "id": "R7",
+      "formula": "=TBILLYIELD(A7,B7,Q7)",
+      "setup": {
+        "Q7": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 1365.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.2054794520547945
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=TBILLEQ(A8,B8,C8)",
+      "setup": {
+        "C8": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B8": {
+          "kind": "number",
+          "value": 1366.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=365*C8/(360-C8*(B8-A8))",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 1366.0
+        },
+        "C8": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0310734463276836
+      }
+    },
+    {
+      "id": "J8",
+      "formula": "=B8-A8",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 1366.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 366.0
+      }
+    },
+    {
+      "id": "L8",
+      "formula": "=(360-365*C8/D8)/C8",
+      "setup": {
+        "C8": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B8": {
+          "kind": "number",
+          "value": 1366.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "D8": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A8,B8,C8)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "N8",
+      "formula": "=TBILLPRICE(A8,B8,C8)",
+      "setup": {
+        "C8": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B8": {
+          "kind": "number",
+          "value": 1366.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "O8",
+      "formula": "=100*(1-C8*J8/360)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 1366.0
+        },
+        "C8": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "J8": {
+          "kind": "formula",
+          "formula": "=B8-A8"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 49.16666666666667
+      }
+    },
+    {
+      "id": "R8",
+      "formula": "=TBILLYIELD(A8,B8,Q8)",
+      "setup": {
+        "Q8": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 1366.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=TBILLEQ(A9,B9,C9)",
+      "setup": {
+        "C9": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B9": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 45332.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7787541318484793
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=365*C9/(360-C9*(B9-A9))",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "C9": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9079601990049752
+      }
+    },
+    {
+      "id": "J9",
+      "formula": "=B9-A9",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 45650.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 318.0
+      }
+    },
+    {
+      "id": "L9",
+      "formula": "=(360-365*C9/D9)/C9",
+      "setup": {
+        "C9": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B9": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "D9": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A9,B9,C9)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 251.30264730201475
+      }
+    },
+    {
+      "id": "N9",
+      "formula": "=TBILLPRICE(A9,B9,C9)",
+      "setup": {
+        "C9": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B9": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 45332.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 55.833333333333336
+      }
+    },
+    {
+      "id": "O9",
+      "formula": "=100*(1-C9*J9/360)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "C9": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "J9": {
+          "kind": "formula",
+          "formula": "=B9-A9"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 55.833333333333336
+      }
+    },
+    {
+      "id": "R9",
+      "formula": "=TBILLYIELD(A9,B9,Q9)",
+      "setup": {
+        "Q9": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 45332.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0754716981132075
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=TBILLEQ(A10,B10,C10)",
+      "setup": {
+        "C10": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B10": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 45366.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8482759796652481
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=365*C10/(360-C10*(B10-A10))",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 45366.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.028169014084507
+      }
+    },
+    {
+      "id": "J10",
+      "formula": "=B10-A10",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 45366.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 45731.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 365.0
+      }
+    },
+    {
+      "id": "L10",
+      "formula": "=(360-365*C10/D10)/C10",
+      "setup": {
+        "C10": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B10": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 45366.0
+        },
+        "D10": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A10,B10,C10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 289.7155068047093
+      }
+    },
+    {
+      "id": "N10",
+      "formula": "=TBILLPRICE(A10,B10,C10)",
+      "setup": {
+        "C10": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B10": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 45366.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 49.30555555555556
+      }
+    },
+    {
+      "id": "O10",
+      "formula": "=100*(1-C10*J10/360)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 45366.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "J10": {
+          "kind": "formula",
+          "formula": "=B10-A10"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 49.30555555555556
+      }
+    },
+    {
+      "id": "R10",
+      "formula": "=TBILLYIELD(A10,B10,Q10)",
+      "setup": {
+        "Q10": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 45366.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.9369863013698629
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=TBILLEQ(A11,B11,C11)",
+      "setup": {
+        "C11": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B11": {
+          "kind": "number",
+          "value": 45732.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 45366.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=365*C11/(360-C11*(B11-A11))",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 45366.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 45732.0
+        },
+        "C11": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0310734463276836
+      }
+    },
+    {
+      "id": "J11",
+      "formula": "=B11-A11",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 45366.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 45732.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 366.0
+      }
+    },
+    {
+      "id": "L11",
+      "formula": "=(360-365*C11/D11)/C11",
+      "setup": {
+        "C11": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B11": {
+          "kind": "number",
+          "value": 45732.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 45366.0
+        },
+        "D11": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A11,B11,C11)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "N11",
+      "formula": "=TBILLPRICE(A11,B11,C11)",
+      "setup": {
+        "C11": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B11": {
+          "kind": "number",
+          "value": 45732.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 45366.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "O11",
+      "formula": "=100*(1-C11*J11/360)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 45366.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 45732.0
+        },
+        "C11": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "J11": {
+          "kind": "formula",
+          "formula": "=B11-A11"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 49.16666666666667
+      }
+    },
+    {
+      "id": "R11",
+      "formula": "=TBILLYIELD(A11,B11,Q11)",
+      "setup": {
+        "Q11": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 45732.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 45366.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=TBILLEQ(A12,B12,C12)",
+      "setup": {
+        "C12": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B12": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A12": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=365*C12/(360-C12*(B12-A12))",
+      "setup": {
+        "A12": {
+          "kind": "bool",
+          "value": true
+        },
+        "B12": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "C12": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.008109309042435014
+      }
+    },
+    {
+      "id": "G12",
+      "formula": "=A12",
+      "setup": {
+        "A12": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "J12",
+      "formula": "=B12-A12",
+      "setup": {
+        "A12": {
+          "kind": "bool",
+          "value": true
+        },
+        "B12": {
+          "kind": "number",
+          "value": 45731.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45730.0
+      }
+    },
+    {
+      "id": "L12",
+      "formula": "=(360-365*C12/D12)/C12",
+      "setup": {
+        "C12": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B12": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A12": {
+          "kind": "bool",
+          "value": true
+        },
+        "D12": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A12,B12,C12)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "N12",
+      "formula": "=TBILLPRICE(A12,B12,C12)",
+      "setup": {
+        "C12": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B12": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A12": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O12",
+      "formula": "=100*(1-C12*J12/360)",
+      "setup": {
+        "A12": {
+          "kind": "bool",
+          "value": true
+        },
+        "B12": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "C12": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=B12-A12"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -6251.388888888889
+      }
+    },
+    {
+      "id": "R12",
+      "formula": "=TBILLYIELD(A12,B12,Q12)",
+      "setup": {
+        "Q12": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A12": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=TBILLEQ(A13,B13,C13)",
+      "setup": {
+        "C13": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B13": {
+          "kind": "number",
+          "value": 20000.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 10000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=365*C13/(360-C13*(B13-A13))",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 10000.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": 20000.0
+        },
+        "C13": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.03933189655172414
+      }
+    },
+    {
+      "id": "J13",
+      "formula": "=B13-A13",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 10000.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": 20000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10000.0
+      }
+    },
+    {
+      "id": "L13",
+      "formula": "=(360-365*C13/D13)/C13",
+      "setup": {
+        "C13": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B13": {
+          "kind": "number",
+          "value": 20000.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 10000.0
+        },
+        "D13": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A13,B13,C13)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "N13",
+      "formula": "=TBILLPRICE(A13,B13,C13)",
+      "setup": {
+        "C13": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B13": {
+          "kind": "number",
+          "value": 20000.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 10000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "O13",
+      "formula": "=100*(1-C13*J13/360)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 10000.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": 20000.0
+        },
+        "C13": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "J13": {
+          "kind": "formula",
+          "formula": "=B13-A13"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1288.888888888889
+      }
+    },
+    {
+      "id": "R13",
+      "formula": "=TBILLYIELD(A13,B13,Q13)",
+      "setup": {
+        "Q13": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": 20000.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 10000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=TBILLEQ(A14,B14,C14)",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B14": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A14": {
+          "kind": "text",
+          "value": "Hello"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=365*C14/(360-C14*(B14-A14))",
+      "setup": {
+        "A14": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "B14": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "C14": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G14",
+      "formula": "=A14",
+      "setup": {
+        "A14": {
+          "kind": "text",
+          "value": "Hello"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Hello"
+      }
+    },
+    {
+      "id": "J14",
+      "formula": "=B14-A14",
+      "setup": {
+        "A14": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "B14": {
+          "kind": "number",
+          "value": 45731.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L14",
+      "formula": "=(360-365*C14/D14)/C14",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B14": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A14": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "D14": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A14,B14,C14)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "N14",
+      "formula": "=TBILLPRICE(A14,B14,C14)",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B14": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A14": {
+          "kind": "text",
+          "value": "Hello"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O14",
+      "formula": "=100*(1-C14*J14/360)",
+      "setup": {
+        "A14": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "B14": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "C14": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "J14": {
+          "kind": "formula",
+          "formula": "=B14-A14"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "R14",
+      "formula": "=TBILLYIELD(A14,B14,Q14)",
+      "setup": {
+        "Q14": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A14": {
+          "kind": "text",
+          "value": "Hello"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=TBILLEQ(A15,B15,C15)",
+      "setup": {
+        "C15": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B15": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "A15": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=365*C15/(360-C15*(B15-A15))",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B15": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "C15": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "H15",
+      "formula": "=B15",
+      "setup": {
+        "B15": {
+          "kind": "text",
+          "value": "Hello"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Hello"
+      }
+    },
+    {
+      "id": "J15",
+      "formula": "=B15-A15",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B15": {
+          "kind": "text",
+          "value": "Hello"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L15",
+      "formula": "=(360-365*C15/D15)/C15",
+      "setup": {
+        "C15": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B15": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "A15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D15": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A15,B15,C15)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "N15",
+      "formula": "=TBILLPRICE(A15,B15,C15)",
+      "setup": {
+        "C15": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B15": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "A15": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O15",
+      "formula": "=100*(1-C15*J15/360)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B15": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "C15": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "J15": {
+          "kind": "formula",
+          "formula": "=B15-A15"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "R15",
+      "formula": "=TBILLYIELD(A15,B15,Q15)",
+      "setup": {
+        "Q15": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "B15": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "A15": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=\"0.5\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.5"
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=TBILLEQ(A16,B16,C16)",
+      "setup": {
+        "B16": {
+          "kind": "text",
+          "value": "45731"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "45366"
+        },
+        "C16": {
+          "kind": "formula",
+          "formula": "=\"0.5\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8482759796652481
+      }
+    },
+    {
+      "id": "E16",
+      "formula": "=365*C16/(360-C16*(B16-A16))",
+      "setup": {
+        "A16": {
+          "kind": "text",
+          "value": "45366"
+        },
+        "B16": {
+          "kind": "text",
+          "value": "45731"
+        },
+        "C16": {
+          "kind": "formula",
+          "formula": "=\"0.5\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.028169014084507
+      }
+    },
+    {
+      "id": "G16",
+      "formula": "=A16",
+      "setup": {
+        "A16": {
+          "kind": "text",
+          "value": "45366"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "45366"
+      }
+    },
+    {
+      "id": "H16",
+      "formula": "=B16",
+      "setup": {
+        "B16": {
+          "kind": "text",
+          "value": "45731"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "45731"
+      }
+    },
+    {
+      "id": "J16",
+      "formula": "=B16-A16",
+      "setup": {
+        "A16": {
+          "kind": "text",
+          "value": "45366"
+        },
+        "B16": {
+          "kind": "text",
+          "value": "45731"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 365.0
+      }
+    },
+    {
+      "id": "L16",
+      "formula": "=(360-365*C16/D16)/C16",
+      "setup": {
+        "B16": {
+          "kind": "text",
+          "value": "45731"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "45366"
+        },
+        "C16": {
+          "kind": "formula",
+          "formula": "=\"0.5\""
+        },
+        "D16": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A16,B16,C16)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 289.7155068047093
+      }
+    },
+    {
+      "id": "N16",
+      "formula": "=TBILLPRICE(A16,B16,C16)",
+      "setup": {
+        "B16": {
+          "kind": "text",
+          "value": "45731"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "45366"
+        },
+        "C16": {
+          "kind": "formula",
+          "formula": "=\"0.5\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 49.30555555555556
+      }
+    },
+    {
+      "id": "O16",
+      "formula": "=100*(1-C16*J16/360)",
+      "setup": {
+        "A16": {
+          "kind": "text",
+          "value": "45366"
+        },
+        "B16": {
+          "kind": "text",
+          "value": "45731"
+        },
+        "J16": {
+          "kind": "formula",
+          "formula": "=B16-A16"
+        },
+        "C16": {
+          "kind": "formula",
+          "formula": "=\"0.5\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 49.30555555555556
+      }
+    },
+    {
+      "id": "R16",
+      "formula": "=TBILLYIELD(A16,B16,Q16)",
+      "setup": {
+        "Q16": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "B16": {
+          "kind": "text",
+          "value": "45731"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "45366"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.9369863013698629
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=TBILLEQ(A17,B17,C17)",
+      "setup": {
+        "C17": {
+          "kind": "bool",
+          "value": true
+        },
+        "B17": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 45366.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E17",
+      "formula": "=365*C17/(360-C17*(B17-A17))",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": 45366.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "C17": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -73.0
+      }
+    },
+    {
+      "id": "J17",
+      "formula": "=B17-A17",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": 45366.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 45731.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 365.0
+      }
+    },
+    {
+      "id": "L17",
+      "formula": "=(360-365*C17/D17)/C17",
+      "setup": {
+        "C17": {
+          "kind": "bool",
+          "value": true
+        },
+        "B17": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 45366.0
+        },
+        "D17": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A17,B17,C17)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "N17",
+      "formula": "=TBILLPRICE(A17,B17,C17)",
+      "setup": {
+        "C17": {
+          "kind": "bool",
+          "value": true
+        },
+        "B17": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 45366.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O17",
+      "formula": "=100*(1-C17*J17/360)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": 45366.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "C17": {
+          "kind": "bool",
+          "value": true
+        },
+        "J17": {
+          "kind": "formula",
+          "formula": "=B17-A17"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.388888888888884
+      }
+    },
+    {
+      "id": "R17",
+      "formula": "=TBILLYIELD(A17,B17,Q17)",
+      "setup": {
+        "Q17": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 45366.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.9369863013698629
+      }
+    },
+    {
+      "id": "A18",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=TBILLEQ(A18,B18,C18)",
+      "setup": {
+        "C18": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B18": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=365*C18/(360-C18*(B18-A18))",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "C18": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "G18",
+      "formula": "=A18",
+      "setup": {
+        "A18": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "J18",
+      "formula": "=B18-A18",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "L18",
+      "formula": "=(360-365*C18/D18)/C18",
+      "setup": {
+        "C18": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B18": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "D18": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A18,B18,C18)"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "N18",
+      "formula": "=TBILLPRICE(A18,B18,C18)",
+      "setup": {
+        "C18": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B18": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "O18",
+      "formula": "=100*(1-C18*J18/360)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "C18": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "J18": {
+          "kind": "formula",
+          "formula": "=B18-A18"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "R18",
+      "formula": "=TBILLYIELD(A18,B18,Q18)",
+      "setup": {
+        "Q18": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=TBILLEQ(A19,B19,C19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 45366.0
+        },
+        "C19": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E19",
+      "formula": "=365*C19/(360-C19*(B19-A19))",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": 45366.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "C19": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "J19",
+      "formula": "=B19-A19",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": 45366.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": 45731.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 365.0
+      }
+    },
+    {
+      "id": "L19",
+      "formula": "=(360-365*C19/D19)/C19",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 45366.0
+        },
+        "C19": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "D19": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A19,B19,C19)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "N19",
+      "formula": "=TBILLPRICE(A19,B19,C19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 45366.0
+        },
+        "C19": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "O19",
+      "formula": "=100*(1-C19*J19/360)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": 45366.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "J19": {
+          "kind": "formula",
+          "formula": "=B19-A19"
+        },
+        "C19": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "R19",
+      "formula": "=TBILLYIELD(A19,B19,Q19)",
+      "setup": {
+        "Q19": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": 45731.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 45366.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.9369863013698629
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=A20+365",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 15640.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16005.0
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=TBILLEQ(A20,B20,C20)",
+      "setup": {
+        "C20": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A20": {
+          "kind": "number",
+          "value": 15640.0
+        },
+        "B20": {
+          "kind": "formula",
+          "formula": "=A20+365"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8482759796652481
+      }
+    },
+    {
+      "id": "E20",
+      "formula": "=365*C20/(360-C20*(B20-A20))",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 15640.0
+        },
+        "C20": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B20": {
+          "kind": "formula",
+          "formula": "=A20+365"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.028169014084507
+      }
+    },
+    {
+      "id": "J20",
+      "formula": "=B20-A20",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 15640.0
+        },
+        "B20": {
+          "kind": "formula",
+          "formula": "=A20+365"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 365.0
+      }
+    },
+    {
+      "id": "L20",
+      "formula": "=(360-365*C20/D20)/C20",
+      "setup": {
+        "C20": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A20": {
+          "kind": "number",
+          "value": 15640.0
+        },
+        "D20": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A20,B20,C20)"
+        },
+        "B20": {
+          "kind": "formula",
+          "formula": "=A20+365"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 289.7155068047093
+      }
+    },
+    {
+      "id": "N20",
+      "formula": "=TBILLPRICE(A20,B20,C20)",
+      "setup": {
+        "C20": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A20": {
+          "kind": "number",
+          "value": 15640.0
+        },
+        "B20": {
+          "kind": "formula",
+          "formula": "=A20+365"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 49.30555555555556
+      }
+    },
+    {
+      "id": "O20",
+      "formula": "=100*(1-C20*J20/360)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 15640.0
+        },
+        "C20": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "J20": {
+          "kind": "formula",
+          "formula": "=B20-A20"
+        },
+        "B20": {
+          "kind": "formula",
+          "formula": "=A20+365"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 49.30555555555556
+      }
+    },
+    {
+      "id": "R20",
+      "formula": "=TBILLYIELD(A20,B20,Q20)",
+      "setup": {
+        "Q20": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 15640.0
+        },
+        "B20": {
+          "kind": "formula",
+          "formula": "=A20+365"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.9369863013698629
+      }
+    },
+    {
+      "id": "A21",
+      "formula": "=A20",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 15640.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15640.0
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=A21+366",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 15640.0
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=A20"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16006.0
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=TBILLEQ(A21,B21,C21)",
+      "setup": {
+        "C21": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A20": {
+          "kind": "number",
+          "value": 15640.0
+        },
+        "B21": {
+          "kind": "formula",
+          "formula": "=A21+366"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=A20"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E21",
+      "formula": "=365*C21/(360-C21*(B21-A21))",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 15640.0
+        },
+        "C21": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=A20"
+        },
+        "B21": {
+          "kind": "formula",
+          "formula": "=A21+366"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0310734463276836
+      }
+    },
+    {
+      "id": "J21",
+      "formula": "=B21-A21",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 15640.0
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=A20"
+        },
+        "B21": {
+          "kind": "formula",
+          "formula": "=A21+366"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 366.0
+      }
+    },
+    {
+      "id": "L21",
+      "formula": "=(360-365*C21/D21)/C21",
+      "setup": {
+        "C21": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A20": {
+          "kind": "number",
+          "value": 15640.0
+        },
+        "D21": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A21,B21,C21)"
+        },
+        "B21": {
+          "kind": "formula",
+          "formula": "=A21+366"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=A20"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "N21",
+      "formula": "=TBILLPRICE(A21,B21,C21)",
+      "setup": {
+        "C21": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A20": {
+          "kind": "number",
+          "value": 15640.0
+        },
+        "B21": {
+          "kind": "formula",
+          "formula": "=A21+366"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=A20"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "O21",
+      "formula": "=100*(1-C21*J21/360)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 15640.0
+        },
+        "C21": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "J21": {
+          "kind": "formula",
+          "formula": "=B21-A21"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=A20"
+        },
+        "B21": {
+          "kind": "formula",
+          "formula": "=A21+366"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 49.16666666666667
+      }
+    },
+    {
+      "id": "R21",
+      "formula": "=TBILLYIELD(A21,B21,Q21)",
+      "setup": {
+        "Q21": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 15640.0
+        },
+        "B21": {
+          "kind": "formula",
+          "formula": "=A21+366"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=A20"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "N22",
+      "formula": "=TBILLPRICE(A22,B22,C22)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "O22",
+      "formula": "=100*(1-C22*J22/360)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "R22",
+      "formula": "=TBILLYIELD(A22,B22,Q22)",
+      "setup": {
+        "Q22": {
+          "kind": "number",
+          "value": 2000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=TBILLEQ(A23,B23,C23)",
+      "setup": {
+        "C23": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B23": {
+          "kind": "number",
+          "value": 2222.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 2040.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.3619402985074627
+      }
+    },
+    {
+      "id": "E23",
+      "formula": "=365*C23/(360-C23*(B23-A23))",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 2040.0
+        },
+        "B23": {
+          "kind": "number",
+          "value": 2222.0
+        },
+        "C23": {
+          "kind": "number",
+          "value": 0.8
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.3619402985074627
+      }
+    },
+    {
+      "id": "J23",
+      "formula": "=B23-A23",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 2040.0
+        },
+        "B23": {
+          "kind": "number",
+          "value": 2222.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 182.0
+      }
+    },
+    {
+      "id": "L23",
+      "formula": "=(360-365*C23/D23)/C23",
+      "setup": {
+        "C23": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B23": {
+          "kind": "number",
+          "value": 2222.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 2040.0
+        },
+        "D23": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A23,B23,C23)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 181.99999999999997
+      }
+    },
+    {
+      "id": "N23",
+      "formula": "=TBILLPRICE(A23,B23,C23)",
+      "setup": {
+        "C23": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B23": {
+          "kind": "number",
+          "value": 2222.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 2040.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 59.555555555555564
+      }
+    },
+    {
+      "id": "O23",
+      "formula": "=100*(1-C23*J23/360)",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 2040.0
+        },
+        "B23": {
+          "kind": "number",
+          "value": 2222.0
+        },
+        "C23": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "J23": {
+          "kind": "formula",
+          "formula": "=B23-A23"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 59.555555555555564
+      }
+    },
+    {
+      "id": "R23",
+      "formula": "=TBILLYIELD(A23,B23,Q23)",
+      "setup": {
+        "Q23": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "B23": {
+          "kind": "number",
+          "value": 2222.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 2040.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.879120879120879
+      }
+    },
+    {
+      "id": "D24",
+      "formula": "=TBILLEQ(A24,B24,C24)",
+      "setup": {
+        "C24": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B24": {
+          "kind": "number",
+          "value": 2223.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2040.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.364497682211261
+      }
+    },
+    {
+      "id": "E24",
+      "formula": "=365*C24/(360-C24*(B24-A24))",
+      "setup": {
+        "A24": {
+          "kind": "number",
+          "value": 2040.0
+        },
+        "B24": {
+          "kind": "number",
+          "value": 2223.0
+        },
+        "C24": {
+          "kind": "number",
+          "value": 0.8
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.3670411985018727
+      }
+    },
+    {
+      "id": "J24",
+      "formula": "=B24-A24",
+      "setup": {
+        "A24": {
+          "kind": "number",
+          "value": 2040.0
+        },
+        "B24": {
+          "kind": "number",
+          "value": 2223.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 183.0
+      }
+    },
+    {
+      "id": "L24",
+      "formula": "=(360-365*C24/D24)/C24",
+      "setup": {
+        "C24": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B24": {
+          "kind": "number",
+          "value": 2223.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2040.0
+        },
+        "D24": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A24,B24,C24)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 182.5022938782184
+      }
+    },
+    {
+      "id": "N24",
+      "formula": "=TBILLPRICE(A24,B24,C24)",
+      "setup": {
+        "C24": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B24": {
+          "kind": "number",
+          "value": 2223.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2040.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 59.33333333333333
+      }
+    },
+    {
+      "id": "O24",
+      "formula": "=100*(1-C24*J24/360)",
+      "setup": {
+        "A24": {
+          "kind": "number",
+          "value": 2040.0
+        },
+        "B24": {
+          "kind": "number",
+          "value": 2223.0
+        },
+        "C24": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "J24": {
+          "kind": "formula",
+          "formula": "=B24-A24"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 59.33333333333333
+      }
+    },
+    {
+      "id": "R24",
+      "formula": "=TBILLYIELD(A24,B24,Q24)",
+      "setup": {
+        "Q24": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "B24": {
+          "kind": "number",
+          "value": 2223.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2040.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.8688524590163933
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=TBILLEQ(A25,B25,C25)",
+      "setup": {
+        "C25": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B25": {
+          "kind": "number",
+          "value": 2224.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 2042.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.3619402985074627
+      }
+    },
+    {
+      "id": "E25",
+      "formula": "=365*C25/(360-C25*(B25-A25))",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": 2042.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": 2224.0
+        },
+        "C25": {
+          "kind": "number",
+          "value": 0.8
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.3619402985074627
+      }
+    },
+    {
+      "id": "J25",
+      "formula": "=B25-A25",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": 2042.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": 2224.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 182.0
+      }
+    },
+    {
+      "id": "L25",
+      "formula": "=(360-365*C25/D25)/C25",
+      "setup": {
+        "C25": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B25": {
+          "kind": "number",
+          "value": 2224.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 2042.0
+        },
+        "D25": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A25,B25,C25)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 181.99999999999997
+      }
+    },
+    {
+      "id": "N25",
+      "formula": "=TBILLPRICE(A25,B25,C25)",
+      "setup": {
+        "C25": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B25": {
+          "kind": "number",
+          "value": 2224.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 2042.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 59.555555555555564
+      }
+    },
+    {
+      "id": "O25",
+      "formula": "=100*(1-C25*J25/360)",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": 2042.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": 2224.0
+        },
+        "C25": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "J25": {
+          "kind": "formula",
+          "formula": "=B25-A25"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 59.555555555555564
+      }
+    },
+    {
+      "id": "R25",
+      "formula": "=TBILLYIELD(A25,B25,Q25)",
+      "setup": {
+        "Q25": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": 2224.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 2042.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.879120879120879
+      }
+    },
+    {
+      "id": "D26",
+      "formula": "=TBILLEQ(A26,B26,C26)",
+      "setup": {
+        "C26": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B26": {
+          "kind": "number",
+          "value": 2225.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": 2042.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.364497682211261
+      }
+    },
+    {
+      "id": "E26",
+      "formula": "=365*C26/(360-C26*(B26-A26))",
+      "setup": {
+        "A26": {
+          "kind": "number",
+          "value": 2042.0
+        },
+        "B26": {
+          "kind": "number",
+          "value": 2225.0
+        },
+        "C26": {
+          "kind": "number",
+          "value": 0.8
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.3670411985018727
+      }
+    },
+    {
+      "id": "J26",
+      "formula": "=B26-A26",
+      "setup": {
+        "A26": {
+          "kind": "number",
+          "value": 2042.0
+        },
+        "B26": {
+          "kind": "number",
+          "value": 2225.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 183.0
+      }
+    },
+    {
+      "id": "L26",
+      "formula": "=(360-365*C26/D26)/C26",
+      "setup": {
+        "C26": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B26": {
+          "kind": "number",
+          "value": 2225.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": 2042.0
+        },
+        "D26": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A26,B26,C26)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 182.5022938782184
+      }
+    },
+    {
+      "id": "N26",
+      "formula": "=TBILLPRICE(A26,B26,C26)",
+      "setup": {
+        "C26": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "B26": {
+          "kind": "number",
+          "value": 2225.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": 2042.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 59.33333333333333
+      }
+    },
+    {
+      "id": "O26",
+      "formula": "=100*(1-C26*J26/360)",
+      "setup": {
+        "A26": {
+          "kind": "number",
+          "value": 2042.0
+        },
+        "B26": {
+          "kind": "number",
+          "value": 2225.0
+        },
+        "C26": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "J26": {
+          "kind": "formula",
+          "formula": "=B26-A26"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 59.33333333333333
+      }
+    },
+    {
+      "id": "R26",
+      "formula": "=TBILLYIELD(A26,B26,Q26)",
+      "setup": {
+        "Q26": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "B26": {
+          "kind": "number",
+          "value": 2225.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": 2042.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.8688524590163933
+      }
+    },
+    {
+      "id": "D27",
+      "formula": "=TBILLEQ(A27,B27,C27)",
+      "setup": {
+        "C27": {
+          "kind": "number",
+          "value": -0.2
+        },
+        "B27": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": 45332.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E27",
+      "formula": "=365*C27/(360-C27*(B27-A27))",
+      "setup": {
+        "A27": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "B27": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "C27": {
+          "kind": "number",
+          "value": -0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.17233238904627005
+      }
+    },
+    {
+      "id": "J27",
+      "formula": "=B27-A27",
+      "setup": {
+        "A27": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "B27": {
+          "kind": "number",
+          "value": 45650.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 318.0
+      }
+    },
+    {
+      "id": "L27",
+      "formula": "=(360-365*C27/D27)/C27",
+      "setup": {
+        "C27": {
+          "kind": "number",
+          "value": -0.2
+        },
+        "B27": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "D27": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A27,B27,C27)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "N27",
+      "formula": "=TBILLPRICE(A27,B27,C27)",
+      "setup": {
+        "C27": {
+          "kind": "number",
+          "value": -0.2
+        },
+        "B27": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": 45332.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "O27",
+      "formula": "=100*(1-C27*J27/360)",
+      "setup": {
+        "A27": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "B27": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "C27": {
+          "kind": "number",
+          "value": -0.2
+        },
+        "J27": {
+          "kind": "formula",
+          "formula": "=B27-A27"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 117.66666666666667
+      }
+    },
+    {
+      "id": "R27",
+      "formula": "=TBILLYIELD(A27,B27,Q27)",
+      "setup": {
+        "Q27": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "B27": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": 45332.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0754716981132075
+      }
+    },
+    {
+      "id": "D28",
+      "formula": "=TBILLEQ(A28,B28,C28)",
+      "setup": {
+        "C28": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "B28": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": 45332.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.10869554506360148
+      }
+    },
+    {
+      "id": "E28",
+      "formula": "=365*C28/(360-C28*(B28-A28))",
+      "setup": {
+        "A28": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "B28": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "C28": {
+          "kind": "number",
+          "value": 0.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.11121267519804998
+      }
+    },
+    {
+      "id": "J28",
+      "formula": "=B28-A28",
+      "setup": {
+        "A28": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "B28": {
+          "kind": "number",
+          "value": 45650.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 318.0
+      }
+    },
+    {
+      "id": "L28",
+      "formula": "=(360-365*C28/D28)/C28",
+      "setup": {
+        "C28": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "B28": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "D28": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A28,B28,C28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 241.99669097361777
+      }
+    },
+    {
+      "id": "N28",
+      "formula": "=TBILLPRICE(A28,B28,C28)",
+      "setup": {
+        "C28": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "B28": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": 45332.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 91.16666666666666
+      }
+    },
+    {
+      "id": "O28",
+      "formula": "=100*(1-C28*J28/360)",
+      "setup": {
+        "A28": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "B28": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "C28": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "J28": {
+          "kind": "formula",
+          "formula": "=B28-A28"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 91.16666666666666
+      }
+    },
+    {
+      "id": "R28",
+      "formula": "=TBILLYIELD(A28,B28,Q28)",
+      "setup": {
+        "Q28": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "B28": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": 45332.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.789991796554553
+      }
+    },
+    {
+      "id": "D29",
+      "formula": "=TBILLEQ(A29,B29,C29)",
+      "setup": {
+        "C29": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B29": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 45332.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E29",
+      "formula": "=365*C29/(360-C29*(B29-A29))",
+      "setup": {
+        "A29": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "B29": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "C29": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.3692390139335477
+      }
+    },
+    {
+      "id": "J29",
+      "formula": "=B29-A29",
+      "setup": {
+        "A29": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "B29": {
+          "kind": "number",
+          "value": 45650.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 318.0
+      }
+    },
+    {
+      "id": "L29",
+      "formula": "=(360-365*C29/D29)/C29",
+      "setup": {
+        "C29": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B29": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "D29": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A29,B29,C29)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "N29",
+      "formula": "=TBILLPRICE(A29,B29,C29)",
+      "setup": {
+        "C29": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B29": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 45332.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "O29",
+      "formula": "=100*(1-C29*J29/360)",
+      "setup": {
+        "A29": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "B29": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "C29": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J29": {
+          "kind": "formula",
+          "formula": "=B29-A29"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -518.3333333333334
+      }
+    },
+    {
+      "id": "R29",
+      "formula": "=TBILLYIELD(A29,B29,Q29)",
+      "setup": {
+        "Q29": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B29": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 45332.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D30",
+      "formula": "=TBILLEQ(A30,B30,C30)",
+      "setup": {
+        "C30": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 45332.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.457435931990497
+      }
+    },
+    {
+      "id": "E30",
+      "formula": "=365*C30/(360-C30*(B30-A30))",
+      "setup": {
+        "A30": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "C30": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.69047619047619
+      }
+    },
+    {
+      "id": "J30",
+      "formula": "=B30-A30",
+      "setup": {
+        "A30": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 45650.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 318.0
+      }
+    },
+    {
+      "id": "L30",
+      "formula": "=(360-365*C30/D30)/C30",
+      "setup": {
+        "C30": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "D30": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A30,B30,C30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 278.11435866516047
+      }
+    },
+    {
+      "id": "N30",
+      "formula": "=TBILLPRICE(A30,B30,C30)",
+      "setup": {
+        "C30": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 45332.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.66666666666667
+      }
+    },
+    {
+      "id": "O30",
+      "formula": "=100*(1-C30*J30/360)",
+      "setup": {
+        "A30": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "C30": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J30": {
+          "kind": "formula",
+          "formula": "=B30-A30"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.66666666666667
+      }
+    },
+    {
+      "id": "R30",
+      "formula": "=TBILLYIELD(A30,B30,Q30)",
+      "setup": {
+        "Q30": {
+          "kind": "number",
+          "value": 123.5676889
+        },
+        "B30": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 45332.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.2159173062619437
+      }
+    },
+    {
+      "id": "D31",
+      "formula": "=TBILLEQ(A31,B31,C31)",
+      "setup": {
+        "C31": {
+          "kind": "number",
+          "value": 1.19
+        },
+        "B31": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A31": {
+          "kind": "number",
+          "value": 45332.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E31",
+      "formula": "=365*C31/(360-C31*(B31-A31))",
+      "setup": {
+        "A31": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "B31": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "C31": {
+          "kind": "number",
+          "value": 1.19
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -23.580347448425673
+      }
+    },
+    {
+      "id": "J31",
+      "formula": "=B31-A31",
+      "setup": {
+        "A31": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "B31": {
+          "kind": "number",
+          "value": 45650.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 318.0
+      }
+    },
+    {
+      "id": "L31",
+      "formula": "=(360-365*C31/D31)/C31",
+      "setup": {
+        "C31": {
+          "kind": "number",
+          "value": 1.19
+        },
+        "B31": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A31": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "D31": {
+          "kind": "formula",
+          "formula": "=TBILLEQ(A31,B31,C31)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "N31",
+      "formula": "=TBILLPRICE(A31,B31,C31)",
+      "setup": {
+        "C31": {
+          "kind": "number",
+          "value": 1.19
+        },
+        "B31": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A31": {
+          "kind": "number",
+          "value": 45332.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "O31",
+      "formula": "=100*(1-C31*J31/360)",
+      "setup": {
+        "A31": {
+          "kind": "number",
+          "value": 45332.0
+        },
+        "B31": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "C31": {
+          "kind": "number",
+          "value": 1.19
+        },
+        "J31": {
+          "kind": "formula",
+          "formula": "=B31-A31"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -5.116666666666658
+      }
+    },
+    {
+      "id": "R31",
+      "formula": "=TBILLYIELD(A31,B31,Q31)",
+      "setup": {
+        "Q31": {
+          "kind": "number",
+          "value": 2000.0
+        },
+        "B31": {
+          "kind": "number",
+          "value": 45650.0
+        },
+        "A31": {
+          "kind": "number",
+          "value": 45332.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0754716981132075
+      }
+    }
+  ]
+}

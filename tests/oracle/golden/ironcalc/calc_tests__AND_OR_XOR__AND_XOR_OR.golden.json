@@ -1,0 +1,3599 @@
+{
+  "suite": "ironcalc_calc_tests_AND_OR_XOR_AND_XOR_OR",
+  "description": "Derived from IronCalc fixture calc_tests/AND_OR_XOR.xlsx, sheet 'AND XOR OR'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "AND XOR OR",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "A1",
+      "formula": "=TRUE",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C1",
+      "formula": "=OR(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D1",
+      "formula": "=_xlfn.XOR(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E1",
+      "formula": "=AND(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "A2",
+      "formula": "=FALSE",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=OR(0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=_xlfn.XOR(0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=AND(0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=OR(0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=_xlfn.XOR(0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=AND(0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=OR(1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=_xlfn.XOR(1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=AND(1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=OR(0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=_xlfn.XOR(0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=AND(0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=OR(0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=_xlfn.XOR(0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=AND(0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "A7",
+      "formula": "=\"TRUE\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "TRUE"
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=OR(-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=_xlfn.XOR(-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=AND(-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "A8",
+      "formula": "=\"FALSE\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "FALSE"
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=OR(0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=_xlfn.XOR(0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=AND(0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "A9",
+      "formula": "=\"0\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=OR(0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=_xlfn.XOR(0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=AND(0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "A10",
+      "formula": "=\"1\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=OR(0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=_xlfn.XOR(0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=AND(0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=OR(1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=_xlfn.XOR(1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=AND(1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=OR(1, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=_xlfn.XOR(1, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=AND(1, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=OR(0, 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=_xlfn.XOR(0, 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=AND(0, 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "A14",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=OR(0, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=_xlfn.XOR(0, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=AND(0, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=OR(0, 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=_xlfn.XOR(0, 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=AND(0, 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=OR(0, 1, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=_xlfn.XOR(0, 1, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E16",
+      "formula": "=AND(0, 1, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=OR(1, 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=_xlfn.XOR(1, 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E17",
+      "formula": "=AND(1, 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=OR(1, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=_xlfn.XOR(1, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=AND(1, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=OR(1, 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=_xlfn.XOR(1, 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E19",
+      "formula": "=AND(1, 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=OR(1, 1, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=_xlfn.XOR(1, 1, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E20",
+      "formula": "=AND(1, 1, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=OR(FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=_xlfn.XOR(FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E22",
+      "formula": "=AND(FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=OR(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=_xlfn.XOR(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E23",
+      "formula": "=AND(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=OR(FALSE, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D24",
+      "formula": "=_xlfn.XOR(FALSE, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E24",
+      "formula": "=AND(FALSE, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=OR(FALSE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=_xlfn.XOR(FALSE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E25",
+      "formula": "=AND(FALSE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C26",
+      "formula": "=OR(TRUE, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D26",
+      "formula": "=_xlfn.XOR(TRUE, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E26",
+      "formula": "=AND(TRUE, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C27",
+      "formula": "=OR(TRUE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D27",
+      "formula": "=_xlfn.XOR(TRUE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E27",
+      "formula": "=AND(TRUE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C28",
+      "formula": "=OR(FALSE, FALSE, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D28",
+      "formula": "=_xlfn.XOR(FALSE, FALSE, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E28",
+      "formula": "=AND(FALSE, FALSE, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C29",
+      "formula": "=OR(FALSE, FALSE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D29",
+      "formula": "=_xlfn.XOR(FALSE, FALSE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E29",
+      "formula": "=AND(FALSE, FALSE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C30",
+      "formula": "=OR(FALSE, TRUE, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D30",
+      "formula": "=_xlfn.XOR(FALSE, TRUE, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E30",
+      "formula": "=AND(FALSE, TRUE, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C31",
+      "formula": "=OR(FALSE, TRUE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D31",
+      "formula": "=_xlfn.XOR(FALSE, TRUE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E31",
+      "formula": "=AND(FALSE, TRUE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C32",
+      "formula": "=OR(TRUE, FALSE, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D32",
+      "formula": "=_xlfn.XOR(TRUE, FALSE, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E32",
+      "formula": "=AND(TRUE, FALSE, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C33",
+      "formula": "=OR(TRUE, FALSE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D33",
+      "formula": "=_xlfn.XOR(TRUE, FALSE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E33",
+      "formula": "=AND(TRUE, FALSE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C34",
+      "formula": "=OR(TRUE, TRUE, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D34",
+      "formula": "=_xlfn.XOR(TRUE, TRUE, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E34",
+      "formula": "=AND(TRUE, TRUE, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C35",
+      "formula": "=OR(TRUE, TRUE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D35",
+      "formula": "=_xlfn.XOR(TRUE, TRUE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E35",
+      "formula": "=AND(TRUE, TRUE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C37",
+      "formula": "=OR(0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D37",
+      "formula": "=_xlfn.XOR(0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E37",
+      "formula": "=AND(0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C38",
+      "formula": "=OR(0, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D38",
+      "formula": "=_xlfn.XOR(0, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E38",
+      "formula": "=AND(0, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C39",
+      "formula": "=OR(TRUE, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D39",
+      "formula": "=_xlfn.XOR(TRUE, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E39",
+      "formula": "=AND(TRUE, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C40",
+      "formula": "=OR(TRUE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D40",
+      "formula": "=_xlfn.XOR(TRUE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E40",
+      "formula": "=AND(TRUE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C41",
+      "formula": "=OR(FALSE, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D41",
+      "formula": "=_xlfn.XOR(FALSE, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E41",
+      "formula": "=AND(FALSE, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C42",
+      "formula": "=OR(FALSE, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D42",
+      "formula": "=_xlfn.XOR(FALSE, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E42",
+      "formula": "=AND(FALSE, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C43",
+      "formula": "=OR(1, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D43",
+      "formula": "=_xlfn.XOR(1, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E43",
+      "formula": "=AND(1, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C44",
+      "formula": "=OR(1, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D44",
+      "formula": "=_xlfn.XOR(1, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E44",
+      "formula": "=AND(1, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C46",
+      "formula": "=OR(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D46",
+      "formula": "=_xlfn.XOR(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E46",
+      "formula": "=AND(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C47",
+      "formula": "=OR(\"TRUE\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D47",
+      "formula": "=_xlfn.XOR(\"TRUE\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E47",
+      "formula": "=AND(\"TRUE\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C48",
+      "formula": "=OR(\"FALSE\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D48",
+      "formula": "=_xlfn.XOR(\"FALSE\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E48",
+      "formula": "=AND(\"FALSE\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C49",
+      "formula": "=OR(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D49",
+      "formula": "=_xlfn.XOR(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E49",
+      "formula": "=AND(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C50",
+      "formula": "=OR(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D50",
+      "formula": "=_xlfn.XOR(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E50",
+      "formula": "=AND(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C51",
+      "formula": "=OR(\"\", \"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D51",
+      "formula": "=_xlfn.XOR(\"\", \"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E51",
+      "formula": "=AND(\"\", \"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C52",
+      "formula": "=OR(\"\", TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D52",
+      "formula": "=_xlfn.XOR(\"\", TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E52",
+      "formula": "=AND(\"\", TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C53",
+      "formula": "=OR(\"\", FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D53",
+      "formula": "=_xlfn.XOR(\"\", FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E53",
+      "formula": "=AND(\"\", FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C54",
+      "formula": "=OR(Z99)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D54",
+      "formula": "=_xlfn.XOR(Z99)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E54",
+      "formula": "=AND(Z99)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C55",
+      "formula": "=OR(Z99, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D55",
+      "formula": "=_xlfn.XOR(Z99, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E55",
+      "formula": "=AND(Z99, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C56",
+      "formula": "=OR(Z99, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D56",
+      "formula": "=_xlfn.XOR(Z99, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E56",
+      "formula": "=AND(Z99, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C58",
+      "formula": "=OR(X90:Z99)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D58",
+      "formula": "=_xlfn.XOR(X90:Z99)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E58",
+      "formula": "=AND(X90:Z99)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C59",
+      "formula": "=OR(X90:Z99, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D59",
+      "formula": "=_xlfn.XOR(X90:Z99, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E59",
+      "formula": "=AND(X90:Z99, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C60",
+      "formula": "=OR(X90:Z99, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D60",
+      "formula": "=_xlfn.XOR(X90:Z99, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E60",
+      "formula": "=AND(X90:Z99, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C61",
+      "formula": "=OR(X90:Z99, X90:Z99)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D61",
+      "formula": "=_xlfn.XOR(X90:Z99, X90:Z99)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E61",
+      "formula": "=AND(X90:Z99, X90:Z99)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C62",
+      "formula": "=OR(X90:Z99, X90:Z99, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D62",
+      "formula": "=_xlfn.XOR(X90:Z99, X90:Z99, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E62",
+      "formula": "=AND(X90:Z99, X90:Z99, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C63",
+      "formula": "=OR(X90:Z99, X90:Z99, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D63",
+      "formula": "=_xlfn.XOR(X90:Z99, X90:Z99, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E63",
+      "formula": "=AND(X90:Z99, X90:Z99, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C65",
+      "formula": "=OR(A1:B1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D65",
+      "formula": "=_xlfn.XOR(A1:B1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E65",
+      "formula": "=AND(A1:B1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C66",
+      "formula": "=OR(A1:B1, TRUE)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D66",
+      "formula": "=_xlfn.XOR(A1:B1, TRUE)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E66",
+      "formula": "=AND(A1:B1, TRUE)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C67",
+      "formula": "=OR(A1:B1, FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D67",
+      "formula": "=_xlfn.XOR(A1:B1, FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E67",
+      "formula": "=AND(A1:B1, FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C68",
+      "formula": "=OR(A1:B1, A1:B1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D68",
+      "formula": "=_xlfn.XOR(A1:B1, A1:B1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E68",
+      "formula": "=AND(A1:B1, A1:B1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C69",
+      "formula": "=OR(A1:B1, A1:B1, TRUE)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D69",
+      "formula": "=_xlfn.XOR(A1:B1, A1:B1, TRUE)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E69",
+      "formula": "=AND(A1:B1, A1:B1, TRUE)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C70",
+      "formula": "=OR(A1:B1, A1:B1, FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D70",
+      "formula": "=_xlfn.XOR(A1:B1, A1:B1, FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E70",
+      "formula": "=AND(A1:B1, A1:B1, FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C72",
+      "formula": "=OR(A2:B2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D72",
+      "formula": "=_xlfn.XOR(A2:B2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E72",
+      "formula": "=AND(A2:B2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C73",
+      "formula": "=OR(A2:B2, TRUE)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D73",
+      "formula": "=_xlfn.XOR(A2:B2, TRUE)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E73",
+      "formula": "=AND(A2:B2, TRUE)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C74",
+      "formula": "=OR(A2:B2, FALSE)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D74",
+      "formula": "=_xlfn.XOR(A2:B2, FALSE)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E74",
+      "formula": "=AND(A2:B2, FALSE)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C75",
+      "formula": "=OR(A2:B2, A2:B2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D75",
+      "formula": "=_xlfn.XOR(A2:B2, A2:B2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E75",
+      "formula": "=AND(A2:B2, A2:B2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C76",
+      "formula": "=OR(A2:B2, A2:B2, TRUE)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D76",
+      "formula": "=_xlfn.XOR(A2:B2, A2:B2, TRUE)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E76",
+      "formula": "=AND(A2:B2, A2:B2, TRUE)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C77",
+      "formula": "=OR(A2:B2, A2:B2, FALSE)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D77",
+      "formula": "=_xlfn.XOR(A2:B2, A2:B2, FALSE)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E77",
+      "formula": "=AND(A2:B2, A2:B2, FALSE)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C79",
+      "formula": "=OR(A1:B1, A2:B2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D79",
+      "formula": "=_xlfn.XOR(A1:B1, A2:B2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E79",
+      "formula": "=AND(A1:B1, A2:B2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C80",
+      "formula": "=OR(A1:B1, X90:Z99)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D80",
+      "formula": "=_xlfn.XOR(A1:B1, X90:Z99)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E80",
+      "formula": "=AND(A1:B1, X90:Z99)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C81",
+      "formula": "=OR(A2:B2, X90:Z99)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D81",
+      "formula": "=_xlfn.XOR(A2:B2, X90:Z99)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E81",
+      "formula": "=AND(A2:B2, X90:Z99)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C83",
+      "formula": "=OR(A12, A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D83",
+      "formula": "=_xlfn.XOR(A12, A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E83",
+      "formula": "=AND(A12, A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C84",
+      "formula": "=OR(A12, A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D84",
+      "formula": "=_xlfn.XOR(A12, A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E84",
+      "formula": "=AND(A12, A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C85",
+      "formula": "=OR(A13, A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D85",
+      "formula": "=_xlfn.XOR(A13, A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E85",
+      "formula": "=AND(A13, A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C86",
+      "formula": "=OR(A13, A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D86",
+      "formula": "=_xlfn.XOR(A13, A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E86",
+      "formula": "=AND(A13, A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C88",
+      "formula": "=OR(A1, A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D88",
+      "formula": "=_xlfn.XOR(A1, A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E88",
+      "formula": "=AND(A1, A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C89",
+      "formula": "=OR(A1, A2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D89",
+      "formula": "=_xlfn.XOR(A1, A2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E89",
+      "formula": "=AND(A1, A2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        },
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C90",
+      "formula": "=OR(A2, A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D90",
+      "formula": "=_xlfn.XOR(A2, A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E90",
+      "formula": "=AND(A2, A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C91",
+      "formula": "=OR(A2, A2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D91",
+      "formula": "=_xlfn.XOR(A2, A2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E91",
+      "formula": "=AND(A2, A2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=FALSE"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C93",
+      "formula": "=OR(A3)",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "=X90:Z99"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D93",
+      "formula": "=_xlfn.XOR(A3)",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "=X90:Z99"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E93",
+      "formula": "=AND(A3)",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "=X90:Z99"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C94",
+      "formula": "=OR(A3:B3)",
+      "setup": {
+        "B3": {
+          "kind": "text",
+          "value": "<--- NOTE: currently escaped as text with leading ': IronCalc doesn't handle range spill"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "=X90:Z99"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D94",
+      "formula": "=_xlfn.XOR(A3:B3)",
+      "setup": {
+        "B3": {
+          "kind": "text",
+          "value": "<--- NOTE: currently escaped as text with leading ': IronCalc doesn't handle range spill"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "=X90:Z99"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E94",
+      "formula": "=AND(A3:B3)",
+      "setup": {
+        "B3": {
+          "kind": "text",
+          "value": "<--- NOTE: currently escaped as text with leading ': IronCalc doesn't handle range spill"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "=X90:Z99"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C95",
+      "formula": "=OR(A4)",
+      "setup": {
+        "A4": {
+          "kind": "text",
+          "value": "=A1:B1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D95",
+      "formula": "=_xlfn.XOR(A4)",
+      "setup": {
+        "A4": {
+          "kind": "text",
+          "value": "=A1:B1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E95",
+      "formula": "=AND(A4)",
+      "setup": {
+        "A4": {
+          "kind": "text",
+          "value": "=A1:B1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C96",
+      "formula": "=OR(A4:B4)",
+      "setup": {
+        "B4": {
+          "kind": "text",
+          "value": "<--- NOTE: currently escaped as text with leading ': IronCalc doesn't handle range spill"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "=A1:B1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D96",
+      "formula": "=_xlfn.XOR(A4:B4)",
+      "setup": {
+        "B4": {
+          "kind": "text",
+          "value": "<--- NOTE: currently escaped as text with leading ': IronCalc doesn't handle range spill"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "=A1:B1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E96",
+      "formula": "=AND(A4:B4)",
+      "setup": {
+        "B4": {
+          "kind": "text",
+          "value": "<--- NOTE: currently escaped as text with leading ': IronCalc doesn't handle range spill"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "=A1:B1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C97",
+      "formula": "=OR(A5)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "=A2:B2"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D97",
+      "formula": "=_xlfn.XOR(A5)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "=A2:B2"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E97",
+      "formula": "=AND(A5)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "=A2:B2"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C98",
+      "formula": "=OR(A5:B5)",
+      "setup": {
+        "B5": {
+          "kind": "text",
+          "value": "<--- NOTE: currently escaped as text with leading ': IronCalc doesn't handle range spill"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "=A2:B2"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D98",
+      "formula": "=_xlfn.XOR(A5:B5)",
+      "setup": {
+        "B5": {
+          "kind": "text",
+          "value": "<--- NOTE: currently escaped as text with leading ': IronCalc doesn't handle range spill"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "=A2:B2"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E98",
+      "formula": "=AND(A5:B5)",
+      "setup": {
+        "B5": {
+          "kind": "text",
+          "value": "<--- NOTE: currently escaped as text with leading ': IronCalc doesn't handle range spill"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "=A2:B2"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C99",
+      "formula": "=OR(A6)",
+      "setup": {
+        "A6": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D99",
+      "formula": "=_xlfn.XOR(A6)",
+      "setup": {
+        "A6": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E99",
+      "formula": "=AND(A6)",
+      "setup": {
+        "A6": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C100",
+      "formula": "=OR(A6:B6)",
+      "setup": {
+        "A6": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D100",
+      "formula": "=_xlfn.XOR(A6:B6)",
+      "setup": {
+        "A6": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E100",
+      "formula": "=AND(A6:B6)",
+      "setup": {
+        "A6": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C101",
+      "formula": "=OR(A7)",
+      "setup": {
+        "A7": {
+          "kind": "formula",
+          "formula": "=\"TRUE\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D101",
+      "formula": "=_xlfn.XOR(A7)",
+      "setup": {
+        "A7": {
+          "kind": "formula",
+          "formula": "=\"TRUE\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E101",
+      "formula": "=AND(A7)",
+      "setup": {
+        "A7": {
+          "kind": "formula",
+          "formula": "=\"TRUE\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C102",
+      "formula": "=OR(A7:B7)",
+      "setup": {
+        "A7": {
+          "kind": "formula",
+          "formula": "=\"TRUE\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D102",
+      "formula": "=_xlfn.XOR(A7:B7)",
+      "setup": {
+        "A7": {
+          "kind": "formula",
+          "formula": "=\"TRUE\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E102",
+      "formula": "=AND(A7:B7)",
+      "setup": {
+        "A7": {
+          "kind": "formula",
+          "formula": "=\"TRUE\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C103",
+      "formula": "=OR(A8)",
+      "setup": {
+        "A8": {
+          "kind": "formula",
+          "formula": "=\"FALSE\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D103",
+      "formula": "=_xlfn.XOR(A8)",
+      "setup": {
+        "A8": {
+          "kind": "formula",
+          "formula": "=\"FALSE\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E103",
+      "formula": "=AND(A8)",
+      "setup": {
+        "A8": {
+          "kind": "formula",
+          "formula": "=\"FALSE\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C104",
+      "formula": "=OR(A8:B8)",
+      "setup": {
+        "A8": {
+          "kind": "formula",
+          "formula": "=\"FALSE\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D104",
+      "formula": "=_xlfn.XOR(A8:B8)",
+      "setup": {
+        "A8": {
+          "kind": "formula",
+          "formula": "=\"FALSE\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E104",
+      "formula": "=AND(A8:B8)",
+      "setup": {
+        "A8": {
+          "kind": "formula",
+          "formula": "=\"FALSE\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C105",
+      "formula": "=OR(A9)",
+      "setup": {
+        "A9": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D105",
+      "formula": "=_xlfn.XOR(A9)",
+      "setup": {
+        "A9": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E105",
+      "formula": "=AND(A9)",
+      "setup": {
+        "A9": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C106",
+      "formula": "=OR(A9:B9)",
+      "setup": {
+        "A9": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D106",
+      "formula": "=_xlfn.XOR(A9:B9)",
+      "setup": {
+        "A9": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E106",
+      "formula": "=AND(A9:B9)",
+      "setup": {
+        "A9": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C107",
+      "formula": "=OR(A10)",
+      "setup": {
+        "A10": {
+          "kind": "formula",
+          "formula": "=\"1\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D107",
+      "formula": "=_xlfn.XOR(A10)",
+      "setup": {
+        "A10": {
+          "kind": "formula",
+          "formula": "=\"1\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E107",
+      "formula": "=AND(A10)",
+      "setup": {
+        "A10": {
+          "kind": "formula",
+          "formula": "=\"1\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C108",
+      "formula": "=OR(A10:B10)",
+      "setup": {
+        "A10": {
+          "kind": "formula",
+          "formula": "=\"1\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D108",
+      "formula": "=_xlfn.XOR(A10:B10)",
+      "setup": {
+        "A10": {
+          "kind": "formula",
+          "formula": "=\"1\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E108",
+      "formula": "=AND(A10:B10)",
+      "setup": {
+        "A10": {
+          "kind": "formula",
+          "formula": "=\"1\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C109",
+      "formula": "=OR(A11)",
+      "setup": {
+        "A11": {
+          "kind": "text",
+          "value": "=X90:Z99"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D109",
+      "formula": "=_xlfn.XOR(A11)",
+      "setup": {
+        "A11": {
+          "kind": "text",
+          "value": "=X90:Z99"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E109",
+      "formula": "=AND(A11)",
+      "setup": {
+        "A11": {
+          "kind": "text",
+          "value": "=X90:Z99"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C110",
+      "formula": "=OR(A11:B11)",
+      "setup": {
+        "B11": {
+          "kind": "text",
+          "value": "<--- NOTE: currently escaped as text with leading ': IronCalc doesn't handle range spill"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "=X90:Z99"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D110",
+      "formula": "=_xlfn.XOR(A11:B11)",
+      "setup": {
+        "B11": {
+          "kind": "text",
+          "value": "<--- NOTE: currently escaped as text with leading ': IronCalc doesn't handle range spill"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "=X90:Z99"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E110",
+      "formula": "=AND(A11:B11)",
+      "setup": {
+        "B11": {
+          "kind": "text",
+          "value": "<--- NOTE: currently escaped as text with leading ': IronCalc doesn't handle range spill"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "=X90:Z99"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C112",
+      "formula": "=OR(A14)",
+      "setup": {
+        "A14": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D112",
+      "formula": "=_xlfn.XOR(A14)",
+      "setup": {
+        "A14": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E112",
+      "formula": "=AND(A14)",
+      "setup": {
+        "A14": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C113",
+      "formula": "=OR(A16:B16)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D113",
+      "formula": "=_xlfn.XOR(A16:B16)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E113",
+      "formula": "=AND(A16:B16)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C114",
+      "formula": "=OR(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D114",
+      "formula": "=_xlfn.XOR(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E114",
+      "formula": "=AND(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    }
+  ]
+}

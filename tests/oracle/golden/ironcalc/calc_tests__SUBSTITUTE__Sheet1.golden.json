@@ -1,0 +1,730 @@
+{
+  "suite": "ironcalc_calc_tests_SUBSTITUTE_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/SUBSTITUTE.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "E2",
+      "formula": "=SUBSTITUTE(A2,B2,C2,D2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "text",
+          "value": "new"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "old"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "My old fears"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My new fears"
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=SUBSTITUTE(A2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "text",
+          "value": "new"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "old"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "My old fears"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My new fears"
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=SUBSTITUTE(A3,B3,C3,D3)",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C3": {
+          "kind": "text",
+          "value": "new"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "old"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My new, very old fears"
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=SUBSTITUTE(A3,B3,C3)",
+      "setup": {
+        "C3": {
+          "kind": "text",
+          "value": "new"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "old"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My new, very new fears"
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=SUBSTITUTE(A4,B4,C4,D4)",
+      "setup": {
+        "D4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C4": {
+          "kind": "text",
+          "value": "new"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "old"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=SUBSTITUTE(A4,B4,C4)",
+      "setup": {
+        "C4": {
+          "kind": "text",
+          "value": "new"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "old"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My new, very new fears"
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=SUBSTITUTE(A5,B5,C5,D5)",
+      "setup": {
+        "D5": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "C5": {
+          "kind": "text",
+          "value": "new"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "old"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=SUBSTITUTE(A5,B5,C5)",
+      "setup": {
+        "C5": {
+          "kind": "text",
+          "value": "new"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "old"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My new, very new fears"
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=SUBSTITUTE(A6,B6,C6,D6)",
+      "setup": {
+        "D6": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C6": {
+          "kind": "text",
+          "value": "new"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "old"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My old, very old fears"
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=SUBSTITUTE(A6,B6,C6)",
+      "setup": {
+        "C6": {
+          "kind": "text",
+          "value": "new"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "old"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My new, very new fears"
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=SUBSTITUTE(A7,B7,C7,D7)",
+      "setup": {
+        "D7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C7": {
+          "kind": "text",
+          "value": "new"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "OLD"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My old, very old fears"
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=SUBSTITUTE(A7,B7,C7)",
+      "setup": {
+        "C7": {
+          "kind": "text",
+          "value": "new"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "OLD"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My old, very old fears"
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=SUBSTITUTE(A8,B8,C8,D8)",
+      "setup": {
+        "D8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C8": {
+          "kind": "text",
+          "value": "new"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "old"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My new, very old fears"
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=SUBSTITUTE(A8,B8,C8)",
+      "setup": {
+        "C8": {
+          "kind": "text",
+          "value": "new"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "old"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My new, very new fears"
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=SUBSTITUTE(A9,B9,C9,D9)",
+      "setup": {
+        "D9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C9": {
+          "kind": "text",
+          "value": "new"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My old, very old fears"
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=SUBSTITUTE(A9,B9,C9)",
+      "setup": {
+        "C9": {
+          "kind": "text",
+          "value": "new"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My old, very old fears"
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=SUBSTITUTE(A10,B10,C10,D10)",
+      "setup": {
+        "D10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C10": {
+          "kind": "text",
+          "value": "new"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My old, very old fears"
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=SUBSTITUTE(A10,B10,C10)",
+      "setup": {
+        "C10": {
+          "kind": "text",
+          "value": "new"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My old, very old fears"
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=SUBSTITUTE(A11,B11,C11,D11)",
+      "setup": {
+        "D11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B11": {
+          "kind": "text",
+          "value": "old"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My , very old fears"
+      }
+    },
+    {
+      "id": "F11",
+      "formula": "=SUBSTITUTE(A11,B11,C11)",
+      "setup": {
+        "B11": {
+          "kind": "text",
+          "value": "old"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My , very  fears"
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=SUBSTITUTE(A12,B12,C12,D12)",
+      "setup": {
+        "D12": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C12": {
+          "kind": "text",
+          "value": "new"
+        },
+        "B12": {
+          "kind": "text",
+          "value": "old"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My new, very old fears"
+      }
+    },
+    {
+      "id": "F12",
+      "formula": "=SUBSTITUTE(A12,B12,C12)",
+      "setup": {
+        "C12": {
+          "kind": "text",
+          "value": "new"
+        },
+        "B12": {
+          "kind": "text",
+          "value": "old"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My new, very new fears"
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=SUBSTITUTE(A13,B13,C13,D13)",
+      "setup": {
+        "D13": {
+          "kind": "text",
+          "value": "qwerty"
+        },
+        "C13": {
+          "kind": "text",
+          "value": "new"
+        },
+        "B13": {
+          "kind": "text",
+          "value": "old"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F13",
+      "formula": "=SUBSTITUTE(A13,B13,C13)",
+      "setup": {
+        "C13": {
+          "kind": "text",
+          "value": "new"
+        },
+        "B13": {
+          "kind": "text",
+          "value": "old"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My new, very new fears"
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=SUBSTITUTE(A14,B14,C14,D14)",
+      "setup": {
+        "D14": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C14": {
+          "kind": "text",
+          "value": "new"
+        },
+        "B14": {
+          "kind": "text",
+          "value": "old"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My old, very new fears"
+      }
+    },
+    {
+      "id": "F14",
+      "formula": "=SUBSTITUTE(A14,B14,C14)",
+      "setup": {
+        "C14": {
+          "kind": "text",
+          "value": "new"
+        },
+        "B14": {
+          "kind": "text",
+          "value": "old"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "My new, very new fears"
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=SUBSTITUTE(A15,B15,C15,D15)",
+      "setup": {
+        "D15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C15": {
+          "kind": "text",
+          "value": "new"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        },
+        "B15": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F15",
+      "formula": "=SUBSTITUTE(A15,B15,C15)",
+      "setup": {
+        "C15": {
+          "kind": "text",
+          "value": "new"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "My old, very old fears"
+        },
+        "B15": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E17",
+      "formula": "=SUBSTITUTE(A17,B17,C17,D17)",
+      "setup": {
+        "D17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C17": {
+          "kind": "text",
+          "value": "qwerty"
+        },
+        "B17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 123.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1qwerty3"
+      }
+    },
+    {
+      "id": "F17",
+      "formula": "=SUBSTITUTE(A17,B17,C17)",
+      "setup": {
+        "C17": {
+          "kind": "text",
+          "value": "qwerty"
+        },
+        "B17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 123.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1qwerty3"
+      }
+    }
+  ]
+}

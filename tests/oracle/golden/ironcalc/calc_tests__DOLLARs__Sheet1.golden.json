@@ -1,0 +1,665 @@
+{
+  "suite": "ironcalc_calc_tests_DOLLARs_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/DOLLARs.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=DOLLARFR(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=DOLLARDE(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=DOLLARFR(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 12.1234
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.014808
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=DOLLARDE(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 12.1234
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 13.028333333333334
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=DOLLARFR(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.18
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=DOLLARDE(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.5
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=DOLLARFR(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.1
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=DOLLARDE(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.5
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=DOLLARFR(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=DOLLARDE(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=DOLLARFR(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 36.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 100.98999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.35639640000001
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=DOLLARDE(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 36.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 100.98999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 102.74997222222224
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=DOLLARFR(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 0.01
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.01
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=DOLLARDE(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 0.01
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.01
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=DOLLARFR(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.01
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.002
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=DOLLARDE(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.01
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.05
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=DOLLARFR(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 0.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.030000000000000006
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=DOLLARDE(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 0.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3333333333333333
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=DOLLARFR(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A11": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=DOLLARDE(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A11": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=DOLLARFR(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "bool",
+          "value": true
+        },
+        "A12": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=DOLLARDE(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "bool",
+          "value": true
+        },
+        "A12": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=DOLLARFR(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=DOLLARDE(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=DOLLARFR(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=DOLLARDE(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=DOLLARFR(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A15": {
+          "kind": "text",
+          "value": "hola"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=DOLLARDE(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A15": {
+          "kind": "text",
+          "value": "hola"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=DOLLARFR(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=DOLLARDE(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=DOLLARFR(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=DOLLARDE(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=DOLLARFR(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A18": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=DOLLARDE(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A18": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=DOLLARFR(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=DOLLARDE(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    }
+  ]
+}

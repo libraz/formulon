@@ -1,0 +1,361 @@
+{
+  "suite": "ironcalc_calc_tests_FORMULATEXT_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/FORMULATEXT.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "F1",
+      "formula": "=E1",
+      "setup": {
+        "E1": {
+          "kind": "formula",
+          "formula": "=CONCATENATE(_xlfn.FORMULATEXT(F1),\" NOT CIRCULAR!\")"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=E1 NOT CIRCULAR!"
+      }
+    },
+    {
+      "id": "B2",
+      "formula": "=_xlfn.FORMULATEXT(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=_xlfn.FORMULATEXT(A3)",
+      "setup": {
+        "A3": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=_xlfn.FORMULATEXT(A4)",
+      "setup": {
+        "A4": {
+          "kind": "text",
+          "value": "Hello"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "A5",
+      "formula": "=1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=_xlfn.FORMULATEXT(A5)",
+      "setup": {
+        "A5": {
+          "kind": "formula",
+          "formula": "=1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=1"
+      }
+    },
+    {
+      "id": "A6",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=_xlfn.FORMULATEXT(A6)",
+      "setup": {
+        "A6": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=1/0"
+      }
+    },
+    {
+      "id": "A7",
+      "formula": "=B7",
+      "setup": {
+        "B7": {
+          "kind": "formula",
+          "formula": "=_xlfn.FORMULATEXT(A7)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=B7"
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=_xlfn.FORMULATEXT(A7)",
+      "setup": {
+        "A7": {
+          "kind": "formula",
+          "formula": "=B7"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=B7"
+      }
+    },
+    {
+      "id": "A8",
+      "formula": "=SIN(1/16)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0624593178423802
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=_xlfn.FORMULATEXT(A8)",
+      "setup": {
+        "A8": {
+          "kind": "formula",
+          "formula": "=SIN(1/16)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SIN(1/16)"
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=_xlfn.FORMULATEXT(A9)",
+      "setup": {
+        "A9": {
+          "kind": "text",
+          "value": "=1+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "A10",
+      "formula": "=1+1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=_xlfn.FORMULATEXT(A10)",
+      "setup": {
+        "A10": {
+          "kind": "formula",
+          "formula": "=1+1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=1+1"
+      }
+    },
+    {
+      "id": "A11",
+      "formula": "=A1",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "value"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "value"
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=_xlfn.FORMULATEXT(A11)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "value"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=A1"
+      }
+    },
+    {
+      "id": "A12",
+      "formula": "=E1-6+3",
+      "setup": {
+        "E1": {
+          "kind": "formula",
+          "formula": "=CONCATENATE(_xlfn.FORMULATEXT(F1),\" NOT CIRCULAR!\")"
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=E1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=_xlfn.FORMULATEXT(A12)",
+      "setup": {
+        "A12": {
+          "kind": "formula",
+          "formula": "=E1-6+3"
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=CONCATENATE(_xlfn.FORMULATEXT(F1),\" NOT CIRCULAR!\")"
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=E1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=E1-6+3"
+      }
+    },
+    {
+      "id": "A13",
+      "formula": "=_xlfn.FORMULATEXT(A13)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "=FORMULATEXT(A13)"
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=_xlfn.FORMULATEXT(A13)",
+      "setup": {
+        "A13": {
+          "kind": "formula",
+          "formula": "=_xlfn.FORMULATEXT(A13)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=FORMULATEXT(A13)"
+      }
+    },
+    {
+      "id": "A14",
+      "formula": "=_xlfn.FORMULATEXT(OFFSET(A1,2,1))",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "value"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=FORMULATEXT(A3)"
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=_xlfn.FORMULATEXT(A14)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "value"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=_xlfn.FORMULATEXT(OFFSET(A1,2,1))"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=FORMULATEXT(OFFSET(A1,2,1))"
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=_xlfn.FORMULATEXT(A15)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=_xlfn.FORMULATEXT(A16)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=_xlfn.FORMULATEXT(A17)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

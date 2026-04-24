@@ -1,0 +1,1721 @@
+{
+  "suite": "ironcalc_calc_tests_HVLOOKUP_HLinear",
+  "description": "Derived from IronCalc fixture calc_tests/HVLOOKUP.xlsx, sheet 'HLinear'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "HLinear",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C6",
+      "formula": "=D1",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Apple"
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=E1",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "Orange"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Orange"
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=F1",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "Pear"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Pear"
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=G1",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "Strawberry"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Strawberry"
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=H1",
+      "setup": {
+        "H1": {
+          "kind": "text",
+          "value": "Potato"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Potato"
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=HLOOKUP(C6,$C$1:$N$5, 2,FALSE)",
+      "setup": {
+        "H3": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "German"
+        },
+        "H2": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "G2": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "H1": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "C6": {
+          "kind": "formula",
+          "formula": "=D1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Manzana"
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=HLOOKUP(D6,$C$1:$N$5, 2,FALSE)",
+      "setup": {
+        "H3": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "German"
+        },
+        "H2": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "G2": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "H1": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=E1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Naranja"
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=HLOOKUP(E6,$C$1:$N$5, 2,FALSE)",
+      "setup": {
+        "H3": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "German"
+        },
+        "H2": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "G2": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "H1": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=F1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Pera"
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=HLOOKUP(F6,$C$1:$N$5, 2,FALSE)",
+      "setup": {
+        "H3": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "German"
+        },
+        "H2": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "G2": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "H1": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "F6": {
+          "kind": "formula",
+          "formula": "=G1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Fresa"
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=HLOOKUP(G6,$C$1:$N$5, 2,FALSE)",
+      "setup": {
+        "H3": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "German"
+        },
+        "H2": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "G2": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "H1": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=H1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Patata"
+      }
+    },
+    {
+      "id": "H7",
+      "formula": "=HLOOKUP(H6,$C$1:$N$5, 2,FALSE)",
+      "setup": {
+        "H3": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "German"
+        },
+        "H2": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "G2": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "H1": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "H6": {
+          "kind": "text",
+          "value": "Otro"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "I7",
+      "formula": "=HLOOKUP(I6,$C$1:$N$5, 2,FALSE)",
+      "setup": {
+        "H3": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "German"
+        },
+        "H2": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "G2": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "H1": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "I6": {
+          "kind": "text",
+          "value": "apple"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Manzana"
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=HLOOKUP(C6,$C$1:$N$5, 3,FALSE)",
+      "setup": {
+        "H3": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "German"
+        },
+        "H2": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "G2": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "H1": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "C6": {
+          "kind": "formula",
+          "formula": "=D1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Apfel"
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=HLOOKUP(D6,$C$1:$N$5, 3,FALSE)",
+      "setup": {
+        "H3": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "German"
+        },
+        "H2": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "G2": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "H1": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=E1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Orange"
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=HLOOKUP(E6,$C$1:$N$5, 3,FALSE)",
+      "setup": {
+        "H3": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "German"
+        },
+        "H2": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "G2": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "H1": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=F1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Birne"
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=HLOOKUP(F6,$C$1:$N$5, 3,FALSE)",
+      "setup": {
+        "H3": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "German"
+        },
+        "H2": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "G2": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "H1": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "F6": {
+          "kind": "formula",
+          "formula": "=G1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Erdbeere"
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=HLOOKUP(G6,$C$1:$N$5, 3,FALSE)",
+      "setup": {
+        "H3": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "German"
+        },
+        "H2": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "G2": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "H1": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=H1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Kartoffel"
+      }
+    },
+    {
+      "id": "H8",
+      "formula": "=HLOOKUP(H6,$C$1:$N$5, 3,FALSE)",
+      "setup": {
+        "H3": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "German"
+        },
+        "H2": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "G2": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "H1": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "H6": {
+          "kind": "text",
+          "value": "Otro"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "I8",
+      "formula": "=HLOOKUP(I6,$C$1:$N$5, 3,FALSE)",
+      "setup": {
+        "H3": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "German"
+        },
+        "H2": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "G2": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "H1": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "I6": {
+          "kind": "text",
+          "value": "apple"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Apfel"
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=HLOOKUP(C6,$C$1:$N$5, 30,FALSE)",
+      "setup": {
+        "H3": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "German"
+        },
+        "H2": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "G2": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "H1": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "C6": {
+          "kind": "formula",
+          "formula": "=D1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=HLOOKUP(C12,$C$1:$H$3, 2, FALSE)",
+      "setup": {
+        "H3": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "German"
+        },
+        "H2": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "G2": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "H1": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "C12": {
+          "kind": "text",
+          "value": "*an*"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Naranja"
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=HLOOKUP(D12,$C$1:$H$3, 2, FALSE)",
+      "setup": {
+        "H3": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "German"
+        },
+        "H2": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "G2": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "H1": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "D12": {
+          "kind": "text",
+          "value": "*t?*"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Fresa"
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=HLOOKUP(E12,$C$1:$H$3, 2, FALSE)",
+      "setup": {
+        "H3": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "German"
+        },
+        "H2": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "G2": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "H1": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "E12": {
+          "kind": "text",
+          "value": "*t"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F13",
+      "formula": "=HLOOKUP(F12,$C$1:$H$3, 2, FALSE)",
+      "setup": {
+        "H3": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "G3": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "F3": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "German"
+        },
+        "H2": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "G2": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "H1": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "F12": {
+          "kind": "text",
+          "value": "*t?t?"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Patata"
+      }
+    }
+  ]
+}

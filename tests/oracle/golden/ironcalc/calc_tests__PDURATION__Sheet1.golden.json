@@ -1,0 +1,418 @@
+{
+  "suite": "ironcalc_calc_tests_PDURATION_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/PDURATION.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "D2",
+      "formula": "=_xlfn.PDURATION(A2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.8017840169239268
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=_xlfn.PDURATION(A3,B3,C3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 235.567
+        },
+        "B3": {
+          "kind": "number",
+          "value": 99.123
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.747841594106537
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=_xlfn.PDURATION(A4,B4,C4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": -0.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=_xlfn.PDURATION(A5,B5,C5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": -100.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=_xlfn.PDURATION(A6,B6,C6)",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.2598510045646644
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=_xlfn.PDURATION(A7,B7,C7)",
+      "setup": {
+        "C7": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=_xlfn.PDURATION(A8,B8,C8)",
+      "setup": {
+        "C8": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=_xlfn.PDURATION(A9,B9,C9)",
+      "setup": {
+        "C9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=_xlfn.PDURATION(A10,B10,C10)",
+      "setup": {
+        "C10": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "B10": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -37.88775940954001
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=_xlfn.PDURATION(A11,B11,C11)",
+      "setup": {
+        "C11": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=_xlfn.PDURATION(A12,B12,C12)",
+      "setup": {
+        "C12": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A12": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 41.68954342646394
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=_xlfn.PDURATION(A13,B13,C13)",
+      "setup": {
+        "C13": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A13": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999999999999989
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=_xlfn.PDURATION(A14,B14,C14)",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B14": {
+          "kind": "bool",
+          "value": true
+        },
+        "A14": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 25.25850627302668
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=_xlfn.PDURATION(A15,B15,C15)",
+      "setup": {
+        "C15": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A15": {
+          "kind": "text",
+          "value": "hellp"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=_xlfn.PDURATION(A16,B16,C16)",
+      "setup": {
+        "C16": {
+          "kind": "bool",
+          "value": true
+        },
+        "B16": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A16": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=\"100\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "100"
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=\"200\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "200"
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=_xlfn.PDURATION(A17,B17,C17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "C17": {
+          "kind": "formula",
+          "formula": "=\"200\""
+        },
+        "B17": {
+          "kind": "formula",
+          "formula": "=\"100\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.8017840169239268
+      }
+    },
+    {
+      "id": "A18",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=_xlfn.PDURATION(A18,B18,C18)",
+      "setup": {
+        "C18": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    }
+  ]
+}

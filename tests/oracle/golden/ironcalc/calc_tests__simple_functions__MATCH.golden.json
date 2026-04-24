@@ -1,0 +1,2723 @@
+{
+  "suite": "ironcalc_calc_tests_simple_functions_MATCH",
+  "description": "Derived from IronCalc fixture calc_tests/simple_functions.xlsx, sheet 'MATCH'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "MATCH",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "L2",
+      "formula": "=MATCH(K2,$J$2:$J$10,  1)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "M2",
+      "formula": "=MATCH(K2,$J$2:$J$10,  0)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "P2",
+      "formula": "=MATCH(N2,$O$2:$O$10,-1)",
+      "setup": {
+        "O10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "O9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "O8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "O7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "O6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "O5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "O4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "O3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "O2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "N2": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "R2",
+      "formula": "=MATCH(Q2,$O$2:$O$10,-1)",
+      "setup": {
+        "O10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "O9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "O8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "O7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "O6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "O5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "O4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "O3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "O2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "Q2": {
+          "kind": "number",
+          "value": 2.818
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "S2",
+      "formula": "=MATCH(Q2,$J$2:$J$10,  1)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Q2": {
+          "kind": "number",
+          "value": 2.818
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "L3",
+      "formula": "=MATCH(K3,$J$2:$J$10,  1)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "M3",
+      "formula": "=MATCH(K3,$J$2:$J$10,  0)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "P3",
+      "formula": "=MATCH(N3,$O$2:$O$10,-1)",
+      "setup": {
+        "O10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "O9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "O8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "O7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "O6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "O5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "O4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "O3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "O2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "N3": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "R3",
+      "formula": "=MATCH(Q3,$O$2:$O$10,-1)",
+      "setup": {
+        "O10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "O9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "O8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "O7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "O6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "O5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "O4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "O3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "O2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "Q3": {
+          "kind": "number",
+          "value": 7.231
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "S3",
+      "formula": "=MATCH(Q3,$J$2:$J$10,  1)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Q3": {
+          "kind": "number",
+          "value": 7.231
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "L4",
+      "formula": "=MATCH(K4,$J$2:$J$10, 1)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "M4",
+      "formula": "=MATCH(K4,$J$2:$J$10, 0)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "P4",
+      "formula": "=MATCH(N4,$O$2:$O$10,-1)",
+      "setup": {
+        "O10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "O9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "O8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "O7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "O6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "O5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "O4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "O3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "O2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "N4": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "R4",
+      "formula": "=MATCH(Q4,$O$2:$O$10,-1)",
+      "setup": {
+        "O10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "O9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "O8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "O7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "O6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "O5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "O4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "O3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "O2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "Q4": {
+          "kind": "number",
+          "value": 2.323
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "S4",
+      "formula": "=MATCH(Q4,$J$2:$J$10, 1)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Q4": {
+          "kind": "number",
+          "value": 2.323
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "L5",
+      "formula": "=MATCH(K5,$J$2:$J$10, 1)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K5": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "M5",
+      "formula": "=MATCH(K5,$J$2:$J$10, 0)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K5": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "P5",
+      "formula": "=MATCH(N5,$O$2:$O$10,-1)",
+      "setup": {
+        "O10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "O9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "O8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "O7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "O6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "O5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "O4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "O3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "O2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "N5": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "R5",
+      "formula": "=MATCH(Q5,$O$2:$O$10,-1)",
+      "setup": {
+        "O10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "O9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "O8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "O7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "O6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "O5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "O4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "O3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "O2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "Q5": {
+          "kind": "number",
+          "value": 9.049
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "S5",
+      "formula": "=MATCH(Q5,$J$2:$J$10, 1)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Q5": {
+          "kind": "number",
+          "value": 9.049
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "L6",
+      "formula": "=MATCH(K6,$J$2:$J$10, 1)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K6": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "M6",
+      "formula": "=MATCH(K6,$J$2:$J$10, 0)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K6": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "P6",
+      "formula": "=MATCH(N6,$O$2:$O$10,-1)",
+      "setup": {
+        "O10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "O9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "O8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "O7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "O6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "O5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "O4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "O3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "O2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "N6": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "R6",
+      "formula": "=MATCH(Q6,$O$2:$O$10,-1)",
+      "setup": {
+        "O10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "O9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "O8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "O7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "O6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "O5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "O4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "O3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "O2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "Q6": {
+          "kind": "number",
+          "value": 5.312
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "S6",
+      "formula": "=MATCH(Q6,$J$2:$J$10, 1)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Q6": {
+          "kind": "number",
+          "value": 5.312
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "A7",
+      "formula": "=MATCH(39,B2:B5,1)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 41.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 38.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 25.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "L7",
+      "formula": "=MATCH(K7,$J$2:$J$10, 1)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K7": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "M7",
+      "formula": "=MATCH(K7,$J$2:$J$10, 0)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K7": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "P7",
+      "formula": "=MATCH(N7,$O$2:$O$10,-1)",
+      "setup": {
+        "O10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "O9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "O8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "O7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "O6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "O5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "O4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "O3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "O2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "N7": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "R7",
+      "formula": "=MATCH(Q7,$O$2:$O$10,-1)",
+      "setup": {
+        "O10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "O9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "O8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "O7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "O6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "O5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "O4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "O3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "O2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "Q7": {
+          "kind": "number",
+          "value": 2.372
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "S7",
+      "formula": "=MATCH(Q7,$J$2:$J$10, 1)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Q7": {
+          "kind": "number",
+          "value": 2.372
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "A8",
+      "formula": "=MATCH(41,B2:B5,0)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 41.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 38.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 25.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=MATCH(41,C2:C5,0)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 25.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 38.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 41.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "L8",
+      "formula": "=MATCH(K8,$J$2:$J$10, 1)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K8": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "M8",
+      "formula": "=MATCH(K8,$J$2:$J$10, 0)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K8": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "P8",
+      "formula": "=MATCH(N8,$O$2:$O$10,-1)",
+      "setup": {
+        "O10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "O9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "O8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "O7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "O6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "O5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "O4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "O3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "O2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "N8": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "R8",
+      "formula": "=MATCH(Q8,$O$2:$O$10,-1)",
+      "setup": {
+        "O10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "O9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "O8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "O7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "O6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "O5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "O4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "O3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "O2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "Q8": {
+          "kind": "number",
+          "value": 3.955
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "S8",
+      "formula": "=MATCH(Q8,$J$2:$J$10, 1)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Q8": {
+          "kind": "number",
+          "value": 3.955
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=MATCH(40, C2:C5, -1)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 25.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 38.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 41.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "L9",
+      "formula": "=MATCH(K9,$J$2:$J$10, 1)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K9": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "M9",
+      "formula": "=MATCH(K9,$J$2:$J$10, 0)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K9": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "P9",
+      "formula": "=MATCH(N9,$O$2:$O$10,-1)",
+      "setup": {
+        "O10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "O9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "O8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "O7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "O6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "O5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "O4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "O3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "O2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "N9": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "R9",
+      "formula": "=MATCH(Q9,$O$2:$O$10,-1)",
+      "setup": {
+        "O10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "O9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "O8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "O7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "O6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "O5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "O4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "O3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "O2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "Q9": {
+          "kind": "number",
+          "value": 8.676
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "S9",
+      "formula": "=MATCH(Q9,$J$2:$J$10, 1)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Q9": {
+          "kind": "number",
+          "value": 8.676
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "A10",
+      "formula": "=MATCH(50,$B$2:$B$5,1)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 41.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 38.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 25.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "L10",
+      "formula": "=MATCH(K10,$J$2:$J$10, 1)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K10": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "M10",
+      "formula": "=MATCH(K10,$J$2:$J$10, 0)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K10": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "P10",
+      "formula": "=MATCH(N10,$O$2:$O$10,-1)",
+      "setup": {
+        "O10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "O9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "O8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "O7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "O6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "O5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "O4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "O3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "O2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "N10": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "R10",
+      "formula": "=MATCH(Q10,$O$2:$O$10,-1)",
+      "setup": {
+        "O10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "O9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "O8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "O7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "O6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "O5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "O4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "O3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "O2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "Q10": {
+          "kind": "number",
+          "value": 4.268
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "S10",
+      "formula": "=MATCH(Q10,$J$2:$J$10, 1)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Q10": {
+          "kind": "number",
+          "value": 4.268
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "A11",
+      "formula": "=MATCH(5,$B$2:$B$5,1)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 41.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 38.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 25.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "M15",
+      "formula": "=MATCH(K15,$J$2:$J$10,  0)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K15": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "M16",
+      "formula": "=MATCH(K16,$J$2:$J$10,  0)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K16": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "M17",
+      "formula": "=MATCH(K17,$J$2:$J$10, 0)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K17": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "M18",
+      "formula": "=MATCH(K18,$J$2:$J$10, 0)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K18": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "M19",
+      "formula": "=MATCH(K19,$J$2:$J$10, 0)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K19": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "M20",
+      "formula": "=MATCH(K20,$J$2:$J$10, 0)",
+      "setup": {
+        "J10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "K20": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    }
+  ]
+}

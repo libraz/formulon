@@ -1,0 +1,10 @@
+Formulon
+Copyright 2026 libraz
+
+This product includes test fixtures derived from IronCalc
+(https://github.com/ironcalc/IronCalc), licensed under either
+MIT License or Apache License 2.0 at the user's option.
+Copyright (c) 2023 EqualTo GmbH, 2023 Nicolas Hatcher.
+
+The fixtures are retained in tests/oracle/external/ironcalc/fixtures/.
+License texts are reproduced at tests/oracle/external/ironcalc/.

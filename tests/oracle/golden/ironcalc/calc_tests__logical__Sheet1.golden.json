@@ -1,0 +1,453 @@
+{
+  "suite": "ironcalc_calc_tests_logical_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/logical.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=_xlfn.SWITCH(A2,1,\"Uno\", 2, \"Dos\", 3, \"Tres\")",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Uno"
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=_xlfn.SWITCH(A2,1,\"Uno\", 2, \"Dos\", 3, \"Tres\", \"-\")",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Uno"
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=_xlfn.IFS(A2=1,\"UNO\", A2=2, \"DOS\")",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "UNO"
+      }
+    },
+    {
+      "id": "I2",
+      "formula": "=_xlfn.SWITCH(H2, \"Monday\", 1, \"Tuesday\",2,\"WEDNESDAY\",3)",
+      "setup": {
+        "H2": {
+          "kind": "text",
+          "value": "Monday"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "L2",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "M2",
+      "formula": "=_xlfn.SWITCH(L2,1/0,\"INF\", \"FIN\")",
+      "setup": {
+        "L2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=_xlfn.SWITCH(A3,1,\"Uno\", 2, \"Dos\", 3, \"Tres\")",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Dos"
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=_xlfn.SWITCH(A3,1,\"Uno\", 2, \"Dos\", 3, \"Tres\", \"-\")",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Dos"
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=_xlfn.IFS(A3=1,\"UNO\", A3=2, \"DOS\")",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "DOS"
+      }
+    },
+    {
+      "id": "I3",
+      "formula": "=_xlfn.SWITCH(H3, \"Monday\", 1, \"Tuesday\",2,\"WEDNESDAY\",3)",
+      "setup": {
+        "H3": {
+          "kind": "text",
+          "value": "Tuesday"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=_xlfn.SWITCH(A4,1,\"Uno\", 2, \"Dos\", 3, \"Tres\")",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Tres"
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=_xlfn.SWITCH(A4,1,\"Uno\", 2, \"Dos\", 3, \"Tres\", \"-\")",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Tres"
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=_xlfn.IFS(A4=1,\"UNO\", A4=2, \"DOS\")",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "I4",
+      "formula": "=_xlfn.SWITCH(H4, \"Monday\", 1, \"Tuesday\",2,\"WEDNESDAY\",3)",
+      "setup": {
+        "H4": {
+          "kind": "text",
+          "value": "Wednesday"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=_xlfn.SWITCH(A5,1,\"Uno\", 2, \"Dos\", 3, \"Tres\")",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=_xlfn.SWITCH(A5,1,\"Uno\", 2, \"Dos\", 3, \"Tres\", \"-\")",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-"
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=_xlfn.IFS(A5=1,\"UNO\", A5=2, \"DOS\")",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "I5",
+      "formula": "=_xlfn.SWITCH(H5, \"Monday\", 1, \"Tuesday\",2,\"WEDNESDAY\",3)",
+      "setup": {
+        "H5": {
+          "kind": "text",
+          "value": "Thursday"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=_xlfn.SWITCH(A6,1,\"Uno\", 2, \"Dos\", 3, \"Tres\")",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=_xlfn.SWITCH(A6,1,\"Uno\", 2, \"Dos\", 3, \"Tres\", \"-\")",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-"
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=_xlfn.IFS(A6=1,\"UNO\", A6=2, \"DOS\")",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "I6",
+      "formula": "=_xlfn.SWITCH(H6, \"Monday\", 1, \"Tuesday\",2,\"WEDNESDAY\",3)",
+      "setup": {
+        "H6": {
+          "kind": "text",
+          "value": "Friday"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "A7",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=_xlfn.SWITCH(A7,1,\"Uno\", 2, \"Dos\", 3, \"Tres\")",
+      "setup": {
+        "A7": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=_xlfn.SWITCH(A7,1,\"Uno\", 2, \"Dos\", 3, \"Tres\", \"-\")",
+      "setup": {
+        "A7": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=_xlfn.IFS(A7=1,\"UNO\", A7=2, \"DOS\")",
+      "setup": {
+        "A7": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "I7",
+      "formula": "=_xlfn.SWITCH(H7, \"Monday\", 1, \"Tuesday\",2,\"WEDNESDAY\",3)",
+      "setup": {
+        "H7": {
+          "kind": "text",
+          "value": "Saturday"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=_xlfn.SWITCH(A8,1,\"Uno\", 2, \"Dos\", 3, \"Tres\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=_xlfn.SWITCH(A8,1,\"Uno\", 2, \"Dos\", 3, \"Tres\", \"-\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-"
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=_xlfn.IFS(A8=1,\"UNO\", A8=2, \"DOS\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "I8",
+      "formula": "=_xlfn.SWITCH(H8, \"Monday\", 1, \"Tuesday\",2,\"WEDNESDAY\",3)",
+      "setup": {
+        "H8": {
+          "kind": "text",
+          "value": "Sunday"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "I9",
+      "formula": "=_xlfn.SWITCH(H9, \"Monday\", 1, \"Tuesday\",2,\"WEDNESDAY\",3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "A14",
+      "formula": "=TRUE()",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "A15",
+      "formula": "=FALSE()",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    }
+  ]
+}

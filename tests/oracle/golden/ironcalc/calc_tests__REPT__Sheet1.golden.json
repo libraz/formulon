@@ -1,0 +1,233 @@
+{
+  "suite": "ironcalc_calc_tests_REPT_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/REPT.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=REPT(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Qwery"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "QweryQweryQwery"
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=REPT(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Qwery"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=REPT(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Qwery"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "QweryQwery"
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=REPT(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "text",
+          "value": "Qwery"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Qwery"
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=REPT(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 1.999
+        },
+        "A9": {
+          "kind": "text",
+          "value": "Qwery"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Qwery"
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=REPT(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "Qwery"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A12",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=REPT(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=REPT(A13,B13)",
+      "setup": {
+        "A13": {
+          "kind": "text",
+          "value": "Qwery"
+        },
+        "B13": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=REPT(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 123.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "123123"
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=REPT(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A15": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "TRUETRUE"
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=REPT(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 123456789.0
+        },
+        "A16": {
+          "kind": "text",
+          "value": "Hwllo"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

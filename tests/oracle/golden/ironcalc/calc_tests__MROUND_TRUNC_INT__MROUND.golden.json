@@ -1,0 +1,1260 @@
+{
+  "suite": "ironcalc_calc_tests_MROUND_TRUNC_INT_MROUND",
+  "description": "Derived from IronCalc fixture calc_tests/MROUND_TRUNC_INT.xlsx, sheet 'MROUND'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "MROUND",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=MROUND(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=MROUND(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 11.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=MROUND(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 13.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=MROUND(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=MROUND(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=MROUND(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": -7.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=MROUND(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -7.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -10.0
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=MROUND(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 7.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=MROUND(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=MROUND(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=MROUND(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=MROUND(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A13": {
+          "kind": "number",
+          "value": 10.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=MROUND(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A14": {
+          "kind": "number",
+          "value": 10.3
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.5
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=MROUND(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 0.01
+        },
+        "A15": {
+          "kind": "number",
+          "value": 2.675
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.68
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=MROUND(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 0.0001
+        },
+        "A16": {
+          "kind": "number",
+          "value": 1.23456789
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.2346000000000001
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=MROUND(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 123456789.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 123457000.0
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=MROUND(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10000000000000.0
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=MROUND(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 0.0001
+        },
+        "A19": {
+          "kind": "number",
+          "value": 0.00037
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0004
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=MROUND(A20,B20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 0.0001
+        },
+        "A20": {
+          "kind": "number",
+          "value": -0.00037
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A21",
+      "formula": "=\"8\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "8"
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=MROUND(A21,B21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "B22",
+      "formula": "=\"8\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "8"
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=MROUND(A22,B22)",
+      "setup": {
+        "A22": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B22": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A23",
+      "formula": "=\" 10 \"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " 10 "
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=MROUND(A23,B23)",
+      "setup": {
+        "B23": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A23": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=MROUND(A24,B24)",
+      "setup": {
+        "B24": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A24": {
+          "kind": "text",
+          "value": "\"eight\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=MROUND(A25,B25)",
+      "setup": {
+        "B25": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A25": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A26",
+      "formula": "=\"0\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "B26",
+      "formula": "=\"5\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "5"
+      }
+    },
+    {
+      "id": "C26",
+      "formula": "=MROUND(A26,B26)",
+      "setup": {
+        "B26": {
+          "kind": "formula",
+          "formula": "=\"5\""
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A27",
+      "formula": "=\"@\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "@"
+      }
+    },
+    {
+      "id": "C27",
+      "formula": "=MROUND(A27,B27)",
+      "setup": {
+        "B27": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A27": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C28",
+      "formula": "=MROUND(A28,B28)",
+      "setup": {
+        "B28": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A28": {
+          "kind": "formula",
+          "formula": "=\"#REF!\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C29",
+      "formula": "=MROUND(A29,B29)",
+      "setup": {
+        "B29": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A29": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45301.0
+      }
+    },
+    {
+      "id": "C30",
+      "formula": "=MROUND(A30,B30)",
+      "setup": {
+        "B30": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A30": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45304.0
+      }
+    },
+    {
+      "id": "A31",
+      "formula": "=\"2024-01-10\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024-01-10"
+      }
+    },
+    {
+      "id": "C31",
+      "formula": "=MROUND(A31,B31)",
+      "setup": {
+        "B31": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A31": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45304.0
+      }
+    },
+    {
+      "id": "A32",
+      "formula": "=\" 2024-01-10 \"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " 2024-01-10 "
+      }
+    },
+    {
+      "id": "C32",
+      "formula": "=MROUND(A32,B32)",
+      "setup": {
+        "B32": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A32": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C33",
+      "formula": "=MROUND(A33,B33)",
+      "setup": {
+        "B33": {
+          "kind": "number",
+          "value": 0.25
+        },
+        "A33": {
+          "kind": "formula",
+          "formula": "=TIME(2,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C34",
+      "formula": "=MROUND(,B34)",
+      "setup": {
+        "B34": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C35",
+      "formula": "=MROUND(A35,B35)",
+      "setup": {
+        "B35": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C36",
+      "formula": "=MROUND(A36, )",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C37",
+      "formula": "=MROUND(A37,B37)",
+      "setup": {
+        "B37": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C38",
+      "formula": "=MROUND(A38,B38)",
+      "setup": {
+        "A38": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B38": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A39",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C39",
+      "formula": "=MROUND(A39,B39)",
+      "setup": {
+        "B39": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A39": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B40",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C40",
+      "formula": "=MROUND(A40,B40)",
+      "setup": {
+        "A40": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B40": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A41",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C41",
+      "formula": "=MROUND(A41,B41)",
+      "setup": {
+        "B41": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A41": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B42",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C42",
+      "formula": "=MROUND(A42,B42)",
+      "setup": {
+        "A42": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B42": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "A43",
+      "formula": "=SQRT(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C43",
+      "formula": "=MROUND(A43,B43)",
+      "setup": {
+        "B43": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A43": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B44",
+      "formula": "=SQRT(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C44",
+      "formula": "=MROUND(A44,B44)",
+      "setup": {
+        "A44": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B44": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A45",
+      "formula": "=\"x\"+1",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C45",
+      "formula": "=MROUND(A45,B45)",
+      "setup": {
+        "B45": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A45": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B46",
+      "formula": "=\"x\"+1",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C46",
+      "formula": "=MROUND(A46,B46)",
+      "setup": {
+        "A46": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B46": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C47",
+      "formula": "=MROUND(A47,B47)",
+      "setup": {
+        "B47": {
+          "kind": "number",
+          "value": 1e-100
+        },
+        "A47": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "C48",
+      "formula": "=MROUND(A48,B48)",
+      "setup": {
+        "B48": {
+          "kind": "number",
+          "value": 1e+50
+        },
+        "A48": {
+          "kind": "number",
+          "value": 1e+100
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1e+100
+      }
+    },
+    {
+      "id": "C51",
+      "formula": "=MROUND(A51,B51)",
+      "setup": {
+        "B51": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A51": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C52",
+      "formula": "=MROUND(A52,B52)",
+      "setup": {
+        "B52": {
+          "kind": "bool",
+          "value": true
+        },
+        "A52": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C53",
+      "formula": "=MROUND(A53,B53)",
+      "setup": {
+        "B53": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A53": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C54",
+      "formula": "=MROUND(A54,B54)",
+      "setup": {
+        "B54": {
+          "kind": "bool",
+          "value": false
+        },
+        "A54": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C55",
+      "formula": "=MROUND(A55,B55)",
+      "setup": {
+        "B55": {
+          "kind": "bool",
+          "value": false
+        },
+        "A55": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C56",
+      "formula": "=MROUND(A56,B56)",
+      "setup": {
+        "B56": {
+          "kind": "bool",
+          "value": true
+        },
+        "A56": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C57",
+      "formula": "=MROUND(A57,B57)",
+      "setup": {
+        "B57": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A57": {
+          "kind": "number",
+          "value": 9.99999e+307
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.99999e+307
+      }
+    },
+    {
+      "id": "C58",
+      "formula": "=MROUND(A58,B58)",
+      "setup": {
+        "B58": {
+          "kind": "number",
+          "value": 9.99999e+307
+        },
+        "A58": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A59",
+      "formula": "=1.05*(0.0284+0.0046)-0.0284",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.006249999999999999
+      }
+    },
+    {
+      "id": "B59",
+      "formula": "=1.05*(0.0284+0.0046)-0.0284",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.006249999999999999
+      }
+    },
+    {
+      "id": "C59",
+      "formula": "=MROUND(A59,B59)",
+      "setup": {
+        "B59": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        },
+        "A59": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.006249999999999999
+      }
+    },
+    {
+      "id": "A60",
+      "formula": "=H60",
+      "setup": {
+        "H60": {
+          "kind": "number",
+          "value": 1.75
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.75
+      }
+    },
+    {
+      "id": "C60",
+      "formula": "=MROUND(A60,B60)",
+      "setup": {
+        "B60": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H60": {
+          "kind": "number",
+          "value": 1.75
+        },
+        "A60": {
+          "kind": "formula",
+          "formula": "=H60"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "A61",
+      "formula": "=PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "C61",
+      "formula": "=MROUND(A61,B61)",
+      "setup": {
+        "B61": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A61": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "B62",
+      "formula": "=PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "C62",
+      "formula": "=MROUND(A62,B62)",
+      "setup": {
+        "A62": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B62": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    }
+  ]
+}

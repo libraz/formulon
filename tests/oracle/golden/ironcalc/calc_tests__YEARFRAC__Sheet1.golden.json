@@ -1,0 +1,401 @@
+{
+  "suite": "ironcalc_calc_tests_YEARFRAC_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/YEARFRAC.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "D2",
+      "formula": "=YEARFRAC(A2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=YEARFRAC(A3,B3,C3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=YEARFRAC(A4,B4,C4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5083333333333333
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=YEARFRAC(A5,B5,C5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5013698630136987
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=YEARFRAC(A6,B6,C6)",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.49722222222222223
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=YEARFRAC(A7,B7,C7)",
+      "setup": {
+        "C7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=YEARFRAC(A8,B8,C8)",
+      "setup": {
+        "C8": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5013698630136987
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=YEARFRAC(A9,B9,C9)",
+      "setup": {
+        "C9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8277777777777777
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=YEARFRAC(A10,B10,C10)",
+      "setup": {
+        "C10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B10": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8246575342465754
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=YEARFRAC(A11,B11,C11)",
+      "setup": {
+        "C11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B11": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8361111111111111
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=YEARFRAC(A12,B12,C12)",
+      "setup": {
+        "C12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B12": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8246575342465754
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=YEARFRAC(A13,B13,C13)",
+      "setup": {
+        "C13": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B13": {
+          "kind": "formula",
+          "formula": "=DATE(2017,12,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8277777777777777
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=YEARFRAC(A14,B14,C14)",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3388888888888889
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=YEARFRAC(A15,B15,C15)",
+      "setup": {
+        "C15": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.33972602739726027
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=YEARFRAC(A16,B16,C16)",
+      "setup": {
+        "C16": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.34444444444444444
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=YEARFRAC(A17,B17,C17)",
+      "setup": {
+        "C17": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.33972602739726027
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=YEARFRAC(A18,B18,C18)",
+      "setup": {
+        "C18": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3388888888888889
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=YEARFRAC(A19,B19,C19)",
+      "setup": {
+        "C19": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 31.086111111111112
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=YEARFRAC(A20,B20,C20)",
+      "setup": {
+        "C20": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 31.08829568788501
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=YEARFRAC(A21,B21,C21)",
+      "setup": {
+        "C21": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 31.541666666666668
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=YEARFRAC(A22,B22,C22)",
+      "setup": {
+        "C22": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 31.10958904109589
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=YEARFRAC(A23,B23,C23)",
+      "setup": {
+        "C23": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 31.086111111111112
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=YEARFRAC(A25,B25,C25)",
+      "setup": {
+        "C25": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.25833333333333336
+      }
+    },
+    {
+      "id": "D28",
+      "formula": "=YEARFRAC(A28,B28,C28)",
+      "setup": {
+        "C28": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 25.65574934090448
+      }
+    },
+    {
+      "id": "D29",
+      "formula": "=YEARFRAC(A29,B29,C29)",
+      "setup": {
+        "C29": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9917808219178083
+      }
+    },
+    {
+      "id": "D30",
+      "formula": "=YEARFRAC(A30,B30,C30)",
+      "setup": {
+        "C30": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0720802919708032
+      }
+    }
+  ]
+}

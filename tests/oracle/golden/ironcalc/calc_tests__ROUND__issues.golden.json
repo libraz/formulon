@@ -1,0 +1,26 @@
+{
+  "suite": "ironcalc_calc_tests_ROUND_issues",
+  "description": "Derived from IronCalc fixture calc_tests/ROUND.xlsx, sheet 'issues'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "issues",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "A2",
+      "formula": "=ROUND(1.05*(0.0284+0.0046)-0.0284,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0063
+      }
+    }
+  ]
+}

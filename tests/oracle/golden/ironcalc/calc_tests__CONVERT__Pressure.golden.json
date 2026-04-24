@@ -1,0 +1,537 @@
+{
+  "suite": "ironcalc_calc_tests_CONVERT_Pressure",
+  "description": "Derived from IronCalc fixture calc_tests/CONVERT.xlsx, sheet 'Pressure'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Pressure",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=CONVERT(1,B2,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=CONVERT($G$1,B2,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        },
+        "G1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "J2",
+      "formula": "=\"M\"&B2",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MPa"
+      }
+    },
+    {
+      "id": "K2",
+      "formula": "=CONVERT(0.05,J2,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        },
+        "J2": {
+          "kind": "formula",
+          "formula": "=\"M\"&B2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50000.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=CONVERT(1,B3,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "p"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=CONVERT($G$1,B3,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "p"
+        },
+        "G1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "J3",
+      "formula": "=\"M\"&B3",
+      "setup": {
+        "B3": {
+          "kind": "text",
+          "value": "p"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mp"
+      }
+    },
+    {
+      "id": "K3",
+      "formula": "=CONVERT(0.05,J3,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "p"
+        },
+        "J3": {
+          "kind": "formula",
+          "formula": "=\"M\"&B3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50000.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=CONVERT(1,B4,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "atm"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 101325.0
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=CONVERT($G$1,B4,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "atm"
+        },
+        "G1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 506625.0
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=\"M\"&B4",
+      "setup": {
+        "B4": {
+          "kind": "text",
+          "value": "atm"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Matm"
+      }
+    },
+    {
+      "id": "K4",
+      "formula": "=CONVERT(0.05,J4,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "atm"
+        },
+        "J4": {
+          "kind": "formula",
+          "formula": "=\"M\"&B4"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5066250000.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=CONVERT(1,B5,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "at"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 101325.0
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=CONVERT($G$1,B5,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "at"
+        },
+        "G1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 506625.0
+      }
+    },
+    {
+      "id": "J5",
+      "formula": "=\"M\"&B5",
+      "setup": {
+        "B5": {
+          "kind": "text",
+          "value": "at"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mat"
+      }
+    },
+    {
+      "id": "K5",
+      "formula": "=CONVERT(0.05,J5,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "at"
+        },
+        "J5": {
+          "kind": "formula",
+          "formula": "=\"M\"&B5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5066250000.0
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=CONVERT(1,B6,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "mmHg"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 133.322
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=CONVERT($G$1,B6,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "mmHg"
+        },
+        "G1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 666.61
+      }
+    },
+    {
+      "id": "J6",
+      "formula": "=\"M\"&B6",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "mmHg"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MmmHg"
+      }
+    },
+    {
+      "id": "K6",
+      "formula": "=CONVERT(0.05,J6,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "mmHg"
+        },
+        "J6": {
+          "kind": "formula",
+          "formula": "=\"M\"&B6"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6666100.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=CONVERT(1,B7,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "psi"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6894.757293168362
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=CONVERT($G$1,B7,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "psi"
+        },
+        "G1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 34473.78646584181
+      }
+    },
+    {
+      "id": "J7",
+      "formula": "=\"M\"&B7",
+      "setup": {
+        "B7": {
+          "kind": "text",
+          "value": "psi"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mpsi"
+      }
+    },
+    {
+      "id": "K7",
+      "formula": "=CONVERT(0.05,J7,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "psi"
+        },
+        "J7": {
+          "kind": "formula",
+          "formula": "=\"M\"&B7"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=CONVERT(1,B8,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "Torr"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 133.32236842105263
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=CONVERT($G$1,B8,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "Torr"
+        },
+        "G1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 666.6118421052631
+      }
+    },
+    {
+      "id": "J8",
+      "formula": "=\"M\"&B8",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "Torr"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MTorr"
+      }
+    },
+    {
+      "id": "K8",
+      "formula": "=CONVERT(0.05,J8,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "Pa"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "Torr"
+        },
+        "J8": {
+          "kind": "formula",
+          "formula": "=\"M\"&B8"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

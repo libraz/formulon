@@ -1,0 +1,6778 @@
+{
+  "suite": "ironcalc_calc_tests_COUNTIFS_Rows2",
+  "description": "Derived from IronCalc fixture calc_tests/COUNTIFS.xlsx, sheet 'Rows2'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Rows2",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=COUNTIFS($A$2:$A$8, B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=COUNTIFS($A$2:$A$8, _xlfn.CONCAT(\"=\", B2))",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=COUNTIFS($A$2:$A$8, _xlfn.CONCAT(\"<>\", B2))",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "L2",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<\",K2))",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "M2",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<=\",K2))",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "N2",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">\",K2))",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "O2",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">=\",K2))",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "P2",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<>\",K2))",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 13.0
+      }
+    },
+    {
+      "id": "T2",
+      "formula": "=COUNTIFS($R$2:$R$15, S2)",
+      "setup": {
+        "S2": {
+          "kind": "text",
+          "value": "<>*brown"
+        },
+        "R11": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "R9": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "R8": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R7": {
+          "kind": "text",
+          "value": "Mrs. Brown"
+        },
+        "R6": {
+          "kind": "text",
+          "value": "Mr. Brown"
+        },
+        "R5": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R4": {
+          "kind": "text",
+          "value": "Bernanrd"
+        },
+        "R3": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R2": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R13": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "R12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "X2",
+      "formula": "=COUNTIFS($V$2:$V$15, W2)",
+      "setup": {
+        "W2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V10": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "V3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "V2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V8": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "V7": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "Y2",
+      "formula": "=COUNTIFS($V$2:$V$8, _xlfn.CONCAT(\"<>\", W2))",
+      "setup": {
+        "W2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "V3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "V2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V8": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "V7": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "AD2",
+      "formula": "=COUNTIFS(AB$2:AB$15,AC2)",
+      "setup": {
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "AE2",
+      "formula": "=COUNTIFS(AB$2:AB$15,_xlfn.CONCAT(\"<>\", AC2))",
+      "setup": {
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=COUNTIFS($A$2:$A$8, B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=COUNTIFS($A$2:$A$8, _xlfn.CONCAT(\"=\", B3))",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=COUNTIFS($A$2:$A$8, _xlfn.CONCAT(\"<>\", B3))",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "L3",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<\",K3))",
+      "setup": {
+        "K3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "M3",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<=\",K3))",
+      "setup": {
+        "K3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "N3",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">\",K3))",
+      "setup": {
+        "K3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "O3",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">=\",K3))",
+      "setup": {
+        "K3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "P3",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<>\",K3))",
+      "setup": {
+        "K3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 13.0
+      }
+    },
+    {
+      "id": "T3",
+      "formula": "=COUNTIFS($R$2:$R$15, S3)",
+      "setup": {
+        "S3": {
+          "kind": "text",
+          "value": "=*brown"
+        },
+        "R11": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "R9": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "R8": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R7": {
+          "kind": "text",
+          "value": "Mrs. Brown"
+        },
+        "R6": {
+          "kind": "text",
+          "value": "Mr. Brown"
+        },
+        "R5": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R4": {
+          "kind": "text",
+          "value": "Bernanrd"
+        },
+        "R3": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R2": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R13": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "R12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "W3",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "X3",
+      "formula": "=COUNTIFS($V$2:$V$15, W3)",
+      "setup": {
+        "V10": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "V3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "V2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "W3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "V8": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "V7": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "Y3",
+      "formula": "=COUNTIFS($V$2:$V$8, _xlfn.CONCAT(\"<>\", W3))",
+      "setup": {
+        "V6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "V3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "V2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "W3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "V8": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "V7": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "AD3",
+      "formula": "=COUNTIFS(AB$2:AB$15,AC3)",
+      "setup": {
+        "AC3": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "AE3",
+      "formula": "=COUNTIFS(AB$2:AB$15,_xlfn.CONCAT(\"<>\", AC3))",
+      "setup": {
+        "AC3": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=COUNTIFS($A$2:$A$8, B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=COUNTIFS($A$2:$A$8, _xlfn.CONCAT(\"=\", B4))",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=COUNTIFS($A$2:$A$8, _xlfn.CONCAT(\"<>\", B4))",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "L4",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<\",K4))",
+      "setup": {
+        "K4": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "M4",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<=\",K4))",
+      "setup": {
+        "K4": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "N4",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">\",K4))",
+      "setup": {
+        "K4": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "O4",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">=\",K4))",
+      "setup": {
+        "K4": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "P4",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<>\",K4))",
+      "setup": {
+        "K4": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 13.0
+      }
+    },
+    {
+      "id": "T4",
+      "formula": "=COUNTIFS($R$2:$R$15, S4)",
+      "setup": {
+        "S4": {
+          "kind": "text",
+          "value": "<brown"
+        },
+        "R11": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "R9": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "R8": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R7": {
+          "kind": "text",
+          "value": "Mrs. Brown"
+        },
+        "R6": {
+          "kind": "text",
+          "value": "Mr. Brown"
+        },
+        "R5": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R4": {
+          "kind": "text",
+          "value": "Bernanrd"
+        },
+        "R3": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R2": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R13": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "R12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "X4",
+      "formula": "=COUNTIFS($V$2:$V$15, W4)",
+      "setup": {
+        "W4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V10": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "V3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "V2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V8": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "V7": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "Y4",
+      "formula": "=COUNTIFS($V$2:$V$8, _xlfn.CONCAT(\"<>\", W4))",
+      "setup": {
+        "W4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "V3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "V2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V8": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "V7": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "AD4",
+      "formula": "=COUNTIFS(AB$2:AB$15,AC4)",
+      "setup": {
+        "AC4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "AE4",
+      "formula": "=COUNTIFS(AB$2:AB$15,_xlfn.CONCAT(\"<>\", AC4))",
+      "setup": {
+        "AC4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 13.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=COUNTIFS($A$2:$A$8, B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=COUNTIFS($A$2:$A$8, _xlfn.CONCAT(\"=\", B5))",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=COUNTIFS($A$2:$A$8, _xlfn.CONCAT(\"<>\", B5))",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "L5",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<\",K5))",
+      "setup": {
+        "K5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "M5",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<=\",K5))",
+      "setup": {
+        "K5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "N5",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">\",K5))",
+      "setup": {
+        "K5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "O5",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">=\",K5))",
+      "setup": {
+        "K5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "P5",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<>\",K5))",
+      "setup": {
+        "K5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 13.0
+      }
+    },
+    {
+      "id": "T5",
+      "formula": "=COUNTIFS($R$2:$R$15, S5)",
+      "setup": {
+        "S5": {
+          "kind": "text",
+          "value": ">brown"
+        },
+        "R11": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "R9": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "R8": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R7": {
+          "kind": "text",
+          "value": "Mrs. Brown"
+        },
+        "R6": {
+          "kind": "text",
+          "value": "Mr. Brown"
+        },
+        "R5": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R4": {
+          "kind": "text",
+          "value": "Bernanrd"
+        },
+        "R3": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R2": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R13": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "R12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "X5",
+      "formula": "=COUNTIFS($V$2:$V$15, W5)",
+      "setup": {
+        "V10": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "V3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "V2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "W5": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "V8": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "V7": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "Y5",
+      "formula": "=COUNTIFS($V$2:$V$8, _xlfn.CONCAT(\"<>\", W5))",
+      "setup": {
+        "V6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "V3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "V2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "W5": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "V8": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "V7": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "AD5",
+      "formula": "=COUNTIFS(AB$2:AB$15,AC5)",
+      "setup": {
+        "AC5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "AE5",
+      "formula": "=COUNTIFS(AB$2:AB$15,_xlfn.CONCAT(\"<>\", AC5))",
+      "setup": {
+        "AC5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=COUNTIFS($A$2:$A$8, B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=COUNTIFS($A$2:$A$8, _xlfn.CONCAT(\"=\", B6))",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=COUNTIFS($A$2:$A$8, _xlfn.CONCAT(\"<>\", B6))",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "L6",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<\",K6))",
+      "setup": {
+        "K6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "M6",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<=\",K6))",
+      "setup": {
+        "K6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "N6",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">\",K6))",
+      "setup": {
+        "K6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "O6",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">=\",K6))",
+      "setup": {
+        "K6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "P6",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<>\",K6))",
+      "setup": {
+        "K6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 14.0
+      }
+    },
+    {
+      "id": "T6",
+      "formula": "=COUNTIFS($R$2:$R$15, S6)",
+      "setup": {
+        "R11": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "R9": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "R8": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R7": {
+          "kind": "text",
+          "value": "Mrs. Brown"
+        },
+        "R6": {
+          "kind": "text",
+          "value": "Mr. Brown"
+        },
+        "R5": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R4": {
+          "kind": "text",
+          "value": "Bernanrd"
+        },
+        "R3": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R2": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R13": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "R12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "X6",
+      "formula": "=COUNTIFS($V$2:$V$15, W6)",
+      "setup": {
+        "V10": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "V3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "V2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V8": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "V7": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "Y6",
+      "formula": "=COUNTIFS($V$2:$V$8, _xlfn.CONCAT(\"<>\", W6))",
+      "setup": {
+        "V6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "V3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "V2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V8": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "V7": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "AD6",
+      "formula": "=COUNTIFS(AB$2:AB$15,AC6)",
+      "setup": {
+        "AC6": {
+          "kind": "text",
+          "value": "true"
+        },
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "AE6",
+      "formula": "=COUNTIFS(AB$2:AB$15,_xlfn.CONCAT(\"<>\", AC6))",
+      "setup": {
+        "AC6": {
+          "kind": "text",
+          "value": "true"
+        },
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=COUNTIFS($A$2:$A$8, B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=COUNTIFS($A$2:$A$8, _xlfn.CONCAT(\"=\", B7))",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=COUNTIFS($A$2:$A$8, _xlfn.CONCAT(\"<>\", B7))",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "L7",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<\",K7))",
+      "setup": {
+        "K7": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "M7",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<=\",K7))",
+      "setup": {
+        "K7": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "N7",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">\",K7))",
+      "setup": {
+        "K7": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "O7",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">=\",K7))",
+      "setup": {
+        "K7": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "P7",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<>\",K7))",
+      "setup": {
+        "K7": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 14.0
+      }
+    },
+    {
+      "id": "S7",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "T7",
+      "formula": "=COUNTIFS($R$2:$R$15, S7)",
+      "setup": {
+        "R11": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "R9": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "R8": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R7": {
+          "kind": "text",
+          "value": "Mrs. Brown"
+        },
+        "R6": {
+          "kind": "text",
+          "value": "Mr. Brown"
+        },
+        "R5": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R4": {
+          "kind": "text",
+          "value": "Bernanrd"
+        },
+        "R3": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R2": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "S7": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "R13": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "R12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "X7",
+      "formula": "=COUNTIFS($V$2:$V$15, W7)",
+      "setup": {
+        "V10": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "V3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "V2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V8": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "V7": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "Y7",
+      "formula": "=COUNTIFS($V$2:$V$8, _xlfn.CONCAT(\"<>\", W7))",
+      "setup": {
+        "V6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "V3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "V2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V8": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "V7": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "AD7",
+      "formula": "=COUNTIFS(AB$2:AB$15,AC7)",
+      "setup": {
+        "AC7": {
+          "kind": "text",
+          "value": "FaLSe"
+        },
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "AE7",
+      "formula": "=COUNTIFS(AB$2:AB$15,_xlfn.CONCAT(\"<>\", AC7))",
+      "setup": {
+        "AC7": {
+          "kind": "text",
+          "value": "FaLSe"
+        },
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=COUNTIFS($A$2:$A$8, B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=COUNTIFS($A$2:$A$8, _xlfn.CONCAT(\"=\", B8))",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=COUNTIFS($A$2:$A$8, _xlfn.CONCAT(\"<>\", B8))",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "L8",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<\",K8))",
+      "setup": {
+        "K8": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "M8",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<=\",K8))",
+      "setup": {
+        "K8": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "N8",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">\",K8))",
+      "setup": {
+        "K8": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "O8",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">=\",K8))",
+      "setup": {
+        "K8": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "P8",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<>\",K8))",
+      "setup": {
+        "K8": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 14.0
+      }
+    },
+    {
+      "id": "S8",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "T8",
+      "formula": "=COUNTIFS($R$2:$R$15, S8)",
+      "setup": {
+        "R11": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "R9": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "R8": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R7": {
+          "kind": "text",
+          "value": "Mrs. Brown"
+        },
+        "R6": {
+          "kind": "text",
+          "value": "Mr. Brown"
+        },
+        "R5": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R4": {
+          "kind": "text",
+          "value": "Bernanrd"
+        },
+        "R3": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R2": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "S8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "R13": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "R12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "X8",
+      "formula": "=COUNTIFS($V$2:$V$15, W8)",
+      "setup": {
+        "V10": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "V3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "V2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V8": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "V7": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "Y8",
+      "formula": "=COUNTIFS($V$2:$V$8, _xlfn.CONCAT(\"<>\", W8))",
+      "setup": {
+        "V6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "V3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "V2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "V8": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "V7": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "AD8",
+      "formula": "=COUNTIFS(AB$2:AB$15,AC8)",
+      "setup": {
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "AE8",
+      "formula": "=COUNTIFS(AB$2:AB$15,_xlfn.CONCAT(\"<>\", AC8))",
+      "setup": {
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "L9",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<\",K9))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "M9",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<=\",K9))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "N9",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">\",K9))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "O9",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">=\",K9))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "P9",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<>\",K9))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "T9",
+      "formula": "=COUNTIFS($R$2:$R$15, S9)",
+      "setup": {
+        "S9": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "R11": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "R9": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "R8": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R7": {
+          "kind": "text",
+          "value": "Mrs. Brown"
+        },
+        "R6": {
+          "kind": "text",
+          "value": "Mr. Brown"
+        },
+        "R5": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R4": {
+          "kind": "text",
+          "value": "Bernanrd"
+        },
+        "R3": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R2": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R13": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "R12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "AD9",
+      "formula": "=COUNTIFS(AB$2:AB$15,AC9)",
+      "setup": {
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "AE9",
+      "formula": "=COUNTIFS(AB$2:AB$15,_xlfn.CONCAT(\"<>\", AC9))",
+      "setup": {
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "L10",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<\",K10))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "M10",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<=\",K10))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "N10",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">\",K10))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "O10",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">=\",K10))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "P10",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<>\",K10))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "T10",
+      "formula": "=COUNTIFS($R$2:$R$15, S10)",
+      "setup": {
+        "S10": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "R11": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "R9": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "R8": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R7": {
+          "kind": "text",
+          "value": "Mrs. Brown"
+        },
+        "R6": {
+          "kind": "text",
+          "value": "Mr. Brown"
+        },
+        "R5": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R4": {
+          "kind": "text",
+          "value": "Bernanrd"
+        },
+        "R3": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R2": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R13": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "R12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "AD10",
+      "formula": "=COUNTIFS(AB$2:AB$15,AC10)",
+      "setup": {
+        "AC10": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "AE10",
+      "formula": "=COUNTIFS(AB$2:AB$15,_xlfn.CONCAT(\"<>\", AC10))",
+      "setup": {
+        "AC10": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "L11",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<\",K11))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "M11",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<=\",K11))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "N11",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">\",K11))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "O11",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">=\",K11))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "P11",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<>\",K11))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "T11",
+      "formula": "=COUNTIFS($R$2:$R$15, S11)",
+      "setup": {
+        "R11": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "R9": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "R8": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R7": {
+          "kind": "text",
+          "value": "Mrs. Brown"
+        },
+        "R6": {
+          "kind": "text",
+          "value": "Mr. Brown"
+        },
+        "R5": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R4": {
+          "kind": "text",
+          "value": "Bernanrd"
+        },
+        "R3": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R2": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R13": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "R12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "AD11",
+      "formula": "=COUNTIFS(AB$2:AB$15,AC11)",
+      "setup": {
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "AE11",
+      "formula": "=COUNTIFS(AB$2:AB$15,_xlfn.CONCAT(\"<>\", AC11))",
+      "setup": {
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "L12",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<\",K12))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "M12",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<=\",K12))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "N12",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">\",K12))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "O12",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">=\",K12))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "P12",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<>\",K12))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "R12",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "T12",
+      "formula": "=COUNTIFS($R$2:$R$15, S12)",
+      "setup": {
+        "R11": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "R9": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "R8": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R7": {
+          "kind": "text",
+          "value": "Mrs. Brown"
+        },
+        "R6": {
+          "kind": "text",
+          "value": "Mr. Brown"
+        },
+        "R5": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R4": {
+          "kind": "text",
+          "value": "Bernanrd"
+        },
+        "R3": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R2": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R13": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "R12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "AD12",
+      "formula": "=COUNTIFS(AB$2:AB$15,AC12)",
+      "setup": {
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "AE12",
+      "formula": "=COUNTIFS(AB$2:AB$15,_xlfn.CONCAT(\"<>\", AC12))",
+      "setup": {
+        "AB11": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB10": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB9": {
+          "kind": "bool",
+          "value": true
+        },
+        "AB7": {
+          "kind": "text",
+          "value": "TRUE"
+        },
+        "AB5": {
+          "kind": "bool",
+          "value": false
+        },
+        "AB4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AB2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "L13",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<\",K13))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "M13",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<=\",K13))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "N13",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">\",K13))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "O13",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">=\",K13))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "P13",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<>\",K13))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "R13",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "T13",
+      "formula": "=COUNTIFS($R$2:$R$15, S13)",
+      "setup": {
+        "R11": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "R9": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "R8": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R7": {
+          "kind": "text",
+          "value": "Mrs. Brown"
+        },
+        "R6": {
+          "kind": "text",
+          "value": "Mr. Brown"
+        },
+        "R5": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R4": {
+          "kind": "text",
+          "value": "Bernanrd"
+        },
+        "R3": {
+          "kind": "text",
+          "value": "Albert"
+        },
+        "R2": {
+          "kind": "text",
+          "value": "Steven"
+        },
+        "R13": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "R12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "L14",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<\",K14))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "M14",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<=\",K14))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "N14",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">\",K14))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "O14",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">=\",K14))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "P14",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<>\",K14))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "L15",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<\",K15))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "M15",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<=\",K15))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "N15",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">\",K15))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "O15",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">=\",K15))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "P15",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<>\",K15))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "L16",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<\",K16))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "M16",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<=\",K16))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "N16",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">\",K16))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "O16",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\">=\",K16))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "P16",
+      "formula": "=COUNTIFS($J$2:$J$15, _xlfn.CONCAT(\"<>\",K16))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "J8": {
+          "kind": "bool",
+          "value": false
+        },
+        "J7": {
+          "kind": "text",
+          "value": "hey"
+        },
+        "J6": {
+          "kind": "number",
+          "value": -23.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "J4": {
+          "kind": "bool",
+          "value": true
+        },
+        "J3": {
+          "kind": "text",
+          "value": "23"
+        },
+        "J2": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "J12": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    }
+  ]
+}

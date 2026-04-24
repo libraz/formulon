@@ -1,0 +1,105 @@
+{
+  "suite": "ironcalc_statistical_STANDARIZE_Sheet1",
+  "description": "Derived from IronCalc fixture statistical/STANDARIZE.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "D2",
+      "formula": "=STANDARDIZE(A2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.8
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.9999999999999998
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=STANDARDIZE(A3,B3,C3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "B3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 110.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=STANDARDIZE(A4,B4,C4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 12.2
+        },
+        "A4": {
+          "kind": "number",
+          "value": 12.3
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.10000000000000142
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=STANDARDIZE(A5,B5,C5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    }
+  ]
+}

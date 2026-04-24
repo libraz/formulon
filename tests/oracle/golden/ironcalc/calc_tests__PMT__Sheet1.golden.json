@@ -1,0 +1,9118 @@
+{
+  "suite": "ironcalc_calc_tests_PMT_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/PMT.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "F2",
+      "formula": "=PMT(A2,B2,C2,D2,E2)",
+      "setup": {
+        "E2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -78.57142857142858
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=PMT(A2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -114.28571428571429
+      }
+    },
+    {
+      "id": "H2",
+      "formula": "=NPER(A2,F2,C2,D2,E2)",
+      "setup": {
+        "E2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F2": {
+          "kind": "formula",
+          "formula": "=PMT(A2,B2,C2,D2,E2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "I2",
+      "formula": "=NPER(A2,G2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "formula",
+          "formula": "=PMT(A2,B2,C2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "J2",
+      "formula": "=PV(A2,B2,F2,D2,E2)",
+      "setup": {
+        "E2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F2": {
+          "kind": "formula",
+          "formula": "=PMT(A2,B2,C2,D2,E2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.00000000000003
+      }
+    },
+    {
+      "id": "K2",
+      "formula": "=PV(A2,B2,G2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "formula",
+          "formula": "=PMT(A2,B2,C2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "L2",
+      "formula": "=FV(A2,I2,F2,C2,E2)",
+      "setup": {
+        "E2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F2": {
+          "kind": "formula",
+          "formula": "=PMT(A2,B2,C2,D2,E2)"
+        },
+        "I2": {
+          "kind": "formula",
+          "formula": "=NPER(A2,G2,C2)"
+        },
+        "G2": {
+          "kind": "formula",
+          "formula": "=PMT(A2,B2,C2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 300.0000000000002
+      }
+    },
+    {
+      "id": "M2",
+      "formula": "=PV(A2,B2,G2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "formula",
+          "formula": "=PMT(A2,B2,C2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=PMT(A3,B3,C3,D3,E3)",
+      "setup": {
+        "E3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -57.142857142857146
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=PMT(A3,B3,C3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -114.28571428571429
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=NPER(A3,F3,C3,D3,E3)",
+      "setup": {
+        "E3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F3": {
+          "kind": "formula",
+          "formula": "=PMT(A3,B3,C3,D3,E3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "I3",
+      "formula": "=NPER(A3,G3,C3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G3": {
+          "kind": "formula",
+          "formula": "=PMT(A3,B3,C3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "J3",
+      "formula": "=PV(A3,B3,F3,D3,E3)",
+      "setup": {
+        "E3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F3": {
+          "kind": "formula",
+          "formula": "=PMT(A3,B3,C3,D3,E3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "K3",
+      "formula": "=PV(A3,B3,G3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G3": {
+          "kind": "formula",
+          "formula": "=PMT(A3,B3,C3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "L3",
+      "formula": "=FV(A3,I3,F3,C3,E3)",
+      "setup": {
+        "E3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F3": {
+          "kind": "formula",
+          "formula": "=PMT(A3,B3,C3,D3,E3)"
+        },
+        "I3": {
+          "kind": "formula",
+          "formula": "=NPER(A3,G3,C3)"
+        },
+        "G3": {
+          "kind": "formula",
+          "formula": "=PMT(A3,B3,C3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "M3",
+      "formula": "=PV(A3,B3,G3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G3": {
+          "kind": "formula",
+          "formula": "=PMT(A3,B3,C3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=PMT(A4,B4,C4,D4,E4)",
+      "setup": {
+        "E4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -157.14285714285717
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=PMT(A4,B4,C4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -114.28571428571429
+      }
+    },
+    {
+      "id": "H4",
+      "formula": "=NPER(A4,F4,C4,D4,E4)",
+      "setup": {
+        "E4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F4": {
+          "kind": "formula",
+          "formula": "=PMT(A4,B4,C4,D4,E4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "I4",
+      "formula": "=NPER(A4,G4,C4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=PMT(A4,B4,C4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=PV(A4,B4,F4,D4,E4)",
+      "setup": {
+        "E4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F4": {
+          "kind": "formula",
+          "formula": "=PMT(A4,B4,C4,D4,E4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.00000000000003
+      }
+    },
+    {
+      "id": "K4",
+      "formula": "=PV(A4,B4,G4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=PMT(A4,B4,C4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "L4",
+      "formula": "=FV(A4,I4,F4,C4,E4)",
+      "setup": {
+        "E4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F4": {
+          "kind": "formula",
+          "formula": "=PMT(A4,B4,C4,D4,E4)"
+        },
+        "I4": {
+          "kind": "formula",
+          "formula": "=NPER(A4,G4,C4)"
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=PMT(A4,B4,C4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 300.0000000000002
+      }
+    },
+    {
+      "id": "M4",
+      "formula": "=PV(A4,B4,G4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G4": {
+          "kind": "formula",
+          "formula": "=PMT(A4,B4,C4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=PMT(A5,B5,C5,D5,E5)",
+      "setup": {
+        "E5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -114.28571428571429
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=PMT(A5,B5,C5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -114.28571428571429
+      }
+    },
+    {
+      "id": "H5",
+      "formula": "=NPER(A5,F5,C5,D5,E5)",
+      "setup": {
+        "E5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F5": {
+          "kind": "formula",
+          "formula": "=PMT(A5,B5,C5,D5,E5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "I5",
+      "formula": "=NPER(A5,G5,C5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=PMT(A5,B5,C5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "J5",
+      "formula": "=PV(A5,B5,F5,D5,E5)",
+      "setup": {
+        "E5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F5": {
+          "kind": "formula",
+          "formula": "=PMT(A5,B5,C5,D5,E5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "K5",
+      "formula": "=PV(A5,B5,G5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=PMT(A5,B5,C5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "L5",
+      "formula": "=FV(A5,I5,F5,C5,E5)",
+      "setup": {
+        "E5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F5": {
+          "kind": "formula",
+          "formula": "=PMT(A5,B5,C5,D5,E5)"
+        },
+        "I5": {
+          "kind": "formula",
+          "formula": "=NPER(A5,G5,C5)"
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=PMT(A5,B5,C5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "M5",
+      "formula": "=PV(A5,B5,G5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G5": {
+          "kind": "formula",
+          "formula": "=PMT(A5,B5,C5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=PMT(A6,B6,C6,D6,E6)",
+      "setup": {
+        "E6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -83.33333471151433
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=PMT(A6,B6,C6)",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -500.000008269086
+      }
+    },
+    {
+      "id": "H6",
+      "formula": "=ABS(NPER(A6,F6,C6,D6,E6)-10)<0.001",
+      "setup": {
+        "E6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F6": {
+          "kind": "formula",
+          "formula": "=PMT(A6,B6,C6,D6,E6)"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "I6",
+      "formula": "=ABS(NPER(A6,G6,C6)-10)<0.0001",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=PMT(A6,B6,C6)"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "J6",
+      "formula": "=PV(A6,B6,F6,D6,E6)",
+      "setup": {
+        "E6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F6": {
+          "kind": "formula",
+          "formula": "=PMT(A6,B6,C6,D6,E6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "K6",
+      "formula": "=PV(A6,B6,G6)",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=PMT(A6,B6,C6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "L6",
+      "formula": "=FV(A6,I6,F6,C6,E6)",
+      "setup": {
+        "E6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F6": {
+          "kind": "formula",
+          "formula": "=PMT(A6,B6,C6,D6,E6)"
+        },
+        "I6": {
+          "kind": "formula",
+          "formula": "=ABS(NPER(A6,G6,C6)-10)<0.0001"
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=PMT(A6,B6,C6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -99.99999173091408
+      }
+    },
+    {
+      "id": "M6",
+      "formula": "=PV(A6,B6,G6)",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "G6": {
+          "kind": "formula",
+          "formula": "=PMT(A6,B6,C6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=PMT(A7,B7,C7,D7,E7)",
+      "setup": {
+        "E7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D7": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -33.59224037394874
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=PMT(A7,B7,C7)",
+      "setup": {
+        "C7": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -50.38836056092312
+      }
+    },
+    {
+      "id": "H7",
+      "formula": "=NPER(A7,F7,C7,D7,E7)",
+      "setup": {
+        "E7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D7": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "F7": {
+          "kind": "formula",
+          "formula": "=PMT(A7,B7,C7,D7,E7)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.000000000000025
+      }
+    },
+    {
+      "id": "I7",
+      "formula": "=NPER(A7,G7,C7)",
+      "setup": {
+        "C7": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=PMT(A7,B7,C7)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.999999999999979
+      }
+    },
+    {
+      "id": "J7",
+      "formula": "=PV(A7,B7,F7,D7,E7)",
+      "setup": {
+        "E7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D7": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "F7": {
+          "kind": "formula",
+          "formula": "=PMT(A7,B7,C7,D7,E7)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 99.99999999999999
+      }
+    },
+    {
+      "id": "K7",
+      "formula": "=PV(A7,B7,G7)",
+      "setup": {
+        "C7": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=PMT(A7,B7,C7)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "L7",
+      "formula": "=ABS(FV(A7,I7,F7,C7,E7)) < 0.0000000001",
+      "setup": {
+        "E7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D7": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "F7": {
+          "kind": "formula",
+          "formula": "=PMT(A7,B7,C7,D7,E7)"
+        },
+        "I7": {
+          "kind": "formula",
+          "formula": "=NPER(A7,G7,C7)"
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=PMT(A7,B7,C7)"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "M7",
+      "formula": "=PV(A7,B7,G7)",
+      "setup": {
+        "C7": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "G7": {
+          "kind": "formula",
+          "formula": "=PMT(A7,B7,C7)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=PMT(A8,B8,C8,D8,E8)",
+      "setup": {
+        "E8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D8": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C8": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=PMT(A8,B8,C8)",
+      "setup": {
+        "C8": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H8",
+      "formula": "=NPER(A8,F8,C8,D8,E8)",
+      "setup": {
+        "E8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D8": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C8": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "F8": {
+          "kind": "formula",
+          "formula": "=PMT(A8,B8,C8,D8,E8)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I8",
+      "formula": "=NPER(A8,G8,C8)",
+      "setup": {
+        "C8": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=PMT(A8,B8,C8)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J8",
+      "formula": "=PV(A8,B8,F8,D8,E8)",
+      "setup": {
+        "E8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D8": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C8": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "F8": {
+          "kind": "formula",
+          "formula": "=PMT(A8,B8,C8,D8,E8)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K8",
+      "formula": "=PV(A8,B8,G8)",
+      "setup": {
+        "C8": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=PMT(A8,B8,C8)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "L8",
+      "formula": "=FV(A8,I8,F8,C8,E8)",
+      "setup": {
+        "E8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C8": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D8": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "F8": {
+          "kind": "formula",
+          "formula": "=PMT(A8,B8,C8,D8,E8)"
+        },
+        "I8": {
+          "kind": "formula",
+          "formula": "=NPER(A8,G8,C8)"
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=PMT(A8,B8,C8)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "M8",
+      "formula": "=PV(A8,B8,G8)",
+      "setup": {
+        "C8": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "G8": {
+          "kind": "formula",
+          "formula": "=PMT(A8,B8,C8)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=PMT(A9,B9,C9,D9,E9)",
+      "setup": {
+        "E9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C9": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -133.33333333333334
+      }
+    },
+    {
+      "id": "G9",
+      "formula": "=PMT(A9,B9,C9)",
+      "setup": {
+        "C9": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -33.333333333333336
+      }
+    },
+    {
+      "id": "H9",
+      "formula": "=NPER(A9,F9,C9,D9,E9)",
+      "setup": {
+        "E9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C9": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F9": {
+          "kind": "formula",
+          "formula": "=PMT(A9,B9,C9,D9,E9)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "I9",
+      "formula": "=NPER(A9,G9,C9)",
+      "setup": {
+        "C9": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=PMT(A9,B9,C9)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "J9",
+      "formula": "=PV(A9,B9,F9,D9,E9)",
+      "setup": {
+        "E9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C9": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F9": {
+          "kind": "formula",
+          "formula": "=PMT(A9,B9,C9,D9,E9)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "K9",
+      "formula": "=PV(A9,B9,G9)",
+      "setup": {
+        "C9": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=PMT(A9,B9,C9)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "L9",
+      "formula": "=FV(A9,I9,F9,C9,E9)",
+      "setup": {
+        "E9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C9": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F9": {
+          "kind": "formula",
+          "formula": "=PMT(A9,B9,C9,D9,E9)"
+        },
+        "I9": {
+          "kind": "formula",
+          "formula": "=NPER(A9,G9,C9)"
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=PMT(A9,B9,C9)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 300.0
+      }
+    },
+    {
+      "id": "M9",
+      "formula": "=PV(A9,B9,G9)",
+      "setup": {
+        "C9": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "G9": {
+          "kind": "formula",
+          "formula": "=PMT(A9,B9,C9)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=PMT(A10,B10,C10,D10,E10)",
+      "setup": {
+        "E10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -0.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2703.783783783783
+      }
+    },
+    {
+      "id": "G10",
+      "formula": "=PMT(A10,B10,C10)",
+      "setup": {
+        "C10": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -0.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.10810810810810803
+      }
+    },
+    {
+      "id": "H10",
+      "formula": "=NPER(A10,F10,C10,D10,E10)",
+      "setup": {
+        "E10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "F10": {
+          "kind": "formula",
+          "formula": "=PMT(A10,B10,C10,D10,E10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0000000000001865
+      }
+    },
+    {
+      "id": "I10",
+      "formula": "=NPER(A10,G10,C10)",
+      "setup": {
+        "C10": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=PMT(A10,B10,C10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "J10",
+      "formula": "=PV(A10,B10,F10,D10,E10)",
+      "setup": {
+        "E10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "F10": {
+          "kind": "formula",
+          "formula": "=PMT(A10,B10,C10,D10,E10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 119.99999999977724
+      }
+    },
+    {
+      "id": "K10",
+      "formula": "=PV(A10,B10,G10)",
+      "setup": {
+        "C10": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=PMT(A10,B10,C10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 119.99999999999997
+      }
+    },
+    {
+      "id": "L10",
+      "formula": "=FV(A10,I10,F10,C10,E10)",
+      "setup": {
+        "E10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "F10": {
+          "kind": "formula",
+          "formula": "=PMT(A10,B10,C10,D10,E10)"
+        },
+        "I10": {
+          "kind": "formula",
+          "formula": "=NPER(A10,G10,C10)"
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=PMT(A10,B10,C10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 299.9999999999998
+      }
+    },
+    {
+      "id": "M10",
+      "formula": "=PV(A10,B10,G10)",
+      "setup": {
+        "C10": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "G10": {
+          "kind": "formula",
+          "formula": "=PMT(A10,B10,C10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 119.99999999999997
+      }
+    },
+    {
+      "id": "F11",
+      "formula": "=PMT(A11,B11,C11,D11,E11)",
+      "setup": {
+        "E11": {
+          "kind": "bool",
+          "value": true
+        },
+        "D11": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C11": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": -0.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2703.603603603602
+      }
+    },
+    {
+      "id": "G11",
+      "formula": "=PMT(A11,B11,C11)",
+      "setup": {
+        "C11": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": -0.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.09009009009009003
+      }
+    },
+    {
+      "id": "H11",
+      "formula": "=NPER(A11,F11,C11,D11,E11)",
+      "setup": {
+        "E11": {
+          "kind": "bool",
+          "value": true
+        },
+        "D11": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C11": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "F11": {
+          "kind": "formula",
+          "formula": "=PMT(A11,B11,C11,D11,E11)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.000000000000222
+      }
+    },
+    {
+      "id": "I11",
+      "formula": "=NPER(A11,G11,C11)",
+      "setup": {
+        "C11": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=PMT(A11,B11,C11)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "J11",
+      "formula": "=PV(A11,B11,F11,D11,E11)",
+      "setup": {
+        "E11": {
+          "kind": "bool",
+          "value": true
+        },
+        "D11": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C11": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "F11": {
+          "kind": "formula",
+          "formula": "=PMT(A11,B11,C11,D11,E11)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 99.99999999973858
+      }
+    },
+    {
+      "id": "K11",
+      "formula": "=PV(A11,B11,G11)",
+      "setup": {
+        "C11": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=PMT(A11,B11,C11)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 99.99999999999999
+      }
+    },
+    {
+      "id": "L11",
+      "formula": "=FV(A11,I11,F11,C11,E11)",
+      "setup": {
+        "E11": {
+          "kind": "bool",
+          "value": true
+        },
+        "C11": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D11": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "F11": {
+          "kind": "formula",
+          "formula": "=PMT(A11,B11,C11,D11,E11)"
+        },
+        "I11": {
+          "kind": "formula",
+          "formula": "=NPER(A11,G11,C11)"
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=PMT(A11,B11,C11)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 299.9999999999997
+      }
+    },
+    {
+      "id": "M11",
+      "formula": "=PV(A11,B11,G11)",
+      "setup": {
+        "C11": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=PMT(A11,B11,C11)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 99.99999999999999
+      }
+    },
+    {
+      "id": "F12",
+      "formula": "=PMT(A12,B12,C12,D12,E12)",
+      "setup": {
+        "E12": {
+          "kind": "bool",
+          "value": false
+        },
+        "D12": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C12": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 0.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -41.43238435912332
+      }
+    },
+    {
+      "id": "G12",
+      "formula": "=PMT(A12,B12,C12)",
+      "setup": {
+        "C12": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 0.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -41.43238435912332
+      }
+    },
+    {
+      "id": "H12",
+      "formula": "=NPER(A12,F12,C12,D12,E12)",
+      "setup": {
+        "E12": {
+          "kind": "bool",
+          "value": false
+        },
+        "D12": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C12": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 0.4
+        },
+        "F12": {
+          "kind": "formula",
+          "formula": "=PMT(A12,B12,C12,D12,E12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.999999999999993
+      }
+    },
+    {
+      "id": "I12",
+      "formula": "=NPER(A12,G12,C12)",
+      "setup": {
+        "C12": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 0.4
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=PMT(A12,B12,C12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.999999999999993
+      }
+    },
+    {
+      "id": "J12",
+      "formula": "=PV(A12,B12,F12,D12,E12)",
+      "setup": {
+        "E12": {
+          "kind": "bool",
+          "value": false
+        },
+        "D12": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C12": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 0.4
+        },
+        "F12": {
+          "kind": "formula",
+          "formula": "=PMT(A12,B12,C12,D12,E12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 99.99999999999999
+      }
+    },
+    {
+      "id": "K12",
+      "formula": "=PV(A12,B12,G12)",
+      "setup": {
+        "C12": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 0.4
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=PMT(A12,B12,C12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 99.99999999999999
+      }
+    },
+    {
+      "id": "L12",
+      "formula": "=ABS(FV(A12,I12,F12,C12,E12)) < 0.0000000001",
+      "setup": {
+        "E12": {
+          "kind": "bool",
+          "value": false
+        },
+        "C12": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D12": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 0.4
+        },
+        "F12": {
+          "kind": "formula",
+          "formula": "=PMT(A12,B12,C12,D12,E12)"
+        },
+        "I12": {
+          "kind": "formula",
+          "formula": "=NPER(A12,G12,C12)"
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=PMT(A12,B12,C12)"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "M12",
+      "formula": "=PV(A12,B12,G12)",
+      "setup": {
+        "C12": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 0.4
+        },
+        "G12": {
+          "kind": "formula",
+          "formula": "=PMT(A12,B12,C12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 99.99999999999999
+      }
+    },
+    {
+      "id": "F13",
+      "formula": "=PMT(A13,B13,C13,D13,E13)",
+      "setup": {
+        "E13": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C13": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": 12.5
+        },
+        "A13": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -33.54442916980625
+      }
+    },
+    {
+      "id": "G13",
+      "formula": "=PMT(A13,B13,C13)",
+      "setup": {
+        "C13": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": 12.5
+        },
+        "A13": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -50.316643754709375
+      }
+    },
+    {
+      "id": "H13",
+      "formula": "=NPER(A13,F13,C13,D13,E13)",
+      "setup": {
+        "E13": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C13": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": 12.5
+        },
+        "A13": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "F13": {
+          "kind": "formula",
+          "formula": "=PMT(A13,B13,C13,D13,E13)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.499999999999993
+      }
+    },
+    {
+      "id": "I13",
+      "formula": "=NPER(A13,G13,C13)",
+      "setup": {
+        "C13": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": 12.5
+        },
+        "A13": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=PMT(A13,B13,C13)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.499999999999993
+      }
+    },
+    {
+      "id": "J13",
+      "formula": "=PV(A13,B13,F13,D13,E13)",
+      "setup": {
+        "E13": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C13": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": 12.5
+        },
+        "A13": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "F13": {
+          "kind": "formula",
+          "formula": "=PMT(A13,B13,C13,D13,E13)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "K13",
+      "formula": "=PV(A13,B13,G13)",
+      "setup": {
+        "C13": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": 12.5
+        },
+        "A13": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=PMT(A13,B13,C13)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "L13",
+      "formula": "=ABS(FV(A13,I13,F13,C13,E13))< 0.0000000001",
+      "setup": {
+        "E13": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C13": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": 12.5
+        },
+        "A13": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "F13": {
+          "kind": "formula",
+          "formula": "=PMT(A13,B13,C13,D13,E13)"
+        },
+        "I13": {
+          "kind": "formula",
+          "formula": "=NPER(A13,G13,C13)"
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=PMT(A13,B13,C13)"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "M13",
+      "formula": "=PV(A13,B13,G13)",
+      "setup": {
+        "C13": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": 12.5
+        },
+        "A13": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "G13": {
+          "kind": "formula",
+          "formula": "=PMT(A13,B13,C13)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "F14",
+      "formula": "=PMT(A14,B14,C14,D14,E14)",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 12.8
+        },
+        "A14": {
+          "kind": "number",
+          "value": -0.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.05794616296156474
+      }
+    },
+    {
+      "id": "G14",
+      "formula": "=PMT(A14,B14,C14)",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 12.8
+        },
+        "A14": {
+          "kind": "number",
+          "value": -0.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.05794616296156474
+      }
+    },
+    {
+      "id": "H14",
+      "formula": "=NPER(A14,F14,C14,D14,E14)",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 12.8
+        },
+        "A14": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "F14": {
+          "kind": "formula",
+          "formula": "=PMT(A14,B14,C14,D14,E14)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.8
+      }
+    },
+    {
+      "id": "I14",
+      "formula": "=NPER(A14,G14,C14)",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 12.8
+        },
+        "A14": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=PMT(A14,B14,C14)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.8
+      }
+    },
+    {
+      "id": "J14",
+      "formula": "=PV(A14,B14,F14,D14,E14)",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 12.8
+        },
+        "A14": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "F14": {
+          "kind": "formula",
+          "formula": "=PMT(A14,B14,C14,D14,E14)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 99.99999999999997
+      }
+    },
+    {
+      "id": "K14",
+      "formula": "=PV(A14,B14,G14)",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 12.8
+        },
+        "A14": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=PMT(A14,B14,C14)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 99.99999999999997
+      }
+    },
+    {
+      "id": "L14",
+      "formula": "=ABS(FV(A14,I14,F14,C14,E14))< 0.0000000001",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 12.8
+        },
+        "A14": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "F14": {
+          "kind": "formula",
+          "formula": "=PMT(A14,B14,C14,D14,E14)"
+        },
+        "I14": {
+          "kind": "formula",
+          "formula": "=NPER(A14,G14,C14)"
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=PMT(A14,B14,C14)"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "M14",
+      "formula": "=PV(A14,B14,G14)",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 12.8
+        },
+        "A14": {
+          "kind": "number",
+          "value": -0.4
+        },
+        "G14": {
+          "kind": "formula",
+          "formula": "=PMT(A14,B14,C14)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 99.99999999999997
+      }
+    },
+    {
+      "id": "F15",
+      "formula": "=PMT(A15,B15,C15,D15,E15)",
+      "setup": {
+        "E15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C15": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 0.7
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.139847998611041
+      }
+    },
+    {
+      "id": "G15",
+      "formula": "=PMT(A15,B15,C15)",
+      "setup": {
+        "C15": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 0.7
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.1425307055127105
+      }
+    },
+    {
+      "id": "H15",
+      "formula": "=NPER(A15,F15,C15,D15,E15)",
+      "setup": {
+        "E15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C15": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "F15": {
+          "kind": "formula",
+          "formula": "=PMT(A15,B15,C15,D15,E15)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -4.0
+      }
+    },
+    {
+      "id": "I15",
+      "formula": "=NPER(A15,G15,C15)",
+      "setup": {
+        "C15": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=PMT(A15,B15,C15)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -4.0
+      }
+    },
+    {
+      "id": "J15",
+      "formula": "=PV(A15,B15,F15,D15,E15)",
+      "setup": {
+        "E15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C15": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "F15": {
+          "kind": "formula",
+          "formula": "=PMT(A15,B15,C15,D15,E15)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.999999999999996
+      }
+    },
+    {
+      "id": "K15",
+      "formula": "=PV(A15,B15,G15)",
+      "setup": {
+        "C15": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=PMT(A15,B15,C15)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.999999999999996
+      }
+    },
+    {
+      "id": "L15",
+      "formula": "=FV(A15,I15,F15,C15,E15)",
+      "setup": {
+        "E15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C15": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "D15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "F15": {
+          "kind": "formula",
+          "formula": "=PMT(A15,B15,C15,D15,E15)"
+        },
+        "I15": {
+          "kind": "formula",
+          "formula": "=NPER(A15,G15,C15)"
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=PMT(A15,B15,C15)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999999999999996
+      }
+    },
+    {
+      "id": "M15",
+      "formula": "=PV(A15,B15,G15)",
+      "setup": {
+        "C15": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "G15": {
+          "kind": "formula",
+          "formula": "=PMT(A15,B15,C15)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.999999999999996
+      }
+    },
+    {
+      "id": "F16",
+      "formula": "=PMT(A16,B16,C16,D16,E16)",
+      "setup": {
+        "E16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D16": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "C16": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": 12.2
+        },
+        "A16": {
+          "kind": "number",
+          "value": 0.03
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -10.425348632818055
+      }
+    },
+    {
+      "id": "G16",
+      "formula": "=PMT(A16,B16,C16)",
+      "setup": {
+        "C16": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": 12.2
+        },
+        "A16": {
+          "kind": "number",
+          "value": 0.03
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -9.909025974823747
+      }
+    },
+    {
+      "id": "H16",
+      "formula": "=NPER(A16,F16,C16,D16,E16)",
+      "setup": {
+        "E16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D16": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "C16": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": 12.2
+        },
+        "A16": {
+          "kind": "number",
+          "value": 0.03
+        },
+        "F16": {
+          "kind": "formula",
+          "formula": "=PMT(A16,B16,C16,D16,E16)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.199999999999989
+      }
+    },
+    {
+      "id": "I16",
+      "formula": "=NPER(A16,G16,C16)",
+      "setup": {
+        "C16": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": 12.2
+        },
+        "A16": {
+          "kind": "number",
+          "value": 0.03
+        },
+        "G16": {
+          "kind": "formula",
+          "formula": "=PMT(A16,B16,C16)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.199999999999994
+      }
+    },
+    {
+      "id": "J16",
+      "formula": "=PV(A16,B16,F16,D16,E16)",
+      "setup": {
+        "E16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D16": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "C16": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": 12.2
+        },
+        "A16": {
+          "kind": "number",
+          "value": 0.03
+        },
+        "F16": {
+          "kind": "formula",
+          "formula": "=PMT(A16,B16,C16,D16,E16)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.00000000000006
+      }
+    },
+    {
+      "id": "K16",
+      "formula": "=PV(A16,B16,G16)",
+      "setup": {
+        "C16": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": 12.2
+        },
+        "A16": {
+          "kind": "number",
+          "value": 0.03
+        },
+        "G16": {
+          "kind": "formula",
+          "formula": "=PMT(A16,B16,C16)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.00000000000004
+      }
+    },
+    {
+      "id": "L16",
+      "formula": "=FV(A16,I16,F16,C16,E16)",
+      "setup": {
+        "E16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C16": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D16": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": 12.2
+        },
+        "A16": {
+          "kind": "number",
+          "value": 0.03
+        },
+        "F16": {
+          "kind": "formula",
+          "formula": "=PMT(A16,B16,C16,D16,E16)"
+        },
+        "I16": {
+          "kind": "formula",
+          "formula": "=NPER(A16,G16,C16)"
+        },
+        "G16": {
+          "kind": "formula",
+          "formula": "=PMT(A16,B16,C16)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.000000000000028
+      }
+    },
+    {
+      "id": "M16",
+      "formula": "=PV(A16,B16,G16)",
+      "setup": {
+        "C16": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": 12.2
+        },
+        "A16": {
+          "kind": "number",
+          "value": 0.03
+        },
+        "G16": {
+          "kind": "formula",
+          "formula": "=PMT(A16,B16,C16)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.00000000000004
+      }
+    },
+    {
+      "id": "F17",
+      "formula": "=PMT(A17,B17,C17,D17,E17)",
+      "setup": {
+        "E17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D17": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C17": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 0.02
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G17",
+      "formula": "=PMT(A17,B17,C17)",
+      "setup": {
+        "C17": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 0.02
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H17",
+      "formula": "=NPER(A17,F17,C17,D17,E17)",
+      "setup": {
+        "E17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D17": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C17": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 0.02
+        },
+        "F17": {
+          "kind": "formula",
+          "formula": "=PMT(A17,B17,C17,D17,E17)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I17",
+      "formula": "=NPER(A17,G17,C17)",
+      "setup": {
+        "C17": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 0.02
+        },
+        "G17": {
+          "kind": "formula",
+          "formula": "=PMT(A17,B17,C17)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J17",
+      "formula": "=PV(A17,B17,F17,D17,E17)",
+      "setup": {
+        "E17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D17": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C17": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 0.02
+        },
+        "F17": {
+          "kind": "formula",
+          "formula": "=PMT(A17,B17,C17,D17,E17)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K17",
+      "formula": "=PV(A17,B17,G17)",
+      "setup": {
+        "C17": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 0.02
+        },
+        "G17": {
+          "kind": "formula",
+          "formula": "=PMT(A17,B17,C17)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "L17",
+      "formula": "=FV(A17,I17,F17,C17,E17)",
+      "setup": {
+        "E17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C17": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D17": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 0.02
+        },
+        "F17": {
+          "kind": "formula",
+          "formula": "=PMT(A17,B17,C17,D17,E17)"
+        },
+        "I17": {
+          "kind": "formula",
+          "formula": "=NPER(A17,G17,C17)"
+        },
+        "G17": {
+          "kind": "formula",
+          "formula": "=PMT(A17,B17,C17)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "M17",
+      "formula": "=PV(A17,B17,G17)",
+      "setup": {
+        "C17": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 0.02
+        },
+        "G17": {
+          "kind": "formula",
+          "formula": "=PMT(A17,B17,C17)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F18",
+      "formula": "=PMT(A18,B18,C18,D18,E18)",
+      "setup": {
+        "E18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D18": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C18": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": -0.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -3099.999999999999
+      }
+    },
+    {
+      "id": "G18",
+      "formula": "=PMT(A18,B18,C18)",
+      "setup": {
+        "C18": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": -0.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -9.999999999999998
+      }
+    },
+    {
+      "id": "H18",
+      "formula": "=NPER(A18,F18,C18,D18,E18)",
+      "setup": {
+        "E18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D18": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C18": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "F18": {
+          "kind": "formula",
+          "formula": "=PMT(A18,B18,C18,D18,E18)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000000000016
+      }
+    },
+    {
+      "id": "I18",
+      "formula": "=NPER(A18,G18,C18)",
+      "setup": {
+        "C18": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "G18": {
+          "kind": "formula",
+          "formula": "=PMT(A18,B18,C18)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "J18",
+      "formula": "=PV(A18,B18,F18,D18,E18)",
+      "setup": {
+        "E18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D18": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C18": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "F18": {
+          "kind": "formula",
+          "formula": "=PMT(A18,B18,C18,D18,E18)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 99.99999999999832
+      }
+    },
+    {
+      "id": "K18",
+      "formula": "=PV(A18,B18,G18)",
+      "setup": {
+        "C18": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "G18": {
+          "kind": "formula",
+          "formula": "=PMT(A18,B18,C18)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "L18",
+      "formula": "=FV(A18,I18,F18,C18,E18)",
+      "setup": {
+        "E18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C18": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D18": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "F18": {
+          "kind": "formula",
+          "formula": "=PMT(A18,B18,C18,D18,E18)"
+        },
+        "I18": {
+          "kind": "formula",
+          "formula": "=NPER(A18,G18,C18)"
+        },
+        "G18": {
+          "kind": "formula",
+          "formula": "=PMT(A18,B18,C18)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 299.99999999999983
+      }
+    },
+    {
+      "id": "M18",
+      "formula": "=PV(A18,B18,G18)",
+      "setup": {
+        "C18": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "G18": {
+          "kind": "formula",
+          "formula": "=PMT(A18,B18,C18)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "F19",
+      "formula": "=PMT(A19,B19,C19,D19,E19)",
+      "setup": {
+        "E19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D19": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C19": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "text",
+          "value": "HELP"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G19",
+      "formula": "=PMT(A19,B19,C19)",
+      "setup": {
+        "C19": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "text",
+          "value": "HELP"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "H19",
+      "formula": "=NPER(A19,F19,C19,D19,E19)",
+      "setup": {
+        "E19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D19": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C19": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "F19": {
+          "kind": "formula",
+          "formula": "=PMT(A19,B19,C19,D19,E19)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "I19",
+      "formula": "=NPER(A19,G19,C19)",
+      "setup": {
+        "C19": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "G19": {
+          "kind": "formula",
+          "formula": "=PMT(A19,B19,C19)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J19",
+      "formula": "=PV(A19,B19,F19,D19,E19)",
+      "setup": {
+        "E19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D19": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C19": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "F19": {
+          "kind": "formula",
+          "formula": "=PMT(A19,B19,C19,D19,E19)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "K19",
+      "formula": "=PV(A19,B19,G19)",
+      "setup": {
+        "C19": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "G19": {
+          "kind": "formula",
+          "formula": "=PMT(A19,B19,C19)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L19",
+      "formula": "=FV(A19,I19,F19,C19,E19)",
+      "setup": {
+        "E19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C19": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D19": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "F19": {
+          "kind": "formula",
+          "formula": "=PMT(A19,B19,C19,D19,E19)"
+        },
+        "I19": {
+          "kind": "formula",
+          "formula": "=NPER(A19,G19,C19)"
+        },
+        "G19": {
+          "kind": "formula",
+          "formula": "=PMT(A19,B19,C19)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "M19",
+      "formula": "=PV(A19,B19,G19)",
+      "setup": {
+        "C19": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "G19": {
+          "kind": "formula",
+          "formula": "=PMT(A19,B19,C19)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F20",
+      "formula": "=PMT(A20,B20,C20,D20,E20)",
+      "setup": {
+        "E20": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D20": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C20": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B20": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "A20": {
+          "kind": "number",
+          "value": -0.9
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G20",
+      "formula": "=PMT(A20,B20,C20)",
+      "setup": {
+        "C20": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B20": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "A20": {
+          "kind": "number",
+          "value": -0.9
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "H20",
+      "formula": "=NPER(A20,F20,C20,D20,E20)",
+      "setup": {
+        "E20": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D20": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C20": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B20": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "A20": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "F20": {
+          "kind": "formula",
+          "formula": "=PMT(A20,B20,C20,D20,E20)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "I20",
+      "formula": "=NPER(A20,G20,C20)",
+      "setup": {
+        "C20": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B20": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "A20": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "G20": {
+          "kind": "formula",
+          "formula": "=PMT(A20,B20,C20)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J20",
+      "formula": "=PV(A20,B20,F20,D20,E20)",
+      "setup": {
+        "E20": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D20": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C20": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B20": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "A20": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "F20": {
+          "kind": "formula",
+          "formula": "=PMT(A20,B20,C20,D20,E20)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "K20",
+      "formula": "=PV(A20,B20,G20)",
+      "setup": {
+        "C20": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B20": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "A20": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "G20": {
+          "kind": "formula",
+          "formula": "=PMT(A20,B20,C20)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L20",
+      "formula": "=FV(A20,I20,F20,C20,E20)",
+      "setup": {
+        "E20": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C20": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D20": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "B20": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "A20": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "F20": {
+          "kind": "formula",
+          "formula": "=PMT(A20,B20,C20,D20,E20)"
+        },
+        "I20": {
+          "kind": "formula",
+          "formula": "=NPER(A20,G20,C20)"
+        },
+        "G20": {
+          "kind": "formula",
+          "formula": "=PMT(A20,B20,C20)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "M20",
+      "formula": "=PV(A20,B20,G20)",
+      "setup": {
+        "C20": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B20": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "A20": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "G20": {
+          "kind": "formula",
+          "formula": "=PMT(A20,B20,C20)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F21",
+      "formula": "=PMT(A21,B21,C21,D21,E21)",
+      "setup": {
+        "E21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D21": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C21": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "B21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": -0.9
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G21",
+      "formula": "=PMT(A21,B21,C21)",
+      "setup": {
+        "C21": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "B21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": -0.9
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "H21",
+      "formula": "=NPER(A21,F21,C21,D21,E21)",
+      "setup": {
+        "E21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D21": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C21": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "B21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "F21": {
+          "kind": "formula",
+          "formula": "=PMT(A21,B21,C21,D21,E21)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "I21",
+      "formula": "=NPER(A21,G21,C21)",
+      "setup": {
+        "C21": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "B21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "G21": {
+          "kind": "formula",
+          "formula": "=PMT(A21,B21,C21)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J21",
+      "formula": "=PV(A21,B21,F21,D21,E21)",
+      "setup": {
+        "E21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D21": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C21": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "B21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "F21": {
+          "kind": "formula",
+          "formula": "=PMT(A21,B21,C21,D21,E21)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "K21",
+      "formula": "=PV(A21,B21,G21)",
+      "setup": {
+        "C21": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "B21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "G21": {
+          "kind": "formula",
+          "formula": "=PMT(A21,B21,C21)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L21",
+      "formula": "=FV(A21,I21,F21,C21,E21)",
+      "setup": {
+        "E21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C21": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "D21": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "B21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "F21": {
+          "kind": "formula",
+          "formula": "=PMT(A21,B21,C21,D21,E21)"
+        },
+        "I21": {
+          "kind": "formula",
+          "formula": "=NPER(A21,G21,C21)"
+        },
+        "G21": {
+          "kind": "formula",
+          "formula": "=PMT(A21,B21,C21)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "M21",
+      "formula": "=PV(A21,B21,G21)",
+      "setup": {
+        "C21": {
+          "kind": "text",
+          "value": "HELP"
+        },
+        "B21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "G21": {
+          "kind": "formula",
+          "formula": "=PMT(A21,B21,C21)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F22",
+      "formula": "=PMT(A22,B22,C22,D22,E22)",
+      "setup": {
+        "E22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C22": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "D22": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G22",
+      "formula": "=PMT(A22,B22,C22)",
+      "setup": {
+        "C22": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": -0.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -9.999999999999998
+      }
+    },
+    {
+      "id": "H22",
+      "formula": "=NPER(A22,F22,C22,D22,E22)",
+      "setup": {
+        "E22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C22": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "D22": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "F22": {
+          "kind": "formula",
+          "formula": "=PMT(A22,B22,C22,D22,E22)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "I22",
+      "formula": "=NPER(A22,G22,C22)",
+      "setup": {
+        "C22": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "G22": {
+          "kind": "formula",
+          "formula": "=PMT(A22,B22,C22)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "J22",
+      "formula": "=PV(A22,B22,F22,D22,E22)",
+      "setup": {
+        "E22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C22": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "D22": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "F22": {
+          "kind": "formula",
+          "formula": "=PMT(A22,B22,C22,D22,E22)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "K22",
+      "formula": "=PV(A22,B22,G22)",
+      "setup": {
+        "C22": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "G22": {
+          "kind": "formula",
+          "formula": "=PMT(A22,B22,C22)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "L22",
+      "formula": "=FV(A22,I22,F22,C22,E22)",
+      "setup": {
+        "E22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C22": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "F22": {
+          "kind": "formula",
+          "formula": "=PMT(A22,B22,C22,D22,E22)"
+        },
+        "D22": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "I22": {
+          "kind": "formula",
+          "formula": "=NPER(A22,G22,C22)"
+        },
+        "G22": {
+          "kind": "formula",
+          "formula": "=PMT(A22,B22,C22)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "M22",
+      "formula": "=PV(A22,B22,G22)",
+      "setup": {
+        "C22": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "G22": {
+          "kind": "formula",
+          "formula": "=PMT(A22,B22,C22)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "F23",
+      "formula": "=PMT(A23,B23,C23,D23,E23)",
+      "setup": {
+        "E23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D23": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C23": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": -0.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -3099.999999999999
+      }
+    },
+    {
+      "id": "G23",
+      "formula": "=PMT(A23,B23,C23)",
+      "setup": {
+        "C23": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": -0.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -9.999999999999998
+      }
+    },
+    {
+      "id": "H23",
+      "formula": "=NPER(A23,F23,C23,D23,E23)",
+      "setup": {
+        "E23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D23": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C23": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "F23": {
+          "kind": "formula",
+          "formula": "=PMT(A23,B23,C23,D23,E23)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000000000016
+      }
+    },
+    {
+      "id": "I23",
+      "formula": "=NPER(A23,G23,C23)",
+      "setup": {
+        "C23": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "G23": {
+          "kind": "formula",
+          "formula": "=PMT(A23,B23,C23)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "J23",
+      "formula": "=PV(A23,B23,F23,D23,E23)",
+      "setup": {
+        "E23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D23": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C23": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "F23": {
+          "kind": "formula",
+          "formula": "=PMT(A23,B23,C23,D23,E23)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 99.99999999999832
+      }
+    },
+    {
+      "id": "K23",
+      "formula": "=PV(A23,B23,G23)",
+      "setup": {
+        "C23": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "G23": {
+          "kind": "formula",
+          "formula": "=PMT(A23,B23,C23)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "L23",
+      "formula": "=FV(A23,I23,F23,C23,E23)",
+      "setup": {
+        "E23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C23": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D23": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "B23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "F23": {
+          "kind": "formula",
+          "formula": "=PMT(A23,B23,C23,D23,E23)"
+        },
+        "I23": {
+          "kind": "formula",
+          "formula": "=NPER(A23,G23,C23)"
+        },
+        "G23": {
+          "kind": "formula",
+          "formula": "=PMT(A23,B23,C23)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 299.99999999999983
+      }
+    },
+    {
+      "id": "M23",
+      "formula": "=PV(A23,B23,G23)",
+      "setup": {
+        "C23": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": -0.9
+        },
+        "G23": {
+          "kind": "formula",
+          "formula": "=PMT(A23,B23,C23)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "F24",
+      "formula": "=PMT(A24,B24,C24,D24,E24)",
+      "setup": {
+        "E24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D24": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C24": {
+          "kind": "number",
+          "value": -100.0
+        },
+        "B24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G24",
+      "formula": "=PMT(A24,B24,C24)",
+      "setup": {
+        "C24": {
+          "kind": "number",
+          "value": -100.0
+        },
+        "B24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H24",
+      "formula": "=NPER(A24,F24,C24,D24,E24)",
+      "setup": {
+        "E24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D24": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C24": {
+          "kind": "number",
+          "value": -100.0
+        },
+        "B24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "F24": {
+          "kind": "formula",
+          "formula": "=PMT(A24,B24,C24,D24,E24)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I24",
+      "formula": "=NPER(A24,G24,C24)",
+      "setup": {
+        "C24": {
+          "kind": "number",
+          "value": -100.0
+        },
+        "B24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "G24": {
+          "kind": "formula",
+          "formula": "=PMT(A24,B24,C24)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J24",
+      "formula": "=PV(A24,B24,F24,D24,E24)",
+      "setup": {
+        "E24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D24": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C24": {
+          "kind": "number",
+          "value": -100.0
+        },
+        "B24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "F24": {
+          "kind": "formula",
+          "formula": "=PMT(A24,B24,C24,D24,E24)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K24",
+      "formula": "=PV(A24,B24,G24)",
+      "setup": {
+        "C24": {
+          "kind": "number",
+          "value": -100.0
+        },
+        "B24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "G24": {
+          "kind": "formula",
+          "formula": "=PMT(A24,B24,C24)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "L24",
+      "formula": "=FV(A24,I24,F24,C24,E24)",
+      "setup": {
+        "E24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C24": {
+          "kind": "number",
+          "value": -100.0
+        },
+        "D24": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "B24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "F24": {
+          "kind": "formula",
+          "formula": "=PMT(A24,B24,C24,D24,E24)"
+        },
+        "I24": {
+          "kind": "formula",
+          "formula": "=NPER(A24,G24,C24)"
+        },
+        "G24": {
+          "kind": "formula",
+          "formula": "=PMT(A24,B24,C24)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "M24",
+      "formula": "=PV(A24,B24,G24)",
+      "setup": {
+        "C24": {
+          "kind": "number",
+          "value": -100.0
+        },
+        "B24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "G24": {
+          "kind": "formula",
+          "formula": "=PMT(A24,B24,C24)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F25",
+      "formula": "=PMT(A25,B25,C25,D25,E25)",
+      "setup": {
+        "E25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D25": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C25": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": -0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.19550342130987292
+      }
+    },
+    {
+      "id": "G25",
+      "formula": "=PMT(A25,B25,C25)",
+      "setup": {
+        "C25": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": -0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.09775171065493646
+      }
+    },
+    {
+      "id": "H25",
+      "formula": "=NPER(A25,F25,C25,D25,E25)",
+      "setup": {
+        "E25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D25": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C25": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F25": {
+          "kind": "formula",
+          "formula": "=PMT(A25,B25,C25,D25,E25)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "I25",
+      "formula": "=NPER(A25,G25,C25)",
+      "setup": {
+        "C25": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "G25": {
+          "kind": "formula",
+          "formula": "=PMT(A25,B25,C25)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "J25",
+      "formula": "=PV(A25,B25,F25,D25,E25)",
+      "setup": {
+        "E25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D25": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C25": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F25": {
+          "kind": "formula",
+          "formula": "=PMT(A25,B25,C25,D25,E25)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -200.0
+      }
+    },
+    {
+      "id": "K25",
+      "formula": "=PV(A25,B25,G25)",
+      "setup": {
+        "C25": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "G25": {
+          "kind": "formula",
+          "formula": "=PMT(A25,B25,C25)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -200.0
+      }
+    },
+    {
+      "id": "L25",
+      "formula": "=ABS(FV(A25,I25,F25,C25,E25))< 0.0000000001",
+      "setup": {
+        "E25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C25": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "D25": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F25": {
+          "kind": "formula",
+          "formula": "=PMT(A25,B25,C25,D25,E25)"
+        },
+        "I25": {
+          "kind": "formula",
+          "formula": "=NPER(A25,G25,C25)"
+        },
+        "G25": {
+          "kind": "formula",
+          "formula": "=PMT(A25,B25,C25)"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "M25",
+      "formula": "=PV(A25,B25,G25)",
+      "setup": {
+        "C25": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "G25": {
+          "kind": "formula",
+          "formula": "=PMT(A25,B25,C25)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -200.0
+      }
+    },
+    {
+      "id": "F26",
+      "formula": "=PMT(A26,B26,C26,D26,E26)",
+      "setup": {
+        "E26": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D26": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C26": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B26": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 56.105699851747296
+      }
+    },
+    {
+      "id": "G26",
+      "formula": "=PMT(A26,B26,C26)",
+      "setup": {
+        "C26": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B26": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 67.57948947113458
+      }
+    },
+    {
+      "id": "H26",
+      "formula": "=NPER(A26,F26,C26,D26,E26)",
+      "setup": {
+        "E26": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D26": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C26": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B26": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F26": {
+          "kind": "formula",
+          "formula": "=PMT(A26,B26,C26,D26,E26)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.999999999999998
+      }
+    },
+    {
+      "id": "I26",
+      "formula": "=NPER(A26,G26,C26)",
+      "setup": {
+        "C26": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B26": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G26": {
+          "kind": "formula",
+          "formula": "=PMT(A26,B26,C26)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.999999999999996
+      }
+    },
+    {
+      "id": "J26",
+      "formula": "=PV(A26,B26,F26,D26,E26)",
+      "setup": {
+        "E26": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D26": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C26": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B26": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F26": {
+          "kind": "formula",
+          "formula": "=PMT(A26,B26,C26,D26,E26)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -300.0
+      }
+    },
+    {
+      "id": "K26",
+      "formula": "=PV(A26,B26,G26)",
+      "setup": {
+        "C26": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B26": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G26": {
+          "kind": "formula",
+          "formula": "=PMT(A26,B26,C26)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -300.00000000000006
+      }
+    },
+    {
+      "id": "L26",
+      "formula": "=FV(A26,I26,F26,C26,E26)",
+      "setup": {
+        "E26": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C26": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "D26": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B26": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F26": {
+          "kind": "formula",
+          "formula": "=PMT(A26,B26,C26,D26,E26)"
+        },
+        "I26": {
+          "kind": "formula",
+          "formula": "=NPER(A26,G26,C26)"
+        },
+        "G26": {
+          "kind": "formula",
+          "formula": "=PMT(A26,B26,C26)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "M26",
+      "formula": "=PV(A26,B26,G26)",
+      "setup": {
+        "C26": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B26": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G26": {
+          "kind": "formula",
+          "formula": "=PMT(A26,B26,C26)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -300.00000000000006
+      }
+    },
+    {
+      "id": "F27",
+      "formula": "=PMT(A27,B27,C27,D27,E27)",
+      "setup": {
+        "E27": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D27": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C27": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B27": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.2115271162167
+      }
+    },
+    {
+      "id": "G27",
+      "formula": "=PMT(A27,B27,C27)",
+      "setup": {
+        "C27": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B27": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 60.25383253946004
+      }
+    },
+    {
+      "id": "H27",
+      "formula": "=NPER(A27,F27,C27,D27,E27)",
+      "setup": {
+        "E27": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D27": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C27": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B27": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F27": {
+          "kind": "formula",
+          "formula": "=PMT(A27,B27,C27,D27,E27)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.000000000000217
+      }
+    },
+    {
+      "id": "I27",
+      "formula": "=NPER(A27,G27,C27)",
+      "setup": {
+        "C27": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B27": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G27": {
+          "kind": "formula",
+          "formula": "=PMT(A27,B27,C27)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.000000000000064
+      }
+    },
+    {
+      "id": "J27",
+      "formula": "=PV(A27,B27,F27,D27,E27)",
+      "setup": {
+        "E27": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D27": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C27": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B27": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F27": {
+          "kind": "formula",
+          "formula": "=PMT(A27,B27,C27,D27,E27)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -299.99999999999994
+      }
+    },
+    {
+      "id": "K27",
+      "formula": "=PV(A27,B27,G27)",
+      "setup": {
+        "C27": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B27": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G27": {
+          "kind": "formula",
+          "formula": "=PMT(A27,B27,C27)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -300.0
+      }
+    },
+    {
+      "id": "L27",
+      "formula": "=ABS(FV(A27,I27,F27,C27,E27))< 0.0000000001",
+      "setup": {
+        "E27": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C27": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "D27": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B27": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F27": {
+          "kind": "formula",
+          "formula": "=PMT(A27,B27,C27,D27,E27)"
+        },
+        "I27": {
+          "kind": "formula",
+          "formula": "=NPER(A27,G27,C27)"
+        },
+        "G27": {
+          "kind": "formula",
+          "formula": "=PMT(A27,B27,C27)"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "M27",
+      "formula": "=PV(A27,B27,G27)",
+      "setup": {
+        "C27": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B27": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G27": {
+          "kind": "formula",
+          "formula": "=PMT(A27,B27,C27)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -300.0
+      }
+    },
+    {
+      "id": "F28",
+      "formula": "=PMT(A28,B28,C28,D28,E28)",
+      "setup": {
+        "E28": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D28": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C28": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B28": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 24.166666666666668
+      }
+    },
+    {
+      "id": "G28",
+      "formula": "=PMT(A28,B28,C28)",
+      "setup": {
+        "C28": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B28": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 25.0
+      }
+    },
+    {
+      "id": "H28",
+      "formula": "=NPER(A28,F28,C28,D28,E28)",
+      "setup": {
+        "E28": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D28": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C28": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B28": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F28": {
+          "kind": "formula",
+          "formula": "=PMT(A28,B28,C28,D28,E28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "I28",
+      "formula": "=NPER(A28,G28,C28)",
+      "setup": {
+        "C28": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B28": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "G28": {
+          "kind": "formula",
+          "formula": "=PMT(A28,B28,C28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "J28",
+      "formula": "=PV(A28,B28,F28,D28,E28)",
+      "setup": {
+        "E28": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D28": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C28": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B28": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F28": {
+          "kind": "formula",
+          "formula": "=PMT(A28,B28,C28,D28,E28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -300.0
+      }
+    },
+    {
+      "id": "K28",
+      "formula": "=PV(A28,B28,G28)",
+      "setup": {
+        "C28": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B28": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "G28": {
+          "kind": "formula",
+          "formula": "=PMT(A28,B28,C28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -300.0
+      }
+    },
+    {
+      "id": "L28",
+      "formula": "=FV(A28,I28,F28,C28,E28)",
+      "setup": {
+        "E28": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C28": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "D28": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B28": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F28": {
+          "kind": "formula",
+          "formula": "=PMT(A28,B28,C28,D28,E28)"
+        },
+        "I28": {
+          "kind": "formula",
+          "formula": "=NPER(A28,G28,C28)"
+        },
+        "G28": {
+          "kind": "formula",
+          "formula": "=PMT(A28,B28,C28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "M28",
+      "formula": "=PV(A28,B28,G28)",
+      "setup": {
+        "C28": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B28": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "G28": {
+          "kind": "formula",
+          "formula": "=PMT(A28,B28,C28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -300.0
+      }
+    },
+    {
+      "id": "F29",
+      "formula": "=PMT(A29,B29,C29,D29,E29)",
+      "setup": {
+        "E29": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D29": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C29": {
+          "kind": "number",
+          "value": -150.0
+        },
+        "B29": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G29",
+      "formula": "=PMT(A29,B29,C29)",
+      "setup": {
+        "C29": {
+          "kind": "number",
+          "value": -150.0
+        },
+        "B29": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H29",
+      "formula": "=NPER(A29,F29,C29,D29,E29)",
+      "setup": {
+        "E29": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D29": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C29": {
+          "kind": "number",
+          "value": -150.0
+        },
+        "B29": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F29": {
+          "kind": "formula",
+          "formula": "=PMT(A29,B29,C29,D29,E29)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I29",
+      "formula": "=NPER(A29,G29,C29)",
+      "setup": {
+        "C29": {
+          "kind": "number",
+          "value": -150.0
+        },
+        "B29": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "G29": {
+          "kind": "formula",
+          "formula": "=PMT(A29,B29,C29)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J29",
+      "formula": "=PV(A29,B29,F29,D29,E29)",
+      "setup": {
+        "E29": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D29": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C29": {
+          "kind": "number",
+          "value": -150.0
+        },
+        "B29": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F29": {
+          "kind": "formula",
+          "formula": "=PMT(A29,B29,C29,D29,E29)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K29",
+      "formula": "=PV(A29,B29,G29)",
+      "setup": {
+        "C29": {
+          "kind": "number",
+          "value": -150.0
+        },
+        "B29": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "G29": {
+          "kind": "formula",
+          "formula": "=PMT(A29,B29,C29)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "L29",
+      "formula": "=FV(A29,I29,F29,C29,E29)",
+      "setup": {
+        "E29": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C29": {
+          "kind": "number",
+          "value": -150.0
+        },
+        "D29": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B29": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F29": {
+          "kind": "formula",
+          "formula": "=PMT(A29,B29,C29,D29,E29)"
+        },
+        "I29": {
+          "kind": "formula",
+          "formula": "=NPER(A29,G29,C29)"
+        },
+        "G29": {
+          "kind": "formula",
+          "formula": "=PMT(A29,B29,C29)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "M29",
+      "formula": "=PV(A29,B29,G29)",
+      "setup": {
+        "C29": {
+          "kind": "number",
+          "value": -150.0
+        },
+        "B29": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "G29": {
+          "kind": "formula",
+          "formula": "=PMT(A29,B29,C29)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F30",
+      "formula": "=PMT(A30,B30,C30,D30,E30)",
+      "setup": {
+        "E30": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D30": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C30": {
+          "kind": "number",
+          "value": -150.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G30",
+      "formula": "=PMT(A30,B30,C30)",
+      "setup": {
+        "C30": {
+          "kind": "number",
+          "value": -150.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H30",
+      "formula": "=NPER(A30,F30,C30,D30,E30)",
+      "setup": {
+        "E30": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D30": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C30": {
+          "kind": "number",
+          "value": -150.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "F30": {
+          "kind": "formula",
+          "formula": "=PMT(A30,B30,C30,D30,E30)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I30",
+      "formula": "=NPER(A30,G30,C30)",
+      "setup": {
+        "C30": {
+          "kind": "number",
+          "value": -150.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "G30": {
+          "kind": "formula",
+          "formula": "=PMT(A30,B30,C30)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J30",
+      "formula": "=PV(A30,B30,F30,D30,E30)",
+      "setup": {
+        "E30": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D30": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C30": {
+          "kind": "number",
+          "value": -150.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "F30": {
+          "kind": "formula",
+          "formula": "=PMT(A30,B30,C30,D30,E30)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K30",
+      "formula": "=PV(A30,B30,G30)",
+      "setup": {
+        "C30": {
+          "kind": "number",
+          "value": -150.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "G30": {
+          "kind": "formula",
+          "formula": "=PMT(A30,B30,C30)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "L30",
+      "formula": "=FV(A30,I30,F30,C30,E30)",
+      "setup": {
+        "E30": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C30": {
+          "kind": "number",
+          "value": -150.0
+        },
+        "D30": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "F30": {
+          "kind": "formula",
+          "formula": "=PMT(A30,B30,C30,D30,E30)"
+        },
+        "I30": {
+          "kind": "formula",
+          "formula": "=NPER(A30,G30,C30)"
+        },
+        "G30": {
+          "kind": "formula",
+          "formula": "=PMT(A30,B30,C30)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "M30",
+      "formula": "=PV(A30,B30,G30)",
+      "setup": {
+        "C30": {
+          "kind": "number",
+          "value": -150.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "G30": {
+          "kind": "formula",
+          "formula": "=PMT(A30,B30,C30)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F31",
+      "formula": "=PMT(A31,B31,C31,D31,E31)",
+      "setup": {
+        "E31": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D31": {
+          "kind": "number",
+          "value": 10.5
+        },
+        "C31": {
+          "kind": "number",
+          "value": -200.6
+        },
+        "B31": {
+          "kind": "number",
+          "value": 0.89
+        },
+        "A31": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 212.68188412195934
+      }
+    },
+    {
+      "id": "G31",
+      "formula": "=PMT(A31,B31,C31)",
+      "setup": {
+        "C31": {
+          "kind": "number",
+          "value": -200.6
+        },
+        "B31": {
+          "kind": "number",
+          "value": 0.89
+        },
+        "A31": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 331.1037818637431
+      }
+    },
+    {
+      "id": "H31",
+      "formula": "=NPER(A31,F31,C31,D31,E31)",
+      "setup": {
+        "E31": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D31": {
+          "kind": "number",
+          "value": 10.5
+        },
+        "C31": {
+          "kind": "number",
+          "value": -200.6
+        },
+        "B31": {
+          "kind": "number",
+          "value": 0.89
+        },
+        "A31": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "F31": {
+          "kind": "formula",
+          "formula": "=PMT(A31,B31,C31,D31,E31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8900000000000002
+      }
+    },
+    {
+      "id": "I31",
+      "formula": "=NPER(A31,G31,C31)",
+      "setup": {
+        "C31": {
+          "kind": "number",
+          "value": -200.6
+        },
+        "B31": {
+          "kind": "number",
+          "value": 0.89
+        },
+        "A31": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "G31": {
+          "kind": "formula",
+          "formula": "=PMT(A31,B31,C31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8900000000000002
+      }
+    },
+    {
+      "id": "J31",
+      "formula": "=PV(A31,B31,F31,D31,E31)",
+      "setup": {
+        "E31": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D31": {
+          "kind": "number",
+          "value": 10.5
+        },
+        "C31": {
+          "kind": "number",
+          "value": -200.6
+        },
+        "B31": {
+          "kind": "number",
+          "value": 0.89
+        },
+        "A31": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "F31": {
+          "kind": "formula",
+          "formula": "=PMT(A31,B31,C31,D31,E31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -200.60000000000002
+      }
+    },
+    {
+      "id": "K31",
+      "formula": "=PV(A31,B31,G31)",
+      "setup": {
+        "C31": {
+          "kind": "number",
+          "value": -200.6
+        },
+        "B31": {
+          "kind": "number",
+          "value": 0.89
+        },
+        "A31": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "G31": {
+          "kind": "formula",
+          "formula": "=PMT(A31,B31,C31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -200.60000000000002
+      }
+    },
+    {
+      "id": "L31",
+      "formula": "=FV(A31,I31,F31,C31,E31)",
+      "setup": {
+        "E31": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C31": {
+          "kind": "number",
+          "value": -200.6
+        },
+        "D31": {
+          "kind": "number",
+          "value": 10.5
+        },
+        "B31": {
+          "kind": "number",
+          "value": 0.89
+        },
+        "A31": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "F31": {
+          "kind": "formula",
+          "formula": "=PMT(A31,B31,C31,D31,E31)"
+        },
+        "I31": {
+          "kind": "formula",
+          "formula": "=NPER(A31,G31,C31)"
+        },
+        "G31": {
+          "kind": "formula",
+          "formula": "=PMT(A31,B31,C31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.5
+      }
+    },
+    {
+      "id": "M31",
+      "formula": "=PV(A31,B31,G31)",
+      "setup": {
+        "C31": {
+          "kind": "number",
+          "value": -200.6
+        },
+        "B31": {
+          "kind": "number",
+          "value": 0.89
+        },
+        "A31": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "G31": {
+          "kind": "formula",
+          "formula": "=PMT(A31,B31,C31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -200.60000000000002
+      }
+    },
+    {
+      "id": "F32",
+      "formula": "=PMT(A32,B32,C32,D32,E32)",
+      "setup": {
+        "E32": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D32": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C32": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B32": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A32": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 76.83150183150182
+      }
+    },
+    {
+      "id": "G32",
+      "formula": "=PMT(A32,B32,C32)",
+      "setup": {
+        "C32": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B32": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A32": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 94.94505494505495
+      }
+    },
+    {
+      "id": "H32",
+      "formula": "=NPER(A32,F32,C32,D32,E32)",
+      "setup": {
+        "E32": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D32": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C32": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B32": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A32": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F32": {
+          "kind": "formula",
+          "formula": "=PMT(A32,B32,C32,D32,E32)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0000000000000013
+      }
+    },
+    {
+      "id": "I32",
+      "formula": "=NPER(A32,G32,C32)",
+      "setup": {
+        "C32": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B32": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A32": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G32": {
+          "kind": "formula",
+          "formula": "=PMT(A32,B32,C32)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.000000000000001
+      }
+    },
+    {
+      "id": "J32",
+      "formula": "=PV(A32,B32,F32,D32,E32)",
+      "setup": {
+        "E32": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D32": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C32": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B32": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A32": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F32": {
+          "kind": "formula",
+          "formula": "=PMT(A32,B32,C32,D32,E32)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -199.99999999999994
+      }
+    },
+    {
+      "id": "K32",
+      "formula": "=PV(A32,B32,G32)",
+      "setup": {
+        "C32": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B32": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A32": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G32": {
+          "kind": "formula",
+          "formula": "=PMT(A32,B32,C32)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -199.99999999999997
+      }
+    },
+    {
+      "id": "L32",
+      "formula": "=FV(A32,I32,F32,C32,E32)",
+      "setup": {
+        "E32": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C32": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "D32": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B32": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A32": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F32": {
+          "kind": "formula",
+          "formula": "=PMT(A32,B32,C32,D32,E32)"
+        },
+        "I32": {
+          "kind": "formula",
+          "formula": "=NPER(A32,G32,C32)"
+        },
+        "G32": {
+          "kind": "formula",
+          "formula": "=PMT(A32,B32,C32)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.000000000000114
+      }
+    },
+    {
+      "id": "M32",
+      "formula": "=PV(A32,B32,G32)",
+      "setup": {
+        "C32": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B32": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A32": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G32": {
+          "kind": "formula",
+          "formula": "=PMT(A32,B32,C32)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -199.99999999999997
+      }
+    },
+    {
+      "id": "F33",
+      "formula": "=PMT(A33,B33,C33,D33,E33)",
+      "setup": {
+        "E33": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "D33": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C33": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B33": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 62.82911077993046
+      }
+    },
+    {
+      "id": "G33",
+      "formula": "=PMT(A33,B33,C33)",
+      "setup": {
+        "C33": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B33": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 77.25782414307007
+      }
+    },
+    {
+      "id": "H33",
+      "formula": "=NPER(A33,F33,C33,D33,E33)",
+      "setup": {
+        "E33": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "D33": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C33": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B33": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F33": {
+          "kind": "formula",
+          "formula": "=PMT(A33,B33,C33,D33,E33)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.000000000000001
+      }
+    },
+    {
+      "id": "I33",
+      "formula": "=NPER(A33,G33,C33)",
+      "setup": {
+        "C33": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B33": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G33": {
+          "kind": "formula",
+          "formula": "=PMT(A33,B33,C33)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.9999999999999996
+      }
+    },
+    {
+      "id": "J33",
+      "formula": "=PV(A33,B33,F33,D33,E33)",
+      "setup": {
+        "E33": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "D33": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C33": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B33": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F33": {
+          "kind": "formula",
+          "formula": "=PMT(A33,B33,C33,D33,E33)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -200.00000000000003
+      }
+    },
+    {
+      "id": "K33",
+      "formula": "=PV(A33,B33,G33)",
+      "setup": {
+        "C33": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B33": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G33": {
+          "kind": "formula",
+          "formula": "=PMT(A33,B33,C33)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -200.00000000000006
+      }
+    },
+    {
+      "id": "L33",
+      "formula": "=FV(A33,I33,F33,C33,E33)",
+      "setup": {
+        "E33": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "C33": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "D33": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B33": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F33": {
+          "kind": "formula",
+          "formula": "=PMT(A33,B33,C33,D33,E33)"
+        },
+        "I33": {
+          "kind": "formula",
+          "formula": "=NPER(A33,G33,C33)"
+        },
+        "G33": {
+          "kind": "formula",
+          "formula": "=PMT(A33,B33,C33)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.000000000000114
+      }
+    },
+    {
+      "id": "M33",
+      "formula": "=PV(A33,B33,G33)",
+      "setup": {
+        "C33": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B33": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G33": {
+          "kind": "formula",
+          "formula": "=PMT(A33,B33,C33)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -200.00000000000006
+      }
+    },
+    {
+      "id": "F34",
+      "formula": "=PMT(A34,B34,C34,D34,E34)",
+      "setup": {
+        "D34": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C34": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B34": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A34": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 92.1978021978022
+      }
+    },
+    {
+      "id": "G34",
+      "formula": "=PMT(A34,B34,C34)",
+      "setup": {
+        "C34": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B34": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A34": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 94.94505494505495
+      }
+    },
+    {
+      "id": "H34",
+      "formula": "=NPER(A34,F34,C34,D34,E34)",
+      "setup": {
+        "D34": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C34": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B34": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A34": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F34": {
+          "kind": "formula",
+          "formula": "=PMT(A34,B34,C34,D34,E34)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.000000000000001
+      }
+    },
+    {
+      "id": "I34",
+      "formula": "=NPER(A34,G34,C34)",
+      "setup": {
+        "C34": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B34": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A34": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G34": {
+          "kind": "formula",
+          "formula": "=PMT(A34,B34,C34)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.000000000000001
+      }
+    },
+    {
+      "id": "J34",
+      "formula": "=PV(A34,B34,F34,D34,E34)",
+      "setup": {
+        "D34": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C34": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B34": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A34": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F34": {
+          "kind": "formula",
+          "formula": "=PMT(A34,B34,C34,D34,E34)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -199.99999999999997
+      }
+    },
+    {
+      "id": "K34",
+      "formula": "=PV(A34,B34,G34)",
+      "setup": {
+        "C34": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B34": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A34": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G34": {
+          "kind": "formula",
+          "formula": "=PMT(A34,B34,C34)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -199.99999999999997
+      }
+    },
+    {
+      "id": "L34",
+      "formula": "=FV(A34,I34,F34,C34,E34)",
+      "setup": {
+        "C34": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "D34": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B34": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A34": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F34": {
+          "kind": "formula",
+          "formula": "=PMT(A34,B34,C34,D34,E34)"
+        },
+        "I34": {
+          "kind": "formula",
+          "formula": "=NPER(A34,G34,C34)"
+        },
+        "G34": {
+          "kind": "formula",
+          "formula": "=PMT(A34,B34,C34)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.000000000000057
+      }
+    },
+    {
+      "id": "M34",
+      "formula": "=PV(A34,B34,G34)",
+      "setup": {
+        "C34": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B34": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A34": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G34": {
+          "kind": "formula",
+          "formula": "=PMT(A34,B34,C34)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -199.99999999999997
+      }
+    },
+    {
+      "id": "F35",
+      "formula": "=PMT(A35,B35,C35,D35,E35)",
+      "setup": {
+        "E35": {
+          "kind": "number",
+          "value": 1.234
+        },
+        "D35": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C35": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B35": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A35": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 54.6101196875224
+      }
+    },
+    {
+      "id": "G35",
+      "formula": "=PMT(A35,B35,C35)",
+      "setup": {
+        "C35": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B35": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A35": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 66.87594065792302
+      }
+    },
+    {
+      "id": "H35",
+      "formula": "=NPER(A35,F35,C35,D35,E35)",
+      "setup": {
+        "E35": {
+          "kind": "number",
+          "value": 1.234
+        },
+        "D35": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C35": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B35": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A35": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F35": {
+          "kind": "formula",
+          "formula": "=PMT(A35,B35,C35,D35,E35)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.000000000000001
+      }
+    },
+    {
+      "id": "I35",
+      "formula": "=NPER(A35,G35,C35)",
+      "setup": {
+        "C35": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B35": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A35": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G35": {
+          "kind": "formula",
+          "formula": "=PMT(A35,B35,C35)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.000000000000002
+      }
+    },
+    {
+      "id": "J35",
+      "formula": "=PV(A35,B35,F35,D35,E35)",
+      "setup": {
+        "E35": {
+          "kind": "number",
+          "value": 1.234
+        },
+        "D35": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C35": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B35": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A35": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F35": {
+          "kind": "formula",
+          "formula": "=PMT(A35,B35,C35,D35,E35)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -200.0
+      }
+    },
+    {
+      "id": "K35",
+      "formula": "=PV(A35,B35,G35)",
+      "setup": {
+        "C35": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B35": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A35": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G35": {
+          "kind": "formula",
+          "formula": "=PMT(A35,B35,C35)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -199.99999999999997
+      }
+    },
+    {
+      "id": "L35",
+      "formula": "=FV(A35,I35,F35,C35,E35)",
+      "setup": {
+        "E35": {
+          "kind": "number",
+          "value": 1.234
+        },
+        "C35": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "D35": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B35": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A35": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F35": {
+          "kind": "formula",
+          "formula": "=PMT(A35,B35,C35,D35,E35)"
+        },
+        "I35": {
+          "kind": "formula",
+          "formula": "=NPER(A35,G35,C35)"
+        },
+        "G35": {
+          "kind": "formula",
+          "formula": "=PMT(A35,B35,C35)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.999999999999943
+      }
+    },
+    {
+      "id": "M35",
+      "formula": "=PV(A35,B35,G35)",
+      "setup": {
+        "C35": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B35": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A35": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G35": {
+          "kind": "formula",
+          "formula": "=PMT(A35,B35,C35)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -199.99999999999997
+      }
+    },
+    {
+      "id": "F36",
+      "formula": "=PMT(A36,B36,C36,D36,E36)",
+      "setup": {
+        "E36": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D36": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C36": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B36": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A36": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 66.87594065792302
+      }
+    },
+    {
+      "id": "G36",
+      "formula": "=PMT(A36,B36,C36)",
+      "setup": {
+        "C36": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B36": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A36": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 66.87594065792302
+      }
+    },
+    {
+      "id": "H36",
+      "formula": "=NPER(A36,F36,C36,D36,E36)",
+      "setup": {
+        "E36": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D36": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C36": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B36": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A36": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F36": {
+          "kind": "formula",
+          "formula": "=PMT(A36,B36,C36,D36,E36)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.000000000000002
+      }
+    },
+    {
+      "id": "I36",
+      "formula": "=NPER(A36,G36,C36)",
+      "setup": {
+        "C36": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B36": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A36": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G36": {
+          "kind": "formula",
+          "formula": "=PMT(A36,B36,C36)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.000000000000002
+      }
+    },
+    {
+      "id": "J36",
+      "formula": "=PV(A36,B36,F36,D36,E36)",
+      "setup": {
+        "E36": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D36": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C36": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B36": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A36": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F36": {
+          "kind": "formula",
+          "formula": "=PMT(A36,B36,C36,D36,E36)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -199.99999999999997
+      }
+    },
+    {
+      "id": "K36",
+      "formula": "=PV(A36,B36,G36)",
+      "setup": {
+        "C36": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B36": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A36": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G36": {
+          "kind": "formula",
+          "formula": "=PMT(A36,B36,C36)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -199.99999999999997
+      }
+    },
+    {
+      "id": "L36",
+      "formula": "=ABS(FV(A36,I36,F36,C36,E36))< 0.0000000001",
+      "setup": {
+        "E36": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C36": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "D36": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B36": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A36": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F36": {
+          "kind": "formula",
+          "formula": "=PMT(A36,B36,C36,D36,E36)"
+        },
+        "I36": {
+          "kind": "formula",
+          "formula": "=NPER(A36,G36,C36)"
+        },
+        "G36": {
+          "kind": "formula",
+          "formula": "=PMT(A36,B36,C36)"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "M36",
+      "formula": "=PV(A36,B36,G36)",
+      "setup": {
+        "C36": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B36": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A36": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G36": {
+          "kind": "formula",
+          "formula": "=PMT(A36,B36,C36)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -199.99999999999997
+      }
+    },
+    {
+      "id": "A37",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B37",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F37",
+      "formula": "=PMT(A37,B37,C37,D37,E37)",
+      "setup": {
+        "E37": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D37": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C37": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B37": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G37",
+      "formula": "=PMT(A37,B37,C37)",
+      "setup": {
+        "C37": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "B37": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "H37",
+      "formula": "=NPER(A37,F37,C37,D37,E37)",
+      "setup": {
+        "E37": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D37": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C37": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "F37": {
+          "kind": "formula",
+          "formula": "=PMT(A37,B37,C37,D37,E37)"
+        },
+        "B37": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "I37",
+      "formula": "=NPER(A37,G37,C37)",
+      "setup": {
+        "C37": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "G37": {
+          "kind": "formula",
+          "formula": "=PMT(A37,B37,C37)"
+        },
+        "B37": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "J37",
+      "formula": "=PV(A37,B37,F37,D37,E37)",
+      "setup": {
+        "E37": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D37": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C37": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "F37": {
+          "kind": "formula",
+          "formula": "=PMT(A37,B37,C37,D37,E37)"
+        },
+        "B37": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "K37",
+      "formula": "=PV(A37,B37,G37)",
+      "setup": {
+        "C37": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "G37": {
+          "kind": "formula",
+          "formula": "=PMT(A37,B37,C37)"
+        },
+        "B37": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "L37",
+      "formula": "=FV(A37,I37,F37,C37,E37)",
+      "setup": {
+        "E37": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C37": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "D37": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F37": {
+          "kind": "formula",
+          "formula": "=PMT(A37,B37,C37,D37,E37)"
+        },
+        "B37": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "I37": {
+          "kind": "formula",
+          "formula": "=NPER(A37,G37,C37)"
+        },
+        "G37": {
+          "kind": "formula",
+          "formula": "=PMT(A37,B37,C37)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "M37",
+      "formula": "=PV(A37,B37,G37)",
+      "setup": {
+        "C37": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "G37": {
+          "kind": "formula",
+          "formula": "=PMT(A37,B37,C37)"
+        },
+        "B37": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A37": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B38",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F38",
+      "formula": "=PMT(A38,B38,C38,D38,E38)",
+      "setup": {
+        "E38": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D38": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C38": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "A38": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "B38": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G38",
+      "formula": "=PMT(A38,B38,C38)",
+      "setup": {
+        "C38": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "A38": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "B38": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "H38",
+      "formula": "=NPER(A38,F38,C38,D38,E38)",
+      "setup": {
+        "E38": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D38": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C38": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "A38": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F38": {
+          "kind": "formula",
+          "formula": "=PMT(A38,B38,C38,D38,E38)"
+        },
+        "B38": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "I38",
+      "formula": "=NPER(A38,G38,C38)",
+      "setup": {
+        "C38": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "A38": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G38": {
+          "kind": "formula",
+          "formula": "=PMT(A38,B38,C38)"
+        },
+        "B38": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "J38",
+      "formula": "=PV(A38,B38,F38,D38,E38)",
+      "setup": {
+        "E38": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D38": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C38": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "A38": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F38": {
+          "kind": "formula",
+          "formula": "=PMT(A38,B38,C38,D38,E38)"
+        },
+        "B38": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "K38",
+      "formula": "=PV(A38,B38,G38)",
+      "setup": {
+        "C38": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "A38": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G38": {
+          "kind": "formula",
+          "formula": "=PMT(A38,B38,C38)"
+        },
+        "B38": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "L38",
+      "formula": "=FV(A38,I38,F38,C38,E38)",
+      "setup": {
+        "E38": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C38": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "D38": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A38": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F38": {
+          "kind": "formula",
+          "formula": "=PMT(A38,B38,C38,D38,E38)"
+        },
+        "B38": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "I38": {
+          "kind": "formula",
+          "formula": "=NPER(A38,G38,C38)"
+        },
+        "G38": {
+          "kind": "formula",
+          "formula": "=PMT(A38,B38,C38)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "M38",
+      "formula": "=PV(A38,B38,G38)",
+      "setup": {
+        "C38": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "A38": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G38": {
+          "kind": "formula",
+          "formula": "=PMT(A38,B38,C38)"
+        },
+        "B38": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C39",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F39",
+      "formula": "=PMT(A39,B39,C39,D39,E39)",
+      "setup": {
+        "E39": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D39": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B39": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A39": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "C39": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "G39",
+      "formula": "=PMT(A39,B39,C39)",
+      "setup": {
+        "B39": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A39": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "C39": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "H39",
+      "formula": "=NPER(A39,F39,C39,D39,E39)",
+      "setup": {
+        "E39": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D39": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B39": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A39": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "C39": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F39": {
+          "kind": "formula",
+          "formula": "=PMT(A39,B39,C39,D39,E39)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "I39",
+      "formula": "=NPER(A39,G39,C39)",
+      "setup": {
+        "B39": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A39": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "C39": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "G39": {
+          "kind": "formula",
+          "formula": "=PMT(A39,B39,C39)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "J39",
+      "formula": "=PV(A39,B39,F39,D39,E39)",
+      "setup": {
+        "E39": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D39": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B39": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A39": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F39": {
+          "kind": "formula",
+          "formula": "=PMT(A39,B39,C39,D39,E39)"
+        },
+        "C39": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "K39",
+      "formula": "=PV(A39,B39,G39)",
+      "setup": {
+        "B39": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A39": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G39": {
+          "kind": "formula",
+          "formula": "=PMT(A39,B39,C39)"
+        },
+        "C39": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "L39",
+      "formula": "=FV(A39,I39,F39,C39,E39)",
+      "setup": {
+        "E39": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D39": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B39": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A39": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "C39": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F39": {
+          "kind": "formula",
+          "formula": "=PMT(A39,B39,C39,D39,E39)"
+        },
+        "I39": {
+          "kind": "formula",
+          "formula": "=NPER(A39,G39,C39)"
+        },
+        "G39": {
+          "kind": "formula",
+          "formula": "=PMT(A39,B39,C39)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "M39",
+      "formula": "=PV(A39,B39,G39)",
+      "setup": {
+        "B39": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A39": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "G39": {
+          "kind": "formula",
+          "formula": "=PMT(A39,B39,C39)"
+        },
+        "C39": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

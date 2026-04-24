@@ -1,0 +1,101 @@
+{
+  "suite": "ironcalc_calc_tests_percentage_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/percentage.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B1",
+      "formula": "=A1+1",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 123.45
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 124.45
+      }
+    },
+    {
+      "id": "B2",
+      "formula": "=A2*2",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 90.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 181.0
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=A3*50%",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 0.06
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.03
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=A4&\"pqr\"",
+      "setup": {
+        "A4": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "abcpqr"
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=A5",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "2020-Jan-30"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2020-Jan-30"
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=A6",
+      "setup": {
+        "A6": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    }
+  ]
+}

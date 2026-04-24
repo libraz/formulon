@@ -1,0 +1,956 @@
+{
+  "suite": "ironcalc_calc_tests_simple_functions_LOGICAL",
+  "description": "Derived from IronCalc fixture calc_tests/simple_functions.xlsx, sheet 'LOGICAL'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "LOGICAL",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "G2",
+      "formula": "=OR(A2:D2)",
+      "setup": {
+        "D2": {
+          "kind": "bool",
+          "value": false
+        },
+        "C2": {
+          "kind": "bool",
+          "value": false
+        },
+        "B2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "L2",
+      "formula": "=NOT(K2)",
+      "setup": {
+        "K2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "M2",
+      "formula": "=L2*2",
+      "setup": {
+        "K2": {
+          "kind": "bool",
+          "value": true
+        },
+        "L2": {
+          "kind": "formula",
+          "formula": "=NOT(K2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=OR(A3:D3)",
+      "setup": {
+        "D3": {
+          "kind": "bool",
+          "value": false
+        },
+        "C3": {
+          "kind": "bool",
+          "value": true
+        },
+        "B3": {
+          "kind": "bool",
+          "value": false
+        },
+        "A3": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "L3",
+      "formula": "=NOT(K3)",
+      "setup": {
+        "K3": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "M3",
+      "formula": "=L3*2",
+      "setup": {
+        "K3": {
+          "kind": "bool",
+          "value": false
+        },
+        "L3": {
+          "kind": "formula",
+          "formula": "=NOT(K3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "L4",
+      "formula": "=NOT(K4)",
+      "setup": {
+        "K4": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "M4",
+      "formula": "=L4*2",
+      "setup": {
+        "K4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "L4": {
+          "kind": "formula",
+          "formula": "=NOT(K4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "P4",
+      "formula": "=IF(O4=\"\", \"Empty\", \"not empty\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Empty"
+      }
+    },
+    {
+      "id": "L5",
+      "formula": "=NOT(K5)",
+      "setup": {
+        "K5": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "M5",
+      "formula": "=L5*2",
+      "setup": {
+        "K5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L5": {
+          "kind": "formula",
+          "formula": "=NOT(K5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "P5",
+      "formula": "=1+O5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A6",
+      "formula": "=AND(A2,A3)",
+      "setup": {
+        "A3": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=AND(B2,B3)",
+      "setup": {
+        "B3": {
+          "kind": "bool",
+          "value": false
+        },
+        "B2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=AND(C2,C3)",
+      "setup": {
+        "C3": {
+          "kind": "bool",
+          "value": true
+        },
+        "C2": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=AND(D2,D3)",
+      "setup": {
+        "D3": {
+          "kind": "bool",
+          "value": false
+        },
+        "D2": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=AND(A2:A3,A6:A7)",
+      "setup": {
+        "A3": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=OR(A2,A3)"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=AND(A2,A3)"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "L6",
+      "formula": "=NOT(K6)",
+      "setup": {
+        "K6": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "M6",
+      "formula": "=L6*2",
+      "setup": {
+        "K6": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "L6": {
+          "kind": "formula",
+          "formula": "=NOT(K6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A7",
+      "formula": "=OR(A2,A3)",
+      "setup": {
+        "A3": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=OR(B2,B3)",
+      "setup": {
+        "B3": {
+          "kind": "bool",
+          "value": false
+        },
+        "B2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=OR(C2,C3)",
+      "setup": {
+        "C3": {
+          "kind": "bool",
+          "value": true
+        },
+        "C2": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=OR(D2,D3)",
+      "setup": {
+        "D3": {
+          "kind": "bool",
+          "value": false
+        },
+        "D2": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=OR(A6:D7)",
+      "setup": {
+        "D3": {
+          "kind": "bool",
+          "value": false
+        },
+        "D2": {
+          "kind": "bool",
+          "value": false
+        },
+        "C3": {
+          "kind": "bool",
+          "value": true
+        },
+        "C2": {
+          "kind": "bool",
+          "value": false
+        },
+        "B3": {
+          "kind": "bool",
+          "value": false
+        },
+        "B2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "bool",
+          "value": true
+        },
+        "D7": {
+          "kind": "formula",
+          "formula": "=OR(D2,D3)"
+        },
+        "C7": {
+          "kind": "formula",
+          "formula": "=OR(C2,C3)"
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=OR(B2,B3)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=OR(A2,A3)"
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=AND(D2,D3)"
+        },
+        "C6": {
+          "kind": "formula",
+          "formula": "=AND(C2,C3)"
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=AND(B2,B3)"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=AND(A2,A3)"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=OR(D2:D3,D6:D7)",
+      "setup": {
+        "D3": {
+          "kind": "bool",
+          "value": false
+        },
+        "D2": {
+          "kind": "bool",
+          "value": false
+        },
+        "D7": {
+          "kind": "formula",
+          "formula": "=OR(D2,D3)"
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=AND(D2,D3)"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "L7",
+      "formula": "=NOT(K7)",
+      "setup": {
+        "K7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "M7",
+      "formula": "=L7*2",
+      "setup": {
+        "K7": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "L7": {
+          "kind": "formula",
+          "formula": "=NOT(K7)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "A13",
+      "formula": "=AND(A10:A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=AND(B10:B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=AND(C10:C11)",
+      "setup": {
+        "C11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=AND(D10:D11)",
+      "setup": {
+        "D11": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "A14",
+      "formula": "=OR(A10:A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=OR(B10:B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=OR(C10:C11)",
+      "setup": {
+        "C11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=OR(D10:D11)",
+      "setup": {
+        "D11": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=\"True\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "True"
+      }
+    },
+    {
+      "id": "F17",
+      "formula": "=\"Hello\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Hello"
+      }
+    },
+    {
+      "id": "I17",
+      "formula": "=\"FALSE\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "FALSE"
+      }
+    },
+    {
+      "id": "A19",
+      "formula": "=AND(A17:A18)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=AND(B17:B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=AND(D17:D18)",
+      "setup": {
+        "D18": {
+          "kind": "bool",
+          "value": true
+        },
+        "D17": {
+          "kind": "formula",
+          "formula": "=\"True\""
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "F19",
+      "formula": "=AND(F17:F18)",
+      "setup": {
+        "F18": {
+          "kind": "bool",
+          "value": true
+        },
+        "F17": {
+          "kind": "formula",
+          "formula": "=\"Hello\""
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G19",
+      "formula": "=AND(G17:G18)",
+      "setup": {
+        "G18": {
+          "kind": "bool",
+          "value": true
+        },
+        "G17": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "I19",
+      "formula": "=AND(I17:I18)",
+      "setup": {
+        "I18": {
+          "kind": "bool",
+          "value": true
+        },
+        "I17": {
+          "kind": "formula",
+          "formula": "=\"FALSE\""
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=OR(D17:D18)",
+      "setup": {
+        "D18": {
+          "kind": "bool",
+          "value": true
+        },
+        "D17": {
+          "kind": "formula",
+          "formula": "=\"True\""
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "F20",
+      "formula": "=OR(F17:F18)",
+      "setup": {
+        "F18": {
+          "kind": "bool",
+          "value": true
+        },
+        "F17": {
+          "kind": "formula",
+          "formula": "=\"Hello\""
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G20",
+      "formula": "=OR(G17:G18)",
+      "setup": {
+        "G18": {
+          "kind": "bool",
+          "value": true
+        },
+        "G17": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "I20",
+      "formula": "=OR(I17:I18)",
+      "setup": {
+        "I18": {
+          "kind": "bool",
+          "value": true
+        },
+        "I17": {
+          "kind": "formula",
+          "formula": "=\"FALSE\""
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B27",
+      "formula": "=IF(A27=\"YES\", \"si\", \"no\")",
+      "setup": {
+        "A27": {
+          "kind": "text",
+          "value": "Yes"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "si"
+      }
+    },
+    {
+      "id": "B28",
+      "formula": "=IF(A28=\"YES\", \"si\", \"no\")",
+      "setup": {
+        "A28": {
+          "kind": "text",
+          "value": "No"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "no"
+      }
+    },
+    {
+      "id": "B29",
+      "formula": "=IF(A29=\"YES\", \"si\", \"no\")",
+      "setup": {
+        "A29": {
+          "kind": "text",
+          "value": "Yes"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "si"
+      }
+    },
+    {
+      "id": "B30",
+      "formula": "=IF(A30=\"YES\", \"si\", \"no\")",
+      "setup": {
+        "A30": {
+          "kind": "text",
+          "value": "Yes"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "si"
+      }
+    }
+  ]
+}

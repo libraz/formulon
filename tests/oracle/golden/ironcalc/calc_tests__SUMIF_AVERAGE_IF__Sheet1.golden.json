@@ -1,0 +1,2475 @@
+{
+  "suite": "ironcalc_calc_tests_SUMIF_AVERAGE_IF_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/SUMIF_AVERAGE_IF.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "E2",
+      "formula": "=AVERAGEIF($B$2:$B$10,D2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=SUMIF($B$2:$B$10,D2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=COUNTIF($B$2:$B$10,D2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "J2",
+      "formula": "=AVERAGEIF($A$2:$A$9,I2,$B$2:$B$9)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I2": {
+          "kind": "text",
+          "value": "xyz"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "tron"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1213.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "QWERTY"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "XYZ"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Paraguay"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Argentina"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Alemania"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "1213"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "K2",
+      "formula": "=SUMIF($A$2:$A$9,I2,$B$2:$B$9)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I2": {
+          "kind": "text",
+          "value": "xyz"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "tron"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1213.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "QWERTY"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "XYZ"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Paraguay"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Argentina"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Alemania"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "1213"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "M2",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "N2",
+      "formula": "=SUMIF(M2:M5, 3)",
+      "setup": {
+        "M3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "M4": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "O2",
+      "formula": "=SUMIF(M2:M5, 3)",
+      "setup": {
+        "M3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "M4": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "T2",
+      "formula": "=SUMIF(Q2:Q4,\">2\",S2:S4)",
+      "setup": {
+        "S3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "S2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Q4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Q3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "Q2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "S4": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=AVERAGEIF($B$2:$B$10,D3)",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=SUMIF($B$2:$B$10,D3)",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=COUNTIF($B$2:$B$10,D3)",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J3",
+      "formula": "=AVERAGEIF($A$2:$A$9,I3,$B$2:$B$9)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I3": {
+          "kind": "text",
+          "value": "*a*"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "tron"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1213.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "QWERTY"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "XYZ"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Paraguay"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Argentina"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Alemania"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "1213"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "K3",
+      "formula": "=SUMIF($A$2:$A$9,I3,$B$2:$B$9)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I3": {
+          "kind": "text",
+          "value": "*a*"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "tron"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1213.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "QWERTY"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "XYZ"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Paraguay"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Argentina"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Alemania"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "1213"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "T3",
+      "formula": "=SUMIF(Q2:Q4,\"<2\",S2:S4)",
+      "setup": {
+        "S3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "S2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "Q4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Q3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "Q2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "S4": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=AVERAGEIF($B$2:$B$10,D4)",
+      "setup": {
+        "D4": {
+          "kind": "text",
+          "value": ">0"
+        },
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=SUMIF($B$2:$B$10,D4)",
+      "setup": {
+        "D4": {
+          "kind": "text",
+          "value": ">0"
+        },
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=COUNTIF($B$2:$B$10,D4)",
+      "setup": {
+        "D4": {
+          "kind": "text",
+          "value": ">0"
+        },
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=AVERAGEIF($A$2:$A$9,I4,$B$2:$B$9)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I4": {
+          "kind": "text",
+          "value": "*a"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "tron"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1213.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "QWERTY"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "XYZ"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Paraguay"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Argentina"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Alemania"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "1213"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.5
+      }
+    },
+    {
+      "id": "K4",
+      "formula": "=SUMIF($A$2:$A$9,I4,$B$2:$B$9)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I4": {
+          "kind": "text",
+          "value": "*a"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "tron"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1213.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "QWERTY"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "XYZ"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Paraguay"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Argentina"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Alemania"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "1213"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "M4",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "S4",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=AVERAGEIF($B$2:$B$10,D5)",
+      "setup": {
+        "D5": {
+          "kind": "text",
+          "value": "<5"
+        },
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.3333333333333333
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=SUMIF($B$2:$B$10,D5)",
+      "setup": {
+        "D5": {
+          "kind": "text",
+          "value": "<5"
+        },
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=COUNTIF($B$2:$B$10,D5)",
+      "setup": {
+        "D5": {
+          "kind": "text",
+          "value": "<5"
+        },
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "J5",
+      "formula": "=AVERAGEIF($A$2:$A$9,I5,$B$2:$B$9)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I5": {
+          "kind": "text",
+          "value": "*Y*"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "tron"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1213.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "QWERTY"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "XYZ"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Paraguay"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Argentina"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Alemania"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "1213"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "K5",
+      "formula": "=SUMIF($A$2:$A$9,I5,$B$2:$B$9)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I5": {
+          "kind": "text",
+          "value": "*Y*"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "tron"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1213.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "QWERTY"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "XYZ"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Paraguay"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Argentina"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Alemania"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "1213"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=AVERAGEIF($B$2:$B$10,D6)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=SUMIF($B$2:$B$10,D6)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=COUNTIF($B$2:$B$10,D6)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "J6",
+      "formula": "=AVERAGEIF($A$2:$A$9,I6,$B$2:$B$9)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I6": {
+          "kind": "text",
+          "value": "12*"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "tron"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1213.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "QWERTY"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "XYZ"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Paraguay"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Argentina"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Alemania"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "1213"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "K6",
+      "formula": "=SUMIF($A$2:$A$9,I6,$B$2:$B$9)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "I6": {
+          "kind": "text",
+          "value": "12*"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "tron"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1213.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "QWERTY"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "XYZ"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Paraguay"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Argentina"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Alemania"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "1213"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=AVERAGEIF($B$2:$B$10,D7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=SUMIF($B$2:$B$10,D7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=COUNTIF($B$2:$B$10,D7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J7",
+      "formula": "=AVERAGEIF($A$2:$A$9,I7,$B$2:$B$9)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A9": {
+          "kind": "text",
+          "value": "tron"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1213.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "QWERTY"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "XYZ"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Paraguay"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Argentina"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Alemania"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "1213"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "K7",
+      "formula": "=SUMIF($A$2:$A$9,I7,$B$2:$B$9)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A9": {
+          "kind": "text",
+          "value": "tron"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1213.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "QWERTY"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "XYZ"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Paraguay"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Argentina"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Alemania"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "1213"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=AVERAGEIF($B$2:$B$10,D8)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=SUMIF($B$2:$B$10,D8)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=COUNTIF($B$2:$B$10,D8)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J8",
+      "formula": "=AVERAGEIF($A$2:$A$9,I8,$B$2:$B$9)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A9": {
+          "kind": "text",
+          "value": "tron"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1213.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "QWERTY"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "XYZ"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Paraguay"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Argentina"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Alemania"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "1213"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "K8",
+      "formula": "=SUMIF($A$2:$A$9,I8,$B$2:$B$9)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A9": {
+          "kind": "text",
+          "value": "tron"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1213.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "QWERTY"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "XYZ"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Paraguay"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Argentina"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Alemania"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "1213"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=AVERAGEIF($B$2:$B$10,D9)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=SUMIF($B$2:$B$10,D9)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G9",
+      "formula": "=COUNTIF($B$2:$B$10,D9)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J9",
+      "formula": "=AVERAGEIF($A$2:$A$9,I9,$B$2:$B$9)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A9": {
+          "kind": "text",
+          "value": "tron"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1213.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "QWERTY"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "XYZ"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Paraguay"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Argentina"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Alemania"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "1213"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "K9",
+      "formula": "=SUMIF($A$2:$A$9,I9,$B$2:$B$9)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A9": {
+          "kind": "text",
+          "value": "tron"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1213.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "QWERTY"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "XYZ"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Paraguay"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Argentina"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Alemania"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "1213"
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    }
+  ]
+}

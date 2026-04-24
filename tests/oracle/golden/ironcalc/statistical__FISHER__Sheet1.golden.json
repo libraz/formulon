@@ -1,0 +1,165 @@
+{
+  "suite": "ironcalc_statistical_FISHER_Sheet1",
+  "description": "Derived from IronCalc fixture statistical/FISHER.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "E2",
+      "formula": "=FISHER(D2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=FISHERINV(E5)",
+      "setup": {
+        "D5": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=FISHER(D5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.30000000000000004
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=FISHER(D3)",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=FISHERINV(E6)",
+      "setup": {
+        "D6": {
+          "kind": "number",
+          "value": 0.4
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=FISHER(D6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=FISHER(D4)",
+      "setup": {
+        "D4": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=FISHERINV(F4)",
+      "setup": {
+        "F4": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=FISHER(D5)",
+      "setup": {
+        "D5": {
+          "kind": "number",
+          "value": 0.3
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3095196042031118
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=FISHERINV(F5)",
+      "setup": {
+        "F5": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.7615941559557649
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=FISHER(D6)",
+      "setup": {
+        "D6": {
+          "kind": "number",
+          "value": 0.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.42364893019360184
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=FISHERINV(F6)",
+      "setup": {
+        "F6": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9640275800758169
+      }
+    }
+  ]
+}

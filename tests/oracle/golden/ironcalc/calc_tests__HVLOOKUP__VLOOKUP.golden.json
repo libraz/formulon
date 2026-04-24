@@ -1,0 +1,1282 @@
+{
+  "suite": "ironcalc_calc_tests_HVLOOKUP_VLOOKUP",
+  "description": "Derived from IronCalc fixture calc_tests/HVLOOKUP.xlsx, sheet 'VLOOKUP'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "VLOOKUP",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "M2",
+      "formula": "=C1",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "Albacete"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Albacete"
+      }
+    },
+    {
+      "id": "N2",
+      "formula": "=VLOOKUP(M2,$C$1:$G$5, 1)",
+      "setup": {
+        "E5": {
+          "kind": "text",
+          "value": "done"
+        },
+        "D5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Zimbawe"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "D4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Madrid"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Berlin"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "alca"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Aranda"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Albacete"
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=C1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Albacete"
+      }
+    },
+    {
+      "id": "O2",
+      "formula": "=VLOOKUP(M2,$C$1:$G$5, 3)",
+      "setup": {
+        "E5": {
+          "kind": "text",
+          "value": "done"
+        },
+        "D5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Zimbawe"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "D4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Madrid"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Berlin"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "alca"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Aranda"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Albacete"
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=C1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "banana"
+      }
+    },
+    {
+      "id": "P2",
+      "formula": "=VLOOKUP(M2,$C$1:$G$5, 10)",
+      "setup": {
+        "E5": {
+          "kind": "text",
+          "value": "done"
+        },
+        "D5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Zimbawe"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "D4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Madrid"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Berlin"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "alca"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Aranda"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Albacete"
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=C1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "M3",
+      "formula": "=C2",
+      "setup": {
+        "C2": {
+          "kind": "text",
+          "value": "Aranda"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Aranda"
+      }
+    },
+    {
+      "id": "N3",
+      "formula": "=VLOOKUP(M3,$C$1:$G$5, 1)",
+      "setup": {
+        "E5": {
+          "kind": "text",
+          "value": "done"
+        },
+        "D5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Zimbawe"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "D4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Madrid"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Berlin"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "alca"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Aranda"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Albacete"
+        },
+        "M3": {
+          "kind": "formula",
+          "formula": "=C2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Aranda"
+      }
+    },
+    {
+      "id": "O3",
+      "formula": "=VLOOKUP(M3,$C$1:$G$5, 3)",
+      "setup": {
+        "E5": {
+          "kind": "text",
+          "value": "done"
+        },
+        "D5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Zimbawe"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "D4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Madrid"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Berlin"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "alca"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Aranda"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Albacete"
+        },
+        "M3": {
+          "kind": "formula",
+          "formula": "=C2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "alca"
+      }
+    },
+    {
+      "id": "M4",
+      "formula": "=C3",
+      "setup": {
+        "C3": {
+          "kind": "text",
+          "value": "Berlin"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Berlin"
+      }
+    },
+    {
+      "id": "N4",
+      "formula": "=VLOOKUP(M4,$C$1:$G$5, 1)",
+      "setup": {
+        "E5": {
+          "kind": "text",
+          "value": "done"
+        },
+        "D5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Zimbawe"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "D4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Madrid"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Berlin"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "alca"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Aranda"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Albacete"
+        },
+        "M4": {
+          "kind": "formula",
+          "formula": "=C3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Berlin"
+      }
+    },
+    {
+      "id": "O4",
+      "formula": "=VLOOKUP(M4,$C$1:$G$5, 3)",
+      "setup": {
+        "E5": {
+          "kind": "text",
+          "value": "done"
+        },
+        "D5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Zimbawe"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "D4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Madrid"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Berlin"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "alca"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Aranda"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Albacete"
+        },
+        "M4": {
+          "kind": "formula",
+          "formula": "=C3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "apple"
+      }
+    },
+    {
+      "id": "N5",
+      "formula": "=VLOOKUP(M5,$C$1:$G$5, 1)",
+      "setup": {
+        "E5": {
+          "kind": "text",
+          "value": "done"
+        },
+        "D5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Zimbawe"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "D4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Madrid"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Berlin"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "alca"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Aranda"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Albacete"
+        },
+        "M5": {
+          "kind": "text",
+          "value": "Cuenca"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Berlin"
+      }
+    },
+    {
+      "id": "O5",
+      "formula": "=VLOOKUP(M5,$C$1:$G$5, 3)",
+      "setup": {
+        "E5": {
+          "kind": "text",
+          "value": "done"
+        },
+        "D5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Zimbawe"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "D4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Madrid"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Berlin"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "alca"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Aranda"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Albacete"
+        },
+        "M5": {
+          "kind": "text",
+          "value": "Cuenca"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "apple"
+      }
+    },
+    {
+      "id": "N6",
+      "formula": "=VLOOKUP(M6,$C$1:$G$5, 1)",
+      "setup": {
+        "E5": {
+          "kind": "text",
+          "value": "done"
+        },
+        "D5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Zimbawe"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "D4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Madrid"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Berlin"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "alca"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Aranda"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Albacete"
+        },
+        "M6": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "O6",
+      "formula": "=VLOOKUP(M6,$C$1:$G$5, 3)",
+      "setup": {
+        "E5": {
+          "kind": "text",
+          "value": "done"
+        },
+        "D5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Zimbawe"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "D4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Madrid"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Berlin"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "alca"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Aranda"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Albacete"
+        },
+        "M6": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "M8",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "N8",
+      "formula": "=VLOOKUP(M8,$C$1:$G$6, 1)",
+      "setup": {
+        "E5": {
+          "kind": "text",
+          "value": "done"
+        },
+        "D5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Zimbawe"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "D4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Madrid"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Berlin"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "alca"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Aranda"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Albacete"
+        },
+        "M8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "O8",
+      "formula": "=VLOOKUP(M8,$C$1:$G$6, 3)",
+      "setup": {
+        "E5": {
+          "kind": "text",
+          "value": "done"
+        },
+        "D5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Zimbawe"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "D4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Madrid"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Berlin"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "alca"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Aranda"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Albacete"
+        },
+        "M8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "N9",
+      "formula": "=HLOOKUP(M9,$C$1:$G$6, 1)",
+      "setup": {
+        "E5": {
+          "kind": "text",
+          "value": "done"
+        },
+        "D5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Zimbawe"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "D4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Madrid"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Berlin"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "alca"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Aranda"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Albacete"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "O9",
+      "formula": "=VLOOKUP(M9,$C$1:$G$6, 3)",
+      "setup": {
+        "E5": {
+          "kind": "text",
+          "value": "done"
+        },
+        "D5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Zimbawe"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "D4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Madrid"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Berlin"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "alca"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Aranda"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Albacete"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "N10",
+      "formula": "=VLOOKUP(M10,$C$1:$G$6, 1/0)",
+      "setup": {
+        "E5": {
+          "kind": "text",
+          "value": "done"
+        },
+        "D5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Zimbawe"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "orange"
+        },
+        "D4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Madrid"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Berlin"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "alca"
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Aranda"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Albacete"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "N12",
+      "formula": "=VLOOKUP(M12,3, 1)",
+      "setup": {
+        "M12": {
+          "kind": "text",
+          "value": "Aranda"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "N13",
+      "formula": "=VLOOKUP(M13,\"Nothing\", 1)",
+      "setup": {
+        "M13": {
+          "kind": "text",
+          "value": "Aranda"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "N14",
+      "formula": "=VLOOKUP(M14,TRUE, 1)",
+      "setup": {
+        "M14": {
+          "kind": "text",
+          "value": "Aranda"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

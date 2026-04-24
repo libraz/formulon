@@ -1,0 +1,521 @@
+{
+  "suite": "ironcalc_calc_tests_BETA_GAMMA_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/BETA_GAMMA.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=_xlfn.GAMMA(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=GAMMALN(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=_xlfn.GAMMALN.PRECISE(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=_xlfn.GAMMA(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=GAMMALN(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=_xlfn.GAMMALN.PRECISE(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=_xlfn.GAMMA(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -3.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6890564120059791
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=GAMMALN(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -3.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=_xlfn.GAMMALN.PRECISE(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -3.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=_xlfn.GAMMA(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=GAMMALN(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=_xlfn.GAMMALN.PRECISE(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=_xlfn.GAMMA(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 24.0
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=GAMMALN(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.1780538303479458
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=_xlfn.GAMMALN.PRECISE(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.1780538303479458
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=_xlfn.GAMMA(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 120.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=GAMMALN(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.787491742782046
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=_xlfn.GAMMALN.PRECISE(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.787491742782046
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=_xlfn.GAMMA(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=GAMMALN(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=_xlfn.GAMMALN.PRECISE(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=_xlfn.GAMMA(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=GAMMALN(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=_xlfn.GAMMALN.PRECISE(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=_xlfn.GAMMA(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.332621544394421e+155
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=GAMMALN(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 359.1342053695754
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=_xlfn.GAMMALN.PRECISE(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 359.1342053695754
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=_xlfn.GAMMA(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 23.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.91912153053999e+21
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=GAMMALN(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 23.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 49.720154482211285
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=_xlfn.GAMMALN.PRECISE(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 23.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 49.720154482211285
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=_xlfn.GAMMA(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 2.22
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.113989255962702
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=GAMMALN(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 2.22
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.10794749690086498
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=_xlfn.GAMMALN.PRECISE(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 2.22
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.10794749690086498
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=_xlfn.GAMMA(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": -18.1111
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0372074185215364e-15
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=GAMMALN(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": -18.1111
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=_xlfn.GAMMALN.PRECISE(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": -18.1111
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    }
+  ]
+}

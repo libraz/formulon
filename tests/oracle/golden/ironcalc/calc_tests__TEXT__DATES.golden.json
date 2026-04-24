@@ -1,0 +1,4969 @@
+{
+  "suite": "ironcalc_calc_tests_TEXT_DATES",
+  "description": "Derived from IronCalc fixture calc_tests/TEXT.xlsx, sheet 'DATES'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "DATES",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=TEXT($A2,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9/29/12"
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=TEXT($A2,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "29/09--12"
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=TEXT($A2,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Sat--/--Sep--/++2012"
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=TEXT($A2,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Saturday/September/2012"
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=TEXT($A2,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Saturday/S/2012"
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=TEXT($A2,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A3",
+      "formula": "=A2+123",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 41304.0
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=TEXT($A3,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1/30/13"
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=TEXT($A3,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "30/01--13"
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=TEXT($A3,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Wed--/--Jan--/++2013"
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=TEXT($A3,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Wednesday/January/2013"
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=TEXT($A3,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Wednesday/J/2013"
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=TEXT($A3,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A4",
+      "formula": "=A3+123",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 41427.0
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=TEXT($A4,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "6/2/13"
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=TEXT($A4,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "02/06--13"
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=TEXT($A4,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Sun--/--Jun--/++2013"
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=TEXT($A4,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Sunday/June/2013"
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=TEXT($A4,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Sunday/J/2013"
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=TEXT($A4,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A5",
+      "formula": "=A4+123",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 41550.0
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=TEXT($A5,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "10/3/13"
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=TEXT($A5,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "03/10--13"
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=TEXT($A5,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Thu--/--Oct--/++2013"
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=TEXT($A5,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Thursday/October/2013"
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=TEXT($A5,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Thursday/O/2013"
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=TEXT($A5,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A6",
+      "formula": "=A5+123",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 41673.0
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=TEXT($A6,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2/3/14"
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=TEXT($A6,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "03/02--14"
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=TEXT($A6,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mon--/--Feb--/++2014"
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=TEXT($A6,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday/February/2014"
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=TEXT($A6,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday/F/2014"
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=TEXT($A6,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A7",
+      "formula": "=A6+123",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 41796.0
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=TEXT($A7,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "6/6/14"
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=TEXT($A7,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "06/06--14"
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=TEXT($A7,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Fri--/--Jun--/++2014"
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=TEXT($A7,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Friday/June/2014"
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=TEXT($A7,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Friday/J/2014"
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=TEXT($A7,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A8",
+      "formula": "=A7+123",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 41919.0
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=TEXT($A8,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "10/7/14"
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=TEXT($A8,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "07/10--14"
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=TEXT($A8,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Tue--/--Oct--/++2014"
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=TEXT($A8,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Tuesday/October/2014"
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=TEXT($A8,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Tuesday/O/2014"
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=TEXT($A8,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A9",
+      "formula": "=A8+123",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42042.0
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=TEXT($A9,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2/7/15"
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=TEXT($A9,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "07/02--15"
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=TEXT($A9,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Sat--/--Feb--/++2015"
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=TEXT($A9,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Saturday/February/2015"
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=TEXT($A9,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Saturday/F/2015"
+      }
+    },
+    {
+      "id": "G9",
+      "formula": "=TEXT($A9,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A10",
+      "formula": "=A9+123",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42165.0
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=TEXT($A10,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "6/10/15"
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=TEXT($A10,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "10/06--15"
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=TEXT($A10,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Wed--/--Jun--/++2015"
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=TEXT($A10,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Wednesday/June/2015"
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=TEXT($A10,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Wednesday/J/2015"
+      }
+    },
+    {
+      "id": "G10",
+      "formula": "=TEXT($A10,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A11",
+      "formula": "=A10+123",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42288.0
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=TEXT($A11,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "10/11/15"
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=TEXT($A11,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "11/10--15"
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=TEXT($A11,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Sun--/--Oct--/++2015"
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=TEXT($A11,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Sunday/October/2015"
+      }
+    },
+    {
+      "id": "F11",
+      "formula": "=TEXT($A11,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Sunday/O/2015"
+      }
+    },
+    {
+      "id": "G11",
+      "formula": "=TEXT($A11,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A12",
+      "formula": "=A11+123",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42411.0
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=TEXT($A12,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+123"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2/11/16"
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=TEXT($A12,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+123"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "11/02--16"
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=TEXT($A12,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+123"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Thu--/--Feb--/++2016"
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=TEXT($A12,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+123"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Thursday/February/2016"
+      }
+    },
+    {
+      "id": "F12",
+      "formula": "=TEXT($A12,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+123"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Thursday/F/2016"
+      }
+    },
+    {
+      "id": "G12",
+      "formula": "=TEXT($A12,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+123"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A13",
+      "formula": "=A12+123",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+123"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42534.0
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=TEXT($A13,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+123"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+123"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "6/13/16"
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=TEXT($A13,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+123"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+123"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "13/06--16"
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=TEXT($A13,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+123"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+123"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mon--/--Jun--/++2016"
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=TEXT($A13,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+123"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+123"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday/June/2016"
+      }
+    },
+    {
+      "id": "F13",
+      "formula": "=TEXT($A13,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+123"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+123"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday/J/2016"
+      }
+    },
+    {
+      "id": "G13",
+      "formula": "=TEXT($A13,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+123"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+123"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A14",
+      "formula": "=A13+123",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+123"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+123"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42657.0
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=TEXT($A14,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+123"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+123"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+123"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "10/14/16"
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=TEXT($A14,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+123"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+123"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+123"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "14/10--16"
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=TEXT($A14,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+123"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+123"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+123"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Fri--/--Oct--/++2016"
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=TEXT($A14,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+123"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+123"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+123"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Friday/October/2016"
+      }
+    },
+    {
+      "id": "F14",
+      "formula": "=TEXT($A14,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+123"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+123"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+123"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Friday/O/2016"
+      }
+    },
+    {
+      "id": "G14",
+      "formula": "=TEXT($A14,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 41181.0
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+123"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+123"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+123"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+123"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+123"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+123"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+123"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+123"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+123"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+123"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+123"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+123"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G15",
+      "formula": "=TEXT($A15,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A15": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=TEXT($A16,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A16": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "4/9/00"
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=TEXT($A16,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A16": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "09/04--00"
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=TEXT($A16,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A16": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mon--/--Apr--/++1900"
+      }
+    },
+    {
+      "id": "E16",
+      "formula": "=TEXT($A16,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A16": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday/April/1900"
+      }
+    },
+    {
+      "id": "F16",
+      "formula": "=TEXT($A16,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A16": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday/A/1900"
+      }
+    },
+    {
+      "id": "G16",
+      "formula": "=TEXT($A16,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A16": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=TEXT($A17,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A17": {
+          "kind": "number",
+          "value": 222.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "8/9/00"
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=TEXT($A17,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A17": {
+          "kind": "number",
+          "value": 222.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "09/08--00"
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=TEXT($A17,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A17": {
+          "kind": "number",
+          "value": 222.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Thu--/--Aug--/++1900"
+      }
+    },
+    {
+      "id": "E17",
+      "formula": "=TEXT($A17,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A17": {
+          "kind": "number",
+          "value": 222.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Thursday/August/1900"
+      }
+    },
+    {
+      "id": "F17",
+      "formula": "=TEXT($A17,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A17": {
+          "kind": "number",
+          "value": 222.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Thursday/A/1900"
+      }
+    },
+    {
+      "id": "G17",
+      "formula": "=TEXT($A17,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A17": {
+          "kind": "number",
+          "value": 222.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=TEXT($A18,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A18": {
+          "kind": "number",
+          "value": 42000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12/27/14"
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=TEXT($A18,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A18": {
+          "kind": "number",
+          "value": 42000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "27/12--14"
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=TEXT($A18,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A18": {
+          "kind": "number",
+          "value": 42000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Sat--/--Dec--/++2014"
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=TEXT($A18,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A18": {
+          "kind": "number",
+          "value": 42000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Saturday/December/2014"
+      }
+    },
+    {
+      "id": "F18",
+      "formula": "=TEXT($A18,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A18": {
+          "kind": "number",
+          "value": 42000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Saturday/D/2014"
+      }
+    },
+    {
+      "id": "G18",
+      "formula": "=TEXT($A18,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A18": {
+          "kind": "number",
+          "value": 42000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=TEXT($A19,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A19": {
+          "kind": "number",
+          "value": 43123.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1/23/18"
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=TEXT($A19,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A19": {
+          "kind": "number",
+          "value": 43123.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "23/01--18"
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=TEXT($A19,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A19": {
+          "kind": "number",
+          "value": 43123.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Tue--/--Jan--/++2018"
+      }
+    },
+    {
+      "id": "E19",
+      "formula": "=TEXT($A19,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A19": {
+          "kind": "number",
+          "value": 43123.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Tuesday/January/2018"
+      }
+    },
+    {
+      "id": "F19",
+      "formula": "=TEXT($A19,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A19": {
+          "kind": "number",
+          "value": 43123.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Tuesday/J/2018"
+      }
+    },
+    {
+      "id": "G19",
+      "formula": "=TEXT($A19,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A19": {
+          "kind": "number",
+          "value": 43123.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=TEXT($A20,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A20": {
+          "kind": "number",
+          "value": 44123.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "10/19/20"
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=TEXT($A20,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A20": {
+          "kind": "number",
+          "value": 44123.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "19/10--20"
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=TEXT($A20,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A20": {
+          "kind": "number",
+          "value": 44123.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mon--/--Oct--/++2020"
+      }
+    },
+    {
+      "id": "E20",
+      "formula": "=TEXT($A20,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A20": {
+          "kind": "number",
+          "value": 44123.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday/October/2020"
+      }
+    },
+    {
+      "id": "F20",
+      "formula": "=TEXT($A20,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A20": {
+          "kind": "number",
+          "value": 44123.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday/O/2020"
+      }
+    },
+    {
+      "id": "G20",
+      "formula": "=TEXT($A20,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A20": {
+          "kind": "number",
+          "value": 44123.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=TEXT($A21,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 44124.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "10/20/20"
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=TEXT($A21,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 44124.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "20/10--20"
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=TEXT($A21,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 44124.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Tue--/--Oct--/++2020"
+      }
+    },
+    {
+      "id": "E21",
+      "formula": "=TEXT($A21,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 44124.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Tuesday/October/2020"
+      }
+    },
+    {
+      "id": "F21",
+      "formula": "=TEXT($A21,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 44124.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Tuesday/O/2020"
+      }
+    },
+    {
+      "id": "G21",
+      "formula": "=TEXT($A21,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 44124.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B22",
+      "formula": "=TEXT($A22,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A22": {
+          "kind": "number",
+          "value": 45125.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7/18/23"
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=TEXT($A22,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A22": {
+          "kind": "number",
+          "value": 45125.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "18/07--23"
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=TEXT($A22,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A22": {
+          "kind": "number",
+          "value": 45125.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Tue--/--Jul--/++2023"
+      }
+    },
+    {
+      "id": "E22",
+      "formula": "=TEXT($A22,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A22": {
+          "kind": "number",
+          "value": 45125.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Tuesday/July/2023"
+      }
+    },
+    {
+      "id": "F22",
+      "formula": "=TEXT($A22,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A22": {
+          "kind": "number",
+          "value": 45125.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Tuesday/J/2023"
+      }
+    },
+    {
+      "id": "G22",
+      "formula": "=TEXT($A22,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A22": {
+          "kind": "number",
+          "value": 45125.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B23",
+      "formula": "=TEXT($A23,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A23": {
+          "kind": "number",
+          "value": 55321.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "6/17/51"
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=TEXT($A23,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A23": {
+          "kind": "number",
+          "value": 55321.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "17/06--51"
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=TEXT($A23,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A23": {
+          "kind": "number",
+          "value": 55321.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Sat--/--Jun--/++2051"
+      }
+    },
+    {
+      "id": "E23",
+      "formula": "=TEXT($A23,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A23": {
+          "kind": "number",
+          "value": 55321.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Saturday/June/2051"
+      }
+    },
+    {
+      "id": "F23",
+      "formula": "=TEXT($A23,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A23": {
+          "kind": "number",
+          "value": 55321.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Saturday/J/2051"
+      }
+    },
+    {
+      "id": "G23",
+      "formula": "=TEXT($A23,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A23": {
+          "kind": "number",
+          "value": 55321.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B24",
+      "formula": "=TEXT($A24,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2958465.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12/31/99"
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=TEXT($A24,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2958465.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "31/12--99"
+      }
+    },
+    {
+      "id": "D24",
+      "formula": "=TEXT($A24,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2958465.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Fri--/--Dec--/++9999"
+      }
+    },
+    {
+      "id": "E24",
+      "formula": "=TEXT($A24,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2958465.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Friday/December/9999"
+      }
+    },
+    {
+      "id": "F24",
+      "formula": "=TEXT($A24,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2958465.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Friday/D/9999"
+      }
+    },
+    {
+      "id": "G24",
+      "formula": "=TEXT($A24,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2958465.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A25",
+      "formula": "=A24+1",
+      "setup": {
+        "A24": {
+          "kind": "number",
+          "value": 2958465.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2958466.0
+      }
+    },
+    {
+      "id": "B25",
+      "formula": "=TEXT($A25,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2958465.0
+        },
+        "A25": {
+          "kind": "formula",
+          "formula": "=A24+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=TEXT($A25,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2958465.0
+        },
+        "A25": {
+          "kind": "formula",
+          "formula": "=A24+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=TEXT($A25,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2958465.0
+        },
+        "A25": {
+          "kind": "formula",
+          "formula": "=A24+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E25",
+      "formula": "=TEXT($A25,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2958465.0
+        },
+        "A25": {
+          "kind": "formula",
+          "formula": "=A24+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F25",
+      "formula": "=TEXT($A25,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2958465.0
+        },
+        "A25": {
+          "kind": "formula",
+          "formula": "=A24+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G25",
+      "formula": "=TEXT($A25,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2958465.0
+        },
+        "A25": {
+          "kind": "formula",
+          "formula": "=A24+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B26",
+      "formula": "=TEXT($A26,B$1)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "m/d/y"
+        },
+        "A26": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C26",
+      "formula": "=TEXT($A26,C$1)",
+      "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "dd/mm--yy"
+        },
+        "A26": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D26",
+      "formula": "=TEXT($A26,D$1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "ddd--/--mmm--/++yyy"
+        },
+        "A26": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E26",
+      "formula": "=TEXT($A26,E$1)",
+      "setup": {
+        "E1": {
+          "kind": "text",
+          "value": "dddd/mmmm/yyyyy"
+        },
+        "A26": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F26",
+      "formula": "=TEXT($A26,F$1)",
+      "setup": {
+        "F1": {
+          "kind": "text",
+          "value": "ddddd/mmmmm/yyyyy"
+        },
+        "A26": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G26",
+      "formula": "=TEXT($A26,G$1)",
+      "setup": {
+        "G1": {
+          "kind": "text",
+          "value": "mm###"
+        },
+        "A26": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

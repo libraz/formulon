@@ -1,0 +1,99 @@
+{
+  "suite": "ironcalc_statistical_LOGNORM_Sheet1",
+  "description": "Derived from IronCalc fixture statistical/LOGNORM.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "F2",
+      "formula": "=_xlfn.LOGNORM.DIST(A2,B2,C2,D2)",
+      "setup": {
+        "D2": {
+          "kind": "bool",
+          "value": true
+        },
+        "C2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.2
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.41130609624829534
+      }
+    },
+    {
+      "id": "H2",
+      "formula": "=_xlfn.LOGNORM.INV(F2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.2
+        },
+        "D2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.2
+        },
+        "F2": {
+          "kind": "formula",
+          "formula": "=_xlfn.LOGNORM.DIST(A2,B2,C2,D2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.1999999999999997
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=_xlfn.LOGNORM.DIST(A3,B3,C3,D3)",
+      "setup": {
+        "D3": {
+          "kind": "bool",
+          "value": false
+        },
+        "C3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 8.3
+        },
+        "A3": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.00410954934236523
+      }
+    }
+  ]
+}

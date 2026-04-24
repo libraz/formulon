@@ -1,0 +1,318 @@
+{
+  "suite": "ironcalc_calc_tests_UNICODE_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/UNICODE.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=_xlfn.UNICODE(A2)",
+      "setup": {
+        "A2": {
+          "kind": "text",
+          "value": " "
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 32.0
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=_xlfn.UNICODE(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 49.0
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=_xlfn.UNICODE(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 49.0
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=_xlfn.UNICODE(A5)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "T"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 84.0
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=_xlfn.UNICODE(A6)",
+      "setup": {
+        "A6": {
+          "kind": "text",
+          "value": "F"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 70.0
+      }
+    },
+    {
+      "id": "A7",
+      "formula": "=(1=1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=_xlfn.UNICODE(A7)",
+      "setup": {
+        "A7": {
+          "kind": "formula",
+          "formula": "=(1=1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 84.0
+      }
+    },
+    {
+      "id": "A8",
+      "formula": "=(1=2)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=_xlfn.UNICODE(A8)",
+      "setup": {
+        "A8": {
+          "kind": "formula",
+          "formula": "=(1=2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 70.0
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=_xlfn.UNICODE(A9)",
+      "setup": {
+        "A9": {
+          "kind": "text",
+          "value": "の"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12398.0
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=_xlfn.UNICODE(A10)",
+      "setup": {
+        "A10": {
+          "kind": "text",
+          "value": "ꬄ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43780.0
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=_xlfn.UNICODE(A11)",
+      "setup": {
+        "A11": {
+          "kind": "text",
+          "value": "^"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 94.0
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=_xlfn.UNICODE(A12)",
+      "setup": {
+        "A12": {
+          "kind": "text",
+          "value": "ش"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1588.0
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=_xlfn.UNICODE(A13)",
+      "setup": {
+        "A13": {
+          "kind": "text",
+          "value": "صش "
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1589.0
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=_xlfn.UNICODE(A14)",
+      "setup": {
+        "A14": {
+          "kind": "text",
+          "value": "شغ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1588.0
+      }
+    },
+    {
+      "id": "A15",
+      "formula": "=40+120",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 160.0
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=_xlfn.UNICODE(A15)",
+      "setup": {
+        "A15": {
+          "kind": "formula",
+          "formula": "=40+120"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 49.0
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=_xlfn.UNICODE(A18)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A19",
+      "formula": "=B18",
+      "setup": {
+        "B18": {
+          "kind": "formula",
+          "formula": "=_xlfn.UNICODE(A18)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=_xlfn.UNICODE(A19)",
+      "setup": {
+        "A19": {
+          "kind": "formula",
+          "formula": "=B18"
+        },
+        "B18": {
+          "kind": "formula",
+          "formula": "=_xlfn.UNICODE(A18)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=_xlfn.UNICODE(A20)",
+      "setup": {
+        "A20": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A21",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=_xlfn.UNICODE(A21)",
+      "setup": {
+        "A21": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    }
+  ]
+}

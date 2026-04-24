@@ -1,0 +1,553 @@
+{
+  "suite": "ironcalc_calc_tests_CONVERT_Time",
+  "description": "Derived from IronCalc fixture calc_tests/CONVERT.xlsx, sheet 'Time'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Time",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=CONVERT(1,B2,$B$9)",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "s"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "yr"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 31557600.0
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=CONVERT($G$1,B2,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "yr"
+        },
+        "G1": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "I2",
+      "formula": "=\"M\"&B2",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "yr"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Myr"
+      }
+    },
+    {
+      "id": "J2",
+      "formula": "=CONVERT(1,F2,$B$9)",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "s"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=CONVERT(1,B3,$B$9)",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "s"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "day"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 86400.0
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=CONVERT($G$1,B3,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "yr"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "day"
+        },
+        "G1": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.010951403148528405
+      }
+    },
+    {
+      "id": "I3",
+      "formula": "=\"M\"&B3",
+      "setup": {
+        "B3": {
+          "kind": "text",
+          "value": "day"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mday"
+      }
+    },
+    {
+      "id": "J3",
+      "formula": "=CONVERT(1,F3,$B$9)",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "s"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=CONVERT(1,B4,$B$9)",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "s"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "d"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 86400.0
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=CONVERT($G$1,B4,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "yr"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "d"
+        },
+        "G1": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.010951403148528405
+      }
+    },
+    {
+      "id": "I4",
+      "formula": "=\"M\"&B4",
+      "setup": {
+        "B4": {
+          "kind": "text",
+          "value": "d"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Md"
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=CONVERT(1,F4,$B$9)",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "s"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=CONVERT(1,B5,$B$9)",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "s"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "hr"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3600.0
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=CONVERT($G$1,B5,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "yr"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "hr"
+        },
+        "G1": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0004563084645220169
+      }
+    },
+    {
+      "id": "I5",
+      "formula": "=\"M\"&B5",
+      "setup": {
+        "B5": {
+          "kind": "text",
+          "value": "hr"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mhr"
+      }
+    },
+    {
+      "id": "J5",
+      "formula": "=CONVERT(1,F5,$B$9)",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "s"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=CONVERT(1,B6,$B$9)",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "s"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "mn"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=CONVERT($G$1,B6,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "yr"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "mn"
+        },
+        "G1": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.605141075366948e-06
+      }
+    },
+    {
+      "id": "I6",
+      "formula": "=\"M\"&B6",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "mn"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mmn"
+      }
+    },
+    {
+      "id": "J6",
+      "formula": "=CONVERT(1,F6,$B$9)",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "s"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=CONVERT(1,B7,$B$9)",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "s"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "min"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=CONVERT($G$1,B7,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "yr"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "min"
+        },
+        "G1": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.605141075366948e-06
+      }
+    },
+    {
+      "id": "I7",
+      "formula": "=\"M\"&B7",
+      "setup": {
+        "B7": {
+          "kind": "text",
+          "value": "min"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mmin"
+      }
+    },
+    {
+      "id": "J7",
+      "formula": "=CONVERT(1,F7,$B$9)",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "s"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=CONVERT(1,B8,$B$9)",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "s"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "sec"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=CONVERT($G$1,B8,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "yr"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "sec"
+        },
+        "G1": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.267523512561158e-07
+      }
+    },
+    {
+      "id": "I8",
+      "formula": "=\"M\"&B8",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "sec"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Msec"
+      }
+    },
+    {
+      "id": "J8",
+      "formula": "=CONVERT(1,F8,$B$9)",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "s"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=CONVERT(1,B9,$B$9)",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "s"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G9",
+      "formula": "=CONVERT($G$1,B9,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "yr"
+        },
+        "B9": {
+          "kind": "text",
+          "value": "s"
+        },
+        "G1": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.267523512561158e-07
+      }
+    },
+    {
+      "id": "I9",
+      "formula": "=\"M\"&B9",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "s"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Ms"
+      }
+    },
+    {
+      "id": "J9",
+      "formula": "=CONVERT(1,F9,$B$9)",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "s"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

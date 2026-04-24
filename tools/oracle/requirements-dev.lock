@@ -11,8 +11,11 @@
 
 appscript==1.4.0
     # via xlwings
+et-xmlfile==2.0.0
+    # via openpyxl
 lxml==6.1.0
     # via appscript
+openpyxl==3.1.5
 psutil==7.2.2
     # via xlwings
 pyyaml==6.0.3

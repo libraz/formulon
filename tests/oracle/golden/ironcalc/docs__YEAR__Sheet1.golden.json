@@ -1,0 +1,389 @@
+{
+  "suite": "ironcalc_docs_YEAR_Sheet1",
+  "description": "Derived from IronCalc fixture docs/YEAR.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=YEAR(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 45651.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2024.0
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=_xlfn.FORMULATEXT(B2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 45651.0
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=YEAR(A2)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=YEAR(A2)"
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=YEAR(DATE(2024,12,25))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2024.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=_xlfn.FORMULATEXT(B3)",
+      "setup": {
+        "B3": {
+          "kind": "formula",
+          "formula": "=YEAR(DATE(2024,12,25))"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=YEAR(DATE(2024,12,25))"
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=YEAR(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 45651.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2024.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=_xlfn.FORMULATEXT(B4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 45651.0
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=YEAR(A4)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=YEAR(A4)"
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=YEAR(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 45651.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2024.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=_xlfn.FORMULATEXT(B5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 45651.9
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=YEAR(A5)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=YEAR(A5)"
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=YEAR(A7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1900.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=_xlfn.FORMULATEXT(B7)",
+      "setup": {
+        "B7": {
+          "kind": "formula",
+          "formula": "=YEAR(A7)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=YEAR(A7)"
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=YEAR(A8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1900.0
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=_xlfn.FORMULATEXT(B8)",
+      "setup": {
+        "B8": {
+          "kind": "formula",
+          "formula": "=YEAR(A8)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=YEAR(A8)"
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=YEAR(A9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2025.0
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=_xlfn.FORMULATEXT(B9)",
+      "setup": {
+        "B9": {
+          "kind": "formula",
+          "formula": "=YEAR(A9)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=YEAR(A9)"
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=YEAR(A10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9999.0
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=_xlfn.FORMULATEXT(B10)",
+      "setup": {
+        "B10": {
+          "kind": "formula",
+          "formula": "=YEAR(A10)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=YEAR(A10)"
+      }
+    },
+    {
+      "id": "A14",
+      "formula": "=YEAR(SQRT(-1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=_xlfn.FORMULATEXT(A14)",
+      "setup": {
+        "A14": {
+          "kind": "formula",
+          "formula": "=YEAR(SQRT(-1))"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=YEAR(SQRT(-1))"
+      }
+    },
+    {
+      "id": "A15",
+      "formula": "=YEAR(\"str\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=_xlfn.FORMULATEXT(A15)",
+      "setup": {
+        "A15": {
+          "kind": "formula",
+          "formula": "=YEAR(\"str\")"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=YEAR(\"str\")"
+      }
+    },
+    {
+      "id": "A16",
+      "formula": "=YEAR(10/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=_xlfn.FORMULATEXT(A16)",
+      "setup": {
+        "A16": {
+          "kind": "formula",
+          "formula": "=YEAR(10/0)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=YEAR(10/0)"
+      }
+    },
+    {
+      "id": "A17",
+      "formula": "=YEAR(-5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=_xlfn.FORMULATEXT(A17)",
+      "setup": {
+        "A17": {
+          "kind": "formula",
+          "formula": "=YEAR(-5)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=YEAR(-5)"
+      }
+    },
+    {
+      "id": "A18",
+      "formula": "=YEAR(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1900.0
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=_xlfn.FORMULATEXT(A18)",
+      "setup": {
+        "A18": {
+          "kind": "formula",
+          "formula": "=YEAR(0)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=YEAR(0)"
+      }
+    },
+    {
+      "id": "A19",
+      "formula": "=YEAR(2958466)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=_xlfn.FORMULATEXT(A19)",
+      "setup": {
+        "A19": {
+          "kind": "formula",
+          "formula": "=YEAR(2958466)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=YEAR(2958466)"
+      }
+    },
+    {
+      "id": "A20",
+      "formula": "=YEAR(DATE(1900,2,29))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1900.0
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=_xlfn.FORMULATEXT(A20)",
+      "setup": {
+        "A20": {
+          "kind": "formula",
+          "formula": "=YEAR(DATE(1900,2,29))"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=YEAR(DATE(1900,2,29))"
+      }
+    }
+  ]
+}

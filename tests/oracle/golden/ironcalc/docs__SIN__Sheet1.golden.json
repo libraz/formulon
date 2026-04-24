@@ -1,0 +1,287 @@
+{
+  "suite": "ironcalc_docs_SIN_Sheet1",
+  "description": "Derived from IronCalc fixture docs/SIN.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "A2",
+      "formula": "=-PI()/2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.5707963267948966
+      }
+    },
+    {
+      "id": "B2",
+      "formula": "=SIN(A2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=-PI()/2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=_xlfn.FORMULATEXT($B2)",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=SIN(A2)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=-PI()/2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SIN(A2)"
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=SIN(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": -0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.479425538604203
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=_xlfn.FORMULATEXT($B3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=SIN(A3)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SIN(A3)"
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=SIN(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=_xlfn.FORMULATEXT($B4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=SIN(A4)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SIN(A4)"
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=SIN(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.479425538604203
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=_xlfn.FORMULATEXT($B5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=SIN(A5)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SIN(A5)"
+      }
+    },
+    {
+      "id": "A6",
+      "formula": "=PI()/2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=SIN(A6)",
+      "setup": {
+        "A6": {
+          "kind": "formula",
+          "formula": "=PI()/2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=_xlfn.FORMULATEXT($B6)",
+      "setup": {
+        "B6": {
+          "kind": "formula",
+          "formula": "=SIN(A6)"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=PI()/2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SIN(A6)"
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=SIN(10*PI()/180)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.17364817766693033
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=_xlfn.FORMULATEXT($B7)",
+      "setup": {
+        "B7": {
+          "kind": "formula",
+          "formula": "=SIN(10*PI()/180)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SIN(10*PI()/180)"
+      }
+    },
+    {
+      "id": "A10",
+      "formula": "=SIN(SQRT(-1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=_xlfn.FORMULATEXT($A10)",
+      "setup": {
+        "A10": {
+          "kind": "formula",
+          "formula": "=SIN(SQRT(-1))"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SIN(SQRT(-1))"
+      }
+    },
+    {
+      "id": "A11",
+      "formula": "=SIN(\"str\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=_xlfn.FORMULATEXT($A11)",
+      "setup": {
+        "A11": {
+          "kind": "formula",
+          "formula": "=SIN(\"str\")"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SIN(\"str\")"
+      }
+    },
+    {
+      "id": "A12",
+      "formula": "=SIN(10/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=_xlfn.FORMULATEXT($A12)",
+      "setup": {
+        "A12": {
+          "kind": "formula",
+          "formula": "=SIN(10/0)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SIN(10/0)"
+      }
+    }
+  ]
+}

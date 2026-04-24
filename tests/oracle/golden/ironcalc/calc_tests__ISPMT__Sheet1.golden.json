@@ -1,0 +1,688 @@
+{
+  "suite": "ironcalc_calc_tests_ISPMT_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/ISPMT.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "E2",
+      "formula": "=ISPMT(A2,B2,C2,D2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -13.333333333333334
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=D2*A2*(B2/C2-1)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "D2": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -13.333333333333336
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=ISPMT(A3,B3,C3,D3)",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.2
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=D3*A3*(B3/C3-1)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.2
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=ISPMT(A4,B4,C4,D4)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=D4*A4*(B4/C4-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=ISPMT(A5,B5,C5,D5)",
+      "setup": {
+        "D5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=D5*A5*(B5/C5-1)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=ISPMT(A6,B6,C6,D6)",
+      "setup": {
+        "D6": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=D6*A6*(B6/C6-1)",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D6": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=ISPMT(A7,B7,C7,D7)",
+      "setup": {
+        "C7": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=D7*A7*(B7/C7-1)",
+      "setup": {
+        "C7": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=ISPMT(A8,B8,C8,D8)",
+      "setup": {
+        "D8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C8": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.25
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=D8*A8*(B8/C8-1)",
+      "setup": {
+        "C8": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D8": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.25
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=ISPMT(A9,B9,C9,D9)",
+      "setup": {
+        "D9": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C9": {
+          "kind": "bool",
+          "value": true
+        },
+        "B9": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A9": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 24.0
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=D9*A9*(B9/C9-1)",
+      "setup": {
+        "C9": {
+          "kind": "bool",
+          "value": true
+        },
+        "B9": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A9": {
+          "kind": "bool",
+          "value": true
+        },
+        "D9": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 24.0
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=ISPMT(A10,B10,C10,D10)",
+      "setup": {
+        "D10": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=D10*A10*(B10/C10-1)",
+      "setup": {
+        "C10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=ISPMT(A11,B11,C11,D11)",
+      "setup": {
+        "D11": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A11": {
+          "kind": "text",
+          "value": "hola"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F11",
+      "formula": "=D11*A11*(B11/C11-1)",
+      "setup": {
+        "C11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A11": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "D11": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A12",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=ISPMT(A12,B12,C12,D12)",
+      "setup": {
+        "D12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F12",
+      "formula": "=D12*A12*(B12/C12-1)",
+      "setup": {
+        "C12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=ISPMT(A13,B13,C13,D13)",
+      "setup": {
+        "D13": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "C13": {
+          "kind": "number",
+          "value": -9.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -4.444444444444445
+      }
+    },
+    {
+      "id": "F13",
+      "formula": "=D13*A13*(B13/C13-1)",
+      "setup": {
+        "C13": {
+          "kind": "number",
+          "value": -9.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "D13": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -4.444444444444445
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=ISPMT(A14,B14,C14,D14)",
+      "setup": {
+        "D14": {
+          "kind": "number",
+          "value": 120.0
+        },
+        "C14": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -797600.0
+      }
+    },
+    {
+      "id": "F14",
+      "formula": "=D14*A14*(B14/C14-1)",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 1000.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": -20.0
+        },
+        "D14": {
+          "kind": "number",
+          "value": 120.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -797600.0
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=ISPMT(A15,B15,C15,D15)",
+      "setup": {
+        "D15": {
+          "kind": "number",
+          "value": 8.9
+        },
+        "C15": {
+          "kind": "number",
+          "value": 3.4
+        },
+        "B15": {
+          "kind": "number",
+          "value": -4.9
+        },
+        "A15": {
+          "kind": "number",
+          "value": 5.7
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -123.8408823529412
+      }
+    },
+    {
+      "id": "F15",
+      "formula": "=D15*A15*(B15/C15-1)",
+      "setup": {
+        "C15": {
+          "kind": "number",
+          "value": 3.4
+        },
+        "B15": {
+          "kind": "number",
+          "value": -4.9
+        },
+        "A15": {
+          "kind": "number",
+          "value": 5.7
+        },
+        "D15": {
+          "kind": "number",
+          "value": 8.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -123.8408823529412
+      }
+    }
+  ]
+}

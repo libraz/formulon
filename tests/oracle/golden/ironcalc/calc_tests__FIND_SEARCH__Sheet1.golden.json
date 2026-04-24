@@ -1,0 +1,1381 @@
+{
+  "suite": "ironcalc_calc_tests_FIND_SEARCH_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/FIND_SEARCH.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "D2",
+      "formula": "=FIND(A2,B2, C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Ana"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=SEARCH(A2,B2, C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Ana"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=FIND(A3,B3, C3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ana"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=SEARCH(A3,B3, C3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ana"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=FIND(A4,B4, C4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "ana"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "ana"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=SEARCH(A4,B4, C4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "ana"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "ana"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=FIND(A5,B5, C5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B5": {
+          "kind": "text",
+          "value": "ana"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "ana"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=SEARCH(A5,B5, C5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B5": {
+          "kind": "text",
+          "value": "ana"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "ana"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=FIND(A6,B6, C6)",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B6": {
+          "kind": "text",
+          "value": "Roger Penrose"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Pen"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=SEARCH(A6,B6, C6)",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B6": {
+          "kind": "text",
+          "value": "Roger Penrose"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Pen"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=FIND(A7,B7, C7)",
+      "setup": {
+        "C7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B7": {
+          "kind": "text",
+          "value": "Y not Y yes"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "Y"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=SEARCH(A7,B7, C7)",
+      "setup": {
+        "C7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B7": {
+          "kind": "text",
+          "value": "Y not Y yes"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "Y"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=FIND(A8,B8, C8)",
+      "setup": {
+        "C8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B8": {
+          "kind": "text",
+          "value": "你好 Hola"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "Hola"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=SEARCH(A8,B8, C8)",
+      "setup": {
+        "C8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B8": {
+          "kind": "text",
+          "value": "你好 Hola"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "Hola"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=FIND(A9,B9, C9)",
+      "setup": {
+        "C9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B9": {
+          "kind": "text",
+          "value": "中国香港"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "国"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=SEARCH(A9,B9, C9)",
+      "setup": {
+        "C9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B9": {
+          "kind": "text",
+          "value": "中国香港"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "国"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=FIND(A10,B10, C10)",
+      "setup": {
+        "C10": {
+          "kind": "number",
+          "value": 17.0
+        },
+        "B10": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "Jude"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=SEARCH(A10,B10, C10)",
+      "setup": {
+        "C10": {
+          "kind": "number",
+          "value": 17.0
+        },
+        "B10": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "Jude"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=FIND(A11,B11, C11)",
+      "setup": {
+        "C11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=SEARCH(A11,B11, C11)",
+      "setup": {
+        "C11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=FIND(A12,B12, C12)",
+      "setup": {
+        "C12": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B12": {
+          "kind": "text",
+          "value": "123456"
+        },
+        "A12": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=SEARCH(A12,B12, C12)",
+      "setup": {
+        "C12": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B12": {
+          "kind": "text",
+          "value": "123456"
+        },
+        "A12": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=FIND(A13,B13, C13)",
+      "setup": {
+        "C13": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": 3214.0
+        },
+        "A13": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=SEARCH(A13,B13, C13)",
+      "setup": {
+        "C13": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": 3214.0
+        },
+        "A13": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=FIND(A14,B14, C14)",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B14": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "Hey"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=SEARCH(A14,B14, C14)",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B14": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "Hey"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=FIND(A15,B15, C15)",
+      "setup": {
+        "C15": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B15": {
+          "kind": "text",
+          "value": "Ahey"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "hey"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=SEARCH(A15,B15, C15)",
+      "setup": {
+        "C15": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B15": {
+          "kind": "text",
+          "value": "Ahey"
+        },
+        "A15": {
+          "kind": "text",
+          "value": "hey"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=FIND(A16,B16, C16)",
+      "setup": {
+        "C16": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B16": {
+          "kind": "text",
+          "value": "Ahey"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "hey"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E16",
+      "formula": "=SEARCH(A16,B16, C16)",
+      "setup": {
+        "C16": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B16": {
+          "kind": "text",
+          "value": "Ahey"
+        },
+        "A16": {
+          "kind": "text",
+          "value": "hey"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=FIND(A17,B17, C17)",
+      "setup": {
+        "C17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B17": {
+          "kind": "bool",
+          "value": true
+        },
+        "A17": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E17",
+      "formula": "=SEARCH(A17,B17, C17)",
+      "setup": {
+        "C17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B17": {
+          "kind": "bool",
+          "value": true
+        },
+        "A17": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=FIND(A18,B18, C18)",
+      "setup": {
+        "C18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B18": {
+          "kind": "text",
+          "value": "Einstein"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "ns??i"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=SEARCH(A18,B18, C18)",
+      "setup": {
+        "C18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B18": {
+          "kind": "text",
+          "value": "Einstein"
+        },
+        "A18": {
+          "kind": "text",
+          "value": "ns??i"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=FIND(A19,B19, C19)",
+      "setup": {
+        "C19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B19": {
+          "kind": "text",
+          "value": "中国香港"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "国?港"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E19",
+      "formula": "=SEARCH(A19,B19, C19)",
+      "setup": {
+        "C19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B19": {
+          "kind": "text",
+          "value": "中国香港"
+        },
+        "A19": {
+          "kind": "text",
+          "value": "国?港"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=FIND(A20,B20, C20)",
+      "setup": {
+        "C20": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B20": {
+          "kind": "text",
+          "value": "Einstein"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "ns*i"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E20",
+      "formula": "=SEARCH(A20,B20, C20)",
+      "setup": {
+        "C20": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B20": {
+          "kind": "text",
+          "value": "Einstein"
+        },
+        "A20": {
+          "kind": "text",
+          "value": "ns*i"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=FIND(A21,B21, C21)",
+      "setup": {
+        "C21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B21": {
+          "kind": "text",
+          "value": "Einstein"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "ns?i"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E21",
+      "formula": "=SEARCH(A21,B21, C21)",
+      "setup": {
+        "C21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B21": {
+          "kind": "text",
+          "value": "Einstein"
+        },
+        "A21": {
+          "kind": "text",
+          "value": "ns?i"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=FIND(A22,B22, C22)",
+      "setup": {
+        "C22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B22": {
+          "kind": "text",
+          "value": "Late?"
+        },
+        "A22": {
+          "kind": "text",
+          "value": "*~?"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E22",
+      "formula": "=SEARCH(A22,B22, C22)",
+      "setup": {
+        "C22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B22": {
+          "kind": "text",
+          "value": "Late?"
+        },
+        "A22": {
+          "kind": "text",
+          "value": "*~?"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=FIND(A23,B23, C23)",
+      "setup": {
+        "C23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B23": {
+          "kind": "text",
+          "value": "Late?"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "~?"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E23",
+      "formula": "=SEARCH(A23,B23, C23)",
+      "setup": {
+        "C23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B23": {
+          "kind": "text",
+          "value": "Late?"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "~?"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "D24",
+      "formula": "=FIND(A24,B24, C24)",
+      "setup": {
+        "C24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B24": {
+          "kind": "text",
+          "value": "Late?"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "La?"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E24",
+      "formula": "=SEARCH(A24,B24, C24)",
+      "setup": {
+        "C24": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B24": {
+          "kind": "text",
+          "value": "Late?"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "La?"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=FIND(A25,B25, C25)",
+      "setup": {
+        "C25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B25": {
+          "kind": "text",
+          "value": "Late"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "Lat???"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E25",
+      "formula": "=SEARCH(A25,B25, C25)",
+      "setup": {
+        "C25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B25": {
+          "kind": "text",
+          "value": "Late"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "Lat???"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D26",
+      "formula": "=FIND(A26,B26, C26)",
+      "setup": {
+        "C26": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B26": {
+          "kind": "text",
+          "value": "Ho*la"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "~*"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E26",
+      "formula": "=SEARCH(A26,B26, C26)",
+      "setup": {
+        "C26": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B26": {
+          "kind": "text",
+          "value": "Ho*la"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "~*"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "D27",
+      "formula": "=FIND(A27,B27, C27)",
+      "setup": {
+        "C27": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B27": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "h"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E27",
+      "formula": "=SEARCH(A27,B27, C27)",
+      "setup": {
+        "C27": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B27": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "h"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D28",
+      "formula": "=FIND(A28,B28, C28)",
+      "setup": {
+        "C28": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B28": {
+          "kind": "text",
+          "value": "Hi ~Bang!"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "~~"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E28",
+      "formula": "=SEARCH(A28,B28, C28)",
+      "setup": {
+        "C28": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B28": {
+          "kind": "text",
+          "value": "Hi ~Bang!"
+        },
+        "A28": {
+          "kind": "text",
+          "value": "~~"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "D29",
+      "formula": "=FIND(A29,B29, C29)",
+      "setup": {
+        "C29": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B29": {
+          "kind": "text",
+          "value": "Hi ~Bang!"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "~"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "E29",
+      "formula": "=SEARCH(A29,B29, C29)",
+      "setup": {
+        "C29": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B29": {
+          "kind": "text",
+          "value": "Hi ~Bang!"
+        },
+        "A29": {
+          "kind": "text",
+          "value": "~"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D30",
+      "formula": "=FIND(A30,B30, C30)",
+      "setup": {
+        "C30": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B30": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "~"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E30",
+      "formula": "=SEARCH(A30,B30, C30)",
+      "setup": {
+        "C30": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B30": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "A30": {
+          "kind": "text",
+          "value": "~"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D31",
+      "formula": "=FIND(A31,B31, C31)",
+      "setup": {
+        "C31": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B31": {
+          "kind": "text",
+          "value": "My dear"
+        },
+        "A31": {
+          "kind": "text",
+          "value": "~d"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E31",
+      "formula": "=SEARCH(A31,B31, C31)",
+      "setup": {
+        "C31": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B31": {
+          "kind": "text",
+          "value": "My dear"
+        },
+        "A31": {
+          "kind": "text",
+          "value": "~d"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "D32",
+      "formula": "=FIND(A32,B32, C32)",
+      "setup": {
+        "C32": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B32": {
+          "kind": "text",
+          "value": "Ho*la"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "~~*"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E32",
+      "formula": "=SEARCH(A32,B32, C32)",
+      "setup": {
+        "C32": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B32": {
+          "kind": "text",
+          "value": "Ho*la"
+        },
+        "A32": {
+          "kind": "text",
+          "value": "~~*"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

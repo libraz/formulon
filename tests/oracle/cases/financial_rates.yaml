@@ -73,3 +73,47 @@ cases:
   - id: tbilleq_dsm_over_365_is_num
     description: "TBILLEQ with maturity > 1 year -> #NUM!"
     formula: "=TBILLEQ(DATE(2008,3,31), DATE(2010,3,31), 0.09)"
+
+  # -- PRICEDISC ----------------------------------------------------------
+  - id: pricedisc_basis_actual_360
+    description: "PRICEDISC: 100 - discount*redemption*YEARFRAC, basis 2"
+    formula: "=PRICEDISC(DATE(2018,2,16), DATE(2018,3,1), 0.0525, 100, 2)"
+
+  - id: pricedisc_default_basis
+    description: "PRICEDISC with default basis 0 (US 30/360)"
+    formula: "=PRICEDISC(DATE(2018,2,16), DATE(2018,3,1), 0.0525, 100)"
+
+  - id: pricedisc_invalid_basis_is_num
+    description: "PRICEDISC with unsupported basis -> #NUM!"
+    formula: "=PRICEDISC(DATE(2018,2,16), DATE(2018,3,1), 0.0525, 100, 5)"
+
+  # -- PRICEMAT -----------------------------------------------------------
+  - id: pricemat_basis_zero
+    description: "Microsoft docs shape: PRICEMAT basis 0 ~ 99.98 range"
+    formula: "=PRICEMAT(DATE(2008,2,15), DATE(2008,4,13), DATE(2007,11,11), 0.061, 0.061, 0)"
+
+  - id: pricemat_default_basis
+    description: "PRICEMAT with default basis 0 (omit trailing arg)"
+    formula: "=PRICEMAT(DATE(2008,2,15), DATE(2008,4,13), DATE(2007,11,11), 0.061, 0.061)"
+
+  - id: pricemat_issue_after_settlement_is_num
+    description: "PRICEMAT with issue >= settlement -> #NUM!"
+    formula: "=PRICEMAT(DATE(2008,2,15), DATE(2008,4,13), DATE(2008,3,1), 0.061, 0.061, 0)"
+
+  # -- YIELDDISC ----------------------------------------------------------
+  - id: yielddisc_basis_actual_360
+    description: "Microsoft docs example: YIELDDISC basis 2 ~ 0.052823"
+    formula: "=YIELDDISC(DATE(2008,2,16), DATE(2008,3,1), 99.795, 100, 2)"
+
+  - id: yielddisc_default_basis
+    description: "YIELDDISC with default basis 0 (US 30/360)"
+    formula: "=YIELDDISC(DATE(2008,2,16), DATE(2008,3,1), 99.795, 100)"
+
+  # -- YIELDMAT -----------------------------------------------------------
+  - id: yieldmat_basis_zero
+    description: "Microsoft docs example: YIELDMAT basis 0 ~ 0.060954"
+    formula: "=YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2007,11,8), 0.0625, 100.0123, 0)"
+
+  - id: yieldmat_default_basis
+    description: "YIELDMAT with default basis 0 (omit trailing arg)"
+    formula: "=YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2007,11,8), 0.0625, 100.0123)"

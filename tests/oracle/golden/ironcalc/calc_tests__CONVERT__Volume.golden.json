@@ -1,0 +1,2169 @@
+{
+  "suite": "ironcalc_calc_tests_CONVERT_Volume",
+  "description": "Derived from IronCalc fixture calc_tests/CONVERT.xlsx, sheet 'Volume'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Volume",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=CONVERT(1,B2,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "tsp"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.92892159375e-06
+      }
+    },
+    {
+      "id": "I2",
+      "formula": "=\"M\"&B2",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "tsp"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mtsp"
+      }
+    },
+    {
+      "id": "J2",
+      "formula": "=CONVERT(0.0002,I2,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "tsp"
+        },
+        "I2": {
+          "kind": "formula",
+          "formula": "=\"M\"&B2"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=CONVERT(1,B3,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "tspm"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5e-06
+      }
+    },
+    {
+      "id": "I3",
+      "formula": "=\"M\"&B3",
+      "setup": {
+        "B3": {
+          "kind": "text",
+          "value": "tspm"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mtspm"
+      }
+    },
+    {
+      "id": "J3",
+      "formula": "=CONVERT(0.0002,I3,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "tspm"
+        },
+        "I3": {
+          "kind": "formula",
+          "formula": "=\"M\"&B3"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=CONVERT(1,B4,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "tbs"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.4786764781249999e-05
+      }
+    },
+    {
+      "id": "I4",
+      "formula": "=\"M\"&B4",
+      "setup": {
+        "B4": {
+          "kind": "text",
+          "value": "tbs"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mtbs"
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=CONVERT(0.0002,I4,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "tbs"
+        },
+        "I4": {
+          "kind": "formula",
+          "formula": "=\"M\"&B4"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=CONVERT(1,B5,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "oz"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.9573529562499998e-05
+      }
+    },
+    {
+      "id": "I5",
+      "formula": "=\"M\"&B5",
+      "setup": {
+        "B5": {
+          "kind": "text",
+          "value": "oz"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Moz"
+      }
+    },
+    {
+      "id": "J5",
+      "formula": "=CONVERT(0.0002,I5,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "oz"
+        },
+        "I5": {
+          "kind": "formula",
+          "formula": "=\"M\"&B5"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=CONVERT(1,B6,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "cup"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.00023658823649999998
+      }
+    },
+    {
+      "id": "I6",
+      "formula": "=\"M\"&B6",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "cup"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mcup"
+      }
+    },
+    {
+      "id": "J6",
+      "formula": "=CONVERT(0.0002,I6,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "cup"
+        },
+        "I6": {
+          "kind": "formula",
+          "formula": "=\"M\"&B6"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=CONVERT(1,B7,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "pt"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.00047317647299999996
+      }
+    },
+    {
+      "id": "I7",
+      "formula": "=\"M\"&B7",
+      "setup": {
+        "B7": {
+          "kind": "text",
+          "value": "pt"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mpt"
+      }
+    },
+    {
+      "id": "J7",
+      "formula": "=CONVERT(0.0002,I7,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "pt"
+        },
+        "I7": {
+          "kind": "formula",
+          "formula": "=\"M\"&B7"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=CONVERT(1,B8,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "us_pt"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.00047317647299999996
+      }
+    },
+    {
+      "id": "I8",
+      "formula": "=\"M\"&B8",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "us_pt"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mus_pt"
+      }
+    },
+    {
+      "id": "J8",
+      "formula": "=CONVERT(0.0002,I8,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "us_pt"
+        },
+        "I8": {
+          "kind": "formula",
+          "formula": "=\"M\"&B8"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=CONVERT(1,B9,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B9": {
+          "kind": "text",
+          "value": "uk_pt"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.00056826125
+      }
+    },
+    {
+      "id": "I9",
+      "formula": "=\"M\"&B9",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "uk_pt"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Muk_pt"
+      }
+    },
+    {
+      "id": "J9",
+      "formula": "=CONVERT(0.0002,I9,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B9": {
+          "kind": "text",
+          "value": "uk_pt"
+        },
+        "I9": {
+          "kind": "formula",
+          "formula": "=\"M\"&B9"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.11365225000000002
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=CONVERT(1,B10,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B10": {
+          "kind": "text",
+          "value": "qt"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0009463529459999999
+      }
+    },
+    {
+      "id": "I10",
+      "formula": "=\"M\"&B10",
+      "setup": {
+        "B10": {
+          "kind": "text",
+          "value": "qt"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mqt"
+      }
+    },
+    {
+      "id": "J10",
+      "formula": "=CONVERT(0.0002,I10,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B10": {
+          "kind": "text",
+          "value": "qt"
+        },
+        "I10": {
+          "kind": "formula",
+          "formula": "=\"M\"&B10"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=CONVERT(1,B11,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B11": {
+          "kind": "text",
+          "value": "uk_qt"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0011365225
+      }
+    },
+    {
+      "id": "I11",
+      "formula": "=\"M\"&B11",
+      "setup": {
+        "B11": {
+          "kind": "text",
+          "value": "uk_qt"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Muk_qt"
+      }
+    },
+    {
+      "id": "J11",
+      "formula": "=CONVERT(0.0002,I11,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B11": {
+          "kind": "text",
+          "value": "uk_qt"
+        },
+        "I11": {
+          "kind": "formula",
+          "formula": "=\"M\"&B11"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=CONVERT(1,B12,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B12": {
+          "kind": "text",
+          "value": "gal"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0037854117839999997
+      }
+    },
+    {
+      "id": "I12",
+      "formula": "=\"M\"&B12",
+      "setup": {
+        "B12": {
+          "kind": "text",
+          "value": "gal"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mgal"
+      }
+    },
+    {
+      "id": "J12",
+      "formula": "=CONVERT(0.0002,I12,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B12": {
+          "kind": "text",
+          "value": "gal"
+        },
+        "I12": {
+          "kind": "formula",
+          "formula": "=\"M\"&B12"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=CONVERT(1,B13,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B13": {
+          "kind": "text",
+          "value": "uk_gal"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.00454609
+      }
+    },
+    {
+      "id": "I13",
+      "formula": "=\"M\"&B13",
+      "setup": {
+        "B13": {
+          "kind": "text",
+          "value": "uk_gal"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Muk_gal"
+      }
+    },
+    {
+      "id": "J13",
+      "formula": "=CONVERT(0.0002,I13,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B13": {
+          "kind": "text",
+          "value": "uk_gal"
+        },
+        "I13": {
+          "kind": "formula",
+          "formula": "=\"M\"&B13"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=CONVERT(1,B14,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B14": {
+          "kind": "text",
+          "value": "l"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.001
+      }
+    },
+    {
+      "id": "I14",
+      "formula": "=\"M\"&B14",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "l"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Ml"
+      }
+    },
+    {
+      "id": "J14",
+      "formula": "=CONVERT(0.0002,I14,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B14": {
+          "kind": "text",
+          "value": "l"
+        },
+        "I14": {
+          "kind": "formula",
+          "formula": "=\"M\"&B14"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.2
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=CONVERT(1,B15,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B15": {
+          "kind": "text",
+          "value": "L"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.001
+      }
+    },
+    {
+      "id": "I15",
+      "formula": "=\"M\"&B15",
+      "setup": {
+        "B15": {
+          "kind": "text",
+          "value": "L"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ML"
+      }
+    },
+    {
+      "id": "J15",
+      "formula": "=CONVERT(0.0002,I15,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B15": {
+          "kind": "text",
+          "value": "L"
+        },
+        "I15": {
+          "kind": "formula",
+          "formula": "=\"M\"&B15"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.2
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=CONVERT(1,B16,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B16": {
+          "kind": "text",
+          "value": "lt"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.001
+      }
+    },
+    {
+      "id": "I16",
+      "formula": "=\"M\"&B16",
+      "setup": {
+        "B16": {
+          "kind": "text",
+          "value": "lt"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mlt"
+      }
+    },
+    {
+      "id": "J16",
+      "formula": "=CONVERT(0.0002,I16,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B16": {
+          "kind": "text",
+          "value": "lt"
+        },
+        "I16": {
+          "kind": "formula",
+          "formula": "=\"M\"&B16"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.2
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=CONVERT(1,B17,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "ang3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1e-30
+      }
+    },
+    {
+      "id": "I17",
+      "formula": "=\"M\"&B17",
+      "setup": {
+        "B17": {
+          "kind": "text",
+          "value": "ang3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mang3"
+      }
+    },
+    {
+      "id": "J17",
+      "formula": "=CONVERT(0.0002,I17,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "ang3"
+        },
+        "I17": {
+          "kind": "formula",
+          "formula": "=\"M\"&B17"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0000000000000002e-16
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=CONVERT(1,B18,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "ang^3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1e-30
+      }
+    },
+    {
+      "id": "I18",
+      "formula": "=\"M\"&B18",
+      "setup": {
+        "B18": {
+          "kind": "text",
+          "value": "ang^3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mang^3"
+      }
+    },
+    {
+      "id": "J18",
+      "formula": "=CONVERT(0.0002,I18,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "ang^3"
+        },
+        "I18": {
+          "kind": "formula",
+          "formula": "=\"M\"&B18"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0000000000000002e-16
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=CONVERT(1,B19,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "barrel"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.158987294928
+      }
+    },
+    {
+      "id": "I19",
+      "formula": "=\"M\"&B19",
+      "setup": {
+        "B19": {
+          "kind": "text",
+          "value": "barrel"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mbarrel"
+      }
+    },
+    {
+      "id": "J19",
+      "formula": "=CONVERT(0.0002,I19,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "barrel"
+        },
+        "I19": {
+          "kind": "formula",
+          "formula": "=\"M\"&B19"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=CONVERT(1,B20,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "bushel"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.03523907016688
+      }
+    },
+    {
+      "id": "I20",
+      "formula": "=\"M\"&B20",
+      "setup": {
+        "B20": {
+          "kind": "text",
+          "value": "bushel"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mbushel"
+      }
+    },
+    {
+      "id": "J20",
+      "formula": "=CONVERT(0.0002,I20,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "bushel"
+        },
+        "I20": {
+          "kind": "formula",
+          "formula": "=\"M\"&B20"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=CONVERT(1,B21,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B21": {
+          "kind": "text",
+          "value": "ft3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.028316846592
+      }
+    },
+    {
+      "id": "I21",
+      "formula": "=\"M\"&B21",
+      "setup": {
+        "B21": {
+          "kind": "text",
+          "value": "ft3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mft3"
+      }
+    },
+    {
+      "id": "J21",
+      "formula": "=CONVERT(0.0002,I21,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B21": {
+          "kind": "text",
+          "value": "ft3"
+        },
+        "I21": {
+          "kind": "formula",
+          "formula": "=\"M\"&B21"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=CONVERT(1,B22,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B22": {
+          "kind": "text",
+          "value": "ft^3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.028316846592
+      }
+    },
+    {
+      "id": "I22",
+      "formula": "=\"M\"&B22",
+      "setup": {
+        "B22": {
+          "kind": "text",
+          "value": "ft^3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mft^3"
+      }
+    },
+    {
+      "id": "J22",
+      "formula": "=CONVERT(0.0002,I22,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B22": {
+          "kind": "text",
+          "value": "ft^3"
+        },
+        "I22": {
+          "kind": "formula",
+          "formula": "=\"M\"&B22"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=CONVERT(1,B23,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B23": {
+          "kind": "text",
+          "value": "in3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.6387064e-05
+      }
+    },
+    {
+      "id": "I23",
+      "formula": "=\"M\"&B23",
+      "setup": {
+        "B23": {
+          "kind": "text",
+          "value": "in3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Min3"
+      }
+    },
+    {
+      "id": "J23",
+      "formula": "=CONVERT(0.0002,I23,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B23": {
+          "kind": "text",
+          "value": "in3"
+        },
+        "I23": {
+          "kind": "formula",
+          "formula": "=\"M\"&B23"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=CONVERT(1,B24,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B24": {
+          "kind": "text",
+          "value": "in^3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.6387064e-05
+      }
+    },
+    {
+      "id": "I24",
+      "formula": "=\"M\"&B24",
+      "setup": {
+        "B24": {
+          "kind": "text",
+          "value": "in^3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Min^3"
+      }
+    },
+    {
+      "id": "J24",
+      "formula": "=CONVERT(0.0002,I24,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B24": {
+          "kind": "text",
+          "value": "in^3"
+        },
+        "I24": {
+          "kind": "formula",
+          "formula": "=\"M\"&B24"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=CONVERT(1,B25,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B25": {
+          "kind": "text",
+          "value": "ly3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.467866646237152e+47
+      }
+    },
+    {
+      "id": "I25",
+      "formula": "=\"M\"&B25",
+      "setup": {
+        "B25": {
+          "kind": "text",
+          "value": "ly3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mly3"
+      }
+    },
+    {
+      "id": "J25",
+      "formula": "=CONVERT(0.0002,I25,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B25": {
+          "kind": "text",
+          "value": "ly3"
+        },
+        "I25": {
+          "kind": "formula",
+          "formula": "=\"M\"&B25"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C26",
+      "formula": "=CONVERT(1,B26,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B26": {
+          "kind": "text",
+          "value": "ly^3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.467866646237152e+47
+      }
+    },
+    {
+      "id": "I26",
+      "formula": "=\"M\"&B26",
+      "setup": {
+        "B26": {
+          "kind": "text",
+          "value": "ly^3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mly^3"
+      }
+    },
+    {
+      "id": "J26",
+      "formula": "=CONVERT(0.0002,I26,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B26": {
+          "kind": "text",
+          "value": "ly^3"
+        },
+        "I26": {
+          "kind": "formula",
+          "formula": "=\"M\"&B26"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C27",
+      "formula": "=CONVERT(1,B27,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "I27",
+      "formula": "=\"M\"&B27",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mm3"
+      }
+    },
+    {
+      "id": "J27",
+      "formula": "=CONVERT(0.0002,I27,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "I27": {
+          "kind": "formula",
+          "formula": "=\"M\"&B27"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 200000000000000.0
+      }
+    },
+    {
+      "id": "C28",
+      "formula": "=CONVERT(1,B28,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B28": {
+          "kind": "text",
+          "value": "m^3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "I28",
+      "formula": "=\"M\"&B28",
+      "setup": {
+        "B28": {
+          "kind": "text",
+          "value": "m^3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mm^3"
+      }
+    },
+    {
+      "id": "J28",
+      "formula": "=CONVERT(0.0002,I28,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B28": {
+          "kind": "text",
+          "value": "m^3"
+        },
+        "I28": {
+          "kind": "formula",
+          "formula": "=\"M\"&B28"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 200000000000000.0
+      }
+    },
+    {
+      "id": "C29",
+      "formula": "=CONVERT(1,B29,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B29": {
+          "kind": "text",
+          "value": "mi3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4168181825.4405794
+      }
+    },
+    {
+      "id": "I29",
+      "formula": "=\"M\"&B29",
+      "setup": {
+        "B29": {
+          "kind": "text",
+          "value": "mi3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mmi3"
+      }
+    },
+    {
+      "id": "J29",
+      "formula": "=CONVERT(0.0002,I29,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B29": {
+          "kind": "text",
+          "value": "mi3"
+        },
+        "I29": {
+          "kind": "formula",
+          "formula": "=\"M\"&B29"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C30",
+      "formula": "=CONVERT(1,B30,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B30": {
+          "kind": "text",
+          "value": "mi^3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4168181825.4405794
+      }
+    },
+    {
+      "id": "I30",
+      "formula": "=\"M\"&B30",
+      "setup": {
+        "B30": {
+          "kind": "text",
+          "value": "mi^3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mmi^3"
+      }
+    },
+    {
+      "id": "J30",
+      "formula": "=CONVERT(0.0002,I30,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B30": {
+          "kind": "text",
+          "value": "mi^3"
+        },
+        "I30": {
+          "kind": "formula",
+          "formula": "=\"M\"&B30"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C31",
+      "formula": "=CONVERT(1,B31,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B31": {
+          "kind": "text",
+          "value": "yd3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.764554857984
+      }
+    },
+    {
+      "id": "I31",
+      "formula": "=\"M\"&B31",
+      "setup": {
+        "B31": {
+          "kind": "text",
+          "value": "yd3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Myd3"
+      }
+    },
+    {
+      "id": "J31",
+      "formula": "=CONVERT(0.0002,I31,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B31": {
+          "kind": "text",
+          "value": "yd3"
+        },
+        "I31": {
+          "kind": "formula",
+          "formula": "=\"M\"&B31"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C32",
+      "formula": "=CONVERT(1,B32,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B32": {
+          "kind": "text",
+          "value": "yd^3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.764554857984
+      }
+    },
+    {
+      "id": "I32",
+      "formula": "=\"M\"&B32",
+      "setup": {
+        "B32": {
+          "kind": "text",
+          "value": "yd^3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Myd^3"
+      }
+    },
+    {
+      "id": "J32",
+      "formula": "=CONVERT(0.0002,I32,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B32": {
+          "kind": "text",
+          "value": "yd^3"
+        },
+        "I32": {
+          "kind": "formula",
+          "formula": "=\"M\"&B32"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C33",
+      "formula": "=CONVERT(1,B33,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B33": {
+          "kind": "text",
+          "value": "Nmi3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6352182208.0
+      }
+    },
+    {
+      "id": "I33",
+      "formula": "=\"M\"&B33",
+      "setup": {
+        "B33": {
+          "kind": "text",
+          "value": "Nmi3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MNmi3"
+      }
+    },
+    {
+      "id": "J33",
+      "formula": "=CONVERT(0.0002,I33,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B33": {
+          "kind": "text",
+          "value": "Nmi3"
+        },
+        "I33": {
+          "kind": "formula",
+          "formula": "=\"M\"&B33"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C34",
+      "formula": "=CONVERT(1,B34,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B34": {
+          "kind": "text",
+          "value": "Nmi^3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6352182208.0
+      }
+    },
+    {
+      "id": "I34",
+      "formula": "=\"M\"&B34",
+      "setup": {
+        "B34": {
+          "kind": "text",
+          "value": "Nmi^3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MNmi^3"
+      }
+    },
+    {
+      "id": "J34",
+      "formula": "=CONVERT(0.0002,I34,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B34": {
+          "kind": "text",
+          "value": "Nmi^3"
+        },
+        "I34": {
+          "kind": "formula",
+          "formula": "=\"M\"&B34"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C35",
+      "formula": "=CONVERT(1,B35,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B35": {
+          "kind": "text",
+          "value": "Picapt3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.3903956618655696e-11
+      }
+    },
+    {
+      "id": "I35",
+      "formula": "=\"M\"&B35",
+      "setup": {
+        "B35": {
+          "kind": "text",
+          "value": "Picapt3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MPicapt3"
+      }
+    },
+    {
+      "id": "J35",
+      "formula": "=CONVERT(0.0002,I35,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B35": {
+          "kind": "text",
+          "value": "Picapt3"
+        },
+        "I35": {
+          "kind": "formula",
+          "formula": "=\"M\"&B35"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C36",
+      "formula": "=CONVERT(1,B36,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B36": {
+          "kind": "text",
+          "value": "Picapt^3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.3903956618655696e-11
+      }
+    },
+    {
+      "id": "I36",
+      "formula": "=\"M\"&B36",
+      "setup": {
+        "B36": {
+          "kind": "text",
+          "value": "Picapt^3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MPicapt^3"
+      }
+    },
+    {
+      "id": "J36",
+      "formula": "=CONVERT(0.0002,I36,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B36": {
+          "kind": "text",
+          "value": "Picapt^3"
+        },
+        "I36": {
+          "kind": "formula",
+          "formula": "=\"M\"&B36"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C37",
+      "formula": "=CONVERT(1,B37,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B37": {
+          "kind": "text",
+          "value": "Pica3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.3903956618655696e-11
+      }
+    },
+    {
+      "id": "I37",
+      "formula": "=\"M\"&B37",
+      "setup": {
+        "B37": {
+          "kind": "text",
+          "value": "Pica3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MPica3"
+      }
+    },
+    {
+      "id": "J37",
+      "formula": "=CONVERT(0.0002,I37,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B37": {
+          "kind": "text",
+          "value": "Pica3"
+        },
+        "I37": {
+          "kind": "formula",
+          "formula": "=\"M\"&B37"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C38",
+      "formula": "=CONVERT(1,B38,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B38": {
+          "kind": "text",
+          "value": "Pica^3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.3903956618655696e-11
+      }
+    },
+    {
+      "id": "I38",
+      "formula": "=\"M\"&B38",
+      "setup": {
+        "B38": {
+          "kind": "text",
+          "value": "Pica^3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MPica^3"
+      }
+    },
+    {
+      "id": "J38",
+      "formula": "=CONVERT(0.0002,I38,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B38": {
+          "kind": "text",
+          "value": "Pica^3"
+        },
+        "I38": {
+          "kind": "formula",
+          "formula": "=\"M\"&B38"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C39",
+      "formula": "=CONVERT(1,B39,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B39": {
+          "kind": "text",
+          "value": "GRT"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.8316846592
+      }
+    },
+    {
+      "id": "I39",
+      "formula": "=\"M\"&B39",
+      "setup": {
+        "B39": {
+          "kind": "text",
+          "value": "GRT"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MGRT"
+      }
+    },
+    {
+      "id": "J39",
+      "formula": "=CONVERT(0.0002,I39,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B39": {
+          "kind": "text",
+          "value": "GRT"
+        },
+        "I39": {
+          "kind": "formula",
+          "formula": "=\"M\"&B39"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C40",
+      "formula": "=CONVERT(1,B40,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B40": {
+          "kind": "text",
+          "value": "regton"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.8316846592
+      }
+    },
+    {
+      "id": "I40",
+      "formula": "=\"M\"&B40",
+      "setup": {
+        "B40": {
+          "kind": "text",
+          "value": "regton"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mregton"
+      }
+    },
+    {
+      "id": "J40",
+      "formula": "=CONVERT(0.0002,I40,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B40": {
+          "kind": "text",
+          "value": "regton"
+        },
+        "I40": {
+          "kind": "formula",
+          "formula": "=\"M\"&B40"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C41",
+      "formula": "=CONVERT(1,B41,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B41": {
+          "kind": "text",
+          "value": "MTON"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.13267386368
+      }
+    },
+    {
+      "id": "I41",
+      "formula": "=\"M\"&B41",
+      "setup": {
+        "B41": {
+          "kind": "text",
+          "value": "MTON"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMTON"
+      }
+    },
+    {
+      "id": "J41",
+      "formula": "=CONVERT(0.0002,I41,$B$27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "m3"
+        },
+        "B41": {
+          "kind": "text",
+          "value": "MTON"
+        },
+        "I41": {
+          "kind": "formula",
+          "formula": "=\"M\"&B41"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+suite: xirr_xnpv
+description: XIRR / XNPV — irregular cash-flow NPV and IRR over date schedules
+# XIRR runs Newton-Raphson; Mac xlwings round-trips the final rate through
+# Excel's display formatter so we cap verification at the usual financial
+# tolerance (1e-4 relative). XNPV is closed-form so the absolute slack can
+# afford to be tighter.
+tolerance: { abs: 1.0e-3, rel: 1.0e-4 }
+locale: ja-JP
+cases:
+  # -- XNPV ----------------------------------------------------------------
+  - id: xnpv_microsoft_doc
+    description: "Classic Microsoft XNPV docs fixture: rate=9%, irregular schedule"
+    setup:
+      A1: -10000
+      A2: 2750
+      A3: 4250
+      A4: 3250
+      A5: 2750
+      B1: 39448   # 2008-01-01
+      B2: 39508   # 2008-03-01
+      B3: 39751   # 2008-10-30
+      B4: 39859   # 2009-02-15
+      B5: 39904   # 2009-04-01
+    formula: "=XNPV(0.09, A1:A5, B1:B5)"
+
+  - id: xnpv_zero_rate
+    description: "rate=0 collapses XNPV to the sum of the values"
+    setup:
+      A1: -10000
+      A2: 2750
+      A3: 4250
+      A4: 3250
+      A5: 2750
+      B1: 39448
+      B2: 39508
+      B3: 39751
+      B4: 39859
+      B5: 39904
+    formula: "=XNPV(0, A1:A5, B1:B5)"
+
+  - id: xnpv_rate_minus_one_is_num
+    description: "rate = -1 drives divisor to zero -> #NUM!"
+    setup: { A1: -100, A2: 100, B1: 39448, B2: 39508 }
+    formula: "=XNPV(-1, A1:A2, B1:B2)"
+
+  # -- XIRR ----------------------------------------------------------------
+  - id: xirr_microsoft_doc
+    description: "Classic Microsoft XIRR docs fixture with explicit guess=0.1"
+    setup:
+      A1: -10000
+      A2: 2750
+      A3: 4250
+      A4: 3250
+      A5: 2750
+      B1: 39448
+      B2: 39508
+      B3: 39751
+      B4: 39859
+      B5: 39904
+    formula: "=XIRR(A1:A5, B1:B5, 0.1)"
+
+  - id: xirr_default_guess
+    description: "Arity-2 XIRR uses default guess 0.1; same result as explicit case"
+    setup:
+      A1: -10000
+      A2: 2750
+      A3: 4250
+      A4: 3250
+      A5: 2750
+      B1: 39448
+      B2: 39508
+      B3: 39751
+      B4: 39859
+      B5: 39904
+    formula: "=XIRR(A1:A5, B1:B5)"
+
+  - id: xirr_all_positive_is_num
+    description: "No sign change in cash flows -> #NUM!"
+    setup: { A1: 100, A2: 200, A3: 300, B1: 39448, B2: 39508, B3: 39751 }
+    formula: "=XIRR(A1:A3, B1:B3)"

@@ -1,0 +1,1242 @@
+{
+  "suite": "ironcalc_calc_tests_TRIGONOMETRIC_ACOT_ACOTH",
+  "description": "Derived from IronCalc fixture calc_tests/TRIGONOMETRIC.xlsx, sheet 'ACOT_ACOTH'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "ACOT_ACOTH",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=_xlfn.ACOT(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7853981633974483
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=_xlfn.ACOTH(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=_xlfn.ACOT(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.356194490192345
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=_xlfn.ACOTH(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=_xlfn.ACOT(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.09966865249116204
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=_xlfn.ACOTH(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.1003353477310756
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=_xlfn.ACOT(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0419240010986313
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=_xlfn.ACOTH(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.1003353477310756
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=_xlfn.ACOT(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=_xlfn.ACOTH(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=_xlfn.ACOT(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.13992467057411775
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=_xlfn.ACOTH(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.14178764524956375
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=_xlfn.ACOT(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0016679830156754
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=_xlfn.ACOTH(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.14178764524956375
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=_xlfn.ACOT(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 1.0000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7853981633474483
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=_xlfn.ACOTH(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 1.0000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.859499013905017
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=_xlfn.ACOT(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 0.9999999999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7853981634474483
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=_xlfn.ACOTH(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 0.9999999999
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=_xlfn.ACOT(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": -1.0000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.356194490242345
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=_xlfn.ACOTH(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": -1.0000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -11.859499013905017
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=_xlfn.ACOT(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -0.9999999999
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.356194490142345
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=_xlfn.ACOTH(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -0.9999999999
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=_xlfn.ACOT(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000000001e-13
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=_xlfn.ACOTH(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000000001e-13
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=_xlfn.ACOT(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267938967
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=_xlfn.ACOTH(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=_xlfn.ACOT(A15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267958964
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=_xlfn.ACOTH(A15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=_xlfn.ACOT(A16)",
+      "setup": {
+        "A16": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7853981633974483
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=_xlfn.ACOTH(A16)",
+      "setup": {
+        "A16": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=_xlfn.ACOT(A17)",
+      "setup": {
+        "A17": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=_xlfn.ACOTH(A17)",
+      "setup": {
+        "A17": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=_xlfn.ACOT(A18)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=_xlfn.ACOTH(A18)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=_xlfn.ACOT(A19)",
+      "setup": {
+        "A19": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=_xlfn.ACOTH(A19)",
+      "setup": {
+        "A19": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A20",
+      "formula": "=\"8\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "8"
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=_xlfn.ACOT(A20)",
+      "setup": {
+        "A20": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.12435499454676144
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=_xlfn.ACOTH(A20)",
+      "setup": {
+        "A20": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.125657214140453
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=_xlfn.ACOT(A21)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4636476090008061
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=_xlfn.ACOTH(A21)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5493061443340549
+      }
+    },
+    {
+      "id": "A22",
+      "formula": "=\" 10 \"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " 10 "
+      }
+    },
+    {
+      "id": "B22",
+      "formula": "=_xlfn.ACOT(A22)",
+      "setup": {
+        "A22": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.09966865249116204
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=_xlfn.ACOTH(A22)",
+      "setup": {
+        "A22": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.1003353477310756
+      }
+    },
+    {
+      "id": "A23",
+      "formula": "=\"0\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "B23",
+      "formula": "=_xlfn.ACOT(A23)",
+      "setup": {
+        "A23": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=_xlfn.ACOTH(A23)",
+      "setup": {
+        "A23": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B24",
+      "formula": "=_xlfn.ACOT(A24)",
+      "setup": {
+        "A24": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=_xlfn.ACOTH(A24)",
+      "setup": {
+        "A24": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A25",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B25",
+      "formula": "=_xlfn.ACOT(A25)",
+      "setup": {
+        "A25": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=_xlfn.ACOTH(A25)",
+      "setup": {
+        "A25": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A26",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B26",
+      "formula": "=_xlfn.ACOT(A26)",
+      "setup": {
+        "A26": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C26",
+      "formula": "=_xlfn.ACOTH(A26)",
+      "setup": {
+        "A26": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B27",
+      "formula": "=_xlfn.ACOT(A27)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "C27",
+      "formula": "=_xlfn.ACOTH(A27)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "A28",
+      "formula": "=SQRT(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B28",
+      "formula": "=_xlfn.ACOT(A28)",
+      "setup": {
+        "A28": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C28",
+      "formula": "=_xlfn.ACOTH(A28)",
+      "setup": {
+        "A28": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A29",
+      "formula": "=\"x\"+1",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B29",
+      "formula": "=_xlfn.ACOT(A29)",
+      "setup": {
+        "A29": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C29",
+      "formula": "=_xlfn.ACOTH(A29)",
+      "setup": {
+        "A29": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A30",
+      "formula": "=2^20",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "B30",
+      "formula": "=_xlfn.ACOT(A30)",
+      "setup": {
+        "A30": {
+          "kind": "formula",
+          "formula": "=2^20"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.536743164059608e-07
+      }
+    },
+    {
+      "id": "C30",
+      "formula": "=_xlfn.ACOTH(A30)",
+      "setup": {
+        "A30": {
+          "kind": "formula",
+          "formula": "=2^20"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.53674316406539e-07
+      }
+    },
+    {
+      "id": "A31",
+      "formula": "=\"@\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "@"
+      }
+    },
+    {
+      "id": "B31",
+      "formula": "=_xlfn.ACOT(A31)",
+      "setup": {
+        "A31": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C31",
+      "formula": "=_xlfn.ACOTH(A31)",
+      "setup": {
+        "A31": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B32",
+      "formula": "=_xlfn.ACOT(A32)",
+      "setup": {
+        "A32": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.2074567886747998e-05
+      }
+    },
+    {
+      "id": "C32",
+      "formula": "=_xlfn.ACOTH(A32)",
+      "setup": {
+        "A32": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.2074567893919094e-05
+      }
+    },
+    {
+      "id": "A33",
+      "formula": "=\"2024-01-10\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024-01-10"
+      }
+    },
+    {
+      "id": "B33",
+      "formula": "=_xlfn.ACOT(A33)",
+      "setup": {
+        "A33": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.2074567886747998e-05
+      }
+    },
+    {
+      "id": "C33",
+      "formula": "=_xlfn.ACOTH(A33)",
+      "setup": {
+        "A33": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.2074567893919094e-05
+      }
+    },
+    {
+      "id": "A34",
+      "formula": "=\" 2024-01-10 \"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " 2024-01-10 "
+      }
+    },
+    {
+      "id": "B34",
+      "formula": "=_xlfn.ACOT(A34)",
+      "setup": {
+        "A34": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C34",
+      "formula": "=_xlfn.ACOTH(A34)",
+      "setup": {
+        "A34": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B35",
+      "formula": "=_xlfn.ACOT(A35)",
+      "setup": {
+        "A35": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0273187320818533
+      }
+    },
+    {
+      "id": "C35",
+      "formula": "=_xlfn.ACOTH(A35)",
+      "setup": {
+        "A35": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A37",
+      "formula": "=1.05*(0.0284+0.0046)-0.0284",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.006249999999999999
+      }
+    },
+    {
+      "id": "B37",
+      "formula": "=_xlfn.ACOT(A37)",
+      "setup": {
+        "A37": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.5645464081731977
+      }
+    },
+    {
+      "id": "C37",
+      "formula": "=_xlfn.ACOTH(A37)",
+      "setup": {
+        "A37": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A38",
+      "formula": "=H41",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B38",
+      "formula": "=_xlfn.ACOT(A38)",
+      "setup": {
+        "A38": {
+          "kind": "formula",
+          "formula": "=H41"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "C38",
+      "formula": "=_xlfn.ACOTH(A38)",
+      "setup": {
+        "A38": {
+          "kind": "formula",
+          "formula": "=H41"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A39",
+      "formula": "=PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "B39",
+      "formula": "=_xlfn.ACOT(A39)",
+      "setup": {
+        "A39": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.30816907111598496
+      }
+    },
+    {
+      "id": "C39",
+      "formula": "=_xlfn.ACOTH(A39)",
+      "setup": {
+        "A39": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.32976531495669914
+      }
+    },
+    {
+      "id": "A40",
+      "formula": "=PI()/2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "B40",
+      "formula": "=_xlfn.ACOT(A40)",
+      "setup": {
+        "A40": {
+          "kind": "formula",
+          "formula": "=PI()/2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5669115049410094
+      }
+    },
+    {
+      "id": "C40",
+      "formula": "=_xlfn.ACOTH(A40)",
+      "setup": {
+        "A40": {
+          "kind": "formula",
+          "formula": "=PI()/2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7524692671419272
+      }
+    },
+    {
+      "id": "B41",
+      "formula": "=_xlfn.ACOT(A41)",
+      "setup": {
+        "A41": {
+          "kind": "text",
+          "value": "Banana"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C41",
+      "formula": "=_xlfn.ACOTH(A41)",
+      "setup": {
+        "A41": {
+          "kind": "text",
+          "value": "Banana"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B42",
+      "formula": "=_xlfn.ACOT(A42)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "C42",
+      "formula": "=_xlfn.ACOTH(A42)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    }
+  ]
+}

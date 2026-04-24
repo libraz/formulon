@@ -1,0 +1,747 @@
+{
+  "suite": "ironcalc_calc_tests_COUNTIFS_Columns1",
+  "description": "Derived from IronCalc fixture calc_tests/COUNTIFS.xlsx, sheet 'Columns1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Columns1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "G1",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=7",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=COUNTIFS($B$1:$T$1,B2,$B$1:$T$1,B3)",
+      "setup": {
+        "B3": {
+          "kind": "text",
+          "value": "<5"
+        },
+        "N1": {
+          "kind": "bool",
+          "value": false
+        },
+        "M1": {
+          "kind": "bool",
+          "value": true
+        },
+        "J1": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "text",
+          "value": ">0"
+        },
+        "G1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=COUNTIFS($B$1:$T$1,C2,$B$1:$T$1,C3)",
+      "setup": {
+        "C3": {
+          "kind": "text",
+          "value": "<=9"
+        },
+        "N1": {
+          "kind": "bool",
+          "value": false
+        },
+        "M1": {
+          "kind": "bool",
+          "value": true
+        },
+        "J1": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "text",
+          "value": ">=1"
+        },
+        "G1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=COUNTIFS($B$1:$T$1,D2,$B$1:$T$1,D3)",
+      "setup": {
+        "D3": {
+          "kind": "text",
+          "value": "<89"
+        },
+        "N1": {
+          "kind": "bool",
+          "value": false
+        },
+        "M1": {
+          "kind": "bool",
+          "value": true
+        },
+        "J1": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "text",
+          "value": ">-4"
+        },
+        "G1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=COUNTIFS($B$1:$T$1,E2,$B$1:$T$1,E3)",
+      "setup": {
+        "E3": {
+          "kind": "text",
+          "value": "<1"
+        },
+        "N1": {
+          "kind": "bool",
+          "value": false
+        },
+        "M1": {
+          "kind": "bool",
+          "value": true
+        },
+        "J1": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "text",
+          "value": ">100"
+        },
+        "G1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=COUNTIFS($B$1:$T$1,F2,$B$1:$T$1,F3)",
+      "setup": {
+        "F3": {
+          "kind": "text",
+          "value": "<100"
+        },
+        "N1": {
+          "kind": "bool",
+          "value": false
+        },
+        "M1": {
+          "kind": "bool",
+          "value": true
+        },
+        "J1": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F2": {
+          "kind": "text",
+          "value": ">20"
+        },
+        "G1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=COUNTIFS($B$1:$T$1,G2,$B$1:$T$1,G3)",
+      "setup": {
+        "G3": {
+          "kind": "text",
+          "value": "<9"
+        },
+        "N1": {
+          "kind": "bool",
+          "value": false
+        },
+        "M1": {
+          "kind": "bool",
+          "value": true
+        },
+        "J1": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "G2": {
+          "kind": "formula",
+          "formula": "=7"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "H4",
+      "formula": "=COUNTIFS($B$1:$T$1,H2,$B$1:$T$1,H3)",
+      "setup": {
+        "H3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "N1": {
+          "kind": "bool",
+          "value": false
+        },
+        "M1": {
+          "kind": "bool",
+          "value": true
+        },
+        "J1": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "G1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "I4",
+      "formula": "=COUNTIFS($B$1:$T$1,I2,$B$1:$T$1,I3)",
+      "setup": {
+        "I3": {
+          "kind": "text",
+          "value": "<9"
+        },
+        "N1": {
+          "kind": "bool",
+          "value": false
+        },
+        "M1": {
+          "kind": "bool",
+          "value": true
+        },
+        "J1": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "I2": {
+          "kind": "text",
+          "value": "=7"
+        },
+        "G1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=COUNTIFS($B$1:$T$1,J2,$B$1:$T$1,J3)",
+      "setup": {
+        "N1": {
+          "kind": "bool",
+          "value": false
+        },
+        "M1": {
+          "kind": "bool",
+          "value": true
+        },
+        "J1": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "K4",
+      "formula": "=COUNTIFS($B$1:$T$1,K2,$B$1:$T$1,K3)",
+      "setup": {
+        "N1": {
+          "kind": "bool",
+          "value": false
+        },
+        "M1": {
+          "kind": "bool",
+          "value": true
+        },
+        "J1": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "L4",
+      "formula": "=COUNTIFS($B$1:$T$1,L2,$B$1:$T$1,L3)",
+      "setup": {
+        "N1": {
+          "kind": "bool",
+          "value": false
+        },
+        "M1": {
+          "kind": "bool",
+          "value": true
+        },
+        "J1": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "M4",
+      "formula": "=COUNTIFS($B$1:$T$1,M2,$B$1:$T$1,M3)",
+      "setup": {
+        "N1": {
+          "kind": "bool",
+          "value": false
+        },
+        "M1": {
+          "kind": "bool",
+          "value": true
+        },
+        "J1": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "I1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    }
+  ]
+}

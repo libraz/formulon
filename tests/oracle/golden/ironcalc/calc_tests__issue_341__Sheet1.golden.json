@@ -1,0 +1,81 @@
+{
+  "suite": "ironcalc_calc_tests_issue_341_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/issue_341.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "A2",
+      "formula": "=\"TEST\"\"ABC\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "TEST\"ABC"
+      }
+    },
+    {
+      "id": "B2",
+      "formula": "=A2&\"\"\"\"",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=\"TEST\"\"ABC\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "TEST\"ABC\""
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=\"TEST\"\" and also \"\" end\"\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "TEST\" and also \" end\""
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=D2&A2",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=\"TEST\"\"ABC\""
+        },
+        "D2": {
+          "kind": "formula",
+          "formula": "=\"TEST\"\" and also \"\" end\"\"\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "TEST\" and also \" end\"TEST\"ABC"
+      }
+    },
+    {
+      "id": "A5",
+      "formula": "=A4",
+      "setup": {
+        "A4": {
+          "kind": "text",
+          "value": "This is \"\"ok\"\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "This is \"\"ok\"\""
+      }
+    }
+  ]
+}

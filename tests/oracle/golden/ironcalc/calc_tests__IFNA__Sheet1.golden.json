@@ -1,0 +1,180 @@
+{
+  "suite": "ironcalc_calc_tests_IFNA_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/IFNA.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=_xlfn.IFNA(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A3",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=_xlfn.IFNA(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A4",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=_xlfn.IFNA(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=_xlfn.IFNA(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=_xlfn.IFNA(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A6": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=_xlfn.IFNA(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "Hello"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Hello"
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=_xlfn.IFNA(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "empty"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A9",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=_xlfn.IFNA(A9,B9)",
+      "setup": {
+        "A9": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    }
+  ]
+}

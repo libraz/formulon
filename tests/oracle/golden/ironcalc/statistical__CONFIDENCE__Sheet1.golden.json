@@ -1,0 +1,61 @@
+{
+  "suite": "ironcalc_statistical_CONFIDENCE_Sheet1",
+  "description": "Derived from IronCalc fixture statistical/CONFIDENCE.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "D2",
+      "formula": "=_xlfn.CONFIDENCE.NORM(A2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.3
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3664345389796085
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=_xlfn.CONFIDENCE.T(A2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.3
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6938875986353249
+      }
+    }
+  ]
+}

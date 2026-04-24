@@ -1,0 +1,416 @@
+{
+  "suite": "ironcalc_calc_tests_SQRT_SQRTPI_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/SQRT_SQRTPI.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=SQRT(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=SQRTPI(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=SQRT(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=SQRTPI(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=SQRT(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 25.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=SQRTPI(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 25.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.86226925452758
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=SQRT(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.23606797749979
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=SQRTPI(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.963327297606011
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=SQRT(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 12.45
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.52845575287547
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=SQRTPI(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 12.45
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.254024986933849
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=SQRT(A7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=SQRTPI(A7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=SQRT(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=SQRTPI(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=SQRT(A9)",
+      "setup": {
+        "A9": {
+          "kind": "text",
+          "value": "Hola"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=SQRTPI(A9)",
+      "setup": {
+        "A9": {
+          "kind": "text",
+          "value": "Hola"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A10",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=SQRT(A10)",
+      "setup": {
+        "A10": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=SQRTPI(A10)",
+      "setup": {
+        "A10": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A11",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=SQRT(A11)",
+      "setup": {
+        "A11": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=SQRTPI(A11)",
+      "setup": {
+        "A11": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=SQRT(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 99999999.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9999.99995
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=SQRTPI(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 99999999.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 17724.538420432466
+      }
+    },
+    {
+      "id": "A13",
+      "formula": "=TRUE",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=SQRT(A13)",
+      "setup": {
+        "A13": {
+          "kind": "formula",
+          "formula": "=TRUE"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=SQRT(A14)",
+      "setup": {
+        "A14": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A15",
+      "formula": "=\"25\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "25"
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=SQRT(A15)",
+      "setup": {
+        "A15": {
+          "kind": "formula",
+          "formula": "=\"25\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=SQRTPI(A15)",
+      "setup": {
+        "A15": {
+          "kind": "formula",
+          "formula": "=\"25\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.86226925452758
+      }
+    },
+    {
+      "id": "A16",
+      "formula": "=\"25€\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "25€"
+      }
+    }
+  ]
+}

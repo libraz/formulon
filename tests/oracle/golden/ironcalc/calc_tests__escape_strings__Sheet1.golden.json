@@ -1,0 +1,35 @@
+{
+  "suite": "ironcalc_calc_tests_escape_strings_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/escape_strings.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "A2",
+      "formula": "=\"x < y\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x < y"
+      }
+    },
+    {
+      "id": "A5",
+      "formula": "=\"<><<<>\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "<><<<>"
+      }
+    }
+  ]
+}

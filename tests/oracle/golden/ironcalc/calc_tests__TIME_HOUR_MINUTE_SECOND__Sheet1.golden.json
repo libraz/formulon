@@ -1,0 +1,2725 @@
+{
+  "suite": "ironcalc_calc_tests_TIME_HOUR_MINUTE_SECOND_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/TIME_HOUR_MINUTE_SECOND.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "E2",
+      "formula": "=D2",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D2": {
+          "kind": "formula",
+          "formula": "=TIME(A2,B2,C2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.12640046296296295
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=HOUR(D2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D2": {
+          "kind": "formula",
+          "formula": "=TIME(A2,B2,C2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=MINUTE(D2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D2": {
+          "kind": "formula",
+          "formula": "=TIME(A2,B2,C2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "H2",
+      "formula": "=SECOND(D2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D2": {
+          "kind": "formula",
+          "formula": "=TIME(A2,B2,C2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=D3",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "D3": {
+          "kind": "formula",
+          "formula": "=TIME(A3,B3,C3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0014236111111110006
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=HOUR(D3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "D3": {
+          "kind": "formula",
+          "formula": "=TIME(A3,B3,C3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=MINUTE(D3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "D3": {
+          "kind": "formula",
+          "formula": "=TIME(A3,B3,C3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=SECOND(D3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "D3": {
+          "kind": "formula",
+          "formula": "=TIME(A3,B3,C3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=D4",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "D4": {
+          "kind": "formula",
+          "formula": "=TIME(A4,B4,C4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7086111111111111
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=HOUR(D4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "D4": {
+          "kind": "formula",
+          "formula": "=TIME(A4,B4,C4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 17.0
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=MINUTE(D4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "D4": {
+          "kind": "formula",
+          "formula": "=TIME(A4,B4,C4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H4",
+      "formula": "=SECOND(D4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "D4": {
+          "kind": "formula",
+          "formula": "=TIME(A4,B4,C4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 24.0
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=D5",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 0.9
+        },
+        "B5": {
+          "kind": "number",
+          "value": 20.7
+        },
+        "A5": {
+          "kind": "number",
+          "value": 3.1
+        },
+        "D5": {
+          "kind": "formula",
+          "formula": "=TIME(A5,B5,C5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.1388888888888889
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=HOUR(D5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 0.9
+        },
+        "B5": {
+          "kind": "number",
+          "value": 20.7
+        },
+        "A5": {
+          "kind": "number",
+          "value": 3.1
+        },
+        "D5": {
+          "kind": "formula",
+          "formula": "=TIME(A5,B5,C5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=MINUTE(D5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 0.9
+        },
+        "B5": {
+          "kind": "number",
+          "value": 20.7
+        },
+        "A5": {
+          "kind": "number",
+          "value": 3.1
+        },
+        "D5": {
+          "kind": "formula",
+          "formula": "=TIME(A5,B5,C5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "H5",
+      "formula": "=SECOND(D5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 0.9
+        },
+        "B5": {
+          "kind": "number",
+          "value": 20.7
+        },
+        "A5": {
+          "kind": "number",
+          "value": 3.1
+        },
+        "D5": {
+          "kind": "formula",
+          "formula": "=TIME(A5,B5,C5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=D6",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 59.999999
+        },
+        "B6": {
+          "kind": "number",
+          "value": 59.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=TIME(A6,B6,C6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.999988425925926
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=HOUR(D6)",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 59.999999
+        },
+        "B6": {
+          "kind": "number",
+          "value": 59.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=TIME(A6,B6,C6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 23.0
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=MINUTE(D6)",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 59.999999
+        },
+        "B6": {
+          "kind": "number",
+          "value": 59.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=TIME(A6,B6,C6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 59.0
+      }
+    },
+    {
+      "id": "H6",
+      "formula": "=SECOND(D6)",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 59.999999
+        },
+        "B6": {
+          "kind": "number",
+          "value": 59.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=TIME(A6,B6,C6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 59.0
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=D7",
+      "setup": {
+        "D7": {
+          "kind": "formula",
+          "formula": "=TIME(A7,B7,C7)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=HOUR(D7)",
+      "setup": {
+        "D7": {
+          "kind": "formula",
+          "formula": "=TIME(A7,B7,C7)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=MINUTE(D7)",
+      "setup": {
+        "D7": {
+          "kind": "formula",
+          "formula": "=TIME(A7,B7,C7)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H7",
+      "formula": "=SECOND(D7)",
+      "setup": {
+        "D7": {
+          "kind": "formula",
+          "formula": "=TIME(A7,B7,C7)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=D8",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "D8": {
+          "kind": "formula",
+          "formula": "=TIME(A8,B8,C8)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9583333333333334
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=HOUR(D8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "D8": {
+          "kind": "formula",
+          "formula": "=TIME(A8,B8,C8)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 23.0
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=MINUTE(D8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "D8": {
+          "kind": "formula",
+          "formula": "=TIME(A8,B8,C8)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H8",
+      "formula": "=SECOND(D8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "D8": {
+          "kind": "formula",
+          "formula": "=TIME(A8,B8,C8)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=D9",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "D9": {
+          "kind": "formula",
+          "formula": "=TIME(A9,B9,C9)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.01597222222222222
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=HOUR(D9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "D9": {
+          "kind": "formula",
+          "formula": "=TIME(A9,B9,C9)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G9",
+      "formula": "=MINUTE(D9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "D9": {
+          "kind": "formula",
+          "formula": "=TIME(A9,B9,C9)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 23.0
+      }
+    },
+    {
+      "id": "H9",
+      "formula": "=SECOND(D9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "D9": {
+          "kind": "formula",
+          "formula": "=TIME(A9,B9,C9)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=D10",
+      "setup": {
+        "C10": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "D10": {
+          "kind": "formula",
+          "formula": "=TIME(A10,B10,C10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0002662037037037037
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=HOUR(D10)",
+      "setup": {
+        "C10": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "D10": {
+          "kind": "formula",
+          "formula": "=TIME(A10,B10,C10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G10",
+      "formula": "=MINUTE(D10)",
+      "setup": {
+        "C10": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "D10": {
+          "kind": "formula",
+          "formula": "=TIME(A10,B10,C10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H10",
+      "formula": "=SECOND(D10)",
+      "setup": {
+        "C10": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "D10": {
+          "kind": "formula",
+          "formula": "=TIME(A10,B10,C10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 23.0
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=TIME(A11,B11,C11)",
+      "setup": {
+        "C11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=D11",
+      "setup": {
+        "C11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "D11": {
+          "kind": "formula",
+          "formula": "=TIME(A11,B11,C11)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F11",
+      "formula": "=HOUR(D11)",
+      "setup": {
+        "C11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "D11": {
+          "kind": "formula",
+          "formula": "=TIME(A11,B11,C11)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G11",
+      "formula": "=MINUTE(D11)",
+      "setup": {
+        "C11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "D11": {
+          "kind": "formula",
+          "formula": "=TIME(A11,B11,C11)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H11",
+      "formula": "=SECOND(D11)",
+      "setup": {
+        "C11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "D11": {
+          "kind": "formula",
+          "formula": "=TIME(A11,B11,C11)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=D12",
+      "setup": {
+        "C12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "D12": {
+          "kind": "formula",
+          "formula": "=TIME(A12,B12,C12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.49872685185185184
+      }
+    },
+    {
+      "id": "F12",
+      "formula": "=HOUR(D12)",
+      "setup": {
+        "C12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "D12": {
+          "kind": "formula",
+          "formula": "=TIME(A12,B12,C12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "G12",
+      "formula": "=MINUTE(D12)",
+      "setup": {
+        "C12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "D12": {
+          "kind": "formula",
+          "formula": "=TIME(A12,B12,C12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 58.0
+      }
+    },
+    {
+      "id": "H12",
+      "formula": "=SECOND(D12)",
+      "setup": {
+        "C12": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "D12": {
+          "kind": "formula",
+          "formula": "=TIME(A12,B12,C12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=D13",
+      "setup": {
+        "C13": {
+          "kind": "number",
+          "value": -30.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": -20.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "D13": {
+          "kind": "formula",
+          "formula": "=TIME(A13,B13,C13)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5274305555555555
+      }
+    },
+    {
+      "id": "F13",
+      "formula": "=HOUR(D13)",
+      "setup": {
+        "C13": {
+          "kind": "number",
+          "value": -30.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": -20.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "D13": {
+          "kind": "formula",
+          "formula": "=TIME(A13,B13,C13)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "G13",
+      "formula": "=MINUTE(D13)",
+      "setup": {
+        "C13": {
+          "kind": "number",
+          "value": -30.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": -20.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "D13": {
+          "kind": "formula",
+          "formula": "=TIME(A13,B13,C13)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 39.0
+      }
+    },
+    {
+      "id": "H13",
+      "formula": "=SECOND(D13)",
+      "setup": {
+        "C13": {
+          "kind": "number",
+          "value": -30.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": -20.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "D13": {
+          "kind": "formula",
+          "formula": "=TIME(A13,B13,C13)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=D14",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 34.0
+        },
+        "D14": {
+          "kind": "formula",
+          "formula": "=TIME(A14,B14,C14)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.41738425925925915
+      }
+    },
+    {
+      "id": "F14",
+      "formula": "=HOUR(D14)",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 34.0
+        },
+        "D14": {
+          "kind": "formula",
+          "formula": "=TIME(A14,B14,C14)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "G14",
+      "formula": "=MINUTE(D14)",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 34.0
+        },
+        "D14": {
+          "kind": "formula",
+          "formula": "=TIME(A14,B14,C14)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "H14",
+      "formula": "=SECOND(D14)",
+      "setup": {
+        "C14": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 34.0
+        },
+        "D14": {
+          "kind": "formula",
+          "formula": "=TIME(A14,B14,C14)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=D15",
+      "setup": {
+        "C15": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": 61.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D15": {
+          "kind": "formula",
+          "formula": "=TIME(A15,B15,C15)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.45905092592592595
+      }
+    },
+    {
+      "id": "F15",
+      "formula": "=HOUR(D15)",
+      "setup": {
+        "C15": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": 61.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D15": {
+          "kind": "formula",
+          "formula": "=TIME(A15,B15,C15)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "G15",
+      "formula": "=MINUTE(D15)",
+      "setup": {
+        "C15": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": 61.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D15": {
+          "kind": "formula",
+          "formula": "=TIME(A15,B15,C15)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "H15",
+      "formula": "=SECOND(D15)",
+      "setup": {
+        "C15": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": 61.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D15": {
+          "kind": "formula",
+          "formula": "=TIME(A15,B15,C15)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "E16",
+      "formula": "=D16",
+      "setup": {
+        "C16": {
+          "kind": "number",
+          "value": 62.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D16": {
+          "kind": "formula",
+          "formula": "=TIME(A16,B16,C16)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4180787037037037
+      }
+    },
+    {
+      "id": "F16",
+      "formula": "=HOUR(D16)",
+      "setup": {
+        "C16": {
+          "kind": "number",
+          "value": 62.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D16": {
+          "kind": "formula",
+          "formula": "=TIME(A16,B16,C16)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "G16",
+      "formula": "=MINUTE(D16)",
+      "setup": {
+        "C16": {
+          "kind": "number",
+          "value": 62.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D16": {
+          "kind": "formula",
+          "formula": "=TIME(A16,B16,C16)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "H16",
+      "formula": "=SECOND(D16)",
+      "setup": {
+        "C16": {
+          "kind": "number",
+          "value": 62.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D16": {
+          "kind": "formula",
+          "formula": "=TIME(A16,B16,C16)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "E17",
+      "formula": "=D17",
+      "setup": {
+        "C17": {
+          "kind": "number",
+          "value": 32767.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 32767.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 32767.0
+        },
+        "D17": {
+          "kind": "formula",
+          "formula": "=TIME(A17,B17,C17)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4257754629629744
+      }
+    },
+    {
+      "id": "F17",
+      "formula": "=HOUR(D17)",
+      "setup": {
+        "C17": {
+          "kind": "number",
+          "value": 32767.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 32767.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 32767.0
+        },
+        "D17": {
+          "kind": "formula",
+          "formula": "=TIME(A17,B17,C17)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "G17",
+      "formula": "=MINUTE(D17)",
+      "setup": {
+        "C17": {
+          "kind": "number",
+          "value": 32767.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 32767.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 32767.0
+        },
+        "D17": {
+          "kind": "formula",
+          "formula": "=TIME(A17,B17,C17)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 13.0
+      }
+    },
+    {
+      "id": "H17",
+      "formula": "=SECOND(D17)",
+      "setup": {
+        "C17": {
+          "kind": "number",
+          "value": 32767.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 32767.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 32767.0
+        },
+        "D17": {
+          "kind": "formula",
+          "formula": "=TIME(A17,B17,C17)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "A18",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=TIME(A18,B18,C18)",
+      "setup": {
+        "C18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=D18",
+      "setup": {
+        "C18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D18": {
+          "kind": "formula",
+          "formula": "=TIME(A18,B18,C18)"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F18",
+      "formula": "=HOUR(D18)",
+      "setup": {
+        "C18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D18": {
+          "kind": "formula",
+          "formula": "=TIME(A18,B18,C18)"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G18",
+      "formula": "=MINUTE(D18)",
+      "setup": {
+        "C18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D18": {
+          "kind": "formula",
+          "formula": "=TIME(A18,B18,C18)"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "H18",
+      "formula": "=SECOND(D18)",
+      "setup": {
+        "C18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D18": {
+          "kind": "formula",
+          "formula": "=TIME(A18,B18,C18)"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=TIME(A19,B19,C19)",
+      "setup": {
+        "C19": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B19": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E19",
+      "formula": "=D19",
+      "setup": {
+        "C19": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D19": {
+          "kind": "formula",
+          "formula": "=TIME(A19,B19,C19)"
+        },
+        "B19": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F19",
+      "formula": "=HOUR(D19)",
+      "setup": {
+        "C19": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D19": {
+          "kind": "formula",
+          "formula": "=TIME(A19,B19,C19)"
+        },
+        "B19": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G19",
+      "formula": "=MINUTE(D19)",
+      "setup": {
+        "C19": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D19": {
+          "kind": "formula",
+          "formula": "=TIME(A19,B19,C19)"
+        },
+        "B19": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "H19",
+      "formula": "=SECOND(D19)",
+      "setup": {
+        "C19": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D19": {
+          "kind": "formula",
+          "formula": "=TIME(A19,B19,C19)"
+        },
+        "B19": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=TIME(A20,B20,C20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C20": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E20",
+      "formula": "=D20",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D20": {
+          "kind": "formula",
+          "formula": "=TIME(A20,B20,C20)"
+        },
+        "C20": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F20",
+      "formula": "=HOUR(D20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D20": {
+          "kind": "formula",
+          "formula": "=TIME(A20,B20,C20)"
+        },
+        "C20": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G20",
+      "formula": "=MINUTE(D20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D20": {
+          "kind": "formula",
+          "formula": "=TIME(A20,B20,C20)"
+        },
+        "C20": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "H20",
+      "formula": "=SECOND(D20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D20": {
+          "kind": "formula",
+          "formula": "=TIME(A20,B20,C20)"
+        },
+        "C20": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A21",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=TIME(A21,B21,C21)",
+      "setup": {
+        "C21": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B21": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "E21",
+      "formula": "=D21",
+      "setup": {
+        "C21": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B21": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D21": {
+          "kind": "formula",
+          "formula": "=TIME(A21,B21,C21)"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F21",
+      "formula": "=HOUR(D21)",
+      "setup": {
+        "C21": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B21": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D21": {
+          "kind": "formula",
+          "formula": "=TIME(A21,B21,C21)"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "G21",
+      "formula": "=MINUTE(D21)",
+      "setup": {
+        "C21": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B21": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D21": {
+          "kind": "formula",
+          "formula": "=TIME(A21,B21,C21)"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "H21",
+      "formula": "=SECOND(D21)",
+      "setup": {
+        "C21": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B21": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D21": {
+          "kind": "formula",
+          "formula": "=TIME(A21,B21,C21)"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B22",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=TIME(A22,B22,C22)",
+      "setup": {
+        "C22": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B22": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "E22",
+      "formula": "=D22",
+      "setup": {
+        "C22": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D22": {
+          "kind": "formula",
+          "formula": "=TIME(A22,B22,C22)"
+        },
+        "B22": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F22",
+      "formula": "=HOUR(D22)",
+      "setup": {
+        "C22": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D22": {
+          "kind": "formula",
+          "formula": "=TIME(A22,B22,C22)"
+        },
+        "B22": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "G22",
+      "formula": "=MINUTE(D22)",
+      "setup": {
+        "C22": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D22": {
+          "kind": "formula",
+          "formula": "=TIME(A22,B22,C22)"
+        },
+        "B22": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "H22",
+      "formula": "=SECOND(D22)",
+      "setup": {
+        "C22": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D22": {
+          "kind": "formula",
+          "formula": "=TIME(A22,B22,C22)"
+        },
+        "B22": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=TIME(A23,B23,C23)",
+      "setup": {
+        "B23": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C23": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "E23",
+      "formula": "=D23",
+      "setup": {
+        "B23": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D23": {
+          "kind": "formula",
+          "formula": "=TIME(A23,B23,C23)"
+        },
+        "C23": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F23",
+      "formula": "=HOUR(D23)",
+      "setup": {
+        "B23": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D23": {
+          "kind": "formula",
+          "formula": "=TIME(A23,B23,C23)"
+        },
+        "C23": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "G23",
+      "formula": "=MINUTE(D23)",
+      "setup": {
+        "B23": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D23": {
+          "kind": "formula",
+          "formula": "=TIME(A23,B23,C23)"
+        },
+        "C23": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "H23",
+      "formula": "=SECOND(D23)",
+      "setup": {
+        "B23": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D23": {
+          "kind": "formula",
+          "formula": "=TIME(A23,B23,C23)"
+        },
+        "C23": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D24",
+      "formula": "=TIME(A24,B24,C24)",
+      "setup": {
+        "C24": {
+          "kind": "text",
+          "value": "\"4\""
+        },
+        "B24": {
+          "kind": "text",
+          "value": "\"3\""
+        },
+        "A24": {
+          "kind": "text",
+          "value": "\"2\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E24",
+      "formula": "=D24",
+      "setup": {
+        "C24": {
+          "kind": "text",
+          "value": "\"4\""
+        },
+        "B24": {
+          "kind": "text",
+          "value": "\"3\""
+        },
+        "A24": {
+          "kind": "text",
+          "value": "\"2\""
+        },
+        "D24": {
+          "kind": "formula",
+          "formula": "=TIME(A24,B24,C24)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F24",
+      "formula": "=HOUR(D24)",
+      "setup": {
+        "C24": {
+          "kind": "text",
+          "value": "\"4\""
+        },
+        "B24": {
+          "kind": "text",
+          "value": "\"3\""
+        },
+        "A24": {
+          "kind": "text",
+          "value": "\"2\""
+        },
+        "D24": {
+          "kind": "formula",
+          "formula": "=TIME(A24,B24,C24)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G24",
+      "formula": "=MINUTE(D24)",
+      "setup": {
+        "C24": {
+          "kind": "text",
+          "value": "\"4\""
+        },
+        "B24": {
+          "kind": "text",
+          "value": "\"3\""
+        },
+        "A24": {
+          "kind": "text",
+          "value": "\"2\""
+        },
+        "D24": {
+          "kind": "formula",
+          "formula": "=TIME(A24,B24,C24)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "H24",
+      "formula": "=SECOND(D24)",
+      "setup": {
+        "C24": {
+          "kind": "text",
+          "value": "\"4\""
+        },
+        "B24": {
+          "kind": "text",
+          "value": "\"3\""
+        },
+        "A24": {
+          "kind": "text",
+          "value": "\"2\""
+        },
+        "D24": {
+          "kind": "formula",
+          "formula": "=TIME(A24,B24,C24)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=TIME(A25,B25,C25)",
+      "setup": {
+        "C25": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B25": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E25",
+      "formula": "=D25",
+      "setup": {
+        "C25": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B25": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "a"
+        },
+        "D25": {
+          "kind": "formula",
+          "formula": "=TIME(A25,B25,C25)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F25",
+      "formula": "=HOUR(D25)",
+      "setup": {
+        "C25": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B25": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "a"
+        },
+        "D25": {
+          "kind": "formula",
+          "formula": "=TIME(A25,B25,C25)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "G25",
+      "formula": "=MINUTE(D25)",
+      "setup": {
+        "C25": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B25": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "a"
+        },
+        "D25": {
+          "kind": "formula",
+          "formula": "=TIME(A25,B25,C25)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "H25",
+      "formula": "=SECOND(D25)",
+      "setup": {
+        "C25": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B25": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "a"
+        },
+        "D25": {
+          "kind": "formula",
+          "formula": "=TIME(A25,B25,C25)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E26",
+      "formula": "=D26",
+      "setup": {
+        "C26": {
+          "kind": "bool",
+          "value": true
+        },
+        "B26": {
+          "kind": "bool",
+          "value": false
+        },
+        "A26": {
+          "kind": "bool",
+          "value": true
+        },
+        "D26": {
+          "kind": "formula",
+          "formula": "=TIME(A26,B26,C26)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.04167824074074074
+      }
+    },
+    {
+      "id": "F26",
+      "formula": "=HOUR(D26)",
+      "setup": {
+        "C26": {
+          "kind": "bool",
+          "value": true
+        },
+        "B26": {
+          "kind": "bool",
+          "value": false
+        },
+        "A26": {
+          "kind": "bool",
+          "value": true
+        },
+        "D26": {
+          "kind": "formula",
+          "formula": "=TIME(A26,B26,C26)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "G26",
+      "formula": "=MINUTE(D26)",
+      "setup": {
+        "C26": {
+          "kind": "bool",
+          "value": true
+        },
+        "B26": {
+          "kind": "bool",
+          "value": false
+        },
+        "A26": {
+          "kind": "bool",
+          "value": true
+        },
+        "D26": {
+          "kind": "formula",
+          "formula": "=TIME(A26,B26,C26)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H26",
+      "formula": "=SECOND(D26)",
+      "setup": {
+        "C26": {
+          "kind": "bool",
+          "value": true
+        },
+        "B26": {
+          "kind": "bool",
+          "value": false
+        },
+        "A26": {
+          "kind": "bool",
+          "value": true
+        },
+        "D26": {
+          "kind": "formula",
+          "formula": "=TIME(A26,B26,C26)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    }
+  ]
+}

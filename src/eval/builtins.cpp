@@ -27,6 +27,7 @@
 #include "eval/builtins/math_rng.h"
 #include "eval/builtins/math_trig.h"
 #include "eval/builtins/references.h"
+#include "eval/builtins/service_stubs.h"
 #include "eval/builtins/stats.h"
 #include "eval/builtins/text.h"
 #include "eval/builtins/text_format.h"
@@ -58,6 +59,7 @@ void register_builtins(FunctionRegistry& registry) {
   register_complex_num_builtins(registry);
   register_reference_builtins(registry);
   register_web_builtins(registry);
+  register_service_stub_builtins(registry);
   register_cube_builtins(registry);
 }
 

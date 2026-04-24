@@ -1,0 +1,2285 @@
+{
+  "suite": "ironcalc_calc_tests_XLOOKUP_ExactMatch",
+  "description": "Derived from IronCalc fixture calc_tests/XLOOKUP.xlsx, sheet 'ExactMatch'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "ExactMatch",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "E4",
+      "formula": "=_xlfn.XLOOKUP(D4,$A$4:$A$8,$B$4:$B$8)",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "a"
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=_xlfn.XLOOKUP(D4,$A$4:$A$8,$B$4:$B$8,,,-1)",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "a"
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=_xlfn.XLOOKUP(D4,$A$4:$A$8,$B$4:$B$8, \"Not found\")",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "a"
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=_xlfn.XLOOKUP(D5,$A$4:$A$8,$B$4:$B$8)",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "e"
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=_xlfn.XLOOKUP(D5,$A$4:$A$8,$B$4:$B$8,,,-1)",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "e"
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=_xlfn.XLOOKUP(D5,$A$4:$A$8,$B$4:$B$8, \"Not found\")",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "e"
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=_xlfn.XLOOKUP(D6,$A$4:$A$8,$B$4:$B$8)",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D6": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "c"
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=_xlfn.XLOOKUP(D6,$A$4:$A$8,$B$4:$B$8,,,-1)",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D6": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "c"
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=_xlfn.XLOOKUP(D6,$A$4:$A$8,$B$4:$B$8, \"Not found\")",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D6": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "c"
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=_xlfn.XLOOKUP(D7,$A$4:$A$8,$B$4:$B$8)",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D7": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "b"
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=_xlfn.XLOOKUP(D7,$A$4:$A$8,$B$4:$B$8,,,-1)",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D7": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "d"
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=_xlfn.XLOOKUP(D7,$A$4:$A$8,$B$4:$B$8, \"Not found\")",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D7": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "b"
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=_xlfn.XLOOKUP(D8,$A$4:$A$8,$B$4:$B$8)",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D8": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=_xlfn.XLOOKUP(D8,$A$4:$A$8,$B$4:$B$8,,,-1)",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D8": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=_xlfn.XLOOKUP(D8,$A$4:$A$8,$B$4:$B$8, \"Not found\")",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D8": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Not found"
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=_xlfn.XLOOKUP(D9,$A$4:$A$8,$B$4:$B$8)",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=_xlfn.XLOOKUP(D9,$A$4:$A$8,$B$4:$B$8,,,-1)",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "G9",
+      "formula": "=_xlfn.XLOOKUP(D9,$A$4:$A$8,$B$4:$B$8, \"Not found\")",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Not found"
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=_xlfn.XLOOKUP(D10,$A$4:$A$8,$B$4:$B$8)",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 2.4
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=_xlfn.XLOOKUP(D10,$A$4:$A$8,$B$4:$B$8,,,-1)",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 2.4
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "G10",
+      "formula": "=_xlfn.XLOOKUP(D10,$A$4:$A$8,$B$4:$B$8, \"Not found\")",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 2.4
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Not found"
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=_xlfn.XLOOKUP(D11,$A$4:$A$8,$B$4:$B$8)",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D11": {
+          "kind": "text",
+          "value": "qwerty"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F11",
+      "formula": "=_xlfn.XLOOKUP(D11,$A$4:$A$8,$B$4:$B$8,,,-1)",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D11": {
+          "kind": "text",
+          "value": "qwerty"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "G11",
+      "formula": "=_xlfn.XLOOKUP(D11,$A$4:$A$8,$B$4:$B$8, \"Not found\")",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D11": {
+          "kind": "text",
+          "value": "qwerty"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Not found"
+      }
+    },
+    {
+      "id": "E17",
+      "formula": "=_xlfn.XLOOKUP(D17,$A$17:$A$21,$B$17:$B$21,,,2)",
+      "setup": {
+        "B21": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D17": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "a"
+      }
+    },
+    {
+      "id": "F17",
+      "formula": "=_xlfn.XLOOKUP(D17,$A$17:$A$21,$B$17:$B$21,,,2)",
+      "setup": {
+        "B21": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D17": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "a"
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=_xlfn.XLOOKUP(D18,$A$17:$A$21,$B$17:$B$21,,,2)",
+      "setup": {
+        "B21": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D18": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "b"
+      }
+    },
+    {
+      "id": "F18",
+      "formula": "=_xlfn.XLOOKUP(D18,$A$17:$A$21,$B$17:$B$21,,,2)",
+      "setup": {
+        "B21": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D18": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "b"
+      }
+    },
+    {
+      "id": "E19",
+      "formula": "=_xlfn.XLOOKUP(D19,$A$17:$A$21,$B$17:$B$21,,,2)",
+      "setup": {
+        "B21": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D19": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "c"
+      }
+    },
+    {
+      "id": "F19",
+      "formula": "=_xlfn.XLOOKUP(D19,$A$17:$A$21,$B$17:$B$21,,,2)",
+      "setup": {
+        "B21": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D19": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "c"
+      }
+    },
+    {
+      "id": "E20",
+      "formula": "=_xlfn.XLOOKUP(D20,$A$17:$A$21,$B$17:$B$21,,,2)",
+      "setup": {
+        "B21": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D20": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "d"
+      }
+    },
+    {
+      "id": "F20",
+      "formula": "=_xlfn.XLOOKUP(D20,$A$17:$A$21,$B$17:$B$21,,,2)",
+      "setup": {
+        "B21": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D20": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "d"
+      }
+    },
+    {
+      "id": "E21",
+      "formula": "=_xlfn.XLOOKUP(D21,$A$17:$A$21,$B$17:$B$21,,,2)",
+      "setup": {
+        "B21": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D21": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "e"
+      }
+    },
+    {
+      "id": "F21",
+      "formula": "=_xlfn.XLOOKUP(D21,$A$17:$A$21,$B$17:$B$21,,,2)",
+      "setup": {
+        "B21": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D21": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "e"
+      }
+    },
+    {
+      "id": "E22",
+      "formula": "=_xlfn.XLOOKUP(D22,$A$17:$A$21,$B$17:$B$21,,,2)",
+      "setup": {
+        "B21": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D22": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F22",
+      "formula": "=_xlfn.XLOOKUP(D22,$A$17:$A$21,$B$17:$B$21,,,2)",
+      "setup": {
+        "B21": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D22": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "E23",
+      "formula": "=_xlfn.XLOOKUP(D23,$A$17:$A$21,$B$17:$B$21,,,2)",
+      "setup": {
+        "B21": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D23": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F23",
+      "formula": "=_xlfn.XLOOKUP(D23,$A$17:$A$21,$B$17:$B$21,,,2)",
+      "setup": {
+        "B21": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D23": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "E24",
+      "formula": "=_xlfn.XLOOKUP(D24,$A$17:$A$21,$B$17:$B$21,,,2)",
+      "setup": {
+        "B21": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D24": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F24",
+      "formula": "=_xlfn.XLOOKUP(D24,$A$17:$A$21,$B$17:$B$21,,,2)",
+      "setup": {
+        "B21": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D24": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "E25",
+      "formula": "=_xlfn.XLOOKUP(D25,$A$17:$A$21,$B$17:$B$21,,,2)",
+      "setup": {
+        "B21": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D25": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F25",
+      "formula": "=_xlfn.XLOOKUP(D25,$A$17:$A$21,$B$17:$B$21,,,2)",
+      "setup": {
+        "B21": {
+          "kind": "text",
+          "value": "e"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "d"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A21": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D25": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

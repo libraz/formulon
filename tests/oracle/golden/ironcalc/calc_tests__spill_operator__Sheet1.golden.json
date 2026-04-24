@@ -1,0 +1,95 @@
+{
+  "suite": "ironcalc_calc_tests_spill_operator_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/spill_operator.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "E2",
+      "formula": "=SUM(_xlfn.ANCHORARRAY(A2))",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=SUM(_xlfn.ANCHORARRAY(B2))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1315.0
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=SUM(_xlfn.ANCHORARRAY(C2))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 492.0
+      }
+    },
+    {
+      "id": "I2",
+      "formula": "=SUM(_xlfn.ANCHORARRAY(OFFSET(A1,1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Array"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1315.0
+      }
+    },
+    {
+      "id": "M2",
+      "formula": "=_xlfn.CONCAT(_xlfn.ANCHORARRAY(L2))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "HolaMundo"
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=SUM(_xlfn.ANCHORARRAY(B3))",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 24.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=SUM(_xlfn.ANCHORARRAY(B10))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    }
+  ]
+}

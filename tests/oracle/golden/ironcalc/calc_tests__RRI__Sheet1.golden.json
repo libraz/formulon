@@ -1,0 +1,477 @@
+{
+  "suite": "ironcalc_calc_tests_RRI_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/RRI.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "D2",
+      "formula": "=_xlfn.RRI(A2,B2,C2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=POWER(C2/B2,1/A2)-1",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=_xlfn.RRI(A3,B3,C3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.15470053837925146
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=POWER(C3/B3,1/A3)-1",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.15470053837925146
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=_xlfn.RRI(A4,B4,C4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.2457309396155174
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=POWER(C4/B4,1/A4)-1",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.2457309396155174
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=_xlfn.RRI(A5,B5,C5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 3.4
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3790369602678094
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=POWER(C5/B5,1/A5)-1",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 1.2
+        },
+        "B5": {
+          "kind": "number",
+          "value": 3.4
+        },
+        "C5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3790369602678094
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=_xlfn.RRI(A6,B6,C6)",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 5.4
+        },
+        "B6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3924766500838337
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=POWER(C6/B6,1/A6)-1",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 5.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3924766500838337
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=_xlfn.RRI(A7,B7,C7)",
+      "setup": {
+        "C7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": -7.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=POWER(C7/B7,1/A7)-1",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -7.2
+        },
+        "B7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.03916813471227221
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=_xlfn.RRI(A8,B8,C8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=POWER(C8/B8,1/A8)-1",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=_xlfn.RRI(A9,B9,C9)",
+      "setup": {
+        "C9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=POWER(C9/B9,1/A9)-1",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C9": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=_xlfn.RRI(A10,B10,C10)",
+      "setup": {
+        "C10": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=POWER(C10/B10,1/A10)-1",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.25
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=_xlfn.RRI(A11,B11,C11)",
+      "setup": {
+        "C11": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=POWER(C11/B11,1/A11)-1",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C11": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=_xlfn.RRI(A12,B12,C12)",
+      "setup": {
+        "C12": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7777777777777775
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=POWER(C12/B12,1/A12)-1",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C12": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7777777777777777
+      }
+    }
+  ]
+}

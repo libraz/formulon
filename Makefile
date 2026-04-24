@@ -16,6 +16,7 @@ CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 
 .PHONY: all build release test test-slow test-all fmt lint clean \
         wasm wasm-debug test-wasm test-python \
         oracle-setup oracle-gen oracle-verify \
+        ironcalc-import ironcalc-verify \
         fuzz-parser fuzz-xlsx fuzz-eval bench coverage \
         function-status behavior-status
 
@@ -127,6 +128,27 @@ oracle-verify:
 	@# in the ctest test list on the next run.
 	@rm -f $(BUILD_DIR)/tests/oracle/formulon_oracle_tests*_tests.cmake
 	@(cd $(BUILD_DIR) && $(CTEST) -L oracle --output-on-failure --timeout 60)
+
+# -- IronCalc secondary oracle --------------------------------------------
+# Imports xlsx fixtures vendored from IronCalc (dual MIT / Apache-2.0)
+# into Formulon's golden JSON schema, then runs the secondary verifier
+# registered under the `ironcalc` CTest label.
+ironcalc-import:
+	@if [ ! -x "$(ORACLE_VENV)/bin/python" ]; then \
+	  echo "ironcalc-import: run 'make oracle-setup' first (or 'cd tools/oracle && rye sync')"; \
+	  exit 1; \
+	fi
+	@$(ORACLE_VENV)/bin/python tools/oracle/ironcalc_import.py
+
+ironcalc-verify:
+	@if [ ! -f $(BUILD_DIR)/CMakeCache.txt ]; then \
+	  echo "ironcalc-verify: run 'make build' first"; exit 1; \
+	fi
+	@$(CMAKE) --build $(BUILD_DIR) --target formulon_ironcalc_oracle_tests --parallel
+	@# Force ctest to rediscover parameter list; the goldens aren't a
+	@# build input so the cache would otherwise stick.
+	@rm -f $(BUILD_DIR)/tests/oracle/formulon_ironcalc_oracle_tests*_tests.cmake
+	@(cd $(BUILD_DIR) && $(CTEST) -L ironcalc --output-on-failure --timeout 60)
 
 fuzz-parser:
 	@echo "fuzz-parser: not yet implemented (planned for M8)"

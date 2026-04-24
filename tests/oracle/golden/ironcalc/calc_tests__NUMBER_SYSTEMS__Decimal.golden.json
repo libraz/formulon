@@ -1,0 +1,4490 @@
+{
+  "suite": "ironcalc_calc_tests_NUMBER_SYSTEMS_Decimal",
+  "description": "Derived from IronCalc fixture calc_tests/NUMBER_SYSTEMS.xlsx, sheet 'Decimal'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Decimal",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=DEC2BIN(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=DEC2BIN(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0001"
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=DEC2HEX(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=DEC2OCT(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0001"
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=DEC2OCT(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "H2",
+      "formula": "=BIN2DEC(D2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A2,B2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "I2",
+      "formula": "=BIN2OCT(F2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F2": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A2,B2)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "J2",
+      "formula": "=HEX2DEC(E2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=DEC2BIN(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "10"
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=DEC2BIN(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "00010"
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=DEC2HEX(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2"
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=DEC2OCT(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "00002"
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=DEC2OCT(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2"
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=BIN2DEC(D3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A3,B3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "I3",
+      "formula": "=BIN2OCT(F3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A3,B3)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J3",
+      "formula": "=HEX2DEC(E3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=DEC2BIN(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "11"
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=DEC2BIN(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0011"
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=DEC2HEX(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "3"
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=DEC2OCT(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0003"
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=DEC2OCT(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "3"
+      }
+    },
+    {
+      "id": "H4",
+      "formula": "=BIN2DEC(D4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D4": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A4,B4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "I4",
+      "formula": "=BIN2OCT(F4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F4": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A4,B4)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=HEX2DEC(E4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=DEC2BIN(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 243.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "11110011"
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=DEC2BIN(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 243.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=DEC2HEX(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 243.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "F3"
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=DEC2OCT(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 243.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "363"
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=DEC2OCT(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 243.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "363"
+      }
+    },
+    {
+      "id": "H5",
+      "formula": "=BIN2DEC(D5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 243.0
+        },
+        "D5": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A5,B5)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I5",
+      "formula": "=BIN2OCT(F5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 243.0
+        },
+        "F5": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A5,B5)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J5",
+      "formula": "=HEX2DEC(E5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 243.0
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 243.0
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=DEC2BIN(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 121233.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=DEC2BIN(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 121233.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=DEC2HEX(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 121233.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1D991"
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=DEC2OCT(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 121233.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=DEC2OCT(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 121233.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "354621"
+      }
+    },
+    {
+      "id": "H6",
+      "formula": "=BIN2DEC(D6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 121233.0
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A6,B6)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I6",
+      "formula": "=BIN2OCT(F6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 121233.0
+        },
+        "F6": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A6,B6)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J6",
+      "formula": "=HEX2DEC(E6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 121233.0
+        },
+        "E6": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 121233.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=DEC2BIN(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -1213.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=DEC2BIN(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": -1213.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=DEC2HEX(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -1213.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "FFFFFFFB43"
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=DEC2OCT(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": -1213.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7777775503"
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=DEC2OCT(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -1213.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7777775503"
+      }
+    },
+    {
+      "id": "H7",
+      "formula": "=BIN2DEC(D7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": -1213.0
+        },
+        "D7": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A7,B7)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I7",
+      "formula": "=BIN2OCT(F7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": -1213.0
+        },
+        "F7": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A7,B7)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J7",
+      "formula": "=HEX2DEC(E7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -1213.0
+        },
+        "E7": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A7)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1213.0
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=DEC2BIN(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 512.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=DEC2BIN(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 512.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=DEC2HEX(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 512.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "200"
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=DEC2OCT(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 512.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0000001000"
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=DEC2OCT(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 512.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1000"
+      }
+    },
+    {
+      "id": "H8",
+      "formula": "=BIN2DEC(D8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 512.0
+        },
+        "D8": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A8,B8)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I8",
+      "formula": "=BIN2OCT(F8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 512.0
+        },
+        "F8": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A8,B8)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "10"
+      }
+    },
+    {
+      "id": "J8",
+      "formula": "=HEX2DEC(E8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 512.0
+        },
+        "E8": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A8)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 512.0
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=DEC2BIN(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 511.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "111111111"
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=DEC2BIN(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 511.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0111111111"
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=DEC2HEX(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 511.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1FF"
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=DEC2OCT(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 511.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0000000777"
+      }
+    },
+    {
+      "id": "G9",
+      "formula": "=DEC2OCT(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 511.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "777"
+      }
+    },
+    {
+      "id": "H9",
+      "formula": "=BIN2DEC(D9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 511.0
+        },
+        "D9": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A9,B9)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 511.0
+      }
+    },
+    {
+      "id": "I9",
+      "formula": "=BIN2OCT(F9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 511.0
+        },
+        "F9": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A9,B9)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J9",
+      "formula": "=HEX2DEC(E9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 511.0
+        },
+        "E9": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A9)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 511.0
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=DEC2BIN(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 2.7
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "10"
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=DEC2BIN(A10,B10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 2.7
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=DEC2HEX(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 2.7
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2"
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=DEC2OCT(A10,B10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 2.7
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G10",
+      "formula": "=DEC2OCT(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 2.7
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2"
+      }
+    },
+    {
+      "id": "H10",
+      "formula": "=BIN2DEC(D10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 2.7
+        },
+        "D10": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A10,B10)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I10",
+      "formula": "=BIN2OCT(F10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 2.7
+        },
+        "F10": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A10,B10)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J10",
+      "formula": "=HEX2DEC(E10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 2.7
+        },
+        "E10": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=DEC2BIN(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 511.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "111111111"
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=DEC2BIN(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 511.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=DEC2HEX(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 511.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1FF"
+      }
+    },
+    {
+      "id": "F11",
+      "formula": "=DEC2OCT(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 511.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "00000777"
+      }
+    },
+    {
+      "id": "G11",
+      "formula": "=DEC2OCT(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 511.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "777"
+      }
+    },
+    {
+      "id": "H11",
+      "formula": "=BIN2DEC(D11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 511.0
+        },
+        "D11": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A11,B11)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I11",
+      "formula": "=BIN2OCT(F11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 511.0
+        },
+        "F11": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A11,B11)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J11",
+      "formula": "=HEX2DEC(E11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 511.0
+        },
+        "E11": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A11)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 511.0
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=DEC2BIN(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 511.2
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "111111111"
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=DEC2BIN(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 511.2
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "111111111"
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=DEC2HEX(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 511.2
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1FF"
+      }
+    },
+    {
+      "id": "F12",
+      "formula": "=DEC2OCT(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 511.2
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "000000777"
+      }
+    },
+    {
+      "id": "G12",
+      "formula": "=DEC2OCT(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 511.2
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "777"
+      }
+    },
+    {
+      "id": "H12",
+      "formula": "=BIN2DEC(D12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 511.2
+        },
+        "D12": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A12,B12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 511.0
+      }
+    },
+    {
+      "id": "I12",
+      "formula": "=BIN2OCT(F12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 511.2
+        },
+        "F12": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A12,B12)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J12",
+      "formula": "=HEX2DEC(E12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 511.2
+        },
+        "E12": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 511.0
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=DEC2BIN(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 511.9
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "111111111"
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=DEC2BIN(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 511.9
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=DEC2HEX(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 511.9
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1FF"
+      }
+    },
+    {
+      "id": "F13",
+      "formula": "=DEC2OCT(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 511.9
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G13",
+      "formula": "=DEC2OCT(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 511.9
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "777"
+      }
+    },
+    {
+      "id": "H13",
+      "formula": "=BIN2DEC(D13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 511.9
+        },
+        "D13": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A13,B13)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I13",
+      "formula": "=BIN2OCT(F13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 511.9
+        },
+        "F13": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A13,B13)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J13",
+      "formula": "=HEX2DEC(E13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 511.9
+        },
+        "E13": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A13)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 511.0
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=DEC2BIN(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": -511.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1000000001"
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=DEC2BIN(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": -511.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1000000001"
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=DEC2HEX(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": -511.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "FFFFFFFE01"
+      }
+    },
+    {
+      "id": "F14",
+      "formula": "=DEC2OCT(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": -511.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7777777001"
+      }
+    },
+    {
+      "id": "G14",
+      "formula": "=DEC2OCT(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": -511.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7777777001"
+      }
+    },
+    {
+      "id": "H14",
+      "formula": "=BIN2DEC(D14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": -511.0
+        },
+        "D14": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A14,B14)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -511.0
+      }
+    },
+    {
+      "id": "I14",
+      "formula": "=BIN2OCT(F14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": -511.0
+        },
+        "F14": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A14,B14)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J14",
+      "formula": "=HEX2DEC(E14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": -511.0
+        },
+        "E14": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A14)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -511.0
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=DEC2BIN(A15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": -512.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1000000000"
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=DEC2BIN(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": -512.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1000000000"
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=DEC2HEX(A15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": -512.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "FFFFFFFE00"
+      }
+    },
+    {
+      "id": "F15",
+      "formula": "=DEC2OCT(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": -512.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7777777000"
+      }
+    },
+    {
+      "id": "G15",
+      "formula": "=DEC2OCT(A15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": -512.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7777777000"
+      }
+    },
+    {
+      "id": "H15",
+      "formula": "=BIN2DEC(D15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": -512.0
+        },
+        "D15": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A15,B15)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -512.0
+      }
+    },
+    {
+      "id": "I15",
+      "formula": "=BIN2OCT(F15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": -512.0
+        },
+        "F15": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A15,B15)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J15",
+      "formula": "=HEX2DEC(E15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": -512.0
+        },
+        "E15": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A15)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -512.0
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=DEC2BIN(A16)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": -513.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=DEC2BIN(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": -513.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E16",
+      "formula": "=DEC2HEX(A16)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": -513.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "FFFFFFFDFF"
+      }
+    },
+    {
+      "id": "F16",
+      "formula": "=DEC2OCT(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": -513.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7777776777"
+      }
+    },
+    {
+      "id": "G16",
+      "formula": "=DEC2OCT(A16)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": -513.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7777776777"
+      }
+    },
+    {
+      "id": "H16",
+      "formula": "=BIN2DEC(D16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": -513.0
+        },
+        "D16": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A16,B16)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I16",
+      "formula": "=BIN2OCT(F16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": -513.0
+        },
+        "F16": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A16,B16)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J16",
+      "formula": "=HEX2DEC(E16)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": -513.0
+        },
+        "E16": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A16)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -513.0
+      }
+    },
+    {
+      "id": "L16",
+      "formula": "=OCT2BIN(776)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "111111110"
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=DEC2BIN(A17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -512.8
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1000000000"
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=DEC2BIN(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": -512.8
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1000000000"
+      }
+    },
+    {
+      "id": "E17",
+      "formula": "=DEC2HEX(A17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -512.8
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "FFFFFFFE00"
+      }
+    },
+    {
+      "id": "F17",
+      "formula": "=DEC2OCT(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": -512.8
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7777777000"
+      }
+    },
+    {
+      "id": "G17",
+      "formula": "=DEC2OCT(A17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -512.8
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7777777000"
+      }
+    },
+    {
+      "id": "H17",
+      "formula": "=BIN2DEC(D17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": -512.8
+        },
+        "D17": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A17,B17)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -512.0
+      }
+    },
+    {
+      "id": "I17",
+      "formula": "=BIN2OCT(F17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": -512.8
+        },
+        "F17": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A17,B17)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J17",
+      "formula": "=HEX2DEC(E17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -512.8
+        },
+        "E17": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A17)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -512.0
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=DEC2BIN(A18)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=DEC2BIN(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "00"
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=DEC2HEX(A18)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "F18",
+      "formula": "=DEC2OCT(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "00"
+      }
+    },
+    {
+      "id": "G18",
+      "formula": "=DEC2OCT(A18)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "H18",
+      "formula": "=BIN2DEC(D18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D18": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A18,B18)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "I18",
+      "formula": "=BIN2OCT(F18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "F18": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A18,B18)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "J18",
+      "formula": "=HEX2DEC(E18)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "E18": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A18)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=DEC2BIN(A19)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=DEC2BIN(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0000000"
+      }
+    },
+    {
+      "id": "E19",
+      "formula": "=DEC2HEX(A19)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "F19",
+      "formula": "=DEC2OCT(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0000000"
+      }
+    },
+    {
+      "id": "G19",
+      "formula": "=DEC2OCT(A19)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "H19",
+      "formula": "=BIN2DEC(D19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "D19": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A19,B19)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "I19",
+      "formula": "=BIN2OCT(F19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F19": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A19,B19)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "J19",
+      "formula": "=HEX2DEC(E19)",
+      "setup": {
+        "E19": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A19)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=DEC2BIN(A20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 123.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1111011"
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=DEC2BIN(A20,B20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 123.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E20",
+      "formula": "=DEC2HEX(A20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 123.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7B"
+      }
+    },
+    {
+      "id": "F20",
+      "formula": "=DEC2OCT(A20,B20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 123.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G20",
+      "formula": "=DEC2OCT(A20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 123.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "173"
+      }
+    },
+    {
+      "id": "H20",
+      "formula": "=BIN2DEC(D20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "D20": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A20,B20)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I20",
+      "formula": "=BIN2OCT(F20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "F20": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A20,B20)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J20",
+      "formula": "=HEX2DEC(E20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "E20": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A20)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 123.0
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=DEC2BIN(A21)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1100"
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=DEC2BIN(A21,B21)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E21",
+      "formula": "=DEC2HEX(A21)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "C"
+      }
+    },
+    {
+      "id": "F21",
+      "formula": "=DEC2OCT(A21,B21)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G21",
+      "formula": "=DEC2OCT(A21)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "14"
+      }
+    },
+    {
+      "id": "H21",
+      "formula": "=BIN2DEC(D21)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "D21": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A21,B21)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I21",
+      "formula": "=BIN2OCT(F21)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "F21": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A21,B21)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J21",
+      "formula": "=HEX2DEC(E21)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "E21": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A21)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=DEC2BIN(A22)",
+      "setup": {
+        "A22": {
+          "kind": "number",
+          "value": 142.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "10001110"
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=DEC2BIN(A22,B22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 142.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E22",
+      "formula": "=DEC2HEX(A22)",
+      "setup": {
+        "A22": {
+          "kind": "number",
+          "value": 142.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "8E"
+      }
+    },
+    {
+      "id": "F22",
+      "formula": "=DEC2OCT(A22,B22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 142.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G22",
+      "formula": "=DEC2OCT(A22)",
+      "setup": {
+        "A22": {
+          "kind": "number",
+          "value": 142.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "216"
+      }
+    },
+    {
+      "id": "H22",
+      "formula": "=BIN2DEC(D22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 142.0
+        },
+        "D22": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A22,B22)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I22",
+      "formula": "=BIN2OCT(F22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 142.0
+        },
+        "F22": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A22,B22)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J22",
+      "formula": "=HEX2DEC(E22)",
+      "setup": {
+        "A22": {
+          "kind": "number",
+          "value": 142.0
+        },
+        "E22": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A22)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 142.0
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=DEC2BIN(A23)",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 89.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1011001"
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=DEC2BIN(A23,B23)",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 89.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E23",
+      "formula": "=DEC2HEX(A23)",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 89.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "59"
+      }
+    },
+    {
+      "id": "F23",
+      "formula": "=DEC2OCT(A23,B23)",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 89.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G23",
+      "formula": "=DEC2OCT(A23)",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 89.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "131"
+      }
+    },
+    {
+      "id": "H23",
+      "formula": "=BIN2DEC(D23)",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "D23": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A23,B23)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I23",
+      "formula": "=BIN2OCT(F23)",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "F23": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A23,B23)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J23",
+      "formula": "=HEX2DEC(E23)",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 89.0
+        },
+        "E23": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A23)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 89.0
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=DEC2BIN(A24)",
+      "setup": {
+        "A24": {
+          "kind": "text",
+          "value": "12"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1100"
+      }
+    },
+    {
+      "id": "D24",
+      "formula": "=DEC2BIN(A24,B24)",
+      "setup": {
+        "A24": {
+          "kind": "text",
+          "value": "12"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E24",
+      "formula": "=DEC2HEX(A24)",
+      "setup": {
+        "A24": {
+          "kind": "text",
+          "value": "12"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "C"
+      }
+    },
+    {
+      "id": "F24",
+      "formula": "=DEC2OCT(A24,B24)",
+      "setup": {
+        "A24": {
+          "kind": "text",
+          "value": "12"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G24",
+      "formula": "=DEC2OCT(A24)",
+      "setup": {
+        "A24": {
+          "kind": "text",
+          "value": "12"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "14"
+      }
+    },
+    {
+      "id": "H24",
+      "formula": "=BIN2DEC(D24)",
+      "setup": {
+        "A24": {
+          "kind": "text",
+          "value": "12"
+        },
+        "D24": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A24,B24)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I24",
+      "formula": "=BIN2OCT(F24)",
+      "setup": {
+        "A24": {
+          "kind": "text",
+          "value": "12"
+        },
+        "F24": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A24,B24)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J24",
+      "formula": "=HEX2DEC(E24)",
+      "setup": {
+        "A24": {
+          "kind": "text",
+          "value": "12"
+        },
+        "E24": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A24)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=DEC2BIN(A25)",
+      "setup": {
+        "A25": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=ISERROR(DEC2BIN(A25,B25))",
+      "setup": {
+        "A25": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E25",
+      "formula": "=DEC2HEX(A25)",
+      "setup": {
+        "A25": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F25",
+      "formula": "=ISERROR(DEC2OCT(A25,B25))",
+      "setup": {
+        "A25": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G25",
+      "formula": "=DEC2OCT(A25)",
+      "setup": {
+        "A25": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "H25",
+      "formula": "=BIN2DEC(D25)",
+      "setup": {
+        "A25": {
+          "kind": "bool",
+          "value": true
+        },
+        "D25": {
+          "kind": "formula",
+          "formula": "=ISERROR(DEC2BIN(A25,B25))"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "I25",
+      "formula": "=BIN2OCT(F25)",
+      "setup": {
+        "A25": {
+          "kind": "bool",
+          "value": true
+        },
+        "F25": {
+          "kind": "formula",
+          "formula": "=ISERROR(DEC2OCT(A25,B25))"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J25",
+      "formula": "=HEX2DEC(E25)",
+      "setup": {
+        "A25": {
+          "kind": "bool",
+          "value": true
+        },
+        "E25": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A25)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C26",
+      "formula": "=DEC2BIN(A26)",
+      "setup": {
+        "A26": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D26",
+      "formula": "=ISERROR(DEC2BIN(A26,B26))",
+      "setup": {
+        "A26": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E26",
+      "formula": "=DEC2HEX(A26)",
+      "setup": {
+        "A26": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F26",
+      "formula": "=ISERROR(DEC2OCT(A26,B26))",
+      "setup": {
+        "A26": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G26",
+      "formula": "=DEC2OCT(A26)",
+      "setup": {
+        "A26": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "H26",
+      "formula": "=BIN2DEC(D26)",
+      "setup": {
+        "A26": {
+          "kind": "bool",
+          "value": false
+        },
+        "D26": {
+          "kind": "formula",
+          "formula": "=ISERROR(DEC2BIN(A26,B26))"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "I26",
+      "formula": "=BIN2OCT(F26)",
+      "setup": {
+        "A26": {
+          "kind": "bool",
+          "value": false
+        },
+        "F26": {
+          "kind": "formula",
+          "formula": "=ISERROR(DEC2OCT(A26,B26))"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J26",
+      "formula": "=HEX2DEC(E26)",
+      "setup": {
+        "A26": {
+          "kind": "bool",
+          "value": false
+        },
+        "E26": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A26)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C27",
+      "formula": "=DEC2BIN(A27)",
+      "setup": {
+        "A27": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1110011100"
+      }
+    },
+    {
+      "id": "D27",
+      "formula": "=DEC2BIN(A27,B27)",
+      "setup": {
+        "B27": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1110011100"
+      }
+    },
+    {
+      "id": "E27",
+      "formula": "=DEC2HEX(A27)",
+      "setup": {
+        "A27": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "FFFFFFFF9C"
+      }
+    },
+    {
+      "id": "F27",
+      "formula": "=DEC2OCT(A27,B27)",
+      "setup": {
+        "B27": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7777777634"
+      }
+    },
+    {
+      "id": "G27",
+      "formula": "=DEC2OCT(A27)",
+      "setup": {
+        "A27": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7777777634"
+      }
+    },
+    {
+      "id": "H27",
+      "formula": "=BIN2DEC(D27)",
+      "setup": {
+        "B27": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": -100.0
+        },
+        "D27": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A27,B27)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -100.0
+      }
+    },
+    {
+      "id": "I27",
+      "formula": "=BIN2OCT(F27)",
+      "setup": {
+        "B27": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": -100.0
+        },
+        "F27": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A27,B27)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J27",
+      "formula": "=HEX2DEC(E27)",
+      "setup": {
+        "A27": {
+          "kind": "number",
+          "value": -100.0
+        },
+        "E27": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A27)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -100.0
+      }
+    },
+    {
+      "id": "C28",
+      "formula": "=DEC2BIN(A28)",
+      "setup": {
+        "A28": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1111111111"
+      }
+    },
+    {
+      "id": "D28",
+      "formula": "=DEC2BIN(A28,B28)",
+      "setup": {
+        "B28": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1111111111"
+      }
+    },
+    {
+      "id": "E28",
+      "formula": "=DEC2HEX(A28)",
+      "setup": {
+        "A28": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "FFFFFFFFFF"
+      }
+    },
+    {
+      "id": "F28",
+      "formula": "=DEC2OCT(A28,B28)",
+      "setup": {
+        "B28": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7777777777"
+      }
+    },
+    {
+      "id": "G28",
+      "formula": "=DEC2OCT(A28)",
+      "setup": {
+        "A28": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7777777777"
+      }
+    },
+    {
+      "id": "H28",
+      "formula": "=BIN2DEC(D28)",
+      "setup": {
+        "B28": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "D28": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A28,B28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "I28",
+      "formula": "=BIN2OCT(F28)",
+      "setup": {
+        "B28": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "F28": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A28,B28)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J28",
+      "formula": "=HEX2DEC(E28)",
+      "setup": {
+        "A28": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "E28": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A28)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "C29",
+      "formula": "=DEC2BIN(A29)",
+      "setup": {
+        "A29": {
+          "kind": "number",
+          "value": 1073741824.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D29",
+      "formula": "=DEC2BIN(A29,B29)",
+      "setup": {
+        "B29": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 1073741824.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E29",
+      "formula": "=DEC2HEX(A29)",
+      "setup": {
+        "A29": {
+          "kind": "number",
+          "value": 1073741824.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "40000000"
+      }
+    },
+    {
+      "id": "F29",
+      "formula": "=DEC2OCT(A29,B29)",
+      "setup": {
+        "B29": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 1073741824.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G29",
+      "formula": "=DEC2OCT(A29)",
+      "setup": {
+        "A29": {
+          "kind": "number",
+          "value": 1073741824.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H29",
+      "formula": "=BIN2DEC(D29)",
+      "setup": {
+        "B29": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 1073741824.0
+        },
+        "D29": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A29,B29)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I29",
+      "formula": "=BIN2OCT(F29)",
+      "setup": {
+        "B29": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": 1073741824.0
+        },
+        "F29": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A29,B29)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J29",
+      "formula": "=HEX2DEC(E29)",
+      "setup": {
+        "A29": {
+          "kind": "number",
+          "value": 1073741824.0
+        },
+        "E29": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A29)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1073741824.0
+      }
+    },
+    {
+      "id": "C30",
+      "formula": "=DEC2BIN(A30)",
+      "setup": {
+        "A30": {
+          "kind": "number",
+          "value": 536870911.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D30",
+      "formula": "=DEC2BIN(A30,B30)",
+      "setup": {
+        "B30": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 536870911.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E30",
+      "formula": "=DEC2HEX(A30)",
+      "setup": {
+        "A30": {
+          "kind": "number",
+          "value": 536870911.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1FFFFFFF"
+      }
+    },
+    {
+      "id": "F30",
+      "formula": "=DEC2OCT(A30,B30)",
+      "setup": {
+        "B30": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 536870911.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "3777777777"
+      }
+    },
+    {
+      "id": "G30",
+      "formula": "=DEC2OCT(A30)",
+      "setup": {
+        "A30": {
+          "kind": "number",
+          "value": 536870911.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "3777777777"
+      }
+    },
+    {
+      "id": "H30",
+      "formula": "=BIN2DEC(D30)",
+      "setup": {
+        "B30": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 536870911.0
+        },
+        "D30": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A30,B30)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I30",
+      "formula": "=BIN2OCT(F30)",
+      "setup": {
+        "B30": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": 536870911.0
+        },
+        "F30": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A30,B30)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J30",
+      "formula": "=HEX2DEC(E30)",
+      "setup": {
+        "A30": {
+          "kind": "number",
+          "value": 536870911.0
+        },
+        "E30": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A30)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 536870911.0
+      }
+    },
+    {
+      "id": "C31",
+      "formula": "=DEC2BIN(A31)",
+      "setup": {
+        "A31": {
+          "kind": "number",
+          "value": 536870912.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D31",
+      "formula": "=DEC2BIN(A31,B31)",
+      "setup": {
+        "B31": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A31": {
+          "kind": "number",
+          "value": 536870912.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E31",
+      "formula": "=DEC2HEX(A31)",
+      "setup": {
+        "A31": {
+          "kind": "number",
+          "value": 536870912.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "20000000"
+      }
+    },
+    {
+      "id": "F31",
+      "formula": "=DEC2OCT(A31,B31)",
+      "setup": {
+        "B31": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A31": {
+          "kind": "number",
+          "value": 536870912.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G31",
+      "formula": "=DEC2OCT(A31)",
+      "setup": {
+        "A31": {
+          "kind": "number",
+          "value": 536870912.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H31",
+      "formula": "=BIN2DEC(D31)",
+      "setup": {
+        "B31": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A31": {
+          "kind": "number",
+          "value": 536870912.0
+        },
+        "D31": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A31,B31)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I31",
+      "formula": "=BIN2OCT(F31)",
+      "setup": {
+        "B31": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A31": {
+          "kind": "number",
+          "value": 536870912.0
+        },
+        "F31": {
+          "kind": "formula",
+          "formula": "=DEC2OCT(A31,B31)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J31",
+      "formula": "=HEX2DEC(E31)",
+      "setup": {
+        "A31": {
+          "kind": "number",
+          "value": 536870912.0
+        },
+        "E31": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A31)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 536870912.0
+      }
+    },
+    {
+      "id": "C32",
+      "formula": "=DEC2BIN(A32)",
+      "setup": {
+        "A32": {
+          "kind": "number",
+          "value": 536870911.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D32",
+      "formula": "=DEC2BIN(A32,B32)",
+      "setup": {
+        "B32": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A32": {
+          "kind": "number",
+          "value": 536870911.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E32",
+      "formula": "=DEC2HEX(A32)",
+      "setup": {
+        "A32": {
+          "kind": "number",
+          "value": 536870911.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1FFFFFFF"
+      }
+    },
+    {
+      "id": "G32",
+      "formula": "=DEC2OCT(A32)",
+      "setup": {
+        "A32": {
+          "kind": "number",
+          "value": 536870911.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "3777777777"
+      }
+    },
+    {
+      "id": "H32",
+      "formula": "=BIN2DEC(D32)",
+      "setup": {
+        "B32": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A32": {
+          "kind": "number",
+          "value": 536870911.0
+        },
+        "D32": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A32,B32)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I32",
+      "formula": "=BIN2OCT(F32)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "J32",
+      "formula": "=HEX2DEC(E32)",
+      "setup": {
+        "A32": {
+          "kind": "number",
+          "value": 536870911.0
+        },
+        "E32": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A32)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 536870911.0
+      }
+    },
+    {
+      "id": "C33",
+      "formula": "=DEC2BIN(A33)",
+      "setup": {
+        "A33": {
+          "kind": "number",
+          "value": 549755813888.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D33",
+      "formula": "=DEC2BIN(A33,B33)",
+      "setup": {
+        "B33": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": 549755813888.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E33",
+      "formula": "=DEC2HEX(A33)",
+      "setup": {
+        "A33": {
+          "kind": "number",
+          "value": 549755813888.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "G33",
+      "formula": "=DEC2OCT(A33)",
+      "setup": {
+        "A33": {
+          "kind": "number",
+          "value": 549755813888.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H33",
+      "formula": "=BIN2DEC(D33)",
+      "setup": {
+        "B33": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": 549755813888.0
+        },
+        "D33": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A33,B33)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J33",
+      "formula": "=HEX2DEC(E33)",
+      "setup": {
+        "A33": {
+          "kind": "number",
+          "value": 549755813888.0
+        },
+        "E33": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A33)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A34",
+      "formula": "=A33-1",
+      "setup": {
+        "A33": {
+          "kind": "number",
+          "value": 549755813888.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 549755813887.0
+      }
+    },
+    {
+      "id": "C34",
+      "formula": "=DEC2BIN(A34)",
+      "setup": {
+        "A33": {
+          "kind": "number",
+          "value": 549755813888.0
+        },
+        "A34": {
+          "kind": "formula",
+          "formula": "=A33-1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D34",
+      "formula": "=DEC2BIN(A34,B34)",
+      "setup": {
+        "B34": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": 549755813888.0
+        },
+        "A34": {
+          "kind": "formula",
+          "formula": "=A33-1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E34",
+      "formula": "=DEC2HEX(A34)",
+      "setup": {
+        "A33": {
+          "kind": "number",
+          "value": 549755813888.0
+        },
+        "A34": {
+          "kind": "formula",
+          "formula": "=A33-1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7FFFFFFFFF"
+      }
+    },
+    {
+      "id": "G34",
+      "formula": "=DEC2OCT(A34)",
+      "setup": {
+        "A33": {
+          "kind": "number",
+          "value": 549755813888.0
+        },
+        "A34": {
+          "kind": "formula",
+          "formula": "=A33-1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H34",
+      "formula": "=BIN2DEC(D34)",
+      "setup": {
+        "B34": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": 549755813888.0
+        },
+        "D34": {
+          "kind": "formula",
+          "formula": "=DEC2BIN(A34,B34)"
+        },
+        "A34": {
+          "kind": "formula",
+          "formula": "=A33-1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J34",
+      "formula": "=HEX2DEC(E34)",
+      "setup": {
+        "A33": {
+          "kind": "number",
+          "value": 549755813888.0
+        },
+        "E34": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A34)"
+        },
+        "A34": {
+          "kind": "formula",
+          "formula": "=A33-1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 549755813887.0
+      }
+    },
+    {
+      "id": "E35",
+      "formula": "=LEN(E34)",
+      "setup": {
+        "A33": {
+          "kind": "number",
+          "value": 549755813888.0
+        },
+        "E34": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A34)"
+        },
+        "A34": {
+          "kind": "formula",
+          "formula": "=A33-1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "J35",
+      "formula": "=HEX2DEC(E35)",
+      "setup": {
+        "A33": {
+          "kind": "number",
+          "value": 549755813888.0
+        },
+        "E35": {
+          "kind": "formula",
+          "formula": "=LEN(E34)"
+        },
+        "E34": {
+          "kind": "formula",
+          "formula": "=DEC2HEX(A34)"
+        },
+        "A34": {
+          "kind": "formula",
+          "formula": "=A33-1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.0
+      }
+    }
+  ]
+}

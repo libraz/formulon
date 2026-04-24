@@ -1,0 +1,279 @@
+{
+  "suite": "ironcalc_templates_travel_expenses_tracker_Overview",
+  "description": "Derived from IronCalc fixture templates/travel_expenses_tracker.xlsx, sheet '📈 Overview'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "📈 Overview",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "H9",
+      "formula": "=D9/$D$15",
+      "setup": {
+        "D14": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D13": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D12": {
+          "kind": "number",
+          "value": 150.0
+        },
+        "D11": {
+          "kind": "number",
+          "value": 500.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 700.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "D15": {
+          "kind": "formula",
+          "formula": "=SUM(D9:D14)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.03125
+      }
+    },
+    {
+      "id": "H10",
+      "formula": "=D10/$D$15",
+      "setup": {
+        "D14": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D13": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D12": {
+          "kind": "number",
+          "value": 150.0
+        },
+        "D11": {
+          "kind": "number",
+          "value": 500.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 700.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "D15": {
+          "kind": "formula",
+          "formula": "=SUM(D9:D14)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4375
+      }
+    },
+    {
+      "id": "H11",
+      "formula": "=D11/$D$15",
+      "setup": {
+        "D14": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D13": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D12": {
+          "kind": "number",
+          "value": 150.0
+        },
+        "D11": {
+          "kind": "number",
+          "value": 500.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 700.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "D15": {
+          "kind": "formula",
+          "formula": "=SUM(D9:D14)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3125
+      }
+    },
+    {
+      "id": "H12",
+      "formula": "=D12/$D$15",
+      "setup": {
+        "D14": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D13": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D12": {
+          "kind": "number",
+          "value": 150.0
+        },
+        "D11": {
+          "kind": "number",
+          "value": 500.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 700.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "D15": {
+          "kind": "formula",
+          "formula": "=SUM(D9:D14)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.09375
+      }
+    },
+    {
+      "id": "H13",
+      "formula": "=D13/$D$15",
+      "setup": {
+        "D14": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D13": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D12": {
+          "kind": "number",
+          "value": 150.0
+        },
+        "D11": {
+          "kind": "number",
+          "value": 500.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 700.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "D15": {
+          "kind": "formula",
+          "formula": "=SUM(D9:D14)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0625
+      }
+    },
+    {
+      "id": "H14",
+      "formula": "=D14/$D$15",
+      "setup": {
+        "D14": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D13": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D12": {
+          "kind": "number",
+          "value": 150.0
+        },
+        "D11": {
+          "kind": "number",
+          "value": 500.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 700.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "D15": {
+          "kind": "formula",
+          "formula": "=SUM(D9:D14)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0625
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=SUM(D9:D14)",
+      "setup": {
+        "D14": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D13": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D12": {
+          "kind": "number",
+          "value": 150.0
+        },
+        "D11": {
+          "kind": "number",
+          "value": 500.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 700.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1600.0
+      }
+    }
+  ]
+}

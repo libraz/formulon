@@ -1,0 +1,1289 @@
+{
+  "suite": "ironcalc_calc_tests_COMBIN_COMBINA_COMBIN_COMBINA",
+  "description": "Derived from IronCalc fixture calc_tests/COMBIN_COMBINA.xlsx, sheet 'COMBIN_COMBINA'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "COMBIN_COMBINA",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=COMBIN(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=_xlfn.COMBINA(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=COMBIN(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=_xlfn.COMBINA(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=COMBIN(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=_xlfn.COMBINA(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 92378.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=COMBIN(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 19.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=_xlfn.COMBINA(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 19.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 35345263799.999985
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=COMBIN(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=_xlfn.COMBINA(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 66.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=COMBIN(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=_xlfn.COMBINA(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=COMBIN(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=_xlfn.COMBINA(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=COMBIN(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=_xlfn.COMBINA(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=COMBIN(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=_xlfn.COMBINA(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=COMBIN(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=_xlfn.COMBINA(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=COMBIN(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 3.576
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=_xlfn.COMBINA(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 3.576
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=COMBIN(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 2.51
+        },
+        "A13": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=_xlfn.COMBINA(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 2.51
+        },
+        "A13": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=COMBIN(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 3.9
+        },
+        "A14": {
+          "kind": "number",
+          "value": 10.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 120.0
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=_xlfn.COMBINA(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 3.9
+        },
+        "A14": {
+          "kind": "number",
+          "value": 10.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 220.0
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=COMBIN(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 0.9
+        },
+        "A15": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=_xlfn.COMBINA(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 0.9
+        },
+        "A15": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=COMBIN(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.617155560659313e+215
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=_xlfn.COMBINA(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.6676833067813678e+233
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=COMBIN(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A17": {
+          "kind": "number",
+          "value": 1e-10
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=_xlfn.COMBINA(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A17": {
+          "kind": "number",
+          "value": 1e-10
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=COMBIN(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 1e-10
+        },
+        "A18": {
+          "kind": "number",
+          "value": 1e-10
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=_xlfn.COMBINA(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 1e-10
+        },
+        "A18": {
+          "kind": "number",
+          "value": 1e-10
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=COMBIN(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=_xlfn.COMBINA(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=COMBIN(A20,B20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=_xlfn.COMBINA(A20,B20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A21",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=COMBIN(A21,B21)",
+      "setup": {
+        "A21": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=_xlfn.COMBINA(A21,B21)",
+      "setup": {
+        "A21": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A22",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=COMBIN(A22,B22)",
+      "setup": {
+        "A22": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=_xlfn.COMBINA(A22,B22)",
+      "setup": {
+        "A22": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=COMBIN(A23,B23)",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=_xlfn.COMBINA(A23,B23)",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=COMBIN(G22:G24,B24)",
+      "setup": {
+        "B24": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G24": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G23": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "G22": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "D24",
+      "formula": "=_xlfn.COMBINA(A24,B24)",
+      "setup": {
+        "B24": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=COMBIN(A25,B25)",
+      "setup": {
+        "A25": {
+          "kind": "text",
+          "value": "hola"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=_xlfn.COMBINA(A25,B25)",
+      "setup": {
+        "A25": {
+          "kind": "text",
+          "value": "hola"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C26",
+      "formula": "=COMBIN(A26,B26)",
+      "setup": {
+        "B26": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A26": {
+          "kind": "text",
+          "value": "12"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 66.0
+      }
+    },
+    {
+      "id": "D26",
+      "formula": "=_xlfn.COMBINA(A26,B26)",
+      "setup": {
+        "B26": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A26": {
+          "kind": "text",
+          "value": "12"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 78.0
+      }
+    },
+    {
+      "id": "C27",
+      "formula": "=COMBIN(A27,B27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A27": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 66.0
+      }
+    },
+    {
+      "id": "D27",
+      "formula": "=_xlfn.COMBINA(A27,B27)",
+      "setup": {
+        "B27": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A27": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 78.0
+      }
+    },
+    {
+      "id": "C28",
+      "formula": "=COMBIN(A28,B28)",
+      "setup": {
+        "B28": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A28": {
+          "kind": "text",
+          "value": "\" 12 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D28",
+      "formula": "=_xlfn.COMBINA(A28,B28)",
+      "setup": {
+        "B28": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A28": {
+          "kind": "text",
+          "value": "\" 12 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C29",
+      "formula": "=COMBIN(A29,B29)",
+      "setup": {
+        "B29": {
+          "kind": "text",
+          "value": "\"2\""
+        },
+        "A29": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D29",
+      "formula": "=_xlfn.COMBINA(A29,B29)",
+      "setup": {
+        "B29": {
+          "kind": "text",
+          "value": "\"2\""
+        },
+        "A29": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C30",
+      "formula": "=COMBIN(A30,B30)",
+      "setup": {
+        "B30": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A30": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D30",
+      "formula": "=_xlfn.COMBINA(A30,B30)",
+      "setup": {
+        "B30": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A30": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C31",
+      "formula": "=COMBIN(A31,B31)",
+      "setup": {
+        "B31": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A31": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D31",
+      "formula": "=_xlfn.COMBINA(A31,B31)",
+      "setup": {
+        "B31": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A31": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C32",
+      "formula": "=COMBIN(A32,B32)",
+      "setup": {
+        "B32": {
+          "kind": "bool",
+          "value": true
+        },
+        "A32": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "D32",
+      "formula": "=_xlfn.COMBINA(A32,B32)",
+      "setup": {
+        "B32": {
+          "kind": "bool",
+          "value": true
+        },
+        "A32": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "C33",
+      "formula": "=COMBIN(A33,B33)",
+      "setup": {
+        "B33": {
+          "kind": "bool",
+          "value": false
+        },
+        "A33": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D33",
+      "formula": "=_xlfn.COMBINA(A33,B33)",
+      "setup": {
+        "B33": {
+          "kind": "bool",
+          "value": false
+        },
+        "A33": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C34",
+      "formula": "=COMBIN(A34,B34)",
+      "setup": {
+        "B34": {
+          "kind": "bool",
+          "value": true
+        },
+        "A34": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D34",
+      "formula": "=_xlfn.COMBINA(A34,B34)",
+      "setup": {
+        "B34": {
+          "kind": "bool",
+          "value": true
+        },
+        "A34": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C35",
+      "formula": "=COMBIN(A35,B35)",
+      "setup": {
+        "B35": {
+          "kind": "bool",
+          "value": false
+        },
+        "A35": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D35",
+      "formula": "=_xlfn.COMBINA(A35,B35)",
+      "setup": {
+        "B35": {
+          "kind": "bool",
+          "value": false
+        },
+        "A35": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A36",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C36",
+      "formula": "=COMBIN(A36,B36)",
+      "setup": {
+        "A36": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D36",
+      "formula": "=_xlfn.COMBINA(A36,B36)",
+      "setup": {
+        "A36": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A37",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C37",
+      "formula": "=COMBIN(A37,B37)",
+      "setup": {
+        "A37": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D37",
+      "formula": "=_xlfn.COMBINA(A37,B37)",
+      "setup": {
+        "A37": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

@@ -1,0 +1,441 @@
+{
+  "suite": "ironcalc_calc_tests_CONVERT_Temperature",
+  "description": "Derived from IronCalc fixture calc_tests/CONVERT.xlsx, sheet 'Temperature'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Temperature",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=CONVERT(1,B2,$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "K"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "C"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 274.15
+      }
+    },
+    {
+      "id": "I2",
+      "formula": "=\"M\"&B2",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "C"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MC"
+      }
+    },
+    {
+      "id": "J2",
+      "formula": "=CONVERT(12,I2,$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "K"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "C"
+        },
+        "I2": {
+          "kind": "formula",
+          "formula": "=\"M\"&B2"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=CONVERT(1,B3,$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "K"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "cel"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 274.15
+      }
+    },
+    {
+      "id": "I3",
+      "formula": "=\"M\"&B3",
+      "setup": {
+        "B3": {
+          "kind": "text",
+          "value": "cel"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mcel"
+      }
+    },
+    {
+      "id": "J3",
+      "formula": "=CONVERT(12,I3,$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "K"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "cel"
+        },
+        "I3": {
+          "kind": "formula",
+          "formula": "=\"M\"&B3"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=CONVERT(1,B4,$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "K"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "F"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 255.92777777777775
+      }
+    },
+    {
+      "id": "I4",
+      "formula": "=\"M\"&B4",
+      "setup": {
+        "B4": {
+          "kind": "text",
+          "value": "F"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MF"
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=CONVERT(12,I4,$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "K"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "F"
+        },
+        "I4": {
+          "kind": "formula",
+          "formula": "=\"M\"&B4"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=CONVERT(1,B5,$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "K"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "fah"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 255.92777777777775
+      }
+    },
+    {
+      "id": "I5",
+      "formula": "=\"M\"&B5",
+      "setup": {
+        "B5": {
+          "kind": "text",
+          "value": "fah"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mfah"
+      }
+    },
+    {
+      "id": "J5",
+      "formula": "=CONVERT(12,I5,$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "K"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "fah"
+        },
+        "I5": {
+          "kind": "formula",
+          "formula": "=\"M\"&B5"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=CONVERT(1,B6,$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "K"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "I6",
+      "formula": "=\"M\"&B6",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "K"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MK"
+      }
+    },
+    {
+      "id": "J6",
+      "formula": "=CONVERT(12,I6,$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "K"
+        },
+        "I6": {
+          "kind": "formula",
+          "formula": "=\"M\"&B6"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12000000.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=CONVERT(1,B7,$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "K"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "kel"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "I7",
+      "formula": "=\"M\"&B7",
+      "setup": {
+        "B7": {
+          "kind": "text",
+          "value": "kel"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mkel"
+      }
+    },
+    {
+      "id": "J7",
+      "formula": "=CONVERT(12,I7,$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "K"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "kel"
+        },
+        "I7": {
+          "kind": "formula",
+          "formula": "=\"M\"&B7"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12000000.0
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=CONVERT(1,B8,$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "K"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "Rank"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5555555555555556
+      }
+    },
+    {
+      "id": "I8",
+      "formula": "=\"M\"&B8",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "Rank"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MRank"
+      }
+    },
+    {
+      "id": "J8",
+      "formula": "=CONVERT(12,I8,$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "K"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "Rank"
+        },
+        "I8": {
+          "kind": "formula",
+          "formula": "=\"M\"&B8"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=CONVERT(1,B9,$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "K"
+        },
+        "B9": {
+          "kind": "text",
+          "value": "Reau"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 274.4
+      }
+    },
+    {
+      "id": "I9",
+      "formula": "=\"M\"&B9",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "Reau"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MReau"
+      }
+    },
+    {
+      "id": "J9",
+      "formula": "=CONVERT(12,I9,$B$6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "K"
+        },
+        "B9": {
+          "kind": "text",
+          "value": "Reau"
+        },
+        "I9": {
+          "kind": "formula",
+          "formula": "=\"M\"&B9"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

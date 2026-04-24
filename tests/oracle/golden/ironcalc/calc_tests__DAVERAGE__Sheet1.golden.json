@@ -1,0 +1,649 @@
+{
+  "suite": "ironcalc_calc_tests_DAVERAGE_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/DAVERAGE.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "A12",
+      "formula": "=DAVERAGE(A4:E10, \"Yield\", A1:B2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": ">10"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "=Apple"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Height"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Tree"
+        },
+        "E10": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A10": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E9": {
+          "kind": "number",
+          "value": 76.8
+        },
+        "D9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A9": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E8": {
+          "kind": "number",
+          "value": 75.0
+        },
+        "D8": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C8": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "A8": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E7": {
+          "kind": "number",
+          "value": 105.0
+        },
+        "D7": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "Cherry"
+        },
+        "E6": {
+          "kind": "number",
+          "value": 96.0
+        },
+        "D6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E5": {
+          "kind": "number",
+          "value": 105.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 18.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Profit"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Yield"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Age"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "Height"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Tree"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "A13",
+      "formula": "=DAVERAGE(A4:E10, 3, A4:E10)",
+      "setup": {
+        "E10": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A10": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E9": {
+          "kind": "number",
+          "value": 76.8
+        },
+        "D9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A9": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E8": {
+          "kind": "number",
+          "value": 75.0
+        },
+        "D8": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C8": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "A8": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E7": {
+          "kind": "number",
+          "value": 105.0
+        },
+        "D7": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "Cherry"
+        },
+        "E6": {
+          "kind": "number",
+          "value": 96.0
+        },
+        "D6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E5": {
+          "kind": "number",
+          "value": 105.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 18.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Profit"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Yield"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Age"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "Height"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Tree"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 13.0
+      }
+    },
+    {
+      "id": "A16",
+      "formula": "=DAVERAGE(A4:E10,\"Yield\", F1:F2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "<16"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Height"
+        },
+        "E10": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A10": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E9": {
+          "kind": "number",
+          "value": 76.8
+        },
+        "D9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A9": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E8": {
+          "kind": "number",
+          "value": 75.0
+        },
+        "D8": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C8": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "A8": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E7": {
+          "kind": "number",
+          "value": 105.0
+        },
+        "D7": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "Cherry"
+        },
+        "E6": {
+          "kind": "number",
+          "value": 96.0
+        },
+        "D6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E5": {
+          "kind": "number",
+          "value": 105.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 18.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Profit"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Yield"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Age"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "Height"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Tree"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.6
+      }
+    },
+    {
+      "id": "A17",
+      "formula": "=DAVERAGE(A4:E10,D4,H1:H2)",
+      "setup": {
+        "H2": {
+          "kind": "text",
+          "value": "*pp*"
+        },
+        "H1": {
+          "kind": "text",
+          "value": "Tree"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Yield"
+        },
+        "E10": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A10": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E9": {
+          "kind": "number",
+          "value": 76.8
+        },
+        "D9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A9": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E8": {
+          "kind": "number",
+          "value": 75.0
+        },
+        "D8": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C8": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "A8": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E7": {
+          "kind": "number",
+          "value": 105.0
+        },
+        "D7": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "Cherry"
+        },
+        "E6": {
+          "kind": "number",
+          "value": 96.0
+        },
+        "D6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E5": {
+          "kind": "number",
+          "value": 105.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 18.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Profit"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Age"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "Height"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Tree"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    }
+  ]
+}

@@ -24,6 +24,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include "eval/builtins/financial_bond_simple.h"
 #include "eval/builtins/financial_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
@@ -691,6 +692,21 @@ void register_financial_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"TBILLPRICE", 3u, 3u, &financial_detail::TBillPrice});
   registry.register_function(FunctionDef{"TBILLYIELD", 3u, 3u, &financial_detail::TBillYield});
   registry.register_function(FunctionDef{"TBILLEQ", 3u, 3u, &financial_detail::TBillEq});
+
+  // Closed-form bond pricing / yield helpers. All eager scalar, no range
+  // support. Implementations live in `financial_bond_simple.cpp`.
+  //   PRICEDISC / YIELDDISC: 4 required + optional basis (min 4, max 5).
+  //   PRICEMAT / YIELDMAT:   5 required + optional basis (min 5, max 6).
+  registry.register_function(FunctionDef{"PRICEDISC", 4u, 5u, &financial_detail::PriceDisc});
+  registry.register_function(FunctionDef{"PRICEMAT", 5u, 6u, &financial_detail::PriceMat});
+  registry.register_function(FunctionDef{"YIELDDISC", 4u, 5u, &financial_detail::YieldDisc});
+  registry.register_function(FunctionDef{"YIELDMAT", 5u, 6u, &financial_detail::YieldMat});
+
+  // STOCKHISTORY: stub returning #VALUE!. Formulon is a pure calc engine
+  // and does not perform network / market-data I/O. Accepts any tail of
+  // properties (2..kVariadic). See `financial_bond_simple.cpp` for the
+  // rationale; mirrors the WEBSERVICE / PY pattern in `web.cpp`.
+  registry.register_function(FunctionDef{"STOCKHISTORY", 2u, kVariadic, &financial_detail::StockHistory});
 }
 
 }  // namespace eval

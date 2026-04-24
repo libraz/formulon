@@ -1,0 +1,641 @@
+{
+  "suite": "ironcalc_calc_tests_ARABIC_ROMAN_ARABIC",
+  "description": "Derived from IronCalc fixture calc_tests/ARABIC_ROMAN.xlsx, sheet 'ARABIC'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "ARABIC",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=_xlfn.ARABIC(A2)",
+      "setup": {
+        "A2": {
+          "kind": "text",
+          "value": "I"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=_xlfn.ARABIC(A3)",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "V"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=_xlfn.ARABIC(A4)",
+      "setup": {
+        "A4": {
+          "kind": "text",
+          "value": "X"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=_xlfn.ARABIC(A5)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "L"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=_xlfn.ARABIC(A6)",
+      "setup": {
+        "A6": {
+          "kind": "text",
+          "value": "C"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=_xlfn.ARABIC(A7)",
+      "setup": {
+        "A7": {
+          "kind": "text",
+          "value": "D"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 500.0
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=_xlfn.ARABIC(A8)",
+      "setup": {
+        "A8": {
+          "kind": "text",
+          "value": "M"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1000.0
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=_xlfn.ARABIC(A9)",
+      "setup": {
+        "A9": {
+          "kind": "text",
+          "value": "A"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=_xlfn.ARABIC(A10)",
+      "setup": {
+        "A10": {
+          "kind": "text",
+          "value": "B"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=_xlfn.ARABIC(A11)",
+      "setup": {
+        "A11": {
+          "kind": "text",
+          "value": "ixix"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 18.0
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=_xlfn.ARABIC(A12)",
+      "setup": {
+        "A12": {
+          "kind": "text",
+          "value": "XIXI"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=_xlfn.ARABIC(A13)",
+      "setup": {
+        "A13": {
+          "kind": "text",
+          "value": "IM"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 999.0
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=_xlfn.ARABIC(A14)",
+      "setup": {
+        "A14": {
+          "kind": "text",
+          "value": "CMM"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1900.0
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=_xlfn.ARABIC(A15)",
+      "setup": {
+        "A15": {
+          "kind": "text",
+          "value": "MmM"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3000.0
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=_xlfn.ARABIC(A16)",
+      "setup": {
+        "A16": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=_xlfn.ARABIC(A17)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=_xlfn.ARABIC(A18)",
+      "setup": {
+        "A18": {
+          "kind": "text",
+          "value": "\"-X\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=_xlfn.ARABIC(A19)",
+      "setup": {
+        "A19": {
+          "kind": "text",
+          "value": "IC"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 99.0
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=_xlfn.ARABIC(A20)",
+      "setup": {
+        "A20": {
+          "kind": "text",
+          "value": "ICIC"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 198.0
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=_xlfn.ARABIC(A21)",
+      "setup": {
+        "A21": {
+          "kind": "text",
+          "value": "CDXCIX"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 499.0
+      }
+    },
+    {
+      "id": "B22",
+      "formula": "=_xlfn.ARABIC(A22)",
+      "setup": {
+        "A22": {
+          "kind": "text",
+          "value": "LDVLIV"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 499.0
+      }
+    },
+    {
+      "id": "B23",
+      "formula": "=_xlfn.ARABIC(A23)",
+      "setup": {
+        "A23": {
+          "kind": "text",
+          "value": "XDIX"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 499.0
+      }
+    },
+    {
+      "id": "B24",
+      "formula": "=_xlfn.ARABIC(A24)",
+      "setup": {
+        "A24": {
+          "kind": "text",
+          "value": "VDIV"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 499.0
+      }
+    },
+    {
+      "id": "B25",
+      "formula": "=_xlfn.ARABIC(A25)",
+      "setup": {
+        "A25": {
+          "kind": "text",
+          "value": "ID"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 499.0
+      }
+    },
+    {
+      "id": "B26",
+      "formula": "=_xlfn.ARABIC(A26)",
+      "setup": {
+        "A26": {
+          "kind": "text",
+          "value": "MMMCMXCIX"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3999.0
+      }
+    },
+    {
+      "id": "B27",
+      "formula": "=_xlfn.ARABIC(A27)",
+      "setup": {
+        "A27": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B28",
+      "formula": "=_xlfn.ARABIC(A28)",
+      "setup": {
+        "A28": {
+          "kind": "text",
+          "value": "Ⅻ"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B29",
+      "formula": "=_xlfn.ARABIC(A29)",
+      "setup": {
+        "A29": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B30",
+      "formula": "=_xlfn.ARABIC(A30)",
+      "setup": {
+        "A30": {
+          "kind": "text",
+          "value": "X"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "B31",
+      "formula": "=_xlfn.ARABIC(A31)",
+      "setup": {
+        "A31": {
+          "kind": "text",
+          "value": "\" X\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B32",
+      "formula": "=_xlfn.ARABIC(A32)",
+      "setup": {
+        "A32": {
+          "kind": "text",
+          "value": "\"X\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B33",
+      "formula": "=_xlfn.ARABIC(A33)",
+      "setup": {
+        "A33": {
+          "kind": "number",
+          "value": 1000000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B34",
+      "formula": "=_xlfn.ARABIC(A34)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B35",
+      "formula": "=_xlfn.ARABIC(A35)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B36",
+      "formula": "=_xlfn.ARABIC(A36)",
+      "setup": {
+        "A36": {
+          "kind": "text",
+          "value": "\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A37",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B37",
+      "formula": "=_xlfn.ARABIC(A37)",
+      "setup": {
+        "A37": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A38",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B38",
+      "formula": "=_xlfn.ARABIC(A38)",
+      "setup": {
+        "A38": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B39",
+      "formula": "=_xlfn.ARABIC(A39)",
+      "setup": {
+        "A39": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B40",
+      "formula": "=_xlfn.ARABIC(A40)",
+      "setup": {
+        "A40": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A41",
+      "formula": "=E39:E42",
+      "setup": {
+        "E42": {
+          "kind": "text",
+          "value": "D"
+        },
+        "E41": {
+          "kind": "text",
+          "value": "X"
+        },
+        "E40": {
+          "kind": "text",
+          "value": "L"
+        },
+        "E39": {
+          "kind": "text",
+          "value": "I"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "X"
+      }
+    },
+    {
+      "id": "B41",
+      "formula": "=_xlfn.ARABIC(E39:E42)",
+      "setup": {
+        "E42": {
+          "kind": "text",
+          "value": "D"
+        },
+        "E41": {
+          "kind": "text",
+          "value": "X"
+        },
+        "E40": {
+          "kind": "text",
+          "value": "L"
+        },
+        "E39": {
+          "kind": "text",
+          "value": "I"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "A42",
+      "formula": "=1.05*(0.0284+0.0046)-0.0284",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.006249999999999999
+      }
+    },
+    {
+      "id": "B42",
+      "formula": "=_xlfn.ARABIC(A42)",
+      "setup": {
+        "A42": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

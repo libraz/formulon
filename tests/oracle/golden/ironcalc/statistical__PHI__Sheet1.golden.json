@@ -1,0 +1,115 @@
+{
+  "suite": "ironcalc_statistical_PHI_Sheet1",
+  "description": "Derived from IronCalc fixture statistical/PHI.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=_xlfn.PHI(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.24197072451914337
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=_xlfn.PHI(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.05399096651318806
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=_xlfn.PHI(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0044318484119380075
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=_xlfn.PHI(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 2.3
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.028327037741601186
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=_xlfn.PHI(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.00013383022576488537
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=_xlfn.PHI(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3989422804014327
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=_xlfn.PHI(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 3.45
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0010382812956614103
+      }
+    }
+  ]
+}

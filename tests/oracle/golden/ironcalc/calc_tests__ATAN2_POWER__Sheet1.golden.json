@@ -1,0 +1,1036 @@
+{
+  "suite": "ironcalc_calc_tests_ATAN2_POWER_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/ATAN2_POWER.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=POWER(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=ATAN2(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7853981633974483
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=POWER(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=ATAN2(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=POWER(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=ATAN2(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=POWER(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=ATAN2(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=POWER(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=ATAN2(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.356194490192345
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=POWER(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=ATAN2(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.677945044588987
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=POWER(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -2.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -79.62624
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=ATAN2(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -2.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0183163019520665
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=POWER(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "A9": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=ATAN2(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "A9": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.761086276477428
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=POWER(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.125
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=ATAN2(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.158798930342464
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=POWER(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A11": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=ATAN2(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A11": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.896613990462929
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=POWER(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 0.1234
+        },
+        "A12": {
+          "kind": "number",
+          "value": -123.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=ATAN2(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 0.1234
+        },
+        "A12": {
+          "kind": "number",
+          "value": -123.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.1405894018938687
+      }
+    },
+    {
+      "id": "A13",
+      "formula": "=PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=POWER(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=ATAN2(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.30816907111598496
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=POWER(A14,B14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B14": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=ATAN2(A14,B14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B14": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.2626272556789115
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=POWER(A15,B15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B15": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.824977827076289
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=ATAN2(A15,B15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B15": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0038848218538872
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=POWER(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 123.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=ATAN2(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 123.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=POWER(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 1e-07
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1e-07
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=ATAN2(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 1e-07
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.5707962267948967
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=POWER(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 1e-07
+        },
+        "A18": {
+          "kind": "number",
+          "value": 1e-07
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999983881917339
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=ATAN2(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 1e-07
+        },
+        "A18": {
+          "kind": "number",
+          "value": 1e-07
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7853981633974483
+      }
+    },
+    {
+      "id": "A19",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=POWER(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A19": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=ATAN2(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A19": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=POWER(A20,B20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B20": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=ATAN2(A20,B20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B20": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "A21",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=POWER(A21,B21)",
+      "setup": {
+        "B21": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=ATAN2(A21,B21)",
+      "setup": {
+        "B21": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=POWER(A22,B22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A22": {
+          "kind": "text",
+          "value": "hola"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=ATAN2(A22,B22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A22": {
+          "kind": "text",
+          "value": "hola"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=POWER(A23,B23)",
+      "setup": {
+        "B23": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "A23": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=ATAN2(A23,B23)",
+      "setup": {
+        "B23": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "A23": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=POWER(A24,B24)",
+      "setup": {
+        "A24": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D24",
+      "formula": "=ATAN2(A24,B24)",
+      "setup": {
+        "A24": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=POWER(A25,B25)",
+      "setup": {
+        "B25": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=ATAN2(A25,B25)",
+      "setup": {
+        "B25": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "C26",
+      "formula": "=POWER(A26,B26)",
+      "setup": {
+        "B26": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A26": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D26",
+      "formula": "=ATAN2(A26,B26)",
+      "setup": {
+        "B26": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A26": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.1071487177940906
+      }
+    },
+    {
+      "id": "C27",
+      "formula": "=POWER(A27,B27)",
+      "setup": {
+        "B27": {
+          "kind": "bool",
+          "value": false
+        },
+        "A27": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D27",
+      "formula": "=ATAN2(A27,B27)",
+      "setup": {
+        "B27": {
+          "kind": "bool",
+          "value": false
+        },
+        "A27": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C28",
+      "formula": "=POWER(A28,B28)",
+      "setup": {
+        "B28": {
+          "kind": "bool",
+          "value": true
+        },
+        "A28": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D28",
+      "formula": "=ATAN2(A28,B28)",
+      "setup": {
+        "B28": {
+          "kind": "bool",
+          "value": true
+        },
+        "A28": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7853981633974483
+      }
+    }
+  ]
+}

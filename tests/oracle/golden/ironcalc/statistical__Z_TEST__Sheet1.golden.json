@@ -1,0 +1,241 @@
+{
+  "suite": "ironcalc_statistical_Z_TEST_Sheet1",
+  "description": "Derived from IronCalc fixture statistical/Z_TEST.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "E2",
+      "formula": "=_xlfn.Z.TEST(A1:A10,C2,D2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 1.8
+        },
+        "A5": {
+          "kind": "number",
+          "value": 2.2
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6615388804893105
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=_xlfn.Z.TEST($A$1:$A$10,C3,D3)",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 1.7
+        },
+        "A10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 1.8
+        },
+        "A5": {
+          "kind": "number",
+          "value": 2.2
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.285470335901444
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=_xlfn.Z.TEST($A$1:$A$10,C4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 2.3
+        },
+        "A10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 1.8
+        },
+        "A5": {
+          "kind": "number",
+          "value": 2.2
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9785431996696947
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=_xlfn.Z.TEST($A$1:$A$10,C5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 1.99
+        },
+        "A10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 1.8
+        },
+        "A5": {
+          "kind": "number",
+          "value": 2.2
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6907332550934567
+      }
+    }
+  ]
+}

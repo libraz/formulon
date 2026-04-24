@@ -1,0 +1,115 @@
+{
+  "suite": "ironcalc_calc_test_no_export_tables_filters",
+  "description": "Derived from IronCalc fixture calc_test_no_export/tables.xlsx, sheet 'filters'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "filters",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B8",
+      "formula": "=SUBTOTAL(9,B3:B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=SUM(B3:B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.0
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=SUBTOTAL(109, OFFSET(A1,1,1):OFFSET(A1,6,1))",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Dogs"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=SUM(OFFSET(A1,1,1):OFFSET(A1,5,1))",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Dogs"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 17.0
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=SUM(INDIRECT(\"B2\"):INDIRECT(\"B6\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 17.0
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=SUBTOTAL(109, INDIRECT(\"B2\"):INDIRECT(\"B6\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    }
+  ]
+}

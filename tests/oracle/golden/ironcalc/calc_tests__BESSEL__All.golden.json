@@ -1,0 +1,1736 @@
+{
+  "suite": "ironcalc_calc_tests_BESSEL_All",
+  "description": "Derived from IronCalc fixture calc_tests/BESSEL.xlsx, sheet 'All'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "All",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 1e-05,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=BESSELI(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=BESSELJ(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.00000000283141
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=BESSELK(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=BESSELY(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=BESSELI(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=BESSELJ(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=BESSELK(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=BESSELY(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=BESSELI(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=BESSELJ(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=BESSELK(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=BESSELY(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=BESSELI(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=BESSELJ(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=BESSELK(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=BESSELY(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=BESSELI(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=BESSELJ(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=BESSELK(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=BESSELY(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=BESSELI(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=BESSELJ(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=BESSELK(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=BESSELY(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=BESSELI(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5651590975819435
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=BESSELJ(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4400505856771301
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=BESSELK(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6019072316669057
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=BESSELY(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.7812128209531197
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=BESSELI(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 1.2
+        },
+        "A9": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5651590975819435
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=BESSELJ(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 1.2
+        },
+        "A9": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4400505856771301
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=BESSELK(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 1.2
+        },
+        "A9": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6019072316669057
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=BESSELY(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 1.2
+        },
+        "A9": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.7812128209531197
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=BESSELI(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 1.999
+        },
+        "A10": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5651590975819435
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=BESSELJ(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 1.999
+        },
+        "A10": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4400505856771301
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=BESSELK(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 1.999
+        },
+        "A10": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6019072316669057
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=BESSELY(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 1.999
+        },
+        "A10": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.7812128209531197
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=BESSELI(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.5651590975819435
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=BESSELJ(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.4400505856771301
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=BESSELK(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F11",
+      "formula": "=BESSELY(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=BESSELI(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.13574766658069928
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=BESSELJ(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.11490348499246938
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=BESSELK(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F12",
+      "formula": "=BESSELY(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=BESSELI(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.022168424403983256
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=BESSELJ(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.019563353982687996
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=BESSELK(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F13",
+      "formula": "=BESSELY(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=BESSELI(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=BESSELJ(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=BESSELK(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F14",
+      "formula": "=BESSELY(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=BESSELI(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 1e-10
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=BESSELJ(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 1e-10
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.00000000283141
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=BESSELK(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 1e-10
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 23.1417824505004
+      }
+    },
+    {
+      "id": "F15",
+      "formula": "=BESSELY(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 1e-10
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -14.732516312945261
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=BESSELI(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 1e-10
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5e-11
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=BESSELJ(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 1e-10
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.000000000760061e-11
+      }
+    },
+    {
+      "id": "E16",
+      "formula": "=BESSELK(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 1e-10
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10000000000.0
+      }
+    },
+    {
+      "id": "F16",
+      "formula": "=BESSELY(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 1e-10
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -6366197720.0
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=BESSELI(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 1e-10
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.6041666666666672e-54
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=BESSELJ(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 1e-10
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.6041666666666675e-54
+      }
+    },
+    {
+      "id": "E17",
+      "formula": "=BESSELK(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 1e-10
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.8400000000000003e+52
+      }
+    },
+    {
+      "id": "F17",
+      "formula": "=BESSELY(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 1e-10
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.44461992448e+52
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=BESSELJ(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 100000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.001846551246313725
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=BESSELK(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 100000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "F18",
+      "formula": "=BESSELY(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 100000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.001719431947654535
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=BESSELI(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=BESSELJ(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E19",
+      "formula": "=BESSELK(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F19",
+      "formula": "=BESSELY(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=BESSELI(A20,B20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A20": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.13574766658069928
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=BESSELJ(A20,B20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A20": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.11490348499246938
+      }
+    },
+    {
+      "id": "E20",
+      "formula": "=BESSELK(A20,B20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A20": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.6248388844172295
+      }
+    },
+    {
+      "id": "F20",
+      "formula": "=BESSELY(A20,B20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A20": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.6506826133039476
+      }
+    },
+    {
+      "id": "A21",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=BESSELI(A21,B21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=BESSELJ(A21,B21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E21",
+      "formula": "=BESSELK(A21,B21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F21",
+      "formula": "=BESSELY(A21,B21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=BESSELI(A22,B22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.8935196726547464e-33
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=BESSELJ(A22,B22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.650256266474097e-33
+      }
+    },
+    {
+      "id": "E22",
+      "formula": "=BESSELK(A22,B22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.2711258180315126e+30
+      }
+    },
+    {
+      "id": "F22",
+      "formula": "=BESSELY(A22,B22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.9132238172293094e+30
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=BESSELI(A23,B23)",
+      "setup": {
+        "B23": {
+          "kind": "number",
+          "value": -30.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=BESSELJ(A23,B23)",
+      "setup": {
+        "B23": {
+          "kind": "number",
+          "value": -30.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E23",
+      "formula": "=BESSELK(A23,B23)",
+      "setup": {
+        "B23": {
+          "kind": "number",
+          "value": -30.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F23",
+      "formula": "=BESSELY(A23,B23)",
+      "setup": {
+        "B23": {
+          "kind": "number",
+          "value": -30.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=BESSELI(A24,B24)",
+      "setup": {
+        "B24": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D24",
+      "formula": "=BESSELJ(A24,B24)",
+      "setup": {
+        "B24": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E24",
+      "formula": "=BESSELK(A24,B24)",
+      "setup": {
+        "B24": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F24",
+      "formula": "=BESSELY(A24,B24)",
+      "setup": {
+        "B24": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=BESSELI(A25,B25)",
+      "setup": {
+        "B25": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 1.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.90495511700334e-11
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=BESSELJ(A25,B25)",
+      "setup": {
+        "B25": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 1.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.332532931984219e-11
+      }
+    },
+    {
+      "id": "E25",
+      "formula": "=BESSELK(A25,B25)",
+      "setup": {
+        "B25": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 1.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 598740569.4156517
+      }
+    },
+    {
+      "id": "F25",
+      "formula": "=BESSELY(A25,B25)",
+      "setup": {
+        "B25": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": 1.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -422217415.9345024
+      }
+    }
+  ]
+}

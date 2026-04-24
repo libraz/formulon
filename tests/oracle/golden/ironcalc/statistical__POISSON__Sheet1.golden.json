@@ -1,0 +1,61 @@
+{
+  "suite": "ironcalc_statistical_POISSON_Sheet1",
+  "description": "Derived from IronCalc fixture statistical/POISSON.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "F2",
+      "formula": "=_xlfn.POISSON.DIST(A2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "bool",
+          "value": true
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.7
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.1353352832366127
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=_xlfn.POISSON.DIST(A3,B3,C3)",
+      "setup": {
+        "C3": {
+          "kind": "bool",
+          "value": false
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.049787068367863944
+      }
+    }
+  ]
+}

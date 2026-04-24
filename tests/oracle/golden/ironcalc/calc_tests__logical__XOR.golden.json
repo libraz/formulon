@@ -1,0 +1,261 @@
+{
+  "suite": "ironcalc_calc_tests_logical_XOR",
+  "description": "Derived from IronCalc fixture calc_tests/logical.xlsx, sheet 'XOR'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "XOR",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "A2",
+      "formula": "=_xlfn.XOR(A1)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B2",
+      "formula": "=_xlfn.XOR(A1,B1)",
+      "setup": {
+        "B1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=_xlfn.XOR(A1,B1,C1)",
+      "setup": {
+        "C1": {
+          "kind": "bool",
+          "value": true
+        },
+        "B1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=_xlfn.XOR(A1:C1)",
+      "setup": {
+        "C1": {
+          "kind": "bool",
+          "value": true
+        },
+        "B1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=_xlfn.XOR(A1,A2:C2)",
+      "setup": {
+        "C1": {
+          "kind": "bool",
+          "value": true
+        },
+        "B1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=_xlfn.XOR(A1,B1,C1)"
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=_xlfn.XOR(A1,B1)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=_xlfn.XOR(A1)"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=_xlfn.XOR(B2:C2)",
+      "setup": {
+        "C1": {
+          "kind": "bool",
+          "value": true
+        },
+        "B1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=_xlfn.XOR(A1,B1,C1)"
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=_xlfn.XOR(A1,B1)"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=_xlfn.XOR(FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=_xlfn.XOR(FALSE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "A14",
+      "formula": "=_xlfn.XOR(A9:A12)",
+      "setup": {
+        "A12": {
+          "kind": "bool",
+          "value": true
+        },
+        "A11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=_xlfn.XOR(B9:B12)",
+      "setup": {
+        "B10": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "B9": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=_xlfn.XOR(C9:C12)",
+      "setup": {
+        "C9": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=_xlfn.XOR(D9:D12)",
+      "setup": {
+        "D9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=_xlfn.XOR(E9:E12)",
+      "setup": {
+        "E9": {
+          "kind": "text",
+          "value": "TRUE"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

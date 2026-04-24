@@ -91,6 +91,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins/engineering_special.cpp
   src/eval/builtins/financial.cpp
   src/eval/builtins/financial_accrual.cpp
+  src/eval/builtins/financial_bond_simple.cpp
   src/eval/builtins/financial_coupon.cpp
   src/eval/builtins/financial_depreciation.cpp
   src/eval/builtins/financial_misc.cpp
@@ -102,6 +103,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins/math_rng.cpp
   src/eval/builtins/math_trig.cpp
   src/eval/builtins/references.cpp
+  src/eval/builtins/service_stubs.cpp
   src/eval/builtins/stats.cpp
   src/eval/builtins/stats/stats_distributions.cpp
   src/eval/builtins/stats/stats_distributions_misc.cpp

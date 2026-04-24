@@ -1,0 +1,111 @@
+{
+  "suite": "ironcalc_docs_CHOOSE_Sheet1",
+  "description": "Derived from IronCalc fixture docs/CHOOSE.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "A7",
+      "formula": "=CHOOSE(5,101,201,301,401,501,601,701,801,901,1001)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 501.0
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=_xlfn.FORMULATEXT(A7)",
+      "setup": {
+        "A7": {
+          "kind": "formula",
+          "formula": "=CHOOSE(5,101,201,301,401,501,601,701,801,901,1001)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=CHOOSE(5,101,201,301,401,501,601,701,801,901,1001)"
+      }
+    },
+    {
+      "id": "A8",
+      "formula": "=SUM(A2:CHOOSE(3,A3,A4,A5))",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=_xlfn.FORMULATEXT(A8)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=SUM(A2:CHOOSE(3,A3,A4,A5))"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SUM(A2:CHOOSE(3,A3,A4,A5))"
+      }
+    },
+    {
+      "id": "A9",
+      "formula": "=CHOOSE(3,\"A\",\"B\",\"C\",\"D\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "C"
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=_xlfn.FORMULATEXT(A9)",
+      "setup": {
+        "A9": {
+          "kind": "formula",
+          "formula": "=CHOOSE(3,\"A\",\"B\",\"C\",\"D\")"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=CHOOSE(3,\"A\",\"B\",\"C\",\"D\")"
+      }
+    }
+  ]
+}

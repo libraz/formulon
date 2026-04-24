@@ -1,0 +1,451 @@
+{
+  "suite": "ironcalc_docs_TAN_Sheet1",
+  "description": "Derived from IronCalc fixture docs/TAN.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "A2",
+      "formula": "=-3*PI()/2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4.71238898038469
+      }
+    },
+    {
+      "id": "B2",
+      "formula": "=TAN(A2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=-3*PI()/2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -5441517425873024.0
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=_xlfn.FORMULATEXT($B2)",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=TAN(A2)"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=-3*PI()/2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=TAN(A2)"
+      }
+    },
+    {
+      "id": "A3",
+      "formula": "=-PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.141592653589793
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=TAN(A3)",
+      "setup": {
+        "A3": {
+          "kind": "formula",
+          "formula": "=-PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.22514845490862e-16
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=_xlfn.FORMULATEXT($B3)",
+      "setup": {
+        "B3": {
+          "kind": "formula",
+          "formula": "=TAN(A3)"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=-PI()"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=TAN(A3)"
+      }
+    },
+    {
+      "id": "A4",
+      "formula": "=-PI()/2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.5707963267948966
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=TAN(A4)",
+      "setup": {
+        "A4": {
+          "kind": "formula",
+          "formula": "=-PI()/2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.6324552277619072e+16
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=_xlfn.FORMULATEXT($B4)",
+      "setup": {
+        "B4": {
+          "kind": "formula",
+          "formula": "=TAN(A4)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=-PI()/2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=TAN(A4)"
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=TAN(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": -0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.5463024898437905
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=_xlfn.FORMULATEXT($B5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=TAN(A5)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=TAN(A5)"
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=TAN(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=_xlfn.FORMULATEXT($B6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=TAN(A6)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=TAN(A6)"
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=TAN(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5463024898437905
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=_xlfn.FORMULATEXT($B7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=TAN(A7)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=TAN(A7)"
+      }
+    },
+    {
+      "id": "A8",
+      "formula": "=PI()/2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=TAN(A8)",
+      "setup": {
+        "A8": {
+          "kind": "formula",
+          "formula": "=PI()/2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.6324552277619072e+16
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=_xlfn.FORMULATEXT($B8)",
+      "setup": {
+        "B8": {
+          "kind": "formula",
+          "formula": "=TAN(A8)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=PI()/2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=TAN(A8)"
+      }
+    },
+    {
+      "id": "A9",
+      "formula": "=PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=TAN(A9)",
+      "setup": {
+        "A9": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.22514845490862e-16
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=_xlfn.FORMULATEXT($B9)",
+      "setup": {
+        "B9": {
+          "kind": "formula",
+          "formula": "=TAN(A9)"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=TAN(A9)"
+      }
+    },
+    {
+      "id": "A10",
+      "formula": "=3*PI()/2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.71238898038469
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=TAN(A10)",
+      "setup": {
+        "A10": {
+          "kind": "formula",
+          "formula": "=3*PI()/2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5441517425873024.0
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=_xlfn.FORMULATEXT($B10)",
+      "setup": {
+        "B10": {
+          "kind": "formula",
+          "formula": "=TAN(A10)"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=3*PI()/2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=TAN(A10)"
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=TAN(10*PI()/180)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.17632698070846498
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=_xlfn.FORMULATEXT($B11)",
+      "setup": {
+        "B11": {
+          "kind": "formula",
+          "formula": "=TAN(10*PI()/180)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=TAN(10*PI()/180)"
+      }
+    },
+    {
+      "id": "A14",
+      "formula": "=TAN(SQRT(-1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=_xlfn.FORMULATEXT($A14)",
+      "setup": {
+        "A14": {
+          "kind": "formula",
+          "formula": "=TAN(SQRT(-1))"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=TAN(SQRT(-1))"
+      }
+    },
+    {
+      "id": "A15",
+      "formula": "=TAN(\"str\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=_xlfn.FORMULATEXT($A15)",
+      "setup": {
+        "A15": {
+          "kind": "formula",
+          "formula": "=TAN(\"str\")"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=TAN(\"str\")"
+      }
+    },
+    {
+      "id": "A16",
+      "formula": "=TAN(10/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=_xlfn.FORMULATEXT($A16)",
+      "setup": {
+        "A16": {
+          "kind": "formula",
+          "formula": "=TAN(10/0)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=TAN(10/0)"
+      }
+    }
+  ]
+}

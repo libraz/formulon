@@ -1,0 +1,632 @@
+{
+  "suite": "ironcalc_calc_tests_ISREF_ISFORMULA_ISODD_ISEVEN_ISODD_ISEVEN",
+  "description": "Derived from IronCalc fixture calc_tests/ISREF_ISFORMULA_ISODD_ISEVEN.xlsx, sheet 'ISODD_ISEVEN'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "ISODD_ISEVEN",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=ISODD(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=ISEVEN(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=ISODD(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=ISEVEN(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=ISODD(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=ISEVEN(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=ISODD(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=ISEVEN(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=ISODD(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 2.3
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=ISEVEN(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 2.3
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=ISODD(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 3.4
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=ISEVEN(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 3.4
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=ISODD(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=ISEVEN(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=ISODD(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": -4.5
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=ISEVEN(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": -4.5
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=ISODD(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": -5.5
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=ISEVEN(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": -5.5
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=ISODD(A11)",
+      "setup": {
+        "A11": {
+          "kind": "text",
+          "value": "12"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=ISEVEN(A11)",
+      "setup": {
+        "A11": {
+          "kind": "text",
+          "value": "12"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=ISODD(A12)",
+      "setup": {
+        "A12": {
+          "kind": "text",
+          "value": "11"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=ISEVEN(A12)",
+      "setup": {
+        "A12": {
+          "kind": "text",
+          "value": "11"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=ISODD(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1.5
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=ISEVEN(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1.5
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=ISODD(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 1.51
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=ISEVEN(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 1.51
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=ISODD(A15)",
+      "setup": {
+        "A15": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=ISEVEN(A15)",
+      "setup": {
+        "A15": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=ISODD(A16)",
+      "setup": {
+        "A16": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=ISEVEN(A16)",
+      "setup": {
+        "A16": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A17",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=ISODD(A17)",
+      "setup": {
+        "A17": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=ISEVEN(A17)",
+      "setup": {
+        "A17": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=ISODD(A18)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=ISEVEN(A18)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=ISODD(A19)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=ISEVEN(A19)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=ISODD(A20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=ISEVEN(A20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=ISODD(A21)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 0.001
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=ISEVEN(A21)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 0.001
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B22",
+      "formula": "=ISODD(A22)",
+      "setup": {
+        "A22": {
+          "kind": "number",
+          "value": 0.002
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=ISEVEN(A22)",
+      "setup": {
+        "A22": {
+          "kind": "number",
+          "value": 0.002
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B23",
+      "formula": "=ISODD(A23)",
+      "setup": {
+        "A23": {
+          "kind": "text",
+          "value": "Hey"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=ISEVEN(A23)",
+      "setup": {
+        "A23": {
+          "kind": "text",
+          "value": "Hey"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

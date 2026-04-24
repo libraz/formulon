@@ -1,0 +1,6291 @@
+{
+  "suite": "ironcalc_calc_tests_ARABIC_ROMAN_ROMAN",
+  "description": "Derived from IronCalc fixture calc_tests/ARABIC_ROMAN.xlsx, sheet 'ROMAN'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "ROMAN",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=ROMAN(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=ROMAN($A2,1)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=ROMAN($A2,2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=ROMAN($A2,3)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=ROMAN($A2,4)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "J2",
+      "formula": "=ROMAN($A2,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "K2",
+      "formula": "=ROMAN($A2,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L2",
+      "formula": "=ROMAN($A2,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "M2",
+      "formula": "=ROMAN($A2,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "N2",
+      "formula": "=ROMAN($A2,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O2",
+      "formula": "=ROMAN($A2,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=ROMAN(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=ROMAN($A3,1)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=ROMAN($A3,2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=ROMAN($A3,3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=ROMAN($A3,4)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "J3",
+      "formula": "=ROMAN($A3,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "K3",
+      "formula": "=ROMAN($A3,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L3",
+      "formula": "=ROMAN($A3,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "M3",
+      "formula": "=ROMAN($A3,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "N3",
+      "formula": "=ROMAN($A3,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O3",
+      "formula": "=ROMAN($A3,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=ROMAN(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "X"
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=ROMAN($A4,1)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "X"
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=ROMAN($A4,2)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "X"
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=ROMAN($A4,3)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "X"
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=ROMAN($A4,4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "X"
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=ROMAN($A4,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "X"
+      }
+    },
+    {
+      "id": "K4",
+      "formula": "=ROMAN($A4,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L4",
+      "formula": "=ROMAN($A4,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "X"
+      }
+    },
+    {
+      "id": "M4",
+      "formula": "=ROMAN($A4,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "X"
+      }
+    },
+    {
+      "id": "N4",
+      "formula": "=ROMAN($A4,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O4",
+      "formula": "=ROMAN($A4,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "X"
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=ROMAN(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "L"
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=ROMAN($A5,1)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "L"
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=ROMAN($A5,2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "L"
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=ROMAN($A5,3)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "L"
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=ROMAN($A5,4)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "L"
+      }
+    },
+    {
+      "id": "J5",
+      "formula": "=ROMAN($A5,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "L"
+      }
+    },
+    {
+      "id": "K5",
+      "formula": "=ROMAN($A5,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L5",
+      "formula": "=ROMAN($A5,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "L"
+      }
+    },
+    {
+      "id": "M5",
+      "formula": "=ROMAN($A5,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "L"
+      }
+    },
+    {
+      "id": "N5",
+      "formula": "=ROMAN($A5,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O5",
+      "formula": "=ROMAN($A5,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "L"
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=ROMAN(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XCIX"
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=ROMAN($A6,1)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "VCIV"
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=ROMAN($A6,2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "IC"
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=ROMAN($A6,3)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "IC"
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=ROMAN($A6,4)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "IC"
+      }
+    },
+    {
+      "id": "J6",
+      "formula": "=ROMAN($A6,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XCIX"
+      }
+    },
+    {
+      "id": "K6",
+      "formula": "=ROMAN($A6,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L6",
+      "formula": "=ROMAN($A6,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A6": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XCIX"
+      }
+    },
+    {
+      "id": "M6",
+      "formula": "=ROMAN($A6,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A6": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "IC"
+      }
+    },
+    {
+      "id": "N6",
+      "formula": "=ROMAN($A6,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O6",
+      "formula": "=ROMAN($A6,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "IC"
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=ROMAN(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "C"
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=ROMAN($A7,1)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "C"
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=ROMAN($A7,2)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "C"
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=ROMAN($A7,3)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "C"
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=ROMAN($A7,4)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "C"
+      }
+    },
+    {
+      "id": "J7",
+      "formula": "=ROMAN($A7,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "C"
+      }
+    },
+    {
+      "id": "K7",
+      "formula": "=ROMAN($A7,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L7",
+      "formula": "=ROMAN($A7,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "C"
+      }
+    },
+    {
+      "id": "M7",
+      "formula": "=ROMAN($A7,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "C"
+      }
+    },
+    {
+      "id": "N7",
+      "formula": "=ROMAN($A7,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A7": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O7",
+      "formula": "=ROMAN($A7,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A7": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "C"
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=ROMAN(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 469.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "CDLXIX"
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=ROMAN($A8,1)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 469.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "LDXIX"
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=ROMAN($A8,2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 469.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "LDXIX"
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=ROMAN($A8,3)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 469.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "LDXIX"
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=ROMAN($A8,4)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 469.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "LDXIX"
+      }
+    },
+    {
+      "id": "J8",
+      "formula": "=ROMAN($A8,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 469.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "CDLXIX"
+      }
+    },
+    {
+      "id": "K8",
+      "formula": "=ROMAN($A8,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 469.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L8",
+      "formula": "=ROMAN($A8,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A8": {
+          "kind": "number",
+          "value": 469.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "CDLXIX"
+      }
+    },
+    {
+      "id": "M8",
+      "formula": "=ROMAN($A8,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A8": {
+          "kind": "number",
+          "value": 469.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "LDXIX"
+      }
+    },
+    {
+      "id": "N8",
+      "formula": "=ROMAN($A8,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 469.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O8",
+      "formula": "=ROMAN($A8,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 469.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "LDXIX"
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=ROMAN(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 499.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "CDXCIX"
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=ROMAN($A9,1)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 499.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "LDVLIV"
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=ROMAN($A9,2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 499.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XDIX"
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=ROMAN($A9,3)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 499.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "VDIV"
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=ROMAN($A9,4)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 499.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ID"
+      }
+    },
+    {
+      "id": "J9",
+      "formula": "=ROMAN($A9,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 499.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "CDXCIX"
+      }
+    },
+    {
+      "id": "K9",
+      "formula": "=ROMAN($A9,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 499.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L9",
+      "formula": "=ROMAN($A9,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A9": {
+          "kind": "number",
+          "value": 499.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "CDXCIX"
+      }
+    },
+    {
+      "id": "M9",
+      "formula": "=ROMAN($A9,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A9": {
+          "kind": "number",
+          "value": 499.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ID"
+      }
+    },
+    {
+      "id": "N9",
+      "formula": "=ROMAN($A9,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A9": {
+          "kind": "number",
+          "value": 499.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O9",
+      "formula": "=ROMAN($A9,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A9": {
+          "kind": "number",
+          "value": 499.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XDIX"
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=ROMAN(A10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 500.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "D"
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=ROMAN($A10,1)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 500.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "D"
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=ROMAN($A10,2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 500.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "D"
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=ROMAN($A10,3)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 500.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "D"
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=ROMAN($A10,4)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 500.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "D"
+      }
+    },
+    {
+      "id": "J10",
+      "formula": "=ROMAN($A10,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 500.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "D"
+      }
+    },
+    {
+      "id": "K10",
+      "formula": "=ROMAN($A10,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 500.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L10",
+      "formula": "=ROMAN($A10,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A10": {
+          "kind": "number",
+          "value": 500.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "D"
+      }
+    },
+    {
+      "id": "M10",
+      "formula": "=ROMAN($A10,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A10": {
+          "kind": "number",
+          "value": 500.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "D"
+      }
+    },
+    {
+      "id": "N10",
+      "formula": "=ROMAN($A10,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A10": {
+          "kind": "number",
+          "value": 500.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O10",
+      "formula": "=ROMAN($A10,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A10": {
+          "kind": "number",
+          "value": 500.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "D"
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=ROMAN(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "M"
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=ROMAN($A11,1)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "M"
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=ROMAN($A11,2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "M"
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=ROMAN($A11,3)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "M"
+      }
+    },
+    {
+      "id": "F11",
+      "formula": "=ROMAN($A11,4)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "M"
+      }
+    },
+    {
+      "id": "J11",
+      "formula": "=ROMAN($A11,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "M"
+      }
+    },
+    {
+      "id": "K11",
+      "formula": "=ROMAN($A11,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L11",
+      "formula": "=ROMAN($A11,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "M"
+      }
+    },
+    {
+      "id": "M11",
+      "formula": "=ROMAN($A11,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "M"
+      }
+    },
+    {
+      "id": "N11",
+      "formula": "=ROMAN($A11,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O11",
+      "formula": "=ROMAN($A11,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "M"
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=ROMAN(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 1111.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MCXI"
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=ROMAN($A12,1)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 1111.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MCXI"
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=ROMAN($A12,2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 1111.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MCXI"
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=ROMAN($A12,3)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 1111.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MCXI"
+      }
+    },
+    {
+      "id": "F12",
+      "formula": "=ROMAN($A12,4)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 1111.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MCXI"
+      }
+    },
+    {
+      "id": "J12",
+      "formula": "=ROMAN($A12,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 1111.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MCXI"
+      }
+    },
+    {
+      "id": "K12",
+      "formula": "=ROMAN($A12,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 1111.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L12",
+      "formula": "=ROMAN($A12,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A12": {
+          "kind": "number",
+          "value": 1111.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MCXI"
+      }
+    },
+    {
+      "id": "M12",
+      "formula": "=ROMAN($A12,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A12": {
+          "kind": "number",
+          "value": 1111.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MCXI"
+      }
+    },
+    {
+      "id": "N12",
+      "formula": "=ROMAN($A12,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A12": {
+          "kind": "number",
+          "value": 1111.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O12",
+      "formula": "=ROMAN($A12,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A12": {
+          "kind": "number",
+          "value": 1111.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MCXI"
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=ROMAN(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 2596.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMDXCVI"
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=ROMAN($A13,1)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 2596.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMDVCI"
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=ROMAN($A13,2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 2596.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMDVCI"
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=ROMAN($A13,3)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 2596.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMDVCI"
+      }
+    },
+    {
+      "id": "F13",
+      "formula": "=ROMAN($A13,4)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 2596.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMDVCI"
+      }
+    },
+    {
+      "id": "J13",
+      "formula": "=ROMAN($A13,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 2596.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMDXCVI"
+      }
+    },
+    {
+      "id": "K13",
+      "formula": "=ROMAN($A13,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 2596.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L13",
+      "formula": "=ROMAN($A13,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A13": {
+          "kind": "number",
+          "value": 2596.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMDXCVI"
+      }
+    },
+    {
+      "id": "M13",
+      "formula": "=ROMAN($A13,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A13": {
+          "kind": "number",
+          "value": 2596.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMDVCI"
+      }
+    },
+    {
+      "id": "N13",
+      "formula": "=ROMAN($A13,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A13": {
+          "kind": "number",
+          "value": 2596.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O13",
+      "formula": "=ROMAN($A13,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A13": {
+          "kind": "number",
+          "value": 2596.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMDVCI"
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=ROMAN(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 3999.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMMCMXCIX"
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=ROMAN($A14,1)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 3999.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMMLMVLIV"
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=ROMAN($A14,2)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 3999.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMMXMIX"
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=ROMAN($A14,3)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 3999.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMMVMIV"
+      }
+    },
+    {
+      "id": "F14",
+      "formula": "=ROMAN($A14,4)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 3999.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMMIM"
+      }
+    },
+    {
+      "id": "J14",
+      "formula": "=ROMAN($A14,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 3999.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMMCMXCIX"
+      }
+    },
+    {
+      "id": "K14",
+      "formula": "=ROMAN($A14,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 3999.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L14",
+      "formula": "=ROMAN($A14,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A14": {
+          "kind": "number",
+          "value": 3999.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMMCMXCIX"
+      }
+    },
+    {
+      "id": "M14",
+      "formula": "=ROMAN($A14,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A14": {
+          "kind": "number",
+          "value": 3999.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMMIM"
+      }
+    },
+    {
+      "id": "N14",
+      "formula": "=ROMAN($A14,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A14": {
+          "kind": "number",
+          "value": 3999.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O14",
+      "formula": "=ROMAN($A14,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A14": {
+          "kind": "number",
+          "value": 3999.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMMXMIX"
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=ROMAN(A15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 3999.9999999
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMMCMXCIX"
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=ROMAN($A15,1)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 3999.9999999
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMMLMVLIV"
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=ROMAN($A15,2)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 3999.9999999
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMMXMIX"
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=ROMAN($A15,3)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 3999.9999999
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMMVMIV"
+      }
+    },
+    {
+      "id": "F15",
+      "formula": "=ROMAN($A15,4)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 3999.9999999
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMMIM"
+      }
+    },
+    {
+      "id": "J15",
+      "formula": "=ROMAN($A15,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 3999.9999999
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMMCMXCIX"
+      }
+    },
+    {
+      "id": "K15",
+      "formula": "=ROMAN($A15,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 3999.9999999
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L15",
+      "formula": "=ROMAN($A15,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A15": {
+          "kind": "number",
+          "value": 3999.9999999
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMMCMXCIX"
+      }
+    },
+    {
+      "id": "M15",
+      "formula": "=ROMAN($A15,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A15": {
+          "kind": "number",
+          "value": 3999.9999999
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMMIM"
+      }
+    },
+    {
+      "id": "N15",
+      "formula": "=ROMAN($A15,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A15": {
+          "kind": "number",
+          "value": 3999.9999999
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O15",
+      "formula": "=ROMAN($A15,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A15": {
+          "kind": "number",
+          "value": 3999.9999999
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMMXMIX"
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=ROMAN(A16)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": 4000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=ROMAN($A16,1)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": 4000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=ROMAN($A16,2)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": 4000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E16",
+      "formula": "=ROMAN($A16,3)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": 4000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F16",
+      "formula": "=ROMAN($A16,4)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": 4000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J16",
+      "formula": "=ROMAN($A16,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 4000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "K16",
+      "formula": "=ROMAN($A16,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 4000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L16",
+      "formula": "=ROMAN($A16,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A16": {
+          "kind": "number",
+          "value": 4000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "M16",
+      "formula": "=ROMAN($A16,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A16": {
+          "kind": "number",
+          "value": 4000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "N16",
+      "formula": "=ROMAN($A16,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A16": {
+          "kind": "number",
+          "value": 4000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O16",
+      "formula": "=ROMAN($A16,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A16": {
+          "kind": "number",
+          "value": 4000.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=ROMAN(A17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -13.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=ROMAN($A17,1)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -13.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=ROMAN($A17,2)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -13.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E17",
+      "formula": "=ROMAN($A17,3)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -13.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F17",
+      "formula": "=ROMAN($A17,4)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -13.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J17",
+      "formula": "=ROMAN($A17,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": -13.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "K17",
+      "formula": "=ROMAN($A17,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": -13.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L17",
+      "formula": "=ROMAN($A17,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A17": {
+          "kind": "number",
+          "value": -13.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "M17",
+      "formula": "=ROMAN($A17,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A17": {
+          "kind": "number",
+          "value": -13.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "N17",
+      "formula": "=ROMAN($A17,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A17": {
+          "kind": "number",
+          "value": -13.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O17",
+      "formula": "=ROMAN($A17,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A17": {
+          "kind": "number",
+          "value": -13.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=ROMAN(A18)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": 5.32
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=ROMAN($A18,1)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": 5.32
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=ROMAN($A18,2)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": 5.32
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=ROMAN($A18,3)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": 5.32
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "F18",
+      "formula": "=ROMAN($A18,4)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": 5.32
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "J18",
+      "formula": "=ROMAN($A18,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 5.32
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "K18",
+      "formula": "=ROMAN($A18,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 5.32
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L18",
+      "formula": "=ROMAN($A18,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A18": {
+          "kind": "number",
+          "value": 5.32
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "M18",
+      "formula": "=ROMAN($A18,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A18": {
+          "kind": "number",
+          "value": 5.32
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "N18",
+      "formula": "=ROMAN($A18,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A18": {
+          "kind": "number",
+          "value": 5.32
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O18",
+      "formula": "=ROMAN($A18,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A18": {
+          "kind": "number",
+          "value": 5.32
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=ROMAN(A20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 5.99999
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=ROMAN($A20,1)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 5.99999
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=ROMAN($A20,2)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 5.99999
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "E20",
+      "formula": "=ROMAN($A20,3)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 5.99999
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "F20",
+      "formula": "=ROMAN($A20,4)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 5.99999
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "J20",
+      "formula": "=ROMAN($A20,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.99999
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "K20",
+      "formula": "=ROMAN($A20,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.99999
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L20",
+      "formula": "=ROMAN($A20,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.99999
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "M20",
+      "formula": "=ROMAN($A20,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.99999
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "N20",
+      "formula": "=ROMAN($A20,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.99999
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O20",
+      "formula": "=ROMAN($A20,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A20": {
+          "kind": "number",
+          "value": 5.99999
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=ROMAN(A21)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": -1.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=ROMAN($A21,1)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": -1.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=ROMAN($A21,2)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": -1.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E21",
+      "formula": "=ROMAN($A21,3)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": -1.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F21",
+      "formula": "=ROMAN($A21,4)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": -1.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J21",
+      "formula": "=ROMAN($A21,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": -1.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "K21",
+      "formula": "=ROMAN($A21,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": -1.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L21",
+      "formula": "=ROMAN($A21,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A21": {
+          "kind": "number",
+          "value": -1.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "M21",
+      "formula": "=ROMAN($A21,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A21": {
+          "kind": "number",
+          "value": -1.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "N21",
+      "formula": "=ROMAN($A21,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A21": {
+          "kind": "number",
+          "value": -1.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O21",
+      "formula": "=ROMAN($A21,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A21": {
+          "kind": "number",
+          "value": -1.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A22",
+      "formula": "=PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "B22",
+      "formula": "=ROMAN(A22)",
+      "setup": {
+        "A22": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "III"
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=ROMAN($A22,1)",
+      "setup": {
+        "A22": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "III"
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=ROMAN($A22,2)",
+      "setup": {
+        "A22": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "III"
+      }
+    },
+    {
+      "id": "E22",
+      "formula": "=ROMAN($A22,3)",
+      "setup": {
+        "A22": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "III"
+      }
+    },
+    {
+      "id": "F22",
+      "formula": "=ROMAN($A22,4)",
+      "setup": {
+        "A22": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "III"
+      }
+    },
+    {
+      "id": "J22",
+      "formula": "=ROMAN($A22,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A22": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "III"
+      }
+    },
+    {
+      "id": "K22",
+      "formula": "=ROMAN($A22,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A22": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L22",
+      "formula": "=ROMAN($A22,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A22": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "III"
+      }
+    },
+    {
+      "id": "M22",
+      "formula": "=ROMAN($A22,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A22": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "III"
+      }
+    },
+    {
+      "id": "N22",
+      "formula": "=ROMAN($A22,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A22": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O22",
+      "formula": "=ROMAN($A22,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A22": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "III"
+      }
+    },
+    {
+      "id": "B24",
+      "formula": "=ROMAN(A24)",
+      "setup": {
+        "A24": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=ROMAN($A24,1)",
+      "setup": {
+        "A24": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D24",
+      "formula": "=ROMAN($A24,2)",
+      "setup": {
+        "A24": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E24",
+      "formula": "=ROMAN($A24,3)",
+      "setup": {
+        "A24": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F24",
+      "formula": "=ROMAN($A24,4)",
+      "setup": {
+        "A24": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J24",
+      "formula": "=ROMAN($A24,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A24": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "K24",
+      "formula": "=ROMAN($A24,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A24": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L24",
+      "formula": "=ROMAN($A24,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A24": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "M24",
+      "formula": "=ROMAN($A24,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A24": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "N24",
+      "formula": "=ROMAN($A24,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O24",
+      "formula": "=ROMAN($A24,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B25",
+      "formula": "=ROMAN(A25)",
+      "setup": {
+        "A25": {
+          "kind": "text",
+          "value": "16"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XVI"
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=ROMAN($A25,1)",
+      "setup": {
+        "A25": {
+          "kind": "text",
+          "value": "16"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XVI"
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=ROMAN($A25,2)",
+      "setup": {
+        "A25": {
+          "kind": "text",
+          "value": "16"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XVI"
+      }
+    },
+    {
+      "id": "E25",
+      "formula": "=ROMAN($A25,3)",
+      "setup": {
+        "A25": {
+          "kind": "text",
+          "value": "16"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XVI"
+      }
+    },
+    {
+      "id": "F25",
+      "formula": "=ROMAN($A25,4)",
+      "setup": {
+        "A25": {
+          "kind": "text",
+          "value": "16"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XVI"
+      }
+    },
+    {
+      "id": "J25",
+      "formula": "=ROMAN($A25,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A25": {
+          "kind": "text",
+          "value": "16"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XVI"
+      }
+    },
+    {
+      "id": "K25",
+      "formula": "=ROMAN($A25,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A25": {
+          "kind": "text",
+          "value": "16"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L25",
+      "formula": "=ROMAN($A25,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A25": {
+          "kind": "text",
+          "value": "16"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XVI"
+      }
+    },
+    {
+      "id": "M25",
+      "formula": "=ROMAN($A25,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A25": {
+          "kind": "text",
+          "value": "16"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XVI"
+      }
+    },
+    {
+      "id": "N25",
+      "formula": "=ROMAN($A25,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "16"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O25",
+      "formula": "=ROMAN($A25,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A25": {
+          "kind": "text",
+          "value": "16"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XVI"
+      }
+    },
+    {
+      "id": "B26",
+      "formula": "=ROMAN(A26)",
+      "setup": {
+        "A26": {
+          "kind": "text",
+          "value": "\" 16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C26",
+      "formula": "=ROMAN($A26,1)",
+      "setup": {
+        "A26": {
+          "kind": "text",
+          "value": "\" 16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D26",
+      "formula": "=ROMAN($A26,2)",
+      "setup": {
+        "A26": {
+          "kind": "text",
+          "value": "\" 16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E26",
+      "formula": "=ROMAN($A26,3)",
+      "setup": {
+        "A26": {
+          "kind": "text",
+          "value": "\" 16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F26",
+      "formula": "=ROMAN($A26,4)",
+      "setup": {
+        "A26": {
+          "kind": "text",
+          "value": "\" 16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J26",
+      "formula": "=ROMAN($A26,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A26": {
+          "kind": "text",
+          "value": "\" 16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "K26",
+      "formula": "=ROMAN($A26,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A26": {
+          "kind": "text",
+          "value": "\" 16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L26",
+      "formula": "=ROMAN($A26,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A26": {
+          "kind": "text",
+          "value": "\" 16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "M26",
+      "formula": "=ROMAN($A26,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A26": {
+          "kind": "text",
+          "value": "\" 16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "N26",
+      "formula": "=ROMAN($A26,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "\" 16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O26",
+      "formula": "=ROMAN($A26,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A26": {
+          "kind": "text",
+          "value": "\" 16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B27",
+      "formula": "=ROMAN(A27)",
+      "setup": {
+        "A27": {
+          "kind": "text",
+          "value": "\"16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C27",
+      "formula": "=ROMAN($A27,1)",
+      "setup": {
+        "A27": {
+          "kind": "text",
+          "value": "\"16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D27",
+      "formula": "=ROMAN($A27,2)",
+      "setup": {
+        "A27": {
+          "kind": "text",
+          "value": "\"16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E27",
+      "formula": "=ROMAN($A27,3)",
+      "setup": {
+        "A27": {
+          "kind": "text",
+          "value": "\"16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F27",
+      "formula": "=ROMAN($A27,4)",
+      "setup": {
+        "A27": {
+          "kind": "text",
+          "value": "\"16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J27",
+      "formula": "=ROMAN($A27,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A27": {
+          "kind": "text",
+          "value": "\"16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "K27",
+      "formula": "=ROMAN($A27,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A27": {
+          "kind": "text",
+          "value": "\"16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L27",
+      "formula": "=ROMAN($A27,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A27": {
+          "kind": "text",
+          "value": "\"16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "M27",
+      "formula": "=ROMAN($A27,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A27": {
+          "kind": "text",
+          "value": "\"16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "N27",
+      "formula": "=ROMAN($A27,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "\"16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O27",
+      "formula": "=ROMAN($A27,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A27": {
+          "kind": "text",
+          "value": "\"16\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B28",
+      "formula": "=ROMAN(A28)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "CXXVI"
+      }
+    },
+    {
+      "id": "C28",
+      "formula": "=ROMAN($A28,1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "CXXVI"
+      }
+    },
+    {
+      "id": "D28",
+      "formula": "=ROMAN($A28,2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "CXXVI"
+      }
+    },
+    {
+      "id": "E28",
+      "formula": "=ROMAN($A28,3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "CXXVI"
+      }
+    },
+    {
+      "id": "F28",
+      "formula": "=ROMAN($A28,4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "CXXVI"
+      }
+    },
+    {
+      "id": "J28",
+      "formula": "=ROMAN($A28,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "CXXVI"
+      }
+    },
+    {
+      "id": "K28",
+      "formula": "=ROMAN($A28,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L28",
+      "formula": "=ROMAN($A28,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "CXXVI"
+      }
+    },
+    {
+      "id": "M28",
+      "formula": "=ROMAN($A28,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "CXXVI"
+      }
+    },
+    {
+      "id": "N28",
+      "formula": "=ROMAN($A28,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O28",
+      "formula": "=ROMAN($A28,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "CXXVI"
+      }
+    },
+    {
+      "id": "B29",
+      "formula": "=ROMAN(A29)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C29",
+      "formula": "=ROMAN($A29,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D29",
+      "formula": "=ROMAN($A29,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E29",
+      "formula": "=ROMAN($A29,3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F29",
+      "formula": "=ROMAN($A29,4)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J29",
+      "formula": "=ROMAN($A29,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "K29",
+      "formula": "=ROMAN($A29,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L29",
+      "formula": "=ROMAN($A29,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "M29",
+      "formula": "=ROMAN($A29,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "N29",
+      "formula": "=ROMAN($A29,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O29",
+      "formula": "=ROMAN($A29,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B31",
+      "formula": "=ROMAN(A31)",
+      "setup": {
+        "A31": {
+          "kind": "text",
+          "value": "\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C31",
+      "formula": "=ROMAN($A31,1)",
+      "setup": {
+        "A31": {
+          "kind": "text",
+          "value": "\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D31",
+      "formula": "=ROMAN($A31,2)",
+      "setup": {
+        "A31": {
+          "kind": "text",
+          "value": "\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E31",
+      "formula": "=ROMAN($A31,3)",
+      "setup": {
+        "A31": {
+          "kind": "text",
+          "value": "\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F31",
+      "formula": "=ROMAN($A31,4)",
+      "setup": {
+        "A31": {
+          "kind": "text",
+          "value": "\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J31",
+      "formula": "=ROMAN($A31,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A31": {
+          "kind": "text",
+          "value": "\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "K31",
+      "formula": "=ROMAN($A31,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A31": {
+          "kind": "text",
+          "value": "\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L31",
+      "formula": "=ROMAN($A31,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A31": {
+          "kind": "text",
+          "value": "\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "M31",
+      "formula": "=ROMAN($A31,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A31": {
+          "kind": "text",
+          "value": "\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "N31",
+      "formula": "=ROMAN($A31,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A31": {
+          "kind": "text",
+          "value": "\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O31",
+      "formula": "=ROMAN($A31,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A31": {
+          "kind": "text",
+          "value": "\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A32",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B32",
+      "formula": "=ROMAN(A32)",
+      "setup": {
+        "A32": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C32",
+      "formula": "=ROMAN($A32,1)",
+      "setup": {
+        "A32": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D32",
+      "formula": "=ROMAN($A32,2)",
+      "setup": {
+        "A32": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E32",
+      "formula": "=ROMAN($A32,3)",
+      "setup": {
+        "A32": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F32",
+      "formula": "=ROMAN($A32,4)",
+      "setup": {
+        "A32": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "J32",
+      "formula": "=ROMAN($A32,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A32": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "K32",
+      "formula": "=ROMAN($A32,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A32": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "L32",
+      "formula": "=ROMAN($A32,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A32": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "M32",
+      "formula": "=ROMAN($A32,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A32": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "N32",
+      "formula": "=ROMAN($A32,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A32": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "O32",
+      "formula": "=ROMAN($A32,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A32": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A33",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B33",
+      "formula": "=ROMAN(A33)",
+      "setup": {
+        "A33": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C33",
+      "formula": "=ROMAN($A33,1)",
+      "setup": {
+        "A33": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D33",
+      "formula": "=ROMAN($A33,2)",
+      "setup": {
+        "A33": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "E33",
+      "formula": "=ROMAN($A33,3)",
+      "setup": {
+        "A33": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F33",
+      "formula": "=ROMAN($A33,4)",
+      "setup": {
+        "A33": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "J33",
+      "formula": "=ROMAN($A33,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A33": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "K33",
+      "formula": "=ROMAN($A33,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A33": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "L33",
+      "formula": "=ROMAN($A33,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A33": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "M33",
+      "formula": "=ROMAN($A33,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A33": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "N33",
+      "formula": "=ROMAN($A33,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A33": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "O33",
+      "formula": "=ROMAN($A33,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A33": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B34",
+      "formula": "=ROMAN(A34)",
+      "setup": {
+        "A34": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "C34",
+      "formula": "=ROMAN($A34,1)",
+      "setup": {
+        "A34": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "D34",
+      "formula": "=ROMAN($A34,2)",
+      "setup": {
+        "A34": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "E34",
+      "formula": "=ROMAN($A34,3)",
+      "setup": {
+        "A34": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "F34",
+      "formula": "=ROMAN($A34,4)",
+      "setup": {
+        "A34": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "J34",
+      "formula": "=ROMAN($A34,J$1)",
+      "setup": {
+        "J1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A34": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "K34",
+      "formula": "=ROMAN($A34,K$1)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A34": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "L34",
+      "formula": "=ROMAN($A34,L$1)",
+      "setup": {
+        "L1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A34": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "M34",
+      "formula": "=ROMAN($A34,M$1)",
+      "setup": {
+        "M1": {
+          "kind": "bool",
+          "value": false
+        },
+        "A34": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "N34",
+      "formula": "=ROMAN($A34,N$1)",
+      "setup": {
+        "N1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A34": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O34",
+      "formula": "=ROMAN($A34,O$1)",
+      "setup": {
+        "O1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A34": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "A36",
+      "formula": "=H34:H37",
+      "setup": {
+        "H37": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H36": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H35": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H34": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "B36",
+      "formula": "=ROMAN(H34:H37)",
+      "setup": {
+        "H37": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H36": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H35": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H34": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "IV"
+      }
+    },
+    {
+      "id": "C36",
+      "formula": "=ROMAN(H34:H37,1)",
+      "setup": {
+        "H37": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H36": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H35": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H34": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "IV"
+      }
+    },
+    {
+      "id": "D36",
+      "formula": "=ROMAN(H34:H37,2)",
+      "setup": {
+        "H37": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H36": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H35": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H34": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "IV"
+      }
+    },
+    {
+      "id": "E36",
+      "formula": "=ROMAN(H34:H37,3)",
+      "setup": {
+        "H37": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H36": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H35": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H34": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "IV"
+      }
+    },
+    {
+      "id": "F36",
+      "formula": "=ROMAN(H34:H37,4)",
+      "setup": {
+        "H37": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H36": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H35": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H34": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "IV"
+      }
+    },
+    {
+      "id": "A37",
+      "formula": "=1.05*(0.0284+0.0046)-0.0284",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.006249999999999999
+      }
+    },
+    {
+      "id": "B41",
+      "formula": "=ROMAN(A41)",
+      "setup": {
+        "A41": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "C41",
+      "formula": "=ROMAN($A41,1)",
+      "setup": {
+        "A41": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "D41",
+      "formula": "=ROMAN($A41,2)",
+      "setup": {
+        "A41": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "E41",
+      "formula": "=ROMAN($A41,3)",
+      "setup": {
+        "A41": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "F41",
+      "formula": "=ROMAN($A41,4)",
+      "setup": {
+        "A41": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "B42",
+      "formula": "=ROMAN(A42)",
+      "setup": {
+        "A42": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "II"
+      }
+    },
+    {
+      "id": "C42",
+      "formula": "=ROMAN($A42,1)",
+      "setup": {
+        "A42": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "II"
+      }
+    },
+    {
+      "id": "D42",
+      "formula": "=ROMAN($A42,2)",
+      "setup": {
+        "A42": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "II"
+      }
+    },
+    {
+      "id": "E42",
+      "formula": "=ROMAN($A42,3)",
+      "setup": {
+        "A42": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "II"
+      }
+    },
+    {
+      "id": "F42",
+      "formula": "=ROMAN($A42,4)",
+      "setup": {
+        "A42": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "II"
+      }
+    },
+    {
+      "id": "B43",
+      "formula": "=ROMAN(A43)",
+      "setup": {
+        "A43": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "III"
+      }
+    },
+    {
+      "id": "C43",
+      "formula": "=ROMAN($A43,1)",
+      "setup": {
+        "A43": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "III"
+      }
+    },
+    {
+      "id": "D43",
+      "formula": "=ROMAN($A43,2)",
+      "setup": {
+        "A43": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "III"
+      }
+    },
+    {
+      "id": "E43",
+      "formula": "=ROMAN($A43,3)",
+      "setup": {
+        "A43": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "III"
+      }
+    },
+    {
+      "id": "F43",
+      "formula": "=ROMAN($A43,4)",
+      "setup": {
+        "A43": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "III"
+      }
+    },
+    {
+      "id": "B44",
+      "formula": "=ROMAN(A44)",
+      "setup": {
+        "A44": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "IV"
+      }
+    },
+    {
+      "id": "C44",
+      "formula": "=ROMAN($A44,1)",
+      "setup": {
+        "A44": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "IV"
+      }
+    },
+    {
+      "id": "D44",
+      "formula": "=ROMAN($A44,2)",
+      "setup": {
+        "A44": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "IV"
+      }
+    },
+    {
+      "id": "E44",
+      "formula": "=ROMAN($A44,3)",
+      "setup": {
+        "A44": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "IV"
+      }
+    },
+    {
+      "id": "F44",
+      "formula": "=ROMAN($A44,4)",
+      "setup": {
+        "A44": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "IV"
+      }
+    },
+    {
+      "id": "B45",
+      "formula": "=ROMAN(A45)",
+      "setup": {
+        "A45": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "C45",
+      "formula": "=ROMAN($A45,1)",
+      "setup": {
+        "A45": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "D45",
+      "formula": "=ROMAN($A45,2)",
+      "setup": {
+        "A45": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "E45",
+      "formula": "=ROMAN($A45,3)",
+      "setup": {
+        "A45": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "F45",
+      "formula": "=ROMAN($A45,4)",
+      "setup": {
+        "A45": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "V"
+      }
+    },
+    {
+      "id": "B46",
+      "formula": "=ROMAN(A46)",
+      "setup": {
+        "A46": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "VI"
+      }
+    },
+    {
+      "id": "C46",
+      "formula": "=ROMAN($A46,1)",
+      "setup": {
+        "A46": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "VI"
+      }
+    },
+    {
+      "id": "D46",
+      "formula": "=ROMAN($A46,2)",
+      "setup": {
+        "A46": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "VI"
+      }
+    },
+    {
+      "id": "E46",
+      "formula": "=ROMAN($A46,3)",
+      "setup": {
+        "A46": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "VI"
+      }
+    },
+    {
+      "id": "F46",
+      "formula": "=ROMAN($A46,4)",
+      "setup": {
+        "A46": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "VI"
+      }
+    },
+    {
+      "id": "B47",
+      "formula": "=ROMAN(A47)",
+      "setup": {
+        "A47": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "VII"
+      }
+    },
+    {
+      "id": "C47",
+      "formula": "=ROMAN($A47,1)",
+      "setup": {
+        "A47": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "VII"
+      }
+    },
+    {
+      "id": "D47",
+      "formula": "=ROMAN($A47,2)",
+      "setup": {
+        "A47": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "VII"
+      }
+    },
+    {
+      "id": "E47",
+      "formula": "=ROMAN($A47,3)",
+      "setup": {
+        "A47": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "VII"
+      }
+    },
+    {
+      "id": "F47",
+      "formula": "=ROMAN($A47,4)",
+      "setup": {
+        "A47": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "VII"
+      }
+    },
+    {
+      "id": "B48",
+      "formula": "=ROMAN(A48)",
+      "setup": {
+        "A48": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "VIII"
+      }
+    },
+    {
+      "id": "C48",
+      "formula": "=ROMAN($A48,1)",
+      "setup": {
+        "A48": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "VIII"
+      }
+    },
+    {
+      "id": "D48",
+      "formula": "=ROMAN($A48,2)",
+      "setup": {
+        "A48": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "VIII"
+      }
+    },
+    {
+      "id": "E48",
+      "formula": "=ROMAN($A48,3)",
+      "setup": {
+        "A48": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "VIII"
+      }
+    },
+    {
+      "id": "F48",
+      "formula": "=ROMAN($A48,4)",
+      "setup": {
+        "A48": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "VIII"
+      }
+    },
+    {
+      "id": "B49",
+      "formula": "=ROMAN(A49)",
+      "setup": {
+        "A49": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "IX"
+      }
+    },
+    {
+      "id": "C49",
+      "formula": "=ROMAN($A49,1)",
+      "setup": {
+        "A49": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "IX"
+      }
+    },
+    {
+      "id": "D49",
+      "formula": "=ROMAN($A49,2)",
+      "setup": {
+        "A49": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "IX"
+      }
+    },
+    {
+      "id": "E49",
+      "formula": "=ROMAN($A49,3)",
+      "setup": {
+        "A49": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "IX"
+      }
+    },
+    {
+      "id": "F49",
+      "formula": "=ROMAN($A49,4)",
+      "setup": {
+        "A49": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "IX"
+      }
+    },
+    {
+      "id": "B50",
+      "formula": "=ROMAN(A50)",
+      "setup": {
+        "A50": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "X"
+      }
+    },
+    {
+      "id": "C50",
+      "formula": "=ROMAN($A50,1)",
+      "setup": {
+        "A50": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "X"
+      }
+    },
+    {
+      "id": "D50",
+      "formula": "=ROMAN($A50,2)",
+      "setup": {
+        "A50": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "X"
+      }
+    },
+    {
+      "id": "E50",
+      "formula": "=ROMAN($A50,3)",
+      "setup": {
+        "A50": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "X"
+      }
+    },
+    {
+      "id": "F50",
+      "formula": "=ROMAN($A50,4)",
+      "setup": {
+        "A50": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "X"
+      }
+    },
+    {
+      "id": "B51",
+      "formula": "=ROMAN(A51)",
+      "setup": {
+        "A51": {
+          "kind": "number",
+          "value": 11.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XI"
+      }
+    },
+    {
+      "id": "C51",
+      "formula": "=ROMAN($A51,1)",
+      "setup": {
+        "A51": {
+          "kind": "number",
+          "value": 11.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XI"
+      }
+    },
+    {
+      "id": "D51",
+      "formula": "=ROMAN($A51,2)",
+      "setup": {
+        "A51": {
+          "kind": "number",
+          "value": 11.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XI"
+      }
+    },
+    {
+      "id": "E51",
+      "formula": "=ROMAN($A51,3)",
+      "setup": {
+        "A51": {
+          "kind": "number",
+          "value": 11.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XI"
+      }
+    },
+    {
+      "id": "F51",
+      "formula": "=ROMAN($A51,4)",
+      "setup": {
+        "A51": {
+          "kind": "number",
+          "value": 11.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XI"
+      }
+    },
+    {
+      "id": "B52",
+      "formula": "=ROMAN(A52)",
+      "setup": {
+        "A52": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XII"
+      }
+    },
+    {
+      "id": "C52",
+      "formula": "=ROMAN($A52,1)",
+      "setup": {
+        "A52": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XII"
+      }
+    },
+    {
+      "id": "D52",
+      "formula": "=ROMAN($A52,2)",
+      "setup": {
+        "A52": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XII"
+      }
+    },
+    {
+      "id": "E52",
+      "formula": "=ROMAN($A52,3)",
+      "setup": {
+        "A52": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XII"
+      }
+    },
+    {
+      "id": "F52",
+      "formula": "=ROMAN($A52,4)",
+      "setup": {
+        "A52": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XII"
+      }
+    }
+  ]
+}

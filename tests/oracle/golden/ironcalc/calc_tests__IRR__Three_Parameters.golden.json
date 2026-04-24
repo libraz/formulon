@@ -1,0 +1,209 @@
+{
+  "suite": "ironcalc_calc_tests_IRR_Three_Parameters",
+  "description": "Derived from IronCalc fixture calc_tests/IRR.xlsx, sheet 'Three Parameters'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Three Parameters",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-07,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "D2",
+      "formula": "=IRR(A2:C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.091399510766422e-07
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=NPV(D2,A2:C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "formula",
+          "formula": "=IRR(A2:C2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.187938506697367e-14
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=IRR(A3:C3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.14921894064178554
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=NPV(D3,A3:C3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "formula",
+          "formula": "=IRR(A3:C3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.505495607634109e-14
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=IRR(A4:C4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.44948974278317744
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=NPV(D4,A4:C4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "D4": {
+          "kind": "formula",
+          "formula": "=IRR(A4:C4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.191287045550868e-16
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=IRR(A5:C5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4415184401122527
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=NPV(D5,A5:C5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": -4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "D5": {
+          "kind": "formula",
+          "formula": "=IRR(A5:C5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.161408657602478e-16
+      }
+    }
+  ]
+}

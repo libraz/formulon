@@ -1,0 +1,1795 @@
+{
+  "suite": "ironcalc_calc_tests_NOMINAL_EFFECT_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/NOMINAL_EFFECT.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=NOMINAL(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4137974399241062
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=EFFECT(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6288946267774416
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=NOMINAL(D2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "D2": {
+          "kind": "formula",
+          "formula": "=EFFECT(A2,B2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5000000000000004
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=EFFECT(C2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A2,B2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5000000000000013
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=NOMINAL(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.1837136459967743
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=EFFECT(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.21939108490523185
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=NOMINAL(D3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "D3": {
+          "kind": "formula",
+          "formula": "=EFFECT(A3,B3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.1999999999999993
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=EFFECT(C3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "C3": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A3,B3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.1999999999999995
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=NOMINAL(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.600193317901077
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=EFFECT(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2125.8224907304752
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=NOMINAL(D4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D4": {
+          "kind": "formula",
+          "formula": "=EFFECT(A4,B4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.999999999999995
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=EFFECT(C4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C4": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A4,B4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.000000000000009
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=NOMINAL(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=EFFECT(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=NOMINAL(D5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "D5": {
+          "kind": "formula",
+          "formula": "=EFFECT(A5,B5)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=EFFECT(C5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "C5": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A5,B5)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=NOMINAL(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=EFFECT(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=NOMINAL(D6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=EFFECT(A6,B6)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=EFFECT(C6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C6": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A6,B6)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=NOMINAL(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=EFFECT(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=NOMINAL(D7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "D7": {
+          "kind": "formula",
+          "formula": "=EFFECT(A7,B7)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=EFFECT(C7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "C7": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A7,B7)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=NOMINAL(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 4.5
+        },
+        "A8": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4267276788012868
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=EFFECT(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 4.5
+        },
+        "A8": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.601806640625
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=NOMINAL(D8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 4.5
+        },
+        "A8": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "D8": {
+          "kind": "formula",
+          "formula": "=EFFECT(A8,B8)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=EFFECT(C8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 4.5
+        },
+        "A8": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C8": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A8,B8)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5000000000000009
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=NOMINAL(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=EFFECT(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=NOMINAL(D9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "D9": {
+          "kind": "formula",
+          "formula": "=EFFECT(A9,B9)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=EFFECT(C9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "C9": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A9,B9)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=NOMINAL(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A10": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=EFFECT(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A10": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=NOMINAL(D10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A10": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "D10": {
+          "kind": "formula",
+          "formula": "=EFFECT(A10,B10)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=EFFECT(C10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "A10": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C10": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A10,B10)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=NOMINAL(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=EFFECT(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=NOMINAL(D11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D11": {
+          "kind": "formula",
+          "formula": "=EFFECT(A11,B11)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "F11",
+      "formula": "=EFFECT(C11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C11": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A11,B11)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=NOMINAL(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 0.99
+        },
+        "A12": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=EFFECT(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 0.99
+        },
+        "A12": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=NOMINAL(D12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 0.99
+        },
+        "A12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D12": {
+          "kind": "formula",
+          "formula": "=EFFECT(A12,B12)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "F12",
+      "formula": "=EFFECT(C12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 0.99
+        },
+        "A12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C12": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A12,B12)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "A13",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=NOMINAL(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=EFFECT(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=NOMINAL(D13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D13": {
+          "kind": "formula",
+          "formula": "=EFFECT(A13,B13)"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F13",
+      "formula": "=EFFECT(C13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C13": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A13,B13)"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=NOMINAL(A14,B14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B14": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=EFFECT(A14,B14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B14": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=NOMINAL(D14,B14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B14": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "D14": {
+          "kind": "formula",
+          "formula": "=EFFECT(A14,B14)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F14",
+      "formula": "=EFFECT(C14,B14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B14": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "C14": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A14,B14)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=NOMINAL(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.738793548317167
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=EFFECT(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 26.0
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=NOMINAL(D15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D15": {
+          "kind": "formula",
+          "formula": "=EFFECT(A15,B15)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.999999999999998
+      }
+    },
+    {
+      "id": "F15",
+      "formula": "=EFFECT(C15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "C15": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A15,B15)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.000000000000001
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=NOMINAL(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.727171322029716
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=EFFECT(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 56.19140625
+      }
+    },
+    {
+      "id": "E16",
+      "formula": "=NOMINAL(D16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "D16": {
+          "kind": "formula",
+          "formula": "=EFFECT(A16,B16)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "F16",
+      "formula": "=EFFECT(C16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "C16": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A16,B16)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.999999999999998
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=NOMINAL(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.5811667464954122
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=EFFECT(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 206.46867498114844
+      }
+    },
+    {
+      "id": "E17",
+      "formula": "=NOMINAL(D17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "D17": {
+          "kind": "formula",
+          "formula": "=EFFECT(A17,B17)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.9999999999999964
+      }
+    },
+    {
+      "id": "F17",
+      "formula": "=EFFECT(C17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C17": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A17,B17)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.000000000000005
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=NOMINAL(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 2.4
+        },
+        "A18": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.324555320336759
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=EFFECT(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 2.4
+        },
+        "A18": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 29.25
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=NOMINAL(D18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 2.4
+        },
+        "A18": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "D18": {
+          "kind": "formula",
+          "formula": "=EFFECT(A18,B18)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "F18",
+      "formula": "=EFFECT(C18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 2.4
+        },
+        "A18": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "C18": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A18,B18)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.000000000000002
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=NOMINAL(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 2.9
+        },
+        "A19": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.6332495807108
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=EFFECT(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 2.9
+        },
+        "A19": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 35.0
+      }
+    },
+    {
+      "id": "E19",
+      "formula": "=NOMINAL(D19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 2.9
+        },
+        "A19": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D19": {
+          "kind": "formula",
+          "formula": "=EFFECT(A19,B19)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "F19",
+      "formula": "=EFFECT(C19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 2.9
+        },
+        "A19": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C19": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A19,B19)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=NOMINAL(A20,B20)",
+      "setup": {
+        "B20": {
+          "kind": "bool",
+          "value": true
+        },
+        "A20": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=EFFECT(A20,B20)",
+      "setup": {
+        "B20": {
+          "kind": "bool",
+          "value": true
+        },
+        "A20": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E20",
+      "formula": "=NOMINAL(D20,B20)",
+      "setup": {
+        "B20": {
+          "kind": "bool",
+          "value": true
+        },
+        "A20": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D20": {
+          "kind": "formula",
+          "formula": "=EFFECT(A20,B20)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F20",
+      "formula": "=EFFECT(C20,B20)",
+      "setup": {
+        "B20": {
+          "kind": "bool",
+          "value": true
+        },
+        "A20": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C20": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A20,B20)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=NOMINAL(A21,B21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 2.9
+        },
+        "A21": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=EFFECT(A21,B21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 2.9
+        },
+        "A21": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E21",
+      "formula": "=NOMINAL(D21,B21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 2.9
+        },
+        "A21": {
+          "kind": "bool",
+          "value": false
+        },
+        "D21": {
+          "kind": "formula",
+          "formula": "=EFFECT(A21,B21)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F21",
+      "formula": "=EFFECT(C21,B21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 2.9
+        },
+        "A21": {
+          "kind": "bool",
+          "value": false
+        },
+        "C21": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A21,B21)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=NOMINAL(A22,B22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A22": {
+          "kind": "text",
+          "value": "hola"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=EFFECT(A22,B22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A22": {
+          "kind": "text",
+          "value": "hola"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E22",
+      "formula": "=NOMINAL(D22,B22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A22": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "D22": {
+          "kind": "formula",
+          "formula": "=EFFECT(A22,B22)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F22",
+      "formula": "=EFFECT(C22,B22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A22": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "C22": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A22,B22)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=NOMINAL(A23,B23)",
+      "setup": {
+        "B23": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "A23": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=EFFECT(A23,B23)",
+      "setup": {
+        "B23": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "A23": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E23",
+      "formula": "=NOMINAL(D23,B23)",
+      "setup": {
+        "B23": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "A23": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D23": {
+          "kind": "formula",
+          "formula": "=EFFECT(A23,B23)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F23",
+      "formula": "=EFFECT(C23,B23)",
+      "setup": {
+        "B23": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "A23": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C23": {
+          "kind": "formula",
+          "formula": "=NOMINAL(A23,B23)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

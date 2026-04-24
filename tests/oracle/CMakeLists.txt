@@ -49,3 +49,42 @@ gtest_discover_tests(formulon_oracle_tests
   DISCOVERY_MODE PRE_TEST
   PROPERTIES LABELS "oracle"
 )
+
+# ---------------------------------------------------------------------------
+# IronCalc oracle target
+#
+# Secondary oracle that reads golden JSON imported from the IronCalc xlsx
+# fixtures (`tests/oracle/external/ironcalc/fixtures/`) via
+# `tools/oracle/ironcalc_import.py`. The binary reuses oracle_test.cpp
+# verbatim; only FORMULON_ORACLE_GOLDEN_DIR differs so the parameter
+# provider pulls from `golden/ironcalc/` instead of `golden/`.
+#
+# Registered under the `ironcalc` CTest label so the primary `oracle`
+# suite can still be invoked standalone by `make oracle-verify`.
+# ---------------------------------------------------------------------------
+
+add_executable(formulon_ironcalc_oracle_tests ${FORMULON_ORACLE_TEST_SOURCES})
+
+target_link_libraries(formulon_ironcalc_oracle_tests
+  PRIVATE
+    formulon_static
+    gtest_main
+)
+
+target_include_directories(formulon_ironcalc_oracle_tests
+  PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}
+)
+
+target_compile_definitions(formulon_ironcalc_oracle_tests
+  PRIVATE
+    FORMULON_ORACLE_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden/ironcalc"
+)
+
+formulon_apply_warnings(formulon_ironcalc_oracle_tests)
+
+gtest_discover_tests(formulon_ironcalc_oracle_tests
+  DISCOVERY_MODE PRE_TEST
+  PROPERTIES LABELS "ironcalc"
+)

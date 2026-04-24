@@ -1,0 +1,3851 @@
+{
+  "suite": "ironcalc_calc_tests_TEXT_NUMBERS",
+  "description": "Derived from IronCalc fixture calc_tests/TEXT.xlsx, sheet 'NUMBERS'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "NUMBERS",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=\"0\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=\"0.00\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00"
+      }
+    },
+    {
+      "id": "K2",
+      "formula": "=\"0.00%\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00%"
+      }
+    },
+    {
+      "id": "M2",
+      "formula": "=\"0.00E+0\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00E+0"
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=TEXT($A3,B$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12"
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=TEXT($A3,C$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=\"0.00\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12.00"
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=TEXT($A3,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "text",
+          "value": "#,##0"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12"
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=TEXT($A3,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "#,##0_);(#,##0)"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12 "
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=TEXT($A3,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "$#,##0_);($#,##0)"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "$12 "
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=TEXT($A3,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "text",
+          "value": "00-00-00-00"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "00-00-00-12"
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=TEXT($A3,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "text",
+          "value": "General"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12"
+      }
+    },
+    {
+      "id": "I3",
+      "formula": "=TEXT($A3,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "text",
+          "value": "[Red]#.#"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12."
+      }
+    },
+    {
+      "id": "J3",
+      "formula": "=TEXT($A3,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "text",
+          "value": "#,#.00 \"Millions!\""
+        },
+        "A3": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12.00 Millions!"
+      }
+    },
+    {
+      "id": "K3",
+      "formula": "=TEXT($A3,K$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "K2": {
+          "kind": "formula",
+          "formula": "=\"0.00%\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1200.00%"
+      }
+    },
+    {
+      "id": "M3",
+      "formula": "=TEXT($A3,M$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=\"0.00E+0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1.20E+1"
+      }
+    },
+    {
+      "id": "A4",
+      "formula": "=1/3",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.3333333333333333
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=TEXT($A4,B$2)",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=TEXT($A4,C$2)",
+      "setup": {
+        "C2": {
+          "kind": "formula",
+          "formula": "=\"0.00\""
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0.33"
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=TEXT($A4,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "text",
+          "value": "#,##0"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=TEXT($A4,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "#,##0_);(#,##0)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0 "
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=TEXT($A4,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "$#,##0_);($#,##0)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "$0 "
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=TEXT($A4,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "text",
+          "value": "00-00-00-00"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "00-00-00-00"
+      }
+    },
+    {
+      "id": "H4",
+      "formula": "=TEXT($A4,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "text",
+          "value": "General"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0.333333333"
+      }
+    },
+    {
+      "id": "I4",
+      "formula": "=TEXT($A4,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "text",
+          "value": "[Red]#.#"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": ".3"
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=TEXT($A4,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "text",
+          "value": "#,#.00 \"Millions!\""
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": ".33 Millions!"
+      }
+    },
+    {
+      "id": "K4",
+      "formula": "=TEXT($A4,K$2)",
+      "setup": {
+        "K2": {
+          "kind": "formula",
+          "formula": "=\"0.00%\""
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "33.33%"
+      }
+    },
+    {
+      "id": "M4",
+      "formula": "=TEXT($A4,M$2)",
+      "setup": {
+        "M2": {
+          "kind": "formula",
+          "formula": "=\"0.00E+0\""
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "3.33E-1"
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=TEXT($A5,B$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 12345.6789
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12346"
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=TEXT($A5,C$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 12345.6789
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=\"0.00\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12345.68"
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=TEXT($A5,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "text",
+          "value": "#,##0"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 12345.6789
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12,346"
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=TEXT($A5,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "#,##0_);(#,##0)"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 12345.6789
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12,346 "
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=TEXT($A5,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "$#,##0_);($#,##0)"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 12345.6789
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "$12,346 "
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=TEXT($A5,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "text",
+          "value": "00-00-00-00"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 12345.6789
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "00-01-23-46"
+      }
+    },
+    {
+      "id": "H5",
+      "formula": "=TEXT($A5,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "text",
+          "value": "General"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 12345.6789
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12345.6789"
+      }
+    },
+    {
+      "id": "I5",
+      "formula": "=TEXT($A5,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "text",
+          "value": "[Red]#.#"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 12345.6789
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12345.7"
+      }
+    },
+    {
+      "id": "J5",
+      "formula": "=TEXT($A5,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "text",
+          "value": "#,#.00 \"Millions!\""
+        },
+        "A5": {
+          "kind": "number",
+          "value": 12345.6789
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12,345.68 Millions!"
+      }
+    },
+    {
+      "id": "K5",
+      "formula": "=TEXT($A5,K$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 12345.6789
+        },
+        "K2": {
+          "kind": "formula",
+          "formula": "=\"0.00%\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1234567.89%"
+      }
+    },
+    {
+      "id": "M5",
+      "formula": "=TEXT($A5,M$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 12345.6789
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=\"0.00E+0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1.23E+4"
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=TEXT($A6,B$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": -12.0
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-12"
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=TEXT($A6,C$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": -12.0
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=\"0.00\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-12.00"
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=TEXT($A6,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "text",
+          "value": "#,##0"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-12"
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=TEXT($A6,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "#,##0_);(#,##0)"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "(12)"
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=TEXT($A6,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "$#,##0_);($#,##0)"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "($12)"
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=TEXT($A6,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "text",
+          "value": "00-00-00-00"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-00-00-00-12"
+      }
+    },
+    {
+      "id": "H6",
+      "formula": "=TEXT($A6,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "text",
+          "value": "General"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-12"
+      }
+    },
+    {
+      "id": "I6",
+      "formula": "=TEXT($A6,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "text",
+          "value": "[Red]#.#"
+        },
+        "A6": {
+          "kind": "number",
+          "value": -12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-12."
+      }
+    },
+    {
+      "id": "J6",
+      "formula": "=TEXT($A6,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "text",
+          "value": "#,#.00 \"Millions!\""
+        },
+        "A6": {
+          "kind": "number",
+          "value": -12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-12.00 Millions!"
+      }
+    },
+    {
+      "id": "K6",
+      "formula": "=TEXT($A6,K$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": -12.0
+        },
+        "K2": {
+          "kind": "formula",
+          "formula": "=\"0.00%\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-1200.00%"
+      }
+    },
+    {
+      "id": "M6",
+      "formula": "=TEXT($A6,M$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": -12.0
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=\"0.00E+0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-1.20E+1"
+      }
+    },
+    {
+      "id": "A7",
+      "formula": "=-1/3",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.3333333333333333
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=TEXT($A7,B$2)",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=-1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=TEXT($A7,C$2)",
+      "setup": {
+        "C2": {
+          "kind": "formula",
+          "formula": "=\"0.00\""
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=-1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-0.33"
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=TEXT($A7,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "text",
+          "value": "#,##0"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=-1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=TEXT($A7,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "#,##0_);(#,##0)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=-1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "(0)"
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=TEXT($A7,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "$#,##0_);($#,##0)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=-1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "($0)"
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=TEXT($A7,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "text",
+          "value": "00-00-00-00"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=-1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "00-00-00-00"
+      }
+    },
+    {
+      "id": "H7",
+      "formula": "=TEXT($A7,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "text",
+          "value": "General"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=-1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-0.333333333"
+      }
+    },
+    {
+      "id": "I7",
+      "formula": "=TEXT($A7,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "text",
+          "value": "[Red]#.#"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=-1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-.3"
+      }
+    },
+    {
+      "id": "J7",
+      "formula": "=TEXT($A7,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "text",
+          "value": "#,#.00 \"Millions!\""
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=-1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-.33 Millions!"
+      }
+    },
+    {
+      "id": "K7",
+      "formula": "=TEXT($A7,K$2)",
+      "setup": {
+        "K2": {
+          "kind": "formula",
+          "formula": "=\"0.00%\""
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=-1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-33.33%"
+      }
+    },
+    {
+      "id": "M7",
+      "formula": "=TEXT($A7,M$2)",
+      "setup": {
+        "M2": {
+          "kind": "formula",
+          "formula": "=\"0.00E+0\""
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=-1/3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-3.33E-1"
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=TEXT($A8,B$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -12345.6789
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-12346"
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=TEXT($A8,C$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -12345.6789
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=\"0.00\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-12345.68"
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=TEXT($A8,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "text",
+          "value": "#,##0"
+        },
+        "A8": {
+          "kind": "number",
+          "value": -12345.6789
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-12,346"
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=TEXT($A8,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "#,##0_);(#,##0)"
+        },
+        "A8": {
+          "kind": "number",
+          "value": -12345.6789
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "(12,346)"
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=TEXT($A8,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "$#,##0_);($#,##0)"
+        },
+        "A8": {
+          "kind": "number",
+          "value": -12345.6789
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "($12,346)"
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=TEXT($A8,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "text",
+          "value": "00-00-00-00"
+        },
+        "A8": {
+          "kind": "number",
+          "value": -12345.6789
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-00-01-23-46"
+      }
+    },
+    {
+      "id": "H8",
+      "formula": "=TEXT($A8,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "text",
+          "value": "General"
+        },
+        "A8": {
+          "kind": "number",
+          "value": -12345.6789
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-12345.6789"
+      }
+    },
+    {
+      "id": "I8",
+      "formula": "=TEXT($A8,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "text",
+          "value": "[Red]#.#"
+        },
+        "A8": {
+          "kind": "number",
+          "value": -12345.6789
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-12345.7"
+      }
+    },
+    {
+      "id": "J8",
+      "formula": "=TEXT($A8,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "text",
+          "value": "#,#.00 \"Millions!\""
+        },
+        "A8": {
+          "kind": "number",
+          "value": -12345.6789
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-12,345.68 Millions!"
+      }
+    },
+    {
+      "id": "K8",
+      "formula": "=TEXT($A8,K$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -12345.6789
+        },
+        "K2": {
+          "kind": "formula",
+          "formula": "=\"0.00%\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-1234567.89%"
+      }
+    },
+    {
+      "id": "M8",
+      "formula": "=TEXT($A8,M$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -12345.6789
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=\"0.00E+0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-1.23E+4"
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=TEXT($A9,B$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=TEXT($A9,C$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=\"0.00\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0.00"
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=TEXT($A9,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "text",
+          "value": "#,##0"
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=TEXT($A9,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "#,##0_);(#,##0)"
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0 "
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=TEXT($A9,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "$#,##0_);($#,##0)"
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "$0 "
+      }
+    },
+    {
+      "id": "G9",
+      "formula": "=TEXT($A9,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "text",
+          "value": "00-00-00-00"
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "00-00-00-00"
+      }
+    },
+    {
+      "id": "H9",
+      "formula": "=TEXT($A9,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "text",
+          "value": "General"
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "I9",
+      "formula": "=TEXT($A9,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "text",
+          "value": "[Red]#.#"
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "."
+      }
+    },
+    {
+      "id": "J9",
+      "formula": "=TEXT($A9,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "text",
+          "value": "#,#.00 \"Millions!\""
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": ".00 Millions!"
+      }
+    },
+    {
+      "id": "K9",
+      "formula": "=TEXT($A9,K$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "K2": {
+          "kind": "formula",
+          "formula": "=\"0.00%\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0.00%"
+      }
+    },
+    {
+      "id": "M9",
+      "formula": "=TEXT($A9,M$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=\"0.00E+0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0.00E+0"
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=TEXT($A10,B$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 123456789012.0
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "123456789012"
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=TEXT($A10,C$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 123456789012.0
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=\"0.00\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "123456789012.00"
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=TEXT($A10,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "text",
+          "value": "#,##0"
+        },
+        "A10": {
+          "kind": "number",
+          "value": 123456789012.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "123,456,789,012"
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=TEXT($A10,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "#,##0_);(#,##0)"
+        },
+        "A10": {
+          "kind": "number",
+          "value": 123456789012.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "123,456,789,012 "
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=TEXT($A10,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "$#,##0_);($#,##0)"
+        },
+        "A10": {
+          "kind": "number",
+          "value": 123456789012.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "$123,456,789,012 "
+      }
+    },
+    {
+      "id": "G10",
+      "formula": "=TEXT($A10,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "text",
+          "value": "00-00-00-00"
+        },
+        "A10": {
+          "kind": "number",
+          "value": 123456789012.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "123456-78-90-12"
+      }
+    },
+    {
+      "id": "H10",
+      "formula": "=TEXT($A10,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "text",
+          "value": "General"
+        },
+        "A10": {
+          "kind": "number",
+          "value": 123456789012.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1.23457E+11"
+      }
+    },
+    {
+      "id": "I10",
+      "formula": "=TEXT($A10,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "text",
+          "value": "[Red]#.#"
+        },
+        "A10": {
+          "kind": "number",
+          "value": 123456789012.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "123456789012."
+      }
+    },
+    {
+      "id": "J10",
+      "formula": "=TEXT($A10,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "text",
+          "value": "#,#.00 \"Millions!\""
+        },
+        "A10": {
+          "kind": "number",
+          "value": 123456789012.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "123,456,789,012.00 Millions!"
+      }
+    },
+    {
+      "id": "K10",
+      "formula": "=TEXT($A10,K$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 123456789012.0
+        },
+        "K2": {
+          "kind": "formula",
+          "formula": "=\"0.00%\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12345678901200.00%"
+      }
+    },
+    {
+      "id": "L10",
+      "formula": "=TEXT($A10,L$2)",
+      "setup": {
+        "L2": {
+          "kind": "text",
+          "value": "#,##,, \"Millions\""
+        },
+        "A10": {
+          "kind": "number",
+          "value": 123456789012.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "123,457 Millions"
+      }
+    },
+    {
+      "id": "M10",
+      "formula": "=TEXT($A10,M$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 123456789012.0
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=\"0.00E+0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1.23E+11"
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=TEXT($A11,B$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1.2e-16
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=TEXT($A11,C$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1.2e-16
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=\"0.00\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0.00"
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=TEXT($A11,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "text",
+          "value": "#,##0"
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1.2e-16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=TEXT($A11,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "#,##0_);(#,##0)"
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1.2e-16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0 "
+      }
+    },
+    {
+      "id": "F11",
+      "formula": "=TEXT($A11,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "$#,##0_);($#,##0)"
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1.2e-16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "$0 "
+      }
+    },
+    {
+      "id": "G11",
+      "formula": "=TEXT($A11,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "text",
+          "value": "00-00-00-00"
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1.2e-16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "00-00-00-00"
+      }
+    },
+    {
+      "id": "H11",
+      "formula": "=TEXT($A11,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "text",
+          "value": "General"
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1.2e-16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1.2E-16"
+      }
+    },
+    {
+      "id": "I11",
+      "formula": "=TEXT($A11,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "text",
+          "value": "[Red]#.#"
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1.2e-16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "."
+      }
+    },
+    {
+      "id": "J11",
+      "formula": "=TEXT($A11,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "text",
+          "value": "#,#.00 \"Millions!\""
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1.2e-16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": ".00 Millions!"
+      }
+    },
+    {
+      "id": "K11",
+      "formula": "=TEXT($A11,K$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1.2e-16
+        },
+        "K2": {
+          "kind": "formula",
+          "formula": "=\"0.00%\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0.00%"
+      }
+    },
+    {
+      "id": "M11",
+      "formula": "=TEXT($A11,M$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1.2e-16
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=\"0.00E+0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1.20E-16"
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=TEXT($A12,B$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 1.23456e+19
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12345600000000000000"
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=TEXT($A12,C$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 1.23456e+19
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=\"0.00\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12345600000000000000.00"
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=TEXT($A12,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "text",
+          "value": "#,##0"
+        },
+        "A12": {
+          "kind": "number",
+          "value": 1.23456e+19
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12,345,600,000,000,000,000"
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=TEXT($A12,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "#,##0_);(#,##0)"
+        },
+        "A12": {
+          "kind": "number",
+          "value": 1.23456e+19
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12,345,600,000,000,000,000 "
+      }
+    },
+    {
+      "id": "F12",
+      "formula": "=TEXT($A12,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "$#,##0_);($#,##0)"
+        },
+        "A12": {
+          "kind": "number",
+          "value": 1.23456e+19
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "$12,345,600,000,000,000,000 "
+      }
+    },
+    {
+      "id": "G12",
+      "formula": "=TEXT($A12,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "text",
+          "value": "00-00-00-00"
+        },
+        "A12": {
+          "kind": "number",
+          "value": 1.23456e+19
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12345600000000-00-00-00"
+      }
+    },
+    {
+      "id": "H12",
+      "formula": "=TEXT($A12,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "text",
+          "value": "General"
+        },
+        "A12": {
+          "kind": "number",
+          "value": 1.23456e+19
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1.23456E+19"
+      }
+    },
+    {
+      "id": "I12",
+      "formula": "=TEXT($A12,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "text",
+          "value": "[Red]#.#"
+        },
+        "A12": {
+          "kind": "number",
+          "value": 1.23456e+19
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12345600000000000000."
+      }
+    },
+    {
+      "id": "J12",
+      "formula": "=TEXT($A12,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "text",
+          "value": "#,#.00 \"Millions!\""
+        },
+        "A12": {
+          "kind": "number",
+          "value": 1.23456e+19
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "12,345,600,000,000,000,000.00 Millions!"
+      }
+    },
+    {
+      "id": "K12",
+      "formula": "=TEXT($A12,K$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 1.23456e+19
+        },
+        "K2": {
+          "kind": "formula",
+          "formula": "=\"0.00%\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1234560000000000000000.00%"
+      }
+    },
+    {
+      "id": "M12",
+      "formula": "=TEXT($A12,M$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 1.23456e+19
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=\"0.00E+0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1.23E+19"
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=TEXT($A13,B$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 25000000000.0
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "25000000000"
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=TEXT($A13,C$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 25000000000.0
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=\"0.00\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "25000000000.00"
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=TEXT($A13,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "text",
+          "value": "#,##0"
+        },
+        "A13": {
+          "kind": "number",
+          "value": 25000000000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "25,000,000,000"
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=TEXT($A13,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "#,##0_);(#,##0)"
+        },
+        "A13": {
+          "kind": "number",
+          "value": 25000000000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "25,000,000,000 "
+      }
+    },
+    {
+      "id": "F13",
+      "formula": "=TEXT($A13,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "$#,##0_);($#,##0)"
+        },
+        "A13": {
+          "kind": "number",
+          "value": 25000000000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "$25,000,000,000 "
+      }
+    },
+    {
+      "id": "G13",
+      "formula": "=TEXT($A13,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "text",
+          "value": "00-00-00-00"
+        },
+        "A13": {
+          "kind": "number",
+          "value": 25000000000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "25000-00-00-00"
+      }
+    },
+    {
+      "id": "H13",
+      "formula": "=TEXT($A13,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "text",
+          "value": "General"
+        },
+        "A13": {
+          "kind": "number",
+          "value": 25000000000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "25000000000"
+      }
+    },
+    {
+      "id": "I13",
+      "formula": "=TEXT($A13,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "text",
+          "value": "[Red]#.#"
+        },
+        "A13": {
+          "kind": "number",
+          "value": 25000000000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "25000000000."
+      }
+    },
+    {
+      "id": "J13",
+      "formula": "=TEXT($A13,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "text",
+          "value": "#,#.00 \"Millions!\""
+        },
+        "A13": {
+          "kind": "number",
+          "value": 25000000000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "25,000,000,000.00 Millions!"
+      }
+    },
+    {
+      "id": "K13",
+      "formula": "=TEXT($A13,K$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 25000000000.0
+        },
+        "K2": {
+          "kind": "formula",
+          "formula": "=\"0.00%\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2500000000000.00%"
+      }
+    },
+    {
+      "id": "M13",
+      "formula": "=TEXT($A13,M$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 25000000000.0
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=\"0.00E+0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2.50E+10"
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=TEXT($A14,B$2)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 250000000000.0
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "250000000000"
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=TEXT($A14,C$2)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 250000000000.0
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=\"0.00\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "250000000000.00"
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=TEXT($A14,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "text",
+          "value": "#,##0"
+        },
+        "A14": {
+          "kind": "number",
+          "value": 250000000000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "250,000,000,000"
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=TEXT($A14,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "#,##0_);(#,##0)"
+        },
+        "A14": {
+          "kind": "number",
+          "value": 250000000000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "250,000,000,000 "
+      }
+    },
+    {
+      "id": "F14",
+      "formula": "=TEXT($A14,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "$#,##0_);($#,##0)"
+        },
+        "A14": {
+          "kind": "number",
+          "value": 250000000000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "$250,000,000,000 "
+      }
+    },
+    {
+      "id": "G14",
+      "formula": "=TEXT($A14,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "text",
+          "value": "00-00-00-00"
+        },
+        "A14": {
+          "kind": "number",
+          "value": 250000000000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "250000-00-00-00"
+      }
+    },
+    {
+      "id": "H14",
+      "formula": "=TEXT($A14,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "text",
+          "value": "General"
+        },
+        "A14": {
+          "kind": "number",
+          "value": 250000000000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2.5E+11"
+      }
+    },
+    {
+      "id": "I14",
+      "formula": "=TEXT($A14,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "text",
+          "value": "[Red]#.#"
+        },
+        "A14": {
+          "kind": "number",
+          "value": 250000000000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "250000000000."
+      }
+    },
+    {
+      "id": "J14",
+      "formula": "=TEXT($A14,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "text",
+          "value": "#,#.00 \"Millions!\""
+        },
+        "A14": {
+          "kind": "number",
+          "value": 250000000000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "250,000,000,000.00 Millions!"
+      }
+    },
+    {
+      "id": "K14",
+      "formula": "=TEXT($A14,K$2)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 250000000000.0
+        },
+        "K2": {
+          "kind": "formula",
+          "formula": "=\"0.00%\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "25000000000000.00%"
+      }
+    },
+    {
+      "id": "M14",
+      "formula": "=TEXT($A14,M$2)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 250000000000.0
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=\"0.00E+0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2.50E+11"
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=TEXT($A15,B$2)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 1e+16
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "10000000000000000"
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=TEXT($A15,C$2)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 1e+16
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=\"0.00\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "10000000000000000.00"
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=TEXT($A15,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "text",
+          "value": "#,##0"
+        },
+        "A15": {
+          "kind": "number",
+          "value": 1e+16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "10,000,000,000,000,000"
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=TEXT($A15,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "#,##0_);(#,##0)"
+        },
+        "A15": {
+          "kind": "number",
+          "value": 1e+16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "10,000,000,000,000,000 "
+      }
+    },
+    {
+      "id": "F15",
+      "formula": "=TEXT($A15,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "$#,##0_);($#,##0)"
+        },
+        "A15": {
+          "kind": "number",
+          "value": 1e+16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "$10,000,000,000,000,000 "
+      }
+    },
+    {
+      "id": "G15",
+      "formula": "=TEXT($A15,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "text",
+          "value": "00-00-00-00"
+        },
+        "A15": {
+          "kind": "number",
+          "value": 1e+16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "10000000000-00-00-00"
+      }
+    },
+    {
+      "id": "H15",
+      "formula": "=TEXT($A15,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "text",
+          "value": "General"
+        },
+        "A15": {
+          "kind": "number",
+          "value": 1e+16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1E+16"
+      }
+    },
+    {
+      "id": "I15",
+      "formula": "=TEXT($A15,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "text",
+          "value": "[Red]#.#"
+        },
+        "A15": {
+          "kind": "number",
+          "value": 1e+16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "10000000000000000."
+      }
+    },
+    {
+      "id": "J15",
+      "formula": "=TEXT($A15,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "text",
+          "value": "#,#.00 \"Millions!\""
+        },
+        "A15": {
+          "kind": "number",
+          "value": 1e+16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "10,000,000,000,000,000.00 Millions!"
+      }
+    },
+    {
+      "id": "K15",
+      "formula": "=TEXT($A15,K$2)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 1e+16
+        },
+        "K2": {
+          "kind": "formula",
+          "formula": "=\"0.00%\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1000000000000000000.00%"
+      }
+    },
+    {
+      "id": "M15",
+      "formula": "=TEXT($A15,M$2)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 1e+16
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=\"0.00E+0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1.00E+16"
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=TEXT($A16,B$2)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": 1e-16
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=TEXT($A16,C$2)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": 1e-16
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=\"0.00\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0.00"
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=TEXT($A16,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "text",
+          "value": "#,##0"
+        },
+        "A16": {
+          "kind": "number",
+          "value": 1e-16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "E16",
+      "formula": "=TEXT($A16,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "#,##0_);(#,##0)"
+        },
+        "A16": {
+          "kind": "number",
+          "value": 1e-16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0 "
+      }
+    },
+    {
+      "id": "F16",
+      "formula": "=TEXT($A16,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "$#,##0_);($#,##0)"
+        },
+        "A16": {
+          "kind": "number",
+          "value": 1e-16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "$0 "
+      }
+    },
+    {
+      "id": "G16",
+      "formula": "=TEXT($A16,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "text",
+          "value": "00-00-00-00"
+        },
+        "A16": {
+          "kind": "number",
+          "value": 1e-16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "00-00-00-00"
+      }
+    },
+    {
+      "id": "H16",
+      "formula": "=TEXT($A16,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "text",
+          "value": "General"
+        },
+        "A16": {
+          "kind": "number",
+          "value": 1e-16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1E-16"
+      }
+    },
+    {
+      "id": "I16",
+      "formula": "=TEXT($A16,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "text",
+          "value": "[Red]#.#"
+        },
+        "A16": {
+          "kind": "number",
+          "value": 1e-16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "."
+      }
+    },
+    {
+      "id": "J16",
+      "formula": "=TEXT($A16,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "text",
+          "value": "#,#.00 \"Millions!\""
+        },
+        "A16": {
+          "kind": "number",
+          "value": 1e-16
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": ".00 Millions!"
+      }
+    },
+    {
+      "id": "K16",
+      "formula": "=TEXT($A16,K$2)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": 1e-16
+        },
+        "K2": {
+          "kind": "formula",
+          "formula": "=\"0.00%\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0.00%"
+      }
+    },
+    {
+      "id": "M16",
+      "formula": "=TEXT($A16,M$2)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": 1e-16
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=\"0.00E+0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1.00E-16"
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=TEXT($A17,B$2)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -2.7e-18
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=TEXT($A17,C$2)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -2.7e-18
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=\"0.00\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0.00"
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=TEXT($A17,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "text",
+          "value": "#,##0"
+        },
+        "A17": {
+          "kind": "number",
+          "value": -2.7e-18
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "E17",
+      "formula": "=TEXT($A17,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "#,##0_);(#,##0)"
+        },
+        "A17": {
+          "kind": "number",
+          "value": -2.7e-18
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "(0)"
+      }
+    },
+    {
+      "id": "F17",
+      "formula": "=TEXT($A17,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "$#,##0_);($#,##0)"
+        },
+        "A17": {
+          "kind": "number",
+          "value": -2.7e-18
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "($0)"
+      }
+    },
+    {
+      "id": "G17",
+      "formula": "=TEXT($A17,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "text",
+          "value": "00-00-00-00"
+        },
+        "A17": {
+          "kind": "number",
+          "value": -2.7e-18
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "00-00-00-00"
+      }
+    },
+    {
+      "id": "H17",
+      "formula": "=TEXT($A17,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "text",
+          "value": "General"
+        },
+        "A17": {
+          "kind": "number",
+          "value": -2.7e-18
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-2.7E-18"
+      }
+    },
+    {
+      "id": "I17",
+      "formula": "=TEXT($A17,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "text",
+          "value": "[Red]#.#"
+        },
+        "A17": {
+          "kind": "number",
+          "value": -2.7e-18
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "."
+      }
+    },
+    {
+      "id": "J17",
+      "formula": "=TEXT($A17,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "text",
+          "value": "#,#.00 \"Millions!\""
+        },
+        "A17": {
+          "kind": "number",
+          "value": -2.7e-18
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": ".00 Millions!"
+      }
+    },
+    {
+      "id": "K17",
+      "formula": "=TEXT($A17,K$2)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -2.7e-18
+        },
+        "K2": {
+          "kind": "formula",
+          "formula": "=\"0.00%\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0.00%"
+      }
+    },
+    {
+      "id": "M17",
+      "formula": "=TEXT($A17,M$2)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": -2.7e-18
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=\"0.00E+0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-2.70E-18"
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=TEXT($A18,B$2)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": -2.5e-10
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=TEXT($A18,C$2)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": -2.5e-10
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=\"0.00\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0.00"
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=TEXT($A18,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "text",
+          "value": "#,##0"
+        },
+        "A18": {
+          "kind": "number",
+          "value": -2.5e-10
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=TEXT($A18,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "#,##0_);(#,##0)"
+        },
+        "A18": {
+          "kind": "number",
+          "value": -2.5e-10
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "(0)"
+      }
+    },
+    {
+      "id": "F18",
+      "formula": "=TEXT($A18,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "$#,##0_);($#,##0)"
+        },
+        "A18": {
+          "kind": "number",
+          "value": -2.5e-10
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "($0)"
+      }
+    },
+    {
+      "id": "G18",
+      "formula": "=TEXT($A18,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "text",
+          "value": "00-00-00-00"
+        },
+        "A18": {
+          "kind": "number",
+          "value": -2.5e-10
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "00-00-00-00"
+      }
+    },
+    {
+      "id": "H18",
+      "formula": "=TEXT($A18,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "text",
+          "value": "General"
+        },
+        "A18": {
+          "kind": "number",
+          "value": -2.5e-10
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-2.5E-10"
+      }
+    },
+    {
+      "id": "I18",
+      "formula": "=TEXT($A18,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "text",
+          "value": "[Red]#.#"
+        },
+        "A18": {
+          "kind": "number",
+          "value": -2.5e-10
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "."
+      }
+    },
+    {
+      "id": "J18",
+      "formula": "=TEXT($A18,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "text",
+          "value": "#,#.00 \"Millions!\""
+        },
+        "A18": {
+          "kind": "number",
+          "value": -2.5e-10
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": ".00 Millions!"
+      }
+    },
+    {
+      "id": "K18",
+      "formula": "=TEXT($A18,K$2)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": -2.5e-10
+        },
+        "K2": {
+          "kind": "formula",
+          "formula": "=\"0.00%\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0.00%"
+      }
+    },
+    {
+      "id": "M18",
+      "formula": "=TEXT($A18,M$2)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": -2.5e-10
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=\"0.00E+0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-2.50E-10"
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=TEXT($A19,B$2)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": -2.5e-09
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=TEXT($A19,C$2)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": -2.5e-09
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=\"0.00\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0.00"
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=TEXT($A19,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "text",
+          "value": "#,##0"
+        },
+        "A19": {
+          "kind": "number",
+          "value": -2.5e-09
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "E19",
+      "formula": "=TEXT($A19,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "#,##0_);(#,##0)"
+        },
+        "A19": {
+          "kind": "number",
+          "value": -2.5e-09
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "(0)"
+      }
+    },
+    {
+      "id": "F19",
+      "formula": "=TEXT($A19,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "$#,##0_);($#,##0)"
+        },
+        "A19": {
+          "kind": "number",
+          "value": -2.5e-09
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "($0)"
+      }
+    },
+    {
+      "id": "G19",
+      "formula": "=TEXT($A19,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "text",
+          "value": "00-00-00-00"
+        },
+        "A19": {
+          "kind": "number",
+          "value": -2.5e-09
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "00-00-00-00"
+      }
+    },
+    {
+      "id": "H19",
+      "formula": "=TEXT($A19,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "text",
+          "value": "General"
+        },
+        "A19": {
+          "kind": "number",
+          "value": -2.5e-09
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-2.5E-09"
+      }
+    },
+    {
+      "id": "I19",
+      "formula": "=TEXT($A19,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "text",
+          "value": "[Red]#.#"
+        },
+        "A19": {
+          "kind": "number",
+          "value": -2.5e-09
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "."
+      }
+    },
+    {
+      "id": "J19",
+      "formula": "=TEXT($A19,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "text",
+          "value": "#,#.00 \"Millions!\""
+        },
+        "A19": {
+          "kind": "number",
+          "value": -2.5e-09
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": ".00 Millions!"
+      }
+    },
+    {
+      "id": "K19",
+      "formula": "=TEXT($A19,K$2)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": -2.5e-09
+        },
+        "K2": {
+          "kind": "formula",
+          "formula": "=\"0.00%\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0.00%"
+      }
+    },
+    {
+      "id": "M19",
+      "formula": "=TEXT($A19,M$2)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": -2.5e-09
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=\"0.00E+0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-2.50E-9"
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=TEXT($A20,B$2)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": -1e-08
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=TEXT($A20,C$2)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": -1e-08
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=\"0.00\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0.00"
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=TEXT($A20,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "text",
+          "value": "#,##0"
+        },
+        "A20": {
+          "kind": "number",
+          "value": -1e-08
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "E20",
+      "formula": "=TEXT($A20,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "#,##0_);(#,##0)"
+        },
+        "A20": {
+          "kind": "number",
+          "value": -1e-08
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "(0)"
+      }
+    },
+    {
+      "id": "F20",
+      "formula": "=TEXT($A20,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "$#,##0_);($#,##0)"
+        },
+        "A20": {
+          "kind": "number",
+          "value": -1e-08
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "($0)"
+      }
+    },
+    {
+      "id": "G20",
+      "formula": "=TEXT($A20,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "text",
+          "value": "00-00-00-00"
+        },
+        "A20": {
+          "kind": "number",
+          "value": -1e-08
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "00-00-00-00"
+      }
+    },
+    {
+      "id": "H20",
+      "formula": "=TEXT($A20,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "text",
+          "value": "General"
+        },
+        "A20": {
+          "kind": "number",
+          "value": -1e-08
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-0.00000001"
+      }
+    },
+    {
+      "id": "I20",
+      "formula": "=TEXT($A20,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "text",
+          "value": "[Red]#.#"
+        },
+        "A20": {
+          "kind": "number",
+          "value": -1e-08
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "."
+      }
+    },
+    {
+      "id": "J20",
+      "formula": "=TEXT($A20,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "text",
+          "value": "#,#.00 \"Millions!\""
+        },
+        "A20": {
+          "kind": "number",
+          "value": -1e-08
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": ".00 Millions!"
+      }
+    },
+    {
+      "id": "K20",
+      "formula": "=TEXT($A20,K$2)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": -1e-08
+        },
+        "K2": {
+          "kind": "formula",
+          "formula": "=\"0.00%\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0.00%"
+      }
+    },
+    {
+      "id": "M20",
+      "formula": "=TEXT($A20,M$2)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": -1e-08
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=\"0.00E+0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-1.00E-8"
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=TEXT($A21,B$2)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": -1000000000.0
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-1000000000"
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=TEXT($A21,C$2)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": -1000000000.0
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=\"0.00\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-1000000000.00"
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=TEXT($A21,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "text",
+          "value": "#,##0"
+        },
+        "A21": {
+          "kind": "number",
+          "value": -1000000000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-1,000,000,000"
+      }
+    },
+    {
+      "id": "E21",
+      "formula": "=TEXT($A21,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "#,##0_);(#,##0)"
+        },
+        "A21": {
+          "kind": "number",
+          "value": -1000000000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "(1,000,000,000)"
+      }
+    },
+    {
+      "id": "F21",
+      "formula": "=TEXT($A21,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "$#,##0_);($#,##0)"
+        },
+        "A21": {
+          "kind": "number",
+          "value": -1000000000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "($1,000,000,000)"
+      }
+    },
+    {
+      "id": "G21",
+      "formula": "=TEXT($A21,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "text",
+          "value": "00-00-00-00"
+        },
+        "A21": {
+          "kind": "number",
+          "value": -1000000000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-1000-00-00-00"
+      }
+    },
+    {
+      "id": "H21",
+      "formula": "=TEXT($A21,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "text",
+          "value": "General"
+        },
+        "A21": {
+          "kind": "number",
+          "value": -1000000000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-1000000000"
+      }
+    },
+    {
+      "id": "I21",
+      "formula": "=TEXT($A21,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "text",
+          "value": "[Red]#.#"
+        },
+        "A21": {
+          "kind": "number",
+          "value": -1000000000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-1000000000."
+      }
+    },
+    {
+      "id": "J21",
+      "formula": "=TEXT($A21,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "text",
+          "value": "#,#.00 \"Millions!\""
+        },
+        "A21": {
+          "kind": "number",
+          "value": -1000000000.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-1,000,000,000.00 Millions!"
+      }
+    },
+    {
+      "id": "K21",
+      "formula": "=TEXT($A21,K$2)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": -1000000000.0
+        },
+        "K2": {
+          "kind": "formula",
+          "formula": "=\"0.00%\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-100000000000.00%"
+      }
+    },
+    {
+      "id": "M21",
+      "formula": "=TEXT($A21,M$2)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": -1000000000.0
+        },
+        "M2": {
+          "kind": "formula",
+          "formula": "=\"0.00E+0\""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-1.00E+9"
+      }
+    }
+  ]
+}

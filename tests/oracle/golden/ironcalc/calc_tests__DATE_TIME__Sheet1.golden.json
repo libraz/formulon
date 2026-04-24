@@ -1,0 +1,89 @@
+{
+  "suite": "ironcalc_calc_tests_DATE_TIME_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/DATE_TIME.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C4",
+      "formula": "=TIME(0,0,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=TIMEVALUE(\"24:00\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=TIMEVALUE(\" 1:30 \")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0625
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=TIMEVALUE(\"12:00 PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=DATEVALUE(\"29-Feb-1900\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=DATEVALUE(\"1-Mar-1900\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 61.0
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=DATEVALUE(\"2024-02-29 06:00\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45351.0
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=DATEVALUE(\"2024-02-29\")+TIMEVALUE(\"6:00\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45351.25
+      }
+    }
+  ]
+}

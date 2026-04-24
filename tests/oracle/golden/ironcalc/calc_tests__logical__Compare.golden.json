@@ -1,0 +1,2348 @@
+{
+  "suite": "ironcalc_calc_tests_logical_Compare",
+  "description": "Derived from IronCalc fixture calc_tests/logical.xlsx, sheet 'Compare'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Compare",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=$A2=$B2",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=$A2<$B2",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=$A2>$B2",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=$A2<=$B2",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=$A2>=$B2",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "H2",
+      "formula": "=$A2<>$B2",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=$A3=$B3",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=$A3<$B3",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=$A3>$B3",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=$A3<=$B3",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=$A3>=$B3",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=$A3<>$B3",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=$A4=$B4",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=$A4<$B4",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=$A4>$B4",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=$A4<=$B4",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=$A4>=$B4",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "H4",
+      "formula": "=$A4<>$B4",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=$A5=$B5",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=$A5<$B5",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=$A5>$B5",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=$A5<=$B5",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=$A5>=$B5",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "H5",
+      "formula": "=$A5<>$B5",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=$A6=$B6",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": -0.27
+        },
+        "A6": {
+          "kind": "number",
+          "value": -2.5
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=$A6<$B6",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": -0.27
+        },
+        "A6": {
+          "kind": "number",
+          "value": -2.5
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=$A6>$B6",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": -0.27
+        },
+        "A6": {
+          "kind": "number",
+          "value": -2.5
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=$A6<=$B6",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": -0.27
+        },
+        "A6": {
+          "kind": "number",
+          "value": -2.5
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=$A6>=$B6",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": -0.27
+        },
+        "A6": {
+          "kind": "number",
+          "value": -2.5
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "H6",
+      "formula": "=$A6<>$B6",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": -0.27
+        },
+        "A6": {
+          "kind": "number",
+          "value": -2.5
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=$A7=$B7",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=$A7<$B7",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=$A7>$B7",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=$A7<=$B7",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=$A7>=$B7",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "H7",
+      "formula": "=$A7<>$B7",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=$A8=$B8",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=$A8<$B8",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=$A8>$B8",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=$A8<=$B8",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=$A8>=$B8",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "H8",
+      "formula": "=$A8<>$B8",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=$A9=$B9",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "An"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "Anna"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=$A9<$B9",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "An"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "Anna"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=$A9>$B9",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "An"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "Anna"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=$A9<=$B9",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "An"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "Anna"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "G9",
+      "formula": "=$A9>=$B9",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "An"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "Anna"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "H9",
+      "formula": "=$A9<>$B9",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "An"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "Anna"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=$A10=$B10",
+      "setup": {
+        "B10": {
+          "kind": "text",
+          "value": "p"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "P"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=$A10<$B10",
+      "setup": {
+        "B10": {
+          "kind": "text",
+          "value": "p"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "P"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=$A10>$B10",
+      "setup": {
+        "B10": {
+          "kind": "text",
+          "value": "p"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "P"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=$A10<=$B10",
+      "setup": {
+        "B10": {
+          "kind": "text",
+          "value": "p"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "P"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G10",
+      "formula": "=$A10>=$B10",
+      "setup": {
+        "B10": {
+          "kind": "text",
+          "value": "p"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "P"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "H10",
+      "formula": "=$A10<>$B10",
+      "setup": {
+        "B10": {
+          "kind": "text",
+          "value": "p"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "P"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "A11",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=$A11=$B11",
+      "setup": {
+        "B11": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=$A11<$B11",
+      "setup": {
+        "B11": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=$A11>$B11",
+      "setup": {
+        "B11": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F11",
+      "formula": "=$A11<=$B11",
+      "setup": {
+        "B11": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "G11",
+      "formula": "=$A11>=$B11",
+      "setup": {
+        "B11": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "H11",
+      "formula": "=$A11<>$B11",
+      "setup": {
+        "B11": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "A12",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=$A12=$B12",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=$A12<$B12",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=$A12>$B12",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F12",
+      "formula": "=$A12<=$B12",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G12",
+      "formula": "=$A12>=$B12",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "H12",
+      "formula": "=$A12<>$B12",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=$A13=$B13",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=$A13<$B13",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=$A13>$B13",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F13",
+      "formula": "=$A13<=$B13",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G13",
+      "formula": "=$A13>=$B13",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "H13",
+      "formula": "=$A13<>$B13",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=$A14=$B14",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=$A14<$B14",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=$A14>$B14",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F14",
+      "formula": "=$A14<=$B14",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G14",
+      "formula": "=$A14>=$B14",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "H14",
+      "formula": "=$A14<>$B14",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=$A15=$B15",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=$A15<$B15",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=$A15>$B15",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F15",
+      "formula": "=$A15<=$B15",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G15",
+      "formula": "=$A15>=$B15",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "H15",
+      "formula": "=$A15<>$B15",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=$A16=$B16",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A16": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=$A16<$B16",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A16": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E16",
+      "formula": "=$A16>$B16",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A16": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "F16",
+      "formula": "=$A16<=$B16",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A16": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "G16",
+      "formula": "=$A16>=$B16",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A16": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "H16",
+      "formula": "=$A16<>$B16",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A16": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=$A17=$B17",
+      "setup": {
+        "B17": {
+          "kind": "text",
+          "value": "bc"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=$A17<$B17",
+      "setup": {
+        "B17": {
+          "kind": "text",
+          "value": "bc"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E17",
+      "formula": "=$A17>$B17",
+      "setup": {
+        "B17": {
+          "kind": "text",
+          "value": "bc"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F17",
+      "formula": "=$A17<=$B17",
+      "setup": {
+        "B17": {
+          "kind": "text",
+          "value": "bc"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G17",
+      "formula": "=$A17>=$B17",
+      "setup": {
+        "B17": {
+          "kind": "text",
+          "value": "bc"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "H17",
+      "formula": "=$A17<>$B17",
+      "setup": {
+        "B17": {
+          "kind": "text",
+          "value": "bc"
+        },
+        "A17": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=$A18=$B18",
+      "setup": {
+        "B18": {
+          "kind": "bool",
+          "value": false
+        },
+        "A18": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=$A18<$B18",
+      "setup": {
+        "B18": {
+          "kind": "bool",
+          "value": false
+        },
+        "A18": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=$A18>$B18",
+      "setup": {
+        "B18": {
+          "kind": "bool",
+          "value": false
+        },
+        "A18": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "F18",
+      "formula": "=$A18<=$B18",
+      "setup": {
+        "B18": {
+          "kind": "bool",
+          "value": false
+        },
+        "A18": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "G18",
+      "formula": "=$A18>=$B18",
+      "setup": {
+        "B18": {
+          "kind": "bool",
+          "value": false
+        },
+        "A18": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "H18",
+      "formula": "=$A18<>$B18",
+      "setup": {
+        "B18": {
+          "kind": "bool",
+          "value": false
+        },
+        "A18": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=$A19=$B19",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=$A19<$B19",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E19",
+      "formula": "=$A19>$B19",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "F19",
+      "formula": "=$A19<=$B19",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "G19",
+      "formula": "=$A19>=$B19",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "H19",
+      "formula": "=$A19<>$B19",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A19": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=$A20=$B20",
+      "setup": {
+        "B20": {
+          "kind": "bool",
+          "value": false
+        },
+        "A20": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=$A20<$B20",
+      "setup": {
+        "B20": {
+          "kind": "bool",
+          "value": false
+        },
+        "A20": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E20",
+      "formula": "=$A20>$B20",
+      "setup": {
+        "B20": {
+          "kind": "bool",
+          "value": false
+        },
+        "A20": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F20",
+      "formula": "=$A20<=$B20",
+      "setup": {
+        "B20": {
+          "kind": "bool",
+          "value": false
+        },
+        "A20": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G20",
+      "formula": "=$A20>=$B20",
+      "setup": {
+        "B20": {
+          "kind": "bool",
+          "value": false
+        },
+        "A20": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "H20",
+      "formula": "=$A20<>$B20",
+      "setup": {
+        "B20": {
+          "kind": "bool",
+          "value": false
+        },
+        "A20": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=$A21=$B21",
+      "setup": {
+        "B21": {
+          "kind": "bool",
+          "value": true
+        },
+        "A21": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=$A21<$B21",
+      "setup": {
+        "B21": {
+          "kind": "bool",
+          "value": true
+        },
+        "A21": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E21",
+      "formula": "=$A21>$B21",
+      "setup": {
+        "B21": {
+          "kind": "bool",
+          "value": true
+        },
+        "A21": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F21",
+      "formula": "=$A21<=$B21",
+      "setup": {
+        "B21": {
+          "kind": "bool",
+          "value": true
+        },
+        "A21": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G21",
+      "formula": "=$A21>=$B21",
+      "setup": {
+        "B21": {
+          "kind": "bool",
+          "value": true
+        },
+        "A21": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "H21",
+      "formula": "=$A21<>$B21",
+      "setup": {
+        "B21": {
+          "kind": "bool",
+          "value": true
+        },
+        "A21": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=$A22=$B22",
+      "setup": {
+        "B22": {
+          "kind": "bool",
+          "value": false
+        },
+        "A22": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=$A22<$B22",
+      "setup": {
+        "B22": {
+          "kind": "bool",
+          "value": false
+        },
+        "A22": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E22",
+      "formula": "=$A22>$B22",
+      "setup": {
+        "B22": {
+          "kind": "bool",
+          "value": false
+        },
+        "A22": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F22",
+      "formula": "=$A22<=$B22",
+      "setup": {
+        "B22": {
+          "kind": "bool",
+          "value": false
+        },
+        "A22": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G22",
+      "formula": "=$A22>=$B22",
+      "setup": {
+        "B22": {
+          "kind": "bool",
+          "value": false
+        },
+        "A22": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "H22",
+      "formula": "=$A22<>$B22",
+      "setup": {
+        "B22": {
+          "kind": "bool",
+          "value": false
+        },
+        "A22": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=$A23=$B23",
+      "setup": {
+        "B23": {
+          "kind": "text",
+          "value": "adam"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "ADAM"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=$A23<$B23",
+      "setup": {
+        "B23": {
+          "kind": "text",
+          "value": "adam"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "ADAM"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E23",
+      "formula": "=$A23>$B23",
+      "setup": {
+        "B23": {
+          "kind": "text",
+          "value": "adam"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "ADAM"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F23",
+      "formula": "=$A23<=$B23",
+      "setup": {
+        "B23": {
+          "kind": "text",
+          "value": "adam"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "ADAM"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G23",
+      "formula": "=$A23>=$B23",
+      "setup": {
+        "B23": {
+          "kind": "text",
+          "value": "adam"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "ADAM"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "H23",
+      "formula": "=$A23<>$B23",
+      "setup": {
+        "B23": {
+          "kind": "text",
+          "value": "adam"
+        },
+        "A23": {
+          "kind": "text",
+          "value": "ADAM"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=$A24=$B24",
+      "setup": {
+        "B24": {
+          "kind": "text",
+          "value": "ADAM1"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "ADAM"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D24",
+      "formula": "=$A24<$B24",
+      "setup": {
+        "B24": {
+          "kind": "text",
+          "value": "ADAM1"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "ADAM"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E24",
+      "formula": "=$A24>$B24",
+      "setup": {
+        "B24": {
+          "kind": "text",
+          "value": "ADAM1"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "ADAM"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F24",
+      "formula": "=$A24<=$B24",
+      "setup": {
+        "B24": {
+          "kind": "text",
+          "value": "ADAM1"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "ADAM"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G24",
+      "formula": "=$A24>=$B24",
+      "setup": {
+        "B24": {
+          "kind": "text",
+          "value": "ADAM1"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "ADAM"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "H24",
+      "formula": "=$A24<>$B24",
+      "setup": {
+        "B24": {
+          "kind": "text",
+          "value": "ADAM1"
+        },
+        "A24": {
+          "kind": "text",
+          "value": "ADAM"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,458 @@
+{
+  "suite": "ironcalc_calc_tests_CHOOSE_CHOOSE",
+  "description": "Derived from IronCalc fixture calc_tests/CHOOSE.xlsx, sheet 'CHOOSE'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "CHOOSE",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "G2",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=CHOOSE(2, A4, A5, A6, A7)",
+      "setup": {
+        "A7": {
+          "kind": "text",
+          "value": "Finished"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "3rd"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "2nd"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "1st"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2nd"
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=CHOOSE(4, B4, B5, B6, B7)",
+      "setup": {
+        "B7": {
+          "kind": "text",
+          "value": "Bolts"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "Nuts"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "Screws"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "Nails"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Bolts"
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=CHOOSE(3,\"Wide\",115,\"world\",8)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "world"
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=SUM(A9:CHOOSE(2,A10,A11,A12))",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 68.0
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=SUM(CHOOSE(2,A9:A10,A9:A11,A9:A12))",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "A9": {
+          "kind": "text",
+          "value": "Ranges"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 68.0
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=SUM(CHOOSE(2,A10:A11,A10:A12,A10:A13))",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 80.0
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=CHOOSE(-1, A4)",
+      "setup": {
+        "A4": {
+          "kind": "text",
+          "value": "1st"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=CHOOSE(0, A4)",
+      "setup": {
+        "A4": {
+          "kind": "text",
+          "value": "1st"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=CHOOSE(1, A4)",
+      "setup": {
+        "A4": {
+          "kind": "text",
+          "value": "1st"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1st"
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=CHOOSE(2, A4)",
+      "setup": {
+        "A4": {
+          "kind": "text",
+          "value": "1st"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=CHOOSE(\"test\", A4)",
+      "setup": {
+        "A4": {
+          "kind": "text",
+          "value": "1st"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=CHOOSE(FALSE, A4)",
+      "setup": {
+        "A4": {
+          "kind": "text",
+          "value": "1st"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B22",
+      "formula": "=CHOOSE(TRUE, A4)",
+      "setup": {
+        "A4": {
+          "kind": "text",
+          "value": "1st"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1st"
+      }
+    },
+    {
+      "id": "B23",
+      "formula": "=CHOOSE(A25:A27,A4,A5,A6)",
+      "setup": {
+        "A6": {
+          "kind": "text",
+          "value": "3rd"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "2nd"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "1st"
+        },
+        "A27": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A26": {
+          "kind": "text",
+          "value": "index_num evaluated"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B24",
+      "formula": "=CHOOSE(G2, A4)",
+      "setup": {
+        "A4": {
+          "kind": "text",
+          "value": "1st"
+        },
+        "G2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C27",
+      "formula": "=CHOOSE(A27, A4, A5, A6)",
+      "setup": {
+        "A6": {
+          "kind": "text",
+          "value": "3rd"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "2nd"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "1st"
+        },
+        "A27": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1st"
+      }
+    },
+    {
+      "id": "C28",
+      "formula": "=CHOOSE(A28, A4, A5, A6)",
+      "setup": {
+        "A6": {
+          "kind": "text",
+          "value": "3rd"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "2nd"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "1st"
+        },
+        "A28": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2nd"
+      }
+    },
+    {
+      "id": "C29",
+      "formula": "=CHOOSE(A29, A4, A5, A6)",
+      "setup": {
+        "A6": {
+          "kind": "text",
+          "value": "3rd"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "2nd"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "1st"
+        },
+        "A29": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "3rd"
+      }
+    },
+    {
+      "id": "B32",
+      "formula": "=CHOOSE(1.1,A4,A5)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "2nd"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "1st"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1st"
+      }
+    },
+    {
+      "id": "B33",
+      "formula": "=CHOOSE(1.9,A4,A5)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "2nd"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "1st"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1st"
+      }
+    },
+    {
+      "id": "B36",
+      "formula": "=CHOOSE(1, 0, G2)",
+      "setup": {
+        "G2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B37",
+      "formula": "=CHOOSE(2, 0, G2)",
+      "setup": {
+        "G2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B40",
+      "formula": "=CHOOSE(2, B40, \"Not a cycle\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Not a cycle"
+      }
+    }
+  ]
+}

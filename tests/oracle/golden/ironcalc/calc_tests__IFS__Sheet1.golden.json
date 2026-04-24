@@ -1,0 +1,880 @@
+{
+  "suite": "ironcalc_calc_tests_IFS_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/IFS.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=_xlfn.IFS(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "H2",
+      "formula": "=_xlfn.IFS(A2,B2,F2,G2)",
+      "setup": {
+        "G2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F2": {
+          "kind": "bool",
+          "value": true
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "N2",
+      "formula": "=_xlfn.IFS(A2,B2,F2,G2,TRUE,\"-\")",
+      "setup": {
+        "G2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F2": {
+          "kind": "bool",
+          "value": true
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=_xlfn.IFS(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=_xlfn.IFS(A3,B3,F3,G3)",
+      "setup": {
+        "G3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F3": {
+          "kind": "bool",
+          "value": false
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "N3",
+      "formula": "=_xlfn.IFS(A3,B3,F3,G3,TRUE,\"-\")",
+      "setup": {
+        "G3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F3": {
+          "kind": "bool",
+          "value": false
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=_xlfn.IFS(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "H4",
+      "formula": "=_xlfn.IFS(A4,B4,F4,G4)",
+      "setup": {
+        "G4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F4": {
+          "kind": "bool",
+          "value": true
+        },
+        "B4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "N4",
+      "formula": "=_xlfn.IFS(A4,B4,F4,G4,TRUE,\"-\")",
+      "setup": {
+        "G4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F4": {
+          "kind": "bool",
+          "value": true
+        },
+        "B4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=_xlfn.IFS(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "H5",
+      "formula": "=_xlfn.IFS(A5,B5,F5,G5)",
+      "setup": {
+        "G5": {
+          "kind": "number",
+          "value": -13.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -13.0
+      }
+    },
+    {
+      "id": "N5",
+      "formula": "=_xlfn.IFS(A5,B5,F5,G5,TRUE,\"-\")",
+      "setup": {
+        "G5": {
+          "kind": "number",
+          "value": -13.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -13.0
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=_xlfn.IFS(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 34.0
+        },
+        "A6": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "H6",
+      "formula": "=_xlfn.IFS(A6,B6,F6,G6)",
+      "setup": {
+        "G6": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "F6": {
+          "kind": "bool",
+          "value": true
+        },
+        "B6": {
+          "kind": "number",
+          "value": 34.0
+        },
+        "A6": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "N6",
+      "formula": "=_xlfn.IFS(A6,B6,F6,G6,TRUE,\"-\")",
+      "setup": {
+        "G6": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "F6": {
+          "kind": "bool",
+          "value": true
+        },
+        "B6": {
+          "kind": "number",
+          "value": 34.0
+        },
+        "A6": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=_xlfn.IFS(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "world"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "H7",
+      "formula": "=_xlfn.IFS(A7,B7,F7,G7)",
+      "setup": {
+        "G7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F7": {
+          "kind": "bool",
+          "value": true
+        },
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "world"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "N7",
+      "formula": "=_xlfn.IFS(A7,B7,F7,G7,TRUE,\"-\")",
+      "setup": {
+        "G7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F7": {
+          "kind": "bool",
+          "value": true
+        },
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "world"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "A8",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=_xlfn.IFS(A8,B8)",
+      "setup": {
+        "A8": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "H8",
+      "formula": "=_xlfn.IFS(A8,B8,F8,G8)",
+      "setup": {
+        "G8": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "N8",
+      "formula": "=_xlfn.IFS(A8,B8,F8,G8,TRUE,\"-\")",
+      "setup": {
+        "G8": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F8": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=_xlfn.IFS(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "H9",
+      "formula": "=_xlfn.IFS(A9,B9,F9,G9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "N9",
+      "formula": "=_xlfn.IFS(A9,B9,F9,G9,TRUE,\"-\")",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-"
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=_xlfn.IFS(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "H10",
+      "formula": "=_xlfn.IFS(A10,B10,F10,G10)",
+      "setup": {
+        "G10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "bool",
+          "value": true
+        },
+        "F10": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "N10",
+      "formula": "=_xlfn.IFS(A10,B10,F10,G10,TRUE,\"-\")",
+      "setup": {
+        "G10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "bool",
+          "value": true
+        },
+        "F10": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=_xlfn.IFS(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A11": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "H11",
+      "formula": "=_xlfn.IFS(A11,B11,F11,G11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A11": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "N11",
+      "formula": "=_xlfn.IFS(A11,B11,F11,G11,TRUE,\"-\")",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A11": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=_xlfn.IFS(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "text",
+          "value": "whatever"
+        },
+        "A12": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "H12",
+      "formula": "=_xlfn.IFS(A12,B12,F12,G12)",
+      "setup": {
+        "G12": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F12": {
+          "kind": "text",
+          "value": "1"
+        },
+        "B12": {
+          "kind": "text",
+          "value": "whatever"
+        },
+        "A12": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "N12",
+      "formula": "=_xlfn.IFS(A12,B12,F12,G12,TRUE,\"-\")",
+      "setup": {
+        "G12": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F12": {
+          "kind": "text",
+          "value": "1"
+        },
+        "B12": {
+          "kind": "text",
+          "value": "whatever"
+        },
+        "A12": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=_xlfn.IFS(A13,B13)",
+      "setup": {
+        "A13": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "H13",
+      "formula": "=_xlfn.IFS(A13,B13,F13,G13)",
+      "setup": {
+        "G13": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A13": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "N13",
+      "formula": "=_xlfn.IFS(A13,B13,F13,G13,TRUE,\"-\")",
+      "setup": {
+        "G13": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A13": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-"
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=_xlfn.IFS(A14,B14)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "H14",
+      "formula": "=_xlfn.IFS(A14,B14,F14,G14)",
+      "setup": {
+        "F14": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "N14",
+      "formula": "=_xlfn.IFS(A14,B14,F14,G14,TRUE,\"-\")",
+      "setup": {
+        "F14": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-"
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=_xlfn.IFS(A15,B15)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "H15",
+      "formula": "=_xlfn.IFS(A15,B15,F15,G15)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "N15",
+      "formula": "=_xlfn.IFS(A15,B15,F15,G15,TRUE,\"-\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-"
+      }
+    }
+  ]
+}

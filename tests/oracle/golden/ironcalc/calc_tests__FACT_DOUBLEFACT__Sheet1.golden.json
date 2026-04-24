@@ -1,0 +1,213 @@
+{
+  "suite": "ironcalc_calc_tests_FACT_DOUBLEFACT_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/FACT_DOUBLEFACT.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=FACT(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=FACTDOUBLE(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=FACT(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=FACTDOUBLE(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=FACT(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=FACTDOUBLE(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=FACT(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=FACTDOUBLE(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=FACT(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 4.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 24.0
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=FACTDOUBLE(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 4.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=FACT(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5040.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=FACTDOUBLE(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 105.0
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=FACT(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 479001600.0
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=FACTDOUBLE(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 46080.0
+      }
+    }
+  ]
+}

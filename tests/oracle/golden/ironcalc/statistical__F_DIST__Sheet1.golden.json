@@ -1,0 +1,225 @@
+{
+  "suite": "ironcalc_statistical_F_DIST_Sheet1",
+  "description": "Derived from IronCalc fixture statistical/F_DIST.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "F2",
+      "formula": "=_xlfn.F.DIST(A2,B2,C2,D2)",
+      "setup": {
+        "D2": {
+          "kind": "bool",
+          "value": true
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.4
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.8
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4733220523344033
+      }
+    },
+    {
+      "id": "H2",
+      "formula": "=_xlfn.F.DIST.RT(A2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.4
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.8
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5266779476655967
+      }
+    },
+    {
+      "id": "J2",
+      "formula": "=_xlfn.F.INV(F2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.4
+        },
+        "D2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "F2": {
+          "kind": "formula",
+          "formula": "=_xlfn.F.DIST(A2,B2,C2,D2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8000000000000002
+      }
+    },
+    {
+      "id": "L2",
+      "formula": "=_xlfn.F.INV.RT(H2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.4
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.8
+        },
+        "H2": {
+          "kind": "formula",
+          "formula": "=_xlfn.F.DIST.RT(A2,B2,C2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8000000000000002
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=_xlfn.F.DIST(A3,B3,C3,D3)",
+      "setup": {
+        "D3": {
+          "kind": "bool",
+          "value": false
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.4
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.7
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.40509259259259256
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=_xlfn.F.DIST.RT(A3,B3,C3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 2.4
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.7
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6597222222222223
+      }
+    },
+    {
+      "id": "J3",
+      "formula": "=_xlfn.F.INV(F3,B3,C3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 2.4
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D3": {
+          "kind": "bool",
+          "value": false
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "F3": {
+          "kind": "formula",
+          "formula": "=_xlfn.F.DIST(A3,B3,C3,D3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8753979410454287
+      }
+    },
+    {
+      "id": "L3",
+      "formula": "=_xlfn.F.INV.RT(H3,B3,C3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 2.4
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.7
+        },
+        "H3": {
+          "kind": "formula",
+          "formula": "=_xlfn.F.DIST.RT(A3,B3,C3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6999999999999997
+      }
+    }
+  ]
+}

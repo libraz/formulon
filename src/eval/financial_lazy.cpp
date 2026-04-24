@@ -1,6 +1,6 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// Implementation of the IRR and MIRR lazy impls. See
+// Implementation of the IRR / MIRR / XIRR / XNPV lazy impls. See
 // `eval/financial_lazy.h` for the dispatch-table contract and
 // `eval/lazy_impls.h` for the shared `eval_node` / `LazyImpl` vocabulary.
 
@@ -299,6 +299,269 @@ Value eval_mirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   }
 
   const double result = mirr_closed_form(flows, finance.value(), reinvest.value());
+  if (std::isnan(result) || std::isinf(result)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(result);
+}
+
+// ---------------------------------------------------------------------------
+// XIRR / XNPV
+// ---------------------------------------------------------------------------
+//
+// These two share three concerns that IRR / MIRR do not have:
+//
+//   1. A parallel `dates` range that must iterate in lockstep with
+//      `values`. Excel enforces equal total cell counts between the two;
+//      we implement this as a row-major flatten of each argument and a
+//      hard size check before any math runs.
+//   2. A per-pair filter that is more permissive than IRR's: Excel
+//      silently SKIPS any pair where `values[i]` is blank (not coerced
+//      to zero), matching the way SUM / NPV treat blank cells in a
+//      range. A pair where `dates[i]` is blank is also skipped because
+//      an undated cash flow has no place in the schedule.
+//   3. A date-to-offset transform: `t_i = (dates[i] - dates[0]) / 365`,
+//      with `dates[i]` truncated toward zero (`std::trunc`) to match
+//      Excel's serial-date conversion rule.
+//
+// The two impls share the collection pipeline so a single bug in the
+// filter cannot drift XIRR away from XNPV.
+
+namespace {
+
+// Row-major flatten of a single range/Ref/ArrayLiteral argument into a
+// vector of cells. `out_cells` is cleared on entry; on failure returns
+// false with the Excel-visible error written to `*out_err`.
+bool collect_range_cells(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx, std::vector<Value>* out_cells, Value* out_err) {
+  out_cells->clear();
+  const parser::NodeKind k = arg.kind();
+  if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
+    ErrorCode range_err = ErrorCode::Value;
+    if (!resolve_range_arg(arg, arena, registry, ctx, out_cells, &range_err)) {
+      *out_err = Value::error(range_err);
+      return false;
+    }
+    return true;
+  }
+  if (k == parser::NodeKind::ArrayLiteral) {
+    const std::uint32_t rows = arg.as_array_rows();
+    const std::uint32_t cols = arg.as_array_cols();
+    out_cells->reserve(static_cast<std::size_t>(rows) * cols);
+    for (std::uint32_t r = 0; r < rows; ++r) {
+      for (std::uint32_t c = 0; c < cols; ++c) {
+        out_cells->push_back(eval_node(arg.as_array_element(r, c), arena, registry, ctx));
+      }
+    }
+    return true;
+  }
+  // Any other shape (scalar literal, arithmetic expression, etc.) is
+  // not a valid XIRR / XNPV range argument.
+  *out_err = Value::error(ErrorCode::Value);
+  return false;
+}
+
+// Collects filtered (value, date) pairs from the two parallel ranges.
+// Rules:
+//   * Error cells on either side propagate as the call's result.
+//   * Pairs where either side is Blank are silently skipped.
+//   * Pairs where either side fails numeric coercion surface #VALUE!.
+//   * Dates are truncated toward zero (Excel serial rule).
+// Writes `*out_err` and returns false on any failure that should
+// propagate out as the final result.
+bool collect_xpairs(const parser::AstNode& values_arg, const parser::AstNode& dates_arg, Arena& arena,
+                    const FunctionRegistry& registry, const EvalContext& ctx, std::vector<double>* out_values,
+                    std::vector<double>* out_dates, Value* out_err) {
+  std::vector<Value> value_cells;
+  std::vector<Value> date_cells;
+  if (!collect_range_cells(values_arg, arena, registry, ctx, &value_cells, out_err)) {
+    return false;
+  }
+  if (!collect_range_cells(dates_arg, arena, registry, ctx, &date_cells, out_err)) {
+    return false;
+  }
+  // Excel requires the two ranges to have the same total cell count
+  // (dimensionality differences that share a count — e.g. 1x4 vs 4x1 —
+  // are tolerated: both flatten to a 4-element vector).
+  if (value_cells.size() != date_cells.size()) {
+    *out_err = Value::error(ErrorCode::Num);
+    return false;
+  }
+  out_values->clear();
+  out_dates->clear();
+  out_values->reserve(value_cells.size());
+  out_dates->reserve(date_cells.size());
+  for (std::size_t i = 0; i < value_cells.size(); ++i) {
+    const Value& v = value_cells[i];
+    const Value& d = date_cells[i];
+    if (v.is_error()) {
+      *out_err = v;
+      return false;
+    }
+    if (d.is_error()) {
+      *out_err = d;
+      return false;
+    }
+    // A blank cell on either side disqualifies the pair; matches
+    // Excel's treatment of blank cells in cash-flow ranges.
+    if (v.is_blank() || d.is_blank()) {
+      continue;
+    }
+    auto v_num = coerce_to_number(v);
+    if (!v_num) {
+      *out_err = Value::error(v_num.error());
+      return false;
+    }
+    auto d_num = coerce_to_number(d);
+    if (!d_num) {
+      *out_err = Value::error(d_num.error());
+      return false;
+    }
+    out_values->push_back(v_num.value());
+    out_dates->push_back(std::trunc(d_num.value()));
+  }
+  return true;
+}
+
+// XNPV-style sum over a (value, date) schedule at `rate`. Caller must
+// have ensured `rate > -1`.
+double xnpv_sum(const std::vector<double>& values, const std::vector<double>& dates, double rate) noexcept {
+  const double base = 1.0 + rate;
+  const double anchor = dates.empty() ? 0.0 : dates[0];
+  double total = 0.0;
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    const double t = (dates[i] - anchor) / 365.0;
+    total += values[i] / std::pow(base, t);
+  }
+  return total;
+}
+
+// d/dr of xnpv_sum: f'(r) = -sum_i values[i] * t_i / (1+r)^(t_i + 1).
+double xnpv_dsum(const std::vector<double>& values, const std::vector<double>& dates, double rate) noexcept {
+  const double base = 1.0 + rate;
+  const double anchor = dates.empty() ? 0.0 : dates[0];
+  double total = 0.0;
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    const double t = (dates[i] - anchor) / 365.0;
+    total += -values[i] * t / std::pow(base, t + 1.0);
+  }
+  return total;
+}
+
+}  // namespace
+
+Value eval_xirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 2U || arity > 3U) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  std::vector<double> values;
+  std::vector<double> dates;
+  Value err = Value::blank();
+  if (!collect_xpairs(call.as_call_arg(0), call.as_call_arg(1), arena, registry, ctx, &values, &dates, &err)) {
+    return err;
+  }
+
+  // XIRR needs at least two cash flows with opposite sign to root-find
+  // meaningfully; otherwise Newton either diverges or converges to the
+  // boundary `rate == -1`. Mac Excel 365 reports #NUM! here.
+  if (values.size() < 2U) {
+    return Value::error(ErrorCode::Num);
+  }
+  bool has_positive = false;
+  bool has_negative = false;
+  for (double v : values) {
+    if (v > 0.0) {
+      has_positive = true;
+    } else if (v < 0.0) {
+      has_negative = true;
+    }
+  }
+  if (!has_positive || !has_negative) {
+    return Value::error(ErrorCode::Num);
+  }
+
+  double rate = 0.1;  // default guess per Excel.
+  if (arity == 3U) {
+    const Value guess_v = eval_node(call.as_call_arg(2), arena, registry, ctx);
+    if (guess_v.is_error()) {
+      return guess_v;
+    }
+    // Blank guess falls back to 0.1 so `=XIRR(v, d,)` matches `=XIRR(v, d)`.
+    if (!guess_v.is_blank()) {
+      auto coerced = coerce_to_number(guess_v);
+      if (!coerced) {
+        return Value::error(coerced.error());
+      }
+      rate = coerced.value();
+    }
+  }
+  if (rate <= -1.0) {
+    return Value::error(ErrorCode::Num);
+  }
+
+  // Newton-Raphson, same iteration cap and tolerance as IRR so oracle
+  // expectations on the two impls stay aligned.
+  constexpr int kMaxIter = 100;
+  constexpr double kTolerance = 1.0e-10;
+  for (int iter = 0; iter < kMaxIter; ++iter) {
+    if (rate <= -1.0) {
+      return Value::error(ErrorCode::Num);
+    }
+    const double fval = xnpv_sum(values, dates, rate);
+    if (std::isnan(fval) || std::isinf(fval)) {
+      return Value::error(ErrorCode::Num);
+    }
+    if (std::fabs(fval) < kTolerance) {
+      return Value::number(rate);
+    }
+    const double dval = xnpv_dsum(values, dates, rate);
+    if (dval == 0.0 || std::isnan(dval) || std::isinf(dval)) {
+      return Value::error(ErrorCode::Num);
+    }
+    const double new_rate = rate - fval / dval;
+    if (std::isnan(new_rate) || std::isinf(new_rate)) {
+      return Value::error(ErrorCode::Num);
+    }
+    if (std::fabs(new_rate - rate) < kTolerance) {
+      return Value::number(new_rate);
+    }
+    rate = new_rate;
+  }
+  return Value::error(ErrorCode::Num);
+}
+
+Value eval_xnpv_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity != 3U) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  // Rate is a scalar numeric argument; evaluate it first so a rate-side
+  // error short-circuits before we flatten the parallel ranges.
+  const Value rate_v = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (rate_v.is_error()) {
+    return rate_v;
+  }
+  auto rate = coerce_to_number(rate_v);
+  if (!rate) {
+    return Value::error(rate.error());
+  }
+  if (rate.value() <= -1.0) {
+    return Value::error(ErrorCode::Num);
+  }
+
+  std::vector<double> values;
+  std::vector<double> dates;
+  Value err = Value::blank();
+  if (!collect_xpairs(call.as_call_arg(1), call.as_call_arg(2), arena, registry, ctx, &values, &dates, &err)) {
+    return err;
+  }
+
+  const double result = xnpv_sum(values, dates, rate.value());
   if (std::isnan(result) || std::isinf(result)) {
     return Value::error(ErrorCode::Num);
   }

@@ -1,0 +1,1651 @@
+{
+  "suite": "ironcalc_calc_tests_HVLOOKUP_VLinear",
+  "description": "Derived from IronCalc fixture calc_tests/HVLOOKUP.xlsx, sheet 'VLinear'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "VLinear",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C10",
+      "formula": "=VLOOKUP(C9,$C$1:$E$6, 2,FALSE)",
+      "setup": {
+        "E6": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "E5": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "D5": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "German"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "C9": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Manzana"
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=VLOOKUP(D9,$C$1:$E$6, 2,FALSE)",
+      "setup": {
+        "E6": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "E5": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "D5": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "German"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "D9": {
+          "kind": "text",
+          "value": "Orange"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Naranja"
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=VLOOKUP(E9,$C$1:$E$6, 2,FALSE)",
+      "setup": {
+        "E6": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "E5": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "D5": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "German"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "E9": {
+          "kind": "text",
+          "value": "Pear"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Pera"
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=VLOOKUP(F9,$C$1:$E$6, 2,FALSE)",
+      "setup": {
+        "E6": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "E5": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "D5": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "German"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "F9": {
+          "kind": "text",
+          "value": "Potato"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Patata"
+      }
+    },
+    {
+      "id": "G10",
+      "formula": "=VLOOKUP(G9,$C$1:$E$6, 2,FALSE)",
+      "setup": {
+        "E6": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "E5": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "D5": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "German"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "G9": {
+          "kind": "text",
+          "value": "Strawberry"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Fresa"
+      }
+    },
+    {
+      "id": "H10",
+      "formula": "=VLOOKUP(H9,$C$1:$E$6, 2,FALSE)",
+      "setup": {
+        "E6": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "E5": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "D5": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "German"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "H9": {
+          "kind": "text",
+          "value": "Otro"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "I10",
+      "formula": "=VLOOKUP(I9,$C$1:$E$6, 2,FALSE)",
+      "setup": {
+        "E6": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "E5": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "D5": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "German"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "I9": {
+          "kind": "text",
+          "value": "apple"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Manzana"
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=VLOOKUP(C9,$C$1:$E$6, 3,FALSE)",
+      "setup": {
+        "E6": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "E5": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "D5": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "German"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "C9": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Apfel"
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=VLOOKUP(D9,$C$1:$E$6, 3,FALSE)",
+      "setup": {
+        "E6": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "E5": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "D5": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "German"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "D9": {
+          "kind": "text",
+          "value": "Orange"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Orange"
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=VLOOKUP(E9,$C$1:$E$6, 3,FALSE)",
+      "setup": {
+        "E6": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "E5": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "D5": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "German"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "E9": {
+          "kind": "text",
+          "value": "Pear"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Birne"
+      }
+    },
+    {
+      "id": "F11",
+      "formula": "=VLOOKUP(F9,$C$1:$E$6, 3,FALSE)",
+      "setup": {
+        "E6": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "E5": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "D5": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "German"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "F9": {
+          "kind": "text",
+          "value": "Potato"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Kartoffel"
+      }
+    },
+    {
+      "id": "G11",
+      "formula": "=VLOOKUP(G9,$C$1:$E$6, 3,FALSE)",
+      "setup": {
+        "E6": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "E5": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "D5": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "German"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "G9": {
+          "kind": "text",
+          "value": "Strawberry"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Erdbeere"
+      }
+    },
+    {
+      "id": "H11",
+      "formula": "=VLOOKUP(H9,$C$1:$E$6, 3,FALSE)",
+      "setup": {
+        "E6": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "E5": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "D5": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "German"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "H9": {
+          "kind": "text",
+          "value": "Otro"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "I11",
+      "formula": "=VLOOKUP(I9,$C$1:$E$6, 3,FALSE)",
+      "setup": {
+        "E6": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "E5": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "D5": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "German"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "I9": {
+          "kind": "text",
+          "value": "apple"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Apfel"
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=VLOOKUP(C9,$C$1:$E$6, 30,FALSE)",
+      "setup": {
+        "E6": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "E5": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "D5": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "German"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "C9": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=VLOOKUP(C15,$C$1:$E$6, 2, FALSE)",
+      "setup": {
+        "E6": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "E5": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "D5": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "German"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "C15": {
+          "kind": "text",
+          "value": "*an*"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Naranja"
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=VLOOKUP(D15,$C$1:$E$6, 2, FALSE)",
+      "setup": {
+        "E6": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "E5": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "D5": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "German"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "D15": {
+          "kind": "text",
+          "value": "*t?*"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Fresa"
+      }
+    },
+    {
+      "id": "E16",
+      "formula": "=VLOOKUP(E15,$C$1:$E$6, 2, FALSE)",
+      "setup": {
+        "E6": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "E5": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "D5": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "German"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "E15": {
+          "kind": "text",
+          "value": "*t"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "F16",
+      "formula": "=VLOOKUP(F15,$C$1:$E$6, 2, FALSE)",
+      "setup": {
+        "E6": {
+          "kind": "text",
+          "value": "Kartoffel"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "Potato"
+        },
+        "E5": {
+          "kind": "text",
+          "value": "Erdbeere"
+        },
+        "D5": {
+          "kind": "text",
+          "value": "Fresa"
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Strawberry"
+        },
+        "E4": {
+          "kind": "text",
+          "value": "Birne"
+        },
+        "D4": {
+          "kind": "text",
+          "value": "Pera"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Naranja"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Orange"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apfel"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Manzana"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "German"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Spanish"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "English"
+        },
+        "F15": {
+          "kind": "text",
+          "value": "*t?t?"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Patata"
+      }
+    }
+  ]
+}

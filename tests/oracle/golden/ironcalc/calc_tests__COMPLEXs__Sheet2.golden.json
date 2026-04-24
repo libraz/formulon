@@ -1,0 +1,587 @@
+{
+  "suite": "ironcalc_calc_tests_COMPLEXs_Sheet2",
+  "description": "Derived from IronCalc fixture calc_tests/COMPLEXs.xlsx, sheet 'Sheet2'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet2",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 1e-05,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=IMPRODUCT(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "-4+5i"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "3+4i"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-32-i"
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=IMREAL(IMDIV(A2,B2))",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "-4+5i"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "3+4i"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.195121951219512
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=IMAGINARY(IMDIV(A2,B2))",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "-4+5i"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "3+4i"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.75609756097561
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=IMSUM(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "-4+5i"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "3+4i"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-1+9i"
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=IMSUB(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "-4+5i"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "3+4i"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7-i"
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=IMPRODUCT(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "text",
+          "value": "3i"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9i"
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=IMREAL(IMDIV(A3,B3))",
+      "setup": {
+        "B3": {
+          "kind": "text",
+          "value": "3i"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=IMAGINARY(IMDIV(A3,B3))",
+      "setup": {
+        "B3": {
+          "kind": "text",
+          "value": "3i"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=IMSUM(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "text",
+          "value": "3i"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "3+3i"
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=IMSUB(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "text",
+          "value": "3i"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "3-3i"
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=IMPRODUCT(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "text",
+          "value": "2-8i"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=IMREAL(IMDIV(A4,B4))",
+      "setup": {
+        "B4": {
+          "kind": "text",
+          "value": "2-8i"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=IMAGINARY(IMDIV(A4,B4))",
+      "setup": {
+        "B4": {
+          "kind": "text",
+          "value": "2-8i"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=IMSUM(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "text",
+          "value": "2-8i"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2-8i"
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=IMSUB(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "text",
+          "value": "2-8i"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-2+8i"
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=IMPRODUCT(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "i"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "i"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-1"
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=IMREAL(IMDIV(A6,B6))",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "i"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "i"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=IMAGINARY(IMDIV(A6,B6))",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "i"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "i"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=IMSUM(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "i"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "i"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2i"
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=IMSUB(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "i"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "i"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=IMPRODUCT(A7,B7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=IMSUM(A7,B7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=IMSUB(A7,B7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=IMPRODUCT(A8,B8)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=IMSUM(A8,B8)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=IMSUB(A8,B8)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=IMPRODUCT(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": -12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-12"
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=IMREAL(IMDIV(A9,B9))",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": -12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -12.0
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=IMAGINARY(IMDIV(A9,B9))",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": -12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=IMSUM(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": -12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-11"
+      }
+    },
+    {
+      "id": "G9",
+      "formula": "=IMSUB(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": -12.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-13"
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=IMPRODUCT(A10,B10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=IMSUM(A10,B10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7"
+      }
+    },
+    {
+      "id": "G10",
+      "formula": "=IMSUB(A10,B10)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7"
+      }
+    },
+    {
+      "id": "A11",
+      "formula": "=COMPLEX(0,1,\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "i"
+      }
+    }
+  ]
+}

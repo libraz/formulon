@@ -1,0 +1,2859 @@
+{
+  "suite": "ironcalc_calc_tests_BITs_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/BITs.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=_xlfn.BITAND(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=_xlfn.BITOR(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=_xlfn.BITXOR(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J2",
+      "formula": "=_xlfn.BITLSHIFT(H2,I2)",
+      "setup": {
+        "I2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "K2",
+      "formula": "=_xlfn.BITRSHIFT(H2,I2)",
+      "setup": {
+        "I2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=_xlfn.BITAND(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=_xlfn.BITOR(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=_xlfn.BITXOR(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "J3",
+      "formula": "=_xlfn.BITLSHIFT(H3,I3)",
+      "setup": {
+        "I3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "K3",
+      "formula": "=_xlfn.BITRSHIFT(H3,I3)",
+      "setup": {
+        "I3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=_xlfn.BITAND(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=_xlfn.BITOR(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 101.0
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=_xlfn.BITXOR(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=_xlfn.BITLSHIFT(H4,I4)",
+      "setup": {
+        "I4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H4": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1600.0
+      }
+    },
+    {
+      "id": "K4",
+      "formula": "=_xlfn.BITRSHIFT(H4,I4)",
+      "setup": {
+        "I4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H4": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=_xlfn.BITAND(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 65662.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 123123123.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=_xlfn.BITOR(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 65662.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 123123123.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 123188735.0
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=_xlfn.BITXOR(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 65662.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 123123123.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 123188685.0
+      }
+    },
+    {
+      "id": "J5",
+      "formula": "=_xlfn.BITLSHIFT(H5,I5)",
+      "setup": {
+        "I5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "H5": {
+          "kind": "number",
+          "value": 123123123.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7879879872.0
+      }
+    },
+    {
+      "id": "K5",
+      "formula": "=_xlfn.BITRSHIFT(H5,I5)",
+      "setup": {
+        "I5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "H5": {
+          "kind": "number",
+          "value": 123123123.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1923798.0
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=_xlfn.BITAND(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": -34.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=_xlfn.BITOR(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": -34.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=_xlfn.BITXOR(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": -34.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J6",
+      "formula": "=_xlfn.BITLSHIFT(H6,I6)",
+      "setup": {
+        "I6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H6": {
+          "kind": "number",
+          "value": -34.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K6",
+      "formula": "=_xlfn.BITRSHIFT(H6,I6)",
+      "setup": {
+        "I6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H6": {
+          "kind": "number",
+          "value": -34.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=_xlfn.BITAND(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": -34.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=_xlfn.BITOR(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": -34.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=_xlfn.BITXOR(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": -34.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J7",
+      "formula": "=_xlfn.BITLSHIFT(H7,I7)",
+      "setup": {
+        "I7": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "H7": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K7",
+      "formula": "=_xlfn.BITRSHIFT(H7,I7)",
+      "setup": {
+        "I7": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "H7": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=_xlfn.BITAND(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 12.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=_xlfn.BITOR(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 12.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=_xlfn.BITXOR(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 12.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J8",
+      "formula": "=_xlfn.BITLSHIFT(H8,I8)",
+      "setup": {
+        "H8": {
+          "kind": "number",
+          "value": 12.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K8",
+      "formula": "=_xlfn.BITRSHIFT(H8,I8)",
+      "setup": {
+        "H8": {
+          "kind": "number",
+          "value": 12.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=_xlfn.BITAND(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 12.5
+        },
+        "A9": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=_xlfn.BITOR(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 12.5
+        },
+        "A9": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=_xlfn.BITXOR(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 12.5
+        },
+        "A9": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J9",
+      "formula": "=_xlfn.BITLSHIFT(H9,I9)",
+      "setup": {
+        "H9": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "K9",
+      "formula": "=_xlfn.BITRSHIFT(H9,I9)",
+      "setup": {
+        "H9": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "A10",
+      "formula": "=2^48-1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 281474976710655.0
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=_xlfn.BITAND(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=2^48-1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=_xlfn.BITOR(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=2^48-1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 281474976710655.0
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=_xlfn.BITXOR(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=2^48-1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 281474976710654.0
+      }
+    },
+    {
+      "id": "H10",
+      "formula": "=2^48-1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 281474976710655.0
+      }
+    },
+    {
+      "id": "J10",
+      "formula": "=_xlfn.BITLSHIFT(H10,I10)",
+      "setup": {
+        "H10": {
+          "kind": "formula",
+          "formula": "=2^48-1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 281474976710655.0
+      }
+    },
+    {
+      "id": "K10",
+      "formula": "=_xlfn.BITRSHIFT(H10,I10)",
+      "setup": {
+        "H10": {
+          "kind": "formula",
+          "formula": "=2^48-1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 281474976710655.0
+      }
+    },
+    {
+      "id": "A11",
+      "formula": "=2^48",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 281474976710656.0
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=_xlfn.BITAND(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=2^48"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=_xlfn.BITOR(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=2^48"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=_xlfn.BITXOR(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=2^48"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H11",
+      "formula": "=2^48",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 281474976710656.0
+      }
+    },
+    {
+      "id": "J11",
+      "formula": "=_xlfn.BITLSHIFT(H11,I11)",
+      "setup": {
+        "H11": {
+          "kind": "formula",
+          "formula": "=2^48"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K11",
+      "formula": "=_xlfn.BITRSHIFT(H11,I11)",
+      "setup": {
+        "H11": {
+          "kind": "formula",
+          "formula": "=2^48"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=_xlfn.BITAND(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 12312.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 512345.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4120.0
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=_xlfn.BITOR(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 12312.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 512345.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 520537.0
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=_xlfn.BITXOR(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 12312.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 512345.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 516417.0
+      }
+    },
+    {
+      "id": "J12",
+      "formula": "=_xlfn.BITLSHIFT(H12,I12)",
+      "setup": {
+        "I12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H12": {
+          "kind": "number",
+          "value": 512345.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4098760.0
+      }
+    },
+    {
+      "id": "K12",
+      "formula": "=_xlfn.BITRSHIFT(H12,I12)",
+      "setup": {
+        "I12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H12": {
+          "kind": "number",
+          "value": 512345.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 64043.0
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=_xlfn.BITAND(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A13": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=_xlfn.BITOR(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A13": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=_xlfn.BITXOR(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A13": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "J13",
+      "formula": "=_xlfn.BITLSHIFT(H13,I13)",
+      "setup": {
+        "H13": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "K13",
+      "formula": "=_xlfn.BITRSHIFT(H13,I13)",
+      "setup": {
+        "H13": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=_xlfn.BITAND(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=_xlfn.BITOR(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=_xlfn.BITXOR(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "J14",
+      "formula": "=_xlfn.BITLSHIFT(H14,I14)",
+      "setup": {
+        "I14": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H14": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "K14",
+      "formula": "=_xlfn.BITRSHIFT(H14,I14)",
+      "setup": {
+        "I14": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H14": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=_xlfn.BITAND(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "bool",
+          "value": true
+        },
+        "A15": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=_xlfn.BITOR(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "bool",
+          "value": true
+        },
+        "A15": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=_xlfn.BITXOR(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "bool",
+          "value": true
+        },
+        "A15": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J15",
+      "formula": "=_xlfn.BITLSHIFT(H15,I15)",
+      "setup": {
+        "H15": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "K15",
+      "formula": "=_xlfn.BITRSHIFT(H15,I15)",
+      "setup": {
+        "H15": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=_xlfn.BITAND(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "bool",
+          "value": false
+        },
+        "A16": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=_xlfn.BITOR(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "bool",
+          "value": false
+        },
+        "A16": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E16",
+      "formula": "=_xlfn.BITXOR(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "bool",
+          "value": false
+        },
+        "A16": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "J16",
+      "formula": "=_xlfn.BITLSHIFT(H16,I16)",
+      "setup": {
+        "H16": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "K16",
+      "formula": "=_xlfn.BITRSHIFT(H16,I16)",
+      "setup": {
+        "H16": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=_xlfn.BITAND(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 456.0
+        },
+        "A17": {
+          "kind": "text",
+          "value": "123"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 72.0
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=_xlfn.BITOR(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 456.0
+        },
+        "A17": {
+          "kind": "text",
+          "value": "123"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 507.0
+      }
+    },
+    {
+      "id": "E17",
+      "formula": "=_xlfn.BITXOR(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 456.0
+        },
+        "A17": {
+          "kind": "text",
+          "value": "123"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 435.0
+      }
+    },
+    {
+      "id": "J17",
+      "formula": "=_xlfn.BITLSHIFT(H17,I17)",
+      "setup": {
+        "I17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H17": {
+          "kind": "text",
+          "value": "123"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 492.0
+      }
+    },
+    {
+      "id": "K17",
+      "formula": "=_xlfn.BITRSHIFT(H17,I17)",
+      "setup": {
+        "I17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H17": {
+          "kind": "text",
+          "value": "123"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "A18",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=_xlfn.BITAND(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=_xlfn.BITOR(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=_xlfn.BITXOR(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "H18",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "J18",
+      "formula": "=_xlfn.BITLSHIFT(H18,I18)",
+      "setup": {
+        "I18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H18": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "K18",
+      "formula": "=_xlfn.BITRSHIFT(H18,I18)",
+      "setup": {
+        "I18": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H18": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=_xlfn.BITAND(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 0.1
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=_xlfn.BITOR(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 0.1
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E19",
+      "formula": "=_xlfn.BITXOR(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 0.1
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J19",
+      "formula": "=_xlfn.BITLSHIFT(H19,I19)",
+      "setup": {
+        "I19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H19": {
+          "kind": "number",
+          "value": 0.1
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K19",
+      "formula": "=_xlfn.BITRSHIFT(H19,I19)",
+      "setup": {
+        "I19": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H19": {
+          "kind": "number",
+          "value": 0.1
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=_xlfn.BITAND(A20,B20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A20": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=_xlfn.BITOR(A20,B20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A20": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E20",
+      "formula": "=_xlfn.BITXOR(A20,B20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A20": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J20",
+      "formula": "=_xlfn.BITLSHIFT(H20,I20)",
+      "setup": {
+        "I20": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H20": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "K20",
+      "formula": "=_xlfn.BITRSHIFT(H20,I20)",
+      "setup": {
+        "I20": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H20": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=_xlfn.BITAND(A21,B21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=_xlfn.BITOR(A21,B21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "E21",
+      "formula": "=_xlfn.BITXOR(A21,B21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "J21",
+      "formula": "=_xlfn.BITLSHIFT(H21,I21)",
+      "setup": {
+        "I21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H21": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 24.0
+      }
+    },
+    {
+      "id": "K21",
+      "formula": "=_xlfn.BITRSHIFT(H21,I21)",
+      "setup": {
+        "I21": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H21": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=_xlfn.BITAND(A22,B22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": 25.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 13.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "D22",
+      "formula": "=_xlfn.BITOR(A22,B22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": 25.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 13.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 29.0
+      }
+    },
+    {
+      "id": "E22",
+      "formula": "=_xlfn.BITXOR(A22,B22)",
+      "setup": {
+        "B22": {
+          "kind": "number",
+          "value": 25.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": 13.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "J22",
+      "formula": "=_xlfn.BITLSHIFT(H22,I22)",
+      "setup": {
+        "I22": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H22": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 48.0
+      }
+    },
+    {
+      "id": "K22",
+      "formula": "=_xlfn.BITRSHIFT(H22,I22)",
+      "setup": {
+        "I22": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H22": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=_xlfn.BITAND(A23,B23)",
+      "setup": {
+        "B23": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 13.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "D23",
+      "formula": "=_xlfn.BITOR(A23,B23)",
+      "setup": {
+        "B23": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 13.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "E23",
+      "formula": "=_xlfn.BITXOR(A23,B23)",
+      "setup": {
+        "B23": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": 13.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "J23",
+      "formula": "=_xlfn.BITLSHIFT(H23,I23)",
+      "setup": {
+        "I23": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H23": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 96.0
+      }
+    },
+    {
+      "id": "K23",
+      "formula": "=_xlfn.BITRSHIFT(H23,I23)",
+      "setup": {
+        "I23": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "H23": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "J24",
+      "formula": "=_xlfn.BITLSHIFT(H24,I24)",
+      "setup": {
+        "I24": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H24": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 192.0
+      }
+    },
+    {
+      "id": "K24",
+      "formula": "=_xlfn.BITRSHIFT(H24,I24)",
+      "setup": {
+        "I24": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H24": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J25",
+      "formula": "=_xlfn.BITLSHIFT(H25,I25)",
+      "setup": {
+        "I25": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H25": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 384.0
+      }
+    },
+    {
+      "id": "K25",
+      "formula": "=_xlfn.BITRSHIFT(H25,I25)",
+      "setup": {
+        "I25": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H25": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J26",
+      "formula": "=_xlfn.BITLSHIFT(H26,I26)",
+      "setup": {
+        "I26": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "H26": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 768.0
+      }
+    },
+    {
+      "id": "K26",
+      "formula": "=_xlfn.BITRSHIFT(H26,I26)",
+      "setup": {
+        "I26": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "H26": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J27",
+      "formula": "=_xlfn.BITLSHIFT(H27,I27)",
+      "setup": {
+        "I27": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "H27": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1536.0
+      }
+    },
+    {
+      "id": "K27",
+      "formula": "=_xlfn.BITRSHIFT(H27,I27)",
+      "setup": {
+        "I27": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "H27": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J28",
+      "formula": "=_xlfn.BITLSHIFT(H28,I28)",
+      "setup": {
+        "I28": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "H28": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3072.0
+      }
+    },
+    {
+      "id": "K28",
+      "formula": "=_xlfn.BITRSHIFT(H28,I28)",
+      "setup": {
+        "I28": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "H28": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J29",
+      "formula": "=_xlfn.BITLSHIFT(H29,I29)",
+      "setup": {
+        "I29": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "H29": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6144.0
+      }
+    },
+    {
+      "id": "K29",
+      "formula": "=_xlfn.BITRSHIFT(H29,I29)",
+      "setup": {
+        "I29": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "H29": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J30",
+      "formula": "=_xlfn.BITLSHIFT(H30,I30)",
+      "setup": {
+        "I30": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "H30": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12288.0
+      }
+    },
+    {
+      "id": "K30",
+      "formula": "=_xlfn.BITRSHIFT(H30,I30)",
+      "setup": {
+        "I30": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "H30": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J31",
+      "formula": "=_xlfn.BITLSHIFT(H31,I31)",
+      "setup": {
+        "I31": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "H31": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 24576.0
+      }
+    },
+    {
+      "id": "K31",
+      "formula": "=_xlfn.BITRSHIFT(H31,I31)",
+      "setup": {
+        "I31": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "H31": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J32",
+      "formula": "=_xlfn.BITLSHIFT(H32,I32)",
+      "setup": {
+        "I32": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "H32": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 49152.0
+      }
+    },
+    {
+      "id": "K32",
+      "formula": "=_xlfn.BITRSHIFT(H32,I32)",
+      "setup": {
+        "I32": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "H32": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J33",
+      "formula": "=_xlfn.BITLSHIFT(H33,I33)",
+      "setup": {
+        "I33": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "H33": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 98304.0
+      }
+    },
+    {
+      "id": "K33",
+      "formula": "=_xlfn.BITRSHIFT(H33,I33)",
+      "setup": {
+        "I33": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "H33": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J34",
+      "formula": "=_xlfn.BITLSHIFT(H34,I34)",
+      "setup": {
+        "I34": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "H34": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 13194139533312.0
+      }
+    },
+    {
+      "id": "K34",
+      "formula": "=_xlfn.BITRSHIFT(H34,I34)",
+      "setup": {
+        "I34": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "H34": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J35",
+      "formula": "=_xlfn.BITLSHIFT(H35,I35)",
+      "setup": {
+        "I35": {
+          "kind": "number",
+          "value": 44.0
+        },
+        "H35": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 211106232532992.0
+      }
+    },
+    {
+      "id": "K35",
+      "formula": "=_xlfn.BITRSHIFT(H35,I35)",
+      "setup": {
+        "I35": {
+          "kind": "number",
+          "value": 44.0
+        },
+        "H35": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J36",
+      "formula": "=_xlfn.BITLSHIFT(H36,I36)",
+      "setup": {
+        "I36": {
+          "kind": "number",
+          "value": 54.0
+        },
+        "H36": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K36",
+      "formula": "=_xlfn.BITRSHIFT(H36,I36)",
+      "setup": {
+        "I36": {
+          "kind": "number",
+          "value": 54.0
+        },
+        "H36": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J37",
+      "formula": "=_xlfn.BITLSHIFT(H37,I37)",
+      "setup": {
+        "I37": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "H37": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "K37",
+      "formula": "=_xlfn.BITRSHIFT(H37,I37)",
+      "setup": {
+        "I37": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "H37": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 24.0
+      }
+    },
+    {
+      "id": "J38",
+      "formula": "=_xlfn.BITLSHIFT(H38,I38)",
+      "setup": {
+        "I38": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "H38": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "K38",
+      "formula": "=_xlfn.BITRSHIFT(H38,I38)",
+      "setup": {
+        "I38": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "H38": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 48.0
+      }
+    },
+    {
+      "id": "J39",
+      "formula": "=_xlfn.BITLSHIFT(H39,I39)",
+      "setup": {
+        "I39": {
+          "kind": "number",
+          "value": -53.0
+        },
+        "H39": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J40",
+      "formula": "=_xlfn.BITLSHIFT(H40,I40)",
+      "setup": {
+        "I40": {
+          "kind": "number",
+          "value": -54.0
+        },
+        "H40": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K40",
+      "formula": "=_xlfn.BITRSHIFT(H40,I40)",
+      "setup": {
+        "I40": {
+          "kind": "number",
+          "value": -54.0
+        },
+        "H40": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J41",
+      "formula": "=_xlfn.BITLSHIFT(H41,I41)",
+      "setup": {
+        "I41": {
+          "kind": "number",
+          "value": 34.67
+        },
+        "H41": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 206158430208.0
+      }
+    },
+    {
+      "id": "K41",
+      "formula": "=_xlfn.BITRSHIFT(H41,I41)",
+      "setup": {
+        "I41": {
+          "kind": "number",
+          "value": 34.67
+        },
+        "H41": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J42",
+      "formula": "=_xlfn.BITLSHIFT(H42,I42)",
+      "setup": {
+        "I42": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "H42": {
+          "kind": "number",
+          "value": 12.6
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K42",
+      "formula": "=_xlfn.BITRSHIFT(H42,I42)",
+      "setup": {
+        "I42": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "H42": {
+          "kind": "number",
+          "value": 12.6
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J43",
+      "formula": "=_xlfn.BITLSHIFT(H43,I43)",
+      "setup": {
+        "I43": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H43": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.0
+      }
+    },
+    {
+      "id": "K43",
+      "formula": "=_xlfn.BITRSHIFT(H43,I43)",
+      "setup": {
+        "I43": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "H43": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "J44",
+      "formula": "=_xlfn.BITLSHIFT(H44,I44)",
+      "setup": {
+        "I44": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "H44": {
+          "kind": "number",
+          "value": 13.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1664.0
+      }
+    },
+    {
+      "id": "K44",
+      "formula": "=_xlfn.BITRSHIFT(H44,I44)",
+      "setup": {
+        "I44": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "H44": {
+          "kind": "number",
+          "value": 13.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J45",
+      "formula": "=_xlfn.BITLSHIFT(H45,I45)",
+      "setup": {
+        "I45": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "H45": {
+          "kind": "number",
+          "value": 145.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 18.0
+      }
+    },
+    {
+      "id": "K45",
+      "formula": "=_xlfn.BITRSHIFT(H45,I45)",
+      "setup": {
+        "I45": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "H45": {
+          "kind": "number",
+          "value": 145.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1160.0
+      }
+    },
+    {
+      "id": "J46",
+      "formula": "=_xlfn.BITLSHIFT(H46,I46)",
+      "setup": {
+        "I46": {
+          "kind": "number",
+          "value": 44.0
+        },
+        "H46": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 211106232532992.0
+      }
+    },
+    {
+      "id": "K46",
+      "formula": "=_xlfn.BITRSHIFT(H46,I46)",
+      "setup": {
+        "I46": {
+          "kind": "number",
+          "value": 44.0
+        },
+        "H46": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J47",
+      "formula": "=_xlfn.BITLSHIFT(H47,I47)",
+      "setup": {
+        "I47": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "H47": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K47",
+      "formula": "=_xlfn.BITRSHIFT(H47,I47)",
+      "setup": {
+        "I47": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "H47": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "K48",
+      "formula": "=_xlfn.BITRSHIFT(H48,I48)",
+      "setup": {
+        "I48": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "H48": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    }
+  ]
+}

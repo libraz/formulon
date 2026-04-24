@@ -1,0 +1,971 @@
+{
+  "suite": "ironcalc_calc_tests_ROW_COLUM_ROW_COLUMN",
+  "description": "Derived from IronCalc fixture calc_tests/ROW_COLUM.xlsx, sheet 'ROW_COLUMN'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "ROW_COLUMN",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B1",
+      "formula": "=ROW()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A2",
+      "formula": "=ROW()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=ROW(E2)",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=COLUMN(E2)",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "K2",
+      "formula": "=ROW(INDIRECT(J2))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "L2",
+      "formula": "=COLUMN(INDIRECT(J2))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "A3",
+      "formula": "=ROW()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=ROW(A10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=COLUMN(AB10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 28.0
+      }
+    },
+    {
+      "id": "K3",
+      "formula": "=ROW(INDIRECT(J3))",
+      "setup": {
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "L3",
+      "formula": "=COLUMN(INDIRECT(J3))",
+      "setup": {
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A4",
+      "formula": "=ROW()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=ISNUMBER(A4)",
+      "setup": {
+        "A4": {
+          "kind": "formula",
+          "formula": "=ROW()"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=ROW(L3:Q8)",
+      "setup": {
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "L8": {
+          "kind": "formula",
+          "formula": "=COLUMN(INDIRECT(J8))"
+        },
+        "L7": {
+          "kind": "formula",
+          "formula": "=COLUMN(INDIRECT(J7))"
+        },
+        "L6": {
+          "kind": "formula",
+          "formula": "=COLUMN(INDIRECT(J6))"
+        },
+        "L5": {
+          "kind": "formula",
+          "formula": "=COLUMN(INDIRECT(J5))"
+        },
+        "L4": {
+          "kind": "formula",
+          "formula": "=COLUMN(INDIRECT(J4))"
+        },
+        "L3": {
+          "kind": "formula",
+          "formula": "=COLUMN(INDIRECT(J3))"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=COLUMN(M4:P9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 13.0
+      }
+    },
+    {
+      "id": "K4",
+      "formula": "=ROW(INDIRECT(J4))",
+      "setup": {
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "L4",
+      "formula": "=COLUMN(INDIRECT(J4))",
+      "setup": {
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "A5",
+      "formula": "=ROW()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=ROW(INDIRECT(E2))",
+      "setup": {
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "K5",
+      "formula": "=ROW(INDIRECT(J5))",
+      "setup": {
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "L5",
+      "formula": "=COLUMN(INDIRECT(J5))",
+      "setup": {
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "A6",
+      "formula": "=ROW()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=ROW($E$5)",
+      "setup": {
+        "E5": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=COLUMN($T$7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "K6",
+      "formula": "=ROW(INDIRECT(J6))",
+      "setup": {
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "L6",
+      "formula": "=COLUMN(INDIRECT(J6))",
+      "setup": {
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "A7",
+      "formula": "=ROW()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "K7",
+      "formula": "=ROW(INDIRECT(J7))",
+      "setup": {
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "L7",
+      "formula": "=COLUMN(INDIRECT(J7))",
+      "setup": {
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "A8",
+      "formula": "=ROW()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "K8",
+      "formula": "=ROW(INDIRECT(J8))",
+      "setup": {
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "L8",
+      "formula": "=COLUMN(INDIRECT(J8))",
+      "setup": {
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "A9",
+      "formula": "=ROW()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "K9",
+      "formula": "=ROW(INDIRECT(J9))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "L9",
+      "formula": "=COLUMN(INDIRECT(J9))",
+      "setup": {
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "K10",
+      "formula": "=ROW(INDIRECT(J10))",
+      "setup": {
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 34.0
+      }
+    },
+    {
+      "id": "L10",
+      "formula": "=COLUMN(INDIRECT(J10))",
+      "setup": {
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 487.0
+      }
+    },
+    {
+      "id": "K11",
+      "formula": "=ROW(INDIRECT(J11))",
+      "setup": {
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 56.0
+      }
+    },
+    {
+      "id": "L11",
+      "formula": "=COLUMN(INDIRECT(J11))",
+      "setup": {
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 621.0
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=COLUMN()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=COLUMN()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=COLUMN()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=COLUMN()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "F12",
+      "formula": "=COLUMN()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "K12",
+      "formula": "=ROW(INDIRECT(J12))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "L12",
+      "formula": "=COLUMN(INDIRECT(J12))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "Z12",
+      "formula": "=COLUMN()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 26.0
+      }
+    },
+    {
+      "id": "AA12",
+      "formula": "=COLUMN()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 27.0
+      }
+    },
+    {
+      "id": "XFD12",
+      "formula": "=COLUMN()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 16384.0
+      }
+    },
+    {
+      "id": "A14",
+      "formula": "=COLUMN()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=ISNUMBER(E12)",
+      "setup": {
+        "E12": {
+          "kind": "formula",
+          "formula": "=COLUMN()"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "K14",
+      "formula": "=ROW(INDIRECT(J14))",
+      "setup": {
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "L14",
+      "formula": "=COLUMN(INDIRECT(J14))",
+      "setup": {
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "J15",
+      "formula": "=\"5:5\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "5:5"
+      }
+    },
+    {
+      "id": "K15",
+      "formula": "=ROW(INDIRECT(J15))",
+      "setup": {
+        "J15": {
+          "kind": "formula",
+          "formula": "=\"5:5\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "L15",
+      "formula": "=COLUMN(INDIRECT(J15))",
+      "setup": {
+        "J15": {
+          "kind": "formula",
+          "formula": "=\"5:5\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "K16",
+      "formula": "=ROW(INDIRECT(J16))",
+      "setup": {
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "L16",
+      "formula": "=COLUMN(INDIRECT(J16))",
+      "setup": {
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 162.0
+      }
+    },
+    {
+      "id": "K17",
+      "formula": "=ROW(INDIRECT(J17))",
+      "setup": {
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "L17",
+      "formula": "=COLUMN(INDIRECT(J17))",
+      "setup": {
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "K18",
+      "formula": "=ROW(INDIRECT(J18))",
+      "setup": {
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "L18",
+      "formula": "=COLUMN(INDIRECT(J18))",
+      "setup": {
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 28.0
+      }
+    },
+    {
+      "id": "K19",
+      "formula": "=ROW(INDIRECT(J19))",
+      "setup": {
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "L19",
+      "formula": "=COLUMN(INDIRECT(J19))",
+      "setup": {
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "K20",
+      "formula": "=ROW(INDIRECT(J20))",
+      "setup": {
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "L20",
+      "formula": "=COLUMN(INDIRECT(J20))",
+      "setup": {
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16384.0
+      }
+    },
+    {
+      "id": "K21",
+      "formula": "=ROW(INDIRECT(J21))",
+      "setup": {
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "L21",
+      "formula": "=COLUMN(INDIRECT(J21))",
+      "setup": {
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "K22",
+      "formula": "=ROW(INDIRECT(J22))",
+      "setup": {
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "L22",
+      "formula": "=COLUMN(INDIRECT(J22))",
+      "setup": {
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "K23",
+      "formula": "=ROW(INDIRECT(J23))",
+      "setup": {
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 77.0
+      }
+    },
+    {
+      "id": "L23",
+      "formula": "=COLUMN(INDIRECT(J23))",
+      "setup": {
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 513.0
+      }
+    },
+    {
+      "id": "K24",
+      "formula": "=ROW(INDIRECT(J24))",
+      "setup": {
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "L24",
+      "formula": "=COLUMN(INDIRECT(J24))",
+      "setup": {
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 19.0
+      }
+    }
+  ]
+}

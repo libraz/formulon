@@ -1,0 +1,59 @@
+{
+  "suite": "ironcalc_calc_tests_MIRR_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/MIRR.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B1",
+      "formula": "=MIRR(A2:A7,A8,A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.12
+        },
+        "A8": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A7": {
+          "kind": "number",
+          "value": 46000.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 37000.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 21000.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 30000.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 39000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": -120000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.1260941303659051
+      }
+    }
+  ]
+}

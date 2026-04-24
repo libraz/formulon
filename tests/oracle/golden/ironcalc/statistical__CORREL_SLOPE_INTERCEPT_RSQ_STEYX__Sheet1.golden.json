@@ -1,0 +1,547 @@
+{
+  "suite": "ironcalc_statistical_CORREL_SLOPE_INTERCEPT_RSQ_STEYX_Sheet1",
+  "description": "Derived from IronCalc fixture statistical/CORREL_SLOPE_INTERCEPT_RSQ_STEYX.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=CORREL(A2:A13,B2:B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B6": {
+          "kind": "text",
+          "value": "Helo"
+        },
+        "B5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "4"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A11": {
+          "kind": "bool",
+          "value": false
+        },
+        "A10": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "12"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.13574278487946612
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=SLOPE(A2:A13,B2:B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B6": {
+          "kind": "text",
+          "value": "Helo"
+        },
+        "B5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "4"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A11": {
+          "kind": "bool",
+          "value": false
+        },
+        "A10": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "12"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.4
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=INTERCEPT(A2:A13,B2:B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B6": {
+          "kind": "text",
+          "value": "Helo"
+        },
+        "B5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "4"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A11": {
+          "kind": "bool",
+          "value": false
+        },
+        "A10": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "12"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.366666666666667
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=RSQ(A2:A13,B2:B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B6": {
+          "kind": "text",
+          "value": "Helo"
+        },
+        "B5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "4"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A11": {
+          "kind": "bool",
+          "value": false
+        },
+        "A10": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "12"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.018426103646833007
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=STEYX(A2:A13,B2:B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B6": {
+          "kind": "text",
+          "value": "Helo"
+        },
+        "B5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "4"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A11": {
+          "kind": "bool",
+          "value": false
+        },
+        "A10": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "12"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.6160950307953295
+      }
+    }
+  ]
+}

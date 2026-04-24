@@ -1,0 +1,3772 @@
+{
+  "suite": "ironcalc_docs_ERF_Sheet1",
+  "description": "Derived from IronCalc fixture docs/ERF.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=ERF($A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.9999999999984626
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=_xlfn.FORMULATEXT($B2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=ERF($A2)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF($A2)"
+      }
+    },
+    {
+      "id": "A3",
+      "formula": "=A2+0.5",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -4.5
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=ERF($A3)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.9999999998033839
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=_xlfn.FORMULATEXT($B3)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B3": {
+          "kind": "formula",
+          "formula": "=ERF($A3)"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF($A3)"
+      }
+    },
+    {
+      "id": "A4",
+      "formula": "=A3+0.5",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -4.0
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=ERF($A4)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.9999999845827421
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=_xlfn.FORMULATEXT($B4)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=ERF($A4)"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF($A4)"
+      }
+    },
+    {
+      "id": "A5",
+      "formula": "=A4+0.5",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -3.5
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=ERF($A5)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.9999992569016276
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=_xlfn.FORMULATEXT($B5)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B5": {
+          "kind": "formula",
+          "formula": "=ERF($A5)"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF($A5)"
+      }
+    },
+    {
+      "id": "A6",
+      "formula": "=A5+0.5",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=ERF($A6)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.9999779095030014
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=_xlfn.FORMULATEXT($B6)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B6": {
+          "kind": "formula",
+          "formula": "=ERF($A6)"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF($A6)"
+      }
+    },
+    {
+      "id": "A7",
+      "formula": "=A6+0.5",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.5
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=ERF($A7)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.999593047982555
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=_xlfn.FORMULATEXT($B7)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B7": {
+          "kind": "formula",
+          "formula": "=ERF($A7)"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF($A7)"
+      }
+    },
+    {
+      "id": "A8",
+      "formula": "=A7+0.5",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=ERF($A8)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.9953222650189527
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=_xlfn.FORMULATEXT($B8)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B8": {
+          "kind": "formula",
+          "formula": "=ERF($A8)"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF($A8)"
+      }
+    },
+    {
+      "id": "A9",
+      "formula": "=A8+0.5",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.5
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=ERF($A9)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.9661051464753108
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=_xlfn.FORMULATEXT($B9)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B9": {
+          "kind": "formula",
+          "formula": "=ERF($A9)"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF($A9)"
+      }
+    },
+    {
+      "id": "A10",
+      "formula": "=A9+0.5",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=ERF($A10)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.8427007929497149
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=_xlfn.FORMULATEXT($B10)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B10": {
+          "kind": "formula",
+          "formula": "=ERF($A10)"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF($A10)"
+      }
+    },
+    {
+      "id": "A11",
+      "formula": "=A10+0.5",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.5
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=ERF($A11)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.5204998778130465
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=_xlfn.FORMULATEXT($B11)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B11": {
+          "kind": "formula",
+          "formula": "=ERF($A11)"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF($A11)"
+      }
+    },
+    {
+      "id": "A12",
+      "formula": "=A11+0.5",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=ERF($A12)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=_xlfn.FORMULATEXT($B12)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B12": {
+          "kind": "formula",
+          "formula": "=ERF($A12)"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF($A12)"
+      }
+    },
+    {
+      "id": "A13",
+      "formula": "=A12+0.5",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=ERF($A13)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5204998778130465
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=_xlfn.FORMULATEXT($B13)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B13": {
+          "kind": "formula",
+          "formula": "=ERF($A13)"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF($A13)"
+      }
+    },
+    {
+      "id": "A14",
+      "formula": "=A13+0.5",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=ERF($A14)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8427007929497149
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=_xlfn.FORMULATEXT($B14)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B14": {
+          "kind": "formula",
+          "formula": "=ERF($A14)"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF($A14)"
+      }
+    },
+    {
+      "id": "A15",
+      "formula": "=A14+0.5",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=ERF($A15)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9661051464753108
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=_xlfn.FORMULATEXT($B15)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B15": {
+          "kind": "formula",
+          "formula": "=ERF($A15)"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF($A15)"
+      }
+    },
+    {
+      "id": "A16",
+      "formula": "=A15+0.5",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=ERF($A16)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=A15+0.5"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9953222650189527
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=_xlfn.FORMULATEXT($B16)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B16": {
+          "kind": "formula",
+          "formula": "=ERF($A16)"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=A15+0.5"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF($A16)"
+      }
+    },
+    {
+      "id": "A17",
+      "formula": "=A16+0.5",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=A15+0.5"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.5
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=ERF($A17)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=A16+0.5"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=A15+0.5"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.999593047982555
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=_xlfn.FORMULATEXT($B17)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B17": {
+          "kind": "formula",
+          "formula": "=ERF($A17)"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=A16+0.5"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=A15+0.5"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF($A17)"
+      }
+    },
+    {
+      "id": "A18",
+      "formula": "=A17+0.5",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=A16+0.5"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=A15+0.5"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=ERF($A18)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=A17+0.5"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=A16+0.5"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=A15+0.5"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999779095030014
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=_xlfn.FORMULATEXT($B18)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B18": {
+          "kind": "formula",
+          "formula": "=ERF($A18)"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=A17+0.5"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=A16+0.5"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=A15+0.5"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF($A18)"
+      }
+    },
+    {
+      "id": "A19",
+      "formula": "=A18+0.5",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=A17+0.5"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=A16+0.5"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=A15+0.5"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.5
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=ERF($A19)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A19": {
+          "kind": "formula",
+          "formula": "=A18+0.5"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=A17+0.5"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=A16+0.5"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=A15+0.5"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999992569016276
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=_xlfn.FORMULATEXT($B19)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B19": {
+          "kind": "formula",
+          "formula": "=ERF($A19)"
+        },
+        "A19": {
+          "kind": "formula",
+          "formula": "=A18+0.5"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=A17+0.5"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=A16+0.5"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=A15+0.5"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF($A19)"
+      }
+    },
+    {
+      "id": "A20",
+      "formula": "=A19+0.5",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A19": {
+          "kind": "formula",
+          "formula": "=A18+0.5"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=A17+0.5"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=A16+0.5"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=A15+0.5"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=ERF($A20)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A20": {
+          "kind": "formula",
+          "formula": "=A19+0.5"
+        },
+        "A19": {
+          "kind": "formula",
+          "formula": "=A18+0.5"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=A17+0.5"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=A16+0.5"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=A15+0.5"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999999845827421
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=_xlfn.FORMULATEXT($B20)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B20": {
+          "kind": "formula",
+          "formula": "=ERF($A20)"
+        },
+        "A20": {
+          "kind": "formula",
+          "formula": "=A19+0.5"
+        },
+        "A19": {
+          "kind": "formula",
+          "formula": "=A18+0.5"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=A17+0.5"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=A16+0.5"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=A15+0.5"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF($A20)"
+      }
+    },
+    {
+      "id": "A21",
+      "formula": "=A20+0.5",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A20": {
+          "kind": "formula",
+          "formula": "=A19+0.5"
+        },
+        "A19": {
+          "kind": "formula",
+          "formula": "=A18+0.5"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=A17+0.5"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=A16+0.5"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=A15+0.5"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.5
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=ERF($A21)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=A20+0.5"
+        },
+        "A20": {
+          "kind": "formula",
+          "formula": "=A19+0.5"
+        },
+        "A19": {
+          "kind": "formula",
+          "formula": "=A18+0.5"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=A17+0.5"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=A16+0.5"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=A15+0.5"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999999998033839
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=_xlfn.FORMULATEXT($B21)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B21": {
+          "kind": "formula",
+          "formula": "=ERF($A21)"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=A20+0.5"
+        },
+        "A20": {
+          "kind": "formula",
+          "formula": "=A19+0.5"
+        },
+        "A19": {
+          "kind": "formula",
+          "formula": "=A18+0.5"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=A17+0.5"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=A16+0.5"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=A15+0.5"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF($A21)"
+      }
+    },
+    {
+      "id": "A22",
+      "formula": "=A21+0.5",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=A20+0.5"
+        },
+        "A20": {
+          "kind": "formula",
+          "formula": "=A19+0.5"
+        },
+        "A19": {
+          "kind": "formula",
+          "formula": "=A18+0.5"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=A17+0.5"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=A16+0.5"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=A15+0.5"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "B22",
+      "formula": "=ERF($A22)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A22": {
+          "kind": "formula",
+          "formula": "=A21+0.5"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=A20+0.5"
+        },
+        "A20": {
+          "kind": "formula",
+          "formula": "=A19+0.5"
+        },
+        "A19": {
+          "kind": "formula",
+          "formula": "=A18+0.5"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=A17+0.5"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=A16+0.5"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=A15+0.5"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9999999999984626
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=_xlfn.FORMULATEXT($B22)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B22": {
+          "kind": "formula",
+          "formula": "=ERF($A22)"
+        },
+        "A22": {
+          "kind": "formula",
+          "formula": "=A21+0.5"
+        },
+        "A21": {
+          "kind": "formula",
+          "formula": "=A20+0.5"
+        },
+        "A20": {
+          "kind": "formula",
+          "formula": "=A19+0.5"
+        },
+        "A19": {
+          "kind": "formula",
+          "formula": "=A18+0.5"
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=A17+0.5"
+        },
+        "A17": {
+          "kind": "formula",
+          "formula": "=A16+0.5"
+        },
+        "A16": {
+          "kind": "formula",
+          "formula": "=A15+0.5"
+        },
+        "A15": {
+          "kind": "formula",
+          "formula": "=A14+0.5"
+        },
+        "A14": {
+          "kind": "formula",
+          "formula": "=A13+0.5"
+        },
+        "A13": {
+          "kind": "formula",
+          "formula": "=A12+0.5"
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=A11+0.5"
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=A10+0.5"
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=A9+0.5"
+        },
+        "A9": {
+          "kind": "formula",
+          "formula": "=A8+0.5"
+        },
+        "A8": {
+          "kind": "formula",
+          "formula": "=A7+0.5"
+        },
+        "A7": {
+          "kind": "formula",
+          "formula": "=A6+0.5"
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=A5+0.5"
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A4+0.5"
+        },
+        "A4": {
+          "kind": "formula",
+          "formula": "=A3+0.5"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=A2+0.5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF($A22)"
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=ERF(A25,B25)",
+      "setup": {
+        "B25": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A25": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5204998778130465
+      }
+    },
+    {
+      "id": "D25",
+      "formula": "=_xlfn.FORMULATEXT(C25)",
+      "setup": {
+        "B25": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "A25": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C25": {
+          "kind": "formula",
+          "formula": "=ERF(A25,B25)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF(A25,B25)"
+      }
+    },
+    {
+      "id": "A26",
+      "formula": "=B25",
+      "setup": {
+        "B25": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "B26",
+      "formula": "=A25",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C26",
+      "formula": "=ERF(A26,B26)",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "B26": {
+          "kind": "formula",
+          "formula": "=A25"
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=B25"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.5204998778130465
+      }
+    },
+    {
+      "id": "D26",
+      "formula": "=_xlfn.FORMULATEXT(C26)",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": 0.5
+        },
+        "C26": {
+          "kind": "formula",
+          "formula": "=ERF(A26,B26)"
+        },
+        "B26": {
+          "kind": "formula",
+          "formula": "=A25"
+        },
+        "A26": {
+          "kind": "formula",
+          "formula": "=B25"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF(A26,B26)"
+      }
+    },
+    {
+      "id": "C27",
+      "formula": "=ERF(A27,B27)",
+      "setup": {
+        "B27": {
+          "kind": "number",
+          "value": 0.7777
+        },
+        "A27": {
+          "kind": "number",
+          "value": 0.3333
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3659810414127489
+      }
+    },
+    {
+      "id": "D27",
+      "formula": "=_xlfn.FORMULATEXT(C27)",
+      "setup": {
+        "B27": {
+          "kind": "number",
+          "value": 0.7777
+        },
+        "A27": {
+          "kind": "number",
+          "value": 0.3333
+        },
+        "C27": {
+          "kind": "formula",
+          "formula": "=ERF(A27,B27)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF(A27,B27)"
+      }
+    },
+    {
+      "id": "A28",
+      "formula": "=B27",
+      "setup": {
+        "B27": {
+          "kind": "number",
+          "value": 0.7777
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7777
+      }
+    },
+    {
+      "id": "B28",
+      "formula": "=A27",
+      "setup": {
+        "A27": {
+          "kind": "number",
+          "value": 0.3333
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3333
+      }
+    },
+    {
+      "id": "C28",
+      "formula": "=ERF(A28,B28)",
+      "setup": {
+        "A27": {
+          "kind": "number",
+          "value": 0.3333
+        },
+        "B27": {
+          "kind": "number",
+          "value": 0.7777
+        },
+        "B28": {
+          "kind": "formula",
+          "formula": "=A27"
+        },
+        "A28": {
+          "kind": "formula",
+          "formula": "=B27"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.3659810414127489
+      }
+    },
+    {
+      "id": "D28",
+      "formula": "=_xlfn.FORMULATEXT(C28)",
+      "setup": {
+        "A27": {
+          "kind": "number",
+          "value": 0.3333
+        },
+        "B27": {
+          "kind": "number",
+          "value": 0.7777
+        },
+        "C28": {
+          "kind": "formula",
+          "formula": "=ERF(A28,B28)"
+        },
+        "B28": {
+          "kind": "formula",
+          "formula": "=A27"
+        },
+        "A28": {
+          "kind": "formula",
+          "formula": "=B27"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF(A28,B28)"
+      }
+    },
+    {
+      "id": "A31",
+      "formula": "=ERF(0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.11246291601828493
+      }
+    },
+    {
+      "id": "B31",
+      "formula": "=_xlfn.FORMULATEXT(A31)",
+      "setup": {
+        "A31": {
+          "kind": "formula",
+          "formula": "=ERF(0.1)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF(0.1)"
+      }
+    },
+    {
+      "id": "A32",
+      "formula": "=ERF(-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.11246291601828493
+      }
+    },
+    {
+      "id": "B32",
+      "formula": "=_xlfn.FORMULATEXT(A32)",
+      "setup": {
+        "A32": {
+          "kind": "formula",
+          "formula": "=ERF(-0.1)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF(-0.1)"
+      }
+    },
+    {
+      "id": "A35",
+      "formula": "=ERF(SQRT(-1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B35",
+      "formula": "=_xlfn.FORMULATEXT(A35)",
+      "setup": {
+        "A35": {
+          "kind": "formula",
+          "formula": "=ERF(SQRT(-1))"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF(SQRT(-1))"
+      }
+    },
+    {
+      "id": "A36",
+      "formula": "=ERF(\"str\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B36",
+      "formula": "=_xlfn.FORMULATEXT(A36)",
+      "setup": {
+        "A36": {
+          "kind": "formula",
+          "formula": "=ERF(\"str\")"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF(\"str\")"
+      }
+    },
+    {
+      "id": "A37",
+      "formula": "=ERF(10/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B37",
+      "formula": "=_xlfn.FORMULATEXT(A37)",
+      "setup": {
+        "A37": {
+          "kind": "formula",
+          "formula": "=ERF(10/0)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ERF(10/0)"
+      }
+    }
+  ]
+}

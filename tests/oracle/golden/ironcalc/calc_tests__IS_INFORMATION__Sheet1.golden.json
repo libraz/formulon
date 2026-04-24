@@ -1,0 +1,1451 @@
+{
+  "suite": "ironcalc_calc_tests_IS_INFORMATION_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/IS_INFORMATION.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=ISNUMBER(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=ISTEXT(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=ISLOGICAL(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=ISBLANK(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=ISERR(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=ISERROR(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "H2",
+      "formula": "=ISNONTEXT(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "J2",
+      "formula": "=ISNA(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=ISNUMBER(A3)",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "Hello"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=ISTEXT(A3)",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "Hello"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=ISLOGICAL(A3)",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "Hello"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=ISBLANK(A3)",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "Hello"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=ISERR(A3)",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "Hello"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=ISERROR(A3)",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "Hello"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=ISNONTEXT(A3)",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "Hello"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "J3",
+      "formula": "=ISNA(A3)",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "Hello"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "A4",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=ISNUMBER(A4)",
+      "setup": {
+        "A4": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=ISTEXT(A4)",
+      "setup": {
+        "A4": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=ISLOGICAL(A4)",
+      "setup": {
+        "A4": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=ISBLANK(A4)",
+      "setup": {
+        "A4": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=ISERR(A4)",
+      "setup": {
+        "A4": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=ISERROR(A4)",
+      "setup": {
+        "A4": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "H4",
+      "formula": "=ISNONTEXT(A4)",
+      "setup": {
+        "A4": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=ISNA(A4)",
+      "setup": {
+        "A4": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=ISNUMBER(A5)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "12"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=ISTEXT(A5)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "12"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=ISLOGICAL(A5)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "12"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=ISBLANK(A5)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "12"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=ISERR(A5)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "12"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=ISERROR(A5)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "12"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "H5",
+      "formula": "=ISNONTEXT(A5)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "12"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "J5",
+      "formula": "=ISNA(A5)",
+      "setup": {
+        "A5": {
+          "kind": "text",
+          "value": "12"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=ISNUMBER(A6)",
+      "setup": {
+        "A6": {
+          "kind": "text",
+          "value": "=1+2"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=ISTEXT(A6)",
+      "setup": {
+        "A6": {
+          "kind": "text",
+          "value": "=1+2"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=ISLOGICAL(A6)",
+      "setup": {
+        "A6": {
+          "kind": "text",
+          "value": "=1+2"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=ISBLANK(A6)",
+      "setup": {
+        "A6": {
+          "kind": "text",
+          "value": "=1+2"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=ISERR(A6)",
+      "setup": {
+        "A6": {
+          "kind": "text",
+          "value": "=1+2"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=ISERROR(A6)",
+      "setup": {
+        "A6": {
+          "kind": "text",
+          "value": "=1+2"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "H6",
+      "formula": "=ISNONTEXT(A6)",
+      "setup": {
+        "A6": {
+          "kind": "text",
+          "value": "=1+2"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "J6",
+      "formula": "=ISNA(A6)",
+      "setup": {
+        "A6": {
+          "kind": "text",
+          "value": "=1+2"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=ISNUMBER(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=ISTEXT(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=ISLOGICAL(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=ISBLANK(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=ISERR(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=ISERROR(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "H7",
+      "formula": "=ISNONTEXT(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "J7",
+      "formula": "=ISNA(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=ISNUMBER(A8)",
+      "setup": {
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=ISTEXT(A8)",
+      "setup": {
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=ISLOGICAL(A8)",
+      "setup": {
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=ISBLANK(A8)",
+      "setup": {
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=ISERR(A8)",
+      "setup": {
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=ISERROR(A8)",
+      "setup": {
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "H8",
+      "formula": "=ISNONTEXT(A8)",
+      "setup": {
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "J8",
+      "formula": "=ISNA(A8)",
+      "setup": {
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=ISNUMBER(A9)",
+      "setup": {
+        "A9": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=ISTEXT(A9)",
+      "setup": {
+        "A9": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=ISLOGICAL(A9)",
+      "setup": {
+        "A9": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=ISBLANK(A9)",
+      "setup": {
+        "A9": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=ISERR(A9)",
+      "setup": {
+        "A9": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "G9",
+      "formula": "=ISERROR(A9)",
+      "setup": {
+        "A9": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "H9",
+      "formula": "=ISNONTEXT(A9)",
+      "setup": {
+        "A9": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "J9",
+      "formula": "=ISNA(A9)",
+      "setup": {
+        "A9": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=ISNUMBER(A10)",
+      "setup": {
+        "A10": {
+          "kind": "text",
+          "value": "true"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=ISTEXT(A10)",
+      "setup": {
+        "A10": {
+          "kind": "text",
+          "value": "true"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=ISLOGICAL(A10)",
+      "setup": {
+        "A10": {
+          "kind": "text",
+          "value": "true"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=ISBLANK(A10)",
+      "setup": {
+        "A10": {
+          "kind": "text",
+          "value": "true"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=ISERR(A10)",
+      "setup": {
+        "A10": {
+          "kind": "text",
+          "value": "true"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "G10",
+      "formula": "=ISERROR(A10)",
+      "setup": {
+        "A10": {
+          "kind": "text",
+          "value": "true"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "H10",
+      "formula": "=ISNONTEXT(A10)",
+      "setup": {
+        "A10": {
+          "kind": "text",
+          "value": "true"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "J10",
+      "formula": "=ISNA(A10)",
+      "setup": {
+        "A10": {
+          "kind": "text",
+          "value": "true"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=ISNUMBER(A11)",
+      "setup": {
+        "A11": {
+          "kind": "text",
+          "value": "false"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=ISTEXT(A11)",
+      "setup": {
+        "A11": {
+          "kind": "text",
+          "value": "false"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=ISLOGICAL(A11)",
+      "setup": {
+        "A11": {
+          "kind": "text",
+          "value": "false"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=ISBLANK(A11)",
+      "setup": {
+        "A11": {
+          "kind": "text",
+          "value": "false"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F11",
+      "formula": "=ISERR(A11)",
+      "setup": {
+        "A11": {
+          "kind": "text",
+          "value": "false"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "G11",
+      "formula": "=ISERROR(A11)",
+      "setup": {
+        "A11": {
+          "kind": "text",
+          "value": "false"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "H11",
+      "formula": "=ISNONTEXT(A11)",
+      "setup": {
+        "A11": {
+          "kind": "text",
+          "value": "false"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "J11",
+      "formula": "=ISNA(A11)",
+      "setup": {
+        "A11": {
+          "kind": "text",
+          "value": "false"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "A12",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=ISNUMBER(A12)",
+      "setup": {
+        "A12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=ISTEXT(A12)",
+      "setup": {
+        "A12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=ISLOGICAL(A12)",
+      "setup": {
+        "A12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=ISBLANK(A12)",
+      "setup": {
+        "A12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F12",
+      "formula": "=ISERR(A12)",
+      "setup": {
+        "A12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G12",
+      "formula": "=ISERROR(A12)",
+      "setup": {
+        "A12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "H12",
+      "formula": "=ISNONTEXT(A12)",
+      "setup": {
+        "A12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "J12",
+      "formula": "=ISNA(A12)",
+      "setup": {
+        "A12": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=ISNUMBER(A13)",
+      "setup": {
+        "A13": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=ISTEXT(A13)",
+      "setup": {
+        "A13": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=ISLOGICAL(A13)",
+      "setup": {
+        "A13": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=ISBLANK(A13)",
+      "setup": {
+        "A13": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "F13",
+      "formula": "=ISERR(A13)",
+      "setup": {
+        "A13": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "G13",
+      "formula": "=ISERROR(A13)",
+      "setup": {
+        "A13": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "H13",
+      "formula": "=ISNONTEXT(A13)",
+      "setup": {
+        "A13": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "J13",
+      "formula": "=ISNA(A13)",
+      "setup": {
+        "A13": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=ISNUMBER(A14)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=ISTEXT(A14)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=ISLOGICAL(A14)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=ISBLANK(A14)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "F14",
+      "formula": "=ISERR(A14)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "G14",
+      "formula": "=ISERROR(A14)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "H14",
+      "formula": "=ISNONTEXT(A14)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "J14",
+      "formula": "=ISNA(A14)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    }
+  ]
+}

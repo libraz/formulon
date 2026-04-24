@@ -1,0 +1,648 @@
+{
+  "suite": "ironcalc_calc_tests_arithmetic_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/arithmetic.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "E2",
+      "formula": "=C2+D2",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=C2-D2",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "G2",
+      "formula": "=C2*D2",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "H2",
+      "formula": "=C2/D2",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=C3+D3",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "C3": {
+          "kind": "number",
+          "value": 0.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.30000000000000004
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=C3-D3",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "C3": {
+          "kind": "number",
+          "value": 0.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.1
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=C3*D3",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "C3": {
+          "kind": "number",
+          "value": 0.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.020000000000000004
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=C3/D3",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "C3": {
+          "kind": "number",
+          "value": 0.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "A4",
+      "formula": "=A5+2*A1",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "formula",
+          "formula": "=A2+A3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=C4+D4",
+      "setup": {
+        "D4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C4": {
+          "kind": "text",
+          "value": "3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=C4-D4",
+      "setup": {
+        "D4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C4": {
+          "kind": "text",
+          "value": "3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=C4*D4",
+      "setup": {
+        "D4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C4": {
+          "kind": "text",
+          "value": "3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "H4",
+      "formula": "=C4/D4",
+      "setup": {
+        "D4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C4": {
+          "kind": "text",
+          "value": "3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.75
+      }
+    },
+    {
+      "id": "M4",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "O4",
+      "formula": "=M4+1",
+      "setup": {
+        "M4": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "A5",
+      "formula": "=A2+A3",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=C5+D5",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=C5-D5",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=C5*D5",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H5",
+      "formula": "=C5/D5",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "M5",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "O5",
+      "formula": "=M5*N5",
+      "setup": {
+        "N5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "M5": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=C6+D6",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=C6-D6",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=C6*D6",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H6",
+      "formula": "=C6/D6",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=C7+D7",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=C7-D7",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=C7*D7",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H7",
+      "formula": "=C7/D7",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=C8-D8",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=C8*D8",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H8",
+      "formula": "=C8/D8",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=C9-D9",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G9",
+      "formula": "=C9*D9",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H9",
+      "formula": "=C9/D9",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A10",
+      "formula": "=1/2/3",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.16666666666666666
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=1/(2/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "A11",
+      "formula": "=1/2/3/4",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.041666666666666664
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=1/(2/(3/4))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.375
+      }
+    },
+    {
+      "id": "A12",
+      "formula": "=1/2/3/4/5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.008333333333333333
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=1/(2/(3/4)/5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.875
+      }
+    },
+    {
+      "id": "A13",
+      "formula": "=10/5*6/4",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=10/(5*6)/4",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.08333333333333333
+      }
+    },
+    {
+      "id": "A14",
+      "formula": "=3.5*7/8*4*9/2/6/7",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.3125
+      }
+    },
+    {
+      "id": "A15",
+      "formula": "=3/2/5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.3
+      }
+    },
+    {
+      "id": "A16",
+      "formula": "=(3.5+2.3)/(23*7+2/3/4)/(1/2/3/4+2.7*5)/4*5/(4+5*2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.00023728081639146792
+      }
+    },
+    {
+      "id": "A20",
+      "formula": "=A19/B19/C19",
+      "setup": {
+        "C19": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.16666666666666666
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=A19/(B19/C19)",
+      "setup": {
+        "C19": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.5
+      }
+    }
+  ]
+}

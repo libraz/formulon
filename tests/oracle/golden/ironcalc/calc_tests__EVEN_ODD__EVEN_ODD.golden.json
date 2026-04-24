@@ -1,0 +1,1237 @@
+{
+  "suite": "ironcalc_calc_tests_EVEN_ODD_EVEN_ODD",
+  "description": "Derived from IronCalc fixture calc_tests/EVEN_ODD.xlsx, sheet 'EVEN_ODD'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "EVEN_ODD",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=EVEN(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=ODD(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=EVEN(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=ODD(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=EVEN(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=ODD(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=EVEN(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 3.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=ODD(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 3.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=EVEN(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 3.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=ODD(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 3.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=EVEN(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -4.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=ODD(A7)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=EVEN(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -2.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -4.0
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=ODD(A8)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -2.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=EVEN(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=ODD(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=EVEN(A10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=ODD(A10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=EVEN(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": -0.3
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=ODD(A11)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": -0.3
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=EVEN(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -0.7
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=ODD(A12)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -0.7
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=EVEN(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": -1.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=ODD(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": -1.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=EVEN(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": -1.7
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=ODD(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": -1.7
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=EVEN(A15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 5.6
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=ODD(A15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": 5.6
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=EVEN(A16)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": 5.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=ODD(A16)",
+      "setup": {
+        "A16": {
+          "kind": "number",
+          "value": 5.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=EVEN(A17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": 6.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=ODD(A17)",
+      "setup": {
+        "A17": {
+          "kind": "number",
+          "value": 6.4
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=EVEN(A18)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=ODD(A18)",
+      "setup": {
+        "A18": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=EVEN(A19)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": 6.6
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=ODD(A19)",
+      "setup": {
+        "A19": {
+          "kind": "number",
+          "value": 6.6
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=EVEN(A20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=ODD(A20)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=EVEN(A21)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 2.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=ODD(A21)",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 2.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "B22",
+      "formula": "=EVEN(A22)",
+      "setup": {
+        "A22": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=ODD(A22)",
+      "setup": {
+        "A22": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "B23",
+      "formula": "=EVEN(A23)",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 10.0000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=ODD(A23)",
+      "setup": {
+        "A23": {
+          "kind": "number",
+          "value": 10.0000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "B24",
+      "formula": "=EVEN(A24)",
+      "setup": {
+        "A24": {
+          "kind": "number",
+          "value": -10.0000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -12.0
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=ODD(A24)",
+      "setup": {
+        "A24": {
+          "kind": "number",
+          "value": -10.0000000001
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -11.0
+      }
+    },
+    {
+      "id": "B25",
+      "formula": "=EVEN(A25)",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": 10000000000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10000000000.0
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=ODD(A25)",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": 10000000000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10000000001.0
+      }
+    },
+    {
+      "id": "B26",
+      "formula": "=EVEN(A26)",
+      "setup": {
+        "A26": {
+          "kind": "number",
+          "value": -10000000000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -10000000000.0
+      }
+    },
+    {
+      "id": "C26",
+      "formula": "=ODD(A26)",
+      "setup": {
+        "A26": {
+          "kind": "number",
+          "value": -10000000000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -10000000001.0
+      }
+    },
+    {
+      "id": "B27",
+      "formula": "=EVEN(A27)",
+      "setup": {
+        "A27": {
+          "kind": "number",
+          "value": 1e-10
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "C27",
+      "formula": "=ODD(A27)",
+      "setup": {
+        "A27": {
+          "kind": "number",
+          "value": 1e-10
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B28",
+      "formula": "=EVEN(A28)",
+      "setup": {
+        "A28": {
+          "kind": "number",
+          "value": 1e+307
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1e+307
+      }
+    },
+    {
+      "id": "C28",
+      "formula": "=ODD(A28)",
+      "setup": {
+        "A28": {
+          "kind": "number",
+          "value": 1e+307
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1e+307
+      }
+    },
+    {
+      "id": "A29",
+      "formula": "=PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "B29",
+      "formula": "=EVEN(A29)",
+      "setup": {
+        "A29": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "C29",
+      "formula": "=ODD(A29)",
+      "setup": {
+        "A29": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "B30",
+      "formula": "=EVEN(A30)",
+      "setup": {
+        "A30": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C30",
+      "formula": "=ODD(A30)",
+      "setup": {
+        "A30": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B31",
+      "formula": "=EVEN(A31)",
+      "setup": {
+        "A31": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C31",
+      "formula": "=ODD(A31)",
+      "setup": {
+        "A31": {
+          "kind": "text",
+          "value": "eight"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B32",
+      "formula": "=EVEN(A32)",
+      "setup": {
+        "A32": {
+          "kind": "text",
+          "value": "16"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.0
+      }
+    },
+    {
+      "id": "C32",
+      "formula": "=ODD(A32)",
+      "setup": {
+        "A32": {
+          "kind": "text",
+          "value": "16"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 17.0
+      }
+    },
+    {
+      "id": "B33",
+      "formula": "=EVEN(A33)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45854.0
+      }
+    },
+    {
+      "id": "C33",
+      "formula": "=ODD(A33)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45855.0
+      }
+    },
+    {
+      "id": "B34",
+      "formula": "=EVEN(A34)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C34",
+      "formula": "=ODD(A34)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A35",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B35",
+      "formula": "=EVEN(A35)",
+      "setup": {
+        "A35": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C35",
+      "formula": "=ODD(A35)",
+      "setup": {
+        "A35": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A36",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B36",
+      "formula": "=EVEN(A36)",
+      "setup": {
+        "A36": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C36",
+      "formula": "=ODD(A36)",
+      "setup": {
+        "A36": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B37",
+      "formula": "=EVEN(A37)",
+      "setup": {
+        "A37": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "C37",
+      "formula": "=ODD(A37)",
+      "setup": {
+        "A37": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "B38",
+      "formula": "=EVEN(A38)",
+      "setup": {
+        "A38": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C38",
+      "formula": "=ODD(A38)",
+      "setup": {
+        "A38": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A39",
+      "formula": "=F37:F41",
+      "setup": {
+        "F40": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F39": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F38": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F37": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "B39",
+      "formula": "=EVEN(A39)",
+      "setup": {
+        "F40": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F39": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F38": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F37": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A39": {
+          "kind": "formula",
+          "formula": "=F37:F41"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "C39",
+      "formula": "=ODD(A39)",
+      "setup": {
+        "F40": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "F39": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F38": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "F37": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A39": {
+          "kind": "formula",
+          "formula": "=F37:F41"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "A40",
+      "formula": "=1.05*(0.0284+0.0046)-0.0284",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.006249999999999999
+      }
+    },
+    {
+      "id": "B40",
+      "formula": "=EVEN(A40)",
+      "setup": {
+        "A40": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "C40",
+      "formula": "=ODD(A40)",
+      "setup": {
+        "A40": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A41",
+      "formula": "=F2",
+      "setup": {
+        "F2": {
+          "kind": "number",
+          "value": 1.75
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.75
+      }
+    },
+    {
+      "id": "B41",
+      "formula": "=EVEN(A41)",
+      "setup": {
+        "F2": {
+          "kind": "number",
+          "value": 1.75
+        },
+        "A41": {
+          "kind": "formula",
+          "formula": "=F2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "C41",
+      "formula": "=ODD(A41)",
+      "setup": {
+        "F2": {
+          "kind": "number",
+          "value": 1.75
+        },
+        "A41": {
+          "kind": "formula",
+          "formula": "=F2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "B42",
+      "formula": "=EVEN(ODD(A42))",
+      "setup": {
+        "A42": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    }
+  ]
+}

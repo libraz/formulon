@@ -1,0 +1,262 @@
+{
+  "suite": "ironcalc_calc_tests_MINA_MAXA_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/MINA_MAXA.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C1",
+      "formula": "=MINA(A1:A15)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "D1",
+      "formula": "=MAXA(A1:A15)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "I1",
+      "formula": "=MINA(G1:G4)",
+      "setup": {
+        "G4": {
+          "kind": "text",
+          "value": "13"
+        },
+        "G3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J1",
+      "formula": "=MIN(G1:G3, \"13\")",
+      "setup": {
+        "G3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "K1",
+      "formula": "=MINA(G1:G3,\"-1\")",
+      "setup": {
+        "G3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "M1",
+      "formula": "=MIN(G1:G4)",
+      "setup": {
+        "G4": {
+          "kind": "text",
+          "value": "13"
+        },
+        "G3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "Q1",
+      "formula": "=MINA(O1:O4)",
+      "setup": {
+        "O4": {
+          "kind": "bool",
+          "value": true
+        },
+        "O3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "O2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "O1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=MINA(D7:D8)",
+      "setup": {
+        "D8": {
+          "kind": "text",
+          "value": "adios"
+        },
+        "D7": {
+          "kind": "text",
+          "value": "hola"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H10",
+      "formula": "=MINA(G10:G11)",
+      "setup": {
+        "G10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G11": {
+          "kind": "formula",
+          "formula": "=\"-1\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G11",
+      "formula": "=\"-1\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1"
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=MINA(4, \"-1\", TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "G13",
+      "formula": "=MINA(1, \"Hola\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

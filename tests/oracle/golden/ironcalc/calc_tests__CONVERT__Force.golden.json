@@ -1,0 +1,279 @@
+{
+  "suite": "ironcalc_calc_tests_CONVERT_Force",
+  "description": "Derived from IronCalc fixture calc_tests/CONVERT.xlsx, sheet 'Force'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Force",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=CONVERT(1,B2,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "N"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "I2",
+      "formula": "=\"M\"&B2",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "N"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MN"
+      }
+    },
+    {
+      "id": "J2",
+      "formula": "=CONVERT(0.05,I2,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "N"
+        },
+        "I2": {
+          "kind": "formula",
+          "formula": "=\"M\"&B2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50000.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=CONVERT(1,B3,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "N"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "dyn"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1e-05
+      }
+    },
+    {
+      "id": "I3",
+      "formula": "=\"M\"&B3",
+      "setup": {
+        "B3": {
+          "kind": "text",
+          "value": "dyn"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mdyn"
+      }
+    },
+    {
+      "id": "J3",
+      "formula": "=CONVERT(0.05,I3,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "N"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "dyn"
+        },
+        "I3": {
+          "kind": "formula",
+          "formula": "=\"M\"&B3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=CONVERT(1,B4,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "N"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "dy"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1e-05
+      }
+    },
+    {
+      "id": "I4",
+      "formula": "=\"M\"&B4",
+      "setup": {
+        "B4": {
+          "kind": "text",
+          "value": "dy"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mdy"
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=CONVERT(0.05,I4,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "N"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "dy"
+        },
+        "I4": {
+          "kind": "formula",
+          "formula": "=\"M\"&B4"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=CONVERT(1,B5,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "N"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "lbf"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.4482216152605005
+      }
+    },
+    {
+      "id": "I5",
+      "formula": "=\"M\"&B5",
+      "setup": {
+        "B5": {
+          "kind": "text",
+          "value": "lbf"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mlbf"
+      }
+    },
+    {
+      "id": "J5",
+      "formula": "=CONVERT(0.05,I5,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "N"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "lbf"
+        },
+        "I5": {
+          "kind": "formula",
+          "formula": "=\"M\"&B5"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=CONVERT(1,B6,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "N"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "pond"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.00980665
+      }
+    },
+    {
+      "id": "I6",
+      "formula": "=\"M\"&B6",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "pond"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mpond"
+      }
+    },
+    {
+      "id": "J6",
+      "formula": "=CONVERT(0.05,I6,$B$2)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "N"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "pond"
+        },
+        "I6": {
+          "kind": "formula",
+          "formula": "=\"M\"&B6"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 490.3325000000001
+      }
+    }
+  ]
+}

@@ -1,0 +1,525 @@
+{
+  "suite": "ironcalc_calc_tests_simple_functions_Implicit_Intersection",
+  "description": "Derived from IronCalc fixture calc_tests/simple_functions.xlsx, sheet 'Implicit Intersection'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Implicit Intersection",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B5",
+      "formula": "=A3:A14",
+      "setup": {
+        "A14": {
+          "kind": "text",
+          "value": "c"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "c"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "c"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "c"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "c"
+      }
+    },
+    {
+      "id": "I14",
+      "formula": "=L4:L13",
+      "setup": {
+        "L13": {
+          "kind": "text",
+          "value": "October"
+        },
+        "L12": {
+          "kind": "text",
+          "value": "September"
+        },
+        "L11": {
+          "kind": "text",
+          "value": "August"
+        },
+        "L10": {
+          "kind": "text",
+          "value": "July"
+        },
+        "L9": {
+          "kind": "text",
+          "value": "June"
+        },
+        "L8": {
+          "kind": "text",
+          "value": "May"
+        },
+        "L7": {
+          "kind": "text",
+          "value": "April"
+        },
+        "L6": {
+          "kind": "text",
+          "value": "March"
+        },
+        "L5": {
+          "kind": "text",
+          "value": "February"
+        },
+        "L4": {
+          "kind": "text",
+          "value": "January"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=A3:A14",
+      "setup": {
+        "A14": {
+          "kind": "text",
+          "value": "c"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A11": {
+          "kind": "text",
+          "value": "c"
+        },
+        "A10": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "c"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "c"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=E2:K2",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=$E$2:$K$2",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "F15",
+      "formula": "=$E$2:$K$2",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "G15",
+      "formula": "=$E$2:$K$2",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "H15",
+      "formula": "=$E$2:$K$2",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "I15",
+      "formula": "=$E$2:$K$2",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "J15",
+      "formula": "=$E$2:$K$2",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "K15",
+      "formula": "=$E$2:$K$2",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "L15",
+      "formula": "=$E$2:$K$2",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "F2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

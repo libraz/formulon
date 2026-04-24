@@ -1,0 +1,126 @@
+{
+  "suite": "ironcalc_calc_tests_range_operator_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/range_operator.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C1",
+      "formula": "=OFFSET(A1,0,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C2",
+      "formula": "=OFFSET(A1,5,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=SUM(OFFSET(A1,0,0):OFFSET(A1,4,0))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=SUM(A1:OFFSET(A1,4,0))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=SUM(A1:OFFSET(A1,4,1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 55.0
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=SUM(CHOOSE(1, A1,A2,A3,A4):CHOOSE(4, A1,A3,A4,A5))",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=SUM(INDIRECT(\"A12\"):INDIRECT(\"A15\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 54.0
+      }
+    }
+  ]
+}

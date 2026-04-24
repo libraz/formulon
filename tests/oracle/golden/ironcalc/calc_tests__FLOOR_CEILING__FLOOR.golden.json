@@ -1,0 +1,7196 @@
+{
+  "suite": "ironcalc_calc_tests_FLOOR_CEILING_FLOOR",
+  "description": "Derived from IronCalc fixture calc_tests/FLOOR_CEILING.xlsx, sheet 'FLOOR'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "FLOOR",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "Q2",
+      "formula": "=\"8\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "8"
+      }
+    },
+    {
+      "id": "R2",
+      "formula": "=\" 10 \"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " 10 "
+      }
+    },
+    {
+      "id": "S2",
+      "formula": "=\"0\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "U2",
+      "formula": "=\"--8\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "--8"
+      }
+    },
+    {
+      "id": "V2",
+      "formula": "=\"7.0e0\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "7.0e0"
+      }
+    },
+    {
+      "id": "W2",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "X2",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "Z2",
+      "formula": "=SQRT(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "AA2",
+      "formula": "=\"x\"+1",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AB2",
+      "formula": "=\"@\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "@"
+      }
+    },
+    {
+      "id": "AD2",
+      "formula": "=\"2024-01-10\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024-01-10"
+      }
+    },
+    {
+      "id": "AE2",
+      "formula": "=\" 2024-01-10 \"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " 2024-01-10 "
+      }
+    },
+    {
+      "id": "AG2",
+      "formula": "=$AD$47:$AH$47",
+      "setup": {
+        "AH47": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "AG47": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "AF47": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "AE47": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "AD47": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "AH2",
+      "formula": "=PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=FLOOR($A3,B$2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=FLOOR($A3,C$2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=FLOOR($A3,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 0.21
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.87
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=FLOOR($A3,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=FLOOR($A3,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=FLOOR($A3,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=FLOOR($A3,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I3",
+      "formula": "=FLOOR($A3,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "number",
+          "value": -0.21
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J3",
+      "formula": "=FLOOR($A3,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "number",
+          "value": -7.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K3",
+      "formula": "=FLOOR($A3,K$2)",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "L3",
+      "formula": "=FLOOR($A3,L$2)",
+      "setup": {
+        "L2": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "M3",
+      "formula": "=FLOOR($A3,M$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "N3",
+      "formula": "=FLOOR($A3,N$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "N2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O3",
+      "formula": "=FLOOR($A3,O$2)",
+      "setup": {
+        "O2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "P3",
+      "formula": "=FLOOR($A3,P$2)",
+      "setup": {
+        "P2": {
+          "kind": "bool",
+          "value": false
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "Q3",
+      "formula": "=FLOOR($A3,Q$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Q2": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "R3",
+      "formula": "=FLOOR($A3,R$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "R2": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "S3",
+      "formula": "=FLOOR($A3,S$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "S2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "T3",
+      "formula": "=FLOOR($A3,T$2)",
+      "setup": {
+        "T2": {
+          "kind": "text",
+          "value": "eight"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "U3",
+      "formula": "=FLOOR($A3,U$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "U2": {
+          "kind": "formula",
+          "formula": "=\"--8\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "V3",
+      "formula": "=FLOOR($A3,V$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "V2": {
+          "kind": "formula",
+          "formula": "=\"7.0e0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "W3",
+      "formula": "=FLOOR($A3,W$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "W2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "X3",
+      "formula": "=FLOOR($A3,X$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "X2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "Y3",
+      "formula": "=FLOOR($A3,Y$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "Z3",
+      "formula": "=FLOOR($A3,Z$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Z2": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "AA3",
+      "formula": "=FLOOR($A3,AA$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "AA2": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AB3",
+      "formula": "=FLOOR($A3,AB$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "AB2": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AC3",
+      "formula": "=FLOOR($A3,AC$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "AC2": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "AD3",
+      "formula": "=FLOOR($A3,AD$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "AD2": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "AE3",
+      "formula": "=FLOOR($A3,AE$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "AE2": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AF3",
+      "formula": "=FLOOR($A3,AF$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "AF2": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.666666666666666
+      }
+    },
+    {
+      "id": "AG3",
+      "formula": "=FLOOR($A3,$AD$47:$AH$47)",
+      "setup": {
+        "AH47": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "AG47": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "AF47": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "AE47": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "AD47": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "AH3",
+      "formula": "=FLOOR($A3,AH$2)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "AH2": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.42477796076938
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=FLOOR($A4,B$2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -10.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=FLOOR($A4,C$2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -10.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=FLOOR($A4,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 0.21
+        },
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -10.08
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=FLOOR($A4,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -14.0
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=FLOOR($A4,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=FLOOR($A4,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -10.0
+      }
+    },
+    {
+      "id": "H4",
+      "formula": "=FLOOR($A4,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -10.0
+      }
+    },
+    {
+      "id": "I4",
+      "formula": "=FLOOR($A4,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "number",
+          "value": -0.21
+        },
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -9.87
+      }
+    },
+    {
+      "id": "J4",
+      "formula": "=FLOOR($A4,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "number",
+          "value": -7.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.0
+      }
+    },
+    {
+      "id": "K4",
+      "formula": "=FLOOR($A4,K$2)",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -10.0
+      }
+    },
+    {
+      "id": "L4",
+      "formula": "=FLOOR($A4,L$2)",
+      "setup": {
+        "L2": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -10.0
+      }
+    },
+    {
+      "id": "M4",
+      "formula": "=FLOOR($A4,M$2)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "N4",
+      "formula": "=FLOOR($A4,N$2)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "N2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O4",
+      "formula": "=FLOOR($A4,O$2)",
+      "setup": {
+        "O2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -10.0
+      }
+    },
+    {
+      "id": "P4",
+      "formula": "=FLOOR($A4,P$2)",
+      "setup": {
+        "P2": {
+          "kind": "bool",
+          "value": false
+        },
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "Q4",
+      "formula": "=FLOOR($A4,Q$2)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "Q2": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -16.0
+      }
+    },
+    {
+      "id": "R4",
+      "formula": "=FLOOR($A4,R$2)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "R2": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -10.0
+      }
+    },
+    {
+      "id": "S4",
+      "formula": "=FLOOR($A4,S$2)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "S2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "T4",
+      "formula": "=FLOOR($A4,T$2)",
+      "setup": {
+        "T2": {
+          "kind": "text",
+          "value": "eight"
+        },
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "U4",
+      "formula": "=FLOOR($A4,U$2)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "U2": {
+          "kind": "formula",
+          "formula": "=\"--8\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "V4",
+      "formula": "=FLOOR($A4,V$2)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "V2": {
+          "kind": "formula",
+          "formula": "=\"7.0e0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -14.0
+      }
+    },
+    {
+      "id": "W4",
+      "formula": "=FLOOR($A4,W$2)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "W2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "X4",
+      "formula": "=FLOOR($A4,X$2)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "X2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "Y4",
+      "formula": "=FLOOR($A4,Y$2)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "Z4",
+      "formula": "=FLOOR($A4,Z$2)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "Z2": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "AA4",
+      "formula": "=FLOOR($A4,AA$2)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "AA2": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AB4",
+      "formula": "=FLOOR($A4,AB$2)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "AB2": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AC4",
+      "formula": "=FLOOR($A4,AC$2)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "AC2": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -45301.0
+      }
+    },
+    {
+      "id": "AD4",
+      "formula": "=FLOOR($A4,AD$2)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "AD2": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -45301.0
+      }
+    },
+    {
+      "id": "AE4",
+      "formula": "=FLOOR($A4,AE$2)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "AE2": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AF4",
+      "formula": "=FLOOR($A4,AF$2)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "AF2": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -10.270833333333332
+      }
+    },
+    {
+      "id": "AG4",
+      "formula": "=FLOOR($A4,$AD$47:$AH$47)",
+      "setup": {
+        "AH47": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "AG47": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "AF47": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "AE47": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "AD47": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -12.0
+      }
+    },
+    {
+      "id": "AH4",
+      "formula": "=FLOOR($A4,AH$2)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "AH2": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -12.566370614359172
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=FLOOR($A5,B$2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=FLOOR($A5,C$2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.1000000000000005
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=FLOOR($A5,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 0.21
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.93
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=FLOOR($A5,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=FLOOR($A5,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=FLOOR($A5,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H5",
+      "formula": "=FLOOR($A5,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I5",
+      "formula": "=FLOOR($A5,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "number",
+          "value": -0.21
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J5",
+      "formula": "=FLOOR($A5,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "number",
+          "value": -7.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K5",
+      "formula": "=FLOOR($A5,K$2)",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.1
+      }
+    },
+    {
+      "id": "L5",
+      "formula": "=FLOOR($A5,L$2)",
+      "setup": {
+        "L2": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "M5",
+      "formula": "=FLOOR($A5,M$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "N5",
+      "formula": "=FLOOR($A5,N$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        },
+        "N2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O5",
+      "formula": "=FLOOR($A5,O$2)",
+      "setup": {
+        "O2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "P5",
+      "formula": "=FLOOR($A5,P$2)",
+      "setup": {
+        "P2": {
+          "kind": "bool",
+          "value": false
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "Q5",
+      "formula": "=FLOOR($A5,Q$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        },
+        "Q2": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "R5",
+      "formula": "=FLOOR($A5,R$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        },
+        "R2": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "S5",
+      "formula": "=FLOOR($A5,S$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        },
+        "S2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "T5",
+      "formula": "=FLOOR($A5,T$2)",
+      "setup": {
+        "T2": {
+          "kind": "text",
+          "value": "eight"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "U5",
+      "formula": "=FLOOR($A5,U$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        },
+        "U2": {
+          "kind": "formula",
+          "formula": "=\"--8\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "V5",
+      "formula": "=FLOOR($A5,V$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        },
+        "V2": {
+          "kind": "formula",
+          "formula": "=\"7.0e0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "W5",
+      "formula": "=FLOOR($A5,W$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        },
+        "W2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "X5",
+      "formula": "=FLOOR($A5,X$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        },
+        "X2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "Y5",
+      "formula": "=FLOOR($A5,Y$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "Z5",
+      "formula": "=FLOOR($A5,Z$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        },
+        "Z2": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "AA5",
+      "formula": "=FLOOR($A5,AA$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        },
+        "AA2": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AB5",
+      "formula": "=FLOOR($A5,AB$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        },
+        "AB2": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AC5",
+      "formula": "=FLOOR($A5,AC$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        },
+        "AC2": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "AD5",
+      "formula": "=FLOOR($A5,AD$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        },
+        "AD2": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "AE5",
+      "formula": "=FLOOR($A5,AE$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        },
+        "AE2": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AF5",
+      "formula": "=FLOOR($A5,AF$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        },
+        "AF2": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.645833333333333
+      }
+    },
+    {
+      "id": "AG5",
+      "formula": "=FLOOR($A5,$AD$47:$AH$47)",
+      "setup": {
+        "AH47": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "AG47": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "AF47": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "AE47": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "AD47": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "AH5",
+      "formula": "=FLOOR($A5,AH$2)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 7.1
+        },
+        "AH2": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.283185307179586
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=FLOOR($A6,B$2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=FLOOR($A6,C$2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.9
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=FLOOR($A6,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 0.21
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.77
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=FLOOR($A6,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=FLOOR($A6,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=FLOOR($A6,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H6",
+      "formula": "=FLOOR($A6,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I6",
+      "formula": "=FLOOR($A6,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "number",
+          "value": -0.21
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J6",
+      "formula": "=FLOOR($A6,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "number",
+          "value": -7.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K6",
+      "formula": "=FLOOR($A6,K$2)",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.8999999999999995
+      }
+    },
+    {
+      "id": "L6",
+      "formula": "=FLOOR($A6,L$2)",
+      "setup": {
+        "L2": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "M6",
+      "formula": "=FLOOR($A6,M$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "N6",
+      "formula": "=FLOOR($A6,N$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        },
+        "N2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O6",
+      "formula": "=FLOOR($A6,O$2)",
+      "setup": {
+        "O2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "P6",
+      "formula": "=FLOOR($A6,P$2)",
+      "setup": {
+        "P2": {
+          "kind": "bool",
+          "value": false
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "Q6",
+      "formula": "=FLOOR($A6,Q$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        },
+        "Q2": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "R6",
+      "formula": "=FLOOR($A6,R$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        },
+        "R2": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "S6",
+      "formula": "=FLOOR($A6,S$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        },
+        "S2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "T6",
+      "formula": "=FLOOR($A6,T$2)",
+      "setup": {
+        "T2": {
+          "kind": "text",
+          "value": "eight"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "U6",
+      "formula": "=FLOOR($A6,U$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        },
+        "U2": {
+          "kind": "formula",
+          "formula": "=\"--8\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "V6",
+      "formula": "=FLOOR($A6,V$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        },
+        "V2": {
+          "kind": "formula",
+          "formula": "=\"7.0e0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "W6",
+      "formula": "=FLOOR($A6,W$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        },
+        "W2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "X6",
+      "formula": "=FLOOR($A6,X$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        },
+        "X2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "Y6",
+      "formula": "=FLOOR($A6,Y$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "Z6",
+      "formula": "=FLOOR($A6,Z$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        },
+        "Z2": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "AA6",
+      "formula": "=FLOOR($A6,AA$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        },
+        "AA2": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AB6",
+      "formula": "=FLOOR($A6,AB$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        },
+        "AB2": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AC6",
+      "formula": "=FLOOR($A6,AC$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        },
+        "AC2": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "AD6",
+      "formula": "=FLOOR($A6,AD$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        },
+        "AD2": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "AE6",
+      "formula": "=FLOOR($A6,AE$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        },
+        "AE2": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AF6",
+      "formula": "=FLOOR($A6,AF$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        },
+        "AF2": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.854166666666666
+      }
+    },
+    {
+      "id": "AG6",
+      "formula": "=FLOOR($A6,$AD$47:$AH$47)",
+      "setup": {
+        "AH47": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "AG47": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "AF47": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "AE47": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "AD47": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "AH6",
+      "formula": "=FLOOR($A6,AH$2)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 7.9
+        },
+        "AH2": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.283185307179586
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=FLOOR($A7,B$2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -8.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=FLOOR($A7,C$2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.1000000000000005
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=FLOOR($A7,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 0.21
+        },
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.14
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=FLOOR($A7,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -14.0
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=FLOOR($A7,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=FLOOR($A7,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.0
+      }
+    },
+    {
+      "id": "H7",
+      "formula": "=FLOOR($A7,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.1000000000000005
+      }
+    },
+    {
+      "id": "I7",
+      "formula": "=FLOOR($A7,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "number",
+          "value": -0.21
+        },
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -6.93
+      }
+    },
+    {
+      "id": "J7",
+      "formula": "=FLOOR($A7,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "number",
+          "value": -7.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.0
+      }
+    },
+    {
+      "id": "K7",
+      "formula": "=FLOOR($A7,K$2)",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.1
+      }
+    },
+    {
+      "id": "L7",
+      "formula": "=FLOOR($A7,L$2)",
+      "setup": {
+        "L2": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.1
+      }
+    },
+    {
+      "id": "M7",
+      "formula": "=FLOOR($A7,M$2)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "N7",
+      "formula": "=FLOOR($A7,N$2)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        },
+        "N2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O7",
+      "formula": "=FLOOR($A7,O$2)",
+      "setup": {
+        "O2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -8.0
+      }
+    },
+    {
+      "id": "P7",
+      "formula": "=FLOOR($A7,P$2)",
+      "setup": {
+        "P2": {
+          "kind": "bool",
+          "value": false
+        },
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "Q7",
+      "formula": "=FLOOR($A7,Q$2)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        },
+        "Q2": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -8.0
+      }
+    },
+    {
+      "id": "R7",
+      "formula": "=FLOOR($A7,R$2)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        },
+        "R2": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -10.0
+      }
+    },
+    {
+      "id": "S7",
+      "formula": "=FLOOR($A7,S$2)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        },
+        "S2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "T7",
+      "formula": "=FLOOR($A7,T$2)",
+      "setup": {
+        "T2": {
+          "kind": "text",
+          "value": "eight"
+        },
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "U7",
+      "formula": "=FLOOR($A7,U$2)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        },
+        "U2": {
+          "kind": "formula",
+          "formula": "=\"--8\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "V7",
+      "formula": "=FLOOR($A7,V$2)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        },
+        "V2": {
+          "kind": "formula",
+          "formula": "=\"7.0e0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -14.0
+      }
+    },
+    {
+      "id": "W7",
+      "formula": "=FLOOR($A7,W$2)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        },
+        "W2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "X7",
+      "formula": "=FLOOR($A7,X$2)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        },
+        "X2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "Y7",
+      "formula": "=FLOOR($A7,Y$2)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "Z7",
+      "formula": "=FLOOR($A7,Z$2)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        },
+        "Z2": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "AA7",
+      "formula": "=FLOOR($A7,AA$2)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        },
+        "AA2": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AB7",
+      "formula": "=FLOOR($A7,AB$2)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        },
+        "AB2": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AC7",
+      "formula": "=FLOOR($A7,AC$2)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        },
+        "AC2": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -45301.0
+      }
+    },
+    {
+      "id": "AD7",
+      "formula": "=FLOOR($A7,AD$2)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        },
+        "AD2": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -45301.0
+      }
+    },
+    {
+      "id": "AE7",
+      "formula": "=FLOOR($A7,AE$2)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        },
+        "AE2": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AF7",
+      "formula": "=FLOOR($A7,AF$2)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        },
+        "AF2": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.25
+      }
+    },
+    {
+      "id": "AG7",
+      "formula": "=FLOOR($A7,$AD$47:$AH$47)",
+      "setup": {
+        "AH47": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "AG47": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "AF47": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "AE47": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "AD47": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -8.0
+      }
+    },
+    {
+      "id": "AH7",
+      "formula": "=FLOOR($A7,AH$2)",
+      "setup": {
+        "A7": {
+          "kind": "number",
+          "value": -7.1
+        },
+        "AH2": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -9.42477796076938
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=FLOOR($A8,B$2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -8.0
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=FLOOR($A8,C$2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.9
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=FLOOR($A8,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 0.21
+        },
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.9799999999999995
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=FLOOR($A8,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -14.0
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=FLOOR($A8,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=FLOOR($A8,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.0
+      }
+    },
+    {
+      "id": "H8",
+      "formula": "=FLOOR($A8,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.9
+      }
+    },
+    {
+      "id": "I8",
+      "formula": "=FLOOR($A8,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "number",
+          "value": -0.21
+        },
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.77
+      }
+    },
+    {
+      "id": "J8",
+      "formula": "=FLOOR($A8,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "number",
+          "value": -7.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.0
+      }
+    },
+    {
+      "id": "K8",
+      "formula": "=FLOOR($A8,K$2)",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.8999999999999995
+      }
+    },
+    {
+      "id": "L8",
+      "formula": "=FLOOR($A8,L$2)",
+      "setup": {
+        "L2": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.8999999999999995
+      }
+    },
+    {
+      "id": "M8",
+      "formula": "=FLOOR($A8,M$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "N8",
+      "formula": "=FLOOR($A8,N$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        },
+        "N2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O8",
+      "formula": "=FLOOR($A8,O$2)",
+      "setup": {
+        "O2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -8.0
+      }
+    },
+    {
+      "id": "P8",
+      "formula": "=FLOOR($A8,P$2)",
+      "setup": {
+        "P2": {
+          "kind": "bool",
+          "value": false
+        },
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "Q8",
+      "formula": "=FLOOR($A8,Q$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        },
+        "Q2": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -8.0
+      }
+    },
+    {
+      "id": "R8",
+      "formula": "=FLOOR($A8,R$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        },
+        "R2": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -10.0
+      }
+    },
+    {
+      "id": "S8",
+      "formula": "=FLOOR($A8,S$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        },
+        "S2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "T8",
+      "formula": "=FLOOR($A8,T$2)",
+      "setup": {
+        "T2": {
+          "kind": "text",
+          "value": "eight"
+        },
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "U8",
+      "formula": "=FLOOR($A8,U$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        },
+        "U2": {
+          "kind": "formula",
+          "formula": "=\"--8\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "V8",
+      "formula": "=FLOOR($A8,V$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        },
+        "V2": {
+          "kind": "formula",
+          "formula": "=\"7.0e0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -14.0
+      }
+    },
+    {
+      "id": "W8",
+      "formula": "=FLOOR($A8,W$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        },
+        "W2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "X8",
+      "formula": "=FLOOR($A8,X$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        },
+        "X2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "Y8",
+      "formula": "=FLOOR($A8,Y$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "Z8",
+      "formula": "=FLOOR($A8,Z$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        },
+        "Z2": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "AA8",
+      "formula": "=FLOOR($A8,AA$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        },
+        "AA2": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AB8",
+      "formula": "=FLOOR($A8,AB$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        },
+        "AB2": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AC8",
+      "formula": "=FLOOR($A8,AC$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        },
+        "AC2": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -45301.0
+      }
+    },
+    {
+      "id": "AD8",
+      "formula": "=FLOOR($A8,AD$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        },
+        "AD2": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -45301.0
+      }
+    },
+    {
+      "id": "AE8",
+      "formula": "=FLOOR($A8,AE$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        },
+        "AE2": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AF8",
+      "formula": "=FLOOR($A8,AF$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        },
+        "AF2": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -8.458333333333332
+      }
+    },
+    {
+      "id": "AG8",
+      "formula": "=FLOOR($A8,$AD$47:$AH$47)",
+      "setup": {
+        "AH47": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "AG47": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "AF47": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "AE47": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "AD47": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -8.0
+      }
+    },
+    {
+      "id": "AH8",
+      "formula": "=FLOOR($A8,AH$2)",
+      "setup": {
+        "A8": {
+          "kind": "number",
+          "value": -7.9
+        },
+        "AH2": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -9.42477796076938
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=FLOOR($A9,B$2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=FLOOR($A9,C$2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=FLOOR($A9,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 0.21
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=FLOOR($A9,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=FLOOR($A9,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G9",
+      "formula": "=FLOOR($A9,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H9",
+      "formula": "=FLOOR($A9,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "I9",
+      "formula": "=FLOOR($A9,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "number",
+          "value": -0.21
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J9",
+      "formula": "=FLOOR($A9,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "number",
+          "value": -7.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "K9",
+      "formula": "=FLOOR($A9,K$2)",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "L9",
+      "formula": "=FLOOR($A9,L$2)",
+      "setup": {
+        "L2": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "M9",
+      "formula": "=FLOOR($A9,M$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "N9",
+      "formula": "=FLOOR($A9,N$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "N2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O9",
+      "formula": "=FLOOR($A9,O$2)",
+      "setup": {
+        "O2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "P9",
+      "formula": "=FLOOR($A9,P$2)",
+      "setup": {
+        "P2": {
+          "kind": "bool",
+          "value": false
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "Q9",
+      "formula": "=FLOOR($A9,Q$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "Q2": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "R9",
+      "formula": "=FLOOR($A9,R$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "R2": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "S9",
+      "formula": "=FLOOR($A9,S$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "S2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "T9",
+      "formula": "=FLOOR($A9,T$2)",
+      "setup": {
+        "T2": {
+          "kind": "text",
+          "value": "eight"
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "U9",
+      "formula": "=FLOOR($A9,U$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "U2": {
+          "kind": "formula",
+          "formula": "=\"--8\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "V9",
+      "formula": "=FLOOR($A9,V$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "V2": {
+          "kind": "formula",
+          "formula": "=\"7.0e0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "W9",
+      "formula": "=FLOOR($A9,W$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "W2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "X9",
+      "formula": "=FLOOR($A9,X$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "X2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "Y9",
+      "formula": "=FLOOR($A9,Y$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "Z9",
+      "formula": "=FLOOR($A9,Z$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "Z2": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "AA9",
+      "formula": "=FLOOR($A9,AA$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AA2": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AB9",
+      "formula": "=FLOOR($A9,AB$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AB2": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AC9",
+      "formula": "=FLOOR($A9,AC$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AC2": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "AD9",
+      "formula": "=FLOOR($A9,AD$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AD2": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "AE9",
+      "formula": "=FLOOR($A9,AE$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AE2": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AF9",
+      "formula": "=FLOOR($A9,AF$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AF2": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "AG9",
+      "formula": "=FLOOR($A9,$AD$47:$AH$47)",
+      "setup": {
+        "AH47": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "AG47": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "AF47": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "AE47": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "AD47": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "AH9",
+      "formula": "=FLOOR($A9,AH$2)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "AH2": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=FLOOR($A10,B$2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9999999999999.0
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=FLOOR($A10,C$2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9999999999999.0
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=FLOOR($A10,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 0.21
+        },
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9999999999998.82
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=FLOOR($A10,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9999999999997.0
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=FLOOR($A10,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G10",
+      "formula": "=FLOOR($A10,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H10",
+      "formula": "=FLOOR($A10,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I10",
+      "formula": "=FLOOR($A10,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "number",
+          "value": -0.21
+        },
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J10",
+      "formula": "=FLOOR($A10,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "number",
+          "value": -7.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K10",
+      "formula": "=FLOOR($A10,K$2)",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9999999999999.0
+      }
+    },
+    {
+      "id": "L10",
+      "formula": "=FLOOR($A10,L$2)",
+      "setup": {
+        "L2": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "M10",
+      "formula": "=FLOOR($A10,M$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "N10",
+      "formula": "=FLOOR($A10,N$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        },
+        "N2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O10",
+      "formula": "=FLOOR($A10,O$2)",
+      "setup": {
+        "O2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9999999999999.0
+      }
+    },
+    {
+      "id": "P10",
+      "formula": "=FLOOR($A10,P$2)",
+      "setup": {
+        "P2": {
+          "kind": "bool",
+          "value": false
+        },
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "Q10",
+      "formula": "=FLOOR($A10,Q$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        },
+        "Q2": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9999999999992.0
+      }
+    },
+    {
+      "id": "R10",
+      "formula": "=FLOOR($A10,R$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        },
+        "R2": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9999999999990.0
+      }
+    },
+    {
+      "id": "S10",
+      "formula": "=FLOOR($A10,S$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        },
+        "S2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "T10",
+      "formula": "=FLOOR($A10,T$2)",
+      "setup": {
+        "T2": {
+          "kind": "text",
+          "value": "eight"
+        },
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "U10",
+      "formula": "=FLOOR($A10,U$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        },
+        "U2": {
+          "kind": "formula",
+          "formula": "=\"--8\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "V10",
+      "formula": "=FLOOR($A10,V$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        },
+        "V2": {
+          "kind": "formula",
+          "formula": "=\"7.0e0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9999999999997.0
+      }
+    },
+    {
+      "id": "W10",
+      "formula": "=FLOOR($A10,W$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        },
+        "W2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "X10",
+      "formula": "=FLOOR($A10,X$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        },
+        "X2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "Y10",
+      "formula": "=FLOOR($A10,Y$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "Z10",
+      "formula": "=FLOOR($A10,Z$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        },
+        "Z2": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "AA10",
+      "formula": "=FLOOR($A10,AA$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        },
+        "AA2": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AB10",
+      "formula": "=FLOOR($A10,AB$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        },
+        "AB2": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AC10",
+      "formula": "=FLOOR($A10,AC$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        },
+        "AC2": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9999999959078.0
+      }
+    },
+    {
+      "id": "AD10",
+      "formula": "=FLOOR($A10,AD$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        },
+        "AD2": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9999999959078.0
+      }
+    },
+    {
+      "id": "AE10",
+      "formula": "=FLOOR($A10,AE$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        },
+        "AE2": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AF10",
+      "formula": "=FLOOR($A10,AF$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        },
+        "AF2": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9999999999998.77
+      }
+    },
+    {
+      "id": "AG10",
+      "formula": "=FLOOR($A10,$AD$47:$AH$47)",
+      "setup": {
+        "AH47": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "AG47": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "AF47": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "AE47": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "AD47": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9999999999996.0
+      }
+    },
+    {
+      "id": "AH10",
+      "formula": "=FLOOR($A10,AH$2)",
+      "setup": {
+        "A10": {
+          "kind": "number",
+          "value": 9999999999999.0
+        },
+        "AH2": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9999999999997.15
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=FLOOR($A11,B$2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=FLOOR($A11,C$2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=FLOOR($A11,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 0.21
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=FLOOR($A11,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "F11",
+      "formula": "=FLOOR($A11,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G11",
+      "formula": "=FLOOR($A11,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H11",
+      "formula": "=FLOOR($A11,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I11",
+      "formula": "=FLOOR($A11,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "number",
+          "value": -0.21
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J11",
+      "formula": "=FLOOR($A11,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "number",
+          "value": -7.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K11",
+      "formula": "=FLOOR($A11,K$2)",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1e-12
+      }
+    },
+    {
+      "id": "L11",
+      "formula": "=FLOOR($A11,L$2)",
+      "setup": {
+        "L2": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "M11",
+      "formula": "=FLOOR($A11,M$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "N11",
+      "formula": "=FLOOR($A11,N$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "N2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O11",
+      "formula": "=FLOOR($A11,O$2)",
+      "setup": {
+        "O2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "P11",
+      "formula": "=FLOOR($A11,P$2)",
+      "setup": {
+        "P2": {
+          "kind": "bool",
+          "value": false
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "Q11",
+      "formula": "=FLOOR($A11,Q$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "Q2": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "R11",
+      "formula": "=FLOOR($A11,R$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "R2": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "S11",
+      "formula": "=FLOOR($A11,S$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "S2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "T11",
+      "formula": "=FLOOR($A11,T$2)",
+      "setup": {
+        "T2": {
+          "kind": "text",
+          "value": "eight"
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "U11",
+      "formula": "=FLOOR($A11,U$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "U2": {
+          "kind": "formula",
+          "formula": "=\"--8\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "V11",
+      "formula": "=FLOOR($A11,V$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "V2": {
+          "kind": "formula",
+          "formula": "=\"7.0e0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "W11",
+      "formula": "=FLOOR($A11,W$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "W2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "X11",
+      "formula": "=FLOOR($A11,X$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "X2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "Y11",
+      "formula": "=FLOOR($A11,Y$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "Z11",
+      "formula": "=FLOOR($A11,Z$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "Z2": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "AA11",
+      "formula": "=FLOOR($A11,AA$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "AA2": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AB11",
+      "formula": "=FLOOR($A11,AB$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "AB2": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AC11",
+      "formula": "=FLOOR($A11,AC$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "AC2": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "AD11",
+      "formula": "=FLOOR($A11,AD$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "AD2": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "AE11",
+      "formula": "=FLOOR($A11,AE$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "AE2": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AF11",
+      "formula": "=FLOOR($A11,AF$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "AF2": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "AG11",
+      "formula": "=FLOOR($A11,$AD$47:$AH$47)",
+      "setup": {
+        "AH47": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "AG47": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "AF47": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "AE47": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "AD47": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "AH11",
+      "formula": "=FLOOR($A11,AH$2)",
+      "setup": {
+        "A11": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "AH2": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=FLOOR($A12,B$2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=FLOOR($A12,C$2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.1
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=FLOOR($A12,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 0.21
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.21
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=FLOOR($A12,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.0
+      }
+    },
+    {
+      "id": "F12",
+      "formula": "=FLOOR($A12,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G12",
+      "formula": "=FLOOR($A12,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H12",
+      "formula": "=FLOOR($A12,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "I12",
+      "formula": "=FLOOR($A12,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "number",
+          "value": -0.21
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "J12",
+      "formula": "=FLOOR($A12,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "number",
+          "value": -7.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "K12",
+      "formula": "=FLOOR($A12,K$2)",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1e-12
+      }
+    },
+    {
+      "id": "L12",
+      "formula": "=FLOOR($A12,L$2)",
+      "setup": {
+        "L2": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1e-12
+      }
+    },
+    {
+      "id": "M12",
+      "formula": "=FLOOR($A12,M$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "N12",
+      "formula": "=FLOOR($A12,N$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "N2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O12",
+      "formula": "=FLOOR($A12,O$2)",
+      "setup": {
+        "O2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "P12",
+      "formula": "=FLOOR($A12,P$2)",
+      "setup": {
+        "P2": {
+          "kind": "bool",
+          "value": false
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "Q12",
+      "formula": "=FLOOR($A12,Q$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "Q2": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -8.0
+      }
+    },
+    {
+      "id": "R12",
+      "formula": "=FLOOR($A12,R$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "R2": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -10.0
+      }
+    },
+    {
+      "id": "S12",
+      "formula": "=FLOOR($A12,S$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "S2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "T12",
+      "formula": "=FLOOR($A12,T$2)",
+      "setup": {
+        "T2": {
+          "kind": "text",
+          "value": "eight"
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "U12",
+      "formula": "=FLOOR($A12,U$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "U2": {
+          "kind": "formula",
+          "formula": "=\"--8\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "V12",
+      "formula": "=FLOOR($A12,V$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "V2": {
+          "kind": "formula",
+          "formula": "=\"7.0e0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -7.0
+      }
+    },
+    {
+      "id": "W12",
+      "formula": "=FLOOR($A12,W$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "W2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "X12",
+      "formula": "=FLOOR($A12,X$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "X2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "Y12",
+      "formula": "=FLOOR($A12,Y$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "Z12",
+      "formula": "=FLOOR($A12,Z$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "Z2": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "AA12",
+      "formula": "=FLOOR($A12,AA$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "AA2": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AB12",
+      "formula": "=FLOOR($A12,AB$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "AB2": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AC12",
+      "formula": "=FLOOR($A12,AC$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "AC2": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -45301.0
+      }
+    },
+    {
+      "id": "AD12",
+      "formula": "=FLOOR($A12,AD$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "AD2": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -45301.0
+      }
+    },
+    {
+      "id": "AE12",
+      "formula": "=FLOOR($A12,AE$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "AE2": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AF12",
+      "formula": "=FLOOR($A12,AF$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "AF2": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.6041666666666666
+      }
+    },
+    {
+      "id": "AG12",
+      "formula": "=FLOOR($A12,$AD$47:$AH$47)",
+      "setup": {
+        "AH47": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "AG47": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "AF47": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "AE47": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "AD47": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -4.0
+      }
+    },
+    {
+      "id": "AH12",
+      "formula": "=FLOOR($A12,AH$2)",
+      "setup": {
+        "A12": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "AH2": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -3.141592653589793
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=FLOOR($A13,B$2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=FLOOR($A13,C$2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=FLOOR($A13,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 0.21
+        },
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=FLOOR($A13,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "F13",
+      "formula": "=FLOOR($A13,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G13",
+      "formula": "=FLOOR($A13,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H13",
+      "formula": "=FLOOR($A13,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I13",
+      "formula": "=FLOOR($A13,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "number",
+          "value": -0.21
+        },
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J13",
+      "formula": "=FLOOR($A13,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "number",
+          "value": -7.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K13",
+      "formula": "=FLOOR($A13,K$2)",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "L13",
+      "formula": "=FLOOR($A13,L$2)",
+      "setup": {
+        "L2": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "M13",
+      "formula": "=FLOOR($A13,M$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "N13",
+      "formula": "=FLOOR($A13,N$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        },
+        "N2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O13",
+      "formula": "=FLOOR($A13,O$2)",
+      "setup": {
+        "O2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "P13",
+      "formula": "=FLOOR($A13,P$2)",
+      "setup": {
+        "P2": {
+          "kind": "bool",
+          "value": false
+        },
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "Q13",
+      "formula": "=FLOOR($A13,Q$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        },
+        "Q2": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "R13",
+      "formula": "=FLOOR($A13,R$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        },
+        "R2": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "S13",
+      "formula": "=FLOOR($A13,S$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        },
+        "S2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "T13",
+      "formula": "=FLOOR($A13,T$2)",
+      "setup": {
+        "T2": {
+          "kind": "text",
+          "value": "eight"
+        },
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "U13",
+      "formula": "=FLOOR($A13,U$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        },
+        "U2": {
+          "kind": "formula",
+          "formula": "=\"--8\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "V13",
+      "formula": "=FLOOR($A13,V$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        },
+        "V2": {
+          "kind": "formula",
+          "formula": "=\"7.0e0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "W13",
+      "formula": "=FLOOR($A13,W$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        },
+        "W2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "X13",
+      "formula": "=FLOOR($A13,X$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        },
+        "X2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "Y13",
+      "formula": "=FLOOR($A13,Y$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "Z13",
+      "formula": "=FLOOR($A13,Z$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        },
+        "Z2": {
+          "kind": "formula",
+          "formula": "=SQRT(-1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "AA13",
+      "formula": "=FLOOR($A13,AA$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        },
+        "AA2": {
+          "kind": "formula",
+          "formula": "=\"x\"+1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AB13",
+      "formula": "=FLOOR($A13,AB$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        },
+        "AB2": {
+          "kind": "formula",
+          "formula": "=\"@\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AC13",
+      "formula": "=FLOOR($A13,AC$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        },
+        "AC2": {
+          "kind": "formula",
+          "formula": "=DATE(2024,1,10)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "AD13",
+      "formula": "=FLOOR($A13,AD$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        },
+        "AD2": {
+          "kind": "formula",
+          "formula": "=\"2024-01-10\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "AE13",
+      "formula": "=FLOOR($A13,AE$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        },
+        "AE2": {
+          "kind": "formula",
+          "formula": "=\" 2024-01-10 \""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "AF13",
+      "formula": "=FLOOR($A13,AF$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        },
+        "AF2": {
+          "kind": "formula",
+          "formula": "=TIME(14,30,0)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "AG13",
+      "formula": "=FLOOR($A13,$AD$47:$AH$47)",
+      "setup": {
+        "AH47": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "AG47": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "AF47": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "AE47": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "AD47": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "AH13",
+      "formula": "=FLOOR($A13,AH$2)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": 1e-307
+        },
+        "AH2": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=FLOOR($A14,B$2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A14": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=FLOOR($A14,C$2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "A14": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=FLOOR($A14,D$2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 0.21
+        },
+        "A14": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.84
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=FLOOR($A14,E$2)",
+      "setup": {
+        "E2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A14": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "F14",
+      "formula": "=FLOOR($A14,F$2)",
+      "setup": {
+        "F2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A14": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G14",
+      "formula": "=FLOOR($A14,G$2)",
+      "setup": {
+        "G2": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A14": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H14",
+      "formula": "=FLOOR($A14,H$2)",
+      "setup": {
+        "H2": {
+          "kind": "number",
+          "value": -0.1
+        },
+        "A14": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "I14",
+      "formula": "=FLOOR($A14,I$2)",
+      "setup": {
+        "I2": {
+          "kind": "number",
+          "value": -0.21
+        },
+        "A14": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "J14",
+      "formula": "=FLOOR($A14,J$2)",
+      "setup": {
+        "J2": {
+          "kind": "number",
+          "value": -7.0
+        },
+        "A14": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "K14",
+      "formula": "=FLOOR($A14,K$2)",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 1e-12
+        },
+        "A14": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "L14",
+      "formula": "=FLOOR($A14,L$2)",
+      "setup": {
+        "L2": {
+          "kind": "number",
+          "value": -1e-12
+        },
+        "A14": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "M14",
+      "formula": "=FLOOR($A14,M$2)",
+      "setup": {
+        "A14": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "N14",
+      "formula": "=FLOOR($A14,N$2)",
+      "setup": {
+        "A14": {
+          "kind": "bool",
+          "value": true
+        },
+        "N2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "O14",
+      "formula": "=FLOOR($A14,O$2)",
+      "setup": {
+        "O2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A14": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "P14",
+      "formula": "=FLOOR($A14,P$2)",
+      "setup": {
+        "P2": {
+          "kind": "bool",
+          "value": false
+        },
+        "A14": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "Q14",
+      "formula": "=FLOOR($A14,Q$2)",
+      "setup": {
+        "A14": {
+          "kind": "bool",
+          "value": true
+        },
+        "Q2": {
+          "kind": "formula",
+          "formula": "=\"8\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "R14",
+      "formula": "=FLOOR($A14,R$2)",
+      "setup": {
+        "A14": {
+          "kind": "bool",
+          "value": true
+        },
+        "R2": {
+          "kind": "formula",
+          "formula": "=\" 10 \""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "S14",
+      "formula": "=FLOOR($A14,S$2)",
+      "setup": {
+        "A14": {
+          "kind": "bool",
+          "value": true
+        },
+        "S2": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "T14",
+      "formula": "=FLOOR($A14,T$2)",
+      "setup": {
+        "T2": {
+          "kind": "text",
+          "value": "eight"
+        },
+        "A14": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "U14",
+      "formula": "=FLOOR($A14,U$2)",
+      "setup": {
+        "A14": {
+          "kind": "bool",
+          "value": true
+        },
+        "U2": {
+          "kind": "formula",
+          "formula": "=\"--8\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "V14",
+      "formula": "=FLOOR($A14,V$2)",
+      "setup": {
+        "A14": {
+          "kind": "bool",
+          "value": true
+        },
+        "V2": {
+          "kind": "formula",
+          "formula": "=\"7.0e0\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "W14",
+      "formula": "=FLOOR($A14,W$2)",
+      "setup": {
+        "A14": {
+          "kind": "bool",
+          "value": true
+        },
+        "W2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "X14",
+      "formula": "=FLOOR($A14,X$2)",
+      "setup": {
+        "A14": {
+          "kind": "bool",
+          "value": true
+        },
+        "X2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

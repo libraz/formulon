@@ -1,0 +1,798 @@
+{
+  "suite": "ironcalc_calc_tests_DEGREES_RADIANS_DEGREES_RADIANS",
+  "description": "Derived from IronCalc fixture calc_tests/DEGREES_RADIANS.xlsx, sheet 'DEGREES_RADIANS'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "DEGREES_RADIANS",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "B2",
+      "formula": "=DEGREES(A2)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 114.59155902616465
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=DEGREES(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 12345678900.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 707355296193.7126
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=DEGREES(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 4.567e-09
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.6166982503624696e-07
+      }
+    },
+    {
+      "id": "B5",
+      "formula": "=DEGREES(A5)",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -114.59155902616465
+      }
+    },
+    {
+      "id": "B6",
+      "formula": "=DEGREES(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": 3.1415
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 179.99469134034814
+      }
+    },
+    {
+      "id": "A7",
+      "formula": "=PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "B7",
+      "formula": "=DEGREES(A7)",
+      "setup": {
+        "A7": {
+          "kind": "formula",
+          "formula": "=PI()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "A8",
+      "formula": "=PI()/2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "B8",
+      "formula": "=DEGREES(A8)",
+      "setup": {
+        "A8": {
+          "kind": "formula",
+          "formula": "=PI()/2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 90.0
+      }
+    },
+    {
+      "id": "B9",
+      "formula": "=DEGREES(A9)",
+      "setup": {
+        "A9": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=DEGREES(A10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A11",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=DEGREES(A11)",
+      "setup": {
+        "A11": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A12",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=DEGREES(A12)",
+      "setup": {
+        "A12": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=DEGREES(A13)",
+      "setup": {
+        "A13": {
+          "kind": "text",
+          "value": "3.1415"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 179.99469134034814
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=DEGREES(A14)",
+      "setup": {
+        "A14": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B15",
+      "formula": "=DEGREES(A15)",
+      "setup": {
+        "A15": {
+          "kind": "text",
+          "value": "Pi"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B16",
+      "formula": "=DEGREES(A16)",
+      "setup": {
+        "A16": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 57.29577951308232
+      }
+    },
+    {
+      "id": "B17",
+      "formula": "=DEGREES(A17)",
+      "setup": {
+        "A17": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A18",
+      "formula": "=E15:E19",
+      "setup": {
+        "E19": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E18": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E17": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E16": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E15": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "B18",
+      "formula": "=DEGREES(A18)",
+      "setup": {
+        "E19": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E18": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E17": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E16": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E15": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A18": {
+          "kind": "formula",
+          "formula": "=E15:E19"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 229.1831180523293
+      }
+    },
+    {
+      "id": "A19",
+      "formula": "=1.05*(0.0284+0.0046)-0.0284",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.006249999999999999
+      }
+    },
+    {
+      "id": "B19",
+      "formula": "=DEGREES(A19)",
+      "setup": {
+        "A19": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.35809862195676445
+      }
+    },
+    {
+      "id": "A20",
+      "formula": "=E6",
+      "setup": {
+        "E6": {
+          "kind": "number",
+          "value": 1.745
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.745
+      }
+    },
+    {
+      "id": "B20",
+      "formula": "=DEGREES(A20)",
+      "setup": {
+        "E6": {
+          "kind": "number",
+          "value": 1.745
+        },
+        "A20": {
+          "kind": "formula",
+          "formula": "=E6"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 99.98113525032866
+      }
+    },
+    {
+      "id": "B21",
+      "formula": "=DEGREES(RADIANS(A21))",
+      "setup": {
+        "A21": {
+          "kind": "number",
+          "value": 2.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.5
+      }
+    },
+    {
+      "id": "B25",
+      "formula": "=RADIANS(A25)",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.03490658503988659
+      }
+    },
+    {
+      "id": "B26",
+      "formula": "=RADIANS(A26)",
+      "setup": {
+        "A26": {
+          "kind": "number",
+          "value": 180.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "B27",
+      "formula": "=RADIANS(A27)",
+      "setup": {
+        "A27": {
+          "kind": "number",
+          "value": 360.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.283185307179586
+      }
+    },
+    {
+      "id": "B28",
+      "formula": "=RADIANS(A28)",
+      "setup": {
+        "A28": {
+          "kind": "number",
+          "value": 18000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 314.1592653589793
+      }
+    },
+    {
+      "id": "B29",
+      "formula": "=RADIANS(A29)",
+      "setup": {
+        "A29": {
+          "kind": "number",
+          "value": 0.00018
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.1415926535897933e-06
+      }
+    },
+    {
+      "id": "B30",
+      "formula": "=RADIANS(A30)",
+      "setup": {
+        "A30": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.03490658503988659
+      }
+    },
+    {
+      "id": "B31",
+      "formula": "=RADIANS(A31)",
+      "setup": {
+        "A31": {
+          "kind": "number",
+          "value": 90.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.5795229730548683
+      }
+    },
+    {
+      "id": "B32",
+      "formula": "=RADIANS(A32)",
+      "setup": {
+        "A32": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "B33",
+      "formula": "=RADIANS(A33)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A34",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B34",
+      "formula": "=RADIANS(A34)",
+      "setup": {
+        "A34": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A35",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B35",
+      "formula": "=RADIANS(A35)",
+      "setup": {
+        "A35": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "B36",
+      "formula": "=RADIANS(A36)",
+      "setup": {
+        "A36": {
+          "kind": "text",
+          "value": "3.1415"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.05482951845140187
+      }
+    },
+    {
+      "id": "B37",
+      "formula": "=RADIANS(A37)",
+      "setup": {
+        "A37": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B38",
+      "formula": "=RADIANS(A38)",
+      "setup": {
+        "A38": {
+          "kind": "text",
+          "value": "Pi"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B39",
+      "formula": "=RADIANS(A39)",
+      "setup": {
+        "A39": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.017453292519943295
+      }
+    },
+    {
+      "id": "B40",
+      "formula": "=RADIANS(A40)",
+      "setup": {
+        "A40": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.017453292519943295
+      }
+    },
+    {
+      "id": "B41",
+      "formula": "=RADIANS(A41)",
+      "setup": {
+        "A41": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A42",
+      "formula": "=E39:E43",
+      "setup": {
+        "E43": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E42": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E41": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E40": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E39": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "B42",
+      "formula": "=RADIANS(A42)",
+      "setup": {
+        "E43": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E42": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E41": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E40": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E39": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A42": {
+          "kind": "formula",
+          "formula": "=E39:E43"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.06981317007977318
+      }
+    },
+    {
+      "id": "A43",
+      "formula": "=1.05*(0.0284+0.0046)-0.0284",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.006249999999999999
+      }
+    },
+    {
+      "id": "B43",
+      "formula": "=RADIANS(A43)",
+      "setup": {
+        "A43": {
+          "kind": "formula",
+          "formula": "=1.05*(0.0284+0.0046)-0.0284"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.00010908307824964557
+      }
+    },
+    {
+      "id": "A44",
+      "formula": "=E6",
+      "setup": {
+        "E6": {
+          "kind": "number",
+          "value": 1.745
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.745
+      }
+    },
+    {
+      "id": "B44",
+      "formula": "=RADIANS(A44)",
+      "setup": {
+        "E6": {
+          "kind": "number",
+          "value": 1.745
+        },
+        "A44": {
+          "kind": "formula",
+          "formula": "=E6"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.030455995447301053
+      }
+    },
+    {
+      "id": "B45",
+      "formula": "=RADIANS(DEGREES(A45))",
+      "setup": {
+        "A45": {
+          "kind": "number",
+          "value": 60.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "B47",
+      "formula": "=RADIANS(DEGREES(PI())) - PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    }
+  ]
+}

@@ -1,0 +1,1359 @@
+{
+  "suite": "ironcalc_calc_tests_CONVERT_Area",
+  "description": "Derived from IronCalc fixture calc_tests/CONVERT.xlsx, sheet 'Area'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Area",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=CONVERT(1,B2,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "uk_acre"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4046.8564224
+      }
+    },
+    {
+      "id": "H2",
+      "formula": "=\"M\"&B2",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "uk_acre"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Muk_acre"
+      }
+    },
+    {
+      "id": "I2",
+      "formula": "=CONVERT(0.05,H2,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "uk_acre"
+        },
+        "H2": {
+          "kind": "formula",
+          "formula": "=\"M\"&B2"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=CONVERT(1,B3,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "us_acre"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4046.8726098742522
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=\"M\"&B3",
+      "setup": {
+        "B3": {
+          "kind": "text",
+          "value": "us_acre"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mus_acre"
+      }
+    },
+    {
+      "id": "I3",
+      "formula": "=CONVERT(0.05,H3,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "us_acre"
+        },
+        "H3": {
+          "kind": "formula",
+          "formula": "=\"M\"&B3"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=CONVERT(1,B4,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "ang2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1e-20
+      }
+    },
+    {
+      "id": "H4",
+      "formula": "=\"M\"&B4",
+      "setup": {
+        "B4": {
+          "kind": "text",
+          "value": "ang2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mang2"
+      }
+    },
+    {
+      "id": "I4",
+      "formula": "=CONVERT(0.05,H4,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "ang2"
+        },
+        "H4": {
+          "kind": "formula",
+          "formula": "=\"M\"&B4"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5e-10
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=CONVERT(1,B5,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "ang^2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1e-20
+      }
+    },
+    {
+      "id": "H5",
+      "formula": "=\"M\"&B5",
+      "setup": {
+        "B5": {
+          "kind": "text",
+          "value": "ang^2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mang^2"
+      }
+    },
+    {
+      "id": "I5",
+      "formula": "=CONVERT(0.05,H5,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "ang^2"
+        },
+        "H5": {
+          "kind": "formula",
+          "formula": "=\"M\"&B5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5e-10
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=CONVERT(1,B6,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "ar"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "H6",
+      "formula": "=\"M\"&B6",
+      "setup": {
+        "B6": {
+          "kind": "text",
+          "value": "ar"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mar"
+      }
+    },
+    {
+      "id": "I6",
+      "formula": "=CONVERT(0.05,H6,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "ar"
+        },
+        "H6": {
+          "kind": "formula",
+          "formula": "=\"M\"&B6"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5000000.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=CONVERT(1,B7,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "ft2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.09290304
+      }
+    },
+    {
+      "id": "H7",
+      "formula": "=\"M\"&B7",
+      "setup": {
+        "B7": {
+          "kind": "text",
+          "value": "ft2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mft2"
+      }
+    },
+    {
+      "id": "I7",
+      "formula": "=CONVERT(0.05,H7,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "ft2"
+        },
+        "H7": {
+          "kind": "formula",
+          "formula": "=\"M\"&B7"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=CONVERT(1,B8,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "ft^2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.09290304
+      }
+    },
+    {
+      "id": "H8",
+      "formula": "=\"M\"&B8",
+      "setup": {
+        "B8": {
+          "kind": "text",
+          "value": "ft^2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mft^2"
+      }
+    },
+    {
+      "id": "I8",
+      "formula": "=CONVERT(0.05,H8,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B8": {
+          "kind": "text",
+          "value": "ft^2"
+        },
+        "H8": {
+          "kind": "formula",
+          "formula": "=\"M\"&B8"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=CONVERT(1,B9,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B9": {
+          "kind": "text",
+          "value": "ha"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10000.0
+      }
+    },
+    {
+      "id": "H9",
+      "formula": "=\"M\"&B9",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "ha"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mha"
+      }
+    },
+    {
+      "id": "I9",
+      "formula": "=CONVERT(0.05,H9,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B9": {
+          "kind": "text",
+          "value": "ha"
+        },
+        "H9": {
+          "kind": "formula",
+          "formula": "=\"M\"&B9"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=CONVERT(1,B10,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B10": {
+          "kind": "text",
+          "value": "in2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.00064516
+      }
+    },
+    {
+      "id": "H10",
+      "formula": "=\"M\"&B10",
+      "setup": {
+        "B10": {
+          "kind": "text",
+          "value": "in2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Min2"
+      }
+    },
+    {
+      "id": "I10",
+      "formula": "=CONVERT(0.05,H10,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B10": {
+          "kind": "text",
+          "value": "in2"
+        },
+        "H10": {
+          "kind": "formula",
+          "formula": "=\"M\"&B10"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=CONVERT(1,B11,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B11": {
+          "kind": "text",
+          "value": "in^2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.00064516
+      }
+    },
+    {
+      "id": "H11",
+      "formula": "=\"M\"&B11",
+      "setup": {
+        "B11": {
+          "kind": "text",
+          "value": "in^2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Min^2"
+      }
+    },
+    {
+      "id": "I11",
+      "formula": "=CONVERT(0.05,H11,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B11": {
+          "kind": "text",
+          "value": "in^2"
+        },
+        "H11": {
+          "kind": "formula",
+          "formula": "=\"M\"&B11"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=CONVERT(1,B12,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B12": {
+          "kind": "text",
+          "value": "ly2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.95054210748189e+31
+      }
+    },
+    {
+      "id": "H12",
+      "formula": "=\"M\"&B12",
+      "setup": {
+        "B12": {
+          "kind": "text",
+          "value": "ly2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mly2"
+      }
+    },
+    {
+      "id": "I12",
+      "formula": "=CONVERT(0.05,H12,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B12": {
+          "kind": "text",
+          "value": "ly2"
+        },
+        "H12": {
+          "kind": "formula",
+          "formula": "=\"M\"&B12"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=CONVERT(1,B13,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B13": {
+          "kind": "text",
+          "value": "ly^2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.95054210748189e+31
+      }
+    },
+    {
+      "id": "H13",
+      "formula": "=\"M\"&B13",
+      "setup": {
+        "B13": {
+          "kind": "text",
+          "value": "ly^2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mly^2"
+      }
+    },
+    {
+      "id": "I13",
+      "formula": "=CONVERT(0.05,H13,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B13": {
+          "kind": "text",
+          "value": "ly^2"
+        },
+        "H13": {
+          "kind": "formula",
+          "formula": "=\"M\"&B13"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=CONVERT(1,B14,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "H14",
+      "formula": "=\"M\"&B14",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mm2"
+      }
+    },
+    {
+      "id": "I14",
+      "formula": "=CONVERT(0.05,H14,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "H14": {
+          "kind": "formula",
+          "formula": "=\"M\"&B14"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50000000000.0
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=CONVERT(1,B15,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B15": {
+          "kind": "text",
+          "value": "m^2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "H15",
+      "formula": "=\"M\"&B15",
+      "setup": {
+        "B15": {
+          "kind": "text",
+          "value": "m^2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mm^2"
+      }
+    },
+    {
+      "id": "I15",
+      "formula": "=CONVERT(0.05,H15,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B15": {
+          "kind": "text",
+          "value": "m^2"
+        },
+        "H15": {
+          "kind": "formula",
+          "formula": "=\"M\"&B15"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50000000000.0
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=CONVERT(1,B16,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B16": {
+          "kind": "text",
+          "value": "Morgen"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2500.0
+      }
+    },
+    {
+      "id": "H16",
+      "formula": "=\"M\"&B16",
+      "setup": {
+        "B16": {
+          "kind": "text",
+          "value": "Morgen"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MMorgen"
+      }
+    },
+    {
+      "id": "I16",
+      "formula": "=CONVERT(0.05,H16,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B16": {
+          "kind": "text",
+          "value": "Morgen"
+        },
+        "H16": {
+          "kind": "formula",
+          "formula": "=\"M\"&B16"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=CONVERT(1,B17,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "mi2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2589988.110336
+      }
+    },
+    {
+      "id": "H17",
+      "formula": "=\"M\"&B17",
+      "setup": {
+        "B17": {
+          "kind": "text",
+          "value": "mi2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mmi2"
+      }
+    },
+    {
+      "id": "I17",
+      "formula": "=CONVERT(0.05,H17,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "mi2"
+        },
+        "H17": {
+          "kind": "formula",
+          "formula": "=\"M\"&B17"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=CONVERT(1,B18,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "mi^2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2589988.110336
+      }
+    },
+    {
+      "id": "H18",
+      "formula": "=\"M\"&B18",
+      "setup": {
+        "B18": {
+          "kind": "text",
+          "value": "mi^2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Mmi^2"
+      }
+    },
+    {
+      "id": "I18",
+      "formula": "=CONVERT(0.05,H18,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B18": {
+          "kind": "text",
+          "value": "mi^2"
+        },
+        "H18": {
+          "kind": "formula",
+          "formula": "=\"M\"&B18"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=CONVERT(1,B19,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Nmi2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3429904.0
+      }
+    },
+    {
+      "id": "H19",
+      "formula": "=\"M\"&B19",
+      "setup": {
+        "B19": {
+          "kind": "text",
+          "value": "Nmi2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MNmi2"
+      }
+    },
+    {
+      "id": "I19",
+      "formula": "=CONVERT(0.05,H19,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B19": {
+          "kind": "text",
+          "value": "Nmi2"
+        },
+        "H19": {
+          "kind": "formula",
+          "formula": "=\"M\"&B19"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=CONVERT(1,B20,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "Nmi^2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3429904.0
+      }
+    },
+    {
+      "id": "H20",
+      "formula": "=\"M\"&B20",
+      "setup": {
+        "B20": {
+          "kind": "text",
+          "value": "Nmi^2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MNmi^2"
+      }
+    },
+    {
+      "id": "I20",
+      "formula": "=CONVERT(0.05,H20,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B20": {
+          "kind": "text",
+          "value": "Nmi^2"
+        },
+        "H20": {
+          "kind": "formula",
+          "formula": "=\"M\"&B20"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C21",
+      "formula": "=CONVERT(1,B21,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B21": {
+          "kind": "text",
+          "value": "Picapt2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.2445216049382715e-07
+      }
+    },
+    {
+      "id": "H21",
+      "formula": "=\"M\"&B21",
+      "setup": {
+        "B21": {
+          "kind": "text",
+          "value": "Picapt2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MPicapt2"
+      }
+    },
+    {
+      "id": "I21",
+      "formula": "=CONVERT(0.05,H21,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B21": {
+          "kind": "text",
+          "value": "Picapt2"
+        },
+        "H21": {
+          "kind": "formula",
+          "formula": "=\"M\"&B21"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C22",
+      "formula": "=CONVERT(1,B22,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B22": {
+          "kind": "text",
+          "value": "Pica2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.2445216049382715e-07
+      }
+    },
+    {
+      "id": "H22",
+      "formula": "=\"M\"&B22",
+      "setup": {
+        "B22": {
+          "kind": "text",
+          "value": "Pica2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MPica2"
+      }
+    },
+    {
+      "id": "I22",
+      "formula": "=CONVERT(0.05,H22,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B22": {
+          "kind": "text",
+          "value": "Pica2"
+        },
+        "H22": {
+          "kind": "formula",
+          "formula": "=\"M\"&B22"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C23",
+      "formula": "=CONVERT(1,B23,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B23": {
+          "kind": "text",
+          "value": "Pica^2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.2445216049382715e-07
+      }
+    },
+    {
+      "id": "H23",
+      "formula": "=\"M\"&B23",
+      "setup": {
+        "B23": {
+          "kind": "text",
+          "value": "Pica^2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MPica^2"
+      }
+    },
+    {
+      "id": "I23",
+      "formula": "=CONVERT(0.05,H23,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B23": {
+          "kind": "text",
+          "value": "Pica^2"
+        },
+        "H23": {
+          "kind": "formula",
+          "formula": "=\"M\"&B23"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=CONVERT(1,B24,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B24": {
+          "kind": "text",
+          "value": "Picapt^2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.2445216049382715e-07
+      }
+    },
+    {
+      "id": "H24",
+      "formula": "=\"M\"&B24",
+      "setup": {
+        "B24": {
+          "kind": "text",
+          "value": "Picapt^2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MPicapt^2"
+      }
+    },
+    {
+      "id": "I24",
+      "formula": "=CONVERT(0.05,H24,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B24": {
+          "kind": "text",
+          "value": "Picapt^2"
+        },
+        "H24": {
+          "kind": "formula",
+          "formula": "=\"M\"&B24"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C25",
+      "formula": "=CONVERT(1,B25,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B25": {
+          "kind": "text",
+          "value": "yd2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.83612736
+      }
+    },
+    {
+      "id": "H25",
+      "formula": "=\"M\"&B25",
+      "setup": {
+        "B25": {
+          "kind": "text",
+          "value": "yd2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Myd2"
+      }
+    },
+    {
+      "id": "I25",
+      "formula": "=CONVERT(0.05,H25,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B25": {
+          "kind": "text",
+          "value": "yd2"
+        },
+        "H25": {
+          "kind": "formula",
+          "formula": "=\"M\"&B25"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C26",
+      "formula": "=CONVERT(1,B26,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B26": {
+          "kind": "text",
+          "value": "yd^2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.83612736
+      }
+    },
+    {
+      "id": "H26",
+      "formula": "=\"M\"&B26",
+      "setup": {
+        "B26": {
+          "kind": "text",
+          "value": "yd^2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Myd^2"
+      }
+    },
+    {
+      "id": "I26",
+      "formula": "=CONVERT(0.05,H26,$B$14)",
+      "setup": {
+        "B14": {
+          "kind": "text",
+          "value": "m2"
+        },
+        "B26": {
+          "kind": "text",
+          "value": "yd^2"
+        },
+        "H26": {
+          "kind": "formula",
+          "formula": "=\"M\"&B26"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

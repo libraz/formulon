@@ -1,0 +1,61 @@
+{
+  "suite": "ironcalc_calc_tests_quotes_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/quotes.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "A4",
+      "formula": "=A1+A2+A3",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 1.6
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.4
+        },
+        "A1": {
+          "kind": "number",
+          "value": 1.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.199999999999999
+      }
+    },
+    {
+      "id": "B4",
+      "formula": "=B1+B2+B3",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 34.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 88.0
+      }
+    }
+  ]
+}

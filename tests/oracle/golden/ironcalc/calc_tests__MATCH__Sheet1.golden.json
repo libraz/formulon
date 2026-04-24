@@ -1,0 +1,1119 @@
+{
+  "suite": "ironcalc_calc_tests_MATCH_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/MATCH.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=MATCH(B2, $A$2:$A$7)",
+      "setup": {
+        "A7": {
+          "kind": "text",
+          "value": "Omega"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Gamma"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Beta"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Alpha"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "alpha"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=MATCH(B2, $A$2:$A$7,0)",
+      "setup": {
+        "A7": {
+          "kind": "text",
+          "value": "Omega"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Gamma"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Beta"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Alpha"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "alpha"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "I2",
+      "formula": "=MATCH(H2,$G$2:$G$7)",
+      "setup": {
+        "G7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "G6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.3
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=MATCH(B3, $A$2:$A$7)",
+      "setup": {
+        "A7": {
+          "kind": "text",
+          "value": "Omega"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Gamma"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Beta"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Alpha"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=MATCH(B3, $A$2:$A$7,0)",
+      "setup": {
+        "A7": {
+          "kind": "text",
+          "value": "Omega"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Gamma"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Beta"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Alpha"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "I3",
+      "formula": "=MATCH(H3,$G$2:$G$7)",
+      "setup": {
+        "G7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "G6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H3": {
+          "kind": "number",
+          "value": 0.8
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=MATCH(B4, $A$2:$A$7)",
+      "setup": {
+        "A7": {
+          "kind": "text",
+          "value": "Omega"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Gamma"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Beta"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Alpha"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "beta"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=MATCH(B4, $A$2:$A$7,0)",
+      "setup": {
+        "A7": {
+          "kind": "text",
+          "value": "Omega"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Gamma"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Beta"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Alpha"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "beta"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "I4",
+      "formula": "=MATCH(H4,$G$2:$G$7)",
+      "setup": {
+        "G7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "G6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H4": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=MATCH(B5, $A$2:$A$7)",
+      "setup": {
+        "A7": {
+          "kind": "text",
+          "value": "Omega"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Gamma"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Beta"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Alpha"
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=MATCH(B5, $A$2:$A$7,0)",
+      "setup": {
+        "A7": {
+          "kind": "text",
+          "value": "Omega"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Gamma"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Beta"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Alpha"
+        },
+        "B5": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "I5",
+      "formula": "=MATCH(H5,$G$2:$G$7)",
+      "setup": {
+        "G7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "G6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H5": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=MATCH(B6, $A$2:$A$7)",
+      "setup": {
+        "A7": {
+          "kind": "text",
+          "value": "Omega"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Gamma"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Beta"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Alpha"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=MATCH(B6, $A$2:$A$7,0)",
+      "setup": {
+        "A7": {
+          "kind": "text",
+          "value": "Omega"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Gamma"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Beta"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Alpha"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "I6",
+      "formula": "=MATCH(H6,$G$2:$G$7)",
+      "setup": {
+        "G7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "G6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "H6": {
+          "kind": "number",
+          "value": 5.7
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=MATCH(B7, $A$2:$A$7)",
+      "setup": {
+        "A7": {
+          "kind": "text",
+          "value": "Omega"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Gamma"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Beta"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Alpha"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "delta"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=MATCH(B7, $A$2:$A$7,0)",
+      "setup": {
+        "A7": {
+          "kind": "text",
+          "value": "Omega"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "Gamma"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Delta"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Beta"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Alpha"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "delta"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "I7",
+      "formula": "=MATCH(H7,$G$2:$G$7)",
+      "setup": {
+        "G7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "G6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=MATCH(B12,$A$12:$A$19,0)",
+      "setup": {
+        "A16": {
+          "kind": "text",
+          "value": ""
+        },
+        "A15": {
+          "kind": "text",
+          "value": "Question?"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "Mulata"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "ata"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "B12": {
+          "kind": "text",
+          "value": "*a*"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=MATCH(B13,$A$12:$A$19,0)",
+      "setup": {
+        "A16": {
+          "kind": "text",
+          "value": ""
+        },
+        "A15": {
+          "kind": "text",
+          "value": "Question?"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "Mulata"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "ata"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "B13": {
+          "kind": "text",
+          "value": "a*"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=MATCH(B14,$A$12:$A$19,0)",
+      "setup": {
+        "A16": {
+          "kind": "text",
+          "value": ""
+        },
+        "A15": {
+          "kind": "text",
+          "value": "Question?"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "Mulata"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "ata"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "B14": {
+          "kind": "text",
+          "value": "??l*"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=MATCH(B15,$A$12:$A$19,0)",
+      "setup": {
+        "A16": {
+          "kind": "text",
+          "value": ""
+        },
+        "A15": {
+          "kind": "text",
+          "value": "Question?"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "Mulata"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "ata"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "B15": {
+          "kind": "text",
+          "value": "*~?"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "C16",
+      "formula": "=MATCH(B16,$A$12:$A$19,0)",
+      "setup": {
+        "A16": {
+          "kind": "text",
+          "value": ""
+        },
+        "A15": {
+          "kind": "text",
+          "value": "Question?"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "Mulata"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "ata"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "B16": {
+          "kind": "text",
+          "value": "*"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C17",
+      "formula": "=MATCH(B17,$A$12:$A$19,0)",
+      "setup": {
+        "A16": {
+          "kind": "text",
+          "value": ""
+        },
+        "A15": {
+          "kind": "text",
+          "value": "Question?"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "Mulata"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "ata"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "B17": {
+          "kind": "text",
+          "value": "Q*"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "C18",
+      "formula": "=MATCH(B18,$A$12:$A$19,0)",
+      "setup": {
+        "A16": {
+          "kind": "text",
+          "value": ""
+        },
+        "A15": {
+          "kind": "text",
+          "value": "Question?"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "Mulata"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "ata"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "B18": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "C19",
+      "formula": "=MATCH(B19,$A$12:$A$19,0)",
+      "setup": {
+        "A16": {
+          "kind": "text",
+          "value": ""
+        },
+        "A15": {
+          "kind": "text",
+          "value": "Question?"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "Mulata"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "ata"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "Patata"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C20",
+      "formula": "=MATCH(B20,$A$12:$A$20,0)",
+      "setup": {
+        "A20": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A16": {
+          "kind": "text",
+          "value": ""
+        },
+        "A15": {
+          "kind": "text",
+          "value": "Question?"
+        },
+        "A14": {
+          "kind": "text",
+          "value": "Mulata"
+        },
+        "A13": {
+          "kind": "text",
+          "value": "ata"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "Patata"
+        },
+        "B20": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "C24",
+      "formula": "=MATCH(B24,A24:A25,0)",
+      "setup": {
+        "A25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B24": {
+          "kind": "text",
+          "value": ""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "G24",
+      "formula": "=MATCH(F24,E24:E25,0)",
+      "setup": {
+        "E25": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E24": {
+          "kind": "bool",
+          "value": true
+        },
+        "F24": {
+          "kind": "text",
+          "value": "TRUE"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C28",
+      "formula": "=MATCH(B28,A28:A29,0)",
+      "setup": {
+        "A29": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B28": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "G28",
+      "formula": "=MATCH(F28,E28:E29,0)",
+      "setup": {
+        "E29": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "E28": {
+          "kind": "text",
+          "value": "FALSE"
+        },
+        "F28": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C33",
+      "formula": "=MATCH(B33,A33:A34,0)",
+      "setup": {
+        "A34": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A33": {
+          "kind": "text",
+          "value": "13"
+        },
+        "B33": {
+          "kind": "number",
+          "value": 13.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "C37",
+      "formula": "=MATCH(B37,A37:A38,0)",
+      "setup": {
+        "A38": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A37": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "B37": {
+          "kind": "text",
+          "value": "13"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

@@ -1,0 +1,363 @@
+{
+  "suite": "ironcalc_docs_FV_Sheet1",
+  "description": "Derived from IronCalc fixture docs/FV.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "F2",
+      "formula": "=FV(A2,B2,,D2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": -1000.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.05
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1276.2815625
+      }
+    },
+    {
+      "id": "H2",
+      "formula": "=_xlfn.FORMULATEXT(F2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": -1000.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.05
+        },
+        "F2": {
+          "kind": "formula",
+          "formula": "=FV(A2,B2,,D2)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=FV(A2,B2,,D2)"
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=FV(A3/12,B3,C3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 36.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 417.8182109025921
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=_xlfn.FORMULATEXT(F3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 36.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F3": {
+          "kind": "formula",
+          "formula": "=FV(A3/12,B3,C3)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=FV(A3/12,B3,C3)"
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=FV(A4/12,B4,C4,,E4)",
+      "setup": {
+        "E4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 36.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 417.8182109025921
+      }
+    },
+    {
+      "id": "H4",
+      "formula": "=_xlfn.FORMULATEXT(F4)",
+      "setup": {
+        "E4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 36.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F4": {
+          "kind": "formula",
+          "formula": "=FV(A4/12,B4,C4,,E4)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=FV(A4/12,B4,C4,,E4)"
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=FV(A5/12,B5,C5,,E5)",
+      "setup": {
+        "E5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 36.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 0.1
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 421.3000293267804
+      }
+    },
+    {
+      "id": "H5",
+      "formula": "=_xlfn.FORMULATEXT(F5)",
+      "setup": {
+        "E5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 36.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F5": {
+          "kind": "formula",
+          "formula": "=FV(A5/12,B5,C5,,E5)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=FV(A5/12,B5,C5,,E5)"
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=FV(0.0042,12,-1000,-10000,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 22796.92466550941
+      }
+    },
+    {
+      "id": "H6",
+      "formula": "=_xlfn.FORMULATEXT(F6)",
+      "setup": {
+        "F6": {
+          "kind": "formula",
+          "formula": "=FV(0.0042,12,-1000,-10000,FALSE)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=FV(0.0042,12,-1000,-10000,FALSE)"
+      }
+    },
+    {
+      "id": "A10",
+      "formula": "=FV(SQRT(-1),2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B10",
+      "formula": "=_xlfn.FORMULATEXT(A10)",
+      "setup": {
+        "A10": {
+          "kind": "formula",
+          "formula": "=FV(SQRT(-1),2,3)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=FV(SQRT(-1),2,3)"
+      }
+    },
+    {
+      "id": "A11",
+      "formula": "=FV(\"str\",2,3,4,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B11",
+      "formula": "=_xlfn.FORMULATEXT(A11)",
+      "setup": {
+        "A11": {
+          "kind": "formula",
+          "formula": "=FV(\"str\",2,3,4,TRUE)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=FV(\"str\",2,3,4,TRUE)"
+      }
+    },
+    {
+      "id": "A12",
+      "formula": "=FV(1,2,3,4,\"false\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "B12",
+      "formula": "=_xlfn.FORMULATEXT(A12)",
+      "setup": {
+        "A12": {
+          "kind": "formula",
+          "formula": "=FV(1,2,3,4,\"false\")"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=FV(1,2,3,4,\"false\")"
+      }
+    },
+    {
+      "id": "A13",
+      "formula": "=FV(-3,0.5,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "B13",
+      "formula": "=_xlfn.FORMULATEXT(A13)",
+      "setup": {
+        "A13": {
+          "kind": "formula",
+          "formula": "=FV(-3,0.5,1)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=FV(-3,0.5,1)"
+      }
+    },
+    {
+      "id": "A14",
+      "formula": "=FV(-1,-1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "B14",
+      "formula": "=_xlfn.FORMULATEXT(A14)",
+      "setup": {
+        "A14": {
+          "kind": "formula",
+          "formula": "=FV(-1,-1,1)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=FV(-1,-1,1)"
+      }
+    }
+  ]
+}

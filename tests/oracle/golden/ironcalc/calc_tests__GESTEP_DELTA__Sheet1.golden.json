@@ -1,0 +1,958 @@
+{
+  "suite": "ironcalc_calc_tests_GESTEP_DELTA_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/GESTEP_DELTA.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "C2",
+      "formula": "=GESTEP(A2,B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D2",
+      "formula": "=DELTA(A2,B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=GESTEP(A2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "F2",
+      "formula": "=DELTA(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C3",
+      "formula": "=GESTEP(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=DELTA(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=GESTEP(A3)",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "F3",
+      "formula": "=DELTA(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C4",
+      "formula": "=GESTEP(A4,B4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=DELTA(A4,B4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=GESTEP(A4)",
+      "setup": {
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "F4",
+      "formula": "=DELTA(A5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "C5",
+      "formula": "=GESTEP(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=DELTA(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=GESTEP(A5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=DELTA(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C6",
+      "formula": "=GESTEP(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=DELTA(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=GESTEP(A6)",
+      "setup": {
+        "A6": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=DELTA(A7)",
+      "setup": {
+        "A7": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "C7",
+      "formula": "=GESTEP(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A7": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=DELTA(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A7": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=GESTEP(A7)",
+      "setup": {
+        "A7": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "F7",
+      "formula": "=DELTA(A8)",
+      "setup": {
+        "A8": {
+          "kind": "text",
+          "value": "2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C8",
+      "formula": "=GESTEP(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A8": {
+          "kind": "text",
+          "value": "2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=DELTA(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A8": {
+          "kind": "text",
+          "value": "2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=GESTEP(A8)",
+      "setup": {
+        "A8": {
+          "kind": "text",
+          "value": "2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "F8",
+      "formula": "=DELTA(A9)",
+      "setup": {
+        "A9": {
+          "kind": "text",
+          "value": "2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C9",
+      "formula": "=GESTEP(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=DELTA(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A9": {
+          "kind": "text",
+          "value": "2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=GESTEP(A9)",
+      "setup": {
+        "A9": {
+          "kind": "text",
+          "value": "2"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "F9",
+      "formula": "=DELTA(A10)",
+      "setup": {
+        "A10": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "A10",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=GESTEP(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=DELTA(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A10": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=GESTEP(A10)",
+      "setup": {
+        "A10": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "F10",
+      "formula": "=DELTA(A11)",
+      "setup": {
+        "A11": {
+          "kind": "formula",
+          "formula": "=3+0.0000000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "A11",
+      "formula": "=3+0.0000000000000001",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "C11",
+      "formula": "=GESTEP(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=3+0.0000000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=DELTA(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=3+0.0000000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=GESTEP(A11)",
+      "setup": {
+        "A11": {
+          "kind": "formula",
+          "formula": "=3+0.0000000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "F11",
+      "formula": "=DELTA(A12)",
+      "setup": {
+        "A12": {
+          "kind": "formula",
+          "formula": "=3+0.000000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G11",
+      "formula": "=GESTEP(B11,A11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=3+0.0000000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "H11",
+      "formula": "=DELTA(B11,A11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A11": {
+          "kind": "formula",
+          "formula": "=3+0.0000000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "A12",
+      "formula": "=3+0.000000000000001",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.000000000000001
+      }
+    },
+    {
+      "id": "C12",
+      "formula": "=GESTEP(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=3+0.000000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=DELTA(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=3+0.000000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=GESTEP(A12)",
+      "setup": {
+        "A12": {
+          "kind": "formula",
+          "formula": "=3+0.000000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "F12",
+      "formula": "=DELTA(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "G12",
+      "formula": "=GESTEP(B12,A12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=3+0.000000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "H12",
+      "formula": "=DELTA(B12,A12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A12": {
+          "kind": "formula",
+          "formula": "=3+0.000000000000001"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C13",
+      "formula": "=GESTEP(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": -7.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=DELTA(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": -7.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=GESTEP(A13)",
+      "setup": {
+        "A13": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "F13",
+      "formula": "=DELTA(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": -7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C14",
+      "formula": "=GESTEP(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": -7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=DELTA(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": -7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=GESTEP(A14)",
+      "setup": {
+        "A14": {
+          "kind": "number",
+          "value": -7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "F14",
+      "formula": "=DELTA(A15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "C15",
+      "formula": "=GESTEP(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=DELTA(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": -3.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=GESTEP(A15)",
+      "setup": {
+        "A15": {
+          "kind": "number",
+          "value": -3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "F15",
+      "formula": "=DELTA(A16)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    }
+  ]
+}

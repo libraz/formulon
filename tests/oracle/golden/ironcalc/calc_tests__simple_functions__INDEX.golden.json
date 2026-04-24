@@ -1,0 +1,289 @@
+{
+  "suite": "ironcalc_calc_tests_simple_functions_INDEX",
+  "description": "Derived from IronCalc fixture calc_tests/simple_functions.xlsx, sheet 'INDEX'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "INDEX",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "A3",
+      "formula": "=INDEX(A1:D1,3)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "D"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "C"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "B"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "A"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "C"
+      }
+    },
+    {
+      "id": "B3",
+      "formula": "=INDEX(A1:D2,2,2)",
+      "setup": {
+        "D2": {
+          "kind": "number",
+          "value": 44.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 33.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "D"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "C"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "B"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "A"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 22.0
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=INDEX(A1:A3,1)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "D"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "C"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "B"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "A"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=INDEX(A1:D1,3)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "A"
+      }
+    },
+    {
+      "id": "F6",
+      "formula": "=INDEX(A1:A3,2)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "D"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "C"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "B"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "A"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=INDEX(A1:D1,3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=INDEX(A1:A3,1.5)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "D"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "C"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "B"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "A"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=INDEX(A1:D1,3)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "A"
+      }
+    },
+    {
+      "id": "H6",
+      "formula": "=INDEX(A1:A3,0.4)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "D"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "C"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "B"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "A"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=INDEX(A1:D1,3)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "I6",
+      "formula": "=INDEX(A1:A3,-2)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "D"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "C"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "B"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "A"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=INDEX(A1:D1,3)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "J6",
+      "formula": "=INDEX(A1:A3,100)",
+      "setup": {
+        "D1": {
+          "kind": "text",
+          "value": "D"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "C"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "B"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "A"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=INDEX(A1:D1,3)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    }
+  ]
+}

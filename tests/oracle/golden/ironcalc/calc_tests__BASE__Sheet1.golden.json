@@ -1,0 +1,1231 @@
+{
+  "suite": "ironcalc_calc_tests_BASE_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/BASE.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "D2",
+      "formula": "=_xlfn.BASE(A2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 16.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "16"
+      }
+    },
+    {
+      "id": "E2",
+      "formula": "=_xlfn.BASE(A2,B2,C2)",
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 16.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0016"
+      }
+    },
+    {
+      "id": "H2",
+      "formula": "=_xlfn.DECIMAL(D2,B2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "D2": {
+          "kind": "formula",
+          "formula": "=_xlfn.BASE(A2,B2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.0
+      }
+    },
+    {
+      "id": "D3",
+      "formula": "=_xlfn.BASE(A3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 16.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "20"
+      }
+    },
+    {
+      "id": "E3",
+      "formula": "=_xlfn.BASE(A3,B3,C3)",
+      "setup": {
+        "C3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 16.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0020"
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=_xlfn.DECIMAL(D3,B3)",
+      "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "D3": {
+          "kind": "formula",
+          "formula": "=_xlfn.BASE(A3,B3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.0
+      }
+    },
+    {
+      "id": "D4",
+      "formula": "=_xlfn.BASE(A4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 16.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "100"
+      }
+    },
+    {
+      "id": "E4",
+      "formula": "=_xlfn.BASE(A4,B4,C4)",
+      "setup": {
+        "C4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 16.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "00000100"
+      }
+    },
+    {
+      "id": "H4",
+      "formula": "=_xlfn.DECIMAL(D4,B4)",
+      "setup": {
+        "B4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "D4": {
+          "kind": "formula",
+          "formula": "=_xlfn.BASE(A4,B4)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.0
+      }
+    },
+    {
+      "id": "D5",
+      "formula": "=_xlfn.BASE(A5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 16.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "22"
+      }
+    },
+    {
+      "id": "E5",
+      "formula": "=_xlfn.BASE(A5,B5,C5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 16.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "00000000000000000022"
+      }
+    },
+    {
+      "id": "F5",
+      "formula": "=ISNUMBER(E5)",
+      "setup": {
+        "C5": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "E5": {
+          "kind": "formula",
+          "formula": "=_xlfn.BASE(A5,B5,C5)"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "H5",
+      "formula": "=_xlfn.DECIMAL(D5,B5)",
+      "setup": {
+        "B5": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "D5": {
+          "kind": "formula",
+          "formula": "=_xlfn.BASE(A5,B5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.0
+      }
+    },
+    {
+      "id": "D6",
+      "formula": "=_xlfn.BASE(A6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "A"
+      }
+    },
+    {
+      "id": "E6",
+      "formula": "=_xlfn.BASE(A6,B6,C6)",
+      "setup": {
+        "C6": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0000000A"
+      }
+    },
+    {
+      "id": "H6",
+      "formula": "=_xlfn.DECIMAL(D6,B6)",
+      "setup": {
+        "B6": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D6": {
+          "kind": "formula",
+          "formula": "=_xlfn.BASE(A6,B6)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "D7",
+      "formula": "=_xlfn.BASE(A7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 12345678.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "BC614E"
+      }
+    },
+    {
+      "id": "E7",
+      "formula": "=_xlfn.BASE(A7,B7,C7)",
+      "setup": {
+        "C7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 12345678.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "BC614E"
+      }
+    },
+    {
+      "id": "H7",
+      "formula": "=_xlfn.DECIMAL(D7,B7)",
+      "setup": {
+        "B7": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 12345678.0
+        },
+        "D7": {
+          "kind": "formula",
+          "formula": "=_xlfn.BASE(A7,B7)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12345678.0
+      }
+    },
+    {
+      "id": "D8",
+      "formula": "=_xlfn.BASE(A8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 12.567
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1100"
+      }
+    },
+    {
+      "id": "E8",
+      "formula": "=_xlfn.BASE(A8,B8,C8)",
+      "setup": {
+        "C8": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 12.567
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0001100"
+      }
+    },
+    {
+      "id": "H8",
+      "formula": "=_xlfn.DECIMAL(D8,B8)",
+      "setup": {
+        "B8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 12.567
+        },
+        "D8": {
+          "kind": "formula",
+          "formula": "=_xlfn.BASE(A8,B8)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "D9",
+      "formula": "=_xlfn.BASE(A9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": -123456.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E9",
+      "formula": "=_xlfn.BASE(A9,B9,C9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": -123456.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H9",
+      "formula": "=_xlfn.DECIMAL(D9,B9)",
+      "setup": {
+        "B9": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": -123456.0
+        },
+        "D9": {
+          "kind": "formula",
+          "formula": "=_xlfn.BASE(A9,B9)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D10",
+      "formula": "=_xlfn.BASE(A10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E10",
+      "formula": "=_xlfn.BASE(A10,B10,C10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H10",
+      "formula": "=_xlfn.DECIMAL(D10,B10)",
+      "setup": {
+        "B10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "D10": {
+          "kind": "formula",
+          "formula": "=_xlfn.BASE(A10,B10)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D11",
+      "formula": "=_xlfn.BASE(A11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 123.45678
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7B"
+      }
+    },
+    {
+      "id": "E11",
+      "formula": "=_xlfn.BASE(A11,B11,C11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 123.45678
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7B"
+      }
+    },
+    {
+      "id": "H11",
+      "formula": "=_xlfn.DECIMAL(D11,B11)",
+      "setup": {
+        "B11": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": 123.45678
+        },
+        "D11": {
+          "kind": "formula",
+          "formula": "=_xlfn.BASE(A11,B11)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 123.0
+      }
+    },
+    {
+      "id": "D12",
+      "formula": "=_xlfn.BASE(A12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 1234.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "10011010010"
+      }
+    },
+    {
+      "id": "E12",
+      "formula": "=_xlfn.BASE(A12,B12,C12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 1234.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "10011010010"
+      }
+    },
+    {
+      "id": "H12",
+      "formula": "=_xlfn.DECIMAL(D12,B12)",
+      "setup": {
+        "B12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": 1234.0
+        },
+        "D12": {
+          "kind": "formula",
+          "formula": "=_xlfn.BASE(A12,B12)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1234.0
+      }
+    },
+    {
+      "id": "D13",
+      "formula": "=_xlfn.BASE(A13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 123.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E13",
+      "formula": "=_xlfn.BASE(A13,B13,C13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 123.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H13",
+      "formula": "=_xlfn.DECIMAL(D13,B13)",
+      "setup": {
+        "B13": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "D13": {
+          "kind": "formula",
+          "formula": "=_xlfn.BASE(A13,B13)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D14",
+      "formula": "=_xlfn.BASE(A14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 10.9
+        },
+        "A14": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "20"
+      }
+    },
+    {
+      "id": "E14",
+      "formula": "=_xlfn.BASE(A14,B14,C14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 10.9
+        },
+        "A14": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "20"
+      }
+    },
+    {
+      "id": "H14",
+      "formula": "=_xlfn.DECIMAL(D14,B14)",
+      "setup": {
+        "B14": {
+          "kind": "number",
+          "value": 10.9
+        },
+        "A14": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D14": {
+          "kind": "formula",
+          "formula": "=_xlfn.BASE(A14,B14)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "D15",
+      "formula": "=_xlfn.BASE(A15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "19"
+      }
+    },
+    {
+      "id": "E15",
+      "formula": "=_xlfn.BASE(A15,B15,C15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "19"
+      }
+    },
+    {
+      "id": "H15",
+      "formula": "=_xlfn.DECIMAL(D15,B15)",
+      "setup": {
+        "B15": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D15": {
+          "kind": "formula",
+          "formula": "=_xlfn.BASE(A15,B15)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "D16",
+      "formula": "=_xlfn.BASE(A16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "212"
+      }
+    },
+    {
+      "id": "E16",
+      "formula": "=_xlfn.BASE(A16,B16,C16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 23.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "212"
+      }
+    },
+    {
+      "id": "H16",
+      "formula": "=_xlfn.DECIMAL(D16,B16)",
+      "setup": {
+        "B16": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "D16": {
+          "kind": "formula",
+          "formula": "=_xlfn.BASE(A16,B16)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 23.0
+      }
+    },
+    {
+      "id": "D17",
+      "formula": "=_xlfn.BASE(A17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 123456789.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "277266780"
+      }
+    },
+    {
+      "id": "E17",
+      "formula": "=_xlfn.BASE(A17,B17,C17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 123456789.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "277266780"
+      }
+    },
+    {
+      "id": "H17",
+      "formula": "=_xlfn.DECIMAL(D17,B17)",
+      "setup": {
+        "B17": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": 123456789.0
+        },
+        "D17": {
+          "kind": "formula",
+          "formula": "=_xlfn.BASE(A17,B17)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 123456789.0
+      }
+    },
+    {
+      "id": "D18",
+      "formula": "=_xlfn.BASE(A18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 123456789.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E18",
+      "formula": "=_xlfn.BASE(A18,B18,C18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 123456789.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H18",
+      "formula": "=_xlfn.DECIMAL(D18,B18)",
+      "setup": {
+        "B18": {
+          "kind": "number",
+          "value": 45.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": 123456789.0
+        },
+        "D18": {
+          "kind": "formula",
+          "formula": "=_xlfn.BASE(A18,B18)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D19",
+      "formula": "=_xlfn.BASE(A19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 36.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 123456789.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "21I3V9"
+      }
+    },
+    {
+      "id": "E19",
+      "formula": "=_xlfn.BASE(A19,B19,C19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 36.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 123456789.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "21I3V9"
+      }
+    },
+    {
+      "id": "H19",
+      "formula": "=_xlfn.DECIMAL(D19,B19)",
+      "setup": {
+        "B19": {
+          "kind": "number",
+          "value": 36.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": 123456789.0
+        },
+        "D19": {
+          "kind": "formula",
+          "formula": "=_xlfn.BASE(A19,B19)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 123456789.0
+      }
+    },
+    {
+      "id": "D20",
+      "formula": "=_xlfn.BASE(A20,B20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 123456789.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E20",
+      "formula": "=_xlfn.BASE(A20,B20,C20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 123456789.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H20",
+      "formula": "=_xlfn.DECIMAL(D20,B20)",
+      "setup": {
+        "B20": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": 123456789.0
+        },
+        "D20": {
+          "kind": "formula",
+          "formula": "=_xlfn.BASE(A20,B20)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "D21",
+      "formula": "=_xlfn.BASE(A21,B21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "E21",
+      "formula": "=_xlfn.BASE(A21,B21,C21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "H21",
+      "formula": "=_xlfn.DECIMAL(D21,B21)",
+      "setup": {
+        "B21": {
+          "kind": "number",
+          "value": 37.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "D21": {
+          "kind": "formula",
+          "formula": "=_xlfn.BASE(A21,B21)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    }
+  ]
+}

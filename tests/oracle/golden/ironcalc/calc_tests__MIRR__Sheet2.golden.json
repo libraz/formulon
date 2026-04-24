@@ -1,0 +1,7070 @@
+{
+  "suite": "ironcalc_calc_tests_MIRR_Sheet2",
+  "description": "Derived from IronCalc fixture calc_tests/MIRR.xlsx, sheet 'Sheet2'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet2",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "N2",
+      "formula": "=MIRR(A2:F2,J2,K2)",
+      "setup": {
+        "K2": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J2": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.13219508745502107
+      }
+    },
+    {
+      "id": "O2",
+      "formula": "=MIRR(A2:F2,L2,M2)",
+      "setup": {
+        "M2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L2": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9776301558892315
+      }
+    },
+    {
+      "id": "P2",
+      "formula": "=MIRR(A2:E2,J2,M2)",
+      "setup": {
+        "M2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J2": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.778279410038923
+      }
+    },
+    {
+      "id": "N3",
+      "formula": "=MIRR(A3:F3,J3,K3)",
+      "setup": {
+        "K3": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J3": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 125.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 230.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": -1000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.04606215115031298
+      }
+    },
+    {
+      "id": "O3",
+      "formula": "=MIRR(A3:F3,L3,M3)",
+      "setup": {
+        "M3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L3": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 125.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 230.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": -1000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9151642637250201
+      }
+    },
+    {
+      "id": "P3",
+      "formula": "=MIRR(A3:E3,J3,M3)",
+      "setup": {
+        "M3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J3": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 125.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 230.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": -1000.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7117292615354576
+      }
+    },
+    {
+      "id": "N4",
+      "formula": "=MIRR(A4:F4,J4,K4)",
+      "setup": {
+        "K4": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J4": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": -55.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.02858445892806538
+      }
+    },
+    {
+      "id": "O4",
+      "formula": "=MIRR(A4:F4,L4,M4)",
+      "setup": {
+        "M4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L4": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": -55.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7897473862982749
+      }
+    },
+    {
+      "id": "P4",
+      "formula": "=MIRR(A4:E4,J4,M4)",
+      "setup": {
+        "M4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J4": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": -55.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5709795415888099
+      }
+    },
+    {
+      "id": "N5",
+      "formula": "=MIRR(A5:F5,J5,K5)",
+      "setup": {
+        "K5": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J5": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E5": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.021982498845402487
+      }
+    },
+    {
+      "id": "O5",
+      "formula": "=MIRR(A5:F5,L5,M5)",
+      "setup": {
+        "M5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E5": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9343665936426333
+      }
+    },
+    {
+      "id": "P5",
+      "formula": "=MIRR(A5:E5,J5,M5)",
+      "setup": {
+        "M5": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J5": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E5": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6093941323398411
+      }
+    },
+    {
+      "id": "N6",
+      "formula": "=MIRR(A6:F6,J6,K6)",
+      "setup": {
+        "K6": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J6": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E6": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "D6": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": -20.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.11582906545850924
+      }
+    },
+    {
+      "id": "O6",
+      "formula": "=MIRR(A6:F6,L6,M6)",
+      "setup": {
+        "M6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L6": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E6": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "D6": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": -20.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.5400953395175168
+      }
+    },
+    {
+      "id": "P6",
+      "formula": "=MIRR(A6:E6,J6,M6)",
+      "setup": {
+        "M6": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J6": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E6": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "D6": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": -20.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.674528883704963
+      }
+    },
+    {
+      "id": "N7",
+      "formula": "=MIRR(A7:F7,J7,K7)",
+      "setup": {
+        "K7": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J7": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "O7",
+      "formula": "=MIRR(A7:F7,L7,M7)",
+      "setup": {
+        "M7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L7": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "P7",
+      "formula": "=MIRR(A7:E7,J7,M7)",
+      "setup": {
+        "M7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J7": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "N8",
+      "formula": "=MIRR(A8:F8,J8,K8)",
+      "setup": {
+        "K8": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J8": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "C8": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.3519259301592139
+      }
+    },
+    {
+      "id": "O8",
+      "formula": "=MIRR(A8:F8,L8,M8)",
+      "setup": {
+        "M8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L8": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "C8": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.14643604306916258
+      }
+    },
+    {
+      "id": "P8",
+      "formula": "=MIRR(A8:E8,J8,M8)",
+      "setup": {
+        "M8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J8": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "C8": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "B8": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": -70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.14643604306916258
+      }
+    },
+    {
+      "id": "N9",
+      "formula": "=MIRR(A9:F9,J9,K9)",
+      "setup": {
+        "K9": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J9": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E9": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.17413231959305042
+      }
+    },
+    {
+      "id": "O9",
+      "formula": "=MIRR(A9:F9,L9,M9)",
+      "setup": {
+        "M9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L9": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "F9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E9": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.1172878868006961
+      }
+    },
+    {
+      "id": "P9",
+      "formula": "=MIRR(A9:E9,J9,M9)",
+      "setup": {
+        "M9": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J9": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E9": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B9": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9377813785625346
+      }
+    },
+    {
+      "id": "N10",
+      "formula": "=MIRR(A10:F10,J10,K10)",
+      "setup": {
+        "K10": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J10": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.17940802529681077
+      }
+    },
+    {
+      "id": "O10",
+      "formula": "=MIRR(A10:F10,L10,M10)",
+      "setup": {
+        "M10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4333461192642658
+      }
+    },
+    {
+      "id": "P10",
+      "formula": "=MIRR(A10:E10,J10,M10)",
+      "setup": {
+        "M10": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J10": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B10": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.18920711500272103
+      }
+    },
+    {
+      "id": "N11",
+      "formula": "=MIRR(A11:F11,J11,K11)",
+      "setup": {
+        "K11": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J11": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "D11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.2437848504031055
+      }
+    },
+    {
+      "id": "O11",
+      "formula": "=MIRR(A11:F11,L11,M11)",
+      "setup": {
+        "M11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L11": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "D11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.1725464585122367
+      }
+    },
+    {
+      "id": "P11",
+      "formula": "=MIRR(A11:E11,J11,M11)",
+      "setup": {
+        "M11": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J11": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "D11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B11": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A11": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "N12",
+      "formula": "=MIRR(A12:F12,J12,K12)",
+      "setup": {
+        "K12": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J12": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F12": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "E12": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "D12": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "C12": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.273432023933609
+      }
+    },
+    {
+      "id": "O12",
+      "formula": "=MIRR(A12:F12,L12,M12)",
+      "setup": {
+        "M12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L12": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F12": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "E12": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "D12": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "C12": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.2243318310690081
+      }
+    },
+    {
+      "id": "P12",
+      "formula": "=MIRR(A12:E12,J12,M12)",
+      "setup": {
+        "M12": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J12": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E12": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "D12": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "C12": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B12": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A12": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0597671439071177
+      }
+    },
+    {
+      "id": "N13",
+      "formula": "=MIRR(A13:F13,J13,K13)",
+      "setup": {
+        "K13": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J13": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F13": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E13": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D13": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C13": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6492489039501921
+      }
+    },
+    {
+      "id": "O13",
+      "formula": "=MIRR(A13:F13,L13,M13)",
+      "setup": {
+        "M13": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L13": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "F13": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E13": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D13": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C13": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.3499776153382177
+      }
+    },
+    {
+      "id": "P13",
+      "formula": "=MIRR(A13:E13,J13,M13)",
+      "setup": {
+        "M13": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J13": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E13": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D13": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C13": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B13": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A13": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.4431640283642833
+      }
+    },
+    {
+      "id": "N14",
+      "formula": "=MIRR(A14:F14,J14,K14)",
+      "setup": {
+        "K14": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J14": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F14": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E14": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D14": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C14": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "O14",
+      "formula": "=MIRR(A14:F14,L14,M14)",
+      "setup": {
+        "M14": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L14": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "F14": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E14": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D14": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C14": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "P14",
+      "formula": "=MIRR(A14:E14,J14,M14)",
+      "setup": {
+        "M14": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J14": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E14": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D14": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C14": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B14": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A14": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "N15",
+      "formula": "=MIRR(A15:F15,J15,K15)",
+      "setup": {
+        "K15": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J15": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F15": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "E15": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "D15": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "C15": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "O15",
+      "formula": "=MIRR(A15:F15,L15,M15)",
+      "setup": {
+        "M15": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L15": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F15": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "E15": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "D15": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "C15": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "P15",
+      "formula": "=MIRR(A15:E15,J15,M15)",
+      "setup": {
+        "M15": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J15": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E15": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "D15": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "C15": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "B15": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "A15": {
+          "kind": "number",
+          "value": -1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "N16",
+      "formula": "=MIRR(A16:F16,J16,K16)",
+      "setup": {
+        "K16": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J16": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F16": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "E16": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "D16": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "C16": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3933280241536672
+      }
+    },
+    {
+      "id": "O16",
+      "formula": "=MIRR(A16:F16,L16,M16)",
+      "setup": {
+        "M16": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L16": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F16": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "E16": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "D16": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "C16": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.5761147793690107
+      }
+    },
+    {
+      "id": "P16",
+      "formula": "=MIRR(A16:E16,J16,M16)",
+      "setup": {
+        "M16": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J16": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E16": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "D16": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "C16": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "B16": {
+          "kind": "number",
+          "value": -5.0
+        },
+        "A16": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.7812339147124923
+      }
+    },
+    {
+      "id": "N17",
+      "formula": "=MIRR(A17:F17,J17,K17)",
+      "setup": {
+        "K17": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J17": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": -400.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.5492650172187122
+      }
+    },
+    {
+      "id": "O17",
+      "formula": "=MIRR(A17:F17,L17,M17)",
+      "setup": {
+        "M17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L17": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": -400.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.21269125423766633
+      }
+    },
+    {
+      "id": "P17",
+      "formula": "=MIRR(A17:E17,J17,M17)",
+      "setup": {
+        "M17": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J17": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B17": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A17": {
+          "kind": "number",
+          "value": -400.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.4376586748096509
+      }
+    },
+    {
+      "id": "N18",
+      "formula": "=MIRR(A18:F18,J18,K18)",
+      "setup": {
+        "K18": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J18": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C18": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": -20.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": -30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.20257984031070753
+      }
+    },
+    {
+      "id": "O18",
+      "formula": "=MIRR(A18:F18,L18,M18)",
+      "setup": {
+        "M18": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L18": {
+          "kind": "number",
+          "value": -0.999999
+        },
+        "F18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C18": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": -20.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": -30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.994211280608657
+      }
+    },
+    {
+      "id": "P18",
+      "formula": "=MIRR(A18:E18,J18,M18)",
+      "setup": {
+        "M18": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J18": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D18": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C18": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "B18": {
+          "kind": "number",
+          "value": -20.0
+        },
+        "A18": {
+          "kind": "number",
+          "value": -30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.2284773763370027
+      }
+    },
+    {
+      "id": "N19",
+      "formula": "=MIRR(A19:F19,J19,K19)",
+      "setup": {
+        "K19": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J19": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F19": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E19": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D19": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C19": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": -20.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": -30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.20257984031070753
+      }
+    },
+    {
+      "id": "P19",
+      "formula": "=MIRR(A19:E19,J19,M19)",
+      "setup": {
+        "M19": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J19": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E19": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D19": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C19": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "B19": {
+          "kind": "number",
+          "value": -20.0
+        },
+        "A19": {
+          "kind": "number",
+          "value": -30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.2284773763370027
+      }
+    },
+    {
+      "id": "N20",
+      "formula": "=MIRR(A20:F20,J20,K20)",
+      "setup": {
+        "K20": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J20": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E20": {
+          "kind": "bool",
+          "value": false
+        },
+        "D20": {
+          "kind": "bool",
+          "value": true
+        },
+        "C20": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "B20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.2583801512904337
+      }
+    },
+    {
+      "id": "O20",
+      "formula": "=MIRR(A20:F20,L20,M20)",
+      "setup": {
+        "M20": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L20": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "F20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "E20": {
+          "kind": "bool",
+          "value": false
+        },
+        "D20": {
+          "kind": "bool",
+          "value": true
+        },
+        "C20": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "B20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "P20",
+      "formula": "=MIRR(A20:E20,J20,M20)",
+      "setup": {
+        "M20": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J20": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E20": {
+          "kind": "bool",
+          "value": false
+        },
+        "D20": {
+          "kind": "bool",
+          "value": true
+        },
+        "C20": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "B20": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A20": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.75
+      }
+    },
+    {
+      "id": "N21",
+      "formula": "=MIRR(A21:F21,J21,K21)",
+      "setup": {
+        "K21": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J21": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F21": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "C21": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B21": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0033222835420891883
+      }
+    },
+    {
+      "id": "O21",
+      "formula": "=MIRR(A21:F21,L21,M21)",
+      "setup": {
+        "M21": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L21": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F21": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "C21": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B21": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4962871135284912
+      }
+    },
+    {
+      "id": "P21",
+      "formula": "=MIRR(A21:E21,J21,M21)",
+      "setup": {
+        "M21": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J21": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "C21": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B21": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A21": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "N22",
+      "formula": "=MIRR(A22:F22,J22,K22)",
+      "setup": {
+        "K22": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J22": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F22": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E22": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D22": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C22": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B22": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.05393879786291822
+      }
+    },
+    {
+      "id": "O22",
+      "formula": "=MIRR(A22:F22,L22,M22)",
+      "setup": {
+        "M22": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L22": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F22": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E22": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D22": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C22": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B22": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9381682107867311
+      }
+    },
+    {
+      "id": "P22",
+      "formula": "=MIRR(A22:E22,J22,M22)",
+      "setup": {
+        "M22": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J22": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E22": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D22": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "C22": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B22": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A22": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7320508075688774
+      }
+    },
+    {
+      "id": "N23",
+      "formula": "=MIRR(A23:F23,J23,K23)",
+      "setup": {
+        "K23": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J23": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F23": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E23": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D23": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C23": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B23": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": -130.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.08332146183758815
+      }
+    },
+    {
+      "id": "O23",
+      "formula": "=MIRR(A23:F23,L23,M23)",
+      "setup": {
+        "M23": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L23": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F23": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E23": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D23": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C23": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B23": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": -130.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9129348367652235
+      }
+    },
+    {
+      "id": "P23",
+      "formula": "=MIRR(A23:E23,J23,M23)",
+      "setup": {
+        "M23": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J23": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E23": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D23": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C23": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B23": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A23": {
+          "kind": "number",
+          "value": -130.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7055416645200134
+      }
+    },
+    {
+      "id": "N24",
+      "formula": "=MIRR(A24:F24,J24,K24)",
+      "setup": {
+        "K24": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J24": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "D24": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "C24": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B24": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0033222835420891883
+      }
+    },
+    {
+      "id": "O24",
+      "formula": "=MIRR(A24:F24,L24,M24)",
+      "setup": {
+        "M24": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L24": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "D24": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "C24": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B24": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4962871135284912
+      }
+    },
+    {
+      "id": "P24",
+      "formula": "=MIRR(A24:E24,J24,M24)",
+      "setup": {
+        "M24": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J24": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "D24": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "C24": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B24": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A24": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4962871135284912
+      }
+    },
+    {
+      "id": "N25",
+      "formula": "=MIRR(A25:F25,J25,K25)",
+      "setup": {
+        "K25": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J25": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F25": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "E25": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D25": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "C25": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.07779651048906544
+      }
+    },
+    {
+      "id": "O25",
+      "formula": "=MIRR(A25:F25,L25,M25)",
+      "setup": {
+        "M25": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L25": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "F25": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "E25": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D25": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "C25": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9763208994244814
+      }
+    },
+    {
+      "id": "P25",
+      "formula": "=MIRR(A25:E25,J25,M25)",
+      "setup": {
+        "M25": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J25": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E25": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "D25": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "C25": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B25": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A25": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7804981035736802
+      }
+    },
+    {
+      "id": "N26",
+      "formula": "=MIRR(A26:F26,J26,K26)",
+      "setup": {
+        "K26": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J26": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F26": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E26": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D26": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C26": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B26": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.14168427034012754
+      }
+    },
+    {
+      "id": "O26",
+      "formula": "=MIRR(A26:F26,L26,M26)",
+      "setup": {
+        "M26": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L26": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F26": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E26": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D26": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C26": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B26": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0159921964584284
+      }
+    },
+    {
+      "id": "P26",
+      "formula": "=MIRR(A26:E26,J26,M26)",
+      "setup": {
+        "M26": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J26": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E26": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D26": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C26": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B26": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A26": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8211602868378718
+      }
+    },
+    {
+      "id": "N27",
+      "formula": "=MIRR(A27:F27,J27,K27)",
+      "setup": {
+        "K27": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J27": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F27": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E27": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D27": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C27": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B27": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": -125.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0918526059107454
+      }
+    },
+    {
+      "id": "O27",
+      "formula": "=MIRR(A27:F27,L27,M27)",
+      "setup": {
+        "M27": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L27": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F27": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E27": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D27": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C27": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B27": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": -125.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9279991766402254
+      }
+    },
+    {
+      "id": "P27",
+      "formula": "=MIRR(A27:E27,J27,M27)",
+      "setup": {
+        "M27": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J27": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E27": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D27": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C27": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B27": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A27": {
+          "kind": "number",
+          "value": -125.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7223470599267341
+      }
+    },
+    {
+      "id": "N28",
+      "formula": "=MIRR(A28:F28,J28,K28)",
+      "setup": {
+        "K28": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J28": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F28": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E28": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D28": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C28": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B28": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": -120.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.10080341539965998
+      }
+    },
+    {
+      "id": "O28",
+      "formula": "=MIRR(A28:F28,L28,M28)",
+      "setup": {
+        "M28": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L28": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F28": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E28": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D28": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C28": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B28": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": -120.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9438045639530086
+      }
+    },
+    {
+      "id": "P28",
+      "formula": "=MIRR(A28:E28,J28,M28)",
+      "setup": {
+        "M28": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J28": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E28": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D28": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C28": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B28": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A28": {
+          "kind": "number",
+          "value": -120.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7400144695080819
+      }
+    },
+    {
+      "id": "N29",
+      "formula": "=MIRR(A29:F29,J29,K29)",
+      "setup": {
+        "K29": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J29": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F29": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E29": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D29": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C29": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B29": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": -115.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.11021336073152677
+      }
+    },
+    {
+      "id": "O29",
+      "formula": "=MIRR(A29:F29,L29,M29)",
+      "setup": {
+        "M29": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L29": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "F29": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E29": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D29": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C29": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B29": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": -115.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9604206957952142
+      }
+    },
+    {
+      "id": "P29",
+      "formula": "=MIRR(A29:E29,J29,M29)",
+      "setup": {
+        "M29": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J29": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E29": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D29": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C29": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B29": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A29": {
+          "kind": "number",
+          "value": -115.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7586268973649393
+      }
+    },
+    {
+      "id": "N30",
+      "formula": "=MIRR(A30:F30,J30,K30)",
+      "setup": {
+        "K30": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J30": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F30": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E30": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D30": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C30": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": -110.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.12012755391044361
+      }
+    },
+    {
+      "id": "O30",
+      "formula": "=MIRR(A30:F30,L30,M30)",
+      "setup": {
+        "M30": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L30": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "F30": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E30": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D30": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C30": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": -110.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.977927231185181
+      }
+    },
+    {
+      "id": "P30",
+      "formula": "=MIRR(A30:E30,J30,M30)",
+      "setup": {
+        "M30": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J30": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E30": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D30": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C30": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B30": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A30": {
+          "kind": "number",
+          "value": -110.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7782794100389228
+      }
+    },
+    {
+      "id": "N31",
+      "formula": "=MIRR(A31:F31,J31,K31)",
+      "setup": {
+        "K31": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "F31": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E31": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D31": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C31": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B31": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A31": {
+          "kind": "number",
+          "value": -105.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.1305978565091228
+      }
+    },
+    {
+      "id": "O31",
+      "formula": "=MIRR(A31:F31,L31,M31)",
+      "setup": {
+        "M31": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L31": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F31": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E31": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D31": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C31": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B31": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A31": {
+          "kind": "number",
+          "value": -105.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9964157475656399
+      }
+    },
+    {
+      "id": "P31",
+      "formula": "=MIRR(A31:E31,J31,M31)",
+      "setup": {
+        "M31": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E31": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D31": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C31": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B31": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A31": {
+          "kind": "number",
+          "value": -105.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7990815364654122
+      }
+    },
+    {
+      "id": "N32",
+      "formula": "=MIRR(A32:F32,J32,K32)",
+      "setup": {
+        "J32": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F32": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E32": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D32": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C32": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B32": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A32": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.05387395206178347
+      }
+    },
+    {
+      "id": "O32",
+      "formula": "=MIRR(A32:F32,L32,M32)",
+      "setup": {
+        "M32": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L32": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F32": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E32": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D32": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C32": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B32": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A32": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0159921964584284
+      }
+    },
+    {
+      "id": "P32",
+      "formula": "=MIRR(A32:E32,J32,M32)",
+      "setup": {
+        "M32": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J32": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E32": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D32": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C32": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B32": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A32": {
+          "kind": "number",
+          "value": -100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8211602868378718
+      }
+    },
+    {
+      "id": "N33",
+      "formula": "=MIRR(A33:F33,J33,K33)",
+      "setup": {
+        "K33": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J33": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F33": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E33": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D33": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C33": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B33": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": -95.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.1534567012476673
+      }
+    },
+    {
+      "id": "O33",
+      "formula": "=MIRR(A33:F33,L33,M33)",
+      "setup": {
+        "M33": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L33": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F33": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E33": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D33": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C33": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B33": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": -95.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0367800179774864
+      }
+    },
+    {
+      "id": "P33",
+      "formula": "=MIRR(A33:E33,J33,M33)",
+      "setup": {
+        "M33": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J33": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E33": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D33": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C33": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B33": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A33": {
+          "kind": "number",
+          "value": -95.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8446639902414754
+      }
+    },
+    {
+      "id": "N34",
+      "formula": "=MIRR(A34:F34,J34,K34)",
+      "setup": {
+        "K34": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J34": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F34": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E34": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D34": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C34": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B34": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A34": {
+          "kind": "number",
+          "value": -90.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.16599722189927912
+      }
+    },
+    {
+      "id": "O34",
+      "formula": "=MIRR(A34:F34,L34,M34)",
+      "setup": {
+        "M34": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L34": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "F34": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E34": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D34": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C34": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B34": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A34": {
+          "kind": "number",
+          "value": -90.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0589241364785176
+      }
+    },
+    {
+      "id": "P34",
+      "formula": "=MIRR(A34:E34,J34,M34)",
+      "setup": {
+        "M34": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J34": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E34": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D34": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C34": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B34": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A34": {
+          "kind": "number",
+          "value": -90.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.869767229871276
+      }
+    },
+    {
+      "id": "N35",
+      "formula": "=MIRR(A35:F35,J35,K35)",
+      "setup": {
+        "K35": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J35": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F35": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E35": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D35": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C35": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B35": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A35": {
+          "kind": "number",
+          "value": -85.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.1794030116235823
+      }
+    },
+    {
+      "id": "O35",
+      "formula": "=MIRR(A35:F35,L35,M35)",
+      "setup": {
+        "M35": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L35": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "F35": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E35": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D35": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C35": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B35": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A35": {
+          "kind": "number",
+          "value": -85.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0825961517402378
+      }
+    },
+    {
+      "id": "P35",
+      "formula": "=MIRR(A35:E35,J35,M35)",
+      "setup": {
+        "M35": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J35": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E35": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D35": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C35": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B35": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A35": {
+          "kind": "number",
+          "value": -85.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8966772711567212
+      }
+    },
+    {
+      "id": "N36",
+      "formula": "=MIRR(A36:F36,J36,K36)",
+      "setup": {
+        "K36": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J36": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F36": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E36": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D36": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C36": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B36": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A36": {
+          "kind": "number",
+          "value": -80.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.1937902296389451
+      }
+    },
+    {
+      "id": "O36",
+      "formula": "=MIRR(A36:F36,L36,M36)",
+      "setup": {
+        "M36": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L36": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F36": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E36": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D36": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C36": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B36": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A36": {
+          "kind": "number",
+          "value": -80.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.1080011783322892
+      }
+    },
+    {
+      "id": "P36",
+      "formula": "=MIRR(A36:E36,J36,M36)",
+      "setup": {
+        "M36": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J36": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E36": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D36": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C36": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B36": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A36": {
+          "kind": "number",
+          "value": -80.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9256425534215407
+      }
+    },
+    {
+      "id": "N37",
+      "formula": "=MIRR(A37:F37,J37,K37)",
+      "setup": {
+        "F37": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E37": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D37": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C37": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B37": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A37": {
+          "kind": "number",
+          "value": -75.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.11628841548417412
+      }
+    },
+    {
+      "id": "O37",
+      "formula": "=MIRR(A37:F37,L37,M37)",
+      "setup": {
+        "F37": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E37": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D37": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C37": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B37": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A37": {
+          "kind": "number",
+          "value": -75.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.11628841548417412
+      }
+    },
+    {
+      "id": "P37",
+      "formula": "=MIRR(A37:E37,J37,M37)",
+      "setup": {
+        "E37": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D37": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C37": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B37": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A37": {
+          "kind": "number",
+          "value": -75.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.07456993182354199
+      }
+    },
+    {
+      "id": "N38",
+      "formula": "=MIRR(A38:F38,J38,K38)",
+      "setup": {
+        "K38": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J38": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F38": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E38": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D38": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C38": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B38": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A38": {
+          "kind": "number",
+          "value": -70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.22610145996077002
+      }
+    },
+    {
+      "id": "O38",
+      "formula": "=MIRR(A38:F38,L38,M38)",
+      "setup": {
+        "M38": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L38": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F38": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E38": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D38": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C38": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B38": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A38": {
+          "kind": "number",
+          "value": -70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.165056521809487
+      }
+    },
+    {
+      "id": "P38",
+      "formula": "=MIRR(A38:E38,J38,M38)",
+      "setup": {
+        "M38": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J38": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E38": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D38": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C38": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B38": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A38": {
+          "kind": "number",
+          "value": -70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9910110084729464
+      }
+    },
+    {
+      "id": "N39",
+      "formula": "=MIRR(A39:F39,J39,K39)",
+      "setup": {
+        "K39": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J39": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F39": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E39": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D39": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C39": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B39": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A39": {
+          "kind": "number",
+          "value": -65.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.24440958114582068
+      }
+    },
+    {
+      "id": "O39",
+      "formula": "=MIRR(A39:F39,L39,M39)",
+      "setup": {
+        "M39": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L39": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F39": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E39": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D39": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C39": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B39": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A39": {
+          "kind": "number",
+          "value": -65.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.1973851002087335
+      }
+    },
+    {
+      "id": "P39",
+      "formula": "=MIRR(A39:E39,J39,M39)",
+      "setup": {
+        "M39": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J39": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E39": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D39": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C39": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B39": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A39": {
+          "kind": "number",
+          "value": -65.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0282422823807837
+      }
+    },
+    {
+      "id": "N40",
+      "formula": "=MIRR(A40:F40,J40,K40)",
+      "setup": {
+        "K40": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J40": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F40": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E40": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D40": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C40": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B40": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A40": {
+          "kind": "number",
+          "value": -60.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.26449107244470715
+      }
+    },
+    {
+      "id": "O40",
+      "formula": "=MIRR(A40:F40,L40,M40)",
+      "setup": {
+        "M40": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L40": {
+          "kind": "number",
+          "value": -1.0
+        },
+        "F40": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E40": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D40": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C40": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B40": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A40": {
+          "kind": "number",
+          "value": -60.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.2328451050485496
+      }
+    },
+    {
+      "id": "P40",
+      "formula": "=MIRR(A40:E40,J40,M40)",
+      "setup": {
+        "M40": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J40": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E40": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D40": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C40": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B40": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A40": {
+          "kind": "number",
+          "value": -60.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0692375873466964
+      }
+    },
+    {
+      "id": "N41",
+      "formula": "=MIRR(A41:F41,J41,K41)",
+      "setup": {
+        "K41": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J41": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F41": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E41": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D41": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C41": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B41": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A41": {
+          "kind": "number",
+          "value": -55.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.2866886785637792
+      }
+    },
+    {
+      "id": "O41",
+      "formula": "=MIRR(A41:F41,L41,M41)",
+      "setup": {
+        "M41": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L41": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "F41": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E41": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D41": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C41": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B41": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A41": {
+          "kind": "number",
+          "value": -55.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.2720417567662574
+      }
+    },
+    {
+      "id": "P41",
+      "formula": "=MIRR(A41:E41,J41,M41)",
+      "setup": {
+        "M41": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J41": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E41": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D41": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C41": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B41": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A41": {
+          "kind": "number",
+          "value": -55.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.1147425268811282
+      }
+    },
+    {
+      "id": "N42",
+      "formula": "=MIRR(A42:F42,J42,K42)",
+      "setup": {
+        "K42": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J42": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F42": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E42": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D42": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C42": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B42": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A42": {
+          "kind": "number",
+          "value": -50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3114508432656946
+      }
+    },
+    {
+      "id": "O42",
+      "formula": "=MIRR(A42:F42,L42,M42)",
+      "setup": {
+        "M42": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L42": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F42": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E42": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D42": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C42": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B42": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A42": {
+          "kind": "number",
+          "value": -50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.3157669197586563
+      }
+    },
+    {
+      "id": "P42",
+      "formula": "=MIRR(A42:E42,J42,M42)",
+      "setup": {
+        "M42": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J42": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E42": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D42": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C42": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B42": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A42": {
+          "kind": "number",
+          "value": -50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.1657367706679933
+      }
+    },
+    {
+      "id": "N43",
+      "formula": "=MIRR(A43:F43,J43,K43)",
+      "setup": {
+        "K43": {
+          "kind": "bool",
+          "value": false
+        },
+        "J43": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F43": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E43": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D43": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C43": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B43": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A43": {
+          "kind": "number",
+          "value": -45.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.23636347834823446
+      }
+    },
+    {
+      "id": "O43",
+      "formula": "=MIRR(A43:F43,L43,M43)",
+      "setup": {
+        "M43": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L43": {
+          "kind": "bool",
+          "value": true
+        },
+        "F43": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E43": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D43": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C43": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B43": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A43": {
+          "kind": "number",
+          "value": -45.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.3650827686365634
+      }
+    },
+    {
+      "id": "P43",
+      "formula": "=MIRR(A43:E43,J43,M43)",
+      "setup": {
+        "M43": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J43": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E43": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D43": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C43": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B43": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A43": {
+          "kind": "number",
+          "value": -45.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.2235404931618494
+      }
+    },
+    {
+      "id": "N44",
+      "formula": "=MIRR(A44:F44,J44,K44)",
+      "setup": {
+        "K44": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J44": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F44": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E44": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D44": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C44": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B44": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A44": {
+          "kind": "number",
+          "value": -40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.371304872997789
+      }
+    },
+    {
+      "id": "O44",
+      "formula": "=MIRR(A44:F44,L44,M44)",
+      "setup": {
+        "M44": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L44": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "F44": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E44": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D44": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C44": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B44": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A44": {
+          "kind": "number",
+          "value": -40.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "P44",
+      "formula": "=MIRR(A44:E44,J44,M44)",
+      "setup": {
+        "M44": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J44": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E44": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D44": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C44": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B44": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A44": {
+          "kind": "number",
+          "value": -40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.2899878254809036
+      }
+    },
+    {
+      "id": "N45",
+      "formula": "=MIRR(A45:F45,J45,K45)",
+      "setup": {
+        "K45": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J45": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F45": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E45": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D45": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C45": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B45": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A45": {
+          "kind": "number",
+          "value": -35.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.40842073011639957
+      }
+    },
+    {
+      "id": "O45",
+      "formula": "=MIRR(A45:F45,L45,M45)",
+      "setup": {
+        "M45": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "L45": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F45": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E45": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D45": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C45": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B45": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A45": {
+          "kind": "number",
+          "value": -35.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "P45",
+      "formula": "=MIRR(A45:E45,J45,M45)",
+      "setup": {
+        "M45": {
+          "kind": "text",
+          "value": "Hello"
+        },
+        "J45": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E45": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D45": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C45": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B45": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A45": {
+          "kind": "number",
+          "value": -35.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "N46",
+      "formula": "=MIRR(A46:F46,J46,K46)",
+      "setup": {
+        "K46": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J46": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F46": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E46": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D46": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C46": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B46": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A46": {
+          "kind": "number",
+          "value": -30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.4525188148256716
+      }
+    },
+    {
+      "id": "O46",
+      "formula": "=MIRR(A46:F46,L46,M46)",
+      "setup": {
+        "M46": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L46": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F46": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E46": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D46": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C46": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B46": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A46": {
+          "kind": "number",
+          "value": -30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.564865499132451
+      }
+    },
+    {
+      "id": "P46",
+      "formula": "=MIRR(A46:E46,J46,M46)",
+      "setup": {
+        "M46": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J46": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E46": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D46": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C46": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B46": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A46": {
+          "kind": "number",
+          "value": -30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.4607520615037553
+      }
+    },
+    {
+      "id": "L47",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "N47",
+      "formula": "=MIRR(A47:F47,J47,K47)",
+      "setup": {
+        "K47": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J47": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F47": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E47": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D47": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C47": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B47": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A47": {
+          "kind": "number",
+          "value": -25.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5064614263187779
+      }
+    },
+    {
+      "id": "O47",
+      "formula": "=MIRR(A47:F47,L47,M47)",
+      "setup": {
+        "M47": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F47": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E47": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D47": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C47": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B47": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A47": {
+          "kind": "number",
+          "value": -25.0
+        },
+        "L47": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "P47",
+      "formula": "=MIRR(A47:E47,J47,M47)",
+      "setup": {
+        "M47": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J47": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E47": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D47": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C47": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B47": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A47": {
+          "kind": "number",
+          "value": -25.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.5755095769013945
+      }
+    },
+    {
+      "id": "N48",
+      "formula": "=MIRR(A48:F48,J48,K48)",
+      "setup": {
+        "K48": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J48": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F48": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E48": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D48": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C48": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B48": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A48": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5752156518119782
+      }
+    },
+    {
+      "id": "O48",
+      "formula": "=MIRR(A48:F48,L48,M48)",
+      "setup": {
+        "M48": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L48": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F48": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E48": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D48": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C48": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B48": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A48": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.7815242307280386
+      }
+    },
+    {
+      "id": "P48",
+      "formula": "=MIRR(A48:E48,J48,M48)",
+      "setup": {
+        "M48": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J48": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E48": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D48": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C48": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B48": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A48": {
+          "kind": "number",
+          "value": -20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.7232698153314998
+      }
+    },
+    {
+      "id": "N49",
+      "formula": "=MIRR(A49:F49,J49,K49)",
+      "setup": {
+        "K49": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J49": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F49": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E49": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D49": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C49": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B49": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A49": {
+          "kind": "number",
+          "value": -135.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.07517526307904077
+      }
+    },
+    {
+      "id": "O49",
+      "formula": "=MIRR(A49:F49,L49,M49)",
+      "setup": {
+        "M49": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L49": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F49": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E49": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D49": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C49": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B49": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A49": {
+          "kind": "number",
+          "value": -135.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8985502353875254
+      }
+    },
+    {
+      "id": "P49",
+      "formula": "=MIRR(A49:E49,J49,M49)",
+      "setup": {
+        "M49": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J49": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E49": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D49": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C49": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B49": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A49": {
+          "kind": "number",
+          "value": -135.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6895254151957142
+      }
+    },
+    {
+      "id": "N50",
+      "formula": "=MIRR(A50:F50,J50,K50)",
+      "setup": {
+        "K50": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J50": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F50": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E50": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D50": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C50": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B50": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A50": {
+          "kind": "number",
+          "value": -140.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.06738331662704855
+      }
+    },
+    {
+      "id": "O50",
+      "formula": "=MIRR(A50:F50,L50,M50)",
+      "setup": {
+        "M50": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L50": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F50": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E50": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D50": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C50": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B50": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A50": {
+          "kind": "number",
+          "value": -140.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8847911746291963
+      }
+    },
+    {
+      "id": "P50",
+      "formula": "=MIRR(A50:E50,J50,M50)",
+      "setup": {
+        "M50": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J50": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E50": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D50": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C50": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B50": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A50": {
+          "kind": "number",
+          "value": -140.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6742340197555836
+      }
+    },
+    {
+      "id": "N51",
+      "formula": "=MIRR(A51:F51,J51,K51)",
+      "setup": {
+        "K51": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J51": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F51": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E51": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D51": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C51": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B51": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A51": {
+          "kind": "number",
+          "value": -145.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.05991836490401403
+      }
+    },
+    {
+      "id": "O51",
+      "formula": "=MIRR(A51:F51,L51,M51)",
+      "setup": {
+        "M51": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L51": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F51": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E51": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D51": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C51": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B51": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A51": {
+          "kind": "number",
+          "value": -145.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8716095229137941
+      }
+    },
+    {
+      "id": "P51",
+      "formula": "=MIRR(A51:E51,J51,M51)",
+      "setup": {
+        "M51": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J51": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E51": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D51": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C51": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B51": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A51": {
+          "kind": "number",
+          "value": -145.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6596104880660216
+      }
+    },
+    {
+      "id": "N52",
+      "formula": "=MIRR(A52:F52,J52,K52)",
+      "setup": {
+        "K52": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J52": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F52": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E52": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D52": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C52": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B52": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A52": {
+          "kind": "number",
+          "value": -150.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.05275609809487536
+      }
+    },
+    {
+      "id": "O52",
+      "formula": "=MIRR(A52:F52,L52,M52)",
+      "setup": {
+        "M52": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L52": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F52": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E52": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D52": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C52": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B52": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A52": {
+          "kind": "number",
+          "value": -150.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8589623538397424
+      }
+    },
+    {
+      "id": "P52",
+      "formula": "=MIRR(A52:E52,J52,M52)",
+      "setup": {
+        "M52": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J52": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E52": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D52": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C52": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B52": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A52": {
+          "kind": "number",
+          "value": -150.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6456040840813808
+      }
+    },
+    {
+      "id": "N53",
+      "formula": "=MIRR(A53:F53,J53,K53)",
+      "setup": {
+        "K53": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J53": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F53": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E53": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D53": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C53": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B53": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A53": {
+          "kind": "number",
+          "value": -155.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.04587474939098768
+      }
+    },
+    {
+      "id": "O53",
+      "formula": "=MIRR(A53:F53,L53,M53)",
+      "setup": {
+        "M53": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L53": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F53": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E53": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D53": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C53": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B53": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A53": {
+          "kind": "number",
+          "value": -155.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.84681123145981
+      }
+    },
+    {
+      "id": "P53",
+      "formula": "=MIRR(A53:E53,J53,M53)",
+      "setup": {
+        "M53": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J53": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E53": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D53": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C53": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B53": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A53": {
+          "kind": "number",
+          "value": -155.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.632169457602566
+      }
+    },
+    {
+      "id": "N54",
+      "formula": "=MIRR(A54:F54,J54,K54)",
+      "setup": {
+        "K54": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J54": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F54": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E54": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D54": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C54": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B54": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A54": {
+          "kind": "number",
+          "value": -160.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.03925475686959312
+      }
+    },
+    {
+      "id": "O54",
+      "formula": "=MIRR(A54:F54,L54,M54)",
+      "setup": {
+        "M54": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L54": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F54": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E54": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D54": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C54": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B54": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A54": {
+          "kind": "number",
+          "value": -160.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8351216132260679
+      }
+    },
+    {
+      "id": "P54",
+      "formula": "=MIRR(A54:E54,J54,M54)",
+      "setup": {
+        "M54": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J54": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E54": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D54": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C54": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B54": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A54": {
+          "kind": "number",
+          "value": -160.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6192659202321831
+      }
+    },
+    {
+      "id": "N55",
+      "formula": "=MIRR(A55:F55,J55,K55)",
+      "setup": {
+        "K55": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J55": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F55": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E55": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D55": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C55": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B55": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A55": {
+          "kind": "number",
+          "value": -165.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.032878479329495613
+      }
+    },
+    {
+      "id": "O55",
+      "formula": "=MIRR(A55:F55,L55,M55)",
+      "setup": {
+        "M55": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L55": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F55": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E55": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D55": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C55": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B55": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A55": {
+          "kind": "number",
+          "value": -165.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8238623482110037
+      }
+    },
+    {
+      "id": "P55",
+      "formula": "=MIRR(A55:E55,J55,M55)",
+      "setup": {
+        "M55": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J55": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E55": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D55": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C55": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B55": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A55": {
+          "kind": "number",
+          "value": -165.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6068568378893033
+      }
+    },
+    {
+      "id": "N56",
+      "formula": "=MIRR(A56:F56,J56,K56)",
+      "setup": {
+        "K56": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J56": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F56": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E56": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D56": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C56": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B56": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A56": {
+          "kind": "number",
+          "value": -170.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.026729956122054865
+      }
+    },
+    {
+      "id": "O56",
+      "formula": "=MIRR(A56:F56,L56,M56)",
+      "setup": {
+        "M56": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L56": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F56": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E56": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D56": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C56": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B56": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A56": {
+          "kind": "number",
+          "value": -170.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8130052530158045
+      }
+    },
+    {
+      "id": "P56",
+      "formula": "=MIRR(A56:E56,J56,M56)",
+      "setup": {
+        "M56": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J56": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E56": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D56": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C56": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B56": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A56": {
+          "kind": "number",
+          "value": -170.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5949091182088844
+      }
+    },
+    {
+      "id": "N57",
+      "formula": "=MIRR(A57:F57,J57,K57)",
+      "setup": {
+        "K57": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J57": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F57": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E57": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D57": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C57": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B57": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A57": {
+          "kind": "number",
+          "value": -175.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0207947030904585
+      }
+    },
+    {
+      "id": "O57",
+      "formula": "=MIRR(A57:F57,L57,M57)",
+      "setup": {
+        "M57": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L57": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F57": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E57": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D57": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C57": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B57": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A57": {
+          "kind": "number",
+          "value": -175.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8025247514388318
+      }
+    },
+    {
+      "id": "P57",
+      "formula": "=MIRR(A57:E57,J57,M57)",
+      "setup": {
+        "M57": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J57": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E57": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D57": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C57": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B57": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A57": {
+          "kind": "number",
+          "value": -175.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5833927756915007
+      }
+    },
+    {
+      "id": "N58",
+      "formula": "=MIRR(A58:F58,J58,K58)",
+      "setup": {
+        "K58": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J58": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F58": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E58": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D58": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C58": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B58": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A58": {
+          "kind": "number",
+          "value": -180.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.01505953832613316
+      }
+    },
+    {
+      "id": "O58",
+      "formula": "=MIRR(A58:F58,L58,M58)",
+      "setup": {
+        "M58": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L58": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F58": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E58": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D58": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C58": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B58": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A58": {
+          "kind": "number",
+          "value": -180.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7923975667953591
+      }
+    },
+    {
+      "id": "P58",
+      "formula": "=MIRR(A58:E58,J58,M58)",
+      "setup": {
+        "M58": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J58": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E58": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D58": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C58": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B58": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A58": {
+          "kind": "number",
+          "value": -180.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.572280560957624
+      }
+    },
+    {
+      "id": "N59",
+      "formula": "=MIRR(A59:F59,J59,K59)",
+      "setup": {
+        "K59": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J59": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F59": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E59": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D59": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C59": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B59": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A59": {
+          "kind": "number",
+          "value": -185.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.009512432689320338
+      }
+    },
+    {
+      "id": "O59",
+      "formula": "=MIRR(A59:F59,L59,M59)",
+      "setup": {
+        "M59": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L59": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F59": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E59": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D59": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C59": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B59": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A59": {
+          "kind": "number",
+          "value": -185.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7826024579660034
+      }
+    },
+    {
+      "id": "P59",
+      "formula": "=MIRR(A59:E59,J59,M59)",
+      "setup": {
+        "M59": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J59": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E59": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D59": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C59": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B59": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A59": {
+          "kind": "number",
+          "value": -185.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5615476431630575
+      }
+    },
+    {
+      "id": "N60",
+      "formula": "=MIRR(A60:F60,J60,K60)",
+      "setup": {
+        "K60": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "J60": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "F60": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E60": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D60": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C60": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B60": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A60": {
+          "kind": "number",
+          "value": -190.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.004142381008845897
+      }
+    },
+    {
+      "id": "O60",
+      "formula": "=MIRR(A60:F60,L60,M60)",
+      "setup": {
+        "M60": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "L60": {
+          "kind": "number",
+          "value": -0.5
+        },
+        "F60": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "E60": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D60": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C60": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B60": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A60": {
+          "kind": "number",
+          "value": -190.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.7731199919605904
+      }
+    },
+    {
+      "id": "P60",
+      "formula": "=MIRR(A60:E60,J60,M60)",
+      "setup": {
+        "M60": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "J60": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "E60": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D60": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C60": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B60": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A60": {
+          "kind": "number",
+          "value": -190.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5511713367416697
+      }
+    }
+  ]
+}

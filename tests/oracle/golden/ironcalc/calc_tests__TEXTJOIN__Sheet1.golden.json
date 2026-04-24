@@ -1,0 +1,1355 @@
+{
+  "suite": "ironcalc_calc_tests_TEXTJOIN_Sheet1",
+  "description": "Derived from IronCalc fixture calc_tests/TEXTJOIN.xlsx, sheet 'Sheet1'.",
+  "environment": {
+    "source": "ironcalc",
+    "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
+    "sheet": "Sheet1",
+    "excel_locale": "unknown",
+    "generated_at": "2026-04-23T17:36:56Z"
+  },
+  "tolerance": {
+    "abs": 5e-08,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "G2",
+      "formula": "=_xlfn.TEXTJOIN(A2,B2,C2:F2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "text",
+          "value": ","
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday,Tuesday,Wednesday,Thursday"
+      }
+    },
+    {
+      "id": "H2",
+      "formula": "=_xlfn.TEXTJOIN(A2,B2,C2,D2,E2,F2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "text",
+          "value": ","
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday,Tuesday,Wednesday,Thursday"
+      }
+    },
+    {
+      "id": "I2",
+      "formula": "=_xlfn.TEXTJOIN(A2,B2,C2,D2:E2,F2)",
+      "setup": {
+        "F2": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B2": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "text",
+          "value": ","
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday,Tuesday,Wednesday,Thursday"
+      }
+    },
+    {
+      "id": "G3",
+      "formula": "=_xlfn.TEXTJOIN(A3,B3,C3:F3)",
+      "setup": {
+        "F3": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B3": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "--"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday--Tuesday--Wednesday--Thursday"
+      }
+    },
+    {
+      "id": "H3",
+      "formula": "=_xlfn.TEXTJOIN(A3,B3,C3,D3,E3,F3)",
+      "setup": {
+        "F3": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B3": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "--"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday--Tuesday--Wednesday--Thursday"
+      }
+    },
+    {
+      "id": "I3",
+      "formula": "=_xlfn.TEXTJOIN(A3,B3,C3,D3:E3,F3)",
+      "setup": {
+        "F3": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B3": {
+          "kind": "bool",
+          "value": true
+        },
+        "A3": {
+          "kind": "text",
+          "value": "--"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday--Tuesday--Wednesday--Thursday"
+      }
+    },
+    {
+      "id": "G4",
+      "formula": "=_xlfn.TEXTJOIN(A4,B4,C4:F4)",
+      "setup": {
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1525354"
+      }
+    },
+    {
+      "id": "H4",
+      "formula": "=_xlfn.TEXTJOIN(A4,B4,C4,D4,E4,F4)",
+      "setup": {
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1525354"
+      }
+    },
+    {
+      "id": "I4",
+      "formula": "=_xlfn.TEXTJOIN(A4,B4,C4,D4:E4,F4)",
+      "setup": {
+        "F4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "bool",
+          "value": true
+        },
+        "A4": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1525354"
+      }
+    },
+    {
+      "id": "G5",
+      "formula": "=_xlfn.TEXTJOIN(A5,B5,C5:F5)",
+      "setup": {
+        "F5": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "E5": {
+          "kind": "bool",
+          "value": false
+        },
+        "D5": {
+          "kind": "bool",
+          "value": true
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Hi"
+        },
+        "B5": {
+          "kind": "bool",
+          "value": true
+        },
+        "A5": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "HiTRUETRUETRUEFALSETRUE123"
+      }
+    },
+    {
+      "id": "H5",
+      "formula": "=_xlfn.TEXTJOIN(A5,B5,C5,D5,E5,F5)",
+      "setup": {
+        "F5": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "E5": {
+          "kind": "bool",
+          "value": false
+        },
+        "D5": {
+          "kind": "bool",
+          "value": true
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Hi"
+        },
+        "B5": {
+          "kind": "bool",
+          "value": true
+        },
+        "A5": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "HiTRUETRUETRUEFALSETRUE123"
+      }
+    },
+    {
+      "id": "I5",
+      "formula": "=_xlfn.TEXTJOIN(A5,B5,C5,D5:E5,F5)",
+      "setup": {
+        "F5": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "E5": {
+          "kind": "bool",
+          "value": false
+        },
+        "D5": {
+          "kind": "bool",
+          "value": true
+        },
+        "C5": {
+          "kind": "text",
+          "value": "Hi"
+        },
+        "B5": {
+          "kind": "bool",
+          "value": true
+        },
+        "A5": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "HiTRUETRUETRUEFALSETRUE123"
+      }
+    },
+    {
+      "id": "A6",
+      "formula": "=NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "G6",
+      "formula": "=_xlfn.TEXTJOIN(A6,B6,C6:F6)",
+      "setup": {
+        "F6": {
+          "kind": "text",
+          "value": "d"
+        },
+        "E6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "b"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B6": {
+          "kind": "bool",
+          "value": true
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "H6",
+      "formula": "=_xlfn.TEXTJOIN(A6,B6,C6,D6,E6,F6)",
+      "setup": {
+        "F6": {
+          "kind": "text",
+          "value": "d"
+        },
+        "E6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "b"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B6": {
+          "kind": "bool",
+          "value": true
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "I6",
+      "formula": "=_xlfn.TEXTJOIN(A6,B6,C6,D6:E6,F6)",
+      "setup": {
+        "F6": {
+          "kind": "text",
+          "value": "d"
+        },
+        "E6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "D6": {
+          "kind": "text",
+          "value": "b"
+        },
+        "C6": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B6": {
+          "kind": "bool",
+          "value": true
+        },
+        "A6": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "G7",
+      "formula": "=_xlfn.TEXTJOIN(A7,B7,C7:F7)",
+      "setup": {
+        "F7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "text",
+          "value": "."
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1.2.3.4"
+      }
+    },
+    {
+      "id": "H7",
+      "formula": "=_xlfn.TEXTJOIN(A7,B7,C7,D7,E7,F7)",
+      "setup": {
+        "F7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "text",
+          "value": "."
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1.2.3.4"
+      }
+    },
+    {
+      "id": "I7",
+      "formula": "=_xlfn.TEXTJOIN(A7,B7,C7,D7:E7,F7)",
+      "setup": {
+        "F7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E7": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B7": {
+          "kind": "bool",
+          "value": true
+        },
+        "A7": {
+          "kind": "text",
+          "value": "."
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1.2.3.4"
+      }
+    },
+    {
+      "id": "N7",
+      "formula": "=_xlfn.TEXTJOIN(\",\",TRUE,C11:F13)",
+      "setup": {
+        "F13": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E13": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D13": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "C13": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "F12": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E12": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D12": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "C12": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "F11": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E11": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D11": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "C11": {
+          "kind": "text",
+          "value": "Monday"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday,Tuesday,Wednesday,Thursday,Monday,Tuesday,Wednesday,Thursday,Monday,Tuesday,Wednesday,Thursday"
+      }
+    },
+    {
+      "id": "G8",
+      "formula": "=_xlfn.TEXTJOIN(A8,B8,C8:F8)",
+      "setup": {
+        "E8": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "C8": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B8": {
+          "kind": "bool",
+          "value": true
+        },
+        "A8": {
+          "kind": "text",
+          "value": ","
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday,Wednesday"
+      }
+    },
+    {
+      "id": "H8",
+      "formula": "=_xlfn.TEXTJOIN(A8,B8,C8,D8,E8,F8)",
+      "setup": {
+        "E8": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "C8": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B8": {
+          "kind": "bool",
+          "value": true
+        },
+        "A8": {
+          "kind": "text",
+          "value": ","
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday,Wednesday"
+      }
+    },
+    {
+      "id": "I8",
+      "formula": "=_xlfn.TEXTJOIN(A8,B8,C8,D8:E8,F8)",
+      "setup": {
+        "E8": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "C8": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B8": {
+          "kind": "bool",
+          "value": true
+        },
+        "A8": {
+          "kind": "text",
+          "value": ","
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday,Wednesday"
+      }
+    },
+    {
+      "id": "G9",
+      "formula": "=_xlfn.TEXTJOIN(A9,B9,C9:F9)",
+      "setup": {
+        "E9": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "C9": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B9": {
+          "kind": "bool",
+          "value": false
+        },
+        "A9": {
+          "kind": "text",
+          "value": ","
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday,,Wednesday,"
+      }
+    },
+    {
+      "id": "H9",
+      "formula": "=_xlfn.TEXTJOIN(A9,B9,C9,D9,E9,F9)",
+      "setup": {
+        "E9": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "C9": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B9": {
+          "kind": "bool",
+          "value": false
+        },
+        "A9": {
+          "kind": "text",
+          "value": ","
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday,,Wednesday,"
+      }
+    },
+    {
+      "id": "I9",
+      "formula": "=_xlfn.TEXTJOIN(A9,B9,C9,D9:E9,F9)",
+      "setup": {
+        "E9": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "C9": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B9": {
+          "kind": "bool",
+          "value": false
+        },
+        "A9": {
+          "kind": "text",
+          "value": ","
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday,,Wednesday,"
+      }
+    },
+    {
+      "id": "C10",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G10",
+      "formula": "=_xlfn.TEXTJOIN(A10,B10,C10:F10)",
+      "setup": {
+        "F10": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E10": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D10": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "B10": {
+          "kind": "bool",
+          "value": true
+        },
+        "A10": {
+          "kind": "text",
+          "value": ","
+        },
+        "C10": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "H10",
+      "formula": "=_xlfn.TEXTJOIN(A10,B10,C10,D10,E10,F10)",
+      "setup": {
+        "F10": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E10": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D10": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "B10": {
+          "kind": "bool",
+          "value": true
+        },
+        "A10": {
+          "kind": "text",
+          "value": ","
+        },
+        "C10": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "I10",
+      "formula": "=_xlfn.TEXTJOIN(A10,B10,C10,D10:E10,F10)",
+      "setup": {
+        "F10": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E10": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D10": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "B10": {
+          "kind": "bool",
+          "value": true
+        },
+        "A10": {
+          "kind": "text",
+          "value": ","
+        },
+        "C10": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "G11",
+      "formula": "=_xlfn.TEXTJOIN(A11,B11,C11:F11)",
+      "setup": {
+        "F11": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E11": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D11": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "C11": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B11": {
+          "kind": "bool",
+          "value": true
+        },
+        "A11": {
+          "kind": "text",
+          "value": "quaternions"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MondayquaternionsTuesdayquaternionsWednesdayquaternionsThursday"
+      }
+    },
+    {
+      "id": "H11",
+      "formula": "=_xlfn.TEXTJOIN(A11,B11,C11,D11,E11,F11)",
+      "setup": {
+        "F11": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E11": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D11": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "C11": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B11": {
+          "kind": "bool",
+          "value": true
+        },
+        "A11": {
+          "kind": "text",
+          "value": "quaternions"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MondayquaternionsTuesdayquaternionsWednesdayquaternionsThursday"
+      }
+    },
+    {
+      "id": "I11",
+      "formula": "=_xlfn.TEXTJOIN(A11,B11,C11,D11:E11,F11)",
+      "setup": {
+        "F11": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E11": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D11": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "C11": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B11": {
+          "kind": "bool",
+          "value": true
+        },
+        "A11": {
+          "kind": "text",
+          "value": "quaternions"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MondayquaternionsTuesdayquaternionsWednesdayquaternionsThursday"
+      }
+    },
+    {
+      "id": "G12",
+      "formula": "=_xlfn.TEXTJOIN(A12,B12,C12:F12)",
+      "setup": {
+        "F12": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E12": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D12": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "C12": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B12": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MondayTuesdayWednesdayThursday"
+      }
+    },
+    {
+      "id": "H12",
+      "formula": "=_xlfn.TEXTJOIN(A12,B12,C12,D12,E12,F12)",
+      "setup": {
+        "F12": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E12": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D12": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "C12": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B12": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MondayTuesdayWednesdayThursday"
+      }
+    },
+    {
+      "id": "I12",
+      "formula": "=_xlfn.TEXTJOIN(A12,B12,C12,D12:E12,F12)",
+      "setup": {
+        "F12": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E12": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D12": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "C12": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B12": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "MondayTuesdayWednesdayThursday"
+      }
+    },
+    {
+      "id": "G13",
+      "formula": "=_xlfn.TEXTJOIN(A13,B13,C13:F13)",
+      "setup": {
+        "F13": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E13": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D13": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "C13": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B13": {
+          "kind": "bool",
+          "value": true
+        },
+        "A13": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday0Tuesday0Wednesday0Thursday"
+      }
+    },
+    {
+      "id": "H13",
+      "formula": "=_xlfn.TEXTJOIN(A13,B13,C13,D13,E13,F13)",
+      "setup": {
+        "F13": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E13": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D13": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "C13": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B13": {
+          "kind": "bool",
+          "value": true
+        },
+        "A13": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday0Tuesday0Wednesday0Thursday"
+      }
+    },
+    {
+      "id": "I13",
+      "formula": "=_xlfn.TEXTJOIN(A13,B13,C13,D13:E13,F13)",
+      "setup": {
+        "F13": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E13": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D13": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "C13": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B13": {
+          "kind": "bool",
+          "value": true
+        },
+        "A13": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday0Tuesday0Wednesday0Thursday"
+      }
+    },
+    {
+      "id": "G14",
+      "formula": "=_xlfn.TEXTJOIN(A14,,C14:F14)",
+      "setup": {
+        "F14": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E14": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D14": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "C14": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "A14": {
+          "kind": "text",
+          "value": ","
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday,Tuesday,Wednesday,Thursday"
+      }
+    },
+    {
+      "id": "H14",
+      "formula": "=_xlfn.TEXTJOIN(A14,B14,C14,D14,E14,F14)",
+      "setup": {
+        "F14": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E14": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D14": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "C14": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B14": {
+          "kind": "bool",
+          "value": true
+        },
+        "A14": {
+          "kind": "text",
+          "value": ","
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday,Tuesday,Wednesday,Thursday"
+      }
+    },
+    {
+      "id": "I14",
+      "formula": "=_xlfn.TEXTJOIN(A14,B14,C14,D14:E14,F14)",
+      "setup": {
+        "F14": {
+          "kind": "text",
+          "value": "Thursday"
+        },
+        "E14": {
+          "kind": "text",
+          "value": "Wednesday"
+        },
+        "D14": {
+          "kind": "text",
+          "value": "Tuesday"
+        },
+        "C14": {
+          "kind": "text",
+          "value": "Monday"
+        },
+        "B14": {
+          "kind": "bool",
+          "value": true
+        },
+        "A14": {
+          "kind": "text",
+          "value": ","
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Monday,Tuesday,Wednesday,Thursday"
+      }
+    }
+  ]
+}
