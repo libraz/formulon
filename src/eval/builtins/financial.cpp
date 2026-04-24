@@ -418,6 +418,15 @@ Value Rate(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
       return Value::error(ErrorCode::Num);
     }
     if (std::fabs(new_rate - rate) < kTolerance) {
+      // Degenerate fixed point at rate == -1 (or dangerously close): the
+      // TVM relation (1+r)^n is zero there, so the algebra that produced
+      // this convergence is ill-defined. Excel returns #NUM! instead of
+      // publishing a spurious -1.0 root. Without this clamp we happily
+      // "converged" on `RATE(10, -1200, 2000, 0, 1)` where the iterate
+      // slides toward -1 and never crosses out.
+      if (new_rate <= -1.0 + kTolerance) {
+        return Value::error(ErrorCode::Num);
+      }
       return finalize(new_rate);
     }
     rate = new_rate;
