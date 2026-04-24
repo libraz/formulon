@@ -81,6 +81,10 @@ Value Pv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const double p = pmt.value();
   const double f = fv.value();
   const double t = normalize_type(type.value());
+  if (r <= -1.0) {
+    // Excel rejects rate <= -1 outright (domain error), matching oracle.
+    return Value::error(ErrorCode::Num);
+  }
   if (r == 0.0) {
     return finalize(-(p * n + f));
   }
@@ -123,6 +127,10 @@ Value Fv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const double p = pmt.value();
   const double v = pv.value();
   const double t = normalize_type(type.value());
+  if (r <= -1.0) {
+    // Excel rejects rate <= -1 outright (domain error), matching oracle.
+    return Value::error(ErrorCode::Num);
+  }
   if (r == 0.0) {
     return finalize(-(v + p * n));
   }
@@ -165,6 +173,10 @@ Value Pmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const double v = pv.value();
   const double f = fv.value();
   const double t = normalize_type(type.value());
+  if (r <= -1.0) {
+    // Excel rejects rate <= -1 outright (domain error), matching oracle.
+    return Value::error(ErrorCode::Num);
+  }
   if (r == 0.0) {
     if (n == 0.0) {
       return Value::error(ErrorCode::Num);

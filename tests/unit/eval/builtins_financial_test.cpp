@@ -174,6 +174,37 @@ TEST(FinancialPMT, BeginOfPeriodIsSmallerMagnitude) {
   EXPECT_LT(std::fabs(begin.as_number()), std::fabs(end.as_number()));
 }
 
+TEST(FinancialPmt, RateAtMinusOneIsNum) {
+  // Excel 365 / IronCalc oracle: rate == -1 is rejected outright as a
+  // domain error, even though nper==1 would give a finite closed form.
+  const Value v = EvalSource("=PMT(-1, 1, -100)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialPmt, RateBelowMinusOneIsNum) {
+  // Excel 365 / IronCalc oracle: rate < -1 is a domain error. Without
+  // the guard, (1 + rate)^nper = (-2)^5 = -32 would yield a finite
+  // answer that disagrees with Excel.
+  const Value v = EvalSource("=PMT(-3, 5, 100, 300, 1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialPv, RateAtMinusOneIsNum) {
+  // Mirrors the PMT guard: PV also rejects rate <= -1.
+  const Value v = EvalSource("=PV(-1, 5, 100)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialFv, RateAtMinusOneIsNum) {
+  // Mirrors the PMT guard: FV also rejects rate <= -1.
+  const Value v = EvalSource("=FV(-1, 5, 100)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
 // ---------------------------------------------------------------------------
 // NPER
 // ---------------------------------------------------------------------------
