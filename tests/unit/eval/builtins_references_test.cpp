@@ -596,6 +596,99 @@ TEST(BuiltinsOffset, SumOfOffsetOutOfGridPropagatesRef) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
+// ---------------------------------------------------------------------------
+// `:` operator with OFFSET / INDIRECT call endpoints.
+// Mac Excel 365 (ja-JP) accepts these and unions the resolved rectangles;
+// see tests/oracle/cases/range_endpoint_calls.yaml for the goldens.
+// ---------------------------------------------------------------------------
+
+TEST(RangeEndpoint, RefToOffsetSingleCol) {
+  // SUM(A1:OFFSET(A1,4,0)) — lhs literal Ref, rhs OFFSET single-cell.
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 0; r < 5; ++r) {
+    wb.sheet(0).set_cell_value(r, 0, Value::number(static_cast<double>(r + 1)));
+  }
+  const Value v = EvalSourceIn("=SUM(A1:OFFSET(A1,4,0))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 15.0);
+}
+
+TEST(RangeEndpoint, OffsetToOffsetSingleCol) {
+  // SUM(OFFSET(A1,0,0):OFFSET(A1,4,0)) — both endpoints are OFFSET calls.
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 0; r < 5; ++r) {
+    wb.sheet(0).set_cell_value(r, 0, Value::number(static_cast<double>(r + 1)));
+  }
+  const Value v = EvalSourceIn("=SUM(OFFSET(A1,0,0):OFFSET(A1,4,0))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 15.0);
+}
+
+TEST(RangeEndpoint, IndirectToIndirect) {
+  // SUM(INDIRECT("B2"):INDIRECT("B6")) — both endpoints INDIRECT.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(1, 1, Value::number(2.0));
+  wb.sheet(0).set_cell_value(2, 1, Value::number(4.0));
+  wb.sheet(0).set_cell_value(3, 1, Value::number(6.0));
+  wb.sheet(0).set_cell_value(4, 1, Value::number(8.0));
+  wb.sheet(0).set_cell_value(5, 1, Value::number(10.0));
+  const Value v = EvalSourceIn("=SUM(INDIRECT(\"B2\"):INDIRECT(\"B6\"))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 30.0);
+}
+
+TEST(RangeEndpoint, OffsetAboveRefNormalises) {
+  // SUM(OFFSET(A5,-4,0):A5) — lhs OFFSET resolves to A1, rhs A5;
+  // endpoint ordering is normalised so the union is A1:A5.
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 0; r < 5; ++r) {
+    wb.sheet(0).set_cell_value(r, 0, Value::number(static_cast<double>(r + 1)));
+  }
+  const Value v = EvalSourceIn("=SUM(OFFSET(A5,-4,0):A5)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 15.0);
+}
+
+TEST(RangeEndpoint, RefToMultiCellOffset) {
+  // SUM(A1:OFFSET(A1,2,1,2,1)) — rhs OFFSET resolves to a 2x1
+  // rectangle B3:B4. The rectangle's bottom-right corner participates
+  // in the union so the unioned range is A1:B4 =
+  //   1 + 2 + 3 + 4 + 10 + 20 + 30 + 40 = 110.
+  // Verified against Mac Excel 365 in
+  // tests/oracle/golden/range_endpoint_calls.golden.json.
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 0; r < 5; ++r) {
+    wb.sheet(0).set_cell_value(r, 0, Value::number(static_cast<double>(r + 1)));
+    wb.sheet(0).set_cell_value(r, 1, Value::number(static_cast<double>((r + 1) * 10)));
+  }
+  const Value v = EvalSourceIn("=SUM(A1:OFFSET(A1,2,1,2,1))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 110.0);
+}
+
+TEST(RangeEndpoint, RefToOffsetTwoCol) {
+  // SUM(A1:OFFSET(A1,4,1)) — rhs OFFSET steps to column B; spans A1:B5.
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 0; r < 5; ++r) {
+    wb.sheet(0).set_cell_value(r, 0, Value::number(static_cast<double>(r + 1)));
+    wb.sheet(0).set_cell_value(r, 1, Value::number(static_cast<double>((r + 1) * 10)));
+  }
+  const Value v = EvalSourceIn("=SUM(A1:OFFSET(A1,4,1))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 165.0);
+}
+
+TEST(RangeEndpoint, RefToIndirect) {
+  // SUM(A1:INDIRECT("A3")) — lhs Ref, rhs INDIRECT.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(100.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(200.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(300.0));
+  const Value v = EvalSourceIn("=SUM(A1:INDIRECT(\"A3\"))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 600.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

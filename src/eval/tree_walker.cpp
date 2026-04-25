@@ -568,19 +568,46 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
     if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::RangeOp) {
       const parser::AstNode& lhs_ast = arg_node.as_range_lhs();
       const parser::AstNode& rhs_ast = arg_node.as_range_rhs();
-      // Only the simplest form -- literal A1:B2 where both endpoints are
-      // Refs -- is expanded. Anything else (INDIRECT(...), named ranges,
-      // etc.) surfaces as #REF! here; full dynamic range resolution is
-      // deferred.
-      if (lhs_ast.kind() != parser::NodeKind::Ref || rhs_ast.kind() != parser::NodeKind::Ref) {
-        const Value err = Value::error(ErrorCode::Ref);
+      // Endpoints may be plain Refs (the simple `A1:B2` form) or
+      // reference-producing calls (`OFFSET(...)` / `INDIRECT(...)`);
+      // `resolve_range_endpoint` normalises both to a rectangle so we
+      // can union them and feed `expand_range` two synthetic Refs.
+      // Anything else (literals, arithmetic, named ranges, …) surfaces
+      // as #REF! / #VALUE! per the helper's error code.
+      std::string_view lhs_sheet;
+      std::string_view rhs_sheet;
+      std::uint32_t lhs_top = 0;
+      std::uint32_t lhs_left = 0;
+      std::uint32_t lhs_bottom = 0;
+      std::uint32_t lhs_right = 0;
+      std::uint32_t rhs_top = 0;
+      std::uint32_t rhs_left = 0;
+      std::uint32_t rhs_bottom = 0;
+      std::uint32_t rhs_right = 0;
+      ErrorCode endpoint_err = ErrorCode::Ref;
+      if (!resolve_range_endpoint(lhs_ast, arena, registry, ctx, &lhs_sheet, &lhs_top, &lhs_left, &lhs_bottom,
+                                  &lhs_right, &endpoint_err) ||
+          !resolve_range_endpoint(rhs_ast, arena, registry, ctx, &rhs_sheet, &rhs_top, &rhs_left, &rhs_bottom,
+                                  &rhs_right, &endpoint_err)) {
+        const Value err = Value::error(endpoint_err);
         if (def->propagate_errors) {
           return err;
         }
         values.push_back(err);
         continue;
       }
-      auto expanded = ctx.expand_range(lhs_ast.as_ref(), rhs_ast.as_ref(), arena, registry);
+      // Build the union rectangle's two corner Refs and let
+      // `expand_range` validate sheet equality (mismatched qualifiers
+      // surface as #REF!).
+      parser::Reference union_lhs{};
+      parser::Reference union_rhs{};
+      union_lhs.sheet = lhs_sheet;
+      union_lhs.row = std::min(lhs_top, rhs_top);
+      union_lhs.col = std::min(lhs_left, rhs_left);
+      union_rhs.sheet = rhs_sheet;
+      union_rhs.row = std::max(lhs_bottom, rhs_bottom);
+      union_rhs.col = std::max(lhs_right, rhs_right);
+      auto expanded = ctx.expand_range(union_lhs, union_rhs, arena, registry);
       if (!expanded) {
         const Value err = Value::error(expanded.error());
         if (def->propagate_errors) {

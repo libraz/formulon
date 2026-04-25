@@ -813,5 +813,36 @@ bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const Fun
   return false;
 }
 
+bool resolve_range_endpoint(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                            std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                            ErrorCode* out_err) {
+  if (node.kind() == parser::NodeKind::Ref) {
+    const parser::Reference& r = node.as_ref();
+    // Whole-column / whole-row refs cannot anchor an endpoint composition
+    // because the union rectangle would be unbounded; surface #VALUE! to
+    // match `expand_range`'s existing degradation for these shapes.
+    if (r.is_full_col || r.is_full_row) {
+      *out_err = ErrorCode::Value;
+      return false;
+    }
+    *out_sheet = r.sheet;
+    *out_top_row = r.row;
+    *out_left_col = r.col;
+    *out_bottom_row = r.row;
+    *out_right_col = r.col;
+    return true;
+  }
+  if (node.kind() == parser::NodeKind::Call) {
+    bool is_range_unused = false;
+    return resolve_reference_call(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
+                                  out_right_col, &is_range_unused, out_err);
+  }
+  // Anything else (NameRef, ExternalRef, BinaryOp, ArrayLiteral, etc.) is
+  // not a recognized range endpoint shape.
+  *out_err = ErrorCode::Ref;
+  return false;
+}
+
 }  // namespace eval
 }  // namespace formulon

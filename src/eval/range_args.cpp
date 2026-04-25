@@ -5,6 +5,7 @@
 
 #include "eval/range_args.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -38,32 +39,49 @@ bool resolve_range_arg(const parser::AstNode& arg_node, Arena& arena, const Func
   if (arg_node.kind() == parser::NodeKind::RangeOp) {
     const parser::AstNode& lhs_ast = arg_node.as_range_lhs();
     const parser::AstNode& rhs_ast = arg_node.as_range_rhs();
-    if (lhs_ast.kind() != parser::NodeKind::Ref || rhs_ast.kind() != parser::NodeKind::Ref) {
-      *out_err_code = ErrorCode::Ref;
+    // Endpoints may be plain Refs or reference-producing calls
+    // (`OFFSET(...)` / `INDIRECT(...)`). `resolve_range_endpoint`
+    // normalises both shapes to a rectangle so we can union them and
+    // feed `expand_range` two synthetic Refs. Sheet-qualifier
+    // validation (mismatched qualifiers -> #REF!) is delegated to
+    // `expand_range` itself.
+    std::string_view lhs_sheet;
+    std::string_view rhs_sheet;
+    std::uint32_t lhs_top = 0;
+    std::uint32_t lhs_left = 0;
+    std::uint32_t lhs_bottom = 0;
+    std::uint32_t lhs_right = 0;
+    std::uint32_t rhs_top = 0;
+    std::uint32_t rhs_left = 0;
+    std::uint32_t rhs_bottom = 0;
+    std::uint32_t rhs_right = 0;
+    ErrorCode endpoint_err = ErrorCode::Ref;
+    if (!resolve_range_endpoint(lhs_ast, arena, registry, ctx, &lhs_sheet, &lhs_top, &lhs_left, &lhs_bottom, &lhs_right,
+                                &endpoint_err) ||
+        !resolve_range_endpoint(rhs_ast, arena, registry, ctx, &rhs_sheet, &rhs_top, &rhs_left, &rhs_bottom, &rhs_right,
+                                &endpoint_err)) {
+      *out_err_code = endpoint_err;
       return false;
     }
-    const parser::Reference& lhs_ref = lhs_ast.as_ref();
-    const parser::Reference& rhs_ref = rhs_ast.as_ref();
-    auto expanded = ctx.expand_range(lhs_ref, rhs_ref, arena, registry);
+    parser::Reference union_lhs{};
+    parser::Reference union_rhs{};
+    union_lhs.sheet = lhs_sheet;
+    union_lhs.row = std::min(lhs_top, rhs_top);
+    union_lhs.col = std::min(lhs_left, rhs_left);
+    union_rhs.sheet = rhs_sheet;
+    union_rhs.row = std::max(lhs_bottom, rhs_bottom);
+    union_rhs.col = std::max(lhs_right, rhs_right);
+    auto expanded = ctx.expand_range(union_lhs, union_rhs, arena, registry);
     if (!expanded) {
       *out_err_code = expanded.error();
       return false;
     }
     *out_cells = std::move(expanded.value());
-    if (out_rows != nullptr || out_cols != nullptr) {
-      // `expand_range` normalises endpoint ordering (A3:A1 == A1:A3) so
-      // mirror that here. Full-col/full-row would have already failed the
-      // expansion with #VALUE!, so we can safely take the absolute span.
-      const std::uint32_t r_lo = lhs_ref.row < rhs_ref.row ? lhs_ref.row : rhs_ref.row;
-      const std::uint32_t r_hi = lhs_ref.row < rhs_ref.row ? rhs_ref.row : lhs_ref.row;
-      const std::uint32_t c_lo = lhs_ref.col < rhs_ref.col ? lhs_ref.col : rhs_ref.col;
-      const std::uint32_t c_hi = lhs_ref.col < rhs_ref.col ? rhs_ref.col : lhs_ref.col;
-      if (out_rows != nullptr) {
-        *out_rows = r_hi - r_lo + 1U;
-      }
-      if (out_cols != nullptr) {
-        *out_cols = c_hi - c_lo + 1U;
-      }
+    if (out_rows != nullptr) {
+      *out_rows = union_rhs.row - union_lhs.row + 1U;
+    }
+    if (out_cols != nullptr) {
+      *out_cols = union_rhs.col - union_lhs.col + 1U;
     }
     return true;
   }

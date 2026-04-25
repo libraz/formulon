@@ -1,0 +1,96 @@
+suite: range_endpoint_calls
+description: >
+  `:` operator with OFFSET / INDIRECT calls on either or both endpoints.
+  Excel 365 accepts these syntactically and unions the resolved rectangles.
+  IronCalc's `range_operator` fixture exercises the same shapes; this file
+  reuses representative cases so we can pin Mac Excel 365 (ja-JP) directly
+  rather than depending on IronCalc's documented values. Each setup is small
+  and self-contained.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  # A1:A5 = 1..5; SUM via Ref:OFFSET endpoint composition.
+  - id: sum_ref_to_offset_single_col
+    description: "SUM(A1:OFFSET(A1,4,0)) - lhs literal Ref, rhs OFFSET single-cell"
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+      A4: 4
+      A5: 5
+    formula: "=SUM(A1:OFFSET(A1,4,0))"
+
+  # Both endpoints are OFFSET calls; same A1..A5 setup.
+  - id: sum_offset_to_offset_single_col
+    description: "SUM(OFFSET(A1,0,0):OFFSET(A1,4,0))"
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+      A4: 4
+      A5: 5
+    formula: "=SUM(OFFSET(A1,0,0):OFFSET(A1,4,0))"
+
+  # 2D: rhs OFFSET steps to column B; spans A1:B5.
+  - id: sum_ref_to_offset_two_col
+    description: "SUM(A1:OFFSET(A1,4,1)) - 2D rectangle via offset"
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+      A4: 4
+      A5: 5
+      B1: 10
+      B2: 20
+      B3: 30
+      B4: 40
+      B5: 50
+    formula: "=SUM(A1:OFFSET(A1,4,1))"
+
+  # INDIRECT-resolved endpoint.
+  - id: sum_indirect_to_indirect
+    description: "SUM(INDIRECT(\"B2\"):INDIRECT(\"B6\"))"
+    setup:
+      B2: 2
+      B3: 4
+      B4: 6
+      B5: 8
+      B6: 10
+    formula: "=SUM(INDIRECT(\"B2\"):INDIRECT(\"B6\"))"
+
+  # Mixed Ref:INDIRECT.
+  - id: sum_ref_to_indirect
+    description: "SUM(A1:INDIRECT(\"A3\")) - lhs Ref, rhs INDIRECT"
+    setup:
+      A1: 100
+      A2: 200
+      A3: 300
+    formula: "=SUM(A1:INDIRECT(\"A3\"))"
+
+  # Reverse-order endpoints (rhs above lhs) - normalise.
+  - id: sum_offset_above_ref
+    description: "SUM(OFFSET(A5,-4,0):A5) - lhs OFFSET resolves to A1, rhs A5"
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+      A4: 4
+      A5: 5
+    formula: "=SUM(OFFSET(A5,-4,0):A5)"
+
+  # Multi-cell OFFSET endpoint - the OFFSET rectangle's bottom-right
+  # corner participates in the union, not just its top-left.
+  - id: sum_ref_to_multi_offset
+    description: "SUM(A1:OFFSET(A1,2,1,2,1)) - rhs is a 2x1 OFFSET rect at row 4-5 col B"
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+      A4: 4
+      A5: 5
+      B1: 10
+      B2: 20
+      B3: 30
+      B4: 40
+      B5: 50
+    formula: "=SUM(A1:OFFSET(A1,2,1,2,1))"

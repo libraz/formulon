@@ -498,10 +498,16 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
     AstNode* node = nullptr;
     if (kind == TokenKind::Colon) {
       // Validate that `rhs` is something that can plausibly close a range.
-      // A literal / call / unary-op on the rhs of `:` is not an Excel range.
+      // A literal / unary-op on the rhs of `:` is not an Excel range.
+      // `Call` is allowed here because Excel accepts reference-returning
+      // calls (`OFFSET(...)`, `INDIRECT(...)`) as `:` endpoints; the
+      // evaluator's `resolve_range_endpoint` discriminates between
+      // reference-producing calls and value-producing calls (the latter
+      // surface as `#VALUE!` at eval time via `resolve_reference_call`).
       const NodeKind rk = rhs->kind();
       if (rk != NodeKind::Ref && rk != NodeKind::NameRef && rk != NodeKind::ExternalRef &&
-          rk != NodeKind::StructuredRef && rk != NodeKind::RangeOp && rk != NodeKind::ErrorPlaceholder) {
+          rk != NodeKind::StructuredRef && rk != NodeKind::RangeOp && rk != NodeKind::Call &&
+          rk != NodeKind::ErrorPlaceholder) {
         record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
       }
       node = make_range_op(arena_, lhs, rhs);

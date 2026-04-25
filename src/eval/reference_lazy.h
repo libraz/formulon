@@ -95,6 +95,25 @@ bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const Fun
                             std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
                             bool* out_is_range, ErrorCode* out_err);
 
+/// Resolves a `:` operator endpoint into a rectangle. `node` may be a
+/// plain `Ref` (1x1 rectangle) or a `Call` to `OFFSET` / `INDIRECT`,
+/// in which case `resolve_reference_call` produces the rectangle.
+/// Returns `true` on success and writes the rectangle (0-based,
+/// inclusive) into the out parameters; the sheet qualifier (empty =
+/// bound sheet) is written to `*out_sheet`. On failure returns `false`
+/// and writes the Excel error code to `*out_err`.
+///
+/// Used by the range-aware dispatcher (`tree_walker.cpp`) and by
+/// `resolve_range_arg` so `SUM(A1:OFFSET(...))` and
+/// `COUNTIF(A1:INDIRECT(...), ...)` produce the union rectangle that
+/// Mac Excel 365 produces. Whole-column / whole-row endpoints surface
+/// `#VALUE!` because the resulting union would be unbounded; that
+/// matches `expand_range`'s existing degradation for those shapes.
+bool resolve_range_endpoint(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                            std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                            ErrorCode* out_err);
+
 namespace refs_internal {
 
 /// Output of `parse_a1_ref`: sheet qualifier (empty if unqualified),

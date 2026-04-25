@@ -174,6 +174,18 @@ TEST(ParserErrors, InvalidRangeRhsIsLiteral) {
   EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::InvalidRange));
 }
 
+TEST(ParserErrors, RangeRhsCallIsAccepted) {
+  // Reference-returning calls (`OFFSET(...)`, `INDIRECT(...)`) are valid
+  // `:` endpoints in Excel 365; the parser must not flag them as
+  // InvalidRange. Call-vs-Ref discrimination happens at eval time
+  // (`resolve_reference_call`), where a non-reference call surfaces
+  // `#VALUE!`.
+  Arena a;
+  Parser p("=A1:OFFSET(A1,4,0)", a);
+  (void)p.parse();
+  EXPECT_FALSE(HasErrorCode(p.errors(), ParseErrorCode::InvalidRange));
+}
+
 TEST(ParserErrors, NestedFormulaTooDeep) {
   Arena a;
   ParserOptions opts;
