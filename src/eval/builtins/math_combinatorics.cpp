@@ -809,11 +809,15 @@ void register_math_combinatorics_builtins(FunctionRegistry& registry) {
   {
     FunctionDef def{"GCD", 1u, kVariadic, &Gcd};
     def.accepts_ranges = true;
+    def.blank_scalar_policy = FunctionDef::BlankScalarPolicy::RejectAnyScalar;
+    def.blank_scalar_error = ErrorCode::Value;
     registry.register_function(def);
   }
   {
     FunctionDef def{"LCM", 1u, kVariadic, &Lcm};
     def.accepts_ranges = true;
+    def.blank_scalar_policy = FunctionDef::BlankScalarPolicy::RejectAnyScalar;
+    def.blank_scalar_error = ErrorCode::Value;
     registry.register_function(def);
   }
 

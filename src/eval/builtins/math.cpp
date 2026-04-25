@@ -694,7 +694,12 @@ void register_math_builtins(FunctionRegistry& registry) {
   // Significance-aware rounding.
   registry.register_function(FunctionDef{"CEILING", 2u, 2u, &Ceiling});
   registry.register_function(FunctionDef{"FLOOR", 2u, 2u, &Floor});
-  registry.register_function(FunctionDef{"MROUND", 2u, 2u, &MRound});
+  {
+    FunctionDef def{"MROUND", 2u, 2u, &MRound};
+    def.blank_scalar_policy = FunctionDef::BlankScalarPolicy::RejectLiteralEmpty;
+    def.blank_scalar_error = ErrorCode::NA;
+    registry.register_function(def);
+  }
   registry.register_function(FunctionDef{"CEILING.MATH", 1u, 3u, &CeilingMath});
   registry.register_function(FunctionDef{"FLOOR.MATH", 1u, 3u, &FloorMath});
 }

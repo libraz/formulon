@@ -86,6 +86,33 @@ struct FunctionDef {
   /// via the impl's own `coerce_to_number`, and a direct non-numeric text
   /// still surfaces `#VALUE!`).
   bool range_filter_a_coerce = false;
+
+  /// Mac-aligned policy for arguments that resolve to `Value::blank()`.
+  /// Only applies to scalar (non-range, non-array-literal, non-OFFSET-call)
+  /// arg slots; cells inside an expanded RangeOp or `OFFSET(...)` call are
+  /// always coerced to 0 regardless of this setting (matching Excel's
+  /// "blank in a range = 0" rule for SUM/AVERAGE/GCD-range/etc.).
+  ///
+  ///   * `Allow` (default) - Blank coerces to 0 via `coerce_to_number`.
+  ///   * `RejectLiteralEmpty` - Only the literal-empty slot (parser-injected
+  ///     `Literal(blank)` for `FN(,X)` / `FN(X,)` / `FN(,)`) surfaces
+  ///     `blank_scalar_error`. A `Ref` to a blank cell still coerces to 0.
+  ///     Used by `MROUND`, where Mac returns `#N/A` for `=MROUND(,5)` but
+  ///     `0` for `=MROUND(A1,B1)` with A1/B1 blank.
+  ///   * `RejectAnyScalar` - Both literal-empty slots AND `Ref`-to-blank
+  ///     surface `blank_scalar_error`. Used by `GCD` / `LCM`, where Mac
+  ///     surfaces `#VALUE!` for `=GCD(A1,B1,C1)` (all blank refs) but
+  ///     returns `0` for `=GCD(A1:C1)` (range form, same blank cells).
+  enum class BlankScalarPolicy : std::uint8_t {
+    Allow = 0,
+    RejectLiteralEmpty = 1,
+    RejectAnyScalar = 2,
+  };
+  BlankScalarPolicy blank_scalar_policy = BlankScalarPolicy::Allow;
+  /// Error code surfaced when `blank_scalar_policy` fires. Ignored when
+  /// the policy is `Allow`. Defaults to `Value` purely so the field has a
+  /// well-defined value; consumers must set this together with the policy.
+  ErrorCode blank_scalar_error = ErrorCode::Value;
 };
 
 /// Case-insensitive function lookup table. Names are stored UPPERCASE

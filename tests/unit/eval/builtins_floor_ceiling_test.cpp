@@ -12,12 +12,17 @@
 
 #include <string_view>
 
+#include "eval/eval_context.h"
+#include "eval/eval_state.h"
+#include "eval/function_registry.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "sheet.h"
 #include "utils/arena.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
@@ -38,6 +43,25 @@ Value EvalSource(std::string_view src) {
     return Value::error(ErrorCode::Name);
   }
   return evaluate(*root, eval_arena);
+}
+
+// Bound-workbook variant for cases that need A1-style cell references
+// (e.g. blank cell refs to MROUND, where the dispatcher's blank-scalar
+// policy distinguishes literal-empty from Ref-to-blank).
+Value EvalSourceIn(std::string_view src, const Workbook& wb, const Sheet& current) {
+  static thread_local Arena parse_arena;
+  static thread_local Arena eval_arena;
+  parse_arena.reset();
+  eval_arena.reset();
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  EvalState state;
+  const EvalContext ctx(wb, current, state);
+  return evaluate(*root, eval_arena, default_registry(), ctx);
 }
 
 // ---------------------------------------------------------------------------
@@ -110,6 +134,54 @@ TEST(CeilingNegNumPosSig, ReturnsNumeric) {
   const Value v = EvalSource("=CEILING(-4.3, 1)");
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), -4.0);
+}
+
+// ---------------------------------------------------------------------------
+// MROUND blank-scalar policy
+// ---------------------------------------------------------------------------
+//
+// Mac Excel 365 distinguishes between a parser-injected literal-empty arg
+// slot (`=MROUND(,5)` / `=MROUND(5,)`) and a Ref to a blank cell
+// (`=MROUND(A1,B1)` with A1/B1 blank). The probe golden
+// `tests/oracle/golden/lowrisk_probes.golden.json` records the full table.
+
+TEST(MRoundBlankScalar, LiteralEmptyFirstArgYieldsNA) {
+  const Value v = EvalSource("=MROUND(,5)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(MRoundBlankScalar, LiteralEmptySecondArgYieldsNA) {
+  const Value v = EvalSource("=MROUND(5,)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(MRoundBlankScalar, BothBlankRefsCoerceToZero) {
+  // Neither A1 nor B1 has a value; both Refs resolve to Blank, which the
+  // RejectLiteralEmpty policy lets through to MRound's normal coercion.
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=MROUND(A1,B1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+}
+
+TEST(MRoundBlankScalar, ZeroMultipleStillZero) {
+  const Value v = EvalSource("=MROUND(0,0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+}
+
+TEST(MRoundBlankScalar, NumberWithZeroMultipleStillZero) {
+  const Value v = EvalSource("=MROUND(5,0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+}
+
+TEST(MRoundBlankScalar, BasicSanityFifteenAndFive) {
+  const Value v = EvalSource("=MROUND(15,5)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 15.0);
 }
 
 }  // namespace

@@ -1,0 +1,221 @@
+{
+  "suite": "lowrisk_probes",
+  "description": "Mac Excel 365 (ja-JP) probe for the small \"low-risk\" cluster of IronCalc divergences identified in the 218-case survey: MROUND with empty/blank scalar args, GCD/LCM with all-blank scalar args, and OFFSET with negative height/width or fractional width. IronCalc returns #N/A / #VALUE! / #REF! for these shapes; we want to confirm whether Mac agrees, disagrees, or exhibits a third outcome before changing Formulon. Each case is intentionally minimal — no dependency on table/spill semantics — so the probe results are unambiguous. Once the golden is written this suite doubles as a regression fence for the chosen behavior.\n",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-25T22:10:24Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "mround_blank_first_arg",
+      "formula": "=MROUND(,B34)",
+      "setup": {
+        "B34": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "mround_blank_second_arg",
+      "formula": "=MROUND(A36,)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "mround_blank_both_via_cell",
+      "formula": "=MROUND(A1,B1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_zero_zero",
+      "formula": "=MROUND(0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_five_zero",
+      "formula": "=MROUND(5,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "gcd_three_blank_scalars",
+      "formula": "=GCD(A1,B1,C1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "lcm_three_blank_scalars",
+      "formula": "=LCM(A1,B1,C1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "gcd_three_zero_scalars",
+      "formula": "=GCD(0,0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "lcm_three_zero_scalars",
+      "formula": "=LCM(0,0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "gcd_blank_range",
+      "formula": "=GCD(A1:C1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "lcm_blank_range",
+      "formula": "=LCM(A1:C1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "offset_neg_height",
+      "formula": "=OFFSET(A1,2,2,-10,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "offset_neg_width",
+      "formula": "=OFFSET(A1,2,2,2,-2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "offset_zero_height",
+      "formula": "=OFFSET(A1,2,2,0,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "offset_zero_width",
+      "formula": "=OFFSET(A1,2,2,1,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "offset_frac_height",
+      "formula": "=OFFSET(A1,0,0,1.7,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "sum_offset_frac_width",
+      "formula": "=SUM(OFFSET(C3,2,2,3,0.9))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E5": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E6": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "E7": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    }
+  ]
+}

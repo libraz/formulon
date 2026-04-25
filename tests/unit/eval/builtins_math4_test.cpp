@@ -12,13 +12,17 @@
 #include <cmath>
 #include <string_view>
 
+#include "eval/eval_context.h"
+#include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "sheet.h"
 #include "utils/arena.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
@@ -42,6 +46,26 @@ Value EvalSource(std::string_view src) {
     return Value::error(ErrorCode::Name);
   }
   return evaluate(*root, eval_arena);
+}
+
+// Bound-workbook variant for cases that need A1-style cell references.
+// Used by the GCD / LCM blank-scalar policy tests where Mac Excel 365
+// distinguishes between a Ref-to-blank-cell scalar arg (#VALUE!) and a
+// range argument whose cells happen to be blank (returns 0).
+Value EvalSourceIn(std::string_view src, const Workbook& wb, const Sheet& current) {
+  static thread_local Arena parse_arena;
+  static thread_local Arena eval_arena;
+  parse_arena.reset();
+  eval_arena.reset();
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  EvalState state;
+  const EvalContext ctx(wb, current, state);
+  return evaluate(*root, eval_arena, default_registry(), ctx);
 }
 
 // ---------------------------------------------------------------------------
@@ -272,6 +296,48 @@ TEST(BuiltinsMath4Gcd, FractionalTruncates) {
 }
 
 // ---------------------------------------------------------------------------
+// GCD blank-scalar policy
+// ---------------------------------------------------------------------------
+//
+// Mac Excel 365 surfaces #VALUE! for `=GCD(A1,B1,C1)` when every Ref
+// resolves to a blank cell, but returns 0 for `=GCD(A1:C1)` over the same
+// blank cells. The probe golden in
+// `tests/oracle/golden/lowrisk_probes.golden.json` records the table.
+
+TEST(BuiltinsMath4GcdBlankScalar, AllBlankRefsYieldValueError) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=GCD(A1,B1,C1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsMath4GcdBlankScalar, AllBlankRangeYieldsZero) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=GCD(A1:C1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+}
+
+TEST(BuiltinsMath4GcdBlankScalar, LiteralZerosStillYieldZero) {
+  // Direct numeric literals are not blank; the policy must not fire.
+  const Value v = EvalSource("=GCD(0,0,0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+}
+
+TEST(BuiltinsMath4GcdBlankScalar, BasicSanityTwelveAndEighteen) {
+  const Value v = EvalSource("=GCD(12,18)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 6.0);
+}
+
+TEST(BuiltinsMath4GcdBlankScalar, LiteralEmptySlotYieldsValueError) {
+  const Value v = EvalSource("=GCD(,5)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+// ---------------------------------------------------------------------------
 // LCM
 // ---------------------------------------------------------------------------
 
@@ -306,6 +372,44 @@ TEST(BuiltinsMath4Lcm, FractionalTruncates) {
   const Value v = EvalSource("=LCM(4.9, 6.1)");
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 12.0);
+}
+
+// ---------------------------------------------------------------------------
+// LCM blank-scalar policy (symmetric to GCD)
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsMath4LcmBlankScalar, AllBlankRefsYieldValueError) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=LCM(A1,B1,C1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsMath4LcmBlankScalar, AllBlankRangeYieldsZero) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=LCM(A1:C1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+}
+
+TEST(BuiltinsMath4LcmBlankScalar, LiteralZerosStillYieldZero) {
+  // LCM with any zero argument is zero by Excel's quirk; literal zeros
+  // are not blank, so the policy must not fire.
+  const Value v = EvalSource("=LCM(0,0,0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+}
+
+TEST(BuiltinsMath4LcmBlankScalar, BasicSanityFourAndSix) {
+  const Value v = EvalSource("=LCM(4,6)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 12.0);
+}
+
+TEST(BuiltinsMath4LcmBlankScalar, LiteralEmptySlotYieldsValueError) {
+  const Value v = EvalSource("=LCM(,5)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 // ---------------------------------------------------------------------------

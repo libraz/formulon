@@ -1,0 +1,114 @@
+suite: lowrisk_probes
+description: >
+  Mac Excel 365 (ja-JP) probe for the small "low-risk" cluster of IronCalc
+  divergences identified in the 218-case survey: MROUND with empty/blank
+  scalar args, GCD/LCM with all-blank scalar args, and OFFSET with negative
+  height/width or fractional width. IronCalc returns #N/A / #VALUE! / #REF!
+  for these shapes; we want to confirm whether Mac agrees, disagrees, or
+  exhibits a third outcome before changing Formulon. Each case is
+  intentionally minimal — no dependency on table/spill semantics — so the
+  probe results are unambiguous. Once the golden is written this suite
+  doubles as a regression fence for the chosen behavior.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  # ---------------------------------------------------------------------
+  # A) MROUND with blank/empty scalar args. IronCalc says #N/A for both
+  # `=MROUND(,5)` and `=MROUND(5,)`. Excel's documented rule is #DIV/0!
+  # when multiple is 0, so `=MROUND(5,)` (multiple coerces to 0) might
+  # land on #DIV/0! instead of #N/A. The first arg case is murkier.
+  - id: mround_blank_first_arg
+    description: "MROUND(,5) - blank number coerces to 0"
+    setup:
+      B34: 5
+    formula: "=MROUND(,B34)"
+
+  - id: mround_blank_second_arg
+    description: "MROUND(A36,) where A36 is blank -> both blank"
+    formula: "=MROUND(A36,)"
+
+  - id: mround_blank_both_via_cell
+    description: "MROUND(A1,B1) with both blank"
+    formula: "=MROUND(A1,B1)"
+
+  - id: mround_zero_zero
+    description: "MROUND(0,0) - canonical #DIV/0! shape"
+    formula: "=MROUND(0,0)"
+
+  - id: mround_five_zero
+    description: "MROUND(5,0) - non-zero number, zero multiple"
+    formula: "=MROUND(5,0)"
+
+  # ---------------------------------------------------------------------
+  # B) GCD / LCM with all blank scalar args. IronCalc says #VALUE!.
+  # Range form (A1:C1) returns 0 in IronCalc — that is plausible.
+  # Excel's blank-coerces-to-0 rule would suggest GCD(0,0,0) which is 0,
+  # not #VALUE!.
+  - id: gcd_three_blank_scalars
+    description: "GCD(A1,B1,C1) - all blanks as scalar args"
+    formula: "=GCD(A1,B1,C1)"
+
+  - id: lcm_three_blank_scalars
+    description: "LCM(A1,B1,C1)"
+    formula: "=LCM(A1,B1,C1)"
+
+  - id: gcd_three_zero_scalars
+    description: "GCD(0,0,0) - explicit zeros for comparison"
+    formula: "=GCD(0,0,0)"
+
+  - id: lcm_three_zero_scalars
+    description: "LCM(0,0,0)"
+    formula: "=LCM(0,0,0)"
+
+  - id: gcd_blank_range
+    description: "GCD(A1:C1) - all-blank range form"
+    formula: "=GCD(A1:C1)"
+
+  - id: lcm_blank_range
+    description: "LCM(A1:C1)"
+    formula: "=LCM(A1:C1)"
+
+  # ---------------------------------------------------------------------
+  # C) OFFSET with invalid height/width. IronCalc says #REF! for negative
+  # height/width and #REF! for the SUM(OFFSET(...)) wrapper too. Need to
+  # verify Mac agrees - particularly the fractional width 0.9 case
+  # (truncates to 0? or snaps to 1?).
+  - id: offset_neg_height
+    description: "OFFSET(A1,2,2,-10,1) - negative height should #REF!"
+    setup:
+      A1: 1
+    formula: "=OFFSET(A1,2,2,-10,1)"
+
+  - id: offset_neg_width
+    description: "OFFSET(A1,2,2,2,-2) - negative width should #REF!"
+    setup:
+      A1: 1
+    formula: "=OFFSET(A1,2,2,2,-2)"
+
+  - id: offset_zero_height
+    description: "OFFSET(A1,2,2,0,1) - zero height"
+    setup:
+      A1: 1
+    formula: "=OFFSET(A1,2,2,0,1)"
+
+  - id: offset_zero_width
+    description: "OFFSET(A1,2,2,1,0) - zero width"
+    setup:
+      A1: 1
+    formula: "=OFFSET(A1,2,2,1,0)"
+
+  - id: offset_frac_height
+    description: "OFFSET(A1,0,0,1.7,1) - fractional height (truncate?)"
+    setup:
+      A1: 1
+      A2: 2
+    formula: "=OFFSET(A1,0,0,1.7,1)"
+
+  - id: sum_offset_frac_width
+    description: "SUM(OFFSET(C3,2,2,3,0.9)) - 3-row x 0.9-col rect"
+    setup:
+      A1: 1
+      E5: 10
+      E6: 20
+      E7: 30
+    formula: "=SUM(OFFSET(C3,2,2,3,0.9))"

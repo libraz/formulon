@@ -510,6 +510,18 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
   // in row-major order.
   std::vector<Value> values;
   values.reserve(arity);
+  // Tracks whether any argument slot was range-shaped (RangeOp / OFFSET-call
+  // / ArrayLiteral). Used by the deferred `RejectAnyScalar` blank-scalar
+  // policy: Mac Excel only surfaces #VALUE! for `=GCD(A1,B1,C1)` (all blank
+  // scalar refs) when there is NO range-shaped arg in the call. The mixed
+  // form `=GCD(A1:B1, C1)` over the same blank cells still returns 0,
+  // because the range arg "rescues" the policy.
+  bool had_range_shaped_arg = false;
+  // Tracks whether at least one scalar arg slot satisfied the
+  // `RejectAnyScalar` policy (a Blank-valued scalar that is not a literal
+  // zero). Combined with `had_range_shaped_arg` to decide whether to fire
+  // the deferred error after the loop completes.
+  bool any_scalar_blank_for_reject_any = false;
   for (std::uint32_t i = 0; i < arity; ++i) {
     const parser::AstNode& arg_node = node.as_call_arg(i);
     // Minimal array-literal support: when a range-aware function receives
@@ -520,6 +532,7 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
     // stays deferred — a bare `={1;2;3}` outside a function call still
     // surfaces as #VALUE! via `eval_node`'s ArrayLiteral case.
     if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::ArrayLiteral) {
+      had_range_shaped_arg = true;
       const std::uint32_t rows = arg_node.as_array_rows();
       const std::uint32_t cols = arg_node.as_array_cols();
       bool short_circuit = false;
@@ -566,6 +579,7 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       continue;
     }
     if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::RangeOp) {
+      had_range_shaped_arg = true;
       const parser::AstNode& lhs_ast = arg_node.as_range_lhs();
       const parser::AstNode& rhs_ast = arg_node.as_range_rhs();
       // Endpoints may be plain Refs (the simple `A1:B2` form) or
@@ -663,6 +677,7 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
     // scalar result OFFSET / INDIRECT produces today.
     if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Call &&
         strings::case_insensitive_eq(arg_node.as_call_name(), "OFFSET")) {
+      had_range_shaped_arg = true;
       std::vector<Value> off_cells;
       ErrorCode off_err = ErrorCode::Value;
       if (!expand_offset_call(arg_node, arena, registry, ctx, &off_cells, &off_err, nullptr, nullptr)) {
@@ -709,6 +724,32 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
     if (def->propagate_errors && v.is_error()) {
       return v;
     }
+    // Blank-scalar policy. RangeOp / OFFSET-call / ArrayLiteral args were
+    // handled above and `continue`'d, so reaching this point implies a
+    // scalar arg slot (Literal, Ref, BinaryOp, ...).
+    //
+    //   * `RejectLiteralEmpty` (MROUND) fires eagerly: only a parser-injected
+    //     `Literal(blank)` for an empty arg slot triggers it. A Ref to a
+    //     blank cell still flows through to the impl as 0, matching Mac.
+    //   * `RejectAnyScalar` (GCD / LCM) defers the decision to end-of-args.
+    //     Mac surfaces #VALUE! for `=GCD(A1,B1,C1)` (all blank scalar refs)
+    //     but returns 0 for the mixed form `=GCD(A1:B1, C1)` over the same
+    //     blank cells — the range arg "rescues" the call. The flag is
+    //     consulted after the loop in conjunction with
+    //     `had_range_shaped_arg`. Direct numeric literals (including
+    //     `=GCD(0,0,0)`) are not Blank and do not set the flag.
+    if (def->blank_scalar_policy == FunctionDef::BlankScalarPolicy::RejectLiteralEmpty &&
+        v.kind() == ValueKind::Blank && arg_node.kind() == parser::NodeKind::Literal) {
+      const Value err = Value::error(def->blank_scalar_error);
+      if (def->propagate_errors) {
+        return err;
+      }
+      values.push_back(err);
+      continue;
+    }
+    if (def->blank_scalar_policy == FunctionDef::BlankScalarPolicy::RejectAnyScalar && v.kind() == ValueKind::Blank) {
+      any_scalar_blank_for_reject_any = true;
+    }
     // Provenance-aware filter also applies to a single-cell `Ref` argument
     // for range-aware aggregators. Excel treats `MIN(A1, A2, A3)` the same
     // way it treats `MIN(A1:A3)`: Text / Bool / Blank cells are silently
@@ -737,6 +778,16 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       }
     }
     values.push_back(v);
+  }
+  // Deferred fire-point for `RejectAnyScalar`: only surface the error when
+  // there is no range-shaped arg in the call. The mixed form
+  // `=GCD(A1:B1, C1)` keeps `had_range_shaped_arg = true` and so falls
+  // through to the impl, where the lone blank scalar coerces to 0 and the
+  // result matches Mac. Pure-scalar all-blank shapes
+  // (`=GCD(A1,B1,C1)`) surface the policy error here.
+  if (def->blank_scalar_policy == FunctionDef::BlankScalarPolicy::RejectAnyScalar && any_scalar_blank_for_reject_any &&
+      !had_range_shaped_arg) {
+    return Value::error(def->blank_scalar_error);
   }
   // Hand the post-expansion size to the impl; aggregator bodies walk the
   // flattened vector directly.
