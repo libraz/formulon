@@ -442,6 +442,93 @@ TEST(BuiltinsChoose, ZeroArityIsValueError) {
 }
 
 // ---------------------------------------------------------------------------
+// CHOOSE as range producer inside aggregators
+//
+// Pre-365 Excel allows `SUM(CHOOSE(idx, range1, range2, ...))` to aggregate
+// the chosen range, not just its top-left cell. Mac Excel 365 (ja-JP) keeps
+// that behaviour, and the IronCalc oracle exercises it directly. The
+// expansion is wired through `expand_choose_call`, which mirrors the
+// OFFSET-as-range-producer path.
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsChoose, ChooseAsRangeProducerInSumPicksMiddleRange) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(10.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(20.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(30.0));
+  wb.sheet(0).set_cell_value(3, 0, Value::number(40.0));
+  // Picks A1:A3 -> 10 + 20 + 30 = 60.
+  const Value v = EvalSourceIn("=SUM(CHOOSE(2, A1:A2, A1:A3, A1:A4))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 60.0);
+}
+
+TEST(BuiltinsChoose, ChooseAsRangeProducerInAverage) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(10.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(20.0));
+  // CHOOSE(1, A1:A2, ...) -> AVERAGE(10, 20) = 15.
+  const Value v = EvalSourceIn("=AVERAGE(CHOOSE(1, A1:A2, A1:A3))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 15.0);
+}
+
+TEST(BuiltinsChoose, ChooseAsRangeProducerSkipsTextInSum) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::text("Ranges"));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(23.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(45.0));
+  // CHOOSE(2, A1:A2, A1:A3, A1:A4) -> SUM over A1:A3, text in A1 is
+  // skipped per range-provenance filter.
+  const Value v = EvalSourceIn("=SUM(CHOOSE(2, A1:A2, A1:A3, A1:A4))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 68.0);
+}
+
+TEST(BuiltinsChoose, ChooseScalarChildStillFailsInSum) {
+  // Scalar children to CHOOSE in this aggregator context are unsupported:
+  // `resolve_range_arg` rejects a literal AST node with #VALUE!. This is
+  // the established behaviour until a `Value::Array` runtime lands.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
+  const Value v = EvalSourceIn("=SUM(CHOOSE(1, 7, A1:A2))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsChoose, ChooseOutOfRangeIndexIsValueError) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
+  const Value v = EvalSourceIn("=SUM(CHOOSE(5, A1:A2, A1:A3))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsChoose, ChooseErrorIndexPropagates) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
+  const Value v = EvalSourceIn("=SUM(CHOOSE(NA(), A1:A2))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsChoose, ChooseNestedRecurses) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(10.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(20.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(30.0));
+  wb.sheet(0).set_cell_value(3, 0, Value::number(40.0));
+  // Outer CHOOSE picks slot 2 -> inner CHOOSE(1, A1:A3, A1:A4) -> A1:A3.
+  // SUM(A1:A3) = 60.
+  const Value v = EvalSourceIn("=SUM(CHOOSE(2, A1:A2, CHOOSE(1, A1:A3, A1:A4)))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 60.0);
+}
+
+// ---------------------------------------------------------------------------
 // LOOKUP (vector form)
 // ---------------------------------------------------------------------------
 

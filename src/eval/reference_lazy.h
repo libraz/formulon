@@ -78,6 +78,32 @@ bool expand_offset_call(const parser::AstNode& call, Arena& arena, const Functio
                         const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
                         std::uint32_t* out_rows, std::uint32_t* out_cols);
 
+/// Expands `Call("CHOOSE", index, value1, value2, …)` into a flat row-major
+/// vector of cell `Value`s by evaluating `index`, validating it against the
+/// `[1, arity-1]` range with `floor`-truncation (mirroring
+/// `eval_choose_lazy`), and then recursively flattening the chosen child:
+///
+///   * a nested `OFFSET(...)` call is forwarded to `expand_offset_call`,
+///   * a nested `CHOOSE(...)` call is forwarded back here recursively,
+///   * any other shape (`Ref`, `RangeOp`, …) flows through
+///     `resolve_range_arg`'s existing branches.
+///
+/// Returns `true` on success and fills `*out_cells` / `*out_rows` /
+/// `*out_cols`; on failure returns `false` and writes the Excel error code
+/// to `*out_err_code`. Errors produced by evaluating `index` propagate
+/// unchanged; an out-of-range `index` surfaces `#VALUE!`. Scalar children
+/// (literals, BinaryOp, INDIRECT, …) reach `resolve_range_arg`'s
+/// "anything else -> #VALUE!" fallthrough — Excel only allows range-or-
+/// scalar children to CHOOSE in this aggregator context, but the scalar
+/// path is unsupported here until a `Value::Array` runtime lands.
+///
+/// `call` must be a `NodeKind::Call` whose callee name is `"CHOOSE"`
+/// (case-insensitive); the caller is expected to have already verified
+/// that shape.
+bool expand_choose_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
+                        std::uint32_t* out_rows, std::uint32_t* out_cols);
+
 /// Attempts to resolve `node` as a reference-returning call, producing a
 /// rectangular reference without dereferencing. Recognises INDIRECT (A1-style)
 /// and nested OFFSET. On success writes the rectangle (0-based, inclusive)

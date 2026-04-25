@@ -18,6 +18,7 @@
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/range_args.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
@@ -722,6 +723,54 @@ bool expand_offset_call(const parser::AstNode& call, Arena& arena, const Functio
     *out_cols = width;
   }
   return true;
+}
+
+bool expand_choose_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
+                        std::uint32_t* out_rows, std::uint32_t* out_cols) {
+  const std::uint32_t arity = call.as_call_arity();
+  // Need at least the index plus one value, matching `eval_choose_lazy`.
+  if (arity < 2U) {
+    *out_err_code = ErrorCode::Value;
+    return false;
+  }
+  // Evaluate the index argument; CHOOSE expects a 1-based integer
+  // selector. Errors propagate with their original code, mirroring
+  // `eval_choose_lazy`.
+  const Value idx_val = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (idx_val.is_error()) {
+    *out_err_code = idx_val.as_error();
+    return false;
+  }
+  auto idx_num = coerce_to_number(idx_val);
+  if (!idx_num) {
+    *out_err_code = idx_num.error();
+    return false;
+  }
+  // Excel truncates (toward zero) rather than rounds: CHOOSE(2.9, ...)
+  // selects the 2nd value, not the 3rd. For valid `[1, arity-1]` indices
+  // these are non-negative, so `std::floor` matches `eval_choose_lazy`.
+  const double raw = std::floor(idx_num.value());
+  if (!(raw >= 1.0 && raw <= static_cast<double>(arity - 1U))) {
+    *out_err_code = ErrorCode::Value;
+    return false;
+  }
+  const auto picked_slot = static_cast<std::uint32_t>(raw);
+  const parser::AstNode& chosen = call.as_call_arg(picked_slot);
+  // Recurse so nested OFFSET / CHOOSE chains also flatten cleanly. Any
+  // other shape (Ref, RangeOp, …) falls through to `resolve_range_arg`,
+  // which already knows how to handle them — including the
+  // "anything else -> #VALUE!" fallthrough for scalar children.
+  if (chosen.kind() == parser::NodeKind::Call) {
+    const std::string_view name = chosen.as_call_name();
+    if (strings::case_insensitive_eq(name, "OFFSET")) {
+      return expand_offset_call(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+    }
+    if (strings::case_insensitive_eq(name, "CHOOSE")) {
+      return expand_choose_call(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+    }
+  }
+  return resolve_range_arg(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
 }
 
 bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,

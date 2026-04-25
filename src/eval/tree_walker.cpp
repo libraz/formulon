@@ -720,6 +720,57 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       }
       continue;
     }
+    // CHOOSE-as-range-producer mirrors the OFFSET branch above: when an
+    // aggregator receives `CHOOSE(idx, range1, range2, ...)`, the chosen
+    // child must be flattened to a vector of cells (recursively, if it is
+    // itself an OFFSET / CHOOSE call). `expand_choose_call` shares the
+    // same evaluation, range-resolution, and filter contracts so SUM /
+    // AVERAGE / MIN / MAX / AVERAGEA all behave consistently.
+    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Call &&
+        strings::case_insensitive_eq(arg_node.as_call_name(), "CHOOSE")) {
+      had_range_shaped_arg = true;
+      std::vector<Value> ch_cells;
+      ErrorCode ch_err = ErrorCode::Value;
+      if (!expand_choose_call(arg_node, arena, registry, ctx, &ch_cells, &ch_err, nullptr, nullptr)) {
+        const Value err = Value::error(ch_err);
+        if (def->propagate_errors) {
+          return err;
+        }
+        values.push_back(err);
+        continue;
+      }
+      for (const Value& v : ch_cells) {
+        if (def->propagate_errors && v.is_error()) {
+          return v;
+        }
+        if (def->range_filter_numeric_only && v.kind() != ValueKind::Number) {
+          continue;
+        }
+        if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
+          continue;
+        }
+        if (def->range_filter_a_coerce) {
+          // A-family (AVERAGEA / MAXA / MINA / VAR{A,PA} / STDEV{A,PA}).
+          // Bool and Text cells inside a range are coerced to numbers rather
+          // than dropped: TRUE -> 1, FALSE -> 0, any text (including the
+          // empty string and numeric-looking strings like "3.14") -> 0.
+          // Blank cells are still skipped.
+          if (v.kind() == ValueKind::Blank) {
+            continue;
+          }
+          if (v.kind() == ValueKind::Bool) {
+            values.push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
+            continue;
+          }
+          if (v.kind() == ValueKind::Text) {
+            values.push_back(Value::number(0.0));
+            continue;
+          }
+        }
+        values.push_back(v);
+      }
+      continue;
+    }
     Value v = eval_node(arg_node, arena, registry, ctx);
     if (def->propagate_errors && v.is_error()) {
       return v;
