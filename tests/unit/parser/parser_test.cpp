@@ -346,6 +346,16 @@ TEST(ParserArray, UnaryMinusInElement) {
   EXPECT_EQ(ParseToSexpr("={-1,2}"), "(array 1 2 (num -1) (num 2))");
 }
 
+TEST(ParserArray, AcceptsString) {
+  // Excel allows mixed scalar types inside `{...}`; downstream functions
+  // (e.g. SMALL/LARGE) decide whether to ignore non-numeric elements.
+  EXPECT_EQ(ParseToSexpr("={1,\"abc\",2}"), "(array 1 3 (num 1) (text \"abc\") (num 2))");
+}
+
+TEST(ParserArray, AcceptsAllTextRow) {
+  EXPECT_EQ(ParseToSexpr("={\"a\",\"b\",\"c\"}"), "(array 1 3 (text \"a\") (text \"b\") (text \"c\"))");
+}
+
 // ---------------------------------------------------------------------------
 // Composite formulas
 // ---------------------------------------------------------------------------

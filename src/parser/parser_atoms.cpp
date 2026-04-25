@@ -202,6 +202,31 @@ AstNode* Parser::parse_array_literal_atom() {
         }
         return node;
       }
+      case TokenKind::String: {
+        if (have_prefix) {
+          // Unary -/+ is only meaningful on numeric literals inside an
+          // array; a prefix on a string surfaces as a syntax error. Mirror
+          // the recovery in the `default:` arm so siblings keep parsing.
+          const Token& tok = peek();
+          record_error_with_token(ParseErrorCode::ExpectedExpression, tok.range, tok.lexeme);
+          skip_to_sync(SyncContext::ArrayElem);
+          AstNode* placeholder = make_error_placeholder(arena_);
+          if (placeholder != nullptr) {
+            placeholder->set_range(tok.range);
+          }
+          return placeholder;
+        }
+        // The tokenizer's `text` field is the escape-resolved payload,
+        // already interned in the tokenizer arena, so we can hand it
+        // straight to `Value::text` without copying — same pattern as
+        // `parse_string_atom` for the top-level grammar.
+        const Token& st = advance();
+        node = make_literal(arena_, Value::text(st.text));
+        if (node != nullptr) {
+          node->set_range(st.range);
+        }
+        return node;
+      }
       default: {
         const Token& tok = peek();
         record_error_with_token(ParseErrorCode::ExpectedExpression, tok.range, tok.lexeme);

@@ -86,6 +86,18 @@ TEST(ParserErrors, ArrayRowMismatch) {
   EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::ArrayRowMismatch));
 }
 
+TEST(ParserErrors, RejectsUnaryPrefixOnStringInArray) {
+  // Excel only accepts a unary -/+ prefix on a numeric literal inside
+  // `{...}`. A prefix on a string is a syntax error; recovery should
+  // still produce an ArrayLiteral root carrying an error placeholder.
+  Arena a;
+  Parser p("={-\"abc\"}", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::ExpectedExpression));
+  EXPECT_EQ(root->kind(), NodeKind::ArrayLiteral);
+}
+
 TEST(ParserErrors, TrailingCommaInCallIsBlankArg) {
   // Excel accepts empty argument slots in function calls and treats them as
   // blank (the function's documented default). `SUM(1,)` parses as arity-2
