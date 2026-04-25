@@ -108,6 +108,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins/stats.cpp
   src/eval/builtins/stats/stats_distributions.cpp
   src/eval/builtins/stats/stats_distributions_misc.cpp
+  src/eval/builtins/subtotal.cpp
   src/eval/builtins/text.cpp
   src/eval/builtins/text_detail.cpp
   src/eval/builtins/text_dbcs.cpp
