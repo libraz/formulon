@@ -1,0 +1,134 @@
+{
+  "suite": "value_coercion_probes",
+  "description": "Mac Excel 365 (ja-JP) probe for `VALUE(text)` corner cases identified in IronCalc's `T_VALUE_VALUETOTEXT` fixture. The IronCalc golden lists expected values that we want to confirm match Mac before changing `coerce_to_number` behaviour. Each case probes one specific text shape: Euro currency suffix, hyphen-style date with mixed component order, comma-as-decimal in en-US notation (which IronCalc rejects), and slash-style M/D/YYYY date. Mac's truth becomes the reference; we use the result to decide whether `coerce_to_number` (or its date-fallback) needs adjustment.\n",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-25T22:37:15Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "value_euro_suffix_integer",
+      "formula": "=VALUE(\"23€\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 23.0
+      }
+    },
+    {
+      "id": "value_euro_suffix_small",
+      "formula": "=VALUE(\"12€\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "value_euro_prefix",
+      "formula": "=VALUE(\"€23\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 23.0
+      }
+    },
+    {
+      "id": "value_dollar_suffix",
+      "formula": "=VALUE(\"23$\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_yen_suffix",
+      "formula": "=VALUE(\"23円\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_hyphen_date_1",
+      "formula": "=VALUE(\"10-12-1999\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_hyphen_date_2",
+      "formula": "=VALUE(\"3-2-2023\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_comma_decimal",
+      "formula": "=VALUE(\"12,34\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_comma_thousands",
+      "formula": "=VALUE(\"1,234\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1234.0
+      }
+    },
+    {
+      "id": "value_slash_date_short",
+      "formula": "=VALUE(\"2/3/2023\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_slash_date_full",
+      "formula": "=VALUE(\"02/03/2023\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_slash_date_iso_alt",
+      "formula": "=VALUE(\"2023/2/3\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44960.0
+      }
+    },
+    {
+      "id": "value_slash_date_dmy",
+      "formula": "=VALUE(\"31/12/2023\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

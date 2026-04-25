@@ -1,0 +1,81 @@
+suite: value_coercion_probes
+description: >
+  Mac Excel 365 (ja-JP) probe for `VALUE(text)` corner cases identified in
+  IronCalc's `T_VALUE_VALUETOTEXT` fixture. The IronCalc golden lists
+  expected values that we want to confirm match Mac before changing
+  `coerce_to_number` behaviour. Each case probes one specific text shape:
+  Euro currency suffix, hyphen-style date with mixed component order,
+  comma-as-decimal in en-US notation (which IronCalc rejects), and
+  slash-style M/D/YYYY date. Mac's truth becomes the reference; we use
+  the result to decide whether `coerce_to_number` (or its date-fallback)
+  needs adjustment.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  # ---------------------------------------------------------------------
+  # A) Euro suffix on integer. IronCalc says this coerces to 23 (Mac
+  # likely strips the trailing €). We have currency-symbol coercion
+  # support added in 72cc275 but only for prefix notation.
+  - id: value_euro_suffix_integer
+    description: "VALUE(\"23€\") - euro as suffix"
+    formula: "=VALUE(\"23€\")"
+
+  - id: value_euro_suffix_small
+    description: "VALUE(\"12€\")"
+    formula: "=VALUE(\"12€\")"
+
+  - id: value_euro_prefix
+    description: "VALUE(\"€23\") - prefix form for comparison"
+    formula: "=VALUE(\"€23\")"
+
+  - id: value_dollar_suffix
+    description: "VALUE(\"23$\") - dollar as suffix"
+    formula: "=VALUE(\"23$\")"
+
+  - id: value_yen_suffix
+    description: "VALUE(\"23円\") - yen kanji as suffix"
+    formula: "=VALUE(\"23円\")"
+
+  # ---------------------------------------------------------------------
+  # B) Hyphen-style date with potentially-ambiguous component order in
+  # ja-JP. "10-12-1999" could be interpreted as YYYY-MM-DD (1999-12-10)
+  # or DD-MM-YYYY or MM-DD-YYYY. IronCalc says 36504 (= 1999-12-10).
+  # Confirm Mac picks the same.
+  - id: value_hyphen_date_1
+    description: "VALUE(\"10-12-1999\")"
+    formula: "=VALUE(\"10-12-1999\")"
+
+  - id: value_hyphen_date_2
+    description: "VALUE(\"3-2-2023\") - more ambiguous (could be DD-MM or MM-DD)"
+    formula: "=VALUE(\"3-2-2023\")"
+
+  # ---------------------------------------------------------------------
+  # C) Comma as decimal. IronCalc says "12,34" yields #VALUE! in en-US
+  # invariant parsing; in some locales comma IS the decimal separator.
+  # ja-JP probably rejects since locale uses period. Confirm.
+  - id: value_comma_decimal
+    description: "VALUE(\"12,34\") - comma as decimal separator"
+    formula: "=VALUE(\"12,34\")"
+
+  - id: value_comma_thousands
+    description: "VALUE(\"1,234\") - comma as thousands separator (already works)"
+    formula: "=VALUE(\"1,234\")"
+
+  # ---------------------------------------------------------------------
+  # D) Slash-style date M/D/YYYY. IronCalc says "2/3/2023" -> 44987
+  # (= 2023-02-03), so M/D/YYYY interpretation. Confirm Mac.
+  - id: value_slash_date_short
+    description: "VALUE(\"2/3/2023\")"
+    formula: "=VALUE(\"2/3/2023\")"
+
+  - id: value_slash_date_full
+    description: "VALUE(\"2/3/2023\") with explicit zero-padded month/day equiv"
+    formula: "=VALUE(\"02/03/2023\")"
+
+  - id: value_slash_date_iso_alt
+    description: "VALUE(\"2023/2/3\") - YYYY/M/D form"
+    formula: "=VALUE(\"2023/2/3\")"
+
+  - id: value_slash_date_dmy
+    description: "VALUE(\"31/12/2023\") - unambiguous DD/MM/YYYY (day > 12)"
+    formula: "=VALUE(\"31/12/2023\")"

@@ -47,8 +47,8 @@ std::string_view trim_ascii(std::string_view s) noexcept {
 
 // Strips a leading currency prefix recognised by Excel's VALUE. Returns
 // the remaining view. Supported prefixes: ASCII '$', UTF-8 '¥' (0xC2 0xA5),
-// UTF-8 '￥' (0xEF 0xBF 0xA5). The prefix is optional and the caller must
-// still handle a missing one.
+// UTF-8 '￥' (0xEF 0xBF 0xA5), UTF-8 '€' (0xE2 0x82 0xAC). The prefix is
+// optional and the caller must still handle a missing one.
 std::string_view strip_currency(std::string_view s) noexcept {
   if (s.empty()) {
     return s;
@@ -62,6 +62,24 @@ std::string_view strip_currency(std::string_view s) noexcept {
   if (s.size() >= 3 && static_cast<unsigned char>(s[0]) == 0xEFu && static_cast<unsigned char>(s[1]) == 0xBFu &&
       static_cast<unsigned char>(s[2]) == 0xA5u) {
     return s.substr(3);
+  }
+  if (s.size() >= 3 && static_cast<unsigned char>(s[0]) == 0xE2u && static_cast<unsigned char>(s[1]) == 0x82u &&
+      static_cast<unsigned char>(s[2]) == 0xACu) {
+    return s.substr(3);
+  }
+  return s;
+}
+
+// Strips a trailing Euro suffix (`23€` -> `23`). Mac Excel 365 accepts
+// Euro both as prefix and suffix when coercing text to a number; the
+// dollar sign and the yen kanji (`円`) are NOT accepted as suffix, so
+// this helper is deliberately Euro-only. Returns the input unchanged
+// when no Euro suffix is present.
+std::string_view strip_trailing_euro(std::string_view s) noexcept {
+  if (s.size() >= 3 && static_cast<unsigned char>(s[s.size() - 3]) == 0xE2u &&
+      static_cast<unsigned char>(s[s.size() - 2]) == 0x82u &&
+      static_cast<unsigned char>(s[s.size() - 1]) == 0xACu) {
+    return s.substr(0, s.size() - 3);
   }
   return s;
 }
@@ -92,6 +110,12 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double*
   if (s.empty()) {
     return false;
   }
+  // Optional trailing Euro suffix. Mac Excel 365 specifically accepts
+  // `€` as a suffix (e.g. `"23€"`); `$` and `円` are not accepted.
+  s = strip_trailing_euro(s);
+  if (s.empty()) {
+    return false;
+  }
   // Trailing percent signs. Each `%` multiplies the parsed value by 0.01,
   // so `"50%%"` yields `0.005` (matches Mac Excel ja-JP NUMBERVALUE).
   int percent_count = 0;
@@ -110,25 +134,57 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double*
   bool seen_digit = false;
   bool seen_point = false;
   bool seen_exp = false;
+  // Thousands-grouping validation state. Mac Excel rejects malformed
+  // groupings such as `"12,34"` (2 digits before, 2 after) or `"1,2345"`
+  // (final group not exactly 3 digits). The first group (before the
+  // first separator) must be 1-3 digits; every subsequent group must be
+  // exactly 3 digits.
+  bool seen_group_sep = false;
+  int digits_in_current_group = 0;
   for (std::size_t i = 0; i < s.size(); ++i) {
     const char c = s[i];
     if (c >= '0' && c <= '9') {
       canonical.push_back(c);
       seen_digit = true;
+      if (!seen_point && !seen_exp) {
+        ++digits_in_current_group;
+      }
       continue;
     }
     if (c == decimal_sep && !seen_point && !seen_exp) {
+      // Transitioning out of integer part: validate the final integer
+      // group if any group separators were seen.
+      if (seen_group_sep && digits_in_current_group != 3) {
+        return false;
+      }
       canonical.push_back('.');
       seen_point = true;
       continue;
     }
     if (group_sep != '\0' && c == group_sep && !seen_point && !seen_exp) {
-      // Group separators are only valid in the integer part and are
-      // discarded by the parser. `group_sep == '\0'` means the caller
-      // opted out of group separators entirely (see `NumberValue_` below).
+      // Group separator inside the integer part. Validate the just-
+      // finished group: 1-3 digits for the first one, exactly 3 for
+      // any subsequent group. `group_sep == '\0'` means the caller
+      // opted out of group separators entirely.
+      if (!seen_group_sep) {
+        if (digits_in_current_group < 1 || digits_in_current_group > 3) {
+          return false;
+        }
+      } else {
+        if (digits_in_current_group != 3) {
+          return false;
+        }
+      }
+      seen_group_sep = true;
+      digits_in_current_group = 0;
       continue;
     }
     if ((c == 'e' || c == 'E') && seen_digit && !seen_exp) {
+      // Transitioning out of integer part (no decimal seen): validate
+      // the final integer group if any group separators were seen.
+      if (!seen_point && seen_group_sep && digits_in_current_group != 3) {
+        return false;
+      }
       canonical.push_back('e');
       seen_exp = true;
       if (i + 1 < s.size() && (s[i + 1] == '+' || s[i + 1] == '-')) {
@@ -140,6 +196,11 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double*
     return false;
   }
   if (!seen_digit) {
+    return false;
+  }
+  // End-of-input: if grouping was used and we never left the integer
+  // part, the final group must also be exactly 3 digits.
+  if (seen_group_sep && !seen_point && !seen_exp && digits_in_current_group != 3) {
     return false;
   }
   // Parse via std::strtod over a NUL-terminated buffer.

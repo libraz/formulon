@@ -194,6 +194,84 @@ TEST(ValueFunction, ErrorPropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
+TEST(ValueFunction, EuroSuffixInteger) {
+  // Mac Excel 365 ja-JP accepts Euro as a trailing currency suffix.
+  const Value v = EvalSource("=VALUE(\"23\xE2\x82\xAC\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 23.0);
+}
+
+TEST(ValueFunction, EuroSuffixSmall) {
+  const Value v = EvalSource("=VALUE(\"12\xE2\x82\xAC\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 12.0);
+}
+
+TEST(ValueFunction, EuroPrefix) {
+  const Value v = EvalSource("=VALUE(\"\xE2\x82\xAC""23\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 23.0);
+}
+
+TEST(ValueFunction, DollarSuffixRejected) {
+  // Mac Excel ja-JP rejects `$` as a trailing suffix (only Euro is
+  // bidirectional).
+  const Value v = EvalSource("=VALUE(\"23$\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(ValueFunction, YenKanjiSuffixRejected) {
+  // The yen kanji (U+5186) is not accepted by Mac Excel.
+  const Value v = EvalSource("=VALUE(\"23\xE5\x86\x86\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(ValueFunction, InvalidThousandsGrouping) {
+  // `"12,34"` is rejected by Mac: first group is 2 digits (OK), but the
+  // final group must be exactly 3 digits.
+  const Value v = EvalSource("=VALUE(\"12,34\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(ValueFunction, ValidThousandsGrouping) {
+  const Value v = EvalSource("=VALUE(\"1,234\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1234.0);
+}
+
+TEST(ValueFunction, ValidThousandsGroupingMultiple) {
+  const Value v = EvalSource("=VALUE(\"1,234,567\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1234567.0);
+}
+
+TEST(ValueFunction, FourDigitFinalGroupRejected) {
+  const Value v = EvalSource("=VALUE(\"1,2345\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(ValueFunction, LeadingGroupSepRejected) {
+  const Value v = EvalSource("=VALUE(\",234\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(ValueFunction, TrailingGroupSepRejected) {
+  const Value v = EvalSource("=VALUE(\"1,\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(ValueFunction, ThousandsWithDecimalAccepted) {
+  const Value v = EvalSource("=VALUE(\"1,234.56\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1234.56);
+}
+
 TEST(ValueFunction, IsoDate) {
   const Value v = EvalSource("=VALUE(\"2024-03-15\")");
   ASSERT_TRUE(v.is_number());
