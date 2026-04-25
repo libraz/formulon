@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "ROW_COLUMN",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:35:35Z"
+    "generated_at": "2026-04-25T14:55:14Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -62,7 +62,124 @@
     {
       "id": "K2",
       "formula": "=ROW(INDIRECT(J2))",
-      "setup": {},
+      "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#REF!"
@@ -71,7 +188,124 @@
     {
       "id": "L2",
       "formula": "=COLUMN(INDIRECT(J2))",
-      "setup": {},
+      "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#REF!"
@@ -108,9 +342,121 @@
       "id": "K3",
       "formula": "=ROW(INDIRECT(J3))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
         "J3": {
           "kind": "text",
           "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -122,9 +468,121 @@
       "id": "L3",
       "formula": "=COLUMN(INDIRECT(J3))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
         "J3": {
           "kind": "text",
           "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -226,9 +684,121 @@
       "id": "K4",
       "formula": "=ROW(INDIRECT(J4))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
         "J4": {
           "kind": "text",
           "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -240,9 +810,121 @@
       "id": "L4",
       "formula": "=COLUMN(INDIRECT(J4))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
         "J4": {
           "kind": "text",
           "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -272,9 +954,121 @@
       "id": "F5",
       "formula": "=ROW(INDIRECT(E2))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
         "E2": {
           "kind": "text",
           "value": "A1"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -286,9 +1080,121 @@
       "id": "K5",
       "formula": "=ROW(INDIRECT(J5))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
         "J5": {
           "kind": "text",
           "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -300,9 +1206,121 @@
       "id": "L5",
       "formula": "=COLUMN(INDIRECT(J5))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
         "J5": {
           "kind": "text",
           "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -346,9 +1364,121 @@
       "id": "K6",
       "formula": "=ROW(INDIRECT(J6))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
         "J6": {
           "kind": "text",
           "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -360,9 +1490,121 @@
       "id": "L6",
       "formula": "=COLUMN(INDIRECT(J6))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
         "J6": {
           "kind": "text",
           "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -383,9 +1625,121 @@
       "id": "K7",
       "formula": "=ROW(INDIRECT(J7))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
         "J7": {
           "kind": "text",
           "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -397,9 +1751,121 @@
       "id": "L7",
       "formula": "=COLUMN(INDIRECT(J7))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
         "J7": {
           "kind": "text",
           "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -420,9 +1886,121 @@
       "id": "K8",
       "formula": "=ROW(INDIRECT(J8))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
         "J8": {
           "kind": "text",
           "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -434,9 +2012,121 @@
       "id": "L8",
       "formula": "=COLUMN(INDIRECT(J8))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
         "J8": {
           "kind": "text",
           "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -457,9 +2147,121 @@
       "id": "K9",
       "formula": "=ROW(INDIRECT(J9))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
         "J9": {
           "kind": "number",
           "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -471,9 +2273,121 @@
       "id": "L9",
       "formula": "=COLUMN(INDIRECT(J9))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
         "J9": {
           "kind": "number",
           "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -485,9 +2399,121 @@
       "id": "K10",
       "formula": "=ROW(INDIRECT(J10))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
         "J10": {
           "kind": "text",
           "value": "$RS34"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -499,9 +2525,121 @@
       "id": "L10",
       "formula": "=COLUMN(INDIRECT(J10))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
         "J10": {
           "kind": "text",
           "value": "$RS34"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -513,9 +2651,121 @@
       "id": "K11",
       "formula": "=ROW(INDIRECT(J11))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
         "J11": {
           "kind": "text",
           "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -527,9 +2777,121 @@
       "id": "L11",
       "formula": "=COLUMN(INDIRECT(J11))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
         "J11": {
           "kind": "text",
           "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -585,7 +2947,124 @@
     {
       "id": "K12",
       "formula": "=ROW(INDIRECT(J12))",
-      "setup": {},
+      "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#REF!"
@@ -594,7 +3073,124 @@
     {
       "id": "L12",
       "formula": "=COLUMN(INDIRECT(J12))",
-      "setup": {},
+      "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#REF!"
@@ -654,9 +3250,121 @@
       "id": "K14",
       "formula": "=ROW(INDIRECT(J14))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
         "J14": {
           "kind": "text",
           "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -668,9 +3376,121 @@
       "id": "L14",
       "formula": "=COLUMN(INDIRECT(J14))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
         "J14": {
           "kind": "text",
           "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -691,6 +3511,122 @@
       "id": "K15",
       "formula": "=ROW(INDIRECT(J15))",
       "setup": {
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
+        },
         "J15": {
           "kind": "formula",
           "formula": "=\"5:5\""
@@ -705,6 +3641,122 @@
       "id": "L15",
       "formula": "=COLUMN(INDIRECT(J15))",
       "setup": {
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
+        },
         "J15": {
           "kind": "formula",
           "formula": "=\"5:5\""
@@ -719,9 +3771,121 @@
       "id": "K16",
       "formula": "=ROW(INDIRECT(J16))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
         "J16": {
           "kind": "text",
           "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -733,9 +3897,121 @@
       "id": "L16",
       "formula": "=COLUMN(INDIRECT(J16))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
         "J16": {
           "kind": "text",
           "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -747,9 +4023,121 @@
       "id": "K17",
       "formula": "=ROW(INDIRECT(J17))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
         "J17": {
           "kind": "text",
           "value": "$7:8"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -761,9 +4149,121 @@
       "id": "L17",
       "formula": "=COLUMN(INDIRECT(J17))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
         "J17": {
           "kind": "text",
           "value": "$7:8"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -775,9 +4275,121 @@
       "id": "K18",
       "formula": "=ROW(INDIRECT(J18))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
         "J18": {
           "kind": "text",
           "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -789,9 +4401,121 @@
       "id": "L18",
       "formula": "=COLUMN(INDIRECT(J18))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
         "J18": {
           "kind": "text",
           "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -803,9 +4527,121 @@
       "id": "K19",
       "formula": "=ROW(INDIRECT(J19))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
         "J19": {
           "kind": "text",
           "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -817,9 +4653,121 @@
       "id": "L19",
       "formula": "=COLUMN(INDIRECT(J19))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
         "J19": {
           "kind": "text",
           "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -831,9 +4779,121 @@
       "id": "K20",
       "formula": "=ROW(INDIRECT(J20))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
         "J20": {
           "kind": "text",
           "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -845,9 +4905,121 @@
       "id": "L20",
       "formula": "=COLUMN(INDIRECT(J20))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
         "J20": {
           "kind": "text",
           "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -859,9 +5031,121 @@
       "id": "K21",
       "formula": "=ROW(INDIRECT(J21))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
         "J21": {
           "kind": "text",
           "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -873,9 +5157,121 @@
       "id": "L21",
       "formula": "=COLUMN(INDIRECT(J21))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
         "J21": {
           "kind": "text",
           "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -887,9 +5283,121 @@
       "id": "K22",
       "formula": "=ROW(INDIRECT(J22))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
         "J22": {
           "kind": "text",
           "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -901,9 +5409,121 @@
       "id": "L22",
       "formula": "=COLUMN(INDIRECT(J22))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
         "J22": {
           "kind": "text",
           "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -918,6 +5538,118 @@
         "J23": {
           "kind": "text",
           "value": "SS077:SW090"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -932,6 +5664,118 @@
         "J23": {
           "kind": "text",
           "value": "SS077:SW090"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J24": {
+          "kind": "text",
+          "value": "s:s"
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -943,9 +5787,121 @@
       "id": "K24",
       "formula": "=ROW(INDIRECT(J24))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
         "J24": {
           "kind": "text",
           "value": "s:s"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {
@@ -957,9 +5913,121 @@
       "id": "L24",
       "formula": "=COLUMN(INDIRECT(J24))",
       "setup": {
+        "M24": {
+          "kind": "text",
+          "value": "<= lowercase is valid"
+        },
+        "J5": {
+          "kind": "text",
+          "value": "$F$9"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "L1": {
+          "kind": "text",
+          "value": "COLUMN_INDIRECT"
+        },
+        "J7": {
+          "kind": "text",
+          "value": "NonExist!W3"
+        },
+        "J9": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "J21": {
+          "kind": "text",
+          "value": "XFE:XFE"
+        },
         "J24": {
           "kind": "text",
           "value": "s:s"
+        },
+        "J11": {
+          "kind": "text",
+          "value": "WW$56"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "REFERENCES"
+        },
+        "J19": {
+          "kind": "text",
+          "value": "$12:$23"
+        },
+        "J14": {
+          "kind": "text",
+          "value": "D:D"
+        },
+        "J10": {
+          "kind": "text",
+          "value": "$RS34"
+        },
+        "J6": {
+          "kind": "text",
+          "value": "OTHER!D5"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "G1": {
+          "kind": "text",
+          "value": "COLUMN"
+        },
+        "J20": {
+          "kind": "text",
+          "value": "XFD:XFD"
+        },
+        "J23": {
+          "kind": "text",
+          "value": "SS077:SW090"
+        },
+        "K1": {
+          "kind": "text",
+          "value": "ROW_INDIRECT"
+        },
+        "J22": {
+          "kind": "text",
+          "value": "05:05"
+        },
+        "J18": {
+          "kind": "text",
+          "value": "$AB:$BC"
+        },
+        "J8": {
+          "kind": "text",
+          "value": "h"
+        },
+        "J17": {
+          "kind": "text",
+          "value": "$7:8"
+        },
+        "J3": {
+          "kind": "text",
+          "value": "A4"
+        },
+        "J16": {
+          "kind": "text",
+          "value": "$FF:FG"
+        },
+        "M22": {
+          "kind": "text",
+          "value": "<= Rows can start with 0"
+        },
+        "J4": {
+          "kind": "text",
+          "value": "D5:E7"
+        },
+        "A12": {
+          "kind": "text",
+          "value": "COLUM"
         }
       },
       "expect": {

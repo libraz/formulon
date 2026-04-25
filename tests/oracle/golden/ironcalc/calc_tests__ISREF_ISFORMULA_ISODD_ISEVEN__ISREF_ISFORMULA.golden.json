@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "ISREF_ISFORMULA",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:35:35Z"
+    "generated_at": "2026-04-25T14:55:14Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -139,7 +139,24 @@
     {
       "id": "F4",
       "formula": "=ISREF(INDIRECT(\"A1\"))",
-      "setup": {},
+      "setup": {
+        "G7": {
+          "kind": "text",
+          "value": "<= This is NOT a circular dependency"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ISREF returns true if it is a reference or evaluates to a reference"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ISREF"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "ISFORMULA"
+        }
+      },
       "expect": {
         "kind": "bool",
         "value": true
@@ -158,6 +175,22 @@
       "id": "F5",
       "formula": "=ISREF(OFFSET(A1,6,5))",
       "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "ISFORMULA"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ISREF returns true if it is a reference or evaluates to a reference"
+        },
+        "G7": {
+          "kind": "text",
+          "value": "<= This is NOT a circular dependency"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ISREF"
+        },
         "A1": {
           "kind": "formula",
           "formula": "=\"value\""
@@ -190,6 +223,22 @@
       "id": "F7",
       "formula": "=ISREF(OFFSET(A1,6,5))",
       "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "ISFORMULA"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ISREF returns true if it is a reference or evaluates to a reference"
+        },
+        "G7": {
+          "kind": "text",
+          "value": "<= This is NOT a circular dependency"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ISREF"
+        },
         "A1": {
           "kind": "formula",
           "formula": "=\"value\""
@@ -213,6 +262,22 @@
       "id": "F8",
       "formula": "=ISREF(A1:OFFSET(A1,1,1))",
       "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "ISFORMULA"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ISREF returns true if it is a reference or evaluates to a reference"
+        },
+        "G7": {
+          "kind": "text",
+          "value": "<= This is NOT a circular dependency"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ISREF"
+        },
         "A1": {
           "kind": "formula",
           "formula": "=\"value\""
@@ -226,7 +291,24 @@
     {
       "id": "C9",
       "formula": "=_xlfn.ISFORMULA(INDIRECT(\"C9\"))",
-      "setup": {},
+      "setup": {
+        "G7": {
+          "kind": "text",
+          "value": "<= This is NOT a circular dependency"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "ISREF returns true if it is a reference or evaluates to a reference"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ISREF"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "ISFORMULA"
+        }
+      },
       "expect": {
         "kind": "bool",
         "value": true

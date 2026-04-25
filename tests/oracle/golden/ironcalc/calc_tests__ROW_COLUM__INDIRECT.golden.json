@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "INDIRECT",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:35:35Z"
+    "generated_at": "2026-04-25T14:55:14Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -17,9 +17,49 @@
       "id": "B2",
       "formula": "=ROW(INDIRECT(A2))",
       "setup": {
+        "S34": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Cell"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "COLUM"
+        },
         "A2": {
           "kind": "text",
           "value": "A1"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "AA23"
+        },
+        "E8": {
+          "kind": "text",
+          "value": "<= Row numbers can start with 0"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "S34"
+        },
+        "AA23": {
+          "kind": "text",
+          "value": "Content of AA23"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "A01"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ROW"
         }
       },
       "expect": {
@@ -31,9 +71,49 @@
       "id": "C2",
       "formula": "=COLUMN(INDIRECT(A2))",
       "setup": {
+        "S34": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Cell"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "COLUM"
+        },
         "A2": {
           "kind": "text",
           "value": "A1"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "AA23"
+        },
+        "E8": {
+          "kind": "text",
+          "value": "<= Row numbers can start with 0"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "S34"
+        },
+        "AA23": {
+          "kind": "text",
+          "value": "Content of AA23"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "A01"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ROW"
         }
       },
       "expect": {
@@ -45,9 +125,49 @@
       "id": "D2",
       "formula": "=INDIRECT(A2)",
       "setup": {
+        "S34": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Cell"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "COLUM"
+        },
         "A2": {
           "kind": "text",
           "value": "A1"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "AA23"
+        },
+        "E8": {
+          "kind": "text",
+          "value": "<= Row numbers can start with 0"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "S34"
+        },
+        "AA23": {
+          "kind": "text",
+          "value": "Content of AA23"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "A01"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ROW"
         }
       },
       "expect": {
@@ -59,9 +179,49 @@
       "id": "B3",
       "formula": "=ROW(INDIRECT(A3))",
       "setup": {
+        "S34": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Cell"
+        },
         "A3": {
           "kind": "text",
           "value": "S34"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "AA23"
+        },
+        "E8": {
+          "kind": "text",
+          "value": "<= Row numbers can start with 0"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "COLUM"
+        },
+        "AA23": {
+          "kind": "text",
+          "value": "Content of AA23"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "A01"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ROW"
         }
       },
       "expect": {
@@ -73,9 +233,49 @@
       "id": "C3",
       "formula": "=COLUMN(INDIRECT(A3))",
       "setup": {
+        "S34": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Cell"
+        },
         "A3": {
           "kind": "text",
           "value": "S34"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "AA23"
+        },
+        "E8": {
+          "kind": "text",
+          "value": "<= Row numbers can start with 0"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "COLUM"
+        },
+        "AA23": {
+          "kind": "text",
+          "value": "Content of AA23"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "A01"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ROW"
         }
       },
       "expect": {
@@ -87,9 +287,49 @@
       "id": "D3",
       "formula": "=INDIRECT(A3)",
       "setup": {
+        "S34": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Cell"
+        },
         "A3": {
           "kind": "text",
           "value": "S34"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "AA23"
+        },
+        "E8": {
+          "kind": "text",
+          "value": "<= Row numbers can start with 0"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "COLUM"
+        },
+        "AA23": {
+          "kind": "text",
+          "value": "Content of AA23"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "A01"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ROW"
         }
       },
       "expect": {
@@ -104,6 +344,46 @@
         "A4": {
           "kind": "text",
           "value": "AA23"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Cell"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "COLUM"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "E8": {
+          "kind": "text",
+          "value": "<= Row numbers can start with 0"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "S34"
+        },
+        "AA23": {
+          "kind": "text",
+          "value": "Content of AA23"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "A01"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "S34": {
+          "kind": "text",
+          "value": "Hey Jude"
         }
       },
       "expect": {
@@ -118,6 +398,46 @@
         "A4": {
           "kind": "text",
           "value": "AA23"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Cell"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "COLUM"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "E8": {
+          "kind": "text",
+          "value": "<= Row numbers can start with 0"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "S34"
+        },
+        "AA23": {
+          "kind": "text",
+          "value": "Content of AA23"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "A01"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "S34": {
+          "kind": "text",
+          "value": "Hey Jude"
         }
       },
       "expect": {
@@ -132,6 +452,46 @@
         "A4": {
           "kind": "text",
           "value": "AA23"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Cell"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "COLUM"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "E8": {
+          "kind": "text",
+          "value": "<= Row numbers can start with 0"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "S34"
+        },
+        "AA23": {
+          "kind": "text",
+          "value": "Content of AA23"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "A01"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ROW"
+        },
+        "S34": {
+          "kind": "text",
+          "value": "Hey Jude"
         }
       },
       "expect": {
@@ -143,9 +503,49 @@
       "id": "B5",
       "formula": "=ROW(INDIRECT(A5))",
       "setup": {
+        "S34": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Cell"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "COLUM"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "A1"
+        },
         "A5": {
           "kind": "text",
           "value": "hola"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "AA23"
+        },
+        "E8": {
+          "kind": "text",
+          "value": "<= Row numbers can start with 0"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "S34"
+        },
+        "AA23": {
+          "kind": "text",
+          "value": "Content of AA23"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "A01"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ROW"
         }
       },
       "expect": {
@@ -157,9 +557,49 @@
       "id": "C5",
       "formula": "=COLUMN(INDIRECT(A5))",
       "setup": {
+        "S34": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Cell"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "COLUM"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "A1"
+        },
         "A5": {
           "kind": "text",
           "value": "hola"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "AA23"
+        },
+        "E8": {
+          "kind": "text",
+          "value": "<= Row numbers can start with 0"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "S34"
+        },
+        "AA23": {
+          "kind": "text",
+          "value": "Content of AA23"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "A01"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ROW"
         }
       },
       "expect": {
@@ -171,9 +611,49 @@
       "id": "D5",
       "formula": "=INDIRECT(A5)",
       "setup": {
+        "S34": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Cell"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "COLUM"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "A1"
+        },
         "A5": {
           "kind": "text",
           "value": "hola"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "AA23"
+        },
+        "E8": {
+          "kind": "text",
+          "value": "<= Row numbers can start with 0"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "S34"
+        },
+        "AA23": {
+          "kind": "text",
+          "value": "Content of AA23"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "A01"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ROW"
         }
       },
       "expect": {
@@ -184,7 +664,52 @@
     {
       "id": "B6",
       "formula": "=ROW(INDIRECT(A6))",
-      "setup": {},
+      "setup": {
+        "S34": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Cell"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "COLUM"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "AA23"
+        },
+        "E8": {
+          "kind": "text",
+          "value": "<= Row numbers can start with 0"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "S34"
+        },
+        "AA23": {
+          "kind": "text",
+          "value": "Content of AA23"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "A01"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ROW"
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#REF!"
@@ -193,7 +718,52 @@
     {
       "id": "C6",
       "formula": "=COLUMN(INDIRECT(A6))",
-      "setup": {},
+      "setup": {
+        "S34": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Cell"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "COLUM"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "AA23"
+        },
+        "E8": {
+          "kind": "text",
+          "value": "<= Row numbers can start with 0"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "S34"
+        },
+        "AA23": {
+          "kind": "text",
+          "value": "Content of AA23"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "A01"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ROW"
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#REF!"
@@ -202,7 +772,52 @@
     {
       "id": "D6",
       "formula": "=INDIRECT(A6)",
-      "setup": {},
+      "setup": {
+        "S34": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Cell"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "COLUM"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "AA23"
+        },
+        "E8": {
+          "kind": "text",
+          "value": "<= Row numbers can start with 0"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "S34"
+        },
+        "AA23": {
+          "kind": "text",
+          "value": "Content of AA23"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "A01"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ROW"
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#REF!"
@@ -211,7 +826,52 @@
     {
       "id": "B7",
       "formula": "=ROW(INDIRECT(A7))",
-      "setup": {},
+      "setup": {
+        "S34": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Cell"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "COLUM"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "AA23"
+        },
+        "E8": {
+          "kind": "text",
+          "value": "<= Row numbers can start with 0"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "S34"
+        },
+        "AA23": {
+          "kind": "text",
+          "value": "Content of AA23"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "A01"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ROW"
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#REF!"
@@ -220,7 +880,52 @@
     {
       "id": "C7",
       "formula": "=COLUMN(INDIRECT(A7))",
-      "setup": {},
+      "setup": {
+        "S34": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Cell"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "COLUM"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "AA23"
+        },
+        "E8": {
+          "kind": "text",
+          "value": "<= Row numbers can start with 0"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "S34"
+        },
+        "AA23": {
+          "kind": "text",
+          "value": "Content of AA23"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "A01"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ROW"
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#REF!"
@@ -229,7 +934,52 @@
     {
       "id": "D7",
       "formula": "=INDIRECT(A7)",
-      "setup": {},
+      "setup": {
+        "S34": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Cell"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "COLUM"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "AA23"
+        },
+        "E8": {
+          "kind": "text",
+          "value": "<= Row numbers can start with 0"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "S34"
+        },
+        "AA23": {
+          "kind": "text",
+          "value": "Content of AA23"
+        },
+        "A8": {
+          "kind": "text",
+          "value": "A01"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ROW"
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#REF!"
@@ -239,9 +989,49 @@
       "id": "B8",
       "formula": "=ROW(INDIRECT(A8))",
       "setup": {
+        "S34": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Cell"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "COLUM"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "AA23"
+        },
+        "E8": {
+          "kind": "text",
+          "value": "<= Row numbers can start with 0"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "S34"
+        },
+        "AA23": {
+          "kind": "text",
+          "value": "Content of AA23"
+        },
         "A8": {
           "kind": "text",
           "value": "A01"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ROW"
         }
       },
       "expect": {
@@ -253,9 +1043,49 @@
       "id": "C8",
       "formula": "=COLUMN(INDIRECT(A8))",
       "setup": {
+        "S34": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Cell"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "COLUM"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "AA23"
+        },
+        "E8": {
+          "kind": "text",
+          "value": "<= Row numbers can start with 0"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "S34"
+        },
+        "AA23": {
+          "kind": "text",
+          "value": "Content of AA23"
+        },
         "A8": {
           "kind": "text",
           "value": "A01"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ROW"
         }
       },
       "expect": {
@@ -267,9 +1097,49 @@
       "id": "D8",
       "formula": "=INDIRECT(A8)",
       "setup": {
+        "S34": {
+          "kind": "text",
+          "value": "Hey Jude"
+        },
+        "A1": {
+          "kind": "text",
+          "value": "Cell"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "COLUM"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "A1"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "hola"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "AA23"
+        },
+        "E8": {
+          "kind": "text",
+          "value": "<= Row numbers can start with 0"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "S34"
+        },
+        "AA23": {
+          "kind": "text",
+          "value": "Content of AA23"
+        },
         "A8": {
           "kind": "text",
           "value": "A01"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ROW"
         }
       },
       "expect": {

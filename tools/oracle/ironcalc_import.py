@@ -118,6 +118,17 @@ EXCEL_ERROR_NAMES = frozenset([
 # case to be skipped, not miscomputed.
 CROSS_SHEET_RE = re.compile(r"(?:'[^']*'|[A-Za-z_][A-Za-z0-9_\.]*)!")
 
+# Matches a call to a dynamic-reference function: `OFFSET(`, `INDIRECT(`,
+# `_xlfn.OFFSET(`, etc. These functions resolve their target cells at
+# runtime, so a lexical-only reference walk misses what they read. When a
+# formula contains one, the setup map must include every concrete cell
+# in the sheet — otherwise the test sees the dynamic target as `blank`
+# and produces a wrong (or erroring) result that the cached IronCalc
+# value never matched against.
+DYNAMIC_REF_RE = re.compile(
+    r"\b(?:_xlfn\.)?(?:OFFSET|INDIRECT)\s*\(", re.IGNORECASE
+)
+
 # Characters we can't put in an output filename. openpyxl will happily
 # accept sheet names with slashes, spaces, etc.
 _FILENAME_SCRUB = re.compile(r"[^A-Za-z0-9._-]+")
@@ -498,6 +509,18 @@ def _convert_sheet(
 
         try:
             referenced = _referenced_cells(formula)
+            if DYNAMIC_REF_RE.search(formula):
+                # `OFFSET` / `INDIRECT` resolve their target at runtime,
+                # past the lexical reference walk. Pull every concrete
+                # static cell in this sheet into the setup so the
+                # dynamic target lands on the cell IronCalc evaluated
+                # against. We deliberately do NOT pull in
+                # `formula_cells` — those would trigger the transitive
+                # walk inside `_build_setup_for`, which can raise
+                # `UnboundedReference` for an unrelated whole-column
+                # formula and lose the entire case.
+                referenced = list(set(referenced)
+                                  | set(non_formula_cells.keys()))
             setup = _build_setup_for(
                 cached_cell, non_formula_cells, formula_cells,
                 referenced=referenced,

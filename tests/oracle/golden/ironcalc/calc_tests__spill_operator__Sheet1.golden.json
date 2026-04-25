@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Sheet1",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:35:35Z"
+    "generated_at": "2026-04-25T14:55:14Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -59,9 +59,97 @@
       "id": "I2",
       "formula": "=SUM(_xlfn.ANCHORARRAY(OFFSET(A1,1,1)))",
       "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1245.0
+        },
+        "I1": {
+          "kind": "text",
+          "value": "This is B2# :)"
+        },
+        "E5": {
+          "kind": "text",
+          "value": "Error, because there is nothing in there"
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Error, because A2 is a number"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 34.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "L2": {
+          "kind": "text",
+          "value": "Hola"
+        },
+        "K3": {
+          "kind": "text",
+          "value": "Mundo"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Error, because C3 is a spill"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 34.0
+        },
+        "L3": {
+          "kind": "text",
+          "value": "Mundo"
+        },
         "A1": {
           "kind": "text",
           "value": "Array"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Array Formula"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "K2": {
+          "kind": "text",
+          "value": "Hola"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 1245.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Dynamic array"
         }
       },
       "expect": {

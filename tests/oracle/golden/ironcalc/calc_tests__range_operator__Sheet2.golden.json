@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Sheet2",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:35:35Z"
+    "generated_at": "2026-04-25T14:55:14Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -17,6 +17,14 @@
       "id": "A1",
       "formula": "=SUM(B1:OFFSET(B1,3,0))",
       "setup": {
+        "B3": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 13.0
+        },
         "B1": {
           "kind": "number",
           "value": 12.0
