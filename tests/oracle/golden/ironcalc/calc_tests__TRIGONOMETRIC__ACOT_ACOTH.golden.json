@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "ACOT_ACOTH",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-24T04:56:20Z"
+    "generated_at": "2026-04-25T14:35:35Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -751,7 +751,12 @@
     {
       "id": "B27",
       "formula": "=_xlfn.ACOT(A27)",
-      "setup": {},
+      "setup": {
+        "A27": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#NAME?"
@@ -760,7 +765,12 @@
     {
       "id": "C27",
       "formula": "=_xlfn.ACOTH(A27)",
-      "setup": {},
+      "setup": {
+        "A27": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#NAME?"

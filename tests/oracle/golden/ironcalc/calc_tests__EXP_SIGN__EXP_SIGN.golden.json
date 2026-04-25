@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "EXP_SIGN",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-24T04:56:20Z"
+    "generated_at": "2026-04-25T14:35:35Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -713,7 +713,12 @@
     {
       "id": "B26",
       "formula": "=EXP(A26)",
-      "setup": {},
+      "setup": {
+        "A26": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#NAME?"
@@ -722,7 +727,12 @@
     {
       "id": "C26",
       "formula": "=SIGN(A26)",
-      "setup": {},
+      "setup": {
+        "A26": {
+          "kind": "error",
+          "code": "#NAME?"
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#NAME?"

@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "CEILING",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-24T04:56:20Z"
+    "generated_at": "2026-04-25T14:35:35Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -598,6 +598,10 @@
       "id": "AA3",
       "formula": "=CEILING($A3,AA$2)",
       "setup": {
+        "AA2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A3": {
           "kind": "number",
           "value": 10.0
@@ -1202,6 +1206,10 @@
       "id": "AA4",
       "formula": "=CEILING($A4,AA$2)",
       "setup": {
+        "AA2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A4": {
           "kind": "number",
           "value": -10.0
@@ -1806,6 +1814,10 @@
       "id": "AA5",
       "formula": "=CEILING($A5,AA$2)",
       "setup": {
+        "AA2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A5": {
           "kind": "number",
           "value": 7.1
@@ -2410,6 +2422,10 @@
       "id": "AA6",
       "formula": "=CEILING($A6,AA$2)",
       "setup": {
+        "AA2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A6": {
           "kind": "number",
           "value": 7.9
@@ -3014,6 +3030,10 @@
       "id": "AA7",
       "formula": "=CEILING($A7,AA$2)",
       "setup": {
+        "AA2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A7": {
           "kind": "number",
           "value": -7.1
@@ -3618,6 +3638,10 @@
       "id": "AA8",
       "formula": "=CEILING($A8,AA$2)",
       "setup": {
+        "AA2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A8": {
           "kind": "number",
           "value": -7.9
@@ -4222,6 +4246,10 @@
       "id": "AA9",
       "formula": "=CEILING($A9,AA$2)",
       "setup": {
+        "AA2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A9": {
           "kind": "number",
           "value": 0.0
@@ -4826,6 +4854,10 @@
       "id": "AA10",
       "formula": "=CEILING($A10,AA$2)",
       "setup": {
+        "AA2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A10": {
           "kind": "number",
           "value": 9999999999999.0
@@ -5430,6 +5462,10 @@
       "id": "AA11",
       "formula": "=CEILING($A11,AA$2)",
       "setup": {
+        "AA2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A11": {
           "kind": "number",
           "value": 1e-12
@@ -6034,6 +6070,10 @@
       "id": "AA12",
       "formula": "=CEILING($A12,AA$2)",
       "setup": {
+        "AA2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A12": {
           "kind": "number",
           "value": -1e-12
@@ -6620,6 +6660,10 @@
       "id": "AA13",
       "formula": "=CEILING($A13,AA$2)",
       "setup": {
+        "AA2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A13": {
           "kind": "number",
           "value": -1e-307

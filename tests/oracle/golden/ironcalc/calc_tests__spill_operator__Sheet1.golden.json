@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Sheet1",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-24T04:56:20Z"
+    "generated_at": "2026-04-25T14:35:35Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -30,7 +30,12 @@
     {
       "id": "F2",
       "formula": "=SUM(_xlfn.ANCHORARRAY(B2))",
-      "setup": {},
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
       "expect": {
         "kind": "number",
         "value": 1315.0
@@ -39,7 +44,12 @@
     {
       "id": "G2",
       "formula": "=SUM(_xlfn.ANCHORARRAY(C2))",
-      "setup": {},
+      "setup": {
+        "C2": {
+          "kind": "number",
+          "value": 123.0
+        }
+      },
       "expect": {
         "kind": "number",
         "value": 492.0
@@ -62,7 +72,12 @@
     {
       "id": "M2",
       "formula": "=_xlfn.CONCAT(_xlfn.ANCHORARRAY(L2))",
-      "setup": {},
+      "setup": {
+        "L2": {
+          "kind": "text",
+          "value": "Hola"
+        }
+      },
       "expect": {
         "kind": "text",
         "value": "HolaMundo"

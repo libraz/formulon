@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Sheet1",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-24T04:56:20Z"
+    "generated_at": "2026-04-25T14:35:35Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -4066,6 +4066,10 @@
       "id": "G59",
       "formula": "=_xlfn.BETA.DIST(A59,B59,C59,D59,E59,F59)",
       "setup": {
+        "B59": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A59": {
           "kind": "number",
           "value": 3.0
@@ -4096,6 +4100,10 @@
       "id": "H59",
       "formula": "=_xlfn.BETA.INV(G59,B59,C59,E59,F59)",
       "setup": {
+        "B59": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A59": {
           "kind": "number",
           "value": 3.0

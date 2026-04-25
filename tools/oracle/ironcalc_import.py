@@ -418,6 +418,17 @@ def _convert_sheet(
     stats = SheetConvertStats()
 
     # Gather values up-front so we can produce setup per formula cell.
+    # Three classes of cells:
+    #   * Plain values (number / text / bool / date) -> non_formula_cells.
+    #   * String formulas (`=SUM(A1:A2)`) -> formula_cells, walked transitively
+    #     by `_build_setup_for`.
+    #   * Array / dynamic-array formulas: openpyxl exposes these as
+    #     `ArrayFormula` objects rather than strings (data_type == 'f' but
+    #     `cell.value` is not a string). Fall back to the cached scalar from
+    #     `cached_sheet` and treat the cell as a static value — which is what
+    #     dependent formulas observe at runtime anyway, and avoids dropping
+    #     the cell entirely (which would silently convert it to `blank` in
+    #     the test harness, masking errors that propagate from such cells).
     non_formula_cells: Dict[str, Any] = {}
     formula_cells: Dict[str, str] = {}
     for row in sheet.iter_rows():
@@ -426,6 +437,10 @@ def _convert_sheet(
                 continue
             if cell.data_type == "f" and isinstance(cell.value, str):
                 formula_cells[cell.coordinate] = cell.value
+            elif cell.data_type == "f":
+                cached_value = cached_sheet[cell.coordinate].value
+                if cached_value is not None:
+                    non_formula_cells[cell.coordinate] = cached_value
             else:
                 non_formula_cells[cell.coordinate] = cell.value
 

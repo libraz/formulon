@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "FLOOR",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-24T04:56:20Z"
+    "generated_at": "2026-04-25T14:35:35Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -592,6 +592,10 @@
       "id": "Y3",
       "formula": "=FLOOR($A3,Y$2)",
       "setup": {
+        "Y2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A3": {
           "kind": "number",
           "value": 10.0
@@ -1194,6 +1198,10 @@
       "id": "Y4",
       "formula": "=FLOOR($A4,Y$2)",
       "setup": {
+        "Y2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A4": {
           "kind": "number",
           "value": -10.0
@@ -1796,6 +1804,10 @@
       "id": "Y5",
       "formula": "=FLOOR($A5,Y$2)",
       "setup": {
+        "Y2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A5": {
           "kind": "number",
           "value": 7.1
@@ -2398,6 +2410,10 @@
       "id": "Y6",
       "formula": "=FLOOR($A6,Y$2)",
       "setup": {
+        "Y2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A6": {
           "kind": "number",
           "value": 7.9
@@ -3000,6 +3016,10 @@
       "id": "Y7",
       "formula": "=FLOOR($A7,Y$2)",
       "setup": {
+        "Y2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A7": {
           "kind": "number",
           "value": -7.1
@@ -3602,6 +3622,10 @@
       "id": "Y8",
       "formula": "=FLOOR($A8,Y$2)",
       "setup": {
+        "Y2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A8": {
           "kind": "number",
           "value": -7.9
@@ -4204,6 +4228,10 @@
       "id": "Y9",
       "formula": "=FLOOR($A9,Y$2)",
       "setup": {
+        "Y2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A9": {
           "kind": "number",
           "value": 0.0
@@ -4806,6 +4834,10 @@
       "id": "Y10",
       "formula": "=FLOOR($A10,Y$2)",
       "setup": {
+        "Y2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A10": {
           "kind": "number",
           "value": 9999999999999.0
@@ -5408,6 +5440,10 @@
       "id": "Y11",
       "formula": "=FLOOR($A11,Y$2)",
       "setup": {
+        "Y2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A11": {
           "kind": "number",
           "value": 1e-12
@@ -6010,6 +6046,10 @@
       "id": "Y12",
       "formula": "=FLOOR($A12,Y$2)",
       "setup": {
+        "Y2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A12": {
           "kind": "number",
           "value": -1e-12
@@ -6612,6 +6652,10 @@
       "id": "Y13",
       "formula": "=FLOOR($A13,Y$2)",
       "setup": {
+        "Y2": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
         "A13": {
           "kind": "number",
           "value": 1e-307
