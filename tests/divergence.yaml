@@ -147,30 +147,6 @@ entries:
     prefer: formulon
     first_noted: 2026-04-23
 
-  # -- Date-string -> number coercion in arithmetic context ---------------
-  # Mac Excel coerces date-formatted text like "2024-01-10" to its
-  # corresponding date serial (45301) when used in a numeric context,
-  # so e.g. CEILING(10, "2024-01-10") returns 45301 (= ceil(10/45301)*45301).
-  # Formulon's coerce_to_number rejects date-strings with #VALUE! pending a
-  # broader DATEVALUE-style parse path in the general numeric coercion.
-  # The fix is a wider change touching many functions; tracking these as
-  # known divergences until a unified date-string coercion lands.
-  - id: floor_date_text_sig
-    mode: skip-oracle
-    reason: "Mac coerces \"2024-01-10\" to date serial 45301; Formulon's coerce_to_number rejects it with #VALUE! pending date-string parse support."
-    prefer: mac-excel-365
-    first_noted: 2026-04-25
-  - id: ceiling_date_text_sig
-    mode: skip-oracle
-    reason: "Same as floor_date_text_sig: Mac coerces date-text to serial."
-    prefer: mac-excel-365
-    first_noted: 2026-04-25
-  - id: floor_neg_num_date_text_sig
-    mode: skip-oracle
-    reason: "Same as floor_date_text_sig: Mac coerces date-text to serial."
-    prefer: mac-excel-365
-    first_noted: 2026-04-25
-
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

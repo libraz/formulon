@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-24T21:36:48Z"
+    "generated_at": "2026-04-25T15:24:31Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -153,19 +153,28 @@
       "id": "floor_date_text_sig",
       "formula": "=FLOOR(10,\"2024-01-10\")",
       "setup": {},
-      "skipped": "Mac coerces \"2024-01-10\" to date serial 45301; Formulon's coerce_to_number rejects it with #VALUE! pending date-string parse support."
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
     },
     {
       "id": "ceiling_date_text_sig",
       "formula": "=CEILING(10,\"2024-01-10\")",
       "setup": {},
-      "skipped": "Same as floor_date_text_sig: Mac coerces date-text to serial."
+      "expect": {
+        "kind": "number",
+        "value": 45301.0
+      }
     },
     {
       "id": "floor_neg_num_date_text_sig",
       "formula": "=FLOOR(-10,\"2024-01-10\")",
       "setup": {},
-      "skipped": "Same as floor_date_text_sig: Mac coerces date-text to serial."
+      "expect": {
+        "kind": "number",
+        "value": -45301.0
+      }
     },
     {
       "id": "floor_numeric_text_sig",
