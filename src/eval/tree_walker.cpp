@@ -1034,7 +1034,18 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
 }
 
 Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
-  return eval_node(node, arena, registry, ctx);
+  Value v = eval_node(node, arena, registry, ctx);
+  // Mac Excel 365 displays a blank-cell-resolved formula result as 0 in
+  // numeric column rendering, and the oracle pipeline reads it back as
+  // number(0.0). We mirror that here so plain `=A1` (A1 blank) and other
+  // top-level reference paths agree with Mac. The Literal-Blank case from
+  // the AST factory (used in unit tests like `BlankFromFactory` to verify
+  // the value variant) is preserved by gating on node kind: a literal
+  // Blank node remains Blank to keep the variant inspectable from tests.
+  if (v.is_blank() && node.kind() != parser::NodeKind::Literal) {
+    return Value::number(0.0);
+  }
+  return v;
 }
 
 }  // namespace eval

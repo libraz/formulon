@@ -681,17 +681,7 @@ Value eval_offset_lazy(const parser::AstNode& call, Arena& arena, const Function
   target.sheet = base.sheet;
   target.row = top_row;
   target.col = left_col;
-  // Mac Excel 365 displays a blank-cell-resolved scalar OFFSET as 0 (the
-  // numeric General-format render), and the oracle pipeline reads that
-  // back as `number(0.0)`. Coerce here to match observable output.
-  // Inspectors like `ISBLANK(OFFSET(...))` reach the underlying ref via
-  // `resolve_reference_call` instead of this scalar path, so they keep
-  // their existing semantics.
-  Value resolved = ctx.resolve_ref(target, arena, registry);
-  if (resolved.is_blank()) {
-    return Value::number(0.0);
-  }
-  return resolved;
+  return ctx.resolve_ref(target, arena, registry);
 }
 
 bool expand_offset_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -846,6 +836,43 @@ bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const Fun
     *out_bottom_row = top_row + height - 1U;
     *out_right_col = left_col + width - 1U;
     *out_is_range = (height > 1U) || (width > 1U);
+    return true;
+  }
+  if (strings::case_insensitive_eq(name, "CHOOSE")) {
+    const std::uint32_t arity = node.as_call_arity();
+    if (arity < 2U) {
+      *out_err = ErrorCode::Value;
+      return false;
+    }
+    // Evaluate the index argument; CHOOSE expects a 1-based integer
+    // selector. Anything that fails coercion (text, blank-as-strict,
+    // error) propagates with its original code.
+    const Value idx_val = eval_node(node.as_call_arg(0), arena, registry, ctx);
+    if (idx_val.is_error()) {
+      *out_err = idx_val.as_error();
+      return false;
+    }
+    auto idx_int = refs_internal::read_int(idx_val);
+    if (!idx_int) {
+      *out_err = idx_int.error();
+      return false;
+    }
+    const int idx = idx_int.value();
+    const std::uint32_t n_choices = arity - 1U;
+    if (idx < 1 || static_cast<std::uint32_t>(idx) > n_choices) {
+      // Excel: out-of-range index -> #VALUE!
+      *out_err = ErrorCode::Value;
+      return false;
+    }
+    // The picked choice is at slot `idx` (0 = index, 1..n = choices).
+    // Recurse via `resolve_range_endpoint` so plain Ref / nested
+    // OFFSET-INDIRECT-CHOOSE endpoints all reduce to a rectangle.
+    const parser::AstNode& picked = node.as_call_arg(static_cast<std::uint32_t>(idx));
+    if (!resolve_range_endpoint(picked, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
+                                out_right_col, out_err)) {
+      return false;
+    }
+    *out_is_range = (*out_top_row != *out_bottom_row) || (*out_left_col != *out_right_col);
     return true;
   }
   // Any other call name is not a reference-returning builtin we know
