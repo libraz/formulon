@@ -493,6 +493,37 @@ bool compute_offset_rect(const parser::AstNode& call, Arena& arena, const Functi
     return true;
   };
 
+  // Height / width get a slightly different coercion than rows_off /
+  // cols_off: Mac Excel 365 truncates the fractional part toward zero,
+  // but a non-zero magnitude < 1 (e.g. `0.9`, `-0.5`) is bumped up to
+  // ±1 instead of collapsing to 0 (which would otherwise misfire the
+  // `height == 0 || width == 0 -> #REF!` guard below). The bump is
+  // sign-preserving so that negative-fractional widths still extend in
+  // the negative direction.
+  auto eval_dim = [&](std::uint32_t idx, int* out_val) -> bool {
+    const Value v = eval_node(call.as_call_arg(idx), arena, registry, ctx);
+    if (v.is_error()) {
+      *out_err = v.as_error();
+      return false;
+    }
+    auto coerced = coerce_to_number(v);
+    if (!coerced) {
+      *out_err = coerced.error();
+      return false;
+    }
+    const double d = coerced.value();
+    if (std::isnan(d) || std::isinf(d)) {
+      *out_err = ErrorCode::Num;
+      return false;
+    }
+    int truncated = static_cast<int>(std::trunc(d));
+    if (truncated == 0 && d != 0.0) {
+      truncated = (d > 0.0) ? 1 : -1;
+    }
+    *out_val = truncated;
+    return true;
+  };
+
   int rows_off = 0;
   int cols_off = 0;
   if (!eval_int(1U, &rows_off) || !eval_int(2U, &cols_off)) {
@@ -502,12 +533,12 @@ bool compute_offset_rect(const parser::AstNode& call, Arena& arena, const Functi
   int height_i = static_cast<int>(out_base->rows);
   int width_i = static_cast<int>(out_base->cols);
   if (arity >= 4U) {
-    if (!eval_int(3U, &height_i)) {
+    if (!eval_dim(3U, &height_i)) {
       return false;
     }
   }
   if (arity >= 5U) {
-    if (!eval_int(4U, &width_i)) {
+    if (!eval_dim(4U, &width_i)) {
       return false;
     }
   }
@@ -650,7 +681,17 @@ Value eval_offset_lazy(const parser::AstNode& call, Arena& arena, const Function
   target.sheet = base.sheet;
   target.row = top_row;
   target.col = left_col;
-  return ctx.resolve_ref(target, arena, registry);
+  // Mac Excel 365 displays a blank-cell-resolved scalar OFFSET as 0 (the
+  // numeric General-format render), and the oracle pipeline reads that
+  // back as `number(0.0)`. Coerce here to match observable output.
+  // Inspectors like `ISBLANK(OFFSET(...))` reach the underlying ref via
+  // `resolve_reference_call` instead of this scalar path, so they keep
+  // their existing semantics.
+  Value resolved = ctx.resolve_ref(target, arena, registry);
+  if (resolved.is_blank()) {
+    return Value::number(0.0);
+  }
+  return resolved;
 }
 
 bool expand_offset_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
