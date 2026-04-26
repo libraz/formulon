@@ -78,3 +78,185 @@ cases:
     description: "No sign change in cash flows -> #NUM!"
     setup: { A1: 100, A2: 200, A3: 300, B1: 39448, B2: 39508, B3: 39751 }
     formula: "=XIRR(A1:A3, B1:B3)"
+
+  # =========================================================================
+  # Expanded probes: solver convergence edges, schedule irregularities,
+  # array shape mismatches, error / blank propagation.
+  # =========================================================================
+
+  # -- XNPV: schedule edges -----------------------------------------------
+  - id: xnpv_two_flow_minimum
+    description: "Minimum schedule: one outflow + one inflow"
+    setup:
+      A1: -1000
+      A2: 1100
+      B1: 39448
+      B2: 39813   # +1 year
+    formula: "=XNPV(0.05, A1:A2, B1:B2)"
+
+  - id: xnpv_negative_rate
+    description: "Negative rate (-0.05) — XNPV computes formal NPV with rate<0"
+    setup:
+      A1: -1000
+      A2: 1100
+      B1: 39448
+      B2: 39813
+    formula: "=XNPV(-0.05, A1:A2, B1:B2)"
+
+  - id: xnpv_dates_unsorted
+    description: "Excel does not require sorted dates — XNPV uses dates[i]-dates[0] regardless"
+    setup:
+      A1: -10000
+      A2: 4250
+      A3: 2750
+      B1: 39448
+      B2: 39751   # later
+      B3: 39508   # earlier (out of order)
+    formula: "=XNPV(0.09, A1:A3, B1:B3)"
+
+  - id: xnpv_size_mismatch_is_num
+    description: "values length != dates length -> #NUM! (Mac Excel)"
+    setup: { A1: -100, A2: 50, B1: 39448 }
+    formula: "=XNPV(0.05, A1:A2, B1:B1)"
+
+  - id: xnpv_first_date_after_others_is_num
+    description: "Excel: first date in schedule must be the earliest -> if not, #NUM!"
+    setup:
+      A1: -1000
+      A2: 1100
+      B1: 39813   # later
+      B2: 39448   # earlier
+    formula: "=XNPV(0.05, A1:A2, B1:B2)"
+
+  - id: xnpv_blank_in_values_is_zero
+    description: "A blank cash-flow cell is treated as zero — Mac Excel does not propagate blank"
+    setup:
+      A1: -1000
+      A3: 1100
+      B1: 39448
+      B2: 39600
+      B3: 39813
+    formula: "=XNPV(0.05, A1:A3, B1:B3)"
+
+  - id: xnpv_text_in_values_is_value
+    description: "A text cash-flow cell -> #VALUE!"
+    setup:
+      A1: -1000
+      A2: "x"
+      A3: 1100
+      B1: 39448
+      B2: 39600
+      B3: 39813
+    formula: "=XNPV(0.05, A1:A3, B1:B3)"
+
+  - id: xnpv_error_in_values_propagates
+    setup:
+      A1: -1000
+      A2: { kind: formula, formula: "=NA()" }
+      A3: 1100
+      B1: 39448
+      B2: 39600
+      B3: 39813
+    formula: "=XNPV(0.05, A1:A3, B1:B3)"
+
+  # -- XIRR: solver edges -------------------------------------------------
+  - id: xirr_negative_guess
+    description: "Negative guess; Newton-Raphson should still converge"
+    setup:
+      A1: -10000
+      A2: 2750
+      A3: 4250
+      A4: 3250
+      A5: 2750
+      B1: 39448
+      B2: 39508
+      B3: 39751
+      B4: 39859
+      B5: 39904
+    formula: "=XIRR(A1:A5, B1:B5, -0.5)"
+
+  - id: xirr_extreme_guess
+    description: "Very high guess (10) — solver may diverge to #NUM! or still converge"
+    setup:
+      A1: -10000
+      A2: 2750
+      A3: 4250
+      A4: 3250
+      A5: 2750
+      B1: 39448
+      B2: 39508
+      B3: 39751
+      B4: 39859
+      B5: 39904
+    formula: "=XIRR(A1:A5, B1:B5, 10)"
+
+  - id: xirr_two_flow_simple
+    description: "Two-flow schedule: -1000 / +1100 over 1 year — XIRR ≈ 0.10"
+    setup:
+      A1: -1000
+      A2: 1100
+      B1: 39448
+      B2: 39813
+    formula: "=XIRR(A1:A2, B1:B2)"
+
+  - id: xirr_two_flow_with_loss
+    description: "Two-flow with loss: -1000 / +500 -> negative IRR"
+    setup:
+      A1: -1000
+      A2: 500
+      B1: 39448
+      B2: 39813
+    formula: "=XIRR(A1:A2, B1:B2)"
+
+  - id: xirr_all_negative_is_num
+    description: "Symmetric to all-positive: no sign change -> #NUM!"
+    setup: { A1: -100, A2: -200, A3: -300, B1: 39448, B2: 39508, B3: 39751 }
+    formula: "=XIRR(A1:A3, B1:B3)"
+
+  - id: xirr_size_mismatch_is_num
+    description: "values length != dates length -> #NUM!"
+    setup: { A1: -1000, A2: 1100, B1: 39448 }
+    formula: "=XIRR(A1:A2, B1:B1)"
+
+  - id: xirr_blank_in_values
+    description: "Blank cash-flow cell treated as zero (matches XNPV blank semantics)"
+    setup:
+      A1: -1000
+      A3: 1100
+      B1: 39448
+      B2: 39600
+      B3: 39813
+    formula: "=XIRR(A1:A3, B1:B3)"
+
+  - id: xirr_error_in_values_propagates
+    setup:
+      A1: -1000
+      A2: { kind: formula, formula: "=NA()" }
+      A3: 1100
+      B1: 39448
+      B2: 39600
+      B3: 39813
+    formula: "=XIRR(A1:A3, B1:B3)"
+
+  - id: xirr_zero_cashflow_padding
+    description: "Zero cash flows interleaved — solver still converges"
+    setup:
+      A1: -1000
+      A2: 0
+      A3: 0
+      A4: 1200
+      B1: 39448
+      B2: 39600
+      B3: 39750
+      B4: 39813
+    formula: "=XIRR(A1:A4, B1:B4)"
+
+  - id: xirr_text_guess_is_value
+    description: "Text guess -> #VALUE!"
+    setup: { A1: -1000, A2: 1100, B1: 39448, B2: 39813 }
+    formula: "=XIRR(A1:A2, B1:B2, \"x\")"
+
+  - id: xnpv_text_rate_is_value
+    description: "Text rate -> #VALUE!"
+    setup: { A1: -1000, A2: 1100, B1: 39448, B2: 39813 }
+    formula: "=XNPV(\"x\", A1:A2, B1:B2)"

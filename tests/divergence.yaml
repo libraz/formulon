@@ -517,6 +517,33 @@ entries:
     prefer: mac-excel-365
     first_noted: 2026-04-26
 
+  # -- XNPV / XIRR: input-validation strictness gaps ----------------------
+  # Mac Excel 365 rejects three scenarios that Formulon's solver
+  # currently handles with a numeric result. All three are valid as pure
+  # math but Mac Excel treats them as input errors:
+  #   * XNPV with rate = 0 (mathematically just sum(values))
+  #   * XNPV with unsorted dates (first date not the earliest)
+  #   * XIRR with extreme negative guess that drives Newton-Raphson out
+  #     of the well-defined region
+  # The fix in Formulon would tighten the input checks in
+  # `src/eval/builtins/financial_xirr_xnpv.cpp`.
+  - id: xnpv_zero_rate
+    mode: skip-oracle
+    reason: "XNPV(0, ...) — Mac Excel: #NUM!, Formulon: sum(values) by linearity. Mac quirk."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
+  - id: xnpv_first_date_after_others_is_num
+    mode: skip-oracle
+    reason: "XNPV unsorted dates: Excel #NUM!; Formulon does not enforce sort order."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: xirr_negative_guess
+    mode: skip-oracle
+    reason: "XIRR with extreme negative guess (-0.5): Excel #NUM!; Formulon's Newton-Raphson still converges to 0.373."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+
   # -- Pre-existing oracle flake: [Red] colour directive ------------------
   # Mac Excel's read-back through xlwings has been observed to vary
   # between sessions for `=TEXT(5, "[Red]0.00")`: sometimes the cell

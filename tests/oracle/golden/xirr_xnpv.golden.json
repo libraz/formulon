@@ -1,0 +1,866 @@
+{
+  "suite": "xirr_xnpv",
+  "description": "XIRR / XNPV — irregular cash-flow NPV and IRR over date schedules",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-26T01:53:41Z"
+  },
+  "tolerance": {
+    "abs": 0.001,
+    "rel": 0.0001
+  },
+  "cases": [
+    {
+      "id": "xnpv_microsoft_doc",
+      "formula": "=XNPV(0.09, A1:A5, B1:B5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -10000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2750.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4250.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3250.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 2750.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39508.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 39751.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 39859.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 39904.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2086.647602031535
+      }
+    },
+    {
+      "id": "xnpv_zero_rate",
+      "formula": "=XNPV(0, A1:A5, B1:B5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -10000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2750.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4250.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3250.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 2750.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39508.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 39751.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 39859.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 39904.0
+        }
+      },
+      "skipped": "XNPV(0, ...) — Mac Excel: #NUM!, Formulon: sum(values) by linearity. Mac quirk."
+    },
+    {
+      "id": "xnpv_rate_minus_one_is_num",
+      "formula": "=XNPV(-1, A1:A2, B1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -100.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39508.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "xirr_microsoft_doc",
+      "formula": "=XIRR(A1:A5, B1:B5, 0.1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -10000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2750.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4250.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3250.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 2750.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39508.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 39751.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 39859.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 39904.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3733625352382659
+      }
+    },
+    {
+      "id": "xirr_default_guess",
+      "formula": "=XIRR(A1:A5, B1:B5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -10000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2750.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4250.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3250.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 2750.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39508.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 39751.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 39859.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 39904.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3733625352382659
+      }
+    },
+    {
+      "id": "xirr_all_positive_is_num",
+      "formula": "=XIRR(A1:A3, B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39508.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 39751.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "xnpv_two_flow_minimum",
+      "formula": "=XNPV(0.05, A1:A2, B1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1100.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39813.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 47.61904761904748
+      }
+    },
+    {
+      "id": "xnpv_negative_rate",
+      "formula": "=XNPV(-0.05, A1:A2, B1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1100.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39813.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "xnpv_dates_unsorted",
+      "formula": "=XNPV(0.09, A1:A3, B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -10000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4250.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2750.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39751.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 39508.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -3332.1036919027515
+      }
+    },
+    {
+      "id": "xnpv_size_mismatch_is_num",
+      "formula": "=XNPV(0.05, A1:A2, B1:B1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -100.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "xnpv_first_date_after_others_is_num",
+      "formula": "=XNPV(0.05, A1:A2, B1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1100.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39813.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39448.0
+        }
+      },
+      "skipped": "XNPV unsorted dates: Excel #NUM!; Formulon does not enforce sort order."
+    },
+    {
+      "id": "xnpv_blank_in_values_is_zero",
+      "formula": "=XNPV(0.05, A1:A3, B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -1000.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1100.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39600.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 39813.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "xnpv_text_in_values_is_value",
+      "formula": "=XNPV(0.05, A1:A3, B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -1000.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1100.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39600.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 39813.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "xnpv_error_in_values_propagates",
+      "formula": "=XNPV(0.05, A1:A3, B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -1000.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1100.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39600.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 39813.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "xirr_negative_guess",
+      "formula": "=XIRR(A1:A5, B1:B5, -0.5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -10000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2750.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4250.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3250.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 2750.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39508.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 39751.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 39859.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 39904.0
+        }
+      },
+      "skipped": "XIRR with extreme negative guess (-0.5): Excel #NUM!; Formulon's Newton-Raphson still converges to 0.373."
+    },
+    {
+      "id": "xirr_extreme_guess",
+      "formula": "=XIRR(A1:A5, B1:B5, 10)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -10000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2750.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4250.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3250.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 2750.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39508.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 39751.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 39859.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 39904.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.37336253095418215
+      }
+    },
+    {
+      "id": "xirr_two_flow_simple",
+      "formula": "=XIRR(A1:A2, B1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1100.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39813.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.09999999403953552
+      }
+    },
+    {
+      "id": "xirr_two_flow_with_loss",
+      "formula": "=XIRR(A1:A2, B1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 500.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39813.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -0.4999999962747097
+      }
+    },
+    {
+      "id": "xirr_all_negative_is_num",
+      "formula": "=XIRR(A1:A3, B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -100.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": -200.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": -300.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39508.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 39751.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "xirr_size_mismatch_is_num",
+      "formula": "=XIRR(A1:A2, B1:B1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1100.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "xirr_blank_in_values",
+      "formula": "=XIRR(A1:A3, B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -1000.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1100.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39600.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 39813.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.09999999403953552
+      }
+    },
+    {
+      "id": "xirr_error_in_values_propagates",
+      "formula": "=XIRR(A1:A3, B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -1000.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1100.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39600.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 39813.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "xirr_zero_cashflow_padding",
+      "formula": "=XIRR(A1:A4, B1:B4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1200.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39600.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 39750.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 39813.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.19999999403953553
+      }
+    },
+    {
+      "id": "xirr_text_guess_is_value",
+      "formula": "=XIRR(A1:A2, B1:B2, \"x\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1100.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39813.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "xnpv_text_rate_is_value",
+      "formula": "=XNPV(\"x\", A1:A2, B1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -1000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1100.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39813.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}
