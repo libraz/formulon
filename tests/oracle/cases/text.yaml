@@ -205,6 +205,54 @@ cases:
     description: "Supplementary-plane emoji: verify Excel's DBCS byte count"
     formula: "=LENB(\"😀\")"
 
+  - id: lenb_kanji_pair
+    description: "Two CJK ideographs: 2 chars * 2 bytes = 4"
+    formula: "=LENB(\"漢字\")"
+
+  - id: lenb_mixed_ascii_kanji
+    description: "2 kanji (4b) + 3 ASCII (3b) = 7 (NB existing lenb_mixed uses 'abcあ')"
+    formula: "=LENB(\"漢ABC字\")"
+
+  - id: lenb_fullwidth_kana_dakuten_composed
+    description: "Single composed full-width 'ガ' (U+30AC). Probe: NFC composed = 2 bytes"
+    formula: "=LENB(\"ガ\")"
+
+  - id: lenb_halfwidth_kana_with_dakuten
+    description: "Half-width 'ｶ'(U+FF76)+combining dakuten 'ﾞ'(U+FF9E): 2 chars * 1 byte = 2"
+    formula: "=LENB(\"ｶﾞ\")"
+
+  - id: lenb_circled_digit
+    description: "Circled digit '①' (U+2460) is BMP non-ASCII: probe DBCS 2 bytes"
+    formula: "=LENB(\"①\")"
+
+  - id: lenb_latin_extended
+    description: "Latin extended 'â' (U+00E2) BMP non-ASCII: probe DBCS 2 bytes"
+    formula: "=LENB(\"â\")"
+
+  - id: lenb_fullwidth_space
+    description: "Ideographic space U+3000: 2 bytes"
+    formula: "=LENB(\"　\")"
+
+  - id: lenb_halfwidth_space
+    description: "ASCII space U+0020: 1 byte"
+    formula: "=LENB(\" \")"
+
+  - id: lenb_newline
+    description: "LF newline U+000A: 1 byte"
+    formula: "=LENB(CHAR(10))"
+
+  - id: lenb_combining_dakuten
+    description: "Base 'か' + combining dakuten U+3099: probe Mac NFC vs decomposed (2+2=4 expected unless recomposed)"
+    formula: "=LENB(\"か\" & UNICHAR(12441))"
+
+  - id: lenb_coerces_number
+    description: "LENB coerces numbers to text first; '123' = 3 bytes"
+    formula: "=LENB(123)"
+
+  - id: lenb_coerces_bool
+    description: "LENB(TRUE) -> 'TRUE' = 4 bytes"
+    formula: "=LENB(TRUE)"
+
   # -- LEFTB --------------------------------------------------------------
   - id: leftb_ascii
     formula: "=LEFTB(\"hello\", 3)"
@@ -226,6 +274,26 @@ cases:
   - id: leftb_zero_count
     formula: "=LEFTB(\"hello\", 0)"
 
+  - id: leftb_split_kanji_one_byte
+    description: "Budget 1 splits the 2-byte kanji: probe pad-with-space behaviour"
+    formula: "=LEFTB(\"漢字\", 1)"
+
+  - id: leftb_kanji_exact_boundary
+    description: "Budget 2 = exactly 1 kanji"
+    formula: "=LEFTB(\"漢字\", 2)"
+
+  - id: leftb_mixed_overshoots_into_kanji
+    description: "'ABC漢' is 5 bytes (3+2); budget 4 splits the kanji -> 'ABC '"
+    formula: "=LEFTB(\"ABC漢\", 4)"
+
+  - id: leftb_over_budget
+    description: "Asking for more bytes than the source provides returns the full string"
+    formula: "=LEFTB(\"hello\", 100)"
+
+  - id: leftb_split_composed_dakuten
+    description: "Single composed 'が' (NFC, 2 bytes); budget 1 = pad-with-space"
+    formula: "=LEFTB(\"が\", 1)"
+
   # -- RIGHTB -------------------------------------------------------------
   - id: rightb_ascii
     formula: "=RIGHTB(\"hello\", 3)"
@@ -237,6 +305,18 @@ cases:
   - id: rightb_hiragana_splits
     description: "Budget 3: space pad then rightmost full hiragana"
     formula: "=RIGHTB(\"あいう\", 3)"
+
+  - id: rightb_split_kanji_one_byte
+    description: "Budget 1 splits the rightmost 2-byte kanji from the right edge"
+    formula: "=RIGHTB(\"漢字\", 1)"
+
+  - id: rightb_mixed_three_bytes
+    description: "'ABC漢' is 5 bytes; rightmost 3 = 'C' + kanji (2b) -> 'C漢'"
+    formula: "=RIGHTB(\"ABC漢\", 3)"
+
+  - id: rightb_over_budget
+    description: "Budget exceeds source size -> full string"
+    formula: "=RIGHTB(\"hello\", 100)"
 
   # -- MIDB ---------------------------------------------------------------
   - id: midb_ascii
@@ -255,6 +335,25 @@ cases:
 
   - id: midb_start_zero_is_value
     formula: "=MIDB(\"abc\", 0, 3)"
+
+  - id: midb_start_negative_is_value
+    formula: "=MIDB(\"hello\", -1, 3)"
+
+  - id: midb_kanji_clean_start
+    description: "Start byte 4 = the kanji in 'ABC漢XY'; 2-byte budget extracts the kanji"
+    formula: "=MIDB(\"ABC漢XY\", 4, 2)"
+
+  - id: midb_kanji_split_length
+    description: "Start byte 4 (kanji boundary) but only 1-byte budget: probe head-pad-then-stop or trailing-pad"
+    formula: "=MIDB(\"ABC漢XY\", 4, 1)"
+
+  - id: midb_start_inside_kanji
+    description: "Start byte 5 lands strictly inside the 2-byte 'ABC漢XY' kanji: head-pad space"
+    formula: "=MIDB(\"ABC漢XY\", 5, 1)"
+
+  - id: midb_over_length
+    description: "Window much larger than source: full string"
+    formula: "=MIDB(\"漢字\", 1, 100)"
 
   # -- CHAR ---------------------------------------------------------------
   - id: char_ascii_a
@@ -331,6 +430,34 @@ cases:
   - id: searchb_case_insensitive
     formula: "=SEARCHB(\"B\", \"abc\")"
 
+  - id: findb_repeated_kanji_first
+    description: "First '字' starts at DBCS byte 3 in '漢字漢字'"
+    formula: "=FINDB(\"字\", \"漢字漢字\")"
+
+  - id: findb_repeated_kanji_with_start
+    description: "Search '字' from byte 4 onward: skips first '字' at byte 3, next '字' at byte 7"
+    formula: "=FINDB(\"字\", \"漢字漢字\", 4)"
+
+  - id: findb_ascii_in_kanji_not_found
+    description: "Latin 'a' is absent from '漢字' -> #VALUE!"
+    formula: "=FINDB(\"a\", \"漢字\", 1)"
+
+  - id: findb_empty_needle_default_start
+    description: "Empty needle with no start_num -> 1"
+    formula: "=FINDB(\"\", \"abc\")"
+
+  - id: searchb_question_wildcard_in_kanji
+    description: "'?' wildcard matches any single character; should land on byte 1"
+    formula: "=SEARCHB(\"?\", \"漢ABC\")"
+
+  - id: searchb_star_wildcard_default
+    description: "'*' matches the empty prefix at the very start -> byte position 1"
+    formula: "=SEARCHB(\"*\", \"あいう\")"
+
+  - id: searchb_kanji_exact_byte_position
+    description: "'漢' starts at DBCS byte 4 in 'ABC漢'"
+    formula: "=SEARCHB(\"漢\", \"ABC漢\", 1)"
+
   # -- FIXED --------------------------------------------------------------
   - id: fixed_positive
     formula: "=FIXED(1234567.891, 2)"
@@ -347,14 +474,15 @@ cases:
 
   # -- DOLLAR (Mac Excel ja-JP uses yen sign '¥' = UTF-8 0xC2 0xA5) -------
   - id: dollar_positive
-    description: "Mac Excel ja-JP DOLLAR uses ¥ prefix, not $. Diverges from en-US."
+    description: "Mac Excel ja-JP DOLLAR uses ¥ prefix and defaults to 0 decimals (en-US defaults to 2). 1234.5 rounds to 1235."
     formula: "=DOLLAR(1234.5)"
 
-  - id: dollar_negative_parens
-    description: "Negative value renders as (¥...) with no minus sign"
+  - id: dollar_negative_minus_sign
+    description: "ja-JP renders negatives as '¥-1,235' (literal minus inside prefix), not '($...)' parens like en-US. Default decimals = 0."
     formula: "=DOLLAR(-1234.5)"
 
   - id: dollar_zero
+    description: "ja-JP default decimals = 0, so DOLLAR(0) is '¥0' (no fractional part)."
     formula: "=DOLLAR(0)"
 
   - id: dollar_negative_decimals

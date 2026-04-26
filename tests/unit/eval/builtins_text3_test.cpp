@@ -382,26 +382,37 @@ TEST(BuiltinsText3Fixed, ErrorPropagates) {
 // ---------------------------------------------------------------------------
 
 TEST(BuiltinsText3Dollar, PositiveYenSign) {
+  // ja-JP default decimals = 0, so 1234.5 rounds to 1235.
   const Value v = EvalSource("=DOLLAR(1234.5)");
   ASSERT_TRUE(v.is_text());
-  // UTF-8: "¥1,234.50" = 0xC2 0xA5 + "1,234.50"
+  // UTF-8: "¥1,235" = 0xC2 0xA5 + "1,235"
   EXPECT_EQ(v.as_text(), std::string("\xC2\xA5"
-                                     "1,234.50"));
+                                     "1,235"));
 }
 
-TEST(BuiltinsText3Dollar, NegativeParens) {
+TEST(BuiltinsText3Dollar, NegativeMinusSign) {
+  // ja-JP renders negatives as "¥-1,235" (literal '-' inside the prefix),
+  // not "($1,234.56)" parens like en-US. Default decimals = 0.
   const Value v = EvalSource("=DOLLAR(-1234.5)");
   ASSERT_TRUE(v.is_text());
-  // UTF-8: "(¥1,234.50)"
-  EXPECT_EQ(v.as_text(), std::string("(\xC2\xA5"
-                                     "1,234.50)"));
+  // UTF-8: "¥-1,235"
+  EXPECT_EQ(v.as_text(), std::string("\xC2\xA5"
+                                     "-1,235"));
 }
 
 TEST(BuiltinsText3Dollar, Zero) {
   const Value v = EvalSource("=DOLLAR(0)");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), std::string("\xC2\xA5"
-                                     "0.00"));
+                                     "0"));
+}
+
+TEST(BuiltinsText3Dollar, ExplicitTwoDecimals) {
+  // Explicit decimals argument is honoured verbatim.
+  const Value v = EvalSource("=DOLLAR(1234.5, 2)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), std::string("\xC2\xA5"
+                                     "1,234.50"));
 }
 
 TEST(BuiltinsText3Dollar, ZeroDecimals) {
@@ -463,10 +474,18 @@ TEST(BuiltinsText3Hyperlink, NumericLinkCoercesToText) {
   EXPECT_EQ(v.as_text(), "123");
 }
 
-TEST(BuiltinsText3Hyperlink, NumericFriendlyCoercesToText) {
+TEST(BuiltinsText3Hyperlink, NumericFriendlyPreservesType) {
+  // Mac Excel preserves the friendly_name's Value variant; a numeric
+  // argument yields a number, not a text rendering.
   const Value v = EvalSource("=HYPERLINK(\"x\", 42)");
-  ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "42");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 42.0);
+}
+
+TEST(BuiltinsText3Hyperlink, BooleanFriendlyPreservesType) {
+  const Value v = EvalSource("=HYPERLINK(\"x\", TRUE)");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
 }
 
 TEST(BuiltinsText3Hyperlink, ErrorInLinkPropagates) {

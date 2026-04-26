@@ -92,6 +92,12 @@ entries:
     reason: "MIDB with start beyond length -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
     prefer: formulon
     first_noted: 2026-04-23
+  - id: searchb_question_wildcard_in_kanji
+    mode: skip-oracle
+    reason: "SEARCHB's '?' wildcard in Mac Excel ja-JP matches a single SBCS byte rather than a UTF-8 codepoint, so =SEARCHB(\"?\",\"漢ABC\") returns 3 (the 'A' position) because '?' refuses to match the 2-byte kanji. Formulon's wildcard_find treats '?' uniformly as one codepoint (returning 1) and is shared with SEARCH; mirroring Mac would require a byte-mode wildcard matcher dedicated to SEARCHB."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
   - id: text_empty_format
     mode: skip-oracle
     reason: "=TEXT(42, \"\") -> \"\" which xlwings read-back classifies as blank. Formulon correctly returns text(\"\")."

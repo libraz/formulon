@@ -464,16 +464,19 @@ Value Fixed_(const Value* args, std::uint32_t arity, Arena& arena) {
 }
 
 // ---------------------------------------------------------------------------
-// DOLLAR(number, [decimals=2])
+// DOLLAR(number, [decimals])
 // ---------------------------------------------------------------------------
 //
 // Mac Excel ja-JP formats with the yen sign `¥` (UTF-8 0xC2 0xA5) rather
-// than the dollar sign: positive values render as `¥1,234.56`, negative
-// values as `(¥1,234.56)` (parentheses, no leading minus). Uses a two-
-// section format `¥#,##0.00;(¥#,##0.00)`; the format engine's section
-// selector emits `std::fabs(value)` for section 1 so the negative branch
-// already strips the minus sign. Negative `decimals` rounds left of the
-// decimal point (same rule as FIXED); `|decimals| > 127` -> `#VALUE!`.
+// than the dollar sign. The default `decimals` is locale-dependent: ja-JP
+// uses 0 (no fractional part) while en-US uses 2. The negative-number
+// section also diverges from en-US: ja-JP renders negatives as
+// `¥-1,235` (leading minus inside the prefix), not `($1,234.56)` parens.
+// Uses a two-section format `¥#,##0[.00];¥-#,##0[.00]`; the format
+// engine's section selector emits `std::fabs(value)` for section 1, so
+// the literal `-` in the negative section is what produces the sign.
+// Negative `decimals` rounds left of the decimal point (same rule as
+// FIXED); `|decimals| > 127` -> `#VALUE!`.
 
 Value Dollar_(const Value* args, std::uint32_t arity, Arena& arena) {
   auto num = coerce_to_number(args[0]);
@@ -483,7 +486,8 @@ Value Dollar_(const Value* args, std::uint32_t arity, Arena& arena) {
   if (std::isnan(num.value()) || std::isinf(num.value())) {
     return Value::error(ErrorCode::Num);
   }
-  int decimals = 2;
+  // ja-JP default is 0 decimals (en-US would default to 2).
+  int decimals = 0;
   if (arity >= 2) {
     auto parsed = fixed_read_int(args[1]);
     if (!parsed) {
@@ -494,15 +498,24 @@ Value Dollar_(const Value* args, std::uint32_t arity, Arena& arena) {
   if (decimals > 127 || decimals < -127) {
     return Value::error(ErrorCode::Value);
   }
+  // Excel rounds half-away-from-zero, but the underlying snprintf used by
+  // `apply_format` rounds half-to-even on macOS (e.g. `%.0f` on 1234.5 ->
+  // 1234). Pre-round explicitly with `std::round` so DOLLAR(1234.5, 0)
+  // yields 1235 to match Mac Excel.
   double value = num.value();
   if (decimals < 0) {
     const double scale = std::pow(10.0, -decimals);
     value = std::round(value / scale) * scale;
+  } else if (decimals > 0) {
+    const double scale = std::pow(10.0, decimals);
+    value = std::round(value * scale) / scale;
+  } else {
+    value = std::round(value);
   }
   const int effective_decimals = decimals < 0 ? 0 : decimals;
   // Two-section ¥ format: positive uses `¥#,##0[.00]`, negative uses
-  // `(¥#,##0[.00])`. The format engine passes `std::fabs(value)` into
-  // section 1, so the trailing `)` lands after the formatted digits.
+  // `¥-#,##0[.00]`. The format engine passes `std::fabs(value)` into
+  // section 1, so the literal `-` in the negative section emits the sign.
   std::string fraction;
   if (effective_decimals > 0) {
     fraction.reserve(1u + static_cast<std::size_t>(effective_decimals));
@@ -515,11 +528,9 @@ Value Dollar_(const Value* args, std::uint32_t arity, Arena& arena) {
   fmt.append("\xC2\xA5#,##0");
   fmt.append(fraction);
   fmt.push_back(';');
-  // Negative section: "(¥#,##0[.00])"
-  fmt.push_back('(');
-  fmt.append("\xC2\xA5#,##0");
+  // Negative section: "¥-#,##0[.00]"
+  fmt.append("\xC2\xA5-#,##0");
   fmt.append(fraction);
-  fmt.push_back(')');
   std::string out;
   out.reserve(32);
   const auto status = text_format::apply_format(value, fmt, out);

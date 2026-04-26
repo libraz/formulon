@@ -648,20 +648,26 @@ Value Proper(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 }
 
 // HYPERLINK(link_location, [friendly_name]) - Excel's hyperlink function
-// returns `friendly_name` (coerced to text) when the 2-arg form is used;
-// otherwise it returns `link_location` coerced to text. Formulon has no
+// returns `friendly_name` as-is (preserving its Value variant) when the
+// 2-arg form is used; otherwise it returns `link_location` coerced to
+// text (the link argument is documented as a URL, so the cell value is a
+// string regardless of whether the input was a number). Formulon has no
 // concept of clickable cells, so the function exists purely to mirror
 // Excel's pure-value behaviour. Error arguments propagate through the
-// dispatcher's default short-circuit. An explicit empty `friendly_name`
-// argument (i.e. `""`) wins over `link_location` - Excel returns "" for
-// the two-arg form even when the friendly name is blank.
+// dispatcher's default short-circuit. Mac Excel preserves the original
+// type for friendly_name: `=HYPERLINK("x", 42)` yields the number 42,
+// not the text "42"; booleans stay booleans; blanks render as 0 (Excel's
+// usual blank-as-zero rule for non-text-context outputs).
 Value Hyperlink(const Value* args, std::uint32_t arity, Arena& arena) {
   if (arity >= 2) {
-    auto friendly = coerce_to_text(args[1]);
-    if (!friendly) {
-      return Value::error(friendly.error());
+    const Value& friendly = args[1];
+    // Blank friendly_name renders as 0 in Mac Excel (the cell shows 0
+    // rather than empty) - mirror by coercing to a Number.
+    if (friendly.kind() == ValueKind::Blank) {
+      return Value::number(0.0);
     }
-    return Value::text(arena.intern(friendly.value()));
+    // Number, Bool, Text, Error: pass through unchanged.
+    return friendly;
   }
   auto link = coerce_to_text(args[0]);
   if (!link) {
