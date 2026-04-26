@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T05:04:43Z"
+    "generated_at": "2026-04-26T05:19:12Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -641,7 +641,10 @@
       "id": "text_currency_jpy_locale",
       "formula": "=TEXT(1234567, \"[$JPY-411]#,##0\")",
       "setup": {},
-      "skipped": "[$JPY-411] currency directive not implemented; prefix is dropped from output."
+      "expect": {
+        "kind": "text",
+        "value": "JPY1,234,567"
+      }
     },
     {
       "id": "text_currency_yen_symbol",
@@ -674,7 +677,10 @@
       "id": "text_asterisk_repeat_dash",
       "formula": "=TEXT(42, \"#,##0*-\")",
       "setup": {},
-      "skipped": "Asterisk-fill directive `*-` leaks as literal; Excel emits it as a no-op in TEXT()."
+      "expect": {
+        "kind": "text",
+        "value": "42"
+      }
     },
     {
       "id": "text_ampm_jp_morning",

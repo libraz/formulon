@@ -259,6 +259,10 @@ std::vector<std::string_view> split_sections(std::string_view fmt) {
       i += 2;  // Skip underscore-skip pair; the trailing byte is reserved.
       continue;
     }
+    if (c == '*' && i + 1 < fmt.size()) {
+      i += 2;  // Skip asterisk-fill pair; the trailing byte is the fill char.
+      continue;
+    }
     if (c == '[') {
       // Skip to matching `]` so e.g. `[Red]` does not interact with `;`.
       while (i < fmt.size() && fmt[i] != ']') {
@@ -322,11 +326,12 @@ void tokenize_section(std::string_view fmt, Section& out) {
     // Anything else (`[>100]`, `[DBNum1]`, unknown qualifiers) still trips
     // the invalid-bracket flag and surfaces as #VALUE!.
     if (c == '[') {
+      const std::size_t body_begin = i + 1;
       std::size_t j = i + 1;
       while (j < fmt.size() && fmt[j] != ']') {
         ++j;
       }
-      const std::string_view body = fmt.substr(i + 1, (j < fmt.size() ? j : fmt.size()) - (i + 1));
+      const std::string_view body = fmt.substr(body_begin, (j < fmt.size() ? j : fmt.size()) - body_begin);
       i = j < fmt.size() ? j + 1 : j;
       // Elapsed time markers: any run of `h`, `m`, or `s` (case-insensitive).
       bool all_h = !body.empty();
@@ -355,9 +360,23 @@ void tokenize_section(std::string_view fmt, Section& out) {
         t.width = static_cast<std::uint8_t>(body.size());
         toks.push_back(t);
       } else if (!body.empty() && body.front() == '$') {
-        // Locale-currency marker (e.g. `[$-409]`, `[$JPY]`). Silently
-        // discarded; the trailing numeric/date tokens supply the rendered
-        // value.
+        // Locale-currency marker. Form: `[$<symbol>-<lcid>]` or `[$<symbol>]`
+        // or `[$-<lcid>]`. The `<symbol>` portion (everything after `$` up
+        // to the optional `-LCID` suffix) is emitted as a literal prefix;
+        // the LCID is metadata only and is discarded. Mac Excel 365 emits
+        // e.g. `[$JPY-411]#,##0` -> `JPY1,234,567`.
+        //
+        // `body_begin` points at the `$` in `fmt`; the symbol bytes start
+        // at `body_begin + 1` and run until either `-` or the end of body.
+        const std::size_t sym_begin = body_begin + 1;
+        std::size_t sym_end = sym_begin + (body.size() - 1);
+        for (std::size_t k = 1; k < body.size(); ++k) {
+          if (body[k] == '-') {
+            sym_end = body_begin + k;
+            break;
+          }
+        }
+        push_literal(sym_begin, sym_end);
       } else if (all_s) {
         Token t;
         t.kind = Tok::DateElapsedS;
@@ -400,6 +419,15 @@ void tokenize_section(std::string_view fmt, Section& out) {
       Token t;
       t.kind = Tok::Space;
       toks.push_back(t);
+      i += 2;
+      continue;
+    }
+    // Asterisk-fill `*X`: in cell formats this pads the cell with `X` to
+    // fill the column width. TEXT() has no column width, so Mac Excel 365
+    // emits this as a no-op (both `*` and the fill char are skipped). If
+    // `*` is the last byte of the format with nothing following, fall
+    // through to the single-byte literal path.
+    if (c == '*' && i + 1 < fmt.size()) {
       i += 2;
       continue;
     }

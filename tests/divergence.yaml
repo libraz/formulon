@@ -213,26 +213,6 @@ entries:
     prefer: mac-excel-365
     first_noted: 2026-04-26
 
-  # -- TEXT format codes: locale-tagged currency [$JPY-411] ---------------
-  # Currency directives like `[$JPY-411]` should emit the locale-tagged
-  # currency prefix; Formulon silently strips the directive.
-  - id: text_currency_jpy_locale
-    mode: skip-oracle
-    reason: "[$JPY-411] currency directive not implemented; prefix is dropped from output."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-
-  # -- TEXT format codes: asterisk-fill (* + char) ------------------------
-  # `*-` should pad the cell with `-` characters to fill the column width.
-  # In TEXT() the directive is observably a no-op (column width is
-  # absent); Formulon currently leaks `*-` as literal characters into the
-  # output.
-  - id: text_asterisk_repeat_dash
-    mode: skip-oracle
-    reason: "Asterisk-fill directive `*-` leaks as literal; Excel emits it as a no-op in TEXT()."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-
   # -- Complex IMCSC: 1-ULP precision in last decimal --------------------
   # IMCSC(1+i): Excel ...0.303931001628427i, Formulon ...0.303931001628426i.
   # Drift is 1 ULP at the 15th significant digit; cannot pass the exact
