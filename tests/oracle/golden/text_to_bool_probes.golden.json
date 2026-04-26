@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T00:27:26Z"
+    "generated_at": "2026-04-26T10:21:13Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -137,6 +137,240 @@
       "expect": {
         "kind": "number",
         "value": 0.5
+      }
+    },
+    {
+      "id": "text_num_if_zero_string",
+      "formula": "=IF(\"0\", 1, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_num_if_one_string",
+      "formula": "=IF(\"1\", 1, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_num_if_negative_string",
+      "formula": "=IF(\"-1\", 1, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_num_if_fractional_string",
+      "formula": "=IF(\"0.5\", 1, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_if_true_with_punct",
+      "formula": "=IF(\"TRUE!!\", 1, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_if_true_with_whitespace",
+      "formula": "=IF(\"  TRUE  \", 1, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_if_kanji_true",
+      "formula": "=IF(\"真\", 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_if_kanji_false",
+      "formula": "=IF(\"偽\", 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_if_hiragana_yes",
+      "formula": "=IF(\"はい\", 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_if_hiragana_no",
+      "formula": "=IF(\"いいえ\", 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_if_french_true",
+      "formula": "=IF(\"VRAI\", 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_if_german_true",
+      "formula": "=IF(\"WAHR\", 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_if_chinese_true",
+      "formula": "=IF(\"正\", 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_not_zero_string",
+      "formula": "=NOT(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_not_one_string",
+      "formula": "=NOT(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_and_zero_one_strings",
+      "formula": "=AND(\"0\", \"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_and_numeric_direct",
+      "formula": "=AND(1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "text_bool_or_mixed_textbool_number",
+      "formula": "=OR(\"FALSE\", 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "text_bool_text_of_true_text_format",
+      "formula": "=TEXT(TRUE, \"@\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "TRUE"
+      }
+    },
+    {
+      "id": "text_bool_n_uppercase_false",
+      "formula": "=N(\"FALSE\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "text_bool_sum_bool_and_number",
+      "formula": "=SUM(TRUE, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "text_bool_sum_textbool_and_number",
+      "formula": "=SUM(\"TRUE\", 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_arith_textbool_plus_number",
+      "formula": "=1 + \"TRUE\"",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_compare_textbool_equals_bool",
+      "formula": "=\"TRUE\" = TRUE",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "text_bool_compare_bool_equals_one",
+      "formula": "=TRUE = 1",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "text_bool_compare_bool_gt_zero",
+      "formula": "=TRUE > 0",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
       }
     }
   ]

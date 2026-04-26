@@ -245,28 +245,29 @@ Expected<bool, ErrorCode> coerce_to_bool(const Value& v) {
     case ValueKind::Blank:
       return false;
     case ValueKind::Text: {
-      // Mac Excel 365 (ja-JP) accepts the literal strings "TRUE" / "FALSE"
-      // (ASCII case-insensitive, ASCII-trimmed) wherever a Bool is expected
-      // via this lenient coercion path: e.g. `=IF("TRUE", 1, 0)` -> 1,
-      // `=NOT("false")` -> TRUE, `=BETA.DIST(..., "TRUE", ...)`. Only the
-      // exact words are recognised; arbitrary truthy text such as "yes"
-      // still falls through to the numeric path and surfaces #VALUE!.
-      // Numeric strings ("0", "1", "1.5") are still accepted via the
-      // numeric fallback below, so `=IF("1", "y", "n")` keeps returning
-      // "y". For the stricter sibling rule used by AND / OR / XOR / IFS
-      // (which rejects numeric text), see `eval/logical_coerce.h`.
-      const std::string_view trimmed = strings::trim(v.as_text());
-      if (strings::case_insensitive_eq(trimmed, "TRUE")) {
+      // Mac Excel 365 (ja-JP) accepts ONLY the literal strings "TRUE" /
+      // "FALSE" (ASCII case-insensitive, no whitespace tolerance) wherever
+      // a Bool is expected via this coercion path: e.g.
+      // `=IF("TRUE", 1, 0)` -> 1, `=NOT("false")` -> TRUE,
+      // `=BETA.DIST(..., "TRUE", ...)`. Everything else surfaces
+      // `#VALUE!` — including numeric strings ("0", "1", "0.5"),
+      // whitespace-padded forms ("  TRUE  "), localised truth-words
+      // ("VRAI", "WAHR", "真"), and decorated forms ("TRUE!!"). This
+      // matches the behaviour the text_to_bool_probes oracle suite
+      // recorded against Mac Excel 365 (ja-JP, build 16.108.1) on
+      // 2026-04-26 — see `tests/oracle/cases/text_to_bool_probes.yaml`.
+      //
+      // The contract is identical to the stricter `logical_coerce` helper
+      // used by AND / OR / XOR / IFS (`eval/logical_coerce.h`) modulo the
+      // Skip vs. HasValue distinction; the two helpers stay in sync.
+      const std::string_view text = v.as_text();
+      if (strings::case_insensitive_eq(text, "TRUE")) {
         return true;
       }
-      if (strings::case_insensitive_eq(trimmed, "FALSE")) {
+      if (strings::case_insensitive_eq(text, "FALSE")) {
         return false;
       }
-      auto coerced = coerce_to_number(v);
-      if (!coerced) {
-        return coerced.error();
-      }
-      return coerced.value() != 0.0;
+      return ErrorCode::Value;
     }
     case ValueKind::Error:
       return v.as_error();

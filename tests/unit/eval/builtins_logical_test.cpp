@@ -110,11 +110,12 @@ TEST(BuiltinsNot, ZeroCoercesToFalse) {
   EXPECT_TRUE(v.as_boolean());
 }
 
-TEST(BuiltinsNot, NumericTextCoerces) {
-  // "1" -> number 1 -> bool true -> NOT -> false.
+TEST(BuiltinsNot, NumericTextRejected) {
+  // Mac Excel 365 (text_bool_not_one_string golden): NOT("1") -> #VALUE!.
+  // Numeric-text never coerces to a Bool through this path.
   const Value v = EvalSource("=NOT(\"1\")");
-  ASSERT_TRUE(v.is_boolean());
-  EXPECT_FALSE(v.as_boolean());
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsNot, NonNumericTextYieldsValue) {
@@ -426,16 +427,22 @@ TEST(BuiltinsIfna, ThreeArgsIsArityViolation) {
 
 // ---------------------------------------------------------------------------
 // Bool coercion follow-up: Mac Excel 365 (ja-JP) probes (`tests/oracle/
-// golden/text_to_bool_probes.golden.json`) confirm that `coerce_to_bool`
-// accepts the literal strings "TRUE" / "FALSE" (ASCII case-insensitive,
-// ASCII-trimmed) in addition to numeric strings. Arbitrary truthy text
-// such as "yes" remains #VALUE!.
+// golden/text_to_bool_probes.golden.json`) settle the rule for
+// `coerce_to_bool` (the path taken by IF / NOT / IFERROR / BETA.DIST's
+// cumulative argument and friends): only the EXACT (no leading or
+// trailing whitespace) ASCII case-insensitive literals "TRUE" / "FALSE"
+// coerce to a Bool. Numeric-text such as "0" / "1" / "0.5", padded
+// forms such as "  TRUE  ", localised truth-words ("VRAI", "WAHR",
+// "真"), and arbitrary text ("yes") all surface `#VALUE!`.
 // ---------------------------------------------------------------------------
 
-TEST(BuiltinsLogicalCoerce, IfAcceptsNumericText) {
+TEST(BuiltinsLogicalCoerce, IfRejectsNumericText) {
+  // Mac Excel 365: `=IF("1", "y", "n")` -> #VALUE! (text_num_if_one_string
+  // golden). The previous Formulon behaviour (numeric-text falls through
+  // to the numeric path) was wrong.
   const Value v = EvalSource("=IF(\"1\", \"y\", \"n\")");
-  ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "y");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsLogicalCoerce, IfAcceptsLiteralTrueText) {
@@ -459,11 +466,12 @@ TEST(BuiltinsLogicalCoerce, IfAcceptsMixedCaseTrueText) {
   EXPECT_EQ(v.as_text(), "y");
 }
 
-TEST(BuiltinsLogicalCoerce, IfAcceptsTrimmedTrueText) {
-  // ASCII whitespace around "TRUE" is tolerated.
+TEST(BuiltinsLogicalCoerce, IfRejectsTrueWithWhitespace) {
+  // Mac Excel does NOT trim whitespace around "TRUE" before bool coercion
+  // (text_bool_if_true_with_whitespace golden).
   const Value v = EvalSource("=IF(\"  TRUE  \", \"y\", \"n\")");
-  ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "y");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsLogicalCoerce, IfRejectsArbitraryText) {
@@ -481,8 +489,8 @@ TEST(BuiltinsLogicalCoerce, IfRejectsArbitraryText) {
 // ---------------------------------------------------------------------------
 
 TEST(BuiltinsIfs, NumericTextConditionIsValue) {
-  // IF("1", ...) -> truthy (coerce_to_bool accepts numeric text) but
-  // IFS must reject the same input with #VALUE!.
+  // IF and IFS now share the same strict text rule: numeric-text such as
+  // "1" surfaces #VALUE! in either context (Mac Excel 365 ja-JP).
   const Value v = EvalSource("=IFS(\"1\", 34)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
