@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T01:29:23Z"
+    "generated_at": "2026-04-26T04:45:42Z"
   },
   "tolerance": {
     "abs": 1e-10,
@@ -449,19 +449,28 @@
       "id": "datevalue_era_reiwa_full",
       "formula": "=DATEVALUE(\"令和6年4月1日\")",
       "setup": {},
-      "skipped": "令和6年4月1日 era prefix not parsed; Excel: 45383, Formulon: #VALUE!."
+      "expect": {
+        "kind": "number",
+        "value": 45383.0
+      }
     },
     {
       "id": "datevalue_era_heisei_full",
       "formula": "=DATEVALUE(\"平成31年4月30日\")",
       "setup": {},
-      "skipped": "平成31年4月30日 era prefix not parsed."
+      "expect": {
+        "kind": "number",
+        "value": 43585.0
+      }
     },
     {
       "id": "datevalue_era_reiwa_first_day",
       "formula": "=DATEVALUE(\"令和1年5月1日\")",
       "setup": {},
-      "skipped": "令和1年5月1日 era prefix not parsed."
+      "expect": {
+        "kind": "number",
+        "value": 43586.0
+      }
     },
     {
       "id": "datevalue_era_reiwa_gannen",
@@ -476,37 +485,55 @@
       "id": "datevalue_era_showa_full",
       "formula": "=DATEVALUE(\"昭和64年1月7日\")",
       "setup": {},
-      "skipped": "昭和64年1月7日 era prefix not parsed."
+      "expect": {
+        "kind": "number",
+        "value": 32515.0
+      }
     },
     {
       "id": "datevalue_era_taisho_full",
       "formula": "=DATEVALUE(\"大正15年12月25日\")",
       "setup": {},
-      "skipped": "大正15年12月25日 era prefix not parsed."
+      "expect": {
+        "kind": "number",
+        "value": 9856.0
+      }
     },
     {
       "id": "datevalue_era_meiji_full",
       "formula": "=DATEVALUE(\"明治45年7月29日\")",
       "setup": {},
-      "skipped": "明治45年7月29日 era prefix not parsed."
+      "expect": {
+        "kind": "number",
+        "value": 4594.0
+      }
     },
     {
       "id": "datevalue_era_r_abbrev",
       "formula": "=DATEVALUE(\"R6.4.1\")",
       "setup": {},
-      "skipped": "R6.4.1 single-letter era prefix not parsed."
+      "expect": {
+        "kind": "number",
+        "value": 45383.0
+      }
     },
     {
       "id": "datevalue_era_h_abbrev",
       "formula": "=DATEVALUE(\"H31.4.30\")",
       "setup": {},
-      "skipped": "H31.4.30 single-letter era prefix not parsed."
+      "expect": {
+        "kind": "number",
+        "value": 43585.0
+      }
     },
     {
       "id": "datevalue_era_s_abbrev",
       "formula": "=DATEVALUE(\"S64.1.7\")",
       "setup": {},
-      "skipped": "S64.1.7 single-letter era prefix not parsed."
+      "expect": {
+        "kind": "number",
+        "value": 32515.0
+      }
     },
     {
       "id": "datevalue_era_reiwa_year_zero_is_value",
@@ -521,25 +548,37 @@
       "id": "datevalue_era_heisei_year_too_high_is_value",
       "formula": "=DATEVALUE(\"平成32年4月30日\")",
       "setup": {},
-      "skipped": "Excel linearly extrapolates past Heisei year 31; Formulon's parser does not recognise era at all."
+      "expect": {
+        "kind": "number",
+        "value": 43951.0
+      }
     },
     {
       "id": "datevalue_era_reiwa_pre_start_is_value",
       "formula": "=DATEVALUE(\"令和1年4月30日\")",
       "setup": {},
-      "skipped": "Excel accepts Reiwa year 1 + April (before Reiwa actual start) permissively; Formulon's era parser absent."
+      "expect": {
+        "kind": "number",
+        "value": 43585.0
+      }
     },
     {
       "id": "datevalue_fullwidth_digits_iso",
       "formula": "=DATEVALUE(\"２０２４-４-１\")",
       "setup": {},
-      "skipped": "Full-width digits in ISO date (２０２４-４-１) not normalised; Excel accepts."
+      "expect": {
+        "kind": "number",
+        "value": 45383.0
+      }
     },
     {
       "id": "datevalue_fullwidth_digits_kanji",
       "formula": "=DATEVALUE(\"２０２４年４月１日\")",
       "setup": {},
-      "skipped": "Full-width digits with kanji terminators (２０２４年４月１日) not normalised."
+      "expect": {
+        "kind": "number",
+        "value": 45383.0
+      }
     },
     {
       "id": "datevalue_kanji_with_dots",
@@ -581,19 +620,28 @@
       "id": "timevalue_jp_kanji_units",
       "formula": "=TIMEVALUE(\"8時30分\")",
       "setup": {},
-      "skipped": "8時30分 kanji time form not parsed; Formulon: #VALUE!."
+      "expect": {
+        "kind": "number",
+        "value": 0.3541666666666667
+      }
     },
     {
       "id": "timevalue_jp_kanji_units_with_seconds",
       "formula": "=TIMEVALUE(\"8時30分15秒\")",
       "setup": {},
-      "skipped": "8時30分15秒 kanji time form not parsed."
+      "expect": {
+        "kind": "number",
+        "value": 0.35434027777777777
+      }
     },
     {
       "id": "timevalue_fullwidth_digits",
       "formula": "=TIMEVALUE(\"８:３０\")",
       "setup": {},
-      "skipped": "Full-width digit time (８:３０) not normalised."
+      "expect": {
+        "kind": "number",
+        "value": 0.3541666666666667
+      }
     },
     {
       "id": "datevalue_error_arg_propagates",

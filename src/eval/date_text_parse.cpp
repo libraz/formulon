@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 
 #include "eval/date_time.h"
@@ -18,17 +19,69 @@ namespace eval {
 namespace date_parse {
 namespace {
 
-// UTF-8 byte sequences for the three kanji the date parser recognises:
-// `kKanjiNen` (年, year), `kKanjiGatsu` (月, month), `kKanjiNichi` (日, day).
+// UTF-8 byte sequences for the kanji the date / time parser recognises.
 // Declared as 4-byte arrays (3 UTF-8 bytes + NUL) so they forward cleanly
 // into `starts_with_utf8` without array-decay pitfalls.
-constexpr char kKanjiNen[4] = {'\xE5', '\xB9', '\xB4', '\0'};    // 年
-constexpr char kKanjiGatsu[4] = {'\xE6', '\x9C', '\x88', '\0'};  // 月
-constexpr char kKanjiNichi[4] = {'\xE6', '\x97', '\xA5', '\0'};  // 日
+constexpr char kKanjiNen[4] = {'\xE5', '\xB9', '\xB4', '\0'};    // 年 year
+constexpr char kKanjiGatsu[4] = {'\xE6', '\x9C', '\x88', '\0'};  // 月 month
+constexpr char kKanjiNichi[4] = {'\xE6', '\x97', '\xA5', '\0'};  // 日 day
+constexpr char kKanjiJi[4] = {'\xE6', '\x99', '\x82', '\0'};     // 時 hour
+constexpr char kKanjiFun[4] = {'\xE5', '\x88', '\x86', '\0'};    // 分 minute
+constexpr char kKanjiByou[4] = {'\xE7', '\xA7', '\x92', '\0'};   // 秒 second
+
+// 6-byte UTF-8 sequences for the five Japanese era names.
+constexpr char kEraReiwa[7] = {'\xE4', '\xBB', '\xA4', '\xE5', '\x92', '\x8C', '\0'};   // 令和
+constexpr char kEraHeisei[7] = {'\xE5', '\xB9', '\xB3', '\xE6', '\x88', '\x90', '\0'};  // 平成
+constexpr char kEraShowa[7] = {'\xE6', '\x98', '\xAD', '\xE5', '\x92', '\x8C', '\0'};   // 昭和
+constexpr char kEraTaisho[7] = {'\xE5', '\xA4', '\xA7', '\xE6', '\xAD', '\xA3', '\0'};  // 大正
+constexpr char kEraMeiji[7] = {'\xE6', '\x98', '\x8E', '\xE6', '\xB2', '\xBB', '\0'};   // 明治
 
 // Returns true iff `s` begins with the given 3-byte UTF-8 sequence.
 bool starts_with_utf8(std::string_view s, const char (&expected)[4]) noexcept {
   return s.size() >= 3 && s[0] == expected[0] && s[1] == expected[1] && s[2] == expected[2];
+}
+
+// Returns true iff `s` begins with the given 6-byte UTF-8 sequence.
+bool starts_with_utf8_6(std::string_view s, const char (&expected)[7]) noexcept {
+  return s.size() >= 6 && s[0] == expected[0] && s[1] == expected[1] && s[2] == expected[2] && s[3] == expected[3] &&
+         s[4] == expected[4] && s[5] == expected[5];
+}
+
+// Folds full-width Arabic digits (U+FF10..U+FF19, encoded as `EF BC 90`..
+// `EF BC 99` in UTF-8) into ASCII `0`..`9`. All other bytes — including
+// the multi-byte kanji terminators `年/月/日/時/分/秒` and era characters
+// — are passed through unchanged. Returns the folded string (or `s` itself
+// when no full-width digit is present, to avoid an unnecessary copy).
+std::string fold_fullwidth_digits(std::string_view s) {
+  // Quick scan: if no full-width digit is present, return the input as-is.
+  bool needs_fold = false;
+  for (std::size_t i = 0; i + 2 < s.size(); ++i) {
+    if (static_cast<unsigned char>(s[i]) == 0xEF && static_cast<unsigned char>(s[i + 1]) == 0xBC) {
+      const unsigned char b2 = static_cast<unsigned char>(s[i + 2]);
+      if (b2 >= 0x90 && b2 <= 0x99) {
+        needs_fold = true;
+        break;
+      }
+    }
+  }
+  if (!needs_fold) {
+    return std::string(s);
+  }
+  std::string out;
+  out.reserve(s.size());
+  for (std::size_t i = 0; i < s.size();) {
+    if (i + 2 < s.size() && static_cast<unsigned char>(s[i]) == 0xEF && static_cast<unsigned char>(s[i + 1]) == 0xBC) {
+      const unsigned char b2 = static_cast<unsigned char>(s[i + 2]);
+      if (b2 >= 0x90 && b2 <= 0x99) {
+        out.push_back(static_cast<char>('0' + (b2 - 0x90)));
+        i += 3;
+        continue;
+      }
+    }
+    out.push_back(s[i]);
+    ++i;
+  }
+  return out;
 }
 
 // Returns the last valid day-of-month under the Gregorian leap rule.
@@ -140,8 +193,165 @@ bool parse_ymd_text(std::string_view s, double* out_serial, std::string_view* re
 // accepted here.
 bool parse_dmy_mmm_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept;
 
+// Era ID; values matter only as enumerators within this translation unit.
+enum class Era { Reiwa, Heisei, Showa, Taisho, Meiji };
+
+// Returns the Gregorian year of era year 1 for the given era. Mac Excel
+// linearly extrapolates outside the era's actual historical window — for
+// example `平成32年4月30日` is accepted as 1989 + (32-1) = 2020-04-30, even
+// though Heisei ended at year 31. We mirror that lenient behaviour here.
+int era_year_anchor(Era e) noexcept {
+  switch (e) {
+    case Era::Reiwa:
+      return 2019;  // 令和 1 = 2019
+    case Era::Heisei:
+      return 1989;  // 平成 1 = 1989
+    case Era::Showa:
+      return 1926;  // 昭和 1 = 1926
+    case Era::Taisho:
+      return 1912;  // 大正 1 = 1912
+    case Era::Meiji:
+      return 1868;  // 明治 1 = 1868
+  }
+  return 1900;  // unreachable
+}
+
+// After an era prefix has been consumed, parses the year/month/day tail in
+// the kanji form `<digits>年<digits>月<digits>日`. Mac Excel rejects 元
+// (gannen) and dot/slash separators when a *full-name* era prefix is used,
+// so we accept only the strict kanji form here.
+bool parse_era_kanji_ymd_tail(Era era, std::string_view s, double* out_serial, std::string_view* rest) noexcept {
+  int era_year = 0;
+  if (scan_digits(s, 4, &era_year) == 0) {
+    return false;
+  }
+  if (era_year <= 0) {
+    return false;
+  }
+  if (!starts_with_utf8(s, kKanjiNen)) {
+    return false;
+  }
+  s.remove_prefix(3);
+  int month = 0;
+  if (scan_digits(s, 2, &month) == 0) {
+    return false;
+  }
+  if (!starts_with_utf8(s, kKanjiGatsu)) {
+    return false;
+  }
+  s.remove_prefix(3);
+  int day = 0;
+  if (scan_digits(s, 2, &day) == 0) {
+    return false;
+  }
+  if (!starts_with_utf8(s, kKanjiNichi)) {
+    return false;
+  }
+  s.remove_prefix(3);
+  if (month < 1 || month > 12) {
+    return false;
+  }
+  const int gy = era_year - 1 + era_year_anchor(era);
+  const unsigned dim = days_in_month(gy, static_cast<unsigned>(month));
+  if (day < 1 || static_cast<unsigned>(day) > dim) {
+    return false;
+  }
+  *out_serial = date_time::serial_from_ymd(gy, static_cast<unsigned>(month), static_cast<unsigned>(day));
+  *rest = s;
+  return true;
+}
+
+// After an abbreviation letter has been consumed, parses the dot-separated
+// `<digits>.<digits>.<digits>` tail used by `R6.4.1` etc.
+bool parse_era_dot_ymd_tail(Era era, std::string_view s, double* out_serial, std::string_view* rest) noexcept {
+  int era_year = 0;
+  if (scan_digits(s, 4, &era_year) == 0) {
+    return false;
+  }
+  if (era_year <= 0) {
+    return false;
+  }
+  if (s.empty() || s[0] != '.') {
+    return false;
+  }
+  s.remove_prefix(1);
+  int month = 0;
+  if (scan_digits(s, 2, &month) == 0) {
+    return false;
+  }
+  if (s.empty() || s[0] != '.') {
+    return false;
+  }
+  s.remove_prefix(1);
+  int day = 0;
+  if (scan_digits(s, 2, &day) == 0) {
+    return false;
+  }
+  if (month < 1 || month > 12) {
+    return false;
+  }
+  const int gy = era_year - 1 + era_year_anchor(era);
+  const unsigned dim = days_in_month(gy, static_cast<unsigned>(month));
+  if (day < 1 || static_cast<unsigned>(day) > dim) {
+    return false;
+  }
+  *out_serial = date_time::serial_from_ymd(gy, static_cast<unsigned>(month), static_cast<unsigned>(day));
+  *rest = s;
+  return true;
+}
+
+// Recognises `<full-era-name><digits>年<digits>月<digits>日` and
+// `<single-letter-era>.<digits>.<digits>.<digits>`. Returns false if the
+// input does not start with one of the five recognised eras; in that case
+// the caller falls back to the regular Gregorian date forms.
+bool parse_era_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
+  // Full-name eras require the strict 年/月/日 grammar.
+  if (starts_with_utf8_6(s, kEraReiwa)) {
+    return parse_era_kanji_ymd_tail(Era::Reiwa, s.substr(6), out_serial, rest);
+  }
+  if (starts_with_utf8_6(s, kEraHeisei)) {
+    return parse_era_kanji_ymd_tail(Era::Heisei, s.substr(6), out_serial, rest);
+  }
+  if (starts_with_utf8_6(s, kEraShowa)) {
+    return parse_era_kanji_ymd_tail(Era::Showa, s.substr(6), out_serial, rest);
+  }
+  if (starts_with_utf8_6(s, kEraTaisho)) {
+    return parse_era_kanji_ymd_tail(Era::Taisho, s.substr(6), out_serial, rest);
+  }
+  if (starts_with_utf8_6(s, kEraMeiji)) {
+    return parse_era_kanji_ymd_tail(Era::Meiji, s.substr(6), out_serial, rest);
+  }
+  // Single-letter abbreviations require the ASCII dot-separated grammar and
+  // a digit immediately after the letter (so `Mar` etc. don't get hijacked).
+  if (s.size() >= 2 && s[1] >= '0' && s[1] <= '9') {
+    switch (s[0]) {
+      case 'R':
+      case 'r':
+        return parse_era_dot_ymd_tail(Era::Reiwa, s.substr(1), out_serial, rest);
+      case 'H':
+      case 'h':
+        return parse_era_dot_ymd_tail(Era::Heisei, s.substr(1), out_serial, rest);
+      case 'S':
+      case 's':
+        return parse_era_dot_ymd_tail(Era::Showa, s.substr(1), out_serial, rest);
+      case 'T':
+      case 't':
+        return parse_era_dot_ymd_tail(Era::Taisho, s.substr(1), out_serial, rest);
+      case 'M':
+      case 'm':
+        return parse_era_dot_ymd_tail(Era::Meiji, s.substr(1), out_serial, rest);
+      default:
+        break;
+    }
+  }
+  return false;
+}
+
 // Parses a leading date token. See `parse_date_time_text` for the grammar.
 bool parse_date_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
+  if (parse_era_text(s, out_serial, rest)) {
+    return true;
+  }
   if (parse_ymd_text(s, out_serial, rest)) {
     return true;
   }
@@ -263,8 +473,61 @@ bool parse_dmy_mmm_text(std::string_view s, double* out_serial, std::string_view
   return true;
 }
 
+// Parses the kanji time form `<digits>時<digits>分[<digits>秒]`. The `分`
+// segment is required (Mac Excel rejects bare `8時` as #VALUE!), and `秒`,
+// when present, must follow `分`. Returns false if the input does not
+// match this exact shape; on success advances `*rest` past the `分` or
+// `秒` terminator.
+bool parse_kanji_time_text(std::string_view s, double* out_frac, std::string_view* rest) noexcept {
+  int hour = 0;
+  if (scan_digits(s, 3, &hour) == 0) {
+    return false;
+  }
+  if (!starts_with_utf8(s, kKanjiJi)) {
+    return false;
+  }
+  s.remove_prefix(3);
+  int minute = 0;
+  if (scan_digits(s, 3, &minute) == 0) {
+    return false;
+  }
+  if (!starts_with_utf8(s, kKanjiFun)) {
+    return false;
+  }
+  s.remove_prefix(3);
+  int second = 0;
+  if (!s.empty() && s[0] >= '0' && s[0] <= '9') {
+    if (scan_digits(s, 3, &second) == 0) {
+      return false;
+    }
+    if (!starts_with_utf8(s, kKanjiByou)) {
+      return false;
+    }
+    s.remove_prefix(3);
+  }
+  if (hour < 0 || minute < 0 || second < 0) {
+    return false;
+  }
+  const double total_seconds =
+      static_cast<double>(hour) * 3600.0 + static_cast<double>(minute) * 60.0 + static_cast<double>(second);
+  *out_frac = total_seconds / 86400.0;
+  *rest = s;
+  return true;
+}
+
 // Parses a leading time token. See `parse_date_time_text` for the grammar.
 bool parse_time_text(std::string_view s, double* out_frac, std::string_view* rest) noexcept {
+  // Probe for the kanji form `H時M分[S秒]` first: scan past the leading
+  // digit run and check for 時. If that matches, the entire token must
+  // parse via the kanji branch — there is no ambiguity with `H:M:S`.
+  {
+    std::string_view probe = s;
+    int dummy = 0;
+    const std::size_t leading_digits = scan_digits(probe, 3, &dummy);
+    if (leading_digits > 0 && starts_with_utf8(probe, kKanjiJi)) {
+      return parse_kanji_time_text(s, out_frac, rest);
+    }
+  }
   int hour = 0;
   if (scan_digits(s, 3, &hour) == 0) {
     return false;
@@ -359,7 +622,12 @@ std::string_view trim_date_text(std::string_view s) noexcept {
 
 bool parse_date_time_text(std::string_view s, double* out_date_serial, double* out_time_frac, bool* out_has_date,
                           bool* out_has_time) noexcept {
-  std::string_view rest = s;
+  // Fold `０..９` (U+FF10..U+FF19) to ASCII before tokenisation. Mac Excel
+  // accepts full-width digits anywhere ASCII digits are expected; the
+  // surrounding kanji terminators / era characters / punctuation pass
+  // through unchanged. `folded` owns the storage when a copy was needed.
+  const std::string folded = fold_fullwidth_digits(s);
+  std::string_view rest(folded);
   double serial = 0.0;
   double frac = 0.0;
   bool has_date = false;

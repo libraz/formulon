@@ -1,13 +1,14 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
 // Shared date / time text-parsing helpers used by DATEVALUE, TIMEVALUE, and
-// VALUE. The primitives here only recognise the shapes that Mac Excel 365
-// accepts in ja-JP locale without touching the clock: ISO 8601 dashed dates,
-// slash-separated dates, the kanji (年/月/日) form, and time-of-day tokens
-// with optional fractional seconds and AM/PM markers. Wareki era prefixes
-// and Japanese time markers (時 / 分 / 秒) are intentionally out of scope —
-// DATEVALUE / TIMEVALUE currently document those gaps in
-// `tests/divergence.yaml`, and VALUE inherits the same limitation.
+// VALUE. The primitives here recognise the shapes that Mac Excel 365 accepts
+// in ja-JP locale without touching the clock: ISO 8601 dashed dates,
+// slash-separated dates, the kanji (年/月/日) form, the wareki era forms
+// (令和/平成/昭和/大正/明治 with strict 年/月/日 separators, plus the
+// single-letter abbreviations R/H/S/T/M with dot separators), and
+// time-of-day tokens with optional fractional seconds, AM/PM markers, and
+// the kanji time form `H時M分[S秒]`. Full-width digits (U+FF10..U+FF19)
+// are folded to ASCII before tokenisation.
 
 #ifndef FORMULON_EVAL_DATE_TEXT_PARSE_H_
 #define FORMULON_EVAL_DATE_TEXT_PARSE_H_
