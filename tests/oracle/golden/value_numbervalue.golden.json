@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T01:36:40Z"
+    "generated_at": "2026-04-26T04:36:57Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -377,25 +377,37 @@
       "id": "value_fullwidth_digits",
       "formula": "=VALUE(\"２０２４\")",
       "setup": {},
-      "skipped": "VALUE: full-width digits ２０２４ not normalised; Excel: 2024."
+      "expect": {
+        "kind": "number",
+        "value": 2024.0
+      }
     },
     {
       "id": "value_fullwidth_digits_with_decimal",
       "formula": "=VALUE(\"２.５\")",
       "setup": {},
-      "skipped": "VALUE: full-width digits with ASCII decimal not normalised."
+      "expect": {
+        "kind": "number",
+        "value": 2.5
+      }
     },
     {
       "id": "value_fullwidth_digits_with_yen",
       "formula": "=VALUE(\"¥２０２４\")",
       "setup": {},
-      "skipped": "VALUE: ¥ prefix combined with full-width digits not handled."
+      "expect": {
+        "kind": "number",
+        "value": 2024.0
+      }
     },
     {
       "id": "value_fullwidth_percent",
       "formula": "=VALUE(\"２５％\")",
       "setup": {},
-      "skipped": "VALUE: full-width percent ％ (U+FF05) not normalised to ASCII %."
+      "expect": {
+        "kind": "number",
+        "value": 0.25
+      }
     },
     {
       "id": "value_fullwidth_minus",
@@ -410,13 +422,19 @@
       "id": "value_parenthesised_negative",
       "formula": "=VALUE(\"(1234)\")",
       "setup": {},
-      "skipped": "VALUE: (1234) accounting-style negative not parsed; Excel: -1234."
+      "expect": {
+        "kind": "number",
+        "value": -1234.0
+      }
     },
     {
       "id": "value_parenthesised_with_yen",
       "formula": "=VALUE(\"(¥1234)\")",
       "setup": {},
-      "skipped": "VALUE: (¥1234) accounting-style yen negative not parsed."
+      "expect": {
+        "kind": "number",
+        "value": -1234.0
+      }
     },
     {
       "id": "value_multiple_decimals_is_value",
@@ -485,7 +503,10 @@
       "id": "numbervalue_fullwidth_digits",
       "formula": "=NUMBERVALUE(\"２０２４.５\", \".\")",
       "setup": {},
-      "skipped": "NUMBERVALUE: full-width digit normalisation absent; same root cause as VALUE."
+      "expect": {
+        "kind": "number",
+        "value": 2024.5
+      }
     },
     {
       "id": "numbervalue_yen_prefix_is_value",
@@ -536,13 +557,19 @@
       "id": "numbervalue_negative_parens",
       "formula": "=NUMBERVALUE(\"(1234)\", \".\")",
       "setup": {},
-      "skipped": "NUMBERVALUE: Excel accepts (1234) as -1234 contrary to the original assumption; Formulon rejects."
+      "expect": {
+        "kind": "number",
+        "value": -1234.0
+      }
     },
     {
       "id": "numbervalue_blank_arg",
       "formula": "=NUMBERVALUE(A1)",
       "setup": {},
-      "skipped": "NUMBERVALUE: blank-cell coercion to 0 absent; Formulon: #VALUE!. Symmetric with VALUE's existing empty-string-is-zero handling."
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
     },
     {
       "id": "numbervalue_error_propagates",

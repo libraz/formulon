@@ -239,6 +239,90 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double*
   return true;
 }
 
+// Locale-input pre-pass shared by VALUE and NUMBERVALUE. Performs two
+// orthogonal normalisations:
+//
+//   1. Full-width ASCII forms (U+FF01..U+FF5E) and the ideographic space
+//      (U+3000) are folded to their ASCII equivalents. Mac Excel ja-JP
+//      coerces strings such as `"２０２４"` and `"２５％"` transparently;
+//      this fold reproduces that behaviour without complicating the
+//      `parse_numeric` grammar.
+//   2. Accounting-style outer parentheses (`"(1234)"` -> `-1234`,
+//      `"(¥1234)"` -> `-1234`) are detected and stripped, with the
+//      enclosed digits flagged for negation by the caller. The inner
+//      string must be non-empty and must not begin with an explicit
+//      sign (`+` / `-`); a missing or unbalanced closing paren is left
+//      untouched so `parse_numeric` can reject it.
+//
+// `*paren_negated` is set to `true` when accounting parens were
+// stripped. Currency-symbol stripping is intentionally left to
+// `parse_numeric`, which already handles `'$'` / `'¥'` / `'€'` for
+// both VALUE and NUMBERVALUE.
+std::string normalize_locale_numeric(std::string_view raw, bool* paren_negated) {
+  *paren_negated = false;
+  std::string out;
+  out.reserve(raw.size());
+  std::size_t i = 0;
+  while (i < raw.size()) {
+    const unsigned char b0 = static_cast<unsigned char>(raw[i]);
+    // 3-byte UTF-8 sequences cover the U+3000 / U+FF00 / U+FFE5 ranges
+    // we care about; everything else passes through verbatim so that
+    // multi-byte tails (e.g. `¥` 0xC2 0xA5, the kanji `円`, etc.) reach
+    // `parse_numeric` unchanged.
+    if (b0 >= 0xE0u && b0 < 0xF0u && i + 2 < raw.size()) {
+      const unsigned char b1 = static_cast<unsigned char>(raw[i + 1]);
+      const unsigned char b2 = static_cast<unsigned char>(raw[i + 2]);
+      const std::uint32_t cp =
+          (static_cast<std::uint32_t>(b0 & 0x0Fu) << 12) | (static_cast<std::uint32_t>(b1 & 0x3Fu) << 6) |
+          static_cast<std::uint32_t>(b2 & 0x3Fu);
+      char ascii = '\0';
+      if (cp >= 0xFF10u && cp <= 0xFF19u) {
+        ascii = static_cast<char>('0' + (cp - 0xFF10u));
+      } else if (cp >= 0xFF21u && cp <= 0xFF3Au) {
+        ascii = static_cast<char>('A' + (cp - 0xFF21u));
+      } else if (cp >= 0xFF41u && cp <= 0xFF5Au) {
+        ascii = static_cast<char>('a' + (cp - 0xFF41u));
+      } else if (cp == 0xFF0Eu) {
+        ascii = '.';
+      } else if (cp == 0xFF0Cu) {
+        ascii = ',';
+      } else if (cp == 0xFF05u) {
+        ascii = '%';
+      } else if (cp == 0xFF0Bu) {
+        ascii = '+';
+      } else if (cp == 0xFF0Du) {
+        ascii = '-';
+      } else if (cp == 0xFF08u) {
+        ascii = '(';
+      } else if (cp == 0xFF09u) {
+        ascii = ')';
+      } else if (cp == 0x3000u) {
+        ascii = ' ';
+      }
+      if (ascii != '\0') {
+        out.push_back(ascii);
+        i += 3;
+        continue;
+      }
+    }
+    out.push_back(raw[i]);
+    ++i;
+  }
+  // Accounting-style outer parens. Trim only ASCII whitespace because
+  // `parse_numeric` does the same; full-width spaces have already been
+  // folded to ASCII above.
+  std::string_view trimmed = trim_ascii(out);
+  if (trimmed.size() >= 3 && trimmed.front() == '(' && trimmed.back() == ')') {
+    std::string_view inner = trimmed.substr(1, trimmed.size() - 2);
+    inner = trim_ascii(inner);
+    if (!inner.empty() && inner.front() != '+' && inner.front() != '-') {
+      *paren_negated = true;
+      return std::string(inner);
+    }
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // TEXT(value, format_text)
 // ---------------------------------------------------------------------------
@@ -467,13 +551,19 @@ Value Value_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     }
     case ValueKind::Text: {
       const std::string_view raw = v.as_text();
-      // Phase 1: numeric parse (the common case).
+      // Phase 1: numeric parse with a locale pre-pass that folds
+      // full-width digits/punctuation to ASCII and strips accounting-
+      // style outer parentheses (`"(1234)"` -> -1234).
+      bool paren_negated = false;
+      const std::string normalized = normalize_locale_numeric(raw, &paren_negated);
       double numeric = 0.0;
-      if (parse_numeric(raw, '.', ',', &numeric)) {
-        return Value::number(numeric);
+      if (parse_numeric(normalized, '.', ',', &numeric)) {
+        return Value::number(paren_negated ? -numeric : numeric);
       }
       // Phase 2: date / time parse. Leading whitespace is trimmed (the
       // date/time parser rejects leading U+3000, so we only strip ASCII).
+      // The original (non-normalised) text is used: the date parser has
+      // its own ja-JP / kanji handling and must not see a folded form.
       const std::string_view trimmed = date_parse::trim_date_text(raw);
       if (!trimmed.empty()) {
         double date_serial = 0.0;
@@ -540,13 +630,27 @@ Value NumberValue_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!group_sep_supplied && decimal_sep == group_sep) {
     group_sep = '\0';
   }
+  // Empty input (including a Blank cell that `coerce_to_text` flattened
+  // to `""`) returns 0, matching Mac Excel ja-JP. This mirrors VALUE's
+  // existing empty-string-is-zero handling.
+  if (text.value().empty()) {
+    return Value::number(0.0);
+  }
+  // Locale pre-pass: fold full-width digits/punctuation to ASCII and
+  // detect accounting-style outer parentheses. Mac Excel accepts
+  // `NUMBERVALUE("(1234)", ".")` as -1234 contrary to the original
+  // assumption documented in `tests/divergence.yaml`.
+  bool paren_negated = false;
+  const std::string normalized = normalize_locale_numeric(text.value(), &paren_negated);
   double parsed = 0.0;
-  if (parse_numeric(text.value(), decimal_sep, group_sep, &parsed)) {
-    return Value::number(parsed);
+  if (parse_numeric(normalized, decimal_sep, group_sep, &parsed)) {
+    return Value::number(paren_negated ? -parsed : parsed);
   }
   // Mac Excel ja-JP NUMBERVALUE accepts date / time strings in addition
   // to the numeric grammar documented by Microsoft. Fall through to the
-  // shared date-parse helper when the numeric path fails.
+  // shared date-parse helper when the numeric path fails. The original
+  // (non-normalised) text is used so the date parser's ja-JP path sees
+  // the input verbatim.
   const std::string_view trimmed = date_parse::trim_date_text(text.value());
   if (!trimmed.empty()) {
     double date_serial = 0.0;
