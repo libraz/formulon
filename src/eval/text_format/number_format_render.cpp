@@ -68,6 +68,91 @@ const char* weekday_long(int sun0) noexcept {
   return kTable[sun0];
 }
 
+// ja-JP weekday tokens (`aaa` / `aaaa`). Index 0 = Sunday to match the
+// `sun0` index used elsewhere in this file.
+const char* weekday_ja_short(int sun0) noexcept {
+  // 日, 月, 火, 水, 木, 金, 土 (each is a 3-byte UTF-8 code point).
+  static const char* kTable[7] = {"\xE6\x97\xA5", "\xE6\x9C\x88", "\xE7\x81\xAB", "\xE6\xB0\xB4",
+                                  "\xE6\x9C\xA8", "\xE9\x87\x91", "\xE5\x9C\x9F"};
+  if (sun0 < 0 || sun0 > 6) {
+    return "";
+  }
+  return kTable[sun0];
+}
+
+const char* weekday_ja_long(int sun0) noexcept {
+  // <weekday>曜日 — the suffix is `\xE6\x9B\x9C\xE6\x97\xA5` (曜日).
+  static const char* kTable[7] = {
+      "\xE6\x97\xA5\xE6\x9B\x9C\xE6\x97\xA5",  // 日曜日
+      "\xE6\x9C\x88\xE6\x9B\x9C\xE6\x97\xA5",  // 月曜日
+      "\xE7\x81\xAB\xE6\x9B\x9C\xE6\x97\xA5",  // 火曜日
+      "\xE6\xB0\xB4\xE6\x9B\x9C\xE6\x97\xA5",  // 水曜日
+      "\xE6\x9C\xA8\xE6\x9B\x9C\xE6\x97\xA5",  // 木曜日
+      "\xE9\x87\x91\xE6\x9B\x9C\xE6\x97\xA5",  // 金曜日
+      "\xE5\x9C\x9F\xE6\x9B\x9C\xE6\x97\xA5",  // 土曜日
+  };
+  if (sun0 < 0 || sun0 > 6) {
+    return "";
+  }
+  return kTable[sun0];
+}
+
+// Japanese era classification. A date is bucketed into one of five eras by
+// (year, month, day) using Mac Excel-observable boundaries:
+//   * 1868-01-25 -> 1912-07-29: Meiji
+//   * 1912-07-30 -> 1926-12-24: Taisho
+//   * 1926-12-25 -> 1989-01-07: Showa
+//   * 1989-01-08 -> 2019-04-30: Heisei
+//   * 2019-05-01 onward:        Reiwa
+// For dates before Meiji (rare in practice for Excel TEXT calls — serial 1
+// is 1900-01-01), we fall back to Meiji's era anchor and let the year math
+// produce a non-positive era year. The 5-bucket table is duplicated from
+// `date_text_parse.cpp`'s parser; see that TU for the parser-side anchors.
+struct EraInfo {
+  int start_year;
+  unsigned start_month;
+  unsigned start_day;
+  int year_anchor;     // Gregorian year corresponding to era year 1.
+  const char* roman;   // 1-byte ASCII era abbreviation for `g`.
+  const char* kanji1;  // 3-byte UTF-8 single-kanji abbreviation for `gg`.
+  const char* kanji2;  // 6-byte UTF-8 full era name for `ggg`.
+};
+
+const EraInfo& classify_era(int year, unsigned month, unsigned day) noexcept {
+  static const EraInfo kReiwa{2019, 5u, 1u, 2019, "R", "\xE4\xBB\xA4", "\xE4\xBB\xA4\xE5\x92\x8C"};
+  static const EraInfo kHeisei{1989, 1u, 8u, 1989, "H", "\xE5\xB9\xB3", "\xE5\xB9\xB3\xE6\x88\x90"};
+  static const EraInfo kShowa{1926, 12u, 25u, 1926, "S", "\xE6\x98\xAD", "\xE6\x98\xAD\xE5\x92\x8C"};
+  static const EraInfo kTaisho{1912, 7u, 30u, 1912, "T", "\xE5\xA4\xA7", "\xE5\xA4\xA7\xE6\xAD\xA3"};
+  static const EraInfo kMeiji{1868, 1u, 25u, 1868, "M", "\xE6\x98\x8E", "\xE6\x98\x8E\xE6\xB2\xBB"};
+  // Rank a (Y, M, D) triple for ordered comparison.
+  auto cmp = [](int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) {
+    if (y1 != y2) {
+      return y1 < y2;
+    }
+    if (m1 != m2) {
+      return m1 < m2;
+    }
+    return d1 < d2;
+  };
+  if (!cmp(year, month, day, kReiwa.start_year, kReiwa.start_month, kReiwa.start_day)) {
+    return kReiwa;
+  }
+  if (!cmp(year, month, day, kHeisei.start_year, kHeisei.start_month, kHeisei.start_day)) {
+    return kHeisei;
+  }
+  if (!cmp(year, month, day, kShowa.start_year, kShowa.start_month, kShowa.start_day)) {
+    return kShowa;
+  }
+  if (!cmp(year, month, day, kTaisho.start_year, kTaisho.start_month, kTaisho.start_day)) {
+    return kTaisho;
+  }
+  // Pre-Meiji dates: still classified as Meiji (anchor 1868). Mac Excel
+  // does not validate, so e.g. an Edo-period serial would emit a
+  // negative-or-zero `era_year`; this matches the parser's lenient
+  // behaviour in `date_text_parse.cpp`.
+  return kMeiji;
+}
+
 void append_pad2(std::string& out, unsigned n) {
   if (n < 10u) {
     out.push_back('0');
@@ -663,6 +748,43 @@ void render_date(const Section& section, std::string_view fmt, double serial, st
       case Tok::DateDDDD:
         out.append(weekday_long(sun0));
         break;
+      case Tok::DateAaa:
+        out.append(weekday_ja_short(sun0));
+        break;
+      case Tok::DateAaaa:
+        out.append(weekday_ja_long(sun0));
+        break;
+      case Tok::EraG: {
+        const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
+        out.append(era.roman);
+        break;
+      }
+      case Tok::EraGG: {
+        const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
+        out.append(era.kanji1);
+        break;
+      }
+      case Tok::EraGGG: {
+        const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
+        out.append(era.kanji2);
+        break;
+      }
+      case Tok::EraE: {
+        const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
+        const int era_year = ymd.y - era.year_anchor + 1;
+        out.append(std::to_string(era_year));
+        break;
+      }
+      case Tok::EraEE: {
+        const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
+        const int era_year = ymd.y - era.year_anchor + 1;
+        if (era_year >= 0 && era_year < 100) {
+          append_pad2(out, static_cast<unsigned>(era_year));
+        } else {
+          out.append(std::to_string(era_year));
+        }
+        break;
+      }
       case Tok::DateH:
         out.append(std::to_string(hour_for_render));
         break;

@@ -123,6 +123,13 @@ bool is_date_tok(Tok t) noexcept {
     case Tok::DateElapsedS:
     case Tok::AmPm:
     case Tok::AP:
+    case Tok::EraG:
+    case Tok::EraGG:
+    case Tok::EraGGG:
+    case Tok::EraE:
+    case Tok::EraEE:
+    case Tok::DateAaa:
+    case Tok::DateAaaa:
     case Tok::DateM:
     case Tok::DateMM:
     case Tok::DateMin:
@@ -417,6 +424,41 @@ void tokenize_section(std::string_view fmt, Section& out) {
         continue;
       }
     }
+    // ja-JP weekday tokens `aaa` / `aaaa` (case-insensitive). Note that
+    // `aaa` does NOT collide with `AM/PM` or `A/P` because those are
+    // matched first above; a bare run of `a`/`A` characters falls through
+    // here. A run shorter than 3 is not a weekday token in Excel and is
+    // emitted as a literal.
+    if (c == 'a' || c == 'A') {
+      const std::size_t run = scan_run(fmt, i, 'a');
+      if (run >= 3) {
+        Token t;
+        t.kind = (run >= 4) ? Tok::DateAaaa : Tok::DateAaa;
+        t.width = static_cast<std::uint8_t>(run);
+        toks.push_back(t);
+        continue;
+      }
+      // Run of 1 or 2 `a` characters: emit as literal.
+      push_literal(i - run, i);
+      continue;
+    }
+    // ja-JP era name tokens: `g` (Roman 1-letter), `gg` (1-char kanji),
+    // `ggg` or longer (full kanji name). Case-insensitive. The `General`
+    // keyword check above already handled the literal "General" word.
+    if (c == 'g' || c == 'G') {
+      const std::size_t run = scan_run(fmt, i, 'g');
+      Token t;
+      t.width = static_cast<std::uint8_t>(run);
+      if (run >= 3) {
+        t.kind = Tok::EraGGG;
+      } else if (run == 2) {
+        t.kind = Tok::EraGG;
+      } else {
+        t.kind = Tok::EraG;
+      }
+      toks.push_back(t);
+      continue;
+    }
     // Date letters.
     if (is_date_letter(c)) {
       const char lc = (c >= 'A' && c <= 'Z') ? static_cast<char>(c + 32) : c;
@@ -475,6 +517,18 @@ void tokenize_section(std::string_view fmt, Section& out) {
       t.kind = fmt[i + 1] == '+' ? Tok::SciPlus : Tok::SciMinus;
       toks.push_back(t);
       i += 2;
+      continue;
+    }
+    // ja-JP era year token `e` / `ee`. A bare `e` (or run of `e`) not
+    // followed by `+`/`-` is the era-year placeholder when the section is
+    // a date section. The renderer falls back to a literal `e` when the
+    // section turns out to be numeric.
+    if (c == 'e' || c == 'E') {
+      const std::size_t run = scan_run(fmt, i, 'e');
+      Token t;
+      t.width = static_cast<std::uint8_t>(run);
+      t.kind = (run >= 2) ? Tok::EraEE : Tok::EraE;
+      toks.push_back(t);
       continue;
     }
     // Numeric specifiers.

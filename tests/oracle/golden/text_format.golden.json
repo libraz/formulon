@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T01:02:22Z"
+    "generated_at": "2026-04-26T04:55:54Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -461,61 +461,91 @@
       "id": "text_era_ggge_reiwa",
       "formula": "=TEXT(45383, \"ggge年m月d日\")",
       "setup": {},
-      "skipped": "GGGE (full era + year) not implemented. Excel: 令和6年4月1日."
+      "expect": {
+        "kind": "text",
+        "value": "令和6年4月1日"
+      }
     },
     {
       "id": "text_era_gge_reiwa",
       "formula": "=TEXT(45383, \"gge年m月d日\")",
       "setup": {},
-      "skipped": "GGE (abbreviated era + year) not implemented."
+      "expect": {
+        "kind": "text",
+        "value": "令6年4月1日"
+      }
     },
     {
       "id": "text_era_ge_reiwa",
       "formula": "=TEXT(45383, \"ge年m月d日\")",
       "setup": {},
-      "skipped": "GE (single-letter era + year) not implemented."
+      "expect": {
+        "kind": "text",
+        "value": "R6年4月1日"
+      }
     },
     {
       "id": "text_era_e_only",
       "formula": "=TEXT(45383, \"e年m月d日\")",
       "setup": {},
-      "skipped": "Era year token E without era prefix not implemented."
+      "expect": {
+        "kind": "text",
+        "value": "6年4月1日"
+      }
     },
     {
       "id": "text_era_ggge_heisei_last_day",
       "formula": "=TEXT(43585, \"ggge年m月d日\")",
       "setup": {},
-      "skipped": "Heisei boundary (2019-04-30 last day) not implemented; era-table absent."
+      "expect": {
+        "kind": "text",
+        "value": "平成31年4月30日"
+      }
     },
     {
       "id": "text_era_ggge_reiwa_first_day",
       "formula": "=TEXT(43586, \"ggge年m月d日\")",
       "setup": {},
-      "skipped": "Reiwa boundary (2019-05-01 first day) not implemented; era-table absent."
+      "expect": {
+        "kind": "text",
+        "value": "令和1年5月1日"
+      }
     },
     {
       "id": "text_era_ggge_showa_first_day",
       "formula": "=TEXT(9856, \"ggge年m月d日\")",
       "setup": {},
-      "skipped": "Showa boundary (1926-12-25 first day) not implemented; era-table absent."
+      "expect": {
+        "kind": "text",
+        "value": "昭和1年12月25日"
+      }
     },
     {
       "id": "text_dow_aaa",
       "formula": "=TEXT(45383, \"aaa\")",
       "setup": {},
-      "skipped": "aaa weekday token not implemented; Excel: 月. Formulon emits literal 'aaa'."
+      "expect": {
+        "kind": "text",
+        "value": "月"
+      }
     },
     {
       "id": "text_dow_aaaa",
       "formula": "=TEXT(45383, \"aaaa\")",
       "setup": {},
-      "skipped": "aaaa full-weekday token not implemented; Excel: 月曜日."
+      "expect": {
+        "kind": "text",
+        "value": "月曜日"
+      }
     },
     {
       "id": "text_date_with_aaa",
       "formula": "=TEXT(45383, \"yyyy/m/d (aaa)\")",
       "setup": {},
-      "skipped": "Date concatenated with aaa weekday — not implemented."
+      "expect": {
+        "kind": "text",
+        "value": "2024/4/1 (月)"
+      }
     },
     {
       "id": "text_dbnum1",

@@ -51,6 +51,13 @@ enum class Tok : std::uint8_t {
   DateElapsedS,   // `[s]` / `[ss]`
   AmPm,           // `AM/PM` / `am/pm`
   AP,             // `A/P` / `a/p`
+  EraG,           // `g` -- single-letter Roman era abbrev (R/H/S/T/M).
+  EraGG,          // `gg` -- single-kanji era abbrev (令/平/昭/大/明).
+  EraGGG,         // `ggg` (or longer run) -- full kanji era name.
+  EraE,           // `e` -- era year (1- or 2-digit, no leading zero).
+  EraEE,          // `ee` (or longer run) -- era year zero-padded to 2 digits.
+  DateAaa,        // `aaa` -- 1-char ja-JP weekday (月/火/水/木/金/土/日).
+  DateAaaa,       // `aaaa` (or longer run) -- full ja-JP weekday (月曜日 etc.).
   FracSecDigits,  // `.0` / `.00` / ... when following a second token
   Literal,        // Arbitrary passthrough bytes (quoted / escaped / other)
   Space,          // `_X` underscore-skip: emits a single space placeholder.

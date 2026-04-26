@@ -173,68 +173,6 @@ entries:
     first_noted: 2026-04-26
     last_verified_excel_version: "16.108.1"
 
-  # -- TEXT format codes: Japanese era (G / GG / GGG / GGGE / E) ----------
-  # The format-string engine in `src/eval/builtins/text_format.cpp` does
-  # not yet recognise Japanese era tokens. Format codes containing G/E
-  # currently render as literal characters instead of resolving to
-  # 令和 / 平成 / 昭和 / 大正 / 明治 + era year. Implementation requires an
-  # era table (start dates per era) plus era-year arithmetic.
-  - id: text_era_ggge_reiwa
-    mode: skip-oracle
-    reason: "GGGE (full era + year) not implemented. Excel: 令和6年4月1日."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
-  - id: text_era_gge_reiwa
-    mode: skip-oracle
-    reason: "GGE (abbreviated era + year) not implemented."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-  - id: text_era_ge_reiwa
-    mode: skip-oracle
-    reason: "GE (single-letter era + year) not implemented."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-  - id: text_era_e_only
-    mode: skip-oracle
-    reason: "Era year token E without era prefix not implemented."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-  - id: text_era_ggge_heisei_last_day
-    mode: skip-oracle
-    reason: "Heisei boundary (2019-04-30 last day) not implemented; era-table absent."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-  - id: text_era_ggge_reiwa_first_day
-    mode: skip-oracle
-    reason: "Reiwa boundary (2019-05-01 first day) not implemented; era-table absent."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-  - id: text_era_ggge_showa_first_day
-    mode: skip-oracle
-    reason: "Showa boundary (1926-12-25 first day) not implemented; era-table absent."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-
-  # -- TEXT format codes: ja-JP weekday tokens (aaa / aaaa) ----------------
-  # `src/eval/builtins/text_format.cpp` renders aaa / aaaa as literal text
-  # instead of resolving to 月/火/水/木/金/土/日 (aaa) or 月曜日 等 (aaaa).
-  - id: text_dow_aaa
-    mode: skip-oracle
-    reason: "aaa weekday token not implemented; Excel: 月. Formulon emits literal 'aaa'."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-  - id: text_dow_aaaa
-    mode: skip-oracle
-    reason: "aaaa full-weekday token not implemented; Excel: 月曜日."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-  - id: text_date_with_aaa
-    mode: skip-oracle
-    reason: "Date concatenated with aaa weekday — not implemented."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-
   # -- TEXT format codes: DBNum (numeral system selector) ------------------
   # `[DBNum1]` / `[DBNum2]` / `[DBNum3]` switch to kanji / 大字 / full-width
   # numerals. Currently the bracket directive triggers #VALUE!: the format
