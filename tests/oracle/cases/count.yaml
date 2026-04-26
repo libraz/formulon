@@ -43,3 +43,110 @@ cases:
     setup: { A1: "", A2: "x", A3: 3 }
     description: "Excel: empty-string formula result counts as blank for COUNTBLANK"
     formula: "=COUNTBLANK(A1:A3)"
+
+  # =========================================================================
+  # Expanded probes: error-cell handling, numeric-text coercion, dates,
+  # mixed types, large ranges, multiple range args, ja-JP text in COUNTA.
+  # =========================================================================
+
+  # -- COUNT: error-cell handling -----------------------------------------
+  - id: count_error_cell_in_range
+    description: "Excel: error cell inside range is silently skipped by COUNT"
+    setup:
+      A1: 10
+      A2: { kind: formula, formula: "=NA()" }
+      A3: 30
+    formula: "=COUNT(A1:A3)"
+
+  - id: count_error_direct_arg
+    description: "Direct error arg propagates"
+    formula: "=COUNT(1,#REF!,3)"
+
+  - id: count_numeric_text_direct_arg
+    description: "Direct text arg that is numeric (\"5\") counts in Excel"
+    formula: "=COUNT(1,\"5\",3)"
+
+  # count_numeric_text_in_range omitted — xlwings auto-coerces "5" to a
+  # numeric cell when writing the setup, so Excel sees A2=5 (number) and
+  # COUNT returns 3. The case as written cannot probe whether COUNT
+  # *would* skip numeric text in a range.
+
+  - id: count_date_in_range
+    description: "Dates count — they are stored as numeric serials"
+    setup: { A1: 1, A2: { kind: formula, formula: "=DATE(2024,1,1)" }, A3: 3 }
+    formula: "=COUNT(A1:A3)"
+
+  - id: count_blank_direct_arg
+    description: "Direct blank-cell ref arg counts as 0 for COUNT (?). Probe Mac behaviour."
+    setup: {}
+    formula: "=COUNT(A1)"
+
+  - id: count_multiple_ranges
+    description: "Multiple range args are flattened"
+    setup: { A1: 1, A2: 2, B1: 3, B2: 4 }
+    formula: "=COUNT(A1:A2,B1:B2)"
+
+  - id: count_mixed_range_and_literal
+    setup: { A1: 1, A2: 2 }
+    formula: "=COUNT(A1:A2,10,\"x\",TRUE)"
+
+  # -- COUNTA: scope of \"non-blank\" ------------------------------------
+  - id: counta_error_cell_counts
+    description: "COUNTA counts error cells"
+    setup:
+      A1: 10
+      A2: { kind: formula, formula: "=NA()" }
+      A3: 30
+    formula: "=COUNTA(A1:A3)"
+
+  - id: counta_empty_string_counts
+    description: "COUNTA on a formula-emitted \"\" still counts (the cell is non-blank)"
+    setup:
+      A1: 10
+      A2: { kind: formula, formula: "=\"\"" }
+      A3: 30
+    formula: "=COUNTA(A1:A3)"
+
+  - id: counta_jp_text
+    description: "COUNTA includes Japanese text"
+    setup: { A1: "りんご", A2: "ぶどう", A3: 100 }
+    formula: "=COUNTA(A1:A3)"
+
+  - id: counta_error_direct_arg
+    description: "Direct error literal as COUNTA arg propagates"
+    formula: "=COUNTA(1,#DIV/0!,3)"
+
+  # counta_zero_args omitted — Excel rejects =COUNTA() at formula entry,
+  # leaving the cell blank rather than evaluating to an error.
+
+  # -- COUNTBLANK: edge cases ---------------------------------------------
+  - id: countblank_only_blanks
+    description: "All cells blank -> count = 3"
+    setup: {}
+    formula: "=COUNTBLANK(A1:A3)"
+
+  - id: countblank_no_blanks
+    description: "All cells filled -> count = 0"
+    setup: { A1: 1, A2: 2, A3: 3 }
+    formula: "=COUNTBLANK(A1:A3)"
+
+  - id: countblank_with_zero
+    description: "Cell holding the value 0 is NOT blank"
+    setup: { A1: 0, A2: 0, A3: 3 }
+    formula: "=COUNTBLANK(A1:A3)"
+
+  - id: countblank_with_error_cell
+    description: "Error cell is NOT blank for COUNTBLANK"
+    setup:
+      A1: 1
+      A2: { kind: formula, formula: "=NA()" }
+      A3: 3
+    formula: "=COUNTBLANK(A1:A3)"
+
+  # countblank_direct_blank_literal omitted — Excel rejects =COUNTBLANK()
+  # at formula entry like the other zero-arity calls.
+
+  - id: countblank_2d_range
+    description: "2D range with mixed blanks"
+    setup: { A1: 1, B1: 2, A3: 3 }
+    formula: "=COUNTBLANK(A1:B3)"
