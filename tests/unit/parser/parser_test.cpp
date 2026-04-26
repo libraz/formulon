@@ -232,6 +232,32 @@ TEST(ParserRange, RangeInsideSum) {
 }
 
 // ---------------------------------------------------------------------------
+// Space-as-intersection operator
+// ---------------------------------------------------------------------------
+
+TEST(ParserIntersect, BetweenTwoRanges) {
+  EXPECT_EQ(ParseToSexpr("=A1:C3 B2:D4"),
+            "(intersect (range (ref A1) (ref C3)) (range (ref B2) (ref D4)))");
+}
+
+TEST(ParserIntersect, InsideAreasCall) {
+  EXPECT_EQ(ParseToSexpr("=AREAS(A1:C3 B2:D4)"),
+            "(call AREAS (intersect (range (ref A1) (ref C3)) (range (ref B2) (ref D4))))");
+}
+
+// Whitespace between non-reference operands must NOT promote to an
+// intersection: `1 + 2` should still parse as plain arithmetic.
+TEST(ParserIntersect, ArithmeticWithSpacesUnchanged) {
+  EXPECT_EQ(ParseToSexpr("= 1 + 2"), "(binary + (num 1) (num 2))");
+}
+
+// Whitespace inside a function call's argument shouldn't be reinterpreted as
+// the intersection operator -- `SUM(A1:A5)` must still produce a plain call.
+TEST(ParserIntersect, FunctionCallNotAffected) {
+  EXPECT_EQ(ParseToSexpr("=SUM(A1:A5)"), "(call SUM (range (ref A1) (ref A5)))");
+}
+
+// ---------------------------------------------------------------------------
 // Unary operators
 // ---------------------------------------------------------------------------
 

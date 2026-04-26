@@ -140,6 +140,27 @@ bool resolve_range_endpoint(const parser::AstNode& node, Arena& arena, const Fun
                             std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
                             ErrorCode* out_err);
 
+/// Computes the rectangular intersection of an `IntersectOp`'s two
+/// operands. Each operand is resolved via `resolve_range_endpoint`
+/// (`Ref` / reference-returning `Call`) or, for `RangeOp`, by unioning
+/// its two endpoints into a single rectangle. On success the inclusive
+/// 0-based intersection rectangle is written to the out parameters and
+/// the resolved sheet qualifier (empty = bound sheet) to `*out_sheet`.
+///
+/// `*out_disjoint` is set to true when the two rectangles do not
+/// overlap; in that case the rectangle fields are left untouched and
+/// callers translate it into Excel's `#NULL!`. The disjoint case is NOT
+/// a hard error so AREAS can distinguish "no intersection" from a
+/// resolution failure.
+///
+/// Returns false on hard error (cross-sheet mismatch -> `#REF!`,
+/// whole-column / whole-row endpoint -> `#VALUE!`, non-reference shape
+/// -> `#REF!`); writes the Excel error code to `*out_err`.
+bool compute_intersect_rect(const parser::AstNode& lhs, const parser::AstNode& rhs, Arena& arena,
+                            const FunctionRegistry& registry, const EvalContext& ctx, std::string_view* out_sheet,
+                            std::uint32_t* out_top_row, std::uint32_t* out_left_col, std::uint32_t* out_bottom_row,
+                            std::uint32_t* out_right_col, bool* out_disjoint, ErrorCode* out_err);
+
 namespace refs_internal {
 
 /// Output of `parse_a1_ref`: sheet qualifier (empty if unqualified),

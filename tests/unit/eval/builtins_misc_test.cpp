@@ -543,6 +543,21 @@ TEST(BuiltinsAreas, TooManyArgsIsValue) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+// Excel's space-as-intersection operator: overlapping rectangles count as a
+// single area. `A1:C3 B2:D4` overlaps at `B2:C3`, so AREAS reports 1.
+TEST(BuiltinsAreas, IntersectingRangesIsOneArea) {
+  const Value v = EvalSource("=AREAS(A1:C3 B2:D4)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1.0);
+}
+
+// Disjoint operands intersect to nothing -> Excel surfaces `#NULL!`.
+TEST(BuiltinsAreas, DisjointRangesIsNullError) {
+  const Value v = EvalSource("=AREAS(A1:B2 C3:D4)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Null);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

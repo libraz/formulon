@@ -52,6 +52,7 @@ namespace parser {
 using detail::kBpAddSub;
 using detail::kBpComparison;
 using detail::kBpConcat;
+using detail::kBpIntersect;
 using detail::kBpMulDiv;
 using detail::kBpPostfixPercent;
 using detail::kBpPow;
@@ -68,6 +69,12 @@ int InfixBindingPower(TokenKind kind, int* right_bp) noexcept {
     case TokenKind::Colon:
       *right_bp = kBpRange + 1;
       return kBpRange;
+    case TokenKind::Whitespace:
+      // Excel's space-as-intersection operator. Only the whitespace tokens
+      // that sit between two reference-shaped tokens reach this point; the
+      // retention pass in `Parser::parse()` strips every other run.
+      *right_bp = kBpIntersect + 1;
+      return kBpIntersect;
     case TokenKind::Caret:
       *right_bp = kBpPow;  // right-assoc.
       return kBpPow;
@@ -343,15 +350,53 @@ AstNode* Parser::parse() {
   }
   parsed_ = true;
 
-  // Drive the tokenizer and pre-filter whitespace into `tokens_`.
+  // Drive the tokenizer and pre-filter whitespace into `tokens_`. Most
+  // whitespace runs are pure layout and should be dropped, but Excel uses a
+  // space character as the binary intersection operator when it sits between
+  // two reference-shaped operands (e.g. `A1:C3 B2:D4`). We retain those
+  // whitespace tokens so the Pratt loop can promote them via
+  // `InfixBindingPower(TokenKind::Whitespace, ...)`. The candidate set here
+  // is intentionally conservative -- it is shape-based and therefore admits
+  // false positives like `1 2`; the LHS-shape guard in `parse_expression`
+  // re-validates that the left operand is reference-shaped before consuming
+  // the whitespace as an operator, so non-reference noise still degrades to
+  // a normal whitespace strip.
   Tokenizer tz(source_);
   const auto& raw = tz.tokens();
   tokens_.reserve(raw.size());
-  for (const auto& t : raw) {
-    if (t.kind == TokenKind::Whitespace) {
+  // `RefCandidate` includes structurally reference-shaped token kinds: bare
+  // cell refs, identifiers (which may resolve to a defined name or, when
+  // followed by `(`, a reference-returning call), a closing paren (which
+  // terminates a parenthesised reference or function call), and a closing
+  // bracket (which terminates a structured reference). The Pratt parser
+  // ultimately decides whether the AST shape allows the intersection.
+  auto is_ref_candidate = [](TokenKind k) noexcept {
+    return k == TokenKind::CellRef || k == TokenKind::Ident || k == TokenKind::RParen ||
+           k == TokenKind::RBracket;
+  };
+  // Walk `raw` with a sliding window over the most recent non-whitespace
+  // token and the next non-whitespace token after each whitespace run. If
+  // both bracket the whitespace as reference-shaped, keep it; otherwise drop.
+  for (std::size_t i = 0; i < raw.size(); ++i) {
+    const Token& t = raw[i];
+    if (t.kind != TokenKind::Whitespace) {
+      tokens_.push_back(t);
       continue;
     }
-    tokens_.push_back(t);
+    // Find the next non-whitespace token after this run.
+    TokenKind next_kind = TokenKind::Eof;
+    for (std::size_t j = i + 1; j < raw.size(); ++j) {
+      if (raw[j].kind != TokenKind::Whitespace) {
+        next_kind = raw[j].kind;
+        break;
+      }
+    }
+    // Find the previous non-whitespace token already pushed onto `tokens_`.
+    TokenKind prev_kind = tokens_.empty() ? TokenKind::Eof : tokens_.back().kind;
+    if (is_ref_candidate(prev_kind) && is_ref_candidate(next_kind)) {
+      tokens_.push_back(t);
+    }
+    // Otherwise: drop. Subsequent iterations resume on the next token.
   }
 
   // Disambiguate CellRef-shaped tokens that are actually function-call names.
@@ -479,7 +524,25 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
     }
 
     int right_bp = 0;
-    const int bp = InfixBindingPower(kind, &right_bp);
+    int bp = InfixBindingPower(kind, &right_bp);
+    // Whitespace only carries binding power when the LHS is reference-shaped.
+    // The retention pass admits whitespace tokens whose neighbouring token
+    // kinds are reference-candidates, but the parser-side AST shape is the
+    // authoritative check: e.g. `1 2` slips through retention (Number is
+    // Ident-like at the byte level only when treated as literal noise) but
+    // must still parse as two separate atoms with the whitespace dropped.
+    if (kind == TokenKind::Whitespace) {
+      const NodeKind lk = lhs->kind();
+      const bool lhs_ref_shaped =
+          lk == NodeKind::Ref || lk == NodeKind::RangeOp || lk == NodeKind::ExternalRef ||
+          lk == NodeKind::NameRef || lk == NodeKind::StructuredRef || lk == NodeKind::Call ||
+          lk == NodeKind::IntersectOp;
+      if (!lhs_ref_shaped) {
+        // Treat the retained whitespace as layout: drop it and continue.
+        advance();
+        bp = 0;
+      }
+    }
     if (bp == 0 || bp < min_bp) {
       --depth_;
       return lhs;
@@ -511,6 +574,18 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
         record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
       }
       node = make_range_op(arena_, lhs, rhs);
+    } else if (kind == TokenKind::Whitespace) {
+      // Space-as-intersection. The LHS shape was already validated above.
+      // Validate the RHS shape with the same rules used for `:`; a non-
+      // reference RHS records `InvalidRange` but we still wrap the children
+      // so siblings keep parsing.
+      const NodeKind rk = rhs->kind();
+      if (rk != NodeKind::Ref && rk != NodeKind::NameRef && rk != NodeKind::ExternalRef &&
+          rk != NodeKind::StructuredRef && rk != NodeKind::RangeOp && rk != NodeKind::Call &&
+          rk != NodeKind::IntersectOp && rk != NodeKind::ErrorPlaceholder) {
+        record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
+      }
+      node = make_intersect_op(arena_, lhs, rhs);
     } else {
       node = make_binary_op(arena_, TokenToBinOp(kind), lhs, rhs);
     }

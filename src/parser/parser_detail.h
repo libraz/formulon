@@ -18,6 +18,11 @@ namespace detail {
 // Binding-power constants. See parser.cpp header comment for the precedence
 // table.
 inline constexpr int kBpRange = 80;
+// Space-as-intersection sits below `:` (range) and above prefix unary, matching
+// Excel's precedence table. The token only retains binding power when it sits
+// between two reference-shaped operands; see the whitespace-retention pass in
+// `Parser::parse()`.
+inline constexpr int kBpIntersect = 75;
 inline constexpr int kBpUnaryPrefix = 70;
 inline constexpr int kBpPostfixPercent = 60;
 inline constexpr int kBpPow = 50;

@@ -961,5 +961,112 @@ bool resolve_range_endpoint(const parser::AstNode& node, Arena& arena, const Fun
   return false;
 }
 
+namespace {
+
+// Resolves an `IntersectOp` operand AST into a rectangle. Accepts the
+// same shapes the `:` operator produces: a `RangeOp` over two
+// `resolve_range_endpoint`-compatible endpoints, a single `Ref`, or a
+// reference-returning `Call`. Whole-column / whole-row inputs surface
+// `#VALUE!`; mismatched cross-sheet endpoints surface `#REF!`. Returns
+// true on success and writes the inclusive 0-based rectangle.
+bool resolve_intersect_operand(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                               const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                               std::uint32_t* out_left_col, std::uint32_t* out_bottom_row,
+                               std::uint32_t* out_right_col, ErrorCode* out_err) {
+  if (node.kind() == parser::NodeKind::RangeOp) {
+    const parser::AstNode& lhs_ast = node.as_range_lhs();
+    const parser::AstNode& rhs_ast = node.as_range_rhs();
+    std::string_view lhs_sheet;
+    std::string_view rhs_sheet;
+    std::uint32_t lhs_top = 0;
+    std::uint32_t lhs_left = 0;
+    std::uint32_t lhs_bottom = 0;
+    std::uint32_t lhs_right = 0;
+    std::uint32_t rhs_top = 0;
+    std::uint32_t rhs_left = 0;
+    std::uint32_t rhs_bottom = 0;
+    std::uint32_t rhs_right = 0;
+    if (!resolve_range_endpoint(lhs_ast, arena, registry, ctx, &lhs_sheet, &lhs_top, &lhs_left, &lhs_bottom, &lhs_right,
+                                out_err)) {
+      return false;
+    }
+    if (!resolve_range_endpoint(rhs_ast, arena, registry, ctx, &rhs_sheet, &rhs_top, &rhs_left, &rhs_bottom, &rhs_right,
+                                out_err)) {
+      return false;
+    }
+    if (!lhs_sheet.empty() && !rhs_sheet.empty()) {
+      if (!strings::case_insensitive_eq(lhs_sheet, rhs_sheet)) {
+        *out_err = ErrorCode::Ref;
+        return false;
+      }
+      *out_sheet = lhs_sheet;
+    } else if (!lhs_sheet.empty()) {
+      *out_sheet = lhs_sheet;
+    } else {
+      *out_sheet = rhs_sheet;
+    }
+    *out_top_row = std::min(lhs_top, rhs_top);
+    *out_left_col = std::min(lhs_left, rhs_left);
+    *out_bottom_row = std::max(lhs_bottom, rhs_bottom);
+    *out_right_col = std::max(lhs_right, rhs_right);
+    return true;
+  }
+  // Single `Ref` or reference-returning `Call` -> 1x1 rectangle (or the
+  // synthesized rectangle from OFFSET / INDIRECT).
+  return resolve_range_endpoint(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
+                                out_right_col, out_err);
+}
+
+}  // namespace
+
+bool compute_intersect_rect(const parser::AstNode& lhs, const parser::AstNode& rhs, Arena& arena,
+                            const FunctionRegistry& registry, const EvalContext& ctx, std::string_view* out_sheet,
+                            std::uint32_t* out_top_row, std::uint32_t* out_left_col, std::uint32_t* out_bottom_row,
+                            std::uint32_t* out_right_col, bool* out_disjoint, ErrorCode* out_err) {
+  *out_disjoint = false;
+  std::string_view lhs_sheet;
+  std::string_view rhs_sheet;
+  std::uint32_t lhs_top = 0;
+  std::uint32_t lhs_left = 0;
+  std::uint32_t lhs_bottom = 0;
+  std::uint32_t lhs_right = 0;
+  std::uint32_t rhs_top = 0;
+  std::uint32_t rhs_left = 0;
+  std::uint32_t rhs_bottom = 0;
+  std::uint32_t rhs_right = 0;
+  if (!resolve_intersect_operand(lhs, arena, registry, ctx, &lhs_sheet, &lhs_top, &lhs_left, &lhs_bottom, &lhs_right,
+                                 out_err)) {
+    return false;
+  }
+  if (!resolve_intersect_operand(rhs, arena, registry, ctx, &rhs_sheet, &rhs_top, &rhs_left, &rhs_bottom, &rhs_right,
+                                 out_err)) {
+    return false;
+  }
+  if (!lhs_sheet.empty() && !rhs_sheet.empty()) {
+    if (!strings::case_insensitive_eq(lhs_sheet, rhs_sheet)) {
+      *out_err = ErrorCode::Ref;
+      return false;
+    }
+    *out_sheet = lhs_sheet;
+  } else if (!lhs_sheet.empty()) {
+    *out_sheet = lhs_sheet;
+  } else {
+    *out_sheet = rhs_sheet;
+  }
+  const std::uint32_t r1 = std::max(lhs_top, rhs_top);
+  const std::uint32_t r2 = std::min(lhs_bottom, rhs_bottom);
+  const std::uint32_t c1 = std::max(lhs_left, rhs_left);
+  const std::uint32_t c2 = std::min(lhs_right, rhs_right);
+  if (r1 > r2 || c1 > c2) {
+    *out_disjoint = true;
+    return true;
+  }
+  *out_top_row = r1;
+  *out_left_col = c1;
+  *out_bottom_row = r2;
+  *out_right_col = c2;
+  return true;
+}
+
 }  // namespace eval
 }  // namespace formulon

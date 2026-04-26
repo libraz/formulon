@@ -1151,9 +1151,55 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       // scalar `Value` variant; defer to follow-up work.
       return Value::error(ErrorCode::Name);
 
+    case parser::NodeKind::IntersectOp: {
+      // Excel's space-as-intersection operator: `A1:C3 B2:D4` -> the
+      // overlapping rectangle (here B2:C3). When the operands do not
+      // overlap, Excel returns `#NULL!`. In scalar context (no formula
+      // cell binding, or 2-D intersection rectangle) we collapse to the
+      // top-left of the intersection rectangle, mirroring the RangeOp
+      // case above.
+      std::string_view sheet;
+      std::uint32_t r1 = 0;
+      std::uint32_t c1 = 0;
+      std::uint32_t r2 = 0;
+      std::uint32_t c2 = 0;
+      bool disjoint = false;
+      ErrorCode err = ErrorCode::Value;
+      if (!compute_intersect_rect(node.as_intersect_lhs(), node.as_intersect_rhs(), arena, registry, ctx, &sheet, &r1,
+                                  &c1, &r2, &c2, &disjoint, &err)) {
+        return Value::error(err);
+      }
+      if (disjoint) {
+        return Value::error(ErrorCode::Null);
+      }
+      // Implicit-intersection style alignment when the formula cell sits
+      // inside the intersection rectangle's row or column band; otherwise
+      // the spill anchor (top-left). Mirrors the RangeOp scalar policy.
+      if (ctx.has_formula_cell()) {
+        const std::uint32_t fr = ctx.formula_row();
+        const std::uint32_t fc = ctx.formula_col();
+        parser::Reference target{};
+        target.sheet = sheet;
+        if (c1 == c2 && fr >= r1 && fr <= r2) {
+          target.row = fr;
+          target.col = c1;
+          return ctx.resolve_ref(target, arena, registry);
+        }
+        if (r1 == r2 && fc >= c1 && fc <= c2) {
+          target.row = r1;
+          target.col = fc;
+          return ctx.resolve_ref(target, arena, registry);
+        }
+      }
+      parser::Reference top_left{};
+      top_left.sheet = sheet;
+      top_left.row = r1;
+      top_left.col = c1;
+      return ctx.resolve_ref(top_left, arena, registry);
+    }
+
     // -- Unsupported: range-producing operators / array literals ----------
     case parser::NodeKind::UnionOp:
-    case parser::NodeKind::IntersectOp:
     case parser::NodeKind::ArrayLiteral:
       return Value::error(ErrorCode::Value);
   }
