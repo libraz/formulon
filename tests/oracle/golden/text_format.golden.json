@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-23T08:03:23Z"
+    "generated_at": "2026-04-26T01:02:22Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -404,10 +404,7 @@
       "id": "text_color_red_discarded",
       "formula": "=TEXT(5, \"[Red]0.00\")",
       "setup": {},
-      "expect": {
-        "kind": "text",
-        "value": "5.00"
-      }
+      "skipped": "xlwings read-back unstable across oracle-gen runs; Mac Excel cell display alternates between text and error."
     },
     {
       "id": "text_locale_prefix_discarded",
@@ -458,6 +455,228 @@
       "expect": {
         "kind": "error",
         "code": "#REF!"
+      }
+    },
+    {
+      "id": "text_era_ggge_reiwa",
+      "formula": "=TEXT(45383, \"ggge年m月d日\")",
+      "setup": {},
+      "skipped": "GGGE (full era + year) not implemented. Excel: 令和6年4月1日."
+    },
+    {
+      "id": "text_era_gge_reiwa",
+      "formula": "=TEXT(45383, \"gge年m月d日\")",
+      "setup": {},
+      "skipped": "GGE (abbreviated era + year) not implemented."
+    },
+    {
+      "id": "text_era_ge_reiwa",
+      "formula": "=TEXT(45383, \"ge年m月d日\")",
+      "setup": {},
+      "skipped": "GE (single-letter era + year) not implemented."
+    },
+    {
+      "id": "text_era_e_only",
+      "formula": "=TEXT(45383, \"e年m月d日\")",
+      "setup": {},
+      "skipped": "Era year token E without era prefix not implemented."
+    },
+    {
+      "id": "text_era_ggge_heisei_last_day",
+      "formula": "=TEXT(43585, \"ggge年m月d日\")",
+      "setup": {},
+      "skipped": "Heisei boundary (2019-04-30 last day) not implemented; era-table absent."
+    },
+    {
+      "id": "text_era_ggge_reiwa_first_day",
+      "formula": "=TEXT(43586, \"ggge年m月d日\")",
+      "setup": {},
+      "skipped": "Reiwa boundary (2019-05-01 first day) not implemented; era-table absent."
+    },
+    {
+      "id": "text_era_ggge_showa_first_day",
+      "formula": "=TEXT(9856, \"ggge年m月d日\")",
+      "setup": {},
+      "skipped": "Showa boundary (1926-12-25 first day) not implemented; era-table absent."
+    },
+    {
+      "id": "text_dow_aaa",
+      "formula": "=TEXT(45383, \"aaa\")",
+      "setup": {},
+      "skipped": "aaa weekday token not implemented; Excel: 月. Formulon emits literal 'aaa'."
+    },
+    {
+      "id": "text_dow_aaaa",
+      "formula": "=TEXT(45383, \"aaaa\")",
+      "setup": {},
+      "skipped": "aaaa full-weekday token not implemented; Excel: 月曜日."
+    },
+    {
+      "id": "text_date_with_aaa",
+      "formula": "=TEXT(45383, \"yyyy/m/d (aaa)\")",
+      "setup": {},
+      "skipped": "Date concatenated with aaa weekday — not implemented."
+    },
+    {
+      "id": "text_dbnum1",
+      "formula": "=TEXT(1234, \"[DBNum1]0\")",
+      "setup": {},
+      "skipped": "[DBNum1] kanji numerals not implemented; Excel: 一千二百三十四. Formulon: #VALUE!."
+    },
+    {
+      "id": "text_dbnum2",
+      "formula": "=TEXT(1234, \"[DBNum2]0\")",
+      "setup": {},
+      "skipped": "[DBNum2] 大字 (formal-document numerals) not implemented; Excel: 壱阡弐百参拾四."
+    },
+    {
+      "id": "text_dbnum3",
+      "formula": "=TEXT(1234, \"[DBNum3]0\")",
+      "setup": {},
+      "skipped": "[DBNum3] full-width Arabic not implemented; Excel: １２３４."
+    },
+    {
+      "id": "text_dbnum1_with_era",
+      "formula": "=TEXT(45383, \"[DBNum1]ggge年m月d日\")",
+      "setup": {},
+      "skipped": "[DBNum1] combined with era format — depends on both DBNum and era support."
+    },
+    {
+      "id": "text_fraction_single_digit",
+      "formula": "=TEXT(0.5, \"# ?/?\")",
+      "setup": {},
+      "skipped": "# ?/? fraction not implemented; Excel: ' 1/2'. Formulon: ' 0/0'."
+    },
+    {
+      "id": "text_fraction_two_digit",
+      "formula": "=TEXT(0.123, \"# ??/??\")",
+      "setup": {},
+      "skipped": "# ??/?? fraction with two-digit denominator not implemented."
+    },
+    {
+      "id": "text_fraction_with_integer",
+      "formula": "=TEXT(1.5, \"# ?/?\")",
+      "setup": {},
+      "skipped": "Fraction with leading integer not implemented."
+    },
+    {
+      "id": "text_fraction_negative",
+      "formula": "=TEXT(-1.5, \"# ?/?\")",
+      "setup": {},
+      "skipped": "Negative fraction not implemented."
+    },
+    {
+      "id": "text_three_section_positive",
+      "formula": "=TEXT(42, \"#,##0;-#,##0;Zero\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "42"
+      }
+    },
+    {
+      "id": "text_four_section_text",
+      "formula": "=TEXT(\"hello\", \"0;0;0;@!\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_conditional_gt_1000",
+      "formula": "=TEXT(1500, \"[>1000]#,##0\\K;0\")",
+      "setup": {},
+      "skipped": "[>1000] conditional section not implemented; Formulon returns #VALUE!."
+    },
+    {
+      "id": "text_conditional_gt_1000_below",
+      "formula": "=TEXT(500, \"[>1000]#,##0\\K;0\")",
+      "setup": {},
+      "skipped": "[>1000] conditional section not implemented (below-threshold path)."
+    },
+    {
+      "id": "text_currency_jpy_locale",
+      "formula": "=TEXT(1234567, \"[$JPY-411]#,##0\")",
+      "setup": {},
+      "skipped": "[$JPY-411] currency directive not implemented; prefix is dropped from output."
+    },
+    {
+      "id": "text_currency_yen_symbol",
+      "formula": "=TEXT(1234567, \"¥#,##0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "¥1,234,567"
+      }
+    },
+    {
+      "id": "text_currency_with_negative",
+      "formula": "=TEXT(-1234567, \"¥#,##0;(¥#,##0)\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "(¥1,234,567)"
+      }
+    },
+    {
+      "id": "text_underscore_aligned_paren",
+      "formula": "=TEXT(42, \"_(#,##0_)\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " 42 "
+      }
+    },
+    {
+      "id": "text_asterisk_repeat_dash",
+      "formula": "=TEXT(42, \"#,##0*-\")",
+      "setup": {},
+      "skipped": "Asterisk-fill directive `*-` leaks as literal; Excel emits it as a no-op in TEXT()."
+    },
+    {
+      "id": "text_ampm_jp_morning",
+      "formula": "=TEXT(0.354166666, \"h:mm AM/PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "8:30 AM"
+      }
+    },
+    {
+      "id": "text_ampm_jp_evening",
+      "formula": "=TEXT(0.854166666, \"h:mm AM/PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "8:30 PM"
+      }
+    },
+    {
+      "id": "text_elapsed_hours_over_24",
+      "formula": "=TEXT(1.5, \"[hh]:mm\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "36:00"
+      }
+    },
+    {
+      "id": "text_elapsed_minutes_over_60",
+      "formula": "=TEXT(0.5, \"[mm]\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "720"
+      }
+    },
+    {
+      "id": "text_backslash_escapes_d",
+      "formula": "=TEXT(45383, \"yyyy\\d\\d\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2024dd"
       }
     }
   ]

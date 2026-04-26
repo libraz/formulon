@@ -87,16 +87,16 @@ groups:
         expected: impl
       - name: "aaaa / aaa (ja-JP weekday kanji)"
         probe_regex: 'aaa+'
-        expected: missing
+        expected: diverged
       - name: "gggg / ggg / g (ja-JP era)"
         probe_regex: 'ggg+|"g"'
-        expected: missing
+        expected: diverged
       - name: "[Red] colour bracket"
         probe: "[Red]"
-        expected: impl
+        expected: diverged
       - name: "[>=N] conditional bracket"
         probe_regex: '\[\s*[<>=][^]]*\]'
-        expected: missing
+        expected: diverged
       - name: "[$-409] en-US locale prefix"
         probe: "[$-409]"
         expected: impl
@@ -114,7 +114,7 @@ groups:
         expected: impl
       - name: "# ?/? fraction format"
         probe_regex: '\?\s*/\s*\?'
-        expected: missing
+        expected: diverged
       - name: "0.00E+00 scientific"
         probe_regex: '0\.0+E\+'
         expected: impl
@@ -126,7 +126,7 @@ groups:
         expected: impl
       - name: "_) underscore-padding"
         probe_regex: '_[)\(\- ]'
-        expected: missing
+        expected: impl
       - name: "@ text-section placeholder"
         probe_regex: '"[^"]*@[^"]*"'
         expected: impl

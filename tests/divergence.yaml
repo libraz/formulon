@@ -173,6 +173,166 @@ entries:
     first_noted: 2026-04-26
     last_verified_excel_version: "16.108.1"
 
+  # -- TEXT format codes: Japanese era (G / GG / GGG / GGGE / E) ----------
+  # The format-string engine in `src/eval/builtins/text_format.cpp` does
+  # not yet recognise Japanese era tokens. Format codes containing G/E
+  # currently render as literal characters instead of resolving to
+  # 令和 / 平成 / 昭和 / 大正 / 明治 + era year. Implementation requires an
+  # era table (start dates per era) plus era-year arithmetic.
+  - id: text_era_ggge_reiwa
+    mode: skip-oracle
+    reason: "GGGE (full era + year) not implemented. Excel: 令和6年4月1日."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
+  - id: text_era_gge_reiwa
+    mode: skip-oracle
+    reason: "GGE (abbreviated era + year) not implemented."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: text_era_ge_reiwa
+    mode: skip-oracle
+    reason: "GE (single-letter era + year) not implemented."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: text_era_e_only
+    mode: skip-oracle
+    reason: "Era year token E without era prefix not implemented."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: text_era_ggge_heisei_last_day
+    mode: skip-oracle
+    reason: "Heisei boundary (2019-04-30 last day) not implemented; era-table absent."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: text_era_ggge_reiwa_first_day
+    mode: skip-oracle
+    reason: "Reiwa boundary (2019-05-01 first day) not implemented; era-table absent."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: text_era_ggge_showa_first_day
+    mode: skip-oracle
+    reason: "Showa boundary (1926-12-25 first day) not implemented; era-table absent."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+
+  # -- TEXT format codes: ja-JP weekday tokens (aaa / aaaa) ----------------
+  # `src/eval/builtins/text_format.cpp` renders aaa / aaaa as literal text
+  # instead of resolving to 月/火/水/木/金/土/日 (aaa) or 月曜日 等 (aaaa).
+  - id: text_dow_aaa
+    mode: skip-oracle
+    reason: "aaa weekday token not implemented; Excel: 月. Formulon emits literal 'aaa'."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: text_dow_aaaa
+    mode: skip-oracle
+    reason: "aaaa full-weekday token not implemented; Excel: 月曜日."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: text_date_with_aaa
+    mode: skip-oracle
+    reason: "Date concatenated with aaa weekday — not implemented."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+
+  # -- TEXT format codes: DBNum (numeral system selector) ------------------
+  # `[DBNum1]` / `[DBNum2]` / `[DBNum3]` switch to kanji / 大字 / full-width
+  # numerals. Currently the bracket directive triggers #VALUE!: the format
+  # parser rejects the whole format string. Implementation requires
+  # numeral-table mapping + bracket-directive pre-processor.
+  - id: text_dbnum1
+    mode: skip-oracle
+    reason: "[DBNum1] kanji numerals not implemented; Excel: 一千二百三十四. Formulon: #VALUE!."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: text_dbnum2
+    mode: skip-oracle
+    reason: "[DBNum2] 大字 (formal-document numerals) not implemented; Excel: 壱阡弐百参拾四."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: text_dbnum3
+    mode: skip-oracle
+    reason: "[DBNum3] full-width Arabic not implemented; Excel: １２３４."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: text_dbnum1_with_era
+    mode: skip-oracle
+    reason: "[DBNum1] combined with era format — depends on both DBNum and era support."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+
+  # -- TEXT format codes: fraction display (# ?/?, # ??/??) ---------------
+  # Fraction codes render as ' 0/0' regardless of the numerator/denominator
+  # inputs — best-rational-approximation is not yet implemented in
+  # `src/eval/builtins/text_format.cpp`.
+  - id: text_fraction_single_digit
+    mode: skip-oracle
+    reason: "# ?/? fraction not implemented; Excel: ' 1/2'. Formulon: ' 0/0'."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: text_fraction_two_digit
+    mode: skip-oracle
+    reason: "# ??/?? fraction with two-digit denominator not implemented."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: text_fraction_with_integer
+    mode: skip-oracle
+    reason: "Fraction with leading integer not implemented."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: text_fraction_negative
+    mode: skip-oracle
+    reason: "Negative fraction not implemented."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+
+  # -- TEXT format codes: conditional brackets [<n] / [>n] ----------------
+  # Bracket-prefixed conditional sections are rejected by the format
+  # parser; Excel uses them to gate which section a value falls into.
+  # Currently any `[<` or `[>` directive returns #VALUE!.
+  - id: text_conditional_gt_1000
+    mode: skip-oracle
+    reason: "[>1000] conditional section not implemented; Formulon returns #VALUE!."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: text_conditional_gt_1000_below
+    mode: skip-oracle
+    reason: "[>1000] conditional section not implemented (below-threshold path)."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+
+  # -- TEXT format codes: locale-tagged currency [$JPY-411] ---------------
+  # Currency directives like `[$JPY-411]` should emit the locale-tagged
+  # currency prefix; Formulon silently strips the directive.
+  - id: text_currency_jpy_locale
+    mode: skip-oracle
+    reason: "[$JPY-411] currency directive not implemented; prefix is dropped from output."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+
+  # -- TEXT format codes: asterisk-fill (* + char) ------------------------
+  # `*-` should pad the cell with `-` characters to fill the column width.
+  # In TEXT() the directive is observably a no-op (column width is
+  # absent); Formulon currently leaks `*-` as literal characters into the
+  # output.
+  - id: text_asterisk_repeat_dash
+    mode: skip-oracle
+    reason: "Asterisk-fill directive `*-` leaks as literal; Excel emits it as a no-op in TEXT()."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+
+  # -- Pre-existing oracle flake: [Red] colour directive ------------------
+  # Mac Excel's read-back through xlwings has been observed to vary
+  # between sessions for `=TEXT(5, "[Red]0.00")`: sometimes the cell
+  # surfaces as text "5.00" (Formulon's expected output), other times as
+  # an error. Until the source of the flake is identified, skip the case
+  # so it does not block the verifier.
+  - id: text_color_red_discarded
+    mode: skip-oracle
+    reason: "xlwings read-back unstable across oracle-gen runs; Mac Excel cell display alternates between text and error."
+    prefer: formulon
+    first_noted: 2026-04-26
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

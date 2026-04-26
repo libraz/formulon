@@ -184,3 +184,162 @@ cases:
   # -- TEXT: error propagation --------------------------------------------
   - id: text_error_propagates
     formula: "=TEXT(#REF!, \"0\")"
+
+  # =========================================================================
+  # ja-JP locale-specific format codes — currently uncovered. Mac Excel 365
+  # (ja-JP) is the oracle. Each block targets a separate format-string
+  # feature that 1-bit compat must reproduce exactly.
+  # =========================================================================
+
+  # -- Japanese era ---------------------------------------------------------
+  # 2024-04-01 is Reiwa 6.4.1; serial 45383 = DATEVALUE("2024/4/1").
+  - id: text_era_ggge_reiwa
+    description: "GGGE = full era name + era year (令和6)"
+    formula: "=TEXT(45383, \"ggge年m月d日\")"
+
+  - id: text_era_gge_reiwa
+    description: "GGE = abbreviated era + year (令6)"
+    formula: "=TEXT(45383, \"gge年m月d日\")"
+
+  - id: text_era_ge_reiwa
+    description: "GE = single-letter era + year (R6)"
+    formula: "=TEXT(45383, \"ge年m月d日\")"
+
+  - id: text_era_e_only
+    description: "Era year alone, no era prefix"
+    formula: "=TEXT(45383, \"e年m月d日\")"
+
+  # Heisei 31.4.30 — last day of Heisei (2019-04-30, serial 43585).
+  - id: text_era_ggge_heisei_last_day
+    description: "Boundary: 2019-04-30 = 平成31.4.30, last day of Heisei"
+    formula: "=TEXT(43585, \"ggge年m月d日\")"
+
+  # Reiwa 1.5.1 — first day of Reiwa (2019-05-01, serial 43586).
+  - id: text_era_ggge_reiwa_first_day
+    description: "Boundary: 2019-05-01 = 令和1.5.1 (commonly displayed as 元年)"
+    formula: "=TEXT(43586, \"ggge年m月d日\")"
+
+  # Showa 1.12.25 = 1926-12-25, serial 9856.
+  - id: text_era_ggge_showa_first_day
+    description: "Boundary: 1926-12-25 = 昭和1.12.25"
+    formula: "=TEXT(9856, \"ggge年m月d日\")"
+
+  # -- Japanese day-of-week (aaa / aaaa) ------------------------------------
+  - id: text_dow_aaa
+    description: "aaa = 1-char Japanese weekday (月/火/水/木/金/土/日)"
+    formula: "=TEXT(45383, \"aaa\")"
+
+  - id: text_dow_aaaa
+    description: "aaaa = full Japanese weekday (月曜日 / 火曜日 / ...)"
+    formula: "=TEXT(45383, \"aaaa\")"
+
+  - id: text_date_with_aaa
+    description: "Date concatenated with weekday in parens"
+    formula: "=TEXT(45383, \"yyyy/m/d (aaa)\")"
+
+  # -- DBNum (numeral system selector) -------------------------------------
+  - id: text_dbnum1
+    description: "DBNum1 = full-width / kanji numerals: 1234 -> 一千二百三十四"
+    formula: "=TEXT(1234, \"[DBNum1]0\")"
+
+  - id: text_dbnum2
+    description: "DBNum2 = formal / 大字 numerals: 1234 -> 壱阡弐百参拾四"
+    formula: "=TEXT(1234, \"[DBNum2]0\")"
+
+  - id: text_dbnum3
+    description: "DBNum3 = full-width Arabic: 1234 -> １２３４"
+    formula: "=TEXT(1234, \"[DBNum3]0\")"
+
+  - id: text_dbnum1_with_era
+    description: "DBNum1 + era + month/day in kanji"
+    formula: "=TEXT(45383, \"[DBNum1]ggge年m月d日\")"
+
+  # -- Fractions ------------------------------------------------------------
+  - id: text_fraction_single_digit
+    description: "0.5 -> '1/2'"
+    formula: "=TEXT(0.5, \"# ?/?\")"
+
+  - id: text_fraction_two_digit
+    description: "0.123 -> ' 23/187' or similar best two-digit fit"
+    formula: "=TEXT(0.123, \"# ??/??\")"
+
+  - id: text_fraction_with_integer
+    description: "1.5 -> '1 1/2'"
+    formula: "=TEXT(1.5, \"# ?/?\")"
+
+  - id: text_fraction_negative
+    description: "-1.5 -> '-1 1/2'"
+    formula: "=TEXT(-1.5, \"# ?/?\")"
+
+  # -- Multi-section formats -----------------------------------------------
+  - id: text_three_section_positive
+    description: "Three sections: pos;neg;zero — positive path"
+    formula: "=TEXT(42, \"#,##0;-#,##0;Zero\")"
+
+  # text_three_section_zero omitted — the literal 'Zero' contains a digit
+  # placeholder '0' that Excel parses as a format token, so the case
+  # measures Excel's digit-rendering inside a literal rather than the
+  # zero-section selection itself.
+
+  - id: text_four_section_text
+    description: "Four sections: pos;neg;zero;text — text path"
+    formula: "=TEXT(\"hello\", \"0;0;0;@!\")"
+
+  # -- Conditional brackets ------------------------------------------------
+  - id: text_conditional_gt_1000
+    description: "[>1000] threshold — 1500 hits the first arm"
+    formula: "=TEXT(1500, \"[>1000]#,##0\\K;0\")"
+
+  - id: text_conditional_gt_1000_below
+    description: "[>1000] threshold — 500 falls to the second arm"
+    formula: "=TEXT(500, \"[>1000]#,##0\\K;0\")"
+
+  # -- Currency / locale ----------------------------------------------------
+  - id: text_currency_jpy_locale
+    description: "[$JPY-411] forces ja-JP currency display"
+    formula: "=TEXT(1234567, \"[$JPY-411]#,##0\")"
+
+  - id: text_currency_yen_symbol
+    description: "Plain ¥ prefix"
+    formula: "=TEXT(1234567, \"¥#,##0\")"
+
+  - id: text_currency_with_negative
+    description: "Yen with parenthesised negative"
+    formula: "=TEXT(-1234567, \"¥#,##0;(¥#,##0)\")"
+
+  # -- Underscore (column-alignment) and asterisk (repeat) -----------------
+  - id: text_underscore_aligned_paren
+    description: "_)/( pair leaves a visible space-the-width-of-paren"
+    formula: "=TEXT(42, \"_(#,##0_)\")"
+
+  - id: text_asterisk_repeat_dash
+    description: "*- pads with dashes; renderer-specific, may collapse to single"
+    formula: "=TEXT(42, \"#,##0*-\")"
+
+  # -- am/pm Japanese forms ------------------------------------------------
+  - id: text_ampm_jp_morning
+    description: "8:30 morning with AM/PM = 午前/午後 in ja-JP"
+    formula: "=TEXT(0.354166666, \"h:mm AM/PM\")"
+
+  - id: text_ampm_jp_evening
+    description: "20:30 evening — should render PM / 午後"
+    formula: "=TEXT(0.854166666, \"h:mm AM/PM\")"
+
+  # -- Elapsed time variants -----------------------------------------------
+  - id: text_elapsed_hours_over_24
+    description: "[hh] elapsed hours — 1.5 days = 36h"
+    formula: "=TEXT(1.5, \"[hh]:mm\")"
+
+  - id: text_elapsed_minutes_over_60
+    description: "[mm] elapsed minutes — 0.5 day = 720 minutes"
+    formula: "=TEXT(0.5, \"[mm]\")"
+
+  # -- Backslash-escaped literal vs auto-recognised ------------------------
+  - id: text_backslash_escapes_d
+    description: "\\d should be a literal 'd' rather than the day-of-month token"
+    formula: "=TEXT(45383, \"yyyy\\d\\d\")"
+
+  # text_quote_block_literal omitted — yaml double-escape was leaking the
+  # backslash into the format string, so the case measured an authoring
+  # bug rather than Formulon's quoted-literal handling. Add back with a
+  # cleaner encoding once we have a yaml fixture for raw quoted blocks.
