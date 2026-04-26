@@ -185,13 +185,15 @@ bool record_matches_criterion_row(std::uint32_t r, std::uint32_t cr, const std::
 }
 
 // Returns `true` iff database row `r` satisfies AT LEAST ONE criterion
-// row of `criteria`. A criteria table with only a header row (no
-// criterion rows) matches every record — the outer disjunction over an
-// empty set of rows is Excel-documented to succeed for D-functions.
+// row of `criteria`. Callers must already have rejected criteria tables
+// with fewer than two rows (header + at least one criterion row); this
+// function therefore treats a header-only block as a no-match. Mac Excel
+// 365 surfaces `#VALUE!` for that shape — see the `crit_rows < 2U` guard
+// in `resolve_common()`.
 bool record_matches(std::uint32_t r, const std::vector<Value>& db_cells, std::uint32_t db_cols,
                     const std::vector<Value>& crit_cells, std::uint32_t crit_rows, std::uint32_t crit_cols) {
-  if (crit_rows <= 1U) {
-    return true;
+  if (crit_rows < 2U) {
+    return false;
   }
   for (std::uint32_t cr = 1; cr < crit_rows; ++cr) {
     if (record_matches_criterion_row(r, cr, db_cells, db_cols, crit_cells, crit_cols)) {
@@ -251,6 +253,15 @@ bool resolve_common(const parser::AstNode& call, Arena& arena, const FunctionReg
     return false;
   }
   if (!resolve_table_arg(call.as_call_arg(2), arena, registry, ctx, out_crit, out_crit_rows, out_crit_cols, out_err)) {
+    return false;
+  }
+  // Mac Excel 365 (16.108.1, ja-JP) rejects a criteria block that has
+  // only its header row with `#VALUE!`: the contract requires at least
+  // one criterion row beneath the headers. Mirror that here rather than
+  // silently treating "no criterion rows" as "match every record" — the
+  // latter would over-count records and silently drift from Excel.
+  if (*out_crit_rows < 2U) {
+    *out_err = Value::error(ErrorCode::Value);
     return false;
   }
   return true;

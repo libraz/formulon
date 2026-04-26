@@ -205,14 +205,16 @@ TEST(BuiltinsDatabase, DSumMultiRowOrCriterion) {
   EXPECT_DOUBLE_EQ(v.as_number(), 350.0);
 }
 
-TEST(BuiltinsDatabase, DSumCriteriaHeaderOnlyMatchesAllRecords) {
+TEST(BuiltinsDatabase, DSumCriteriaHeaderOnlyReturnsValueError) {
+  // Mac Excel 365 (16.108.1, ja-JP) rejects a criteria block with only a
+  // header row (no criterion rows beneath it) by surfacing #VALUE!. The
+  // shape is malformed: the contract requires at least one criterion row.
   Workbook wb = MakeFruitWorkbook();
   auto& s = wb.sheet(0);
   s.set_cell_value(0, 4, Value::text("Fruit"));
-  // Only a header, no criterion rows -> matches every record.
   const Value v = EvalIn("=DSUM(A1:C5, \"Sales\", E1:E1)", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 650.0);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsDatabase, DSumErrorCellsInDatabaseSilentlySkipped) {
@@ -247,9 +249,10 @@ TEST(BuiltinsDatabase, DCountCountsNumericOnly) {
   auto& s = wb.sheet(0);
   // Replace one Sales with text; it should NOT be counted by DCOUNT.
   s.set_cell_value(4, 2, Value::text("tbd"));
+  // Wildcard "*" matches every non-blank Fruit -> every data row.
   s.set_cell_value(0, 4, Value::text("Fruit"));
-  // Header-only criterion: matches every record.
-  const Value v = EvalIn("=DCOUNT(A1:C5, \"Sales\", E1:E1)", wb, wb.sheet(0));
+  s.set_cell_value(1, 4, Value::text("*"));
+  const Value v = EvalIn("=DCOUNT(A1:C5, \"Sales\", E1:E2)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
 }
@@ -269,8 +272,10 @@ TEST(BuiltinsDatabase, DCountSkipsBoolFieldCells) {
   // field column (matches SUM / COUNT's range-argument rule and IronCalc
   // oracle `DCOUNT_DCOUNTA B54`).
   s.set_cell_value(1, 2, Value::boolean(true));
+  // Wildcard "*" criterion matches every non-blank Fruit -> every record.
   s.set_cell_value(0, 4, Value::text("Fruit"));
-  const Value v = EvalIn("=DCOUNT(A1:C5, \"Sales\", E1:E1)", wb, wb.sheet(0));
+  s.set_cell_value(1, 4, Value::text("*"));
+  const Value v = EvalIn("=DCOUNT(A1:C5, \"Sales\", E1:E2)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
 }
@@ -280,8 +285,10 @@ TEST(BuiltinsDatabase, DCountAIncludesTextAndBool) {
   auto& s = wb.sheet(0);
   s.set_cell_value(1, 2, Value::text("pending"));
   s.set_cell_value(2, 2, Value::boolean(true));
+  // Wildcard "*" criterion matches every non-blank Fruit -> every record.
   s.set_cell_value(0, 4, Value::text("Fruit"));
-  const Value v = EvalIn("=DCOUNTA(A1:C5, \"Sales\", E1:E1)", wb, wb.sheet(0));
+  s.set_cell_value(1, 4, Value::text("*"));
+  const Value v = EvalIn("=DCOUNTA(A1:C5, \"Sales\", E1:E2)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   // All four data rows have a non-blank Sales cell.
   EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
@@ -291,8 +298,10 @@ TEST(BuiltinsDatabase, DCountACountsErrorCells) {
   Workbook wb = MakeFruitWorkbook();
   auto& s = wb.sheet(0);
   s.set_cell_value(2, 2, Value::error(ErrorCode::NA));
+  // Wildcard "*" criterion matches every non-blank Fruit -> every record.
   s.set_cell_value(0, 4, Value::text("Fruit"));
-  const Value v = EvalIn("=DCOUNTA(A1:C5, \"Sales\", E1:E1)", wb, wb.sheet(0));
+  s.set_cell_value(1, 4, Value::text("*"));
+  const Value v = EvalIn("=DCOUNTA(A1:C5, \"Sales\", E1:E2)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
 }
@@ -301,8 +310,10 @@ TEST(BuiltinsDatabase, DCountASkipsBlank) {
   Workbook wb = MakeFruitWorkbook();
   auto& s = wb.sheet(0);
   s.set_cell_value(3, 2, Value::blank());
+  // Wildcard "*" criterion matches every non-blank Fruit -> every record.
   s.set_cell_value(0, 4, Value::text("Fruit"));
-  const Value v = EvalIn("=DCOUNTA(A1:C5, \"Sales\", E1:E1)", wb, wb.sheet(0));
+  s.set_cell_value(1, 4, Value::text("*"));
+  const Value v = EvalIn("=DCOUNTA(A1:C5, \"Sales\", E1:E2)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
 }

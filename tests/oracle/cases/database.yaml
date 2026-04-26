@@ -391,3 +391,678 @@ cases:
       E1: Fruit
       E2: Pear
     formula: "=DGET(A1:C5, \"Sales\", E1:E2)"
+
+  # -- Wildcards in criteria ---------------------------------------------
+  - id: dsum_wildcard_substring_contains
+    description: "*App* contains-substring wildcard matches Apple/Apple -> 300"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: "*App*"
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dsum_wildcard_single_char
+    description: "?ear single-char wildcard matches Pear -> 50"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: "?ear"
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dsum_wildcard_literal_asterisk
+    description: "~* literal asterisk matches no fruit -> 0"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: "~*"
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dsum_wildcard_on_numeric_field
+    description: "Wildcard on numeric Sales column -> Excel typically does not match numbers"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Sales
+      E2: "*"
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E2)"
+
+  # -- Comparator criteria ------------------------------------------------
+  - id: dsum_not_equal_text
+    description: "<>Apple selects Pear+Banana -> 50+300"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: "<>Apple"
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dsum_not_equal_numeric
+    description: "<>100 on Sales selects 200+50+300"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Sales
+      E2: "<>100"
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dsum_or_same_column_ranged
+    description: "Sales >=200 OR Sales <100 -> 200+50+300 (multi-row OR on same column)"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Sales
+      E2: ">=200"
+      E3: "<100"
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E3)"
+
+  - id: dsum_explicit_equals_text
+    description: "=Apple explicit equals behaves like Apple -> 300"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: "=Apple"
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dsum_literal_zero_criterion
+    description: "0 matches numeric 0; nothing in fixture -> 0"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Sales
+      E2: 0
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E2)"
+
+  # -- Case sensitivity ---------------------------------------------------
+  - id: dsum_lowercase_apple
+    description: "Lowercase apple should match Apple/Apple in Excel (case-insensitive)"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: apple
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dsum_uppercase_apple
+    description: "Uppercase APPLE matches Apple/Apple (case-insensitive) -> 300"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: APPLE
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E2)"
+
+  # -- DGET error behaviour ----------------------------------------------
+  - id: dget_zero_matches_is_value
+    description: "DGET with 0 matching records -> #VALUE!"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Mango
+    formula: "=DGET(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dget_multi_match_is_num
+    description: "DGET with >1 matching records (Apple twice) -> #NUM!"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DGET(A1:C5, \"Sales\", E1:E2)"
+
+  # -- Field selector edge cases -----------------------------------------
+  - id: dsum_field_index_zero_is_value
+    description: "Field index 0 -> #VALUE!"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DSUM(A1:C5, 0, E1:E2)"
+
+  - id: dsum_field_index_out_of_range_is_value
+    description: "Field index 4 in a 3-column database -> #VALUE!"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DSUM(A1:C5, 4, E1:E2)"
+
+  - id: dsum_field_name_unknown_is_value
+    description: "Field name not in header -> #VALUE!"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DSUM(A1:C5, \"Price\", E1:E2)"
+
+  - id: dsum_field_name_case_insensitive
+    description: "Field name lowercase 'sales' should resolve to Sales -> 300"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DSUM(A1:C5, \"sales\", E1:E2)"
+
+  - id: dsum_field_as_cell_reference
+    description: "Field selected via cell reference C1 (= 'Sales') -> 300"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DSUM(A1:C5, C1, E1:E2)"
+
+  # -- Criteria block edge cases -----------------------------------------
+  - id: dsum_header_only_criteria_full_db
+    description: "Criteria block is just the header row -> matches all 4 records -> 650"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E1)"
+
+  - id: dsum_unknown_criteria_header
+    description: "Criterion header (Animal) not in database; behaviour to probe: #VALUE! or matches all"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Animal
+      E2: Cat
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E2)"
+
+  # -- Aggregation edge cases --------------------------------------------
+  - id: dsum_no_match_zero
+    description: "DSUM with no matching records -> 0"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Mango
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dmax_no_match_is_num_or_zero
+    description: "DMAX with no matching records: probe Mac Excel return (often 0)"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Mango
+    formula: "=DMAX(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dstdev_single_record_is_div0
+    description: "DSTDEV with exactly 1 record (Pear) -> #DIV/0! (sample SD undefined for n=1)"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Pear
+    formula: "=DSTDEV(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dproduct_no_match_zero
+    description: "DPRODUCT with no matching records -> 0 (Excel-quirk; mathematical empty product is 1)"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Mango
+    formula: "=DPRODUCT(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dcount_text_field_is_zero
+    description: "DCOUNT on Fruit (text column) -> 0 (DCOUNT only counts numeric)"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DCOUNT(A1:C5, \"Fruit\", E1:E2)"
+
+  # -- Numeric comparator on text field ----------------------------------
+  - id: dsum_numeric_comparator_on_text_field
+    description: ">=Apple comparator on text Fruit column; probe Excel coerce / order rule"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: ">=Apple"
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E2)"
+
+  # -- ja-JP specific ----------------------------------------------------
+  - id: dsum_full_width_comparator
+    description: "Full-width '>=１００' comparator on Sales; probe whether ja-JP Excel parses full-width digits"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Sales
+      E2: "＞=１００"
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E2)"
+
+  # -- Multi-criteria interaction (AND combined with OR) ------------------
+  - id: dsum_and_or_combined
+    description: "(Fruit=Apple AND Region=East) OR (Fruit=Pear) -> 100 + 50 = 150"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      F1: Region
+      E2: Apple
+      F2: East
+      E3: Pear
+    formula: "=DSUM(A1:C5, \"Sales\", E1:F3)"
+
+  - id: dsum_comparator_and_literal
+    description: "Sales>=100 AND Region=East -> Apple/East(100) + Pear/East(50) = 150"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Sales
+      F1: Region
+      E2: ">=100"
+      F2: East
+    formula: "=DSUM(A1:C5, \"Sales\", E1:F2)"
+
+  - id: dsum_wildcard_inside_comparator
+    description: ">=A* on Fruit; probe Excel: does it parse the wildcard inside a comparator?"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: ">=A*"
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E2)"
