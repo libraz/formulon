@@ -306,10 +306,41 @@ TEST(CriteriaMatchWildcard, EscapedQuestionIsLiteral) {
   EXPECT_FALSE(matches_criterion(Value::text("fooX"), c));
 }
 
-TEST(CriteriaMatchWildcard, EscapedTildeIsLiteral) {
+TEST(CriteriaMatchWildcard, MalformedTildeMatchesNothing) {
+  // Mac Excel 365 treats `~~` (and any other malformed escape) as an
+  // un-matchable pattern: `=COUNTIF(range, "~~")` returns 0 even when a
+  // cell holds a literal tilde. Excel's `~` only escapes `*` and `?`;
+  // every other use renders the entire criterion invalid. Verified via
+  // tests/oracle/cases/countif.yaml case `countif_tilde_escapes_tilde`.
   const ParsedCriterion c = parse_criterion(Value::text("~~"));
-  EXPECT_TRUE(matches_criterion(Value::text("~"), c));
+  EXPECT_TRUE(c.rhs_invalid_wildcard);
+  EXPECT_FALSE(matches_criterion(Value::text("~"), c));
   EXPECT_FALSE(matches_criterion(Value::text("~~"), c));
+  EXPECT_FALSE(matches_criterion(Value::text("anything"), c));
+  // The mirror NotEq matches every non-blank, non-error cell.
+  const ParsedCriterion neq = parse_criterion(Value::text("<>~~"));
+  EXPECT_TRUE(neq.rhs_invalid_wildcard);
+  EXPECT_TRUE(matches_criterion(Value::text("~"), neq));
+  EXPECT_TRUE(matches_criterion(Value::text("anything"), neq));
+}
+
+TEST(CriteriaMatchWildcard, TildeFollowedByNonMetaIsInvalid) {
+  // `~a` is malformed under the strict "tilde escapes only `*` or `?`"
+  // rule documented by Excel. Mac has only been probed for `~~` directly,
+  // but the consistent behaviour is to reject the entire pattern. Locked
+  // in here so future drift is caught by unit tests rather than the slower
+  // oracle pipeline. Note: SEARCH / FIND / MATCH still honour the lenient
+  // `wildcard_match` decoding (`~a` -> literal `a`) — this strictness
+  // applies only to the criteria layer used by COUNTIF / SUMIF / etc.
+  const ParsedCriterion c = parse_criterion(Value::text("~a"));
+  EXPECT_TRUE(c.rhs_invalid_wildcard);
+  EXPECT_FALSE(matches_criterion(Value::text("a"), c));
+  EXPECT_FALSE(matches_criterion(Value::text("~a"), c));
+  // A trailing bare `~` is likewise malformed.
+  const ParsedCriterion trailing = parse_criterion(Value::text("foo~"));
+  EXPECT_TRUE(trailing.rhs_invalid_wildcard);
+  EXPECT_FALSE(matches_criterion(Value::text("foo"), trailing));
+  EXPECT_FALSE(matches_criterion(Value::text("foo~"), trailing));
 }
 
 TEST(CriteriaMatchWildcard, NotEqWithWildcard) {
@@ -319,11 +350,17 @@ TEST(CriteriaMatchWildcard, NotEqWithWildcard) {
   EXPECT_TRUE(matches_criterion(Value::text("bar"), c));
 }
 
-TEST(CriteriaMatchWildcard, StarAloneMatchesEverythingNonBlank) {
+TEST(CriteriaMatchWildcard, StarAloneMatchesNonEmptyTextOnly) {
+  // Mac Excel 365 treats `=COUNTIF(range, "*")` as "match any non-empty
+  // text cell". An empty-text cell `Value::text("")` has no characters
+  // and is excluded; Number / Bool / Blank cells are likewise excluded
+  // (the text-only-cells rule already in place). Verified via
+  // tests/oracle/cases/countif.yaml case
+  // `countif_wildcard_star_alone_text_only`.
   const ParsedCriterion c = parse_criterion(Value::text("*"));
-  EXPECT_TRUE(matches_criterion(Value::text(""), c));
   EXPECT_TRUE(matches_criterion(Value::text("hello"), c));
-  // Blank cell doesn't hit the text path unless rhs_text is empty.
+  EXPECT_FALSE(matches_criterion(Value::text(""), c));
+  EXPECT_FALSE(matches_criterion(Value::number(10.0), c));
   EXPECT_FALSE(matches_criterion(Value::blank(), c));
 }
 

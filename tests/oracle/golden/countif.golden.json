@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T08:32:27Z"
+    "generated_at": "2026-04-26T08:44:33Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -288,7 +288,10 @@
           "value": "banana"
         }
       },
-      "skipped": "Excel COUNTIF \"*\" matches text cells only; Formulon also counts numeric cells. Real impl gap in criteria.cpp wildcard path."
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
     },
     {
       "id": "countif_wildcard_q_alone_single_char",
@@ -377,7 +380,10 @@
           "value": "~"
         }
       },
-      "skipped": "Mac Excel returns 0 for COUNTIF(\"~~\"); Formulon decodes ~~ as literal tilde. Excel ~~ behaviour is undocumented; aligning with Mac requires criteria.cpp tweak."
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
     },
     {
       "id": "countif_wildcard_escaped_star_middle",

@@ -129,6 +129,31 @@ bool scan_has_wildcard(std::string_view rhs) {
 
 namespace {
 
+// Scans `rhs` for a `~` that does not escape `*` or `?` (the only two
+// metacharacters Excel's wildcard dialect documents). Used by
+// `parse_criterion` to flag malformed criteria that Mac Excel 365 rejects
+// outright: e.g. `COUNTIF(range, "~~")` returns 0 even when a cell holds
+// a literal `~`. Reports `true` when the pattern contains an invalid
+// tilde-escape anywhere.
+bool scan_has_invalid_wildcard_escape(std::string_view rhs) {
+  for (std::size_t i = 0; i < rhs.size(); ++i) {
+    if (rhs[i] != '~') {
+      continue;
+    }
+    // Trailing `~` with nothing after it is also malformed under the
+    // strict "tilde escapes only `*` or `?`" rule.
+    if (i + 1 >= rhs.size()) {
+      return true;
+    }
+    const char next = rhs[i + 1];
+    if (next != '*' && next != '?') {
+      return true;
+    }
+    ++i;  // Skip the well-formed escape pair.
+  }
+  return false;
+}
+
 // Core two-pointer wildcard matcher. When `prefix_match_ok` is false the
 // pattern must consume `text` exactly (SEARCH whole-string / criteria
 // equality semantics). When `prefix_match_ok` is true the match succeeds
@@ -274,6 +299,7 @@ ParsedCriterion::ParsedCriterion(const ParsedCriterion& other)
       rhs_is_error(other.rhs_is_error),
       rhs_error_code(other.rhs_error_code),
       prefix_match(other.prefix_match),
+      rhs_invalid_wildcard(other.rhs_invalid_wildcard),
       rhs_storage(other.rhs_storage),
       rhs_text_owns_storage_(other.rhs_text_owns_storage_) {
   if (rhs_text_owns_storage_) {
@@ -291,6 +317,7 @@ ParsedCriterion::ParsedCriterion(ParsedCriterion&& other) noexcept
       rhs_is_error(other.rhs_is_error),
       rhs_error_code(other.rhs_error_code),
       prefix_match(other.prefix_match),
+      rhs_invalid_wildcard(other.rhs_invalid_wildcard),
       rhs_storage(std::move(other.rhs_storage)),
       rhs_text_owns_storage_(other.rhs_text_owns_storage_) {
   if (rhs_text_owns_storage_) {
@@ -308,6 +335,7 @@ ParsedCriterion& ParsedCriterion::operator=(const ParsedCriterion& other) {
     rhs_is_error = other.rhs_is_error;
     rhs_error_code = other.rhs_error_code;
     prefix_match = other.prefix_match;
+    rhs_invalid_wildcard = other.rhs_invalid_wildcard;
     rhs_storage = other.rhs_storage;
     rhs_text_owns_storage_ = other.rhs_text_owns_storage_;
     rhs_text = rhs_text_owns_storage_ ? std::string_view(rhs_storage) : other.rhs_text;
@@ -325,6 +353,7 @@ ParsedCriterion& ParsedCriterion::operator=(ParsedCriterion&& other) noexcept {
     rhs_is_error = other.rhs_is_error;
     rhs_error_code = other.rhs_error_code;
     prefix_match = other.prefix_match;
+    rhs_invalid_wildcard = other.rhs_invalid_wildcard;
     rhs_storage = std::move(other.rhs_storage);
     rhs_text_owns_storage_ = other.rhs_text_owns_storage_;
     rhs_text = rhs_text_owns_storage_ ? std::string_view(rhs_storage) : other.rhs_text;
@@ -411,6 +440,16 @@ ParsedCriterion parse_criterion(const Value& criterion) {
       }
       parsed.has_wildcard =
           (parsed.op == CriteriaOp::Eq || parsed.op == CriteriaOp::NotEq) && scan_has_wildcard(parsed.rhs_text);
+      // Excel's wildcard dialect only documents `~` as the escape for `*`
+      // and `?`. Any other use (most notably `~~`, but also `~a`, trailing
+      // `~`, etc.) is treated by Mac Excel 365 as a malformed pattern that
+      // matches nothing — `COUNTIF(range, "~~")` returns 0 even when a
+      // cell holds a literal `~`. Flag the criterion here so the matcher
+      // can short-circuit on Eq / NotEq.
+      if ((parsed.op == CriteriaOp::Eq || parsed.op == CriteriaOp::NotEq) &&
+          scan_has_invalid_wildcard_escape(parsed.rhs_text)) {
+        parsed.rhs_invalid_wildcard = true;
+      }
       return parsed;
     }
     case ValueKind::Error: {
@@ -522,6 +561,16 @@ bool matches_text(const Value& cell, const ParsedCriterion& c) {
         if (cell.kind() != ValueKind::Text) {
           return false;
         }
+        // Mac Excel additionally excludes empty-text cells from any
+        // wildcard pattern: `=COUNTIF(range, "*")` matches text cells with
+        // non-empty content but skips a cell holding the empty string `""`.
+        // Verified via tests/oracle/cases/countif.yaml case
+        // `countif_wildcard_star_alone_text_only` (Mac=2 over `[apple, "",
+        // 10, banana]`). This is the criteria-layer counterpart to the
+        // text-only-cells rule above.
+        if (cell_text.empty()) {
+          return false;
+        }
         return wildcard_match(rhs, cell_text);
       }
       const std::string literal = unescape_literal(rhs);
@@ -542,6 +591,11 @@ bool matches_text(const Value& cell, const ParsedCriterion& c) {
         // wildcard text pattern, so `<>12*` against a Number cell is
         // trivially true.
         if (cell.kind() != ValueKind::Text) {
+          return true;
+        }
+        // Empty-text cells never satisfy a wildcard equality pattern (see
+        // the Eq branch above), so they always satisfy the NotEq mirror.
+        if (cell_text.empty()) {
           return true;
         }
         return !wildcard_match(rhs, cell_text);
@@ -660,6 +714,16 @@ bool matches_criterion(const Value& cell, const ParsedCriterion& c) {
   // unequal to any concrete value, so it matches NotEq and fails every
   // other comparator.
   if (cell.is_error()) {
+    return c.op == CriteriaOp::NotEq;
+  }
+
+  // Malformed wildcard RHS (e.g. `"~~"`) — Mac Excel returns 0 for
+  // `COUNTIF(range, "~~")` even on a cell holding a literal `~`. Treat
+  // the entire pattern as un-matchable: `Op::Eq` matches nothing, and the
+  // mirror `Op::NotEq` matches every (non-blank, non-error) cell. The
+  // `rhs_invalid_wildcard` flag is set only for Eq / NotEq, so other ops
+  // are unreachable here.
+  if (c.rhs_invalid_wildcard) {
     return c.op == CriteriaOp::NotEq;
   }
 

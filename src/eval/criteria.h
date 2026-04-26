@@ -91,6 +91,13 @@ struct ParsedCriterion {
   /// `Op::NotEq` it negates the prefix test. Never set by the ordinary
   /// `parse_criterion` used for `COUNTIF` / `SUMIF` / `AVERAGEIF`.
   bool prefix_match = false;
+  /// True when the RHS pattern is structurally invalid as an Excel wildcard
+  /// criterion and therefore matches no cells (Mac Excel 365 returns 0 for
+  /// `COUNTIF(range, "~~")` even when a cell holds a literal `~`). Excel's
+  /// `~` only escapes `*` and `?`; any other use renders the entire
+  /// pattern malformed, with `Op::Eq` matching nothing and `Op::NotEq`
+  /// matching everything (modulo blanks / errors handled upstream).
+  bool rhs_invalid_wildcard = false;
 
   // `rhs_text` may alias `rhs_storage` (owning) or the caller-provided
   // `Value::text` view (non-owning). When `rhs_storage` holds the buffer,

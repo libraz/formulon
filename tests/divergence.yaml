@@ -250,30 +250,6 @@ entries:
     prefer: formulon
     first_noted: 2026-04-26
 
-  # -- COUNTIF "*" against numeric cells -----------------------------------
-  # Mac Excel COUNTIF(range, "*") matches text cells only and excludes
-  # number cells. Formulon currently treats "*" as "any non-blank value"
-  # and counts numeric cells, returning 3 where Mac returns 2.
-  - id: countif_wildcard_star_alone_text_only
-    mode: skip-oracle
-    reason: "Excel COUNTIF \"*\" matches text cells only; Formulon also counts numeric cells. Real impl gap in criteria.cpp wildcard path."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
-
-  # -- COUNTIF "~~" tilde-only criterion -----------------------------------
-  # Mac Excel returns 0 for COUNTIF(range, "~~") even when a cell holds a
-  # literal tilde "~". Excel docs only define ~ as the escape for * and ?;
-  # ~~ has no documented meaning and Mac yields 0 (likely treats the
-  # criterion as a malformed wildcard pattern). Formulon treats ~~ as a
-  # literal tilde and matches the "~" cell, returning 1.
-  - id: countif_tilde_escapes_tilde
-    mode: skip-oracle
-    reason: "Mac Excel returns 0 for COUNTIF(\"~~\"); Formulon decodes ~~ as literal tilde. Excel ~~ behaviour is undocumented; aligning with Mac requires criteria.cpp tweak."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
-
   # -- COUNTIF katakana vs hiragana folding (ja-JP) ------------------------
   # Mac Excel ja-JP equates katakana and hiragana of the same word in
   # COUNTIF text equality (returns 3 for the criterion アップル against
