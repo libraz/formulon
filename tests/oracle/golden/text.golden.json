@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T09:34:15Z"
+    "generated_at": "2026-04-26T11:45:09Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -1080,7 +1080,10 @@
       "id": "searchb_question_wildcard_in_kanji",
       "formula": "=SEARCHB(\"?\", \"漢ABC\")",
       "setup": {},
-      "skipped": "SEARCHB's '?' wildcard in Mac Excel ja-JP matches a single SBCS byte rather than a UTF-8 codepoint, so =SEARCHB(\"?\",\"漢ABC\") returns 3 (the 'A' position) because '?' refuses to match the 2-byte kanji. Formulon's wildcard_find treats '?' uniformly as one codepoint (returning 1) and is shared with SEARCH; mirroring Mac would require a byte-mode wildcard matcher dedicated to SEARCHB."
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
     },
     {
       "id": "searchb_star_wildcard_default",

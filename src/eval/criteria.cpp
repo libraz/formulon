@@ -11,6 +11,7 @@
 
 #include "eval/coerce.h"
 #include "eval/date_text_parse.h"
+#include "eval/utf8_length.h"
 #include "utils/strings.h"
 #include "value.h"
 
@@ -191,8 +192,54 @@ std::size_t utf8_codepoint_bytes(std::string_view text, std::size_t i) {
   return len;
 }
 
+// Decodes a single UTF-8 codepoint at `text[i]`, mirroring the lenient
+// broken-UTF-8 handling of `utf8_codepoint_bytes`: a malformed leading byte
+// returns U+FFFD with `*out_bytes == 1`, and a bad continuation likewise
+// returns U+FFFD over the byte range we tentatively consumed. Used by the
+// byte-mode `?` branch of the wildcard matcher.
+std::uint32_t decode_utf8_codepoint(std::string_view text, std::size_t i, std::size_t* out_bytes) {
+  if (i >= text.size()) {
+    *out_bytes = 0;
+    return 0xFFFDu;
+  }
+  const auto lead = static_cast<unsigned char>(text[i]);
+  if ((lead & 0x80u) == 0x00u) {
+    *out_bytes = 1;
+    return lead;
+  }
+  std::size_t need = 0;
+  std::uint32_t value = 0;
+  if ((lead & 0xE0u) == 0xC0u) {
+    need = 1;
+    value = lead & 0x1Fu;
+  } else if ((lead & 0xF0u) == 0xE0u) {
+    need = 2;
+    value = lead & 0x0Fu;
+  } else if ((lead & 0xF8u) == 0xF0u) {
+    need = 3;
+    value = lead & 0x07u;
+  } else {
+    *out_bytes = 1;
+    return 0xFFFDu;
+  }
+  if (i + need >= text.size()) {
+    *out_bytes = 1;
+    return 0xFFFDu;
+  }
+  for (std::size_t k = 0; k < need; ++k) {
+    const auto ck = static_cast<unsigned char>(text[i + 1 + k]);
+    if ((ck & 0xC0u) != 0x80u) {
+      *out_bytes = 1;
+      return 0xFFFDu;
+    }
+    value = (value << 6) | (ck & 0x3Fu);
+  }
+  *out_bytes = need + 1;
+  return value;
+}
+
 bool wildcard_match_impl(std::string_view pattern, std::string_view text, bool prefix_match_ok,
-                         std::size_t* out_consumed) {
+                         std::size_t* out_consumed, bool question_is_byte = false) {
   std::size_t pi = 0;
   std::size_t ti = 0;
   std::size_t star_pi = std::string_view::npos;
@@ -230,13 +277,29 @@ bool wildcard_match_impl(std::string_view pattern, std::string_view text, bool p
         ++pi;
         continue;
       } else if (pc == '?') {
-        // `?` matches exactly one UTF-8 code point (1-4 bytes) rather
-        // than a single byte, so multibyte scripts (CJK, emoji, combining
-        // marks treated as atomic) match as Excel users would expect.
-        const std::size_t cp_bytes = utf8_codepoint_bytes(text, ti);
-        ++pi;
-        ti += cp_bytes;
-        continue;
+        if (question_is_byte) {
+          // SEARCHB byte-mode `?`: the pattern character matches only a
+          // codepoint whose ja-JP DBCS cost is 1 (ASCII or half-width
+          // katakana). Anything wider (kanji, hiragana, full-width, emoji)
+          // refuses to match here, falling through to the `*`-backtrack /
+          // failure path below.
+          std::size_t cp_bytes = 0;
+          const std::uint32_t cp = decode_utf8_codepoint(text, ti, &cp_bytes);
+          if (byte_count_jajp(cp) == 1) {
+            ++pi;
+            ti += cp_bytes;
+            continue;
+          }
+        } else {
+          // Default mode: `?` matches exactly one UTF-8 code point (1-4
+          // bytes) rather than a single byte, so multibyte scripts (CJK,
+          // emoji, combining marks treated as atomic) match as Excel users
+          // would expect.
+          const std::size_t cp_bytes = utf8_codepoint_bytes(text, ti);
+          ++pi;
+          ti += cp_bytes;
+          continue;
+        }
       } else if (strings::ascii_to_lower(pc) == strings::ascii_to_lower(text[ti])) {
         ++pi;
         ++ti;
@@ -272,7 +335,8 @@ bool wildcard_match_impl(std::string_view pattern, std::string_view text, bool p
 }  // namespace
 
 bool wildcard_match(std::string_view pattern, std::string_view text) {
-  return wildcard_match_impl(pattern, text, /*prefix_match_ok=*/false, /*out_consumed=*/nullptr);
+  return wildcard_match_impl(pattern, text, /*prefix_match_ok=*/false, /*out_consumed=*/nullptr,
+                             /*question_is_byte=*/false);
 }
 
 std::size_t wildcard_find(std::string_view pattern, std::string_view text) {
@@ -282,9 +346,30 @@ std::size_t wildcard_find(std::string_view pattern, std::string_view text) {
   // case (it would find offset 0 on the first iteration).
   for (std::size_t start = 0; start <= text.size(); ++start) {
     if (wildcard_match_impl(pattern, text.substr(start), /*prefix_match_ok=*/true,
-                            /*out_consumed=*/nullptr)) {
+                            /*out_consumed=*/nullptr, /*question_is_byte=*/false)) {
       return start;
     }
+  }
+  return std::string_view::npos;
+}
+
+std::size_t wildcard_find_dbcs(std::string_view pattern, std::string_view text) {
+  // Iterate start positions over codepoint boundaries (not byte-by-byte) so
+  // the returned offset is always codepoint-aligned. SEARCHB looks the
+  // offset up against `build_dbcs_char_map`'s `byte_offset` records via
+  // direct equality; a misaligned offset would silently route into the
+  // defensive `total_dbcs + 1` fallback.
+  std::size_t start = 0;
+  while (start <= text.size()) {
+    if (wildcard_match_impl(pattern, text.substr(start), /*prefix_match_ok=*/true,
+                            /*out_consumed=*/nullptr, /*question_is_byte=*/true)) {
+      return start;
+    }
+    if (start == text.size()) {
+      break;
+    }
+    const std::size_t step = utf8_codepoint_bytes(text, start);
+    start += (step == 0 ? 1 : step);
   }
   return std::string_view::npos;
 }
@@ -648,8 +733,7 @@ bool matches_numeric(const Value& cell, const ParsedCriterion& c) {
   //     bool criterion's Eq).
   //   * Cross-kind cell for ordering ops: no match (Excel does not
   //     implicitly coerce across kinds for ordering).
-  const ValueKind required_kind =
-      c.rhs_from_bool ? ValueKind::Bool : ValueKind::Number;
+  const ValueKind required_kind = c.rhs_from_bool ? ValueKind::Bool : ValueKind::Number;
   if (cell.kind() != required_kind) {
     if (c.op == CriteriaOp::NotEq) {
       return true;
@@ -673,9 +757,7 @@ bool matches_numeric(const Value& cell, const ParsedCriterion& c) {
     }
     return false;
   }
-  const double x = (required_kind == ValueKind::Bool)
-                       ? (cell.as_boolean() ? 1.0 : 0.0)
-                       : cell.as_number();
+  const double x = (required_kind == ValueKind::Bool) ? (cell.as_boolean() ? 1.0 : 0.0) : cell.as_number();
   const double y = c.rhs_number;
   switch (c.op) {
     case CriteriaOp::Eq:

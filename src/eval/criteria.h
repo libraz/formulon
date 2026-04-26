@@ -218,6 +218,19 @@ bool scan_has_wildcard(std::string_view rhs);
 /// `text`.
 std::size_t wildcard_find(std::string_view pattern, std::string_view text);
 
+/// Same contract as `wildcard_find`, but `?` matches only a single
+/// SBCS-byte codepoint under the ja-JP DBCS rule (`byte_count_jajp(cp)
+/// == 1`): ASCII and half-width katakana match, every other codepoint
+/// (kanji, hiragana, full-width punctuation, emoji) refuses to match.
+/// `*`, `~?`, `~*`, and literal characters retain their normal
+/// semantics. Used exclusively by SEARCHB to mirror Mac Excel 365's
+/// byte-oriented wildcard dialect.
+///
+/// The returned offset is always aligned to a UTF-8 codepoint boundary in
+/// `text`, so callers translating the offset to a DBCS position (via
+/// `build_dbcs_char_map`) can use direct equality on `byte_offset`.
+std::size_t wildcard_find_dbcs(std::string_view pattern, std::string_view text);
+
 }  // namespace eval
 }  // namespace formulon
 

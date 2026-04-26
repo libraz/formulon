@@ -113,8 +113,11 @@ Value SearchB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!has_metachar) {
     match_byte = lowered_haystack.find(lowered_needle, start_byte);
   } else {
+    // SEARCHB uses byte-mode `?` (matches only SBCS codepoints under the
+    // ja-JP DBCS rule) so `=SEARCHB("?","漢ABC")` skips the kanji and
+    // lands on the 'A' (Mac Excel 365 parity).
     const std::string_view suffix = std::string_view(lowered_haystack).substr(start_byte);
-    const std::size_t rel = wildcard_find(lowered_needle, suffix);
+    const std::size_t rel = wildcard_find_dbcs(lowered_needle, suffix);
     if (rel != std::string_view::npos) {
       match_byte = start_byte + rel;
     }
