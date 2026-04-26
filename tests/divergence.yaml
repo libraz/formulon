@@ -250,31 +250,6 @@ entries:
     prefer: formulon
     first_noted: 2026-04-26
 
-  # -- COUNTIF katakana vs hiragana folding (ja-JP) ------------------------
-  # Mac Excel ja-JP equates katakana and hiragana of the same word in
-  # COUNTIF text equality (returns 3 for the criterion アップル against
-  # ['アップル', 'あっぷる', 'アップル']). Formulon performs strict
-  # codepoint comparison and returns 2.
-  - id: countif_jp_katakana_vs_hiragana
-    mode: skip-oracle
-    reason: "Mac Excel ja-JP folds katakana and hiragana for COUNTIF equality; Formulon does strict codepoint compare. Adding kana folding to criteria.cpp matcher is a deeper change."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
-
-  # -- COUNTIF full-width asterisk treated as half-width -------------------
-  # Mac Excel ja-JP folds full-width '＊' (U+FF0A) onto half-width '*' for
-  # criterion equality, so COUNTIF(range, "＊") matches both '＊' and '*'
-  # cells (returns 2). Formulon does strict codepoint compare and matches
-  # only the '＊' cell (returns 1). Same family of full-width folding as
-  # the existing dsum_full_width_comparator probe.
-  - id: countif_fullwidth_star_literal
-    mode: skip-oracle
-    reason: "Mac Excel ja-JP folds full-width ＊ onto half-width * in COUNTIF equality; Formulon does strict compare. Same gap as full-width comparator handling in criteria.cpp."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
-
   # -- BESSELI: Formulon more accurate than Excel's A&S 9.8.1/9.8.2 -------
   # Excel's BESSELI uses the Abramowitz & Stegun rational polynomial
   # approximations (rated |epsilon| < ~1.9e-7) for I_n(x). Formulon's

@@ -1,0 +1,403 @@
+{
+  "suite": "countif_kana_folding_probes",
+  "description": "Mac Excel ja-JP COUNTIF text-equality folds certain Japanese character classes onto a canonical form before comparing. The two existing divergences (countif_jp_katakana_vs_hiragana, countif_fullwidth_star_literal) pin two specific behaviours but do not delineate the full extent of the folding. These probes map out the boundaries — hiragana/katakana, half-width/full-width katakana, full-width punctuation, full-width digits, voiced-mark normalisation — before designing the criteria.cpp matcher fix.\n",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-26T21:07:16Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "countif_kana_hira_eq_kata_simple",
+      "formula": "=COUNTIF(A1:A3, \"あ\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "あ"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ア"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "い"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_kana_kata_eq_hira_simple",
+      "formula": "=COUNTIF(A1:A3, \"ア\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "あ"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ア"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "い"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_kana_word_with_sokuon",
+      "formula": "=COUNTIF(A1:A3, \"アップル\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "アップル"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "あっぷる"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "アップル"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "countif_kana_voiced_mark",
+      "formula": "=COUNTIF(A1:A3, \"が\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "が"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ガ"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "か"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_kana_handakuten",
+      "formula": "=COUNTIF(A1:A3, \"ぱ\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ぱ"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "パ"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ば"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_kana_long_mark_passthrough",
+      "formula": "=COUNTIF(A1:A3, \"ベー\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ベー"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "べー"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ベ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_kana_halfwidth_eq_fullwidth",
+      "formula": "=COUNTIF(A1:A3, \"ｱ\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ｱ"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ア"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "イ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_kana_halfwidth_eq_hiragana",
+      "formula": "=COUNTIF(A1:A3, \"ｱ\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ｱ"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "あ"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "い"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_kana_halfwidth_voiced",
+      "formula": "=COUNTIF(A1:A3, \"ｶﾞ\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ｶﾞ"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ガ"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "カ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_kana_fullwidth_star_as_wildcard",
+      "formula": "=COUNTIF(A1:A3, \"＊\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "＊"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "*"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_kana_fullwidth_question_as_wildcard",
+      "formula": "=COUNTIF(A1:A3, \"？\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "？"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "countif_kana_fullwidth_tilde_escape",
+      "formula": "=COUNTIF(A1:A3, \"～＊\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "＊"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "*"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "countif_kana_fullwidth_at_literal",
+      "formula": "=COUNTIF(A1:A3, \"＠\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "＠"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "@"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_kana_fullwidth_digits",
+      "formula": "=COUNTIF(A1:A3, \"１２３\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "１２３"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "123"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_kana_fullwidth_latin",
+      "formula": "=COUNTIF(A1:A3, \"ＡＢＣ\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ＡＢＣ"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ABC"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "xyz"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_kana_fullwidth_space",
+      "formula": "=COUNTIF(A1:A3, \"a　b\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a　b"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a b"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ab"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "sumif_kana_hira_eq_kata",
+      "formula": "=SUMIF(A1:A3, \"あ\", B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "あ"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ア"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "い"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    }
+  ]
+}

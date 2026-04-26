@@ -660,7 +660,10 @@
           "value": "アップル"
         }
       },
-      "skipped": "Mac Excel ja-JP folds katakana and hiragana for COUNTIF equality; Formulon does strict codepoint compare. Adding kana folding to criteria.cpp matcher is a deeper change."
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
     },
     {
       "id": "countif_fullwidth_gt_digits",
@@ -701,7 +704,10 @@
           "value": "abc"
         }
       },
-      "skipped": "Mac Excel ja-JP folds full-width ＊ onto half-width * in COUNTIF equality; Formulon does strict compare. Same gap as full-width comparator handling in criteria.cpp."
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
     },
     {
       "id": "countif_hiragana_wildcard_prefix",

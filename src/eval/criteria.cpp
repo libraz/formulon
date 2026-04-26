@@ -11,6 +11,7 @@
 
 #include "eval/coerce.h"
 #include "eval/date_text_parse.h"
+#include "eval/jp_fold.h"
 #include "eval/utf8_length.h"
 #include "utils/strings.h"
 #include "value.h"
@@ -634,6 +635,16 @@ bool matches_text(const Value& cell, const ParsedCriterion& c) {
   const std::string& cell_text = cell_text_exp.value();
   const std::string_view rhs = c.rhs_text;
 
+  // Mac Excel ja-JP folds Japanese variants (hiragana<->katakana,
+  // half<->full-width katakana, full<->half-width ASCII, ideographic
+  // space) to a canonical form before COUNTIF / SUMIF / AVERAGEIF text
+  // equality compares. Apply once to the cell projection here; per-branch
+  // sites fold the RHS as needed. Wildcard detection on the criterion
+  // happened earlier on the original raw RHS, so a full-width ＊ stays
+  // un-flagged and folds to a literal `*` byte for comparison rather than
+  // gaining wildcard semantics.
+  const std::string cell_folded = fold_jp_text(cell_text);
+
   switch (c.op) {
     case CriteriaOp::Eq: {
       if (c.has_wildcard) {
@@ -656,19 +667,20 @@ bool matches_text(const Value& cell, const ParsedCriterion& c) {
         if (cell_text.empty()) {
           return false;
         }
-        return wildcard_match(rhs, cell_text);
+        const std::string rhs_folded = fold_jp_text(rhs);
+        return wildcard_match(rhs_folded, cell_folded);
       }
-      const std::string literal = unescape_literal(rhs);
+      const std::string literal = fold_jp_text(unescape_literal(rhs));
       if (c.prefix_match) {
         // D-function "begins-with" semantics: cell text starts with
         // the literal (case-insensitive ASCII). Per Excel docs, the
         // plain-text criterion "Sm" matches "Smith" and "Smithfield".
-        if (cell_text.size() < literal.size()) {
+        if (cell_folded.size() < literal.size()) {
           return false;
         }
-        return strings::case_insensitive_eq(std::string_view(cell_text).substr(0, literal.size()), literal);
+        return strings::case_insensitive_eq(std::string_view(cell_folded).substr(0, literal.size()), literal);
       }
-      return strings::case_insensitive_eq(cell_text, literal);
+      return strings::case_insensitive_eq(cell_folded, literal);
     }
     case CriteriaOp::NotEq: {
       if (c.has_wildcard) {
@@ -683,9 +695,10 @@ bool matches_text(const Value& cell, const ParsedCriterion& c) {
         if (cell_text.empty()) {
           return true;
         }
-        return !wildcard_match(rhs, cell_text);
+        const std::string rhs_folded = fold_jp_text(rhs);
+        return !wildcard_match(rhs_folded, cell_folded);
       }
-      const std::string literal = unescape_literal(rhs);
+      const std::string literal = fold_jp_text(unescape_literal(rhs));
       if (c.prefix_match) {
         // D-function "does-NOT-begin-with" semantics: negation of the
         // prefix test. Reachable only via `parse_criterion_dfunc`, and
@@ -694,21 +707,22 @@ bool matches_text(const Value& cell, const ParsedCriterion& c) {
         // Note: the current `parse_criterion_dfunc` never sets
         // `prefix_match` for `Op::NotEq`, so this branch is reserved for
         // future parity should Excel document a different behaviour.
-        if (cell_text.size() < literal.size()) {
+        if (cell_folded.size() < literal.size()) {
           return true;
         }
-        return !strings::case_insensitive_eq(std::string_view(cell_text).substr(0, literal.size()), literal);
+        return !strings::case_insensitive_eq(std::string_view(cell_folded).substr(0, literal.size()), literal);
       }
-      return !strings::case_insensitive_eq(cell_text, literal);
+      return !strings::case_insensitive_eq(cell_folded, literal);
     }
     case CriteriaOp::Lt:
     case CriteriaOp::LtEq:
     case CriteriaOp::Gt:
     case CriteriaOp::GtEq: {
       // Wildcards in ordering ops are literal — Excel does not interpret
-      // `*`/`?` for comparison. Pass the raw RHS view through the
-      // case-insensitive compare.
-      const int cmp = strings::case_insensitive_compare(cell_text, rhs);
+      // `*`/`?` for comparison. Fold both sides for ja-JP parity, then
+      // pass through the case-insensitive compare.
+      const std::string rhs_folded = fold_jp_text(rhs);
+      const int cmp = strings::case_insensitive_compare(cell_folded, rhs_folded);
       return apply_ordering(c.op, cmp);
     }
   }
