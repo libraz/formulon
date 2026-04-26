@@ -320,9 +320,15 @@ static Value Mode(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return Value::number(best_value);
 }
 
-// LARGE(array, k) - k-th largest numeric. k is truncated toward zero; any
-// fractional part is discarded. k must be in [1, numeric_count], else
-// `#NUM!`. An empty numeric slice trivially fails the upper bound.
+// LARGE(array, k) - k-th largest numeric. Implemented as the SMALL dual:
+// `LARGE(arr, k) == SMALL(arr, N + 1 - k)` with TRUNC indexing on the
+// derived position. The bounds check is performed on the *raw* k, not on
+// the truncated index: Mac Excel 365 rejects `LARGE({10;20;30}, 0.5)`
+// with `#NUM!` even though `TRUNC(N + 1 - 0.5) = 3` would land in range
+// (probe `large_k_below_one_fractional`). Conversely
+// `LARGE({10;20;30}, 1.9)` succeeds because raw k=1.9 satisfies
+// `1 <= k <= N` and `TRUNC(N + 1 - 1.9) = TRUNC(2.1) = 2`, picking the
+// second-largest element (probe `large_k_fractional_truncates`).
 //
 // Direct scalar Text / Bool arguments coerce through `collect_small_large`
 // (Bool -> 1 / 0, Text -> strict numeric coercion with #VALUE! on failure).
@@ -334,39 +340,48 @@ static Value Large(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!k_raw) {
     return Value::error(k_raw.error());
   }
-  const double k_floor = std::floor(k_raw.value());
+  const double k = k_raw.value();
   auto xs_e = collect_small_large(args, data_count);
   if (!xs_e) {
     return Value::error(xs_e.error());
   }
   std::vector<double>& xs = xs_e.value();
-  if (xs.empty() || k_floor < 1.0 || k_floor > static_cast<double>(xs.size())) {
+  const auto n = static_cast<double>(xs.size());
+  if (xs.empty() || k < 1.0 || k > n) {
     return Value::error(ErrorCode::Num);
   }
   std::sort(xs.begin(), xs.end());
-  const auto k = static_cast<std::size_t>(k_floor);
-  return Value::number(xs[xs.size() - k]);
+  const double idx_d = std::trunc(n + 1.0 - k);
+  const auto idx = static_cast<std::size_t>(idx_d);
+  return Value::number(xs[idx - 1u]);
 }
 
-// SMALL(array, k) - k-th smallest numeric. Same rules as LARGE.
+// SMALL(array, k) - k-th smallest numeric. Same shape as LARGE: k is
+// truncated toward zero for indexing, but the bounds check uses the
+// *raw* k. Mac Excel 365 rejects `SMALL({10;20;30}, 3.0001)` with
+// `#NUM!` even though `TRUNC(3.0001) = 3` would land in range (probe
+// `small_k_above_n_fractional`). `SMALL({10;20;30}, 2.999)` succeeds
+// because raw k=2.999 is within `[1, N]` and `TRUNC(2.999) = 2`.
 static Value Small(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const std::uint32_t data_count = arity - 1u;
   auto k_raw = read_kth_arg(args[arity - 1u]);
   if (!k_raw) {
     return Value::error(k_raw.error());
   }
-  const double k_floor = std::floor(k_raw.value());
+  const double k = k_raw.value();
   auto xs_e = collect_small_large(args, data_count);
   if (!xs_e) {
     return Value::error(xs_e.error());
   }
   std::vector<double>& xs = xs_e.value();
-  if (xs.empty() || k_floor < 1.0 || k_floor > static_cast<double>(xs.size())) {
+  const auto n = static_cast<double>(xs.size());
+  if (xs.empty() || k < 1.0 || k > n) {
     return Value::error(ErrorCode::Num);
   }
   std::sort(xs.begin(), xs.end());
-  const auto k = static_cast<std::size_t>(k_floor);
-  return Value::number(xs[k - 1u]);
+  const double idx_d = std::trunc(k);
+  const auto idx = static_cast<std::size_t>(idx_d);
+  return Value::number(xs[idx - 1u]);
 }
 
 // PERCENTILE.INC(array, k) / PERCENTILE(array, k) - linear-interpolation

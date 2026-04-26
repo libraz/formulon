@@ -1,0 +1,326 @@
+suite: comparison_rank_probes
+description: >
+  Mac Excel 365 (ja-JP) probe for tie handling and edge-case argument
+  coercion in RANK / RANK.EQ / RANK.AVG / LARGE / SMALL. Each probe
+  targets one specific (function, edge-case) pair so the result is
+  unambiguous. Coverage focuses on:
+    - Order-argument coercion (Bool / Text / fractional / negative).
+    - Number-argument coercion in RANK (Bool / Text rejection).
+    - Empty / filtered-empty / not-present arrays -> #N/A or #NUM!.
+    - Tie behavior at array boundaries (all-equal, all-distinct, mixed).
+    - LARGE / SMALL k-argument truncation / rounding and bounds.
+    - Range-sourced Bool / Text inclusion semantics.
+    - Error-cell-in-range propagation.
+  RANK probes use cell-range setup (not array literals). Mac Excel 365
+  silently returns a blank cell — neither a value nor an error — for
+  =RANK(value, {array_literal}, ...); only real range references are
+  supported. LARGE / SMALL accept array literals for the data argument.
+  Once the goldens are written this suite doubles as a regression fence
+  for the chosen behaviors. No spill / no array results: every probe
+  resolves to a single scalar so xlwings round-trips cleanly.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  # ---------------------------------------------------------------------
+  # A) RANK / RANK.EQ order-argument variants. Excel's documented rule
+  # is "0 or omitted -> descending; any nonzero -> ascending"; we probe
+  # whether nonzero is parsed as a number-only (Bool / Text rejected)
+  # or coerced. All RANK probes use a real range A1:A3 = {30;20;10}.
+  - id: rank_order_omitted_descending
+    description: "RANK(20, A1:A3) - default order is descending"
+    setup:
+      A1: 30
+      A2: 20
+      A3: 10
+    formula: "=RANK(20, A1:A3)"
+
+  - id: rank_order_zero_descending
+    description: "RANK(20, A1:A3, 0) - explicit 0 is descending"
+    setup:
+      A1: 30
+      A2: 20
+      A3: 10
+    formula: "=RANK(20, A1:A3, 0)"
+
+  - id: rank_order_one_ascending
+    description: "RANK(20, A1:A3, 1) - explicit 1 is ascending"
+    setup:
+      A1: 30
+      A2: 20
+      A3: 10
+    formula: "=RANK(20, A1:A3, 1)"
+
+  - id: rank_order_negative_ascending
+    description: "RANK(20, A1:A3, -1) - negative is nonzero -> ascending"
+    setup:
+      A1: 30
+      A2: 20
+      A3: 10
+    formula: "=RANK(20, A1:A3, -1)"
+
+  - id: rank_order_fractional_ascending
+    description: "RANK(20, A1:A3, 0.5) - 0.5 is nonzero -> ascending"
+    setup:
+      A1: 30
+      A2: 20
+      A3: 10
+    formula: "=RANK(20, A1:A3, 0.5)"
+
+  - id: rank_order_true_bool
+    description: "RANK(20, A1:A3, TRUE) - bool in order slot: coerced or #VALUE!?"
+    setup:
+      A1: 30
+      A2: 20
+      A3: 10
+    formula: "=RANK(20, A1:A3, TRUE)"
+
+  - id: rank_order_false_bool
+    description: "RANK(20, A1:A3, FALSE) - FALSE is 0 if coerced -> descending"
+    setup:
+      A1: 30
+      A2: 20
+      A3: 10
+    formula: "=RANK(20, A1:A3, FALSE)"
+
+  - id: rank_order_text_zero
+    description: "RANK(20, A1:A3, \"0\") - text-numeric: coerced or #VALUE!?"
+    setup:
+      A1: 30
+      A2: 20
+      A3: 10
+    formula: "=RANK(20, A1:A3, \"0\")"
+
+  - id: rank_order_text_one
+    description: "RANK(20, A1:A3, \"1\") - text-numeric ascending probe"
+    setup:
+      A1: 30
+      A2: 20
+      A3: 10
+    formula: "=RANK(20, A1:A3, \"1\")"
+
+  - id: rank_order_text_nonnumeric
+    description: "RANK(20, A1:A3, \"asc\") - non-numeric text"
+    setup:
+      A1: 30
+      A2: 20
+      A3: 10
+    formula: "=RANK(20, A1:A3, \"asc\")"
+
+  # ---------------------------------------------------------------------
+  # B) RANK number-argument variants. Excel docs say `number` must be
+  # numeric; bool / text rejection is the question.
+  - id: rank_number_text_numeric
+    description: "RANK(\"20\", A1:A3, 0) - text-numeric in number slot"
+    setup:
+      A1: 30
+      A2: 20
+      A3: 10
+    formula: "=RANK(\"20\", A1:A3, 0)"
+
+  - id: rank_number_bool_true
+    description: "RANK(TRUE, A1:A3, 1) - TRUE is 1 if coerced; A1:A3={2;1;0} -> rank 2"
+    setup:
+      A1: 2
+      A2: 1
+      A3: 0
+    formula: "=RANK(TRUE, A1:A3, 1)"
+
+  - id: rank_number_blank_arg
+    description: "RANK(, A1:A3, 1) - blank in number slot (coerces to 0); A1:A3={0;1;2}"
+    setup:
+      A1: 0
+      A2: 1
+      A3: 2
+    formula: "=RANK(, A1:A3, 1)"
+
+  # ---------------------------------------------------------------------
+  # C) RANK array filtering. Numeric-only after errors propagate.
+  - id: rank_array_with_error_propagates
+    description: "RANK(1, A1:A3) where A2=#DIV/0!: error propagates"
+    setup:
+      A1: 1
+      A2: "=1/0"
+      A3: 3
+    formula: "=RANK(1, A1:A3)"
+
+  - id: rank_array_with_text_skipped
+    description: "RANK(20, A1:A4) where A2=text 'x': text cell silently skipped"
+    setup:
+      A1: 30
+      A2: "x"
+      A3: 20
+      A4: 10
+    formula: "=RANK(20, A1:A4)"
+
+  - id: rank_array_with_bool_skipped
+    description: "RANK(20, A1:A4) where A2=TRUE: bool in range cell skipped or counted?"
+    setup:
+      A1: 30
+      A2: true
+      A3: 20
+      A4: 10
+    formula: "=RANK(20, A1:A4)"
+
+  - id: rank_number_not_in_array
+    description: "RANK(15, A1:A3): number absent from array -> #N/A"
+    setup:
+      A1: 30
+      A2: 20
+      A3: 10
+    formula: "=RANK(15, A1:A3)"
+
+  - id: rank_array_empty_after_filter
+    description: "RANK(1, A1:A2) where both cells are text -> empty filter -> #N/A"
+    setup:
+      A1: "a"
+      A2: "b"
+    formula: "=RANK(1, A1:A2)"
+
+  # ---------------------------------------------------------------------
+  # D) RANK / RANK.AVG tie behavior.
+  - id: rank_eq_three_way_tie_descending
+    description: "RANK.EQ(20, A1:A3, 0) where all=20: return highest rank = 1"
+    setup:
+      A1: 20
+      A2: 20
+      A3: 20
+    formula: "=RANK.EQ(20, A1:A3, 0)"
+
+  - id: rank_avg_three_way_tie_descending
+    description: "RANK.AVG(20, A1:A3, 0) where all=20: avg of {1;2;3} = 2"
+    setup:
+      A1: 20
+      A2: 20
+      A3: 20
+    formula: "=RANK.AVG(20, A1:A3, 0)"
+
+  - id: rank_eq_two_way_tie_middle
+    description: "RANK.EQ(20, A1:A4, 0) where A1=30 A2=A3=20 A4=10: greater=1, equal=2 -> 2"
+    setup:
+      A1: 30
+      A2: 20
+      A3: 20
+      A4: 10
+    formula: "=RANK.EQ(20, A1:A4, 0)"
+
+  - id: rank_avg_two_way_tie_middle
+    description: "RANK.AVG(20, A1:A4, 0) where A1=30 A2=A3=20 A4=10: avg of {2;3} = 2.5"
+    setup:
+      A1: 30
+      A2: 20
+      A3: 20
+      A4: 10
+    formula: "=RANK.AVG(20, A1:A4, 0)"
+
+  - id: rank_eq_four_way_tie_with_higher
+    description: "RANK.EQ(10, A1:A5, 0) where A1=20 A2..A5=10: greater=1, equal=4 -> 2"
+    setup:
+      A1: 20
+      A2: 10
+      A3: 10
+      A4: 10
+      A5: 10
+    formula: "=RANK.EQ(10, A1:A5, 0)"
+
+  - id: rank_avg_four_way_tie_with_higher
+    description: "RANK.AVG(10, A1:A5, 0) where A1=20 A2..A5=10: avg of {2;3;4;5} = 3.5"
+    setup:
+      A1: 20
+      A2: 10
+      A3: 10
+      A4: 10
+      A5: 10
+    formula: "=RANK.AVG(10, A1:A5, 0)"
+
+  # ---------------------------------------------------------------------
+  # E) LARGE / SMALL k-argument boundaries and coercion. Array literals
+  # work for the data argument in LARGE / SMALL.
+  - id: large_k_fractional_truncates
+    description: "LARGE({10;20;30}, 1.9) - Mac uses CEIL(k); k=1.9 -> 2nd-largest = 20"
+    formula: "=LARGE({10;20;30}, 1.9)"
+
+  - id: large_k_fractional_at_half
+    description: "LARGE({10;20;30}, 2.5) - CEIL(2.5)=3 -> 3rd-largest = 10"
+    formula: "=LARGE({10;20;30}, 2.5)"
+
+  - id: small_k_fractional
+    description: "SMALL({10;20;30}, 2.999) - Mac uses TRUNC(k); k=2.999 -> 2nd-smallest = 20"
+    formula: "=SMALL({10;20;30}, 2.999)"
+
+  - id: small_k_fractional_low
+    description: "SMALL({10;20;30}, 1.9) - TRUNC(1.9)=1 -> 1st-smallest = 10"
+    formula: "=SMALL({10;20;30}, 1.9)"
+
+  - id: large_k_below_one_fractional
+    description: "LARGE({10;20;30}, 0.5) - k<1 rejected even though TRUNC(N+1-0.5)=3 in range"
+    formula: "=LARGE({10;20;30}, 0.5)"
+
+  - id: small_k_above_n_fractional
+    description: "SMALL({10;20;30}, 3.0001) - k>N rejected even though TRUNC=3 in range"
+    formula: "=SMALL({10;20;30}, 3.0001)"
+
+  - id: large_k_zero
+    description: "LARGE({10;20;30}, 0) -> #NUM!"
+    formula: "=LARGE({10;20;30}, 0)"
+
+  - id: large_k_negative
+    description: "LARGE({10;20;30}, -1) -> #NUM!"
+    formula: "=LARGE({10;20;30}, -1)"
+
+  - id: large_k_at_size
+    description: "LARGE({10;20;30}, 3) -> 10 (smallest at k=N)"
+    formula: "=LARGE({10;20;30}, 3)"
+
+  - id: large_k_above_size
+    description: "LARGE({10;20;30}, 4) -> #NUM!"
+    formula: "=LARGE({10;20;30}, 4)"
+
+  - id: large_k_text_numeric
+    description: "LARGE({10;20;30}, \"2\") - text-numeric: coerced or #VALUE!?"
+    formula: "=LARGE({10;20;30}, \"2\")"
+
+  - id: large_k_bool_true
+    description: "LARGE({10;20;30}, TRUE) - TRUE=1 if coerced -> 30"
+    formula: "=LARGE({10;20;30}, TRUE)"
+
+  - id: large_k_blank
+    description: "LARGE({10;20;30},) - blank k coerces to 0 -> #NUM!"
+    formula: "=LARGE({10;20;30},)"
+
+  # ---------------------------------------------------------------------
+  # F) LARGE / SMALL with arrays containing errors / negatives / zeroes.
+  - id: small_array_negatives_only
+    description: "SMALL({-3;-1;-2}, 1) -> -3 (most negative)"
+    formula: "=SMALL({-3;-1;-2}, 1)"
+
+  - id: small_array_zero_block
+    description: "SMALL({0;0;0;5}, 2) -> 0 (zeroes count individually)"
+    formula: "=SMALL({0;0;0;5}, 2)"
+
+  - id: large_array_all_text_emptied
+    description: "LARGE({\"a\";\"b\"}, 1) - all dropped -> empty -> #NUM!"
+    formula: "=LARGE({\"a\";\"b\"}, 1)"
+
+  - id: small_array_single_numeric_at_one
+    description: "SMALL({\"x\";5;\"y\"}, 1) - one numeric survives -> 5"
+    formula: "=SMALL({\"x\";5;\"y\"}, 1)"
+
+  - id: small_array_single_numeric_at_two
+    description: "SMALL({\"x\";5;\"y\"}, 2) - only one numeric, k=2 -> #NUM!"
+    formula: "=SMALL({\"x\";5;\"y\"}, 2)"
+
+  - id: large_array_literal_with_bool_silent_drop
+    description: "LARGE({TRUE;FALSE;5}, 1) - array literal bools dropped -> 5"
+    formula: "=LARGE({TRUE;FALSE;5}, 1)"
+
+  - id: large_array_literal_with_text_silent_drop
+    description: "LARGE({\"x\";\"y\";7}, 1) - array literal text dropped -> 7"
+    formula: "=LARGE({\"x\";\"y\";7}, 1)"
+
+  - id: large_range_with_error_propagates
+    description: "LARGE(A1:A3, 1) where A2=#DIV/0!: error propagates"
+    setup:
+      A1: 1
+      A2: "=1/0"
+      A3: 3
+    formula: "=LARGE(A1:A3, 1)"

@@ -294,10 +294,17 @@ TEST(BuiltinsLarge, KNegativeIsNum) {
 }
 
 TEST(BuiltinsLarge, KFractionalTruncates) {
-  // k=2.7 -> truncates to 2. Sorted desc: 5, 4, 3, 2, 1 -> 2nd is 4.
+  // Mac Excel 365 LARGE indexes via TRUNC(N + 1 - k), i.e. CEIL-on-k:
+  // for N=5 and k=2.7 the index is TRUNC(5 + 1 - 2.7) = TRUNC(3.3) = 3,
+  // so the result is the 3rd element of the ascending sort -> 3.
+  // (Previously this test asserted the floor-on-k value 4; that
+  // matched the old impl, not Excel. See oracle probes
+  // `large_k_fractional_truncates` and `large_k_fractional_at_half` in
+  // `tests/oracle/cases/comparison_rank_probes.yaml` for the Mac
+  // ground truth.)
   const Value v = EvalSource("=LARGE(1, 2, 3, 4, 5, 2.7)");
   ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
 }
 
 TEST(BuiltinsLarge, DirectScalarTextUnparseableIsValue) {

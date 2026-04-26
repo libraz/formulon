@@ -10,10 +10,18 @@
 // cell in scan order, then filter down to the numeric cells only
 // (Text / Bool / Blank are skipped, matching MEDIAN / LARGE / SMALL
 // semantics in `src/eval/builtins/stats.cpp`). The scalar arguments
-// (`number` / `x` / `order` / `significance`) are evaluated through
-// `eval_node` and checked for numeric kind directly — `Bool` is
-// rejected with `#VALUE!` in the slots where Excel does so, rather
-// than being coerced through `coerce_to_number`.
+// split by slot:
+//   * RANK's `number` slot goes through `coerce_scalar_number` so Mac
+//     Excel 365's lenient coercion applies (Number passes through;
+//     Bool -> 1 / 0; Blank -> 0; text-numeric parsed; non-numeric
+//     text -> `#VALUE!`).
+//   * RANK's `order` slot is hand-coded: Number / Bool / Blank are
+//     accepted (Bool -> 1 / 0, Blank -> 0) but ANY text -- numeric or
+//     not -- yields `#VALUE!`. Mac Excel rejects `=RANK(20, A1:A3,
+//     "0")` even though `"0"` is text-numeric.
+//   * PERCENTRANK's `x` and the shared `significance` slot use the
+//     strict `read_scalar_number` (Bool / Text rejected with `#VALUE!`),
+//     preserving Excel's distinction.
 
 #include "eval/rank_lazy.h"
 
@@ -24,6 +32,7 @@
 #include <variant>
 #include <vector>
 
+#include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_args.h"
@@ -126,6 +135,28 @@ std::variant<Value, double> read_scalar_number(const parser::AstNode& arg, Arena
   return v.as_number();
 }
 
+/// Evaluates one AST arg as a scalar number using Excel's lenient
+/// coercion rules: Number passes through; Bool -> 1.0 / 0.0; Blank ->
+/// 0.0; text-numeric is parsed; non-numeric text yields `#VALUE!`;
+/// non-finite numbers yield `#NUM!`. Errors propagate. Used by the
+/// RANK `number` and `order` slots so probes like
+/// `=RANK(TRUE, A1:A3, 1)` and `=RANK("20", A1:A3, 0)` match Mac
+/// Excel 365 ja-JP behaviour. PERCENTRANK keeps the strict
+/// `read_scalar_number` because Mac rejects Bool / Text in its `x`
+/// and `significance` slots.
+std::variant<Value, double> coerce_scalar_number(const parser::AstNode& arg, Arena& arena,
+                                                 const FunctionRegistry& registry, const EvalContext& ctx) {
+  const Value v = eval_node(arg, arena, registry, ctx);
+  if (v.is_error()) {
+    return v;
+  }
+  auto coerced = coerce_to_number(v);
+  if (!coerced) {
+    return Value{Value::error(coerced.error())};
+  }
+  return coerced.value();
+}
+
 // Truncates `raw` to `significance` fractional digits (>= 1). Excel
 // truncates toward zero rather than rounding; implemented as
 // `trunc(raw * 10^sig) / 10^sig`.
@@ -171,21 +202,47 @@ std::variant<Value, RankInputs> prepare_rank(const parser::AstNode& call, Arena&
   if (arity < 2U || arity > 3U) {
     return Value{Value::error(ErrorCode::Value)};
   }
-  // Argument 0: `number`. Bool / Text / Blank -> #VALUE! (Excel rejects
-  // a bool in this slot).
-  auto number = read_scalar_number(call.as_call_arg(0), arena, registry, ctx, ErrorCode::Value);
+  // Argument 0: `number`. Mac Excel 365 coerces Bool (TRUE -> 1, FALSE
+  // -> 0), text-numeric (`"20"` -> 20), and Blank (-> 0); only truly
+  // non-numeric text yields `#VALUE!`. Verified by the
+  // `rank_number_text_numeric`, `rank_number_bool_true`, and
+  // `rank_number_blank_arg` probes in
+  // `tests/oracle/cases/comparison_rank_probes.yaml`.
+  auto number = coerce_scalar_number(call.as_call_arg(0), arena, registry, ctx);
   if (std::holds_alternative<Value>(number)) {
     return std::get<Value>(number);
   }
-  // Argument 2 (optional): `order`. Any nonzero value -> ascending;
-  // 0 or omitted -> descending.
+  // Argument 2 (optional): `order`. Mac Excel 365 accepts Number / Bool
+  // / Blank here but rejects ANY text (numeric or not) with `#VALUE!`.
+  // That asymmetry vs the `number` slot is real: probes
+  // `rank_order_true_bool` / `rank_order_false_bool` succeed but
+  // `rank_order_text_zero` / `rank_order_text_one` /
+  // `rank_order_text_nonnumeric` all return `#VALUE!`.
+  // Accordingly we evaluate the arg, propagate errors, accept Number
+  // as-is, coerce Bool (TRUE -> 1, FALSE -> 0) and Blank (-> 0), and
+  // reject everything else with `#VALUE!`. Any nonzero value ->
+  // ascending; 0 or omitted -> descending.
   bool descending = true;
   if (arity == 3U) {
-    auto order = read_scalar_number(call.as_call_arg(2), arena, registry, ctx, ErrorCode::Value);
-    if (std::holds_alternative<Value>(order)) {
-      return std::get<Value>(order);
+    const Value v = eval_node(call.as_call_arg(2), arena, registry, ctx);
+    if (v.is_error()) {
+      return v;
     }
-    descending = std::get<double>(order) == 0.0;
+    double order_d = 0.0;
+    switch (v.kind()) {
+      case ValueKind::Number:
+        order_d = v.as_number();
+        break;
+      case ValueKind::Bool:
+        order_d = v.as_boolean() ? 1.0 : 0.0;
+        break;
+      case ValueKind::Blank:
+        order_d = 0.0;
+        break;
+      default:
+        return Value::error(ErrorCode::Value);
+    }
+    descending = order_d == 0.0;
   }
   // Argument 1: the `ref` array.
   auto arr = collect_rank_array(call.as_call_arg(1), arena, registry, ctx);
