@@ -79,3 +79,91 @@ cases:
   - id: chisq_inv_rt_round_trip
     description: "CHISQ.INV.RT(CHISQ.DIST.RT(5, 4), 4) should equal 5 to tolerance"
     formula: "=CHISQ.INV.RT(CHISQ.DIST.RT(5, 4), 4) - 5"
+
+  # =========================================================================
+  # Expanded probes: small / large df, fractional truncation, p boundary
+  # edges, error inputs, complement symmetry, very-large x asymptotes.
+  # =========================================================================
+
+  # -- CHISQ.DIST: small / large df ---------------------------------------
+  - id: chisq_dist_df_one_pdf_at_one
+    description: "df=1 PDF at x=1 — sharp peak"
+    formula: "=CHISQ.DIST(1, 1, FALSE)"
+
+  - id: chisq_dist_df_huge_normal_like
+    description: "df=10000 — by CLT, chi-sq approaches a shifted normal"
+    formula: "=CHISQ.DIST(10000, 10000, TRUE)"
+
+  - id: chisq_dist_fractional_df_truncates
+    description: "df=4.7 truncates to 4 — Excel allows fractional df for chi-squared"
+    formula: "=CHISQ.DIST(5, 4.7, TRUE)"
+
+  - id: chisq_dist_fractional_df_at_1_5
+    description: "df=1.5 — chi-squared accepts non-integer df"
+    formula: "=CHISQ.DIST(2, 1.5, TRUE)"
+
+  # -- CHISQ.DIST.RT: edges -----------------------------------------------
+  - id: chisq_dist_rt_at_zero
+    description: "Right-tail at x=0 is 1.0"
+    formula: "=CHISQ.DIST.RT(0, 4)"
+
+  - id: chisq_dist_rt_negative_x_is_num
+    formula: "=CHISQ.DIST.RT(-1, 4)"
+
+  - id: chisq_dist_rt_huge_x
+    description: "Right-tail at very large x — vanishingly small probability"
+    formula: "=CHISQ.DIST.RT(100, 4)"
+
+  - id: chisq_dist_rt_zero_df_is_num
+    formula: "=CHISQ.DIST.RT(5, 0)"
+
+  - id: chisq_dist_rt_negative_df_is_num
+    formula: "=CHISQ.DIST.RT(5, -4)"
+
+  # -- CHISQ.INV: edges --------------------------------------------------
+  - id: chisq_inv_p_just_below_one
+    description: "p=0.999 — far-tail quantile"
+    formula: "=CHISQ.INV(0.999, 4)"
+
+  - id: chisq_inv_p_negative_is_num
+    formula: "=CHISQ.INV(-0.1, 4)"
+
+  - id: chisq_inv_p_above_one_is_num
+    formula: "=CHISQ.INV(1.5, 4)"
+
+  - id: chisq_inv_zero_df_is_num
+    formula: "=CHISQ.INV(0.5, 0)"
+
+  - id: chisq_inv_negative_df_is_num
+    formula: "=CHISQ.INV(0.5, -4)"
+
+  - id: chisq_inv_fractional_df_truncates
+    formula: "=CHISQ.INV(0.5, 4.7)"
+
+  # -- CHISQ.INV.RT: edges ----------------------------------------------
+  - id: chisq_inv_rt_p_zero
+    description: "CHISQ.INV.RT(0, df) — right-tail of 0 is +Inf or #NUM!"
+    formula: "=CHISQ.INV.RT(0, 4)"
+
+  - id: chisq_inv_rt_p_one
+    description: "CHISQ.INV.RT(1, df) -> 0"
+    formula: "=CHISQ.INV.RT(1, 4)"
+
+  - id: chisq_inv_rt_p_negative_is_num
+    formula: "=CHISQ.INV.RT(-0.1, 4)"
+
+  - id: chisq_inv_rt_p_above_one_is_num
+    formula: "=CHISQ.INV.RT(1.5, 4)"
+
+  # -- Complement symmetry ----------------------------------------------
+  - id: chisq_inv_complement_symmetry
+    description: "CHISQ.INV(0.95) == CHISQ.INV.RT(0.05)"
+    formula: "=CHISQ.INV(0.95, 4) - CHISQ.INV.RT(0.05, 4)"
+
+  # -- PDF at boundary ---------------------------------------------------
+  - id: chisq_dist_pdf_df_one_at_x_one
+    formula: "=CHISQ.DIST(1, 1, FALSE)"
+
+  - id: chisq_dist_pdf_df3_x0
+    description: "PDF at x=0 with df=3 — value is 0 (chi-squared with df>=2 has zero density at zero)"
+    formula: "=CHISQ.DIST(0, 3, FALSE)"

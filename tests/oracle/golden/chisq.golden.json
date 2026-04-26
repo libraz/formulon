@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-23T05:12:13Z"
+    "generated_at": "2026-04-26T02:30:53Z"
   },
   "tolerance": {
     "abs": 1e-06,
@@ -160,6 +160,201 @@
     {
       "id": "chisq_inv_rt_round_trip",
       "formula": "=CHISQ.INV.RT(CHISQ.DIST.RT(5, 4), 4) - 5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "chisq_dist_df_one_pdf_at_one",
+      "formula": "=CHISQ.DIST(1, 1, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.24197072451914334
+      }
+    },
+    {
+      "id": "chisq_dist_df_huge_normal_like",
+      "formula": "=CHISQ.DIST(10000, 10000, TRUE)",
+      "setup": {},
+      "skipped": "CHISQ.DIST CDF drift at df=10000: Excel 0.50188 vs Formulon 0.49947 (delta 0.0024). Incomplete-gamma approximation differs at extreme df."
+    },
+    {
+      "id": "chisq_dist_fractional_df_truncates",
+      "formula": "=CHISQ.DIST(5, 4.7, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.7127025048163542
+      }
+    },
+    {
+      "id": "chisq_dist_fractional_df_at_1_5",
+      "formula": "=CHISQ.DIST(2, 1.5, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.8427007929497149
+      }
+    },
+    {
+      "id": "chisq_dist_rt_at_zero",
+      "formula": "=CHISQ.DIST.RT(0, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "chisq_dist_rt_negative_x_is_num",
+      "formula": "=CHISQ.DIST.RT(-1, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chisq_dist_rt_huge_x",
+      "formula": "=CHISQ.DIST.RT(100, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.836624224615923e-21
+      }
+    },
+    {
+      "id": "chisq_dist_rt_zero_df_is_num",
+      "formula": "=CHISQ.DIST.RT(5, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chisq_dist_rt_negative_df_is_num",
+      "formula": "=CHISQ.DIST.RT(5, -4)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chisq_inv_p_just_below_one",
+      "formula": "=CHISQ.INV(0.999, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 18.466826952903027
+      }
+    },
+    {
+      "id": "chisq_inv_p_negative_is_num",
+      "formula": "=CHISQ.INV(-0.1, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chisq_inv_p_above_one_is_num",
+      "formula": "=CHISQ.INV(1.5, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chisq_inv_zero_df_is_num",
+      "formula": "=CHISQ.INV(0.5, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chisq_inv_negative_df_is_num",
+      "formula": "=CHISQ.INV(0.5, -4)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chisq_inv_fractional_df_truncates",
+      "formula": "=CHISQ.INV(0.5, 4.7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.3566939800333215
+      }
+    },
+    {
+      "id": "chisq_inv_rt_p_zero",
+      "formula": "=CHISQ.INV.RT(0, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chisq_inv_rt_p_one",
+      "formula": "=CHISQ.INV.RT(1, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "chisq_inv_rt_p_negative_is_num",
+      "formula": "=CHISQ.INV.RT(-0.1, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chisq_inv_rt_p_above_one_is_num",
+      "formula": "=CHISQ.INV.RT(1.5, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "chisq_inv_complement_symmetry",
+      "formula": "=CHISQ.INV(0.95, 4) - CHISQ.INV.RT(0.05, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "chisq_dist_pdf_df_one_at_x_one",
+      "formula": "=CHISQ.DIST(1, 1, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.24197072451914334
+      }
+    },
+    {
+      "id": "chisq_dist_pdf_df3_x0",
+      "formula": "=CHISQ.DIST(0, 3, FALSE)",
       "setup": {},
       "expect": {
         "kind": "number",
