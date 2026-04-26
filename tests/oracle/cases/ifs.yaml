@@ -146,3 +146,123 @@ cases:
       C3: 30
       C4: 40
     formula: "=MINIFS(C1:C4,A1:A4,\"east\",B1:B4,\">=100\")"
+
+  # =========================================================================
+  # Expanded probes: criteria edge semantics, error-range handling,
+  # bool / blank / type-coercion criteria, ja-JP wildcard.
+  # =========================================================================
+
+  # -- Criteria semantics: empty string and not-blank operator -----------
+  - id: countifs_empty_string_criterion
+    description: "Excel: \"\" matches blank cells AND empty-string formula results"
+    setup: { A1: "", A2: "x", A3: 0 }
+    formula: "=COUNTIFS(A1:A3,\"\")"
+
+  - id: countifs_not_blank
+    description: "<> matches non-blank cells"
+    setup: { A1: 1, A3: 3 }
+    formula: "=COUNTIFS(A1:A3,\"<>\")"
+
+  - id: countifs_zero_value
+    description: "Criterion 0 matches numeric zeros only (not blanks)"
+    setup: { A1: 0, A3: 0 }
+    formula: "=COUNTIFS(A1:A3,0)"
+
+  # -- Bool criterion ----------------------------------------------------
+  - id: countifs_bool_true_criterion
+    description: "TRUE in criterion matches cells holding TRUE"
+    setup: { A1: true, A2: false, A3: true }
+    formula: "=COUNTIFS(A1:A3,TRUE)"
+
+  - id: countifs_bool_false_criterion
+    setup: { A1: true, A2: false, A3: true }
+    formula: "=COUNTIFS(A1:A3,FALSE)"
+
+  # -- Error in criteria range ------------------------------------------
+  - id: countifs_error_in_criteria_range
+    description: "Excel: error cell in criteria range is silently skipped (does not propagate)"
+    setup:
+      A1: 1
+      A2: { kind: formula, formula: "=NA()" }
+      A3: 1
+    formula: "=COUNTIFS(A1:A3,1)"
+
+  - id: sumifs_error_in_sum_range
+    description: "Excel: SUMIFS error cell in sum_range — propagates only if matched"
+    setup:
+      A1: "x"
+      A2: "x"
+      A3: "x"
+      B1: 10
+      B2: { kind: formula, formula: "=NA()" }
+      B3: 30
+    formula: "=SUMIFS(B1:B3,A1:A3,\"x\")"
+
+  - id: sumifs_error_in_criteria_value
+    description: "Excel: error in criteria value propagates"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 10, B2: 20, B3: 30 }
+    formula: "=SUMIFS(B1:B3,A1:A3,#REF!)"
+
+  # -- Numeric vs text criteria -----------------------------------------
+  - id: countifs_text_numeric_criterion
+    description: "Criterion \"5\" should match cell value 5 (Excel coerces text-numeric criteria)"
+    setup: { A1: 5, A2: 10 }
+    formula: "=COUNTIFS(A1:A2,\"5\")"
+
+  - id: countifs_text_numeric_with_op
+    description: "\">5\" comparison uses numeric semantics"
+    setup: { A1: 5, A2: 10, A3: 15 }
+    formula: "=COUNTIFS(A1:A3,\">5\")"
+
+  # -- Wildcard semantics ------------------------------------------------
+  - id: countifs_wildcard_question
+    description: "? matches a single character"
+    setup: { A1: "ab", A2: "abc", A3: "abcd" }
+    formula: "=COUNTIFS(A1:A3,\"a?\")"
+
+  - id: countifs_tilde_escape
+    description: "~* matches literal '*'"
+    setup: { A1: "ab*c", A2: "abc", A3: "ab*" }
+    formula: "=COUNTIFS(A1:A3,\"ab~*\")"
+
+  - id: countifs_jp_wildcard
+    description: "ja-JP wildcard with full-width chars"
+    setup: { A1: "りんご", A2: "りんごジュース", A3: "ぶどう" }
+    formula: "=COUNTIFS(A1:A3,\"り*\")"
+
+  # -- Multiple range coverage ------------------------------------------
+  - id: countifs_three_criteria_and
+    description: "Three ANDed criteria"
+    setup:
+      A1: "east"
+      A2: "east"
+      A3: "west"
+      B1: 100
+      B2: 200
+      B3: 100
+      C1: "Q1"
+      C2: "Q1"
+      C3: "Q1"
+    formula: "=COUNTIFS(A1:A3,\"east\",B1:B3,\">=100\",C1:C3,\"Q1\")"
+
+  # -- Sum range with mixed types ---------------------------------------
+  - id: sumifs_blank_in_sum_range
+    description: "Blank cell in sum_range is treated as 0"
+    setup: { A1: "x", A2: "x", A3: "x", B1: 10, B3: 30 }
+    formula: "=SUMIFS(B1:B3,A1:A3,\"x\")"
+
+  - id: sumifs_bool_in_sum_range
+    description: "Bool in sum_range is silently skipped"
+    setup: { A1: "x", A2: "x", A3: "x", B1: 10, B2: true, B3: 30 }
+    formula: "=SUMIFS(B1:B3,A1:A3,\"x\")"
+
+  # -- Criteria reference (cell-as-criterion) ---------------------------
+  - id: countifs_ref_as_criterion
+    description: "C1 holds the criterion value; range references it"
+    setup: { A1: 5, A2: 10, A3: 5, C1: 5 }
+    formula: "=COUNTIFS(A1:A3,C1)"
+
+  - id: sumifs_ref_as_criterion_with_op
+    description: "Concat operator + cell to build criterion"
+    setup: { A1: 5, A2: 10, A3: 15, B1: 1, B2: 2, B3: 3, D1: 5 }
+    formula: "=SUMIFS(B1:B3,A1:A3,\">\"&D1)"

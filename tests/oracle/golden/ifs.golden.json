@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-23T02:32:42Z"
+    "generated_at": "2026-04-26T02:08:52Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -667,6 +667,478 @@
       "expect": {
         "kind": "number",
         "value": 10.0
+      }
+    },
+    {
+      "id": "countifs_empty_string_criterion",
+      "formula": "=COUNTIFS(A1:A3,\"\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": ""
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "countifs_not_blank",
+      "formula": "=COUNTIFS(A1:A3,\"<>\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countifs_zero_value",
+      "formula": "=COUNTIFS(A1:A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countifs_bool_true_criterion",
+      "formula": "=COUNTIFS(A1:A3,TRUE)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "bool",
+          "value": false
+        },
+        "A3": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countifs_bool_false_criterion",
+      "formula": "=COUNTIFS(A1:A3,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "bool",
+          "value": false
+        },
+        "A3": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "countifs_error_in_criteria_range",
+      "formula": "=COUNTIFS(A1:A3,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "sumifs_error_in_sum_range",
+      "formula": "=SUMIFS(B1:B3,A1:A3,\"x\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumifs_error_in_criteria_value",
+      "formula": "=SUMIFS(B1:B3,A1:A3,#REF!)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "countifs_text_numeric_criterion",
+      "formula": "=COUNTIFS(A1:A2,\"5\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "countifs_text_numeric_with_op",
+      "formula": "=COUNTIFS(A1:A3,\">5\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 15.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countifs_wildcard_question",
+      "formula": "=COUNTIFS(A1:A3,\"a?\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "abc"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "abcd"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "countifs_tilde_escape",
+      "formula": "=COUNTIFS(A1:A3,\"ab~*\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ab*c"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "abc"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ab*"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "countifs_jp_wildcard",
+      "formula": "=COUNTIFS(A1:A3,\"り*\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "りんご"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "りんごジュース"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ぶどう"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countifs_three_criteria_and",
+      "formula": "=COUNTIFS(A1:A3,\"east\",B1:B3,\">=100\",C1:C3,\"Q1\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "east"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "east"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "west"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Q1"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "Q1"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "Q1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "sumifs_blank_in_sum_range",
+      "formula": "=SUMIFS(B1:B3,A1:A3,\"x\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 40.0
+      }
+    },
+    {
+      "id": "sumifs_bool_in_sum_range",
+      "formula": "=SUMIFS(B1:B3,A1:A3,\"x\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "bool",
+          "value": true
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 40.0
+      }
+    },
+    {
+      "id": "countifs_ref_as_criterion",
+      "formula": "=COUNTIFS(A1:A3,C1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "sumifs_ref_as_criterion_with_op",
+      "formula": "=SUMIFS(B1:B3,A1:A3,\">\"&D1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
       }
     }
   ]
