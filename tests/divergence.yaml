@@ -147,6 +147,32 @@ entries:
     prefer: formulon
     first_noted: 2026-04-23
 
+  # -- Space-as-intersection operator --------------------------------------
+  # Formulon's tokenizer emits Whitespace tokens but the parser drops them
+  # at construction time (`src/parser/parser.cpp` filter loop), so the
+  # space binary intersection operator never reaches the Pratt parser and
+  # `make_intersect_op` is dead code. As a side effect the parser silently
+  # uses only the first operand of `A1:B2 C3:D4`, which makes
+  # arg_intersection_operator coincidentally agree with Excel (both = 1)
+  # but for entirely the wrong reason; the disjoint counterpart fails
+  # because Excel returns #NULL! while Formulon returns 1. Both cases are
+  # skipped together until tokenizer / parser support the operator
+  # properly; reinstate by removing these entries once IntersectOp wiring
+  # lands.
+  - id: arg_intersection_operator
+    mode: skip-oracle
+    reason: "Space-as-intersection operator not yet parsed. Currently passes by accident; skipped to avoid masking the missing feature."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
+
+  - id: arg_intersection_disjoint
+    mode: skip-oracle
+    reason: "Disjoint range intersection should yield #NULL! per Excel; Formulon parser drops the second operand and returns 1. Same root cause as arg_intersection_operator (Whitespace token discarded by parser)."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

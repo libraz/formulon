@@ -139,6 +139,41 @@ AstNode* Parser::parse_paren_atom() {
     // Hard arena failure during recovery; propagate.
     return nullptr;
   }
+  // Top-level parenthesised comma list = reference union. Excel's
+  // `=AREAS((A1,B2))` and `=SUM((A1:B2,C3:D4))` rely on this. The comma
+  // here cannot be confused with a function-arg separator because that is
+  // consumed inside the call parser; reaching `parse_paren_atom` means we
+  // are in a grouped-expression context.
+  if (peek_kind() == TokenKind::Comma) {
+    std::vector<const AstNode*> children;
+    children.push_back(inner);
+    while (peek_kind() == TokenKind::Comma) {
+      advance();  // consume `,`
+      AstNode* next_child = parse_expression(0, SyncContext::Paren);
+      if (next_child == nullptr) {
+        return nullptr;
+      }
+      children.push_back(next_child);
+    }
+    if (peek_kind() != TokenKind::RParen) {
+      record_error_with_token(ParseErrorCode::ExpectedCloseParen, lparen.range, lparen.lexeme);
+      // Best-effort recovery: emit the union we have so far. Children are
+      // already valid subtrees (possibly placeholders); make_union_op can
+      // build a node from any vector with size >= 2.
+      AstNode* u = make_union_op(arena_, children.data(), static_cast<std::uint32_t>(children.size()));
+      if (u != nullptr) {
+        u->set_range(lparen.range);
+      }
+      return u;
+    }
+    const Token& rparen = advance();
+    AstNode* u = make_union_op(arena_, children.data(), static_cast<std::uint32_t>(children.size()));
+    if (u == nullptr) {
+      return nullptr;
+    }
+    u->set_range(SpanRange(lparen.range, rparen.range));
+    return u;
+  }
   if (peek_kind() != TokenKind::RParen) {
     record_error_with_token(ParseErrorCode::ExpectedCloseParen, lparen.range, lparen.lexeme);
     // `inner` is still a usable subtree (possibly a placeholder). Return it
