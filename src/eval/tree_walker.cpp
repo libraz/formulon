@@ -1168,18 +1168,22 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
         const parser::AstNode& expr_node = node.as_let_binding_expr(i);
         const EvalContext inner_ctx = ctx.with_name_env(&env);
         const Value v = eval_node(expr_node, arena, registry, inner_ctx);
-        // Record the AST source for genuinely range-shaped bindings only:
-        // `RangeOp`, `ArrayLiteral`, and the reference-producing calls
-        // (`OFFSET`, `CHOOSE`, `INDIRECT`). Single-cell `Ref` and scalar
-        // shapes bind by Value -- recording their AST would either be
-        // unused (the resolve helper skips non-range shapes) or risk
-        // re-evaluating side-effecting / expensive sub-expressions on
-        // every NameRef read. NameRef-on-NameRef is transitive: if the
-        // RHS already resolves to a range-shaped AST in the (possibly
-        // outer) scope, we inherit that AST so `=LET(s, r, SUM(s))` works
-        // when `r` is itself a range binding.
+        // Record the AST source for reference-shaped bindings: a bare
+        // `Ref` (`=LET(r, A5, ROW(r))`), a `RangeOp`, an `ArrayLiteral`,
+        // or one of the reference-producing calls (`OFFSET`, `CHOOSE`,
+        // `INDIRECT`, `IF`). The `Ref` case keeps `ROW` / `COLUMN` able
+        // to introspect a single-cell binding without re-evaluation;
+        // SUM-family callers continue to skip `Ref` via the narrower
+        // `is_range_shaped_ast` predicate so a scalar-bound name still
+        // flows through the existing scalar branch. Truly scalar shapes
+        // (literals, arithmetic) still bind by Value only — recording
+        // their AST would risk re-evaluating side-effecting or expensive
+        // sub-expressions on every NameRef read. NameRef-on-NameRef is
+        // transitive: if the RHS already resolves to a reference-shaped
+        // AST in the (possibly outer) scope, we inherit that AST so
+        // `=LET(s, r, SUM(s))` works when `r` is itself a range binding.
         const parser::AstNode* expr_for_binding = nullptr;
-        if (is_range_shaped_ast(expr_node)) {
+        if (expr_node.kind() == parser::NodeKind::Ref || is_range_shaped_ast(expr_node)) {
           expr_for_binding = &expr_node;
         } else if (expr_node.kind() == parser::NodeKind::NameRef) {
           // `env` already reflects every previously bound name in this LET

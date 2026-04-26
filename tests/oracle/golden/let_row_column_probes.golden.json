@@ -1,0 +1,199 @@
+{
+  "suite": "let_row_column_probes",
+  "description": "LET-binding passthrough probes for ROW / COLUMN with range arguments. Mac Excel returns the first row/col of the rectangle when the LET binding resolves to a RangeOp, OFFSET-call, CHOOSE-call, or IF-call; Formulon currently falls through to the scalar `#VALUE!` branch because `eval_row_or_column` does not look through the NameRef. These probes pin Mac's behaviour so the eventual NameRef passthrough fix stays aligned with the rest of the LET-bound-range family.\n",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-26T20:14:25Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "let_row_of_rangeop",
+      "formula": "=LET(r, A1:A3, ROW(r))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "let_row_of_single_ref",
+      "formula": "=LET(r, A5, ROW(r))",
+      "setup": {
+        "A5": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "let_column_of_rangeop",
+      "formula": "=LET(r, B1:D1, COLUMN(r))",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "let_row_of_offset_call",
+      "formula": "=LET(r, OFFSET(A1, 2, 0, 1, 1), ROW(r))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "let_column_of_choose_call",
+      "formula": "=LET(r, CHOOSE(2, A1:A3, B1:B3), COLUMN(r))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "let_row_of_if_call",
+      "formula": "=LET(r, IF(TRUE, A2:A4, B2:B4), ROW(r))",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "let_row_of_if_else_branch",
+      "formula": "=LET(r, IF(FALSE, A1:A3, B5:B7), ROW(r))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    }
+  ]
+}

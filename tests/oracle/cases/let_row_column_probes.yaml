@@ -1,0 +1,46 @@
+suite: let_row_column_probes
+description: >
+  LET-binding passthrough probes for ROW / COLUMN with range arguments.
+  Mac Excel returns the first row/col of the rectangle when the LET
+  binding resolves to a RangeOp, OFFSET-call, CHOOSE-call, or IF-call;
+  Formulon currently falls through to the scalar `#VALUE!` branch
+  because `eval_row_or_column` does not look through the NameRef. These
+  probes pin Mac's behaviour so the eventual NameRef passthrough fix
+  stays aligned with the rest of the LET-bound-range family.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: let_row_of_rangeop
+    description: "LET binds r to A1:A3; ROW(r) -> 1 (first row of the rectangle)"
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=LET(r, A1:A3, ROW(r))"
+
+  - id: let_row_of_single_ref
+    description: "LET binds r to A5; ROW(r) -> 5"
+    setup: { A5: 99 }
+    formula: "=LET(r, A5, ROW(r))"
+
+  - id: let_column_of_rangeop
+    description: "LET binds r to B1:D1; COLUMN(r) -> 2"
+    setup: { B1: 1, C1: 2, D1: 3 }
+    formula: "=LET(r, B1:D1, COLUMN(r))"
+
+  - id: let_row_of_offset_call
+    description: "LET binds r to OFFSET(A1,2,0,1,1); ROW(r) -> 3"
+    setup: { A1: 1, A2: 2, A3: 3 }
+    formula: "=LET(r, OFFSET(A1, 2, 0, 1, 1), ROW(r))"
+
+  - id: let_column_of_choose_call
+    description: "LET binds r to CHOOSE(2, A1:A3, B1:B3); COLUMN(r) -> 2"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 4, B2: 5, B3: 6 }
+    formula: "=LET(r, CHOOSE(2, A1:A3, B1:B3), COLUMN(r))"
+
+  - id: let_row_of_if_call
+    description: "LET binds r to IF(TRUE, A2:A4, B2:B4); ROW(r) -> 2"
+    setup: { A2: 1, A3: 2, A4: 3, B2: 10, B3: 20, B4: 30 }
+    formula: "=LET(r, IF(TRUE, A2:A4, B2:B4), ROW(r))"
+
+  - id: let_row_of_if_else_branch
+    description: "LET binds r to IF(FALSE, A1:A3, B5:B7); ROW(r) -> 5 (else branch picked)"
+    setup: { A1: 1, A2: 2, A3: 3, B5: 10, B6: 20, B7: 30 }
+    formula: "=LET(r, IF(FALSE, A1:A3, B5:B7), ROW(r))"

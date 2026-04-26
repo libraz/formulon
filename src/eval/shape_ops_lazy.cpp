@@ -196,7 +196,22 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
   if (call.as_call_arity() != 1U) {
     return Value::error(ErrorCode::Value);
   }
-  const parser::AstNode& arg = call.as_call_arg(0);
+  const parser::AstNode& raw_arg = call.as_call_arg(0);
+  // LET-binding passthrough: `=LET(r, A1:A3, ROW(r))` parses `r` as a
+  // NameRef, but Mac Excel returns the first row of the bound rectangle
+  // rather than `#VALUE!`. Look through the NameRef to the bound AST and
+  // accept the broader "Ref OR range-shaped" set: ROW(single-cell Ref)
+  // is meaningful (returns its row), so unlike the SUM-style passthrough
+  // we do not exclude bare Refs here.
+  const parser::AstNode* effective = &raw_arg;
+  if (raw_arg.kind() == parser::NodeKind::NameRef) {
+    const parser::AstNode& resolved = resolve_name_ast(raw_arg, ctx.name_env());
+    if (&resolved != &raw_arg &&
+        (resolved.kind() == parser::NodeKind::Ref || is_range_shaped_ast(resolved))) {
+      effective = &resolved;
+    }
+  }
+  const parser::AstNode& arg = *effective;
   const parser::NodeKind k = arg.kind();
   if (k == parser::NodeKind::Ref) {
     const parser::Reference& r = arg.as_ref();
