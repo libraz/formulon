@@ -112,3 +112,175 @@ cases:
     description: "Negative probability -> #NUM!"
     setup: { A1: 1, A2: 2, A3: 3, A4: 4, B1: 0.1, B2: 0.2, B3: 0.3, B4: -0.1 }
     formula: "=PROB(A1:A4, B1:B4, 2)"
+
+  # -- Edge probes (appended) ---------------------------------------------
+  # Each probe targets one underspecified semantic question for the
+  # hypothesis-test / probability builtins. Categories: T.TEST size /
+  # type / arg coercion, F.TEST degenerate variance, CHISQ.TEST shape /
+  # zero-expected, Z.TEST sigma boundaries, PROB shape / bounds, and
+  # range-orientation insensitivity.
+
+  # -- T.TEST edge cases ---------------------------------------------------
+  - id: t_test_paired_size_mismatch
+    description: "Paired t-test (type=1) with mismatched sample sizes -> #N/A per Excel docs"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 6, B2: 7, B3: 8 }
+    formula: "=T.TEST(A1:A5, B1:B3, 2, 1)"
+
+  - id: t_test_single_point_is_num
+    description: "T.TEST on n=1 samples -> #NUM! (no variance)"
+    setup: { A1: 5, B1: 7 }
+    formula: "=T.TEST(A1, B1, 2, 2)"
+
+  - id: t_test_identical_samples_p_equals_one
+    description: "Identical samples -> p ≈ 1.0 (no mean difference)"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 1, B2: 2, B3: 3, B4: 4, B5: 5 }
+    formula: "=T.TEST(A1:A5, B1:B5, 2, 2)"
+
+  - id: t_test_all_zeros_is_div0
+    description: "Both samples constant zero -> variance=0 -> #DIV/0!"
+    setup: { A1: 0, A2: 0, A3: 0, A4: 0, B1: 0, B2: 0, B3: 0, B4: 0 }
+    formula: "=T.TEST(A1:A4, B1:B4, 2, 2)"
+
+  - id: t_test_type_zero_is_num
+    description: "T.TEST type=0 (out of range; valid types are 1..3) -> #NUM!"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 6, B2: 7, B3: 8, B4: 9, B5: 10 }
+    formula: "=T.TEST(A1:A5, B1:B5, 2, 0)"
+
+  - id: t_test_type_four_is_num
+    description: "T.TEST type=4 (out of range) -> #NUM!"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 6, B2: 7, B3: 8, B4: 9, B5: 10 }
+    formula: "=T.TEST(A1:A5, B1:B5, 2, 4)"
+
+  - id: t_test_type_fractional_truncates
+    description: "T.TEST type=2.9 should truncate toward zero to 2 (Excel int-conversion rule)"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 6, B2: 7, B3: 8, B4: 9, B5: 10 }
+    formula: "=T.TEST(A1:A5, B1:B5, 2, 2.9) - T.TEST(A1:A5, B1:B5, 2, 2)"
+
+  - id: t_test_tails_zero_is_num
+    description: "T.TEST tails=0 -> #NUM! (only 1 or 2 are valid)"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 6, B2: 7, B3: 8, B4: 9, B5: 10 }
+    formula: "=T.TEST(A1:A5, B1:B5, 0, 2)"
+
+  - id: t_test_tails_three_is_num
+    description: "T.TEST tails=3 -> #NUM!"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 6, B2: 7, B3: 8, B4: 9, B5: 10 }
+    formula: "=T.TEST(A1:A5, B1:B5, 3, 2)"
+
+  - id: t_test_negative_values
+    description: "T.TEST works on negative-valued samples (sanity)"
+    setup: { A1: -5, A2: -4, A3: -3, A4: -2, A5: -1, B1: -10, B2: -9, B3: -8, B4: -7, B5: -6 }
+    formula: "=T.TEST(A1:A5, B1:B5, 2, 2)"
+
+  - id: t_test_skips_text_and_bool
+    description: "Range with text and TRUE — Excel skips non-numeric in range; effective n drops"
+    setup: { A1: 1, A2: 2, A3: 3, A4: "x", A5: true, A6: 4, A7: 5, B1: 6, B2: 7, B3: 8, B4: 9, B5: 10 }
+    formula: "=T.TEST(A1:A7, B1:B5, 2, 2)"
+
+  - id: t_test_error_in_range_propagates
+    description: "Range with #DIV/0! cell -> error propagates"
+    setup:
+      A1: 1
+      A2: 2
+      A3: { kind: error, code: "#DIV/0!" }
+      A4: 4
+      A5: 5
+      B1: 6
+      B2: 7
+      B3: 8
+      B4: 9
+      B5: 10
+    formula: "=T.TEST(A1:A5, B1:B5, 2, 2)"
+
+  # -- F.TEST edge cases ---------------------------------------------------
+  - id: f_test_single_point_is_div0
+    description: "F.TEST with n=1 -> #DIV/0! (variance undefined)"
+    setup: { A1: 5, B1: 7 }
+    formula: "=F.TEST(A1, B1)"
+
+  - id: f_test_identical_samples_p_one
+    description: "Identical samples -> ratio=1, p=1"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 1, B2: 2, B3: 3, B4: 4, B5: 5 }
+    formula: "=F.TEST(A1:A5, B1:B5)"
+
+  - id: f_test_constant_input_is_div0
+    description: "F.TEST with all-equal sample (variance=0) -> #DIV/0!"
+    setup: { A1: 7, A2: 7, A3: 7, A4: 7, A5: 7, B1: 1, B2: 2, B3: 3, B4: 4, B5: 5 }
+    formula: "=F.TEST(A1:A5, B1:B5)"
+
+  - id: f_test_mismatched_sizes_ok
+    description: "F.TEST allows differing sample sizes (both n>=2)"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 10, B2: 12, B3: 14 }
+    formula: "=F.TEST(A1:A5, B1:B3)"
+
+  - id: f_test_skips_text
+    description: "F.TEST: text cells in range are skipped"
+    setup: { A1: 1, A2: 2, A3: "x", A4: 3, A5: 4, A6: 5, B1: 6, B2: 7, B3: 8, B4: 9, B5: 10 }
+    formula: "=F.TEST(A1:A6, B1:B5)"
+
+  # -- CHISQ.TEST edge cases -----------------------------------------------
+  - id: chisq_test_1x1_is_na
+    description: "CHISQ.TEST on 1x1 table -> df=0 -> #N/A"
+    setup: { A1: 10, B1: 10 }
+    formula: "=CHISQ.TEST(A1, B1)"
+
+  - id: chisq_test_zero_expected_is_div0
+    description: "CHISQ.TEST with a zero expected count -> #DIV/0!"
+    setup: { A1: 10, A2: 20, A3: 30, B1: 10, B2: 0, B3: 30 }
+    formula: "=CHISQ.TEST(A1:A3, B1:B3)"
+
+  - id: chisq_test_dim_mismatch_is_na
+    description: "CHISQ.TEST with mismatched dimensions -> #N/A"
+    setup: { A1: 10, A2: 20, A3: 30, B1: 10, B2: 20 }
+    formula: "=CHISQ.TEST(A1:A3, B1:B2)"
+
+  - id: chisq_test_horizontal_range
+    description: "CHISQ.TEST: 1xN horizontal range works (df = N-1)"
+    setup: { A1: 10, B1: 20, C1: 30, A2: 12, B2: 18, C2: 30 }
+    formula: "=CHISQ.TEST(A1:C1, A2:C2)"
+
+  # -- Z.TEST edge cases ---------------------------------------------------
+  - id: z_test_sigma_zero_is_div0
+    description: "Z.TEST with sigma=0 -> #DIV/0!"
+    setup: { A1: 3, A2: 6, A3: 7, A4: 8, A5: 6 }
+    formula: "=Z.TEST(A1:A5, 4, 0)"
+
+  - id: z_test_x_outside_range
+    description: "Z.TEST with x far below sample mean (x=0) — extreme tail probability"
+    setup: { A1: 3, A2: 6, A3: 7, A4: 8, A5: 6, A6: 5, A7: 4, A8: 2, A9: 1, A10: 9 }
+    formula: "=Z.TEST(A1:A10, 0, 2)"
+
+  - id: z_test_single_point_is_div0
+    description: "Z.TEST with one observation and no sigma -> sample std undefined -> #DIV/0!"
+    setup: { A1: 5 }
+    formula: "=Z.TEST(A1, 4)"
+
+  # -- PROB edge cases -----------------------------------------------------
+  - id: prob_size_mismatch_is_na
+    description: "PROB x_range and prob_range size mismatch -> #N/A"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, B1: 0.5, B2: 0.5 }
+    formula: "=PROB(A1:A4, B1:B2, 2)"
+
+  - id: prob_lower_above_upper
+    description: "PROB lower > upper — swap or zero?"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, B1: 0.1, B2: 0.2, B3: 0.3, B4: 0.4 }
+    formula: "=PROB(A1:A4, B1:B4, 3, 2)"
+
+  - id: prob_lower_equals_upper
+    description: "PROB lower == upper hits the single-bin probability"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, B1: 0.1, B2: 0.2, B3: 0.3, B4: 0.4 }
+    formula: "=PROB(A1:A4, B1:B4, 3, 3)"
+
+  - id: prob_probs_sum_under_one_is_num
+    description: "Probabilities summing to <1 -> #NUM! (Excel doc)"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, B1: 0.1, B2: 0.2, B3: 0.3, B4: 0.3 }
+    formula: "=PROB(A1:A4, B1:B4, 2)"
+
+  # -- Range orientation -----------------------------------------------------
+  - id: t_test_horizontal_range
+    description: "T.TEST is orientation-insensitive — horizontal vs vertical"
+    setup: { A1: 1, B1: 2, C1: 3, D1: 4, E1: 5, A2: 6, B2: 7, C2: 8, D2: 9, E2: 10 }
+    formula: "=T.TEST(A1:E1, A2:E2, 2, 2)"
+
+  - id: t_test_array_literal
+    description: "T.TEST accepts {1,2,3,4,5} array literals"
+    formula: "=T.TEST({1,2,3,4,5}, {6,7,8,9,10}, 2, 2)"

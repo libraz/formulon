@@ -305,17 +305,20 @@ TEST(HypothesisChisqTest, NonNumericCellIsValue) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(HypothesisChisqTest, ExpectedZeroIsNum) {
+TEST(HypothesisChisqTest, ExpectedZeroIsDiv0) {
+  // Mac Excel returns #DIV/0! when any expected count is exactly zero
+  // (the chi-squared term divides by zero).
   const Value v = EvalSource("=CHISQ.TEST({1,2,3}, {1,0,3})");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
 TEST(HypothesisChisqTest, SinglePairHasNoDegreesOfFreedom) {
-  // A 1x1 contingency table gives df = 0 -> #NUM!.
+  // A 1x1 contingency table gives df = 0; Mac Excel surfaces this as
+  // #N/A (degenerate shape, no test to run).
   const Value v = EvalSource("=CHISQ.TEST({5}, {5})");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
 TEST(HypothesisChisqTest, OneDimensionalSequenceUsesNMinus1) {
@@ -415,10 +418,12 @@ TEST(HypothesisProb, NoMatchIsZero) {
   EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
 }
 
-TEST(HypothesisProb, UpperLessThanLowerIsNum) {
+TEST(HypothesisProb, UpperLessThanLowerIsZero) {
+  // Mac Excel returns 0 when lower > upper (empty interval has no mass),
+  // not a parameter error.
   const Value v = EvalSource("=PROB({1,2,3,4}, {0.1,0.2,0.3,0.4}, 3, 1)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
 }
 
 TEST(HypothesisProb, ProbsSumNotOneIsNum) {
