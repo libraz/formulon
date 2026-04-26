@@ -96,3 +96,128 @@ cases:
     description: "Legacy FORECAST name should match FORECAST.LINEAR"
     setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 2, B2: 4, B3: 5, B4: 4, B5: 5 }
     formula: "=FORECAST(3, B1:B5, A1:A5)"
+
+  # ========================================================================
+  # Edge probes (appended 2026-04-26)
+  # ========================================================================
+
+  # -- CORREL: shape combinations and degenerate inputs --------------------
+  - id: correl_horizontal_pair
+    description: "CORREL accepts a row-vector pair; (x,y)=(1,1)..(3,3) -> 1"
+    setup: { A1: 1, B1: 2, C1: 3, A2: 1, B2: 2, C2: 3 }
+    formula: "=CORREL(A1:C1, A2:C2)"
+
+  - id: correl_row_vs_column
+    description: "Row-vs-column with matching cell counts: pairs in row-major scan; perfect correlation -> 1"
+    setup: { A1: 1, B1: 2, C1: 3, A2: 10, A3: 20, A4: 30 }
+    formula: "=CORREL(A1:C1, A2:A4)"
+
+  - id: correl_square_block
+    description: "2x2 vs 2x2 block; pair-by-pair Pearson on (1,2,3,4) vs (2,4,6,8) -> 1"
+    setup: { A1: 1, B1: 2, A2: 3, B2: 4, C1: 2, D1: 4, C2: 6, D2: 8 }
+    formula: "=CORREL(A1:B2, C1:D2)"
+
+  - id: correl_zero_variance_y_is_div0
+    description: "All y values identical -> #DIV/0! (sum_yy = 0)"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 5, B2: 5, B3: 5 }
+    formula: "=CORREL(B1:B3, A1:A3)"
+
+  - id: correl_single_pair_is_div0
+    description: "n=1 -> #DIV/0! (variance undefined for a single point)"
+    setup: { A1: 7, B1: 11 }
+    formula: "=CORREL(A1:A1, B1:B1)"
+
+  - id: correl_all_text_is_div0
+    description: "All cells are text -> no numeric pairs -> #DIV/0!"
+    setup: { A1: "a", A2: "b", A3: "c", B1: "x", B2: "y", B3: "z" }
+    formula: "=CORREL(A1:A3, B1:B3)"
+
+  - id: correl_error_in_range_propagates
+    description: "An error cell anywhere in the inputs propagates"
+    setup:
+      A1: 1
+      A2: { kind: formula, formula: "=NA()" }
+      A3: 3
+      B1: 2
+      B2: 4
+      B3: 6
+    formula: "=CORREL(B1:B3, A1:A3)"
+
+  # -- COVARIANCE.P / COVARIANCE.S edge probes -----------------------------
+  - id: covar_p_single_pair
+    description: "Population covariance with n=1 -> 0 (sum_xy = 0, divisor = 1)"
+    setup: { A1: 7, B1: 11 }
+    formula: "=COVARIANCE.P(A1:A1, B1:B1)"
+
+  - id: covar_s_n_two
+    description: "Sample covariance with n=2: (x,y)=(1,2),(3,6) -> sum_xy=4, /(n-1)=4"
+    setup: { A1: 1, A2: 3, B1: 2, B2: 6 }
+    formula: "=COVARIANCE.S(B1:B2, A1:A2)"
+
+  - id: covar_p_shape_mismatch_is_na
+    description: "Mismatched array sizes -> #N/A"
+    setup: { A1: 1, A2: 2, B1: 1, B2: 2, B3: 3 }
+    formula: "=COVARIANCE.P(A1:A2, B1:B3)"
+
+  - id: covar_legacy_alias_matches_p
+    description: "Legacy COVAR alias should match COVARIANCE.P (= 1.2 on reference dataset)"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 2, B2: 4, B3: 5, B4: 4, B5: 5 }
+    formula: "=COVAR(B1:B5, A1:A5)"
+
+  # -- SLOPE / INTERCEPT edge probes ---------------------------------------
+  - id: slope_vertical_line_is_div0
+    description: "All x identical (variance_x = 0) -> #DIV/0!"
+    setup: { A1: 1, A2: 1, A3: 1, B1: 2, B2: 4, B3: 6 }
+    formula: "=SLOPE(B1:B3, A1:A3)"
+
+  - id: slope_horizontal_line_is_zero
+    description: "All y identical -> slope = 0"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 5, B2: 5, B3: 5 }
+    formula: "=SLOPE(B1:B3, A1:A3)"
+
+  - id: intercept_horizontal_line
+    description: "All y identical -> slope = 0, intercept = constant y = 5"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 5, B2: 5, B3: 5 }
+    formula: "=INTERCEPT(B1:B3, A1:A3)"
+
+  - id: slope_negative
+    description: "Strictly decreasing y vs increasing x -> slope = -2"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 6, B2: 4, B3: 2 }
+    formula: "=SLOPE(B1:B3, A1:A3)"
+
+  - id: slope_shape_mismatch_is_na
+    description: "Mismatched array sizes -> #N/A"
+    setup: { A1: 1, A2: 2, B1: 1, B2: 2, B3: 3 }
+    formula: "=SLOPE(B1:B3, A1:A2)"
+
+  # -- RSQ edge probes -----------------------------------------------------
+  - id: rsq_perfect_linear
+    description: "y = 2x -> RSQ = 1"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, B1: 2, B2: 4, B3: 6, B4: 8 }
+    formula: "=RSQ(B1:B4, A1:A4)"
+
+  - id: rsq_constant_y_is_div0
+    description: "All y identical (sum_yy = 0) -> #DIV/0!"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 5, B2: 5, B3: 5 }
+    formula: "=RSQ(B1:B3, A1:A3)"
+
+  # -- FORECAST.LINEAR edge probes -----------------------------------------
+  - id: forecast_linear_extrapolation
+    description: "FORECAST extrapolates beyond the known_x range; x=10 -> intercept + slope*10"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 2, B2: 4, B3: 5, B4: 4, B5: 5 }
+    formula: "=FORECAST.LINEAR(10, B1:B5, A1:A5)"
+
+  - id: forecast_linear_single_distinct_x_is_div0
+    description: "All known_x identical (variance_x = 0) -> #DIV/0!"
+    setup: { A1: 1, A2: 1, A3: 1, B1: 2, B2: 4, B3: 6 }
+    formula: "=FORECAST.LINEAR(2, B1:B3, A1:A3)"
+
+  # -- Cross-family: bool / array literal / error propagation --------------
+  - id: correl_bool_pairs_dropped
+    description: "TRUE/FALSE in a range are skipped (treated as non-numeric); only (1,2) and (3,6) survive -> 1"
+    setup: { A1: 1, A2: true, A3: 3, B1: 2, B2: false, B3: 6 }
+    formula: "=CORREL(B1:B3, A1:A3)"
+
+  - id: slope_array_literal
+    description: "Inline array-literal arguments: y={2,4,6}, x={1,2,3} -> slope = 2"
+    formula: "=SLOPE({2,4,6}, {1,2,3})"
