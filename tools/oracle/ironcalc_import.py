@@ -670,6 +670,42 @@ def _out_filename(rel_source: str, xlsx_stem: str, sheet_title: str) -> str:
     return f"{stem}.golden.json"
 
 
+def _write_golden_if_changed(path: Path, doc: Dict[str, Any]) -> bool:
+    """Writes ``doc`` to ``path`` as JSON only when the content differs.
+
+    The ``environment.generated_at`` timestamp is excluded from the
+    comparison on both sides because it is rebuilt on every run and
+    would otherwise force a rewrite of every golden. A missing or
+    unparseable existing file counts as "different" and is rewritten
+    unconditionally.
+
+    Returns
+    -------
+    bool
+        ``True`` if the file was rewritten, ``False`` if the existing
+        file was kept untouched.
+    """
+
+    candidate_text = json.dumps(doc, ensure_ascii=False, indent=2) + "\n"
+    if path.exists():
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            existing = None
+        if existing is not None:
+            def _normalize(d: Dict[str, Any]) -> Dict[str, Any]:
+                norm = dict(d)
+                if isinstance(norm.get("environment"), dict):
+                    env = dict(norm["environment"])
+                    env.pop("generated_at", None)
+                    norm["environment"] = env
+                return norm
+            if _normalize(existing) == _normalize(doc):
+                return False
+    path.write_text(candidate_text, encoding="utf-8")
+    return True
+
+
 # ---------------------------------------------------------------------------
 # CLI entry
 # ---------------------------------------------------------------------------
@@ -734,6 +770,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     xlsx_files = _iter_xlsx(args.source)
     total_xlsx = 0
     total_goldens = 0
+    total_goldens_rewritten = 0
+    total_goldens_unchanged = 0
     total_cases = 0
     total_skip_cross_sheet = 0
     total_skip_no_cached = 0
@@ -743,11 +781,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     total_skip_divergence = 0
     errored_files: List[Tuple[str, str]] = []
 
-    # Purge any prior run's goldens so deletions propagate. Preserve
-    # non-JSON files (README, etc.) just in case.
-    for existing in args.out.iterdir() if args.out.exists() else []:
-        if existing.is_file() and existing.name.endswith(".golden.json"):
-            existing.unlink()
+    # Track every golden filename we (re)produce this run so any
+    # leftover files from previous runs can be pruned at the end. We
+    # used to purge the directory up front, but that defeated diff-aware
+    # writes -- the file would be deleted then rewritten with an
+    # otherwise-identical body and a fresh timestamp.
+    produced_names: set = set()
 
     for xlsx_path in xlsx_files:
         total_xlsx += 1
@@ -820,15 +859,36 @@ def main(argv: Optional[List[str]] = None) -> int:
 
             out_name = _out_filename(rel_source, xlsx_stem, sheet_name)
             out_path = args.out / out_name
-            with out_path.open("w", encoding="utf-8") as f:
-                json.dump(doc, f, ensure_ascii=False, indent=2)
-                f.write("\n")
+            produced_names.add(out_name)
+            rewritten = _write_golden_if_changed(out_path, doc)
             total_goldens += 1
+            if rewritten:
+                total_goldens_rewritten += 1
+            else:
+                total_goldens_unchanged += 1
             total_cases += len(doc["cases"])
+
+    # Prune leftover goldens that this run did not (re)produce. This
+    # mirrors the previous "purge up front" behaviour but defers the
+    # delete so unchanged files keep their original mtime + content.
+    total_goldens_pruned = 0
+    if args.out.exists():
+        for existing in args.out.iterdir():
+            if (
+                existing.is_file()
+                and existing.name.endswith(".golden.json")
+                and existing.name not in produced_names
+            ):
+                existing.unlink()
+                total_goldens_pruned += 1
 
     print(
         f"ironcalc_import: processed xlsx={total_xlsx} "
-        f"goldens={total_goldens} cases={total_cases} "
+        f"goldens={total_goldens} "
+        f"(rewritten={total_goldens_rewritten}, "
+        f"unchanged={total_goldens_unchanged}, "
+        f"pruned={total_goldens_pruned}) "
+        f"cases={total_cases} "
         f"skipped_cross_sheet={total_skip_cross_sheet} "
         f"skipped_no_cached={total_skip_no_cached} "
         f"skipped_unsupported={total_skip_unsupported} "
