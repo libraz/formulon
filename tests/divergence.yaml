@@ -287,6 +287,66 @@ entries:
     first_noted: 2026-04-26
     last_verified_excel_version: "16.108.1"
 
+  # -- BESSELI: Formulon more accurate than Excel's A&S 9.8.1/9.8.2 -------
+  # Excel's BESSELI uses the Abramowitz & Stegun rational polynomial
+  # approximations (rated |epsilon| < ~1.9e-7) for I_n(x). Formulon's
+  # power-series implementation is accurate to ~1e-13 in practice, so it
+  # diverges from Excel by up to a few times 1e-7 in the value. The
+  # discrepancy is within the published Excel error bound, so the answers
+  # are both "right" — we just differ on which one we trust. Verified at
+  # I_0(1): true value 1.26606587775..., Formulon 1.26606587775,
+  # Mac Excel 1.26606584803 (~3e-8 absolute error). I_0(20): true
+  # 43558282.559, Formulon 43558282.560, Mac Excel 43558285.788
+  # (~7.4e-8 relative). Tolerance widening is applied per-case in
+  # tests/oracle/cases/engineering_special.yaml; this entry documents
+  # the underlying numerical-accuracy reason.
+  - id: besseli_one_zero
+    reason: "Formulon's power-series BESSELI is more accurate than Mac Excel's A&S polynomial approximation; ~3e-8 absolute drift at I_0(1) is within Excel's published 1.9e-7 error bound. Per-case tolerance widened in engineering_special.yaml."
+    tolerance: { abs: 1e-6, rel: 1e-7 }
+    prefer: formulon
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
+  - id: besseli_text_x_coerces
+    reason: "Same BESSELI accuracy gap as besseli_one_zero (both compute I_0(1)). Per-case tolerance widened in engineering_special.yaml."
+    tolerance: { abs: 1e-6, rel: 1e-7 }
+    prefer: formulon
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
+  - id: besseli_large_x_growth
+    reason: "I_0(20): Excel's A&S 9.8.2 large-x polynomial has |epsilon| < 1.9e-7; observed diff is ~7.4e-8 relative (~3 absolute on a 4.4e7 magnitude). Per-case tolerance widened in engineering_special.yaml."
+    tolerance: { abs: 100.0, rel: 1e-6 }
+    prefer: formulon
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
+
+  # -- BESSELY: Formulon's POSIX delegation more accurate than Excel ------
+  # BESSELY(x, n) goes through POSIX `::yn`, which on macOS / glibc / musl
+  # is accurate to within a few ULPs of the true value. Mac Excel's
+  # implementation diverges by ~1e-7 at moderate orders. Same accuracy
+  # story as BESSELI. Verified at Y_5(2): true -9.93598912848...,
+  # Formulon -9.93598912848 (POSIX), Mac Excel -9.93598902280.
+  - id: bessely_large_order_decay
+    reason: "Y_5(2): Formulon's POSIX ::yn matches the true value to ULP; Mac Excel diverges by ~1.1e-7. Same accuracy gap as BESSELI. Per-case tolerance widened in engineering_special.yaml."
+    tolerance: { abs: 1e-6, rel: 1e-7 }
+    prefer: formulon
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
+
+  # -- ERF.PRECISE arity rejection: Mac Excel returns blank, not error ----
+  # Mac Excel 365 ja-JP refuses to evaluate `=ERF.PRECISE(1, 2)` (the
+  # function is documented as strict 1-arg) and surfaces something the
+  # xlwings driver reads back as a blank cell — most likely a parse-time
+  # rejection or an error category xlwings can't reify. Formulon's
+  # registry enforces the (1,1) arity bound and correctly returns
+  # #VALUE!, which is the more useful behaviour for tooling that
+  # consumes formula errors.
+  - id: erf_precise_two_arg_rejected
+    mode: skip-oracle
+    reason: "Mac Excel rejects =ERF.PRECISE(1,2) at the formula level; xlwings reads the rejection back as blank. Formulon correctly surfaces #VALUE! from arity enforcement."
+    prefer: formulon
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

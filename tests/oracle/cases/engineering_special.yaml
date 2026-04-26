@@ -69,6 +69,10 @@ cases:
   # -- BESSELI -------------------------------------------------------------
   - id: besseli_one_zero
     description: "I_0(1)"
+    # Mac Excel's BESSELI uses A&S 9.8.1/9.8.2 polynomials with rated
+    # |epsilon| < 1.9e-7; Formulon's power series is accurate to ~1e-13.
+    # Widened tolerance accepts the published Excel error bound.
+    tolerance: { abs: 1e-6, rel: 1e-7 }
     formula: "=BESSELI(1,0)"
 
   - id: besseli_two_one
@@ -87,3 +91,130 @@ cases:
   - id: besselk_zero_singular
     description: "K_n(0) is singular -> #NUM!"
     formula: "=BESSELK(0,0)"
+
+  # =========================================================================
+  # Edge probes appended for engineering_special expansion.
+  # =========================================================================
+
+  # -- ERF asymptotes / sign / 2-arg shape ---------------------------------
+  - id: erf_large_positive_asymptote
+    description: "erf(6) is indistinguishable from 1.0 at double precision"
+    formula: "=ERF(6)"
+
+  - id: erf_large_negative_asymptote
+    description: "erf(-6) ~ -1.0"
+    formula: "=ERF(-6)"
+
+  - id: erf_two_arg_negative_bounds
+    description: "erf(-1) - erf(-2): both negative, result positive"
+    formula: "=ERF(-2,-1)"
+
+  - id: erf_two_arg_reversed_bounds
+    description: "lower=2, upper=1 -> erf(1) - erf(2) (negative)"
+    formula: "=ERF(2,1)"
+
+  - id: erf_two_arg_same_value
+    description: "lower == upper -> 0"
+    formula: "=ERF(1,1)"
+
+  - id: erf_text_numeric
+    description: "Text that parses as number is coerced"
+    formula: "=ERF(\"1.5\")"
+
+  - id: erf_bool_rejected
+    description: "Excel 365 rejects TRUE/FALSE for ERF -> #VALUE!"
+    formula: "=ERF(TRUE)"
+
+  - id: erf_propagates_error
+    description: "Error in argument propagates"
+    formula: "=ERF(#N/A)"
+
+  - id: erf_precise_two_arg_rejected
+    description: "ERF.PRECISE is strict 1-arg; 2nd arg surfaces #VALUE!"
+    formula: "=ERF.PRECISE(1,2)"
+
+  # -- ERFC tail / sign ----------------------------------------------------
+  - id: erfc_large_positive_to_zero
+    description: "erfc(6) ~ 1e-17, far below typical tolerance"
+    formula: "=ERFC(6)"
+
+  - id: erfc_negative
+    description: "erfc(-1) = 2 - erfc(1) ~= 1.842700793"
+    formula: "=ERFC(-1)"
+
+  # -- BESSELJ -------------------------------------------------------------
+  - id: besselj_fractional_order_truncates
+    description: "Excel truncates n toward zero: J_1.7 -> J_1"
+    formula: "=BESSELJ(1,1.7)"
+
+  - id: besselj_negative_order_rejected
+    description: "Negative order -> #NUM! (Excel rejects negative orders)"
+    formula: "=BESSELJ(1,-1)"
+
+  - id: besselj_zero_higher_order
+    description: "J_n(0) = 0 for n >= 1"
+    formula: "=BESSELJ(0,1)"
+
+  - id: besselj_large_x_oscillation
+    description: "J_0(10) is in the oscillatory regime"
+    formula: "=BESSELJ(10,0)"
+
+  # -- BESSELY -------------------------------------------------------------
+  - id: bessely_negative_x_rejected
+    description: "Y_n is undefined for x < 0 in Excel"
+    formula: "=BESSELY(-1,0)"
+
+  - id: bessely_large_order_decay
+    description: "Y_5 at moderate x shows heavy growth in magnitude"
+    # Mac Excel's BESSELY drifts ~1e-7 from the true value; Formulon delegates
+    # to POSIX ::yn which is ULP-accurate. Widened tolerance accepts the
+    # documented Excel approximation error (see divergence.yaml).
+    tolerance: { abs: 1e-6, rel: 1e-7 }
+    formula: "=BESSELY(2,5)"
+
+  # -- BESSELI -------------------------------------------------------------
+  - id: besseli_zero_zero
+    description: "I_0(0) = 1"
+    formula: "=BESSELI(0,0)"
+
+  - id: besseli_zero_higher_order
+    description: "I_n(0) = 0 for n >= 1"
+    formula: "=BESSELI(0,1)"
+
+  - id: besseli_large_x_growth
+    description: "I_0(20) grows exponentially; verify against Excel cap"
+    # Same A&S BESSELI accuracy gap as besseli_one_zero; magnitudes here
+    # are ~4.4e7 so the published 1.9e-7 relative error becomes ~10
+    # absolute. Widen both axes accordingly.
+    tolerance: { abs: 100.0, rel: 1e-6 }
+    formula: "=BESSELI(20,0)"
+
+  # -- BESSELK -------------------------------------------------------------
+  - id: besselk_negative_x_rejected
+    description: "K_n is undefined for x < 0 in Excel"
+    formula: "=BESSELK(-1,0)"
+
+  - id: besselk_small_x_log_asymptote
+    description: "K_0(0.01) is large; -log(x/2) dominant"
+    formula: "=BESSELK(0.01,0)"
+
+  - id: besselk_large_x_decay
+    description: "K_0(20) decays exponentially"
+    formula: "=BESSELK(20,0)"
+
+  # -- Cross-family --------------------------------------------------------
+  - id: besselj_order_via_cell_ref
+    description: "Order argument resolved through a cell reference, with fractional truncation"
+    setup: { A1: 2.9 }
+    formula: "=BESSELJ(1,A1)"
+
+  - id: besseli_text_x_coerces
+    description: "Text x is parsed as a number for BESSELI"
+    # Same I_0(1) accuracy gap as besseli_one_zero.
+    tolerance: { abs: 1e-6, rel: 1e-7 }
+    formula: "=BESSELI(\"1\",0)"
+
+  - id: besselk_blank_x_rejected
+    description: "Blank x -> 0; K_n(0) -> #NUM!"
+    setup: { A1: null }
+    formula: "=BESSELK(A1,0)"
