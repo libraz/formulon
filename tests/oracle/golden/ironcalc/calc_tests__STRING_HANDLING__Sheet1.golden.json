@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Sheet1",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:55:14Z"
+    "generated_at": "2026-04-26T01:08:53Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -1123,10 +1123,7 @@
           "code": "#DIV/0!"
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 7.0
-      }
+      "skipped": "Mac propagates error through LEN; IronCalc textifies to LEN(\"#DIV/0!\")=7. Probe: text_function_error_probes."
     },
     {
       "id": "C8",
@@ -1137,10 +1134,7 @@
           "code": "#DIV/0!"
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "#div/0!"
-      }
+      "skipped": "Mac propagates error through LOWER; IronCalc textifies. Probe: text_function_error_probes."
     },
     {
       "id": "D8",
@@ -1165,10 +1159,7 @@
           "code": "#DIV/0!"
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "#"
-      }
+      "skipped": "Mac propagates error through LEFT; IronCalc textifies. Probe: text_function_error_probes."
     },
     {
       "id": "F8",
@@ -1179,10 +1170,7 @@
           "code": "#DIV/0!"
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "#DI"
-      }
+      "skipped": "Mac propagates error through LEFT(_,3); IronCalc textifies. Probe: text_function_error_probes."
     },
     {
       "id": "G8",
@@ -1207,10 +1195,7 @@
           "code": "#DIV/0!"
         }
       },
-      "expect": {
-        "kind": "error",
-        "code": "#VALUE!"
-      }
+      "skipped": "Mac propagates error before negative-length validation; IronCalc validates negative-length first and surfaces #VALUE!. Probe: text_function_error_probes (text_err_left_neg_div0)."
     },
     {
       "id": "J8",
@@ -1221,10 +1206,7 @@
           "code": "#DIV/0!"
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "!"
-      }
+      "skipped": "Mac propagates error through RIGHT; IronCalc textifies. Probe: text_function_error_probes."
     },
     {
       "id": "K8",
@@ -1235,10 +1217,7 @@
           "code": "#DIV/0!"
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "/0!"
-      }
+      "skipped": "Mac propagates error through RIGHT(_,3); IronCalc textifies. Probe: text_function_error_probes."
     },
     {
       "id": "L8",
@@ -1263,10 +1242,7 @@
           "code": "#DIV/0!"
         }
       },
-      "expect": {
-        "kind": "error",
-        "code": "#VALUE!"
-      }
+      "skipped": "Mac propagates error before negative-length validation; IronCalc validates first. Probe: text_function_error_probes (text_err_right_neg_na)."
     },
     {
       "id": "O8",
@@ -1291,10 +1267,7 @@
           "code": "#DIV/0!"
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 7.0
-      }
+      "skipped": "Mac propagates error through TRIM and through LEN; IronCalc textifies twice. Probe: text_function_error_probes (text_err_trim_div0)."
     },
     {
       "id": "B9",

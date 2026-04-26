@@ -69,6 +69,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SOURCE_DIR = REPO_ROOT / "tests" / "oracle" / "external" / "ironcalc" / "fixtures"
 DEFAULT_OUT_DIR = REPO_ROOT / "tests" / "oracle" / "golden" / "ironcalc"
 DEFAULT_LOG_PATH = Path(__file__).resolve().parent / "ironcalc_import.log"
+DEFAULT_DIVERGENCE = REPO_ROOT / "tests" / "ironcalc_divergence.yaml"
 
 # Formulon's existing tolerance default for xlwings-generated goldens is
 # 1e-12, but IronCalc's own runner uses 5e-8 so a lot of its fixtures
@@ -158,6 +159,42 @@ def _ironcalc_commit() -> str:
         if m:
             return m.group(1)
     return "unknown"
+
+
+def _load_divergence_skips(path: Path) -> Dict[str, str]:
+    """Loads composite-id -> reason from `tests/ironcalc_divergence.yaml`.
+
+    The IronCalc importer does not have a `mode: tolerance` notion (the
+    upstream goldens are already imported with whatever epsilon the
+    fixture's METADATA sheet declared), so any entry is treated as a
+    skip. An explicit `mode: skip-oracle` is still accepted for
+    symmetry with `tests/divergence.yaml`. The composite id is
+    `<suite>.<addr>` matching the gtest parameter format printed by the
+    oracle test driver.
+    """
+
+    if not path.exists():
+        return {}
+    try:
+        import yaml  # type: ignore
+
+        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return {}
+    out: Dict[str, str] = {}
+    entries = doc.get("entries") or []
+    if not isinstance(entries, list):
+        return {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        cid = entry.get("id")
+        mode = entry.get("mode", "skip-oracle")
+        if mode == "skip-oracle" and isinstance(cid, str):
+            out[cid] = str(
+                entry.get("reason", "ironcalc_divergence.yaml skip-oracle")
+            )
+    return out
 
 
 def _scrub_filename(part: str) -> str:
@@ -284,6 +321,7 @@ class SheetConvertStats:
         self.skipped_unsupported_value: int = 0
         self.skipped_over_cap: int = 0
         self.skipped_unbounded_ref: int = 0
+        self.skipped_divergence: int = 0
 
 
 def _expand_reference(ref: str) -> List[str]:
@@ -420,13 +458,33 @@ def _convert_sheet(
     locale: str,
     commit: str,
     now_iso: str,
+    skip_map: Optional[Dict[str, str]] = None,
 ) -> Tuple[Optional[Dict[str, Any]], SheetConvertStats]:
     """Converts one sheet of one xlsx to a golden-JSON dict.
 
     Returns (None, stats) when the sheet has no emittable cases.
+
+    `skip_map` maps `<suite>.<addr>` composite ids to a reason string.
+    Matching cases are still emitted (so the divergence stays visible
+    in the goldens) but with `"skipped": <reason>` in place of
+    `"expect": {...}`. The C++ test driver translates the field into a
+    gtest-skip; see `tests/oracle/oracle_test.cpp`.
     """
 
     stats = SheetConvertStats()
+    skip_map = skip_map or {}
+
+    # Suite name is needed up-front so we can build composite skip ids
+    # while iterating cases. The downstream `doc` reuses the same
+    # value so the goldens and the skip map stay in sync.
+    sheet_slug = _scrub_filename(sheet.title)
+    rel_dir = _scrub_filename(
+        str(Path(rel_source).parent).replace("/", "__")
+    )
+    if rel_dir in ("", "."):
+        suite = f"ironcalc_{xlsx_stem}_{sheet_slug}"
+    else:
+        suite = f"ironcalc_{rel_dir}_{xlsx_stem}_{sheet_slug}"
 
     # Gather values up-front so we can produce setup per formula cell.
     # Three classes of cells:
@@ -534,27 +592,30 @@ def _convert_sheet(
             continue
 
         formula_text = formula if formula.startswith("=") else "=" + formula
-        cases.append({
-            "id": addr,
-            "formula": formula_text,
-            "setup": setup,
-            "expect": expect,
-        })
-        stats.emitted_cases += 1
+        skip_key = f"{suite}.{addr}"
+        if skip_key in skip_map:
+            cases.append({
+                "id": addr,
+                "formula": formula_text,
+                "setup": setup,
+                "skipped": skip_map[skip_key],
+            })
+            stats.skipped_divergence += 1
+            logger.info(
+                "skip divergence: %s sheet=%r cell=%s reason=%s",
+                rel_source, sheet.title, addr, skip_map[skip_key],
+            )
+        else:
+            cases.append({
+                "id": addr,
+                "formula": formula_text,
+                "setup": setup,
+                "expect": expect,
+            })
+            stats.emitted_cases += 1
 
     if not cases:
         return None, stats
-
-    rel_slug = _scrub_filename(rel_source.replace("/", "__"))
-    sheet_slug = _scrub_filename(sheet.title)
-    # rel_source looks like "calc_tests/AVERAGE.xlsx"; strip suffix.
-    rel_dir = _scrub_filename(
-        str(Path(rel_source).parent).replace("/", "__")
-    )
-    if rel_dir in ("", "."):
-        suite = f"ironcalc_{xlsx_stem}_{sheet_slug}"
-    else:
-        suite = f"ironcalc_{rel_dir}_{xlsx_stem}_{sheet_slug}"
 
     doc = {
         "suite": suite,
@@ -639,6 +700,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="Where to tee per-skip reasons",
     )
     ap.add_argument(
+        "--divergence", type=Path, default=DEFAULT_DIVERGENCE,
+        help=(
+            "YAML listing IronCalc-vs-Mac divergences to mark as skipped "
+            f"(default {DEFAULT_DIVERGENCE})."
+        ),
+    )
+    ap.add_argument(
         "--strict", action="store_true",
         help="Treat any per-file exception as fatal (exit 1)",
     )
@@ -656,6 +724,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     now_iso = _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")
     now_iso = now_iso.replace("+00:00", "Z")
 
+    skip_map = _load_divergence_skips(args.divergence)
+    if skip_map:
+        logger.info(
+            "loaded %d divergence skip(s) from %s",
+            len(skip_map), args.divergence,
+        )
+
     xlsx_files = _iter_xlsx(args.source)
     total_xlsx = 0
     total_goldens = 0
@@ -665,6 +740,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     total_skip_unsupported = 0
     total_skip_over_cap = 0
     total_skip_unbounded = 0
+    total_skip_divergence = 0
     errored_files: List[Tuple[str, str]] = []
 
     # Purge any prior run's goldens so deletions propagate. Preserve
@@ -717,6 +793,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     locale=locale,
                     commit=commit,
                     now_iso=now_iso,
+                    skip_map=skip_map,
                 )
             except Exception as exc:
                 logger.info(
@@ -736,6 +813,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             total_skip_unsupported += stats.skipped_unsupported_value
             total_skip_over_cap += stats.skipped_over_cap
             total_skip_unbounded += stats.skipped_unbounded_ref
+            total_skip_divergence += stats.skipped_divergence
 
             if doc is None:
                 continue
@@ -756,6 +834,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         f"skipped_unsupported={total_skip_unsupported} "
         f"skipped_over_cap={total_skip_over_cap} "
         f"skipped_unbounded_ref={total_skip_unbounded} "
+        f"skipped_divergence={total_skip_divergence} "
         f"errors={len(errored_files)}"
     )
     if errored_files:

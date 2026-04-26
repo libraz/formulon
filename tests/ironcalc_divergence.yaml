@@ -1,0 +1,114 @@
+# Known / accepted divergences between IronCalc and Mac Excel 365.
+#
+# This file is the IronCalc-oracle counterpart to `tests/divergence.yaml`.
+# It documents cases where IronCalc's cached value disagrees with Mac
+# Excel 365, and Formulon intentionally tracks the Mac behaviour. The
+# IronCalc importer (`tools/oracle/ironcalc_import.py`) replaces each
+# matching case's `expect` with `"skipped": "<reason>"` so the C++ test
+# driver (`tests/oracle/oracle_test.cpp`) reports the case as
+# gtest-skipped rather than failed.
+#
+# Mac-vs-Formulon divergences belong in `tests/divergence.yaml`. This
+# file is exclusively for divergences against IronCalc's published
+# behaviour, and every entry MUST cite a Mac-side probe golden under
+# `tests/oracle/golden/` as evidence that Formulon's behaviour matches
+# Mac (so the skip is legitimate and not just hiding a Formulon bug).
+#
+# The id format is "<suite>.<addr>" — the same composite key the
+# parameterized test runner prints. The suite name is the one written
+# by the IronCalc importer (e.g.
+# `ironcalc_calc_tests_STRING_HANDLING_Sheet1`) and the addr is the
+# A1 reference of the cell under test (e.g. `B8`).
+#
+# Schema (parsed by tools/oracle/ironcalc_import.py::_load_divergence_skips):
+#
+#   entries:
+#     - id: <suite>.<addr>
+#       reason: "<one-line summary including the probe reference>"
+#       prefer: mac | ironcalc            # which side we trust
+#       first_noted: YYYY-MM-DD
+
+entries:
+  # -- STRING_HANDLING: text functions on error inputs --------------------
+  # Mac Excel propagates errors through text-family functions: any error
+  # input produces the same error code as output. IronCalc instead
+  # textifies the error to its display string ("#DIV/0!") and runs the
+  # function on the resulting text — so e.g. LEN(#DIV/0!) returns 7 in
+  # IronCalc and #DIV/0! on Mac. Formulon matches Mac.
+  # Probe: tests/oracle/golden/text_function_error_probes.golden.json
+  # (19 cases). Every STRING_HANDLING.A8 case below has `A8 = #DIV/0!`
+  # fed into a text function.
+  - id: ironcalc_calc_tests_STRING_HANDLING_Sheet1.B8
+    reason: "Mac propagates error through LEN; IronCalc textifies to LEN(\"#DIV/0!\")=7. Probe: text_function_error_probes."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_STRING_HANDLING_Sheet1.C8
+    reason: "Mac propagates error through LOWER; IronCalc textifies. Probe: text_function_error_probes."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_STRING_HANDLING_Sheet1.E8
+    reason: "Mac propagates error through LEFT; IronCalc textifies. Probe: text_function_error_probes."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_STRING_HANDLING_Sheet1.F8
+    reason: "Mac propagates error through LEFT(_,3); IronCalc textifies. Probe: text_function_error_probes."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_STRING_HANDLING_Sheet1.H8
+    reason: "Mac propagates error before negative-length validation; IronCalc validates negative-length first and surfaces #VALUE!. Probe: text_function_error_probes (text_err_left_neg_div0)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_STRING_HANDLING_Sheet1.J8
+    reason: "Mac propagates error through RIGHT; IronCalc textifies. Probe: text_function_error_probes."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_STRING_HANDLING_Sheet1.K8
+    reason: "Mac propagates error through RIGHT(_,3); IronCalc textifies. Probe: text_function_error_probes."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_STRING_HANDLING_Sheet1.M8
+    reason: "Mac propagates error before negative-length validation; IronCalc validates first. Probe: text_function_error_probes (text_err_right_neg_na)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_STRING_HANDLING_Sheet1.P8
+    reason: "Mac propagates error through TRIM and through LEN; IronCalc textifies twice. Probe: text_function_error_probes (text_err_trim_div0)."
+    prefer: mac
+    first_noted: 2026-04-26
+
+  # -- simple_functions Implicit_Intersection: out-of-alignment ranges ----
+  # IronCalc applies strict legacy implicit-intersection: when the
+  # formula cell is outside both the row span and the column span of a
+  # 1D range, the range collapses to #VALUE!. Mac Excel 365 instead
+  # spills the range into adjacent cells; xlwings reads the spill anchor
+  # (the top-left cell). Formulon matches Mac (spill semantics).
+  # Probe: tests/oracle/golden/implicit_intersection.golden.json
+  - id: ironcalc_calc_tests_simple_functions_Implicit_Intersection.B15
+    reason: "IronCalc legacy II returns #VALUE! for col-misaligned 1D vertical range; Mac spills (anchor = top-left). Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_simple_functions_Implicit_Intersection.D15
+    reason: "IronCalc legacy II returns #VALUE! for row-misaligned 1D horizontal range; Mac spills. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_simple_functions_Implicit_Intersection.I14
+    reason: "IronCalc legacy II returns #VALUE! for col-misaligned 1D vertical range; Mac spills. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_simple_functions_Implicit_Intersection.L15
+    reason: "IronCalc legacy II returns #VALUE! for row-misaligned 1D horizontal range with absolute refs; Mac spills. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-04-26
+
+  # -- T_VALUE_VALUETOTEXT: VALUE() date parsing under ja-JP locale -------
+  # IronCalc parses hyphen-format ("10-12-1999") and US slash-format
+  # ("M/D/YYYY") date strings as numbers. Mac Excel 365 in ja-JP locale
+  # rejects both with #VALUE!. Formulon follows Mac's locale-aware
+  # behaviour. Probe: tests/oracle/golden/value_coercion_probes.golden.json
+  - id: ironcalc_calc_tests_T_VALUE_VALUETOTEXT_Sheet1.I5
+    reason: "VALUE(\"10-12-1999\") returns 36504 in IronCalc, #VALUE! on Mac ja-JP. Probe: value_coercion_probes (value_hyphen_date_1)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_T_VALUE_VALUETOTEXT_Sheet1.C15
+    reason: "VALUE(\"2/3/2023\") returns 44960 in IronCalc, #VALUE! on Mac ja-JP. Probe: value_coercion_probes (value_slash_date_short)."
+    prefer: mac
+    first_noted: 2026-04-26
