@@ -124,21 +124,6 @@ entries:
     prefer: formulon
     first_noted: 2026-04-25
 
-  # -- CODE / CHAR: Mac Excel ja-JP uses CP932 / JIS X 0208 encoding ------
-  # Mac Excel ja-JP's CODE / CHAR operate on the Shift-JIS (CP932)
-  # codepage: for single-byte characters we match exactly, but for
-  # double-byte characters CODE returns the JIS X 0208 row-cell encoding
-  # (e.g. CODE("あ") == 9250 == 0x2422) and CHAR on DBCS lead-byte values
-  # (0x81..0x9F, 0xE0..0xFC) returns a variety of fallback glyphs.
-  # Implementing full CP932 / JIS mapping requires a ~8 KB table that is
-  # not yet justified against the WASM size budget. Formulon returns the
-  # Unicode codepoint instead; cases that trip this are listed here.
-  - id: code_hiragana_first
-    mode: skip-oracle
-    reason: "Mac Excel ja-JP CODE returns JIS X 0208 row-cell (9250 for \"あ\"); Formulon returns the Unicode codepoint (12354) pending a CP932 table."
-    prefer: mac-excel-365
-    first_noted: 2026-04-23
-
   # -- ISFORMULA of non-reference literals ---------------------------------
   # Mac Excel 365 returns `#VALUE!` for ISFORMULA(42) and
   # ISFORMULA("A1"), matching the documented rule that ISFORMULA expects

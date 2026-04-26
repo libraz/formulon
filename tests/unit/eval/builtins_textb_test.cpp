@@ -347,14 +347,20 @@ TEST(TextCode, UsesFirstCharOnly) {
   EXPECT_DOUBLE_EQ(v.as_number(), 65.0);
 }
 
-TEST(TextCode, HiraganaReturnsUnicode) {
-  // "あ" = U+3042 = 12354 decimal. Mac Excel ja-JP historically returned
-  // CP932 for non-ASCII; this test pins Formulon's current Unicode
-  // behaviour. If the oracle diverges the result will be captured via
-  // tests/divergence.yaml and this assertion stays the contract.
+TEST(TextCode, HiraganaReturnsJisRowCell) {
+  // "あ" = U+3042. Mac Excel ja-JP returns the JIS X 0208 row-cell
+  // encoding (row 4, cell 2) -> ((4+0x20)<<8) | (2+0x20) = 0x2422 = 9250.
   const Value v = EvalSource("=CODE(\"あ\")");
   ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 12354.0);
+  EXPECT_DOUBLE_EQ(v.as_number(), 9250.0);
+}
+
+TEST(TextCode, EmojiFallsBackToUnderscore) {
+  // Codepoints outside JIS X 0208 (here U+1F600) fall back to 95 (the
+  // underscore byte) per Mac Excel's empirically confirmed behaviour.
+  const Value v = EvalSource("=CODE(\"\xF0\x9F\x98\x80\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 95.0);
 }
 
 TEST(TextCode, ErrorPropagates) {

@@ -65,6 +65,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/coerce_test.cpp
   unit/eval/criteria_test.cpp
   unit/eval/jp_fold_test.cpp
+  unit/eval/jis0208_table_test.cpp
   unit/eval/builtins_countif_test.cpp
   unit/eval/builtins_database_test.cpp
   unit/eval/builtins_ifs_test.cpp

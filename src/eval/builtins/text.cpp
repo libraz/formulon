@@ -24,6 +24,7 @@
 #include "eval/coerce.h"
 #include "eval/criteria.h"
 #include "eval/function_registry.h"
+#include "eval/jis0208_table.h"
 #include "eval/text_ops.h"
 #include "eval/utf8_length.h"
 #include "utils/arena.h"
@@ -540,51 +541,68 @@ Value Clean(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 // REPLACEB / FINDB / SEARCHB) lives in `text_dbcs.cpp`.
 
 // CHAR(number) - returns the single-character text whose Mac Excel ja-JP
-// codepage value is `number`. `number` is truncated to an integer; values
-// outside 1..255 surface `#VALUE!`.
+// codepage value is `number`. `number` is truncated to an integer.
 //
-// Mac Excel ja-JP uses the Shift-JIS (CP932) codepage for this function.
-// CP932 partitions 0x00..0xFF as follows:
+// Mac Excel ja-JP uses CP932 / JIS X 0208. The valid argument space is the
+// disjoint union of two ranges:
 //
-//   0x00..0x7F  - ASCII (identical to Unicode)
-//   0x81..0x9F  - DBCS lead byte (not a valid single-byte char)
-//   0xA1..0xDF  - Half-width katakana (U+FF61..U+FF9F)
-//   0xE0..0xFC  - DBCS lead byte
-//   0x80, 0xA0, 0xFD..0xFF - unassigned
+//   1..255       SBCS region. ASCII (1..127), the CP1252 high table for
+//                lead-byte slots (0x80..0x9F), half-width katakana
+//                (0xA1..0xDF -> U+FF61..U+FF9F), and the 0xA0..0xFF
+//                passthrough are kept exactly as before; ASC/JIS round-trip
+//                relies on the half-width katakana mapping.
+//   8481..32382  DBCS region: `n` is split into `(hi << 8) | lo` where
+//                hi, lo each live in [0x21, 0x7E] (i.e. JIS X 0208 row,
+//                cell in [1, 94]). The Unicode codepoint comes from the
+//                JIS X 0208 reverse table.
 //
-// We implement the two single-byte regions (ASCII and half-width katakana)
-// exactly. Lead-byte values are echoed back as their CP1252 equivalent:
-// Mac Excel returns a variety of fallback glyphs for these and we capture
-// specific mismatches in `tests/divergence.yaml`.
+// Anything else (256..8480, unmapped DBCS slots, bytes outside [0x21, 0x7E],
+// n < 1, n > 65535) yields `#VALUE!`. Mac probe golden:
+// tests/oracle/golden/code_char_jp_probes.golden.json.
 Value Char_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   auto parsed = read_int_arg(args[0]);
   if (!parsed) {
     return Value::error(parsed.error());
   }
   const int n = parsed.value();
-  if (n < 1 || n > 255) {
+  if (n < 1) {
     return Value::error(ErrorCode::Value);
   }
   std::uint32_t cp = 0;
-  if (n < 0x80) {
-    cp = static_cast<std::uint32_t>(n);
-  } else if (n >= 0xA1 && n <= 0xDF) {
-    // Half-width katakana mapping: 0xA1 -> U+FF61, 0xDF -> U+FF9F.
-    cp = 0xFF61u + static_cast<std::uint32_t>(n - 0xA1);
-  } else {
-    // CP932 DBCS lead-byte or unassigned slot. Fall back to the CP1252
-    // value so the character is at least printable; any divergence from
-    // Mac Excel ja-JP is captured per-case in tests/divergence.yaml.
-    static constexpr std::uint32_t kCp1252HighTable[32] = {
-        0x20ACu, 0xFFFDu, 0x201Au, 0x0192u, 0x201Eu, 0x2026u, 0x2020u, 0x2021u, 0x02C6u, 0x2030u, 0x0160u,
-        0x2039u, 0x0152u, 0xFFFDu, 0x017Du, 0xFFFDu, 0xFFFDu, 0x2018u, 0x2019u, 0x201Cu, 0x201Du, 0x2022u,
-        0x2013u, 0x2014u, 0x02DCu, 0x2122u, 0x0161u, 0x203Au, 0x0153u, 0xFFFDu, 0x017Eu, 0x0178u,
-    };
-    if (n < 0xA0) {
-      cp = kCp1252HighTable[n - 0x80];
-    } else {
+  if (n <= 0xFF) {
+    if (n < 0x80) {
       cp = static_cast<std::uint32_t>(n);
+    } else if (n >= 0xA1 && n <= 0xDF) {
+      // Half-width katakana mapping: 0xA1 -> U+FF61, 0xDF -> U+FF9F.
+      cp = 0xFF61u + static_cast<std::uint32_t>(n - 0xA1);
+    } else {
+      // CP932 DBCS lead-byte or unassigned single-byte slot. Fall back to
+      // the CP1252 value so the character is at least printable; any
+      // divergence from Mac Excel ja-JP is captured per-case in
+      // tests/divergence.yaml.
+      static constexpr std::uint32_t kCp1252HighTable[32] = {
+          0x20ACu, 0xFFFDu, 0x201Au, 0x0192u, 0x201Eu, 0x2026u, 0x2020u, 0x2021u, 0x02C6u, 0x2030u, 0x0160u,
+          0x2039u, 0x0152u, 0xFFFDu, 0x017Du, 0xFFFDu, 0xFFFDu, 0x2018u, 0x2019u, 0x201Cu, 0x201Du, 0x2022u,
+          0x2013u, 0x2014u, 0x02DCu, 0x2122u, 0x0161u, 0x203Au, 0x0153u, 0xFFFDu, 0x017Eu, 0x0178u,
+      };
+      if (n < 0xA0) {
+        cp = kCp1252HighTable[n - 0x80];
+      } else {
+        cp = static_cast<std::uint32_t>(n);
+      }
     }
+  } else if (n < 0x2121 || n > 0xFFFF) {
+    // Gap between SBCS and DBCS, or wider than two bytes. Mac returns
+    // #VALUE! (probe `char_above_255` in code_char_jp_probes).
+    return Value::error(ErrorCode::Value);
+  } else {
+    const auto hi = static_cast<std::uint8_t>((n >> 8) & 0xFF);
+    const auto lo = static_cast<std::uint8_t>(n & 0xFF);
+    const std::uint16_t mapped = lookup_jis0208_to_unicode(hi, lo);
+    if (mapped == 0u) {
+      return Value::error(ErrorCode::Value);
+    }
+    cp = static_cast<std::uint32_t>(mapped);
   }
   const std::string encoded = encode_utf8_codepoint(cp);
   if (encoded.empty()) {
@@ -593,11 +611,17 @@ Value Char_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return Value::text(arena.intern(encoded));
 }
 
-// CODE(text) - returns the ANSI/Mac codepage value of the first character
-// in `text`. Empty text yields `#VALUE!`. For ASCII (<= 0x7F) the result is
-// the codepoint; for non-ASCII we return the first UTF-8 codepoint as a
-// number. Mac Excel ja-JP returns CP932 values for non-ASCII; any mismatch
-// is documented in `tests/divergence.yaml`.
+// CODE(text) - returns the Mac Excel ja-JP CP932 / JIS X 0208 value of the
+// first character in `text`. Empty text yields `#VALUE!`.
+//
+//   * ASCII (codepoint < 0x80): codepoint itself.
+//   * Half-width katakana (U+FF61..U+FF9F): 0xA1..0xDF.
+//   * Anything in JIS X 0208: the row-cell encoding from
+//     `lookup_unicode_to_jis0208` (e.g. CODE("あ") = 0x2422 = 9250).
+//   * Anything else (NEC extensions, emoji, supplementary plane, etc.):
+//     95 (ASCII underscore), the empirically confirmed Mac fallback.
+//
+// Mac probe golden: tests/oracle/golden/code_char_jp_probes.golden.json.
 Value Code_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto text = coerce_to_text(args[0]);
   if (!text) {
@@ -610,7 +634,19 @@ Value Code_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!decoded.valid) {
     return Value::error(ErrorCode::Value);
   }
-  return Value::number(static_cast<double>(decoded.codepoint));
+  const std::uint32_t cp = decoded.codepoint;
+  if (cp < 0x80u) {
+    return Value::number(static_cast<double>(cp));
+  }
+  if (cp >= 0xFF61u && cp <= 0xFF9Fu) {
+    return Value::number(static_cast<double>(0xA1u + (cp - 0xFF61u)));
+  }
+  const std::uint16_t mapped = lookup_unicode_to_jis0208(cp);
+  if (mapped != 0u) {
+    return Value::number(static_cast<double>(mapped));
+  }
+  // Mac fallback for anything outside JIS X 0208 (NEC ext, emoji, etc.).
+  return Value::number(95.0);
 }
 
 // PROPER(text) - title-case `text`. ASCII letters that begin a "word" are

@@ -1,0 +1,359 @@
+{
+  "suite": "code_char_jp_probes",
+  "description": "Mac Excel ja-JP CODE returns the JIS X 0208 row-cell encoding for DBCS characters (e.g. CODE(\"あ\") = 9250 = 0x2422 = row 4, cell 2). For ASCII it returns the byte value; for half-width katakana it returns the CP932 single-byte code (0xA1..0xDF). CHAR is the inverse but accepts only single-byte codes 1..255 in many Excel versions; ja-JP semantics for higher integers are unverified. These probes pin Mac's exact algorithm before designing a CP932-based implementation.\n",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-26T23:30:31Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "code_ascii_A",
+      "formula": "=CODE(\"A\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 65.0
+      }
+    },
+    {
+      "id": "code_ascii_space",
+      "formula": "=CODE(\" \")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 32.0
+      }
+    },
+    {
+      "id": "code_ascii_zero_digit",
+      "formula": "=CODE(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 48.0
+      }
+    },
+    {
+      "id": "code_halfwidth_kata_a",
+      "formula": "=CODE(\"ｱ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 177.0
+      }
+    },
+    {
+      "id": "code_halfwidth_kata_wo",
+      "formula": "=CODE(\"ｦ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 166.0
+      }
+    },
+    {
+      "id": "code_halfwidth_kata_dakuten",
+      "formula": "=CODE(\"ﾞ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 222.0
+      }
+    },
+    {
+      "id": "code_hira_a",
+      "formula": "=CODE(\"あ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9250.0
+      }
+    },
+    {
+      "id": "code_hira_n",
+      "formula": "=CODE(\"ん\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9331.0
+      }
+    },
+    {
+      "id": "code_kata_a",
+      "formula": "=CODE(\"ア\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9506.0
+      }
+    },
+    {
+      "id": "code_kata_vu",
+      "formula": "=CODE(\"ヴ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9588.0
+      }
+    },
+    {
+      "id": "code_fullwidth_A",
+      "formula": "=CODE(\"Ａ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9025.0
+      }
+    },
+    {
+      "id": "code_fullwidth_zero",
+      "formula": "=CODE(\"０\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9008.0
+      }
+    },
+    {
+      "id": "code_fullwidth_space",
+      "formula": "=CODE(\"　\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8481.0
+      }
+    },
+    {
+      "id": "code_kanji_ichi",
+      "formula": "=CODE(\"一\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12396.0
+      }
+    },
+    {
+      "id": "code_kanji_kanji",
+      "formula": "=CODE(\"漢\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 13377.0
+      }
+    },
+    {
+      "id": "code_kanji_takahashi_high",
+      "formula": "=CODE(\"髙\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 95.0
+      }
+    },
+    {
+      "id": "code_jp_period",
+      "formula": "=CODE(\"。\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8483.0
+      }
+    },
+    {
+      "id": "code_jp_comma",
+      "formula": "=CODE(\"、\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8482.0
+      }
+    },
+    {
+      "id": "code_jp_open_kakko",
+      "formula": "=CODE(\"「\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8534.0
+      }
+    },
+    {
+      "id": "code_jp_yen_fullwidth",
+      "formula": "=CODE(\"￥\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8559.0
+      }
+    },
+    {
+      "id": "code_emoji_smile",
+      "formula": "=CODE(\"😀\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 95.0
+      }
+    },
+    {
+      "id": "code_chinese_only",
+      "formula": "=CODE(\"鎬\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 28462.0
+      }
+    },
+    {
+      "id": "code_first_char_only",
+      "formula": "=CODE(\"あいう\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9250.0
+      }
+    },
+    {
+      "id": "code_empty_string",
+      "formula": "=CODE(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "char_ascii_65",
+      "formula": "=CHAR(65)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "A"
+      }
+    },
+    {
+      "id": "char_halfwidth_kata_177",
+      "formula": "=CHAR(177)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ｱ"
+      }
+    },
+    {
+      "id": "char_dbcs_hira_a",
+      "formula": "=CHAR(9250)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "あ"
+      }
+    },
+    {
+      "id": "char_dbcs_kata_a",
+      "formula": "=CHAR(9507)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ィ"
+      }
+    },
+    {
+      "id": "char_dbcs_kanji_ichi",
+      "formula": "=CHAR(CODE(\"一\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "一"
+      }
+    },
+    {
+      "id": "char_above_255",
+      "formula": "=CHAR(256)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "char_zero",
+      "formula": "=CHAR(0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "char_negative",
+      "formula": "=CHAR(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "unicode_hira_a",
+      "formula": "=UNICODE(\"あ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12354.0
+      }
+    },
+    {
+      "id": "unicode_kata_a",
+      "formula": "=UNICODE(\"ア\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12450.0
+      }
+    },
+    {
+      "id": "unichar_hira_a",
+      "formula": "=UNICHAR(12354)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "あ"
+      }
+    },
+    {
+      "id": "round_trip_code_char_ascii",
+      "formula": "=CODE(CHAR(65))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 65.0
+      }
+    },
+    {
+      "id": "round_trip_char_code_hira",
+      "formula": "=CHAR(CODE(\"あ\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "あ"
+      }
+    },
+    {
+      "id": "round_trip_char_code_kata",
+      "formula": "=CHAR(CODE(\"ア\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ア"
+      }
+    }
+  ]
+}

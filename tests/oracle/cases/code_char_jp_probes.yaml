@@ -1,0 +1,205 @@
+suite: code_char_jp_probes
+description: >
+  Mac Excel ja-JP CODE returns the JIS X 0208 row-cell encoding for DBCS
+  characters (e.g. CODE("あ") = 9250 = 0x2422 = row 4, cell 2). For ASCII
+  it returns the byte value; for half-width katakana it returns the
+  CP932 single-byte code (0xA1..0xDF). CHAR is the inverse but accepts
+  only single-byte codes 1..255 in many Excel versions; ja-JP semantics
+  for higher integers are unverified. These probes pin Mac's exact
+  algorithm before designing a CP932-based implementation.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  # ---------------------------------------------------------------------
+  # CODE: ASCII -- baseline, should be the byte value.
+  # ---------------------------------------------------------------------
+  - id: code_ascii_A
+    description: "CODE('A') -- ASCII baseline = 65"
+    formula: '=CODE("A")'
+
+  - id: code_ascii_space
+    description: "CODE(' ') = 32"
+    formula: '=CODE(" ")'
+
+  - id: code_ascii_zero_digit
+    description: "CODE('0') = 48"
+    formula: '=CODE("0")'
+
+  # ---------------------------------------------------------------------
+  # CODE: half-width katakana -- CP932 single byte 0xA1..0xDF.
+  # ---------------------------------------------------------------------
+  - id: code_halfwidth_kata_a
+    description: "CODE('ｱ') -- half-width ア -- expected 0xB1 = 177"
+    formula: '=CODE("ｱ")'
+
+  - id: code_halfwidth_kata_wo
+    description: "CODE('ｦ') -- half-width ヲ -- expected 0xA6 = 166"
+    formula: '=CODE("ｦ")'
+
+  - id: code_halfwidth_kata_dakuten
+    description: "CODE('ﾞ') -- half-width voicing mark -- expected 0xDE = 222"
+    formula: '=CODE("ﾞ")'
+
+  # ---------------------------------------------------------------------
+  # CODE: full-width hiragana -- JIS X 0208 row 4 (0x24), cell starts 0x21.
+  # ---------------------------------------------------------------------
+  - id: code_hira_a
+    description: "CODE('あ') -- row 4 cell 2 -- expected 0x2422 = 9250"
+    formula: '=CODE("あ")'
+
+  - id: code_hira_n
+    description: "CODE('ん') -- row 4 cell 0x73 -- pin Mac value"
+    formula: '=CODE("ん")'
+
+  # ---------------------------------------------------------------------
+  # CODE: full-width katakana -- JIS X 0208 row 5 (0x25).
+  # ---------------------------------------------------------------------
+  - id: code_kata_a
+    description: "CODE('ア') -- row 5 cell 3 -- expected 0x2523 = 9507"
+    formula: '=CODE("ア")'
+
+  - id: code_kata_vu
+    description: "CODE('ヴ') -- pin Mac value (special katakana)"
+    formula: '=CODE("ヴ")'
+
+  # ---------------------------------------------------------------------
+  # CODE: full-width ASCII / digits -- JIS X 0208 row 3 (0x23).
+  # ---------------------------------------------------------------------
+  - id: code_fullwidth_A
+    description: "CODE('Ａ') -- row 3 cell 0x41 -- expected 0x2341 = 9025"
+    formula: '=CODE("Ａ")'
+
+  - id: code_fullwidth_zero
+    description: "CODE('０') -- row 3 cell 0x30 -- expected 0x2330 = 9008"
+    formula: '=CODE("０")'
+
+  - id: code_fullwidth_space
+    description: "CODE('　') -- ideographic space, row 1 cell 1 -- expected 0x2121 = 8481"
+    formula: '=CODE("　")'
+
+  # ---------------------------------------------------------------------
+  # CODE: kanji -- JIS X 0208 row 0x30+ for level 1, row 0x50+ for level 2.
+  # ---------------------------------------------------------------------
+  - id: code_kanji_ichi
+    description: "CODE('一') -- common kanji"
+    formula: '=CODE("一")'
+
+  - id: code_kanji_kanji
+    description: "CODE('漢') -- in '漢字'"
+    formula: '=CODE("漢")'
+
+  - id: code_kanji_takahashi_high
+    description: "CODE('髙') -- variant kanji, may be NEC extension or unmapped"
+    formula: '=CODE("髙")'
+
+  # ---------------------------------------------------------------------
+  # CODE: punctuation -- JIS X 0208 row 1 (0x21) symbols / punctuation.
+  # ---------------------------------------------------------------------
+  - id: code_jp_period
+    description: "CODE('。') -- 0x2123 = 8483"
+    formula: '=CODE("。")'
+
+  - id: code_jp_comma
+    description: "CODE('、') -- 0x2122 = 8482"
+    formula: '=CODE("、")'
+
+  - id: code_jp_open_kakko
+    description: "CODE('「')"
+    formula: '=CODE("「")'
+
+  - id: code_jp_yen_fullwidth
+    description: "CODE('￥') -- full-width yen"
+    formula: '=CODE("￥")'
+
+  # ---------------------------------------------------------------------
+  # CODE: characters that may not be in JIS X 0208 (Unicode-only).
+  # ---------------------------------------------------------------------
+  - id: code_emoji_smile
+    description: "CODE('😀') -- emoji, definitely outside JIS X 0208"
+    formula: '=CODE("😀")'
+
+  - id: code_chinese_only
+    description: "CODE('鎬') -- a kanji that exists in Unicode but pin Mac response"
+    formula: '=CODE("鎬")'
+
+  # ---------------------------------------------------------------------
+  # CODE: from a string with multiple chars -- only first matters.
+  # ---------------------------------------------------------------------
+  - id: code_first_char_only
+    description: "CODE('あいう') = CODE('あ')"
+    formula: '=CODE("あいう")'
+
+  - id: code_empty_string
+    description: "CODE('') -> #VALUE!"
+    formula: '=CODE("")'
+
+  # ---------------------------------------------------------------------
+  # CHAR: SBCS baseline (already implemented in Formulon).
+  # ---------------------------------------------------------------------
+  - id: char_ascii_65
+    description: "CHAR(65) -- 'A'"
+    formula: '=CHAR(65)'
+
+  - id: char_halfwidth_kata_177
+    description: "CHAR(177) -- 'ｱ'"
+    formula: '=CHAR(177)'
+
+  # ---------------------------------------------------------------------
+  # CHAR: DBCS row-cell -- this is the question. Does Mac CHAR accept
+  # numbers > 255 and decode them as JIS X 0208 row-cell? Or does it cap
+  # at 255 and #VALUE! above?
+  # ---------------------------------------------------------------------
+  - id: char_dbcs_hira_a
+    description: "CHAR(9250) -- if Mac accepts JIS row-cell, returns 'あ'"
+    formula: '=CHAR(9250)'
+
+  - id: char_dbcs_kata_a
+    description: "CHAR(9507) -- if Mac accepts JIS row-cell, returns 'ア'"
+    formula: '=CHAR(9507)'
+
+  - id: char_dbcs_kanji_ichi
+    description: "CHAR(value-of-CODE('一')) -- round-trip"
+    formula: '=CHAR(CODE("一"))'
+
+  - id: char_above_255
+    description: "CHAR(256) -- above SBCS but below smallest DBCS row-cell; pin Mac"
+    formula: '=CHAR(256)'
+
+  - id: char_zero
+    description: "CHAR(0) -> #VALUE!"
+    formula: '=CHAR(0)'
+
+  - id: char_negative
+    description: "CHAR(-1) -> #VALUE!"
+    formula: '=CHAR(-1)'
+
+  # ---------------------------------------------------------------------
+  # UNICODE / UNICHAR -- the Unicode-codepoint variants. Should NOT
+  # involve CP932 at all; UNICODE('あ') = 12354 = U+3042.
+  # ---------------------------------------------------------------------
+  - id: unicode_hira_a
+    description: "UNICODE('あ') -- 12354"
+    formula: '=UNICODE("あ")'
+
+  - id: unicode_kata_a
+    description: "UNICODE('ア') -- 12450"
+    formula: '=UNICODE("ア")'
+
+  - id: unichar_hira_a
+    description: "UNICHAR(12354) -- 'あ'"
+    formula: '=UNICHAR(12354)'
+
+  # ---------------------------------------------------------------------
+  # Round-trip CODE(CHAR(x)) and CHAR(CODE(x)) sanity checks.
+  # ---------------------------------------------------------------------
+  - id: round_trip_code_char_ascii
+    description: "CODE(CHAR(65)) = 65"
+    formula: '=CODE(CHAR(65))'
+
+  - id: round_trip_char_code_hira
+    description: "CHAR(CODE('あ')) = 'あ' if both are JIS-aware"
+    formula: '=CHAR(CODE("あ"))'
+
+  - id: round_trip_char_code_kata
+    description: "CHAR(CODE('ア')) = 'ア'"
+    formula: '=CHAR(CODE("ア"))'
