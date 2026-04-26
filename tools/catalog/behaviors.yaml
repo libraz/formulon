@@ -142,28 +142,28 @@ groups:
     behaviors:
       - name: "令和 (Reiwa) full form"
         probe: "令和"
-        expected: missing
+        expected: impl
       - name: "平成 (Heisei) full form"
         probe: "平成"
-        expected: missing
+        expected: diverged
       - name: "昭和 (Showa) full form"
         probe: "昭和"
-        expected: missing
+        expected: diverged
       - name: "大正 (Taisho) full form"
         probe: "大正"
-        expected: missing
+        expected: diverged
       - name: "明治 (Meiji) full form"
         probe: "明治"
-        expected: missing
+        expected: diverged
       - name: "元年 (first-year marker)"
         probe: "元年"
-        expected: missing
+        expected: impl
       - name: "R6.4.22 short Reiwa form"
         probe_regex: '"R\d'
-        expected: missing
+        expected: diverged
       - name: "H30.1.1 short Heisei form"
         probe_regex: '"H\d'
-        expected: missing
+        expected: diverged
 
   # -------------------------------------------------------------------------
   # CHAR / CODE: Mac Excel ja-JP uses CP932 / JIS X 0208. The ASCII and

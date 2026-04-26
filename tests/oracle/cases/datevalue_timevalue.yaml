@@ -198,3 +198,130 @@ cases:
   - id: timevalue_agrees_with_time
     description: "TIMEVALUE(\"14:30:15\") == TIME(14,30,15)"
     formula: "=TIMEVALUE(\"14:30:15\")-TIME(14,30,15)"
+
+  # =========================================================================
+  # ja-JP era / locale parsing — currently uncovered. The format-string
+  # output side (TEXT / GGGE etc) is documented as missing in
+  # `tests/divergence.yaml`; this block probes the symmetric input side
+  # (DATEVALUE accepting era-prefixed Japanese date strings).
+  # =========================================================================
+
+  # -- DATEVALUE: full era name + 年/月/日 (令和/平成/昭和/大正/明治) ------
+  - id: datevalue_era_reiwa_full
+    description: "令和6年4月1日 -> 2024-04-01"
+    formula: "=DATEVALUE(\"令和6年4月1日\")"
+
+  - id: datevalue_era_heisei_full
+    description: "平成31年4月30日 -> 2019-04-30 (last day of Heisei)"
+    formula: "=DATEVALUE(\"平成31年4月30日\")"
+
+  - id: datevalue_era_reiwa_first_day
+    description: "令和1年5月1日 -> 2019-05-01 (first day of Reiwa)"
+    formula: "=DATEVALUE(\"令和1年5月1日\")"
+
+  - id: datevalue_era_reiwa_gannen
+    description: "令和元年5月1日 — 元 (gannen) is the kanji synonym for year 1"
+    formula: "=DATEVALUE(\"令和元年5月1日\")"
+
+  - id: datevalue_era_showa_full
+    description: "昭和64年1月7日 -> 1989-01-07 (last day of Showa)"
+    formula: "=DATEVALUE(\"昭和64年1月7日\")"
+
+  - id: datevalue_era_taisho_full
+    description: "大正15年12月25日 -> 1926-12-25 (last day of Taisho)"
+    formula: "=DATEVALUE(\"大正15年12月25日\")"
+
+  - id: datevalue_era_meiji_full
+    description: "明治45年7月29日 -> 1912-07-29 (last day of Meiji)"
+    formula: "=DATEVALUE(\"明治45年7月29日\")"
+
+  # -- DATEVALUE: era abbreviation (R/H/S/T/M) ----------------------------
+  - id: datevalue_era_r_abbrev
+    description: "R6.4.1 -> 2024-04-01 (single-letter era + dot separators)"
+    formula: "=DATEVALUE(\"R6.4.1\")"
+
+  - id: datevalue_era_h_abbrev
+    description: "H31.4.30 -> 2019-04-30"
+    formula: "=DATEVALUE(\"H31.4.30\")"
+
+  - id: datevalue_era_s_abbrev
+    description: "S64.1.7 -> 1989-01-07"
+    formula: "=DATEVALUE(\"S64.1.7\")"
+
+  # -- DATEVALUE: era out-of-range / invalid ------------------------------
+  - id: datevalue_era_reiwa_year_zero_is_value
+    description: "Reiwa 0 has no Excel meaning -> #VALUE!"
+    formula: "=DATEVALUE(\"令和0年5月1日\")"
+
+  - id: datevalue_era_heisei_year_too_high_is_value
+    description: "Heisei 32 doesn't exist (Heisei ended at 31) -> #VALUE!"
+    formula: "=DATEVALUE(\"平成32年4月30日\")"
+
+  - id: datevalue_era_reiwa_pre_start_is_value
+    description: "令和1年4月30日 is before Reiwa started (5/1) -> #VALUE!"
+    formula: "=DATEVALUE(\"令和1年4月30日\")"
+
+  # -- DATEVALUE: full-width digits ---------------------------------------
+  - id: datevalue_fullwidth_digits_iso
+    description: "Full-width Arabic digits in ISO date: ２０２４-４-１ -> 2024-04-01"
+    formula: "=DATEVALUE(\"２０２４-４-１\")"
+
+  - id: datevalue_fullwidth_digits_kanji
+    description: "Full-width digits combined with kanji terminators"
+    formula: "=DATEVALUE(\"２０２４年４月１日\")"
+
+  # -- DATEVALUE: Japanese-formal punctuation -----------------------------
+  - id: datevalue_kanji_with_dots
+    description: "Kanji-style with dot separators (令和6.4.1)"
+    formula: "=DATEVALUE(\"令和6.4.1\")"
+
+  - id: datevalue_kanji_with_slashes
+    description: "Era + slash separators (令和6/4/1)"
+    formula: "=DATEVALUE(\"令和6/4/1\")"
+
+  # =========================================================================
+  # TIMEVALUE: ja-JP am/pm and hour-format edges
+  # =========================================================================
+  - id: timevalue_jp_morning_prefix
+    description: "Japanese 午前 (AM) prefix — 午前8:30 -> 8:30"
+    formula: "=TIMEVALUE(\"午前8:30\")"
+
+  - id: timevalue_jp_afternoon_prefix
+    description: "Japanese 午後 (PM) prefix — 午後8:30 -> 20:30"
+    formula: "=TIMEVALUE(\"午後8:30\")"
+
+  - id: timevalue_jp_kanji_units
+    description: "Kanji time form 8時30分 -> 8:30"
+    formula: "=TIMEVALUE(\"8時30分\")"
+
+  - id: timevalue_jp_kanji_units_with_seconds
+    description: "Kanji time form with seconds 8時30分15秒 -> 8:30:15"
+    formula: "=TIMEVALUE(\"8時30分15秒\")"
+
+  - id: timevalue_fullwidth_digits
+    description: "Full-width digit time: ８:３０"
+    formula: "=TIMEVALUE(\"８:３０\")"
+
+  # =========================================================================
+  # Error / coercion edge cases
+  # =========================================================================
+  - id: datevalue_error_arg_propagates
+    description: "DATEVALUE(#DIV/0!) propagates"
+    formula: "=DATEVALUE(#DIV/0!)"
+
+  - id: timevalue_error_arg_propagates
+    description: "TIMEVALUE(#REF!) propagates"
+    formula: "=TIMEVALUE(#REF!)"
+
+  - id: datevalue_blank_cell_arg
+    description: "DATEVALUE on blank cell — coerces to empty string -> #VALUE!"
+    setup: {}
+    formula: "=DATEVALUE(A1)"
+
+  - id: datevalue_numeric_text_year_only_is_value
+    description: "Year-only string \"2024\" without month/day -> #VALUE!"
+    formula: "=DATEVALUE(\"2024\")"
+
+  - id: datevalue_excel_serial_text
+    description: "Numeric text resembling serial — Excel does NOT interpret this as a date"
+    formula: "=DATEVALUE(\"45383\")"
