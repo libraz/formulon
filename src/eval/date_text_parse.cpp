@@ -193,6 +193,13 @@ bool parse_ymd_text(std::string_view s, double* out_serial, std::string_view* re
 // accepted here.
 bool parse_dmy_mmm_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept;
 
+// Parses the US-style `MMM D, YYYY` and `MMMM D, YYYY` shapes (e.g. `Jan 1,
+// 2024` or `January 1, 2024`). One or more ASCII spaces are accepted after
+// the month word; the comma after the day is mandatory and must be followed
+// by at least one space before the year. Mac Excel ja-JP accepts these
+// English-locale forms even though the workbook locale is ja-JP.
+bool parse_mmm_d_yyyy_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept;
+
 // Era ID; values matter only as enumerators within this translation unit.
 enum class Era { Reiwa, Heisei, Showa, Taisho, Meiji };
 
@@ -355,7 +362,10 @@ bool parse_date_text(std::string_view s, double* out_serial, std::string_view* r
   if (parse_ymd_text(s, out_serial, rest)) {
     return true;
   }
-  return parse_dmy_mmm_text(s, out_serial, rest);
+  if (parse_dmy_mmm_text(s, out_serial, rest)) {
+    return true;
+  }
+  return parse_mmm_d_yyyy_text(s, out_serial, rest);
 }
 
 bool parse_ymd_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
@@ -464,6 +474,62 @@ bool parse_dmy_mmm_text(std::string_view s, double* out_serial, std::string_view
   const unsigned dim = days_in_month(expanded_year, static_cast<unsigned>(month));
   // Reuse the same 1900-02-29 ghost-day escape as the yyyy-first path so
   // `DATEVALUE("29-Feb-1900")` still resolves to serial 60.
+  const bool is_excel_ghost_day = (expanded_year == 1900 && month == 2 && day == 29);
+  if (!is_excel_ghost_day && (day < 1 || static_cast<unsigned>(day) > dim)) {
+    return false;
+  }
+  *out_serial = date_time::serial_from_ymd(expanded_year, static_cast<unsigned>(month), static_cast<unsigned>(day));
+  *rest = s;
+  return true;
+}
+
+bool parse_mmm_d_yyyy_text(std::string_view s, double* out_serial, std::string_view* rest) noexcept {
+  // Leading month word: case-insensitive 3-letter abbreviation or full
+  // English name. Mac Excel accepts both forms in the workbook's ja-JP
+  // locale (verified against the oracle).
+  int month = 0;
+  if (!parse_mmm_month(s, &month)) {
+    return false;
+  }
+  // At least one ASCII space between the month word and the day. Mac Excel
+  // does not accept `Jan1,2024` or tab-separated forms.
+  if (s.empty() || s[0] != ' ') {
+    return false;
+  }
+  while (!s.empty() && s[0] == ' ') {
+    s.remove_prefix(1);
+  }
+  // Day: 1..2 ASCII digits.
+  int day = 0;
+  if (scan_digits(s, 2, &day) == 0) {
+    return false;
+  }
+  // Mandatory comma after the day.
+  if (s.empty() || s[0] != ',') {
+    return false;
+  }
+  s.remove_prefix(1);
+  // At least one ASCII space between the comma and the year.
+  if (s.empty() || s[0] != ' ') {
+    return false;
+  }
+  while (!s.empty() && s[0] == ' ') {
+    s.remove_prefix(1);
+  }
+  // Year: 1..4 ASCII digits.
+  int year = 0;
+  const std::size_t year_digits = scan_digits(s, 4, &year);
+  if (year_digits == 0) {
+    return false;
+  }
+  const int expanded_year = expand_two_digit_year(year, year_digits);
+  if (expanded_year < 1900 || expanded_year > 9999) {
+    return false;
+  }
+  if (month < 1 || month > 12) {
+    return false;
+  }
+  const unsigned dim = days_in_month(expanded_year, static_cast<unsigned>(month));
   const bool is_excel_ghost_day = (expanded_year == 1900 && month == 2 && day == 29);
   if (!is_excel_ghost_day && (day < 1 || static_cast<unsigned>(day) > dim)) {
     return false;

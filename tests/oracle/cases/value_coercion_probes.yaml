@@ -79,3 +79,165 @@ cases:
   - id: value_slash_date_dmy
     description: "VALUE(\"31/12/2023\") - unambiguous DD/MM/YYYY (day > 12)"
     formula: "=VALUE(\"31/12/2023\")"
+
+  # ---------------------------------------------------------------------
+  # E) Locale-specific currency markers. Mac Excel 365 (ja-JP) is known
+  # to be asymmetric: prefix `¥` works, kanji `円` suffix may or may not
+  # work, parenthesized negative-with-currency-suffix is exotic.
+  - id: value_yen_prefix_integer
+    description: "VALUE(\"¥1,234\") - yen prefix with thousands separator"
+    formula: "=VALUE(\"¥1,234\")"
+
+  - id: value_yen_prefix_decimal
+    description: "VALUE(\"¥23.5\") - yen prefix with decimal"
+    formula: "=VALUE(\"¥23.5\")"
+
+  - id: value_yen_kanji_decimal_suffix
+    description: "VALUE(\"23.5円\") - yen kanji suffix with decimal"
+    formula: "=VALUE(\"23.5円\")"
+
+  - id: value_yen_kanji_paren_negative
+    description: "VALUE(\"(23円)\") - parenthesized negative with currency suffix"
+    formula: "=VALUE(\"(23円)\")"
+
+  - id: value_pound_prefix
+    description: "VALUE(\"£23\") - pound prefix"
+    formula: "=VALUE(\"£23\")"
+
+  - id: value_pound_suffix
+    description: "VALUE(\"23£\") - pound suffix"
+    formula: "=VALUE(\"23£\")"
+
+  # ---------------------------------------------------------------------
+  # F) Full-width punctuation (jp/zh keyboards routinely emit these).
+  - id: value_fullwidth_minus
+    description: "VALUE(\"－23\") - full-width minus sign U+FF0D"
+    formula: "=VALUE(\"－23\")"
+
+  - id: value_fullwidth_plus
+    description: "VALUE(\"＋23\") - full-width plus sign U+FF0B"
+    formula: "=VALUE(\"＋23\")"
+
+  - id: value_fullwidth_whitespace_pad
+    description: "VALUE(\"　23　\") - full-width whitespace U+3000 padding"
+    formula: "=VALUE(\"　23　\")"
+
+  # ---------------------------------------------------------------------
+  # G) Percent suffix variants and per-mille (U+2030).
+  - id: value_percent_fractional
+    description: "VALUE(\"23.5%\") - percent suffix with decimal"
+    formula: "=VALUE(\"23.5%\")"
+
+  - id: value_percent_thousands
+    description: "VALUE(\"1,234.5%\") - percent with thousands separator"
+    formula: "=VALUE(\"1,234.5%\")"
+
+  - id: value_per_mille
+    description: "VALUE(\"23‰\") - per-mille U+2030 (probably #VALUE!)"
+    formula: "=VALUE(\"23‰\")"
+
+  # ---------------------------------------------------------------------
+  # H) ja-JP date formats and English month names.
+  - id: value_jajp_date_kanji_ymd
+    description: "VALUE(\"2024年1月1日\") - ja-JP year/month/day with kanji separators"
+    formula: "=VALUE(\"2024年1月1日\")"
+
+  - id: value_english_month_abbrev
+    description: "VALUE(\"Jan 1, 2024\") - English month abbreviation, comma year"
+    formula: "=VALUE(\"Jan 1, 2024\")"
+
+  - id: value_english_month_full
+    description: "VALUE(\"January 1, 2024\") - English month full name"
+    formula: "=VALUE(\"January 1, 2024\")"
+
+  - id: value_d_mmm_yy
+    description: "VALUE(\"1-Jan-24\") - d-mmm-yy hyphen form"
+    formula: "=VALUE(\"1-Jan-24\")"
+
+  - id: value_datetime_slash_with_time
+    description: "VALUE(\"2024/1/1 12:00\") - YYYY/M/D with HH:MM time"
+    formula: "=VALUE(\"2024/1/1 12:00\")"
+
+  # ---------------------------------------------------------------------
+  # I) Time-only inputs become a fraction of a day.
+  - id: value_time_hh_mm
+    description: "VALUE(\"12:00\") - HH:MM only -> 0.5"
+    formula: "=VALUE(\"12:00\")"
+
+  - id: value_time_hh_mm_ss
+    description: "VALUE(\"12:00:00\") - HH:MM:SS only"
+    formula: "=VALUE(\"12:00:00\")"
+
+  - id: value_time_am_pm
+    description: "VALUE(\"12:00 AM\") - AM marker (en-US locale dependent)"
+    formula: "=VALUE(\"12:00 AM\")"
+
+  - id: value_time_kanji
+    description: "VALUE(\"12時00分\") - kanji time format"
+    formula: "=VALUE(\"12時00分\")"
+
+  # ---------------------------------------------------------------------
+  # J) Scientific notation edges.
+  - id: value_sci_uppercase_e
+    description: "VALUE(\"1.5E3\") - uppercase E exponent"
+    formula: "=VALUE(\"1.5E3\")"
+
+  - id: value_sci_lowercase_e_plus
+    description: "VALUE(\"1.5e+3\") - lowercase e with explicit + sign"
+    formula: "=VALUE(\"1.5e+3\")"
+
+  - id: value_sci_negative_exp
+    description: "VALUE(\"1.5E-3\") - negative exponent"
+    formula: "=VALUE(\"1.5E-3\")"
+
+  - id: value_sci_incomplete
+    description: "VALUE(\"1.5e\") - dangling exponent marker -> #VALUE!"
+    formula: "=VALUE(\"1.5e\")"
+
+  - id: value_sci_fullwidth
+    description: "VALUE(\"1.5Ｅ３\") - full-width E and digit -> #VALUE! expected"
+    formula: "=VALUE(\"1.5Ｅ３\")"
+
+  # ---------------------------------------------------------------------
+  # K) Pure-error and ambiguous-text edges.
+  - id: value_empty_string
+    description: "VALUE(\"\") - empty string -> #VALUE!"
+    formula: "=VALUE(\"\")"
+
+  - id: value_ascii_whitespace_only
+    description: "VALUE(\"   \") - ASCII whitespace only -> #VALUE!"
+    formula: "=VALUE(\"   \")"
+
+  - id: value_pure_text
+    description: "VALUE(\"abc\") - pure text -> #VALUE!"
+    formula: "=VALUE(\"abc\")"
+
+  - id: value_text_after_number
+    description: "VALUE(\"12abc\") - trailing letters after digits -> #VALUE!"
+    formula: "=VALUE(\"12abc\")"
+
+  - id: value_text_before_number
+    description: "VALUE(\"abc12\") - leading letters before digits -> #VALUE!"
+    formula: "=VALUE(\"abc12\")"
+
+  - id: value_double_negative
+    description: "VALUE(\"--23\") - double negative sign -> #VALUE!"
+    formula: "=VALUE(\"--23\")"
+
+  # ---------------------------------------------------------------------
+  # L) NUMBERVALUE comparison probes (custom decimal/group separators).
+  - id: numbervalue_european_explicit
+    description: "NUMBERVALUE(\"1.234,56\", \",\", \".\") - European format"
+    formula: "=NUMBERVALUE(\"1.234,56\", \",\", \".\")"
+
+  - id: numbervalue_european_default
+    description: "NUMBERVALUE(\"1.234,56\") - relies on locale defaults (ja-JP uses .,)"
+    formula: "=NUMBERVALUE(\"1.234,56\")"
+
+  - id: numbervalue_percent_single
+    description: "NUMBERVALUE(\"12%\") - percent suffix scales by 1/100"
+    formula: "=NUMBERVALUE(\"12%\")"
+
+  - id: numbervalue_percent_double
+    description: "NUMBERVALUE(\"12%%\") - double percent scales by 1/10000"
+    formula: "=NUMBERVALUE(\"12%%\")"

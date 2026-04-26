@@ -229,8 +229,13 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double*
   if (std::isnan(parsed) || std::isinf(parsed)) {
     return false;
   }
+  // Apply percent scaling with division (not multiplication by 0.01) so the
+  // result is bit-identical to Mac Excel for clean cases such as
+  // `VALUE("23.5%")`. `23.5 * 0.01` is `0x3fce147ae147ae15` — one ulp above
+  // the canonical `0.235` (`0x3fce147ae147ae14`) that Excel returns; dividing
+  // by 100 directly lands on the canonical bit pattern.
   for (int k = 0; k < percent_count; ++k) {
-    parsed *= 0.01;
+    parsed /= 100.0;
   }
   if (negative) {
     parsed = -parsed;
