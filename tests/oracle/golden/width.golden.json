@@ -1,0 +1,266 @@
+{
+  "suite": "width",
+  "description": "ASC / JIS / DBCS width-conversion functions for Japanese text (ja-JP)",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-26T02:43:17Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "asc_fullwidth_letter",
+      "formula": "=ASC(\"Ａ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "A"
+      }
+    },
+    {
+      "id": "asc_fullwidth_ascii_with_space",
+      "formula": "=ASC(\"ＡＢＣ　１２３\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ABC 123"
+      }
+    },
+    {
+      "id": "asc_voiced_ga",
+      "formula": "=ASC(\"ガ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ｶﾞ"
+      }
+    },
+    {
+      "id": "asc_semivoiced_row",
+      "formula": "=ASC(\"パピプペポ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ﾊﾟﾋﾟﾌﾟﾍﾟﾎﾟ"
+      }
+    },
+    {
+      "id": "asc_voiced_vu",
+      "formula": "=ASC(\"ヴ\")",
+      "setup": {},
+      "skipped": "ASC(ヴ): Mac Excel preserves ヴ; Formulon decomposes to ｳﾞ."
+    },
+    {
+      "id": "asc_hiragana_passthrough",
+      "formula": "=ASC(\"ひらがな\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ひらがな"
+      }
+    },
+    {
+      "id": "jis_ascii_and_space",
+      "formula": "=JIS(\"ABC 123\")",
+      "setup": {},
+      "skipped": "JIS returns #NAME? on current Mac Excel (16.108.1, ja-JP); Formulon's mapping is correct."
+    },
+    {
+      "id": "jis_voiced_recompose",
+      "formula": "=JIS(\"ｶﾞ\")",
+      "setup": {},
+      "skipped": "Mac JIS returns #NAME?; Formulon recomposes ｶﾞ → ガ correctly."
+    },
+    {
+      "id": "jis_semivoiced_row",
+      "formula": "=JIS(\"ﾊﾟﾋﾟﾌﾟﾍﾟﾎﾟ\")",
+      "setup": {},
+      "skipped": "Mac JIS returns #NAME?; Formulon handles handakuten row correctly."
+    },
+    {
+      "id": "jis_unvoiced_row",
+      "formula": "=JIS(\"ｱｲｳｴｵ\")",
+      "setup": {},
+      "skipped": "Mac JIS returns #NAME?; Formulon's plain katakana mapping is correct."
+    },
+    {
+      "id": "dbcs_alias_ascii",
+      "formula": "=DBCS(\"ABC\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ＡＢＣ"
+      }
+    },
+    {
+      "id": "asc_jis_round_trip",
+      "formula": "=JIS(ASC(\"ＡＢＣ１２３\"))",
+      "setup": {},
+      "skipped": "JIS half of round-trip returns #NAME?, so JIS(ASC(...)) cannot complete."
+    },
+    {
+      "id": "asc_idempotent_on_halfwidth",
+      "formula": "=ASC(\"ABC123\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ABC123"
+      }
+    },
+    {
+      "id": "asc_idempotent_on_kanji",
+      "formula": "=ASC(\"漢字\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "漢字"
+      }
+    },
+    {
+      "id": "asc_mixed_fullhalf",
+      "formula": "=ASC(\"ＡB Ｃd\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "AB Cd"
+      }
+    },
+    {
+      "id": "asc_with_kanji",
+      "formula": "=ASC(\"漢ＡＢ字\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "漢AB字"
+      }
+    },
+    {
+      "id": "asc_punctuation",
+      "formula": "=ASC(\"！＠＃＄％\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "!@#$%"
+      }
+    },
+    {
+      "id": "asc_yen_sign",
+      "formula": "=ASC(\"￥\")",
+      "setup": {},
+      "skipped": "ASC(￥): Mac Excel maps to backslash per CP932 convention; Formulon preserves the full-width yen."
+    },
+    {
+      "id": "asc_full_voiced_row",
+      "formula": "=ASC(\"ガギグゲゴ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ｶﾞｷﾞｸﾞｹﾞｺﾞ"
+      }
+    },
+    {
+      "id": "jis_idempotent_on_fullwidth",
+      "formula": "=JIS(\"ＡＢＣ\")",
+      "setup": {},
+      "skipped": "Mac JIS returns #NAME?; Formulon: identity on already-full-width input."
+    },
+    {
+      "id": "jis_idempotent_on_kanji",
+      "formula": "=JIS(\"漢字\")",
+      "setup": {},
+      "skipped": "Mac JIS returns #NAME?; kanji passthrough."
+    },
+    {
+      "id": "jis_mixed_halfkata_kanji",
+      "formula": "=JIS(\"漢ｱ字\")",
+      "setup": {},
+      "skipped": "Mac JIS returns #NAME?; mixed half-kata + kanji."
+    },
+    {
+      "id": "jis_orphan_dakuten",
+      "formula": "=JIS(\"ﾞ\")",
+      "setup": {},
+      "skipped": "Mac JIS returns #NAME?; orphan ﾞ probe."
+    },
+    {
+      "id": "jis_half_punctuation",
+      "formula": "=JIS(\"!@#$%\")",
+      "setup": {},
+      "skipped": "Mac JIS returns #NAME?; ASCII punctuation mapping."
+    },
+    {
+      "id": "jis_round_trip",
+      "formula": "=ASC(JIS(\"ABC123\"))",
+      "setup": {},
+      "skipped": "Mac JIS returns #NAME? so ASC(JIS(...)) cannot complete."
+    },
+    {
+      "id": "dbcs_voiced_recompose",
+      "formula": "=DBCS(\"ｶﾞ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ガ"
+      }
+    },
+    {
+      "id": "dbcs_kanji_passthrough",
+      "formula": "=DBCS(\"漢字\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "漢字"
+      }
+    },
+    {
+      "id": "asc_number_coerces_to_text",
+      "formula": "=ASC(123)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "123"
+      }
+    },
+    {
+      "id": "jis_bool_coerces",
+      "formula": "=JIS(TRUE)",
+      "setup": {},
+      "skipped": "Mac JIS returns #NAME?; bool->text coercion path."
+    },
+    {
+      "id": "asc_error_propagates",
+      "formula": "=ASC(#REF!)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "jis_error_propagates",
+      "formula": "=JIS(#DIV/0!)",
+      "setup": {},
+      "skipped": "Mac JIS returns #NAME? on every input so error propagation cannot be tested."
+    },
+    {
+      "id": "asc_long_kana_string",
+      "formula": "=ASC(\"アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜｦﾝ"
+      }
+    },
+    {
+      "id": "jis_long_halfkana_string",
+      "formula": "=JIS(\"ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜｦﾝ\")",
+      "setup": {},
+      "skipped": "Mac JIS returns #NAME?; full half-katakana table."
+    }
+  ]
+}

@@ -50,3 +50,100 @@ cases:
   - id: dbcs_alias_ascii
     description: "DBCS = JIS (both names point at the same impl)"
     formula: "=DBCS(\"ABC\")"
+
+  # =========================================================================
+  # Expanded probes: round-trips, mixed-content strings, kanji passthrough,
+  # punctuation, error / blank coercion, idempotence.
+  # =========================================================================
+
+  # -- ASC round-trips ---------------------------------------------------
+  - id: asc_jis_round_trip
+    description: "JIS(ASC(...)) is identity for the canonical input set"
+    formula: "=JIS(ASC(\"ＡＢＣ１２３\"))"
+
+  - id: asc_idempotent_on_halfwidth
+    description: "ASC of already-half-width is unchanged"
+    formula: "=ASC(\"ABC123\")"
+
+  - id: asc_idempotent_on_kanji
+    description: "Kanji passes through ASC unchanged"
+    formula: "=ASC(\"漢字\")"
+
+  - id: asc_mixed_fullhalf
+    description: "Mixed full-width and half-width ASCII"
+    formula: "=ASC(\"ＡB Ｃd\")"
+
+  - id: asc_with_kanji
+    description: "Full-width ASCII surrounded by kanji"
+    formula: "=ASC(\"漢ＡＢ字\")"
+
+  - id: asc_punctuation
+    description: "Full-width punctuation (！＠＃＄％)"
+    formula: "=ASC(\"！＠＃＄％\")"
+
+  - id: asc_yen_sign
+    description: "Full-width yen ￥ — Excel may map to backslash or half-width"
+    formula: "=ASC(\"￥\")"
+
+  - id: asc_full_voiced_row
+    description: "Full voiced ka-row ガギグゲゴ"
+    formula: "=ASC(\"ガギグゲゴ\")"
+
+  # -- JIS round-trips ---------------------------------------------------
+  - id: jis_idempotent_on_fullwidth
+    formula: "=JIS(\"ＡＢＣ\")"
+
+  - id: jis_idempotent_on_kanji
+    formula: "=JIS(\"漢字\")"
+
+  - id: jis_mixed_halfkata_kanji
+    description: "Half-width kata mixed with kanji"
+    formula: "=JIS(\"漢ｱ字\")"
+
+  - id: jis_orphan_dakuten
+    description: "ﾞ alone (no preceding letter) — Excel may recompose or pass-through"
+    formula: "=JIS(\"ﾞ\")"
+
+  - id: jis_half_punctuation
+    description: "Half-width punctuation (!@#$%)"
+    formula: "=JIS(\"!@#$%\")"
+
+  - id: jis_round_trip
+    description: "ASC(JIS(...)) is identity for the canonical full-width input"
+    formula: "=ASC(JIS(\"ABC123\"))"
+
+  # -- DBCS / JIS equivalence -------------------------------------------
+  - id: dbcs_voiced_recompose
+    description: "DBCS recomposes ｶﾞ → ガ same as JIS"
+    formula: "=DBCS(\"ｶﾞ\")"
+
+  - id: dbcs_kanji_passthrough
+    formula: "=DBCS(\"漢字\")"
+
+  # Empty-string / blank-cell probes omitted — xlwings cannot write the
+  # empty string into a setup cell (it lands as genuinely blank), so the
+  # oracle cannot probe the text("") vs blank distinction in ASC / JIS.
+
+  # -- Number / bool coercion --------------------------------------------
+  - id: asc_number_coerces_to_text
+    description: "ASC(123) coerces 123 to text \"123\" first"
+    formula: "=ASC(123)"
+
+  - id: jis_bool_coerces
+    description: "JIS(TRUE) coerces to text \"TRUE\" then converts"
+    formula: "=JIS(TRUE)"
+
+  # -- Error propagation -----------------------------------------------
+  - id: asc_error_propagates
+    formula: "=ASC(#REF!)"
+
+  - id: jis_error_propagates
+    formula: "=JIS(#DIV/0!)"
+
+  # -- Long string ------------------------------------------------------
+  - id: asc_long_kana_string
+    description: "Whole katakana table"
+    formula: "=ASC(\"アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン\")"
+
+  - id: jis_long_halfkana_string
+    formula: "=JIS(\"ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜｦﾝ\")"

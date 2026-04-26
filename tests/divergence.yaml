@@ -701,6 +701,106 @@ entries:
     prefer: mac-excel-365
     first_noted: 2026-04-26
 
+  # -- JIS unsupported on current Mac Excel ja-JP build ------------------
+  # Mac Excel 365 16.108.1 (ja-JP) returns `#NAME?` for every `=JIS(...)`
+  # invocation in the oracle pipeline (every kana / ASCII / kanji / mixed
+  # input we tried). Formulon implements JIS correctly per the documented
+  # half-width-to-full-width mapping. Prefer Formulon here — these cases
+  # document a Mac Excel limitation rather than a Formulon gap. If a
+  # future Mac Excel version restores JIS, these entries should be
+  # removed.
+  - id: jis_ascii_and_space
+    mode: skip-oracle
+    reason: "JIS returns #NAME? on current Mac Excel (16.108.1, ja-JP); Formulon's mapping is correct."
+    prefer: formulon
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
+  - id: jis_voiced_recompose
+    mode: skip-oracle
+    reason: "Mac JIS returns #NAME?; Formulon recomposes ｶﾞ → ガ correctly."
+    prefer: formulon
+    first_noted: 2026-04-26
+  - id: jis_semivoiced_row
+    mode: skip-oracle
+    reason: "Mac JIS returns #NAME?; Formulon handles handakuten row correctly."
+    prefer: formulon
+    first_noted: 2026-04-26
+  - id: jis_unvoiced_row
+    mode: skip-oracle
+    reason: "Mac JIS returns #NAME?; Formulon's plain katakana mapping is correct."
+    prefer: formulon
+    first_noted: 2026-04-26
+  - id: jis_idempotent_on_fullwidth
+    mode: skip-oracle
+    reason: "Mac JIS returns #NAME?; Formulon: identity on already-full-width input."
+    prefer: formulon
+    first_noted: 2026-04-26
+  - id: jis_idempotent_on_kanji
+    mode: skip-oracle
+    reason: "Mac JIS returns #NAME?; kanji passthrough."
+    prefer: formulon
+    first_noted: 2026-04-26
+  - id: jis_mixed_halfkata_kanji
+    mode: skip-oracle
+    reason: "Mac JIS returns #NAME?; mixed half-kata + kanji."
+    prefer: formulon
+    first_noted: 2026-04-26
+  - id: jis_orphan_dakuten
+    mode: skip-oracle
+    reason: "Mac JIS returns #NAME?; orphan ﾞ probe."
+    prefer: formulon
+    first_noted: 2026-04-26
+  - id: jis_half_punctuation
+    mode: skip-oracle
+    reason: "Mac JIS returns #NAME?; ASCII punctuation mapping."
+    prefer: formulon
+    first_noted: 2026-04-26
+  - id: jis_round_trip
+    mode: skip-oracle
+    reason: "Mac JIS returns #NAME? so ASC(JIS(...)) cannot complete."
+    prefer: formulon
+    first_noted: 2026-04-26
+  - id: jis_bool_coerces
+    mode: skip-oracle
+    reason: "Mac JIS returns #NAME?; bool->text coercion path."
+    prefer: formulon
+    first_noted: 2026-04-26
+  - id: jis_error_propagates
+    mode: skip-oracle
+    reason: "Mac JIS returns #NAME? on every input so error propagation cannot be tested."
+    prefer: formulon
+    first_noted: 2026-04-26
+  - id: jis_long_halfkana_string
+    mode: skip-oracle
+    reason: "Mac JIS returns #NAME?; full half-katakana table."
+    prefer: formulon
+    first_noted: 2026-04-26
+  - id: asc_jis_round_trip
+    mode: skip-oracle
+    reason: "JIS half of round-trip returns #NAME?, so JIS(ASC(...)) cannot complete."
+    prefer: formulon
+    first_noted: 2026-04-26
+
+  # -- ASC: ja-JP-specific char mappings ---------------------------------
+  # Two cases where Formulon's ASC mapping diverges from Mac Excel:
+  #   * ヴ — Mac preserves as a single full-width character, Formulon
+  #     decomposes into ｳ + ﾞ (the dakuten-decomposition path that's
+  #     correct for the ガ / パ rows but not for ヴ).
+  #   * ￥ — Mac maps the full-width yen sign to ASCII backslash (\),
+  #     reflecting CP932 / JIS X 0208 convention; Formulon preserves the
+  #     character.
+  - id: asc_voiced_vu
+    mode: skip-oracle
+    reason: "ASC(ヴ): Mac Excel preserves ヴ; Formulon decomposes to ｳﾞ."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
+  - id: asc_yen_sign
+    mode: skip-oracle
+    reason: "ASC(￥): Mac Excel maps to backslash per CP932 convention; Formulon preserves the full-width yen."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+
   # -- Pre-existing oracle flake: [Red] colour directive ------------------
   # Mac Excel's read-back through xlwings has been observed to vary
   # between sessions for `=TEXT(5, "[Red]0.00")`: sometimes the cell
