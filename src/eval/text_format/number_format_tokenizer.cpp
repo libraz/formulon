@@ -101,6 +101,37 @@ bool is_color_specifier(std::string_view body) noexcept {
   return value >= 1 && value <= 56;
 }
 
+// Detects `[DBNumN]` (body length exactly 6 bytes after stripping brackets).
+// Matching is case-insensitive: `[DBNum1]`, `[dbnum2]`, `[DbNum3]` all parse.
+// Returns the directive index (1, 2, or 3) on a hit, otherwise 0.
+int parse_dbnum_directive(std::string_view body) noexcept {
+  // Expected form: `dbnumN` where N is `1`, `2`, or `3`.
+  if (body.size() != 6) {
+    return 0;
+  }
+  static const char kPrefix[5] = {'d', 'b', 'n', 'u', 'm'};
+  for (std::size_t k = 0; k < 5; ++k) {
+    char ch = body[k];
+    if (ch >= 'A' && ch <= 'Z') {
+      ch = static_cast<char>(ch + 32);
+    }
+    if (ch != kPrefix[k]) {
+      return 0;
+    }
+  }
+  const char d = body[5];
+  if (d == '1') {
+    return 1;
+  }
+  if (d == '2') {
+    return 2;
+  }
+  if (d == '3') {
+    return 3;
+  }
+  return 0;
+}
+
 // Returns true if `tok` is a date-family token (including elapsed brackets).
 bool is_date_tok(Tok t) noexcept {
   switch (t) {
@@ -336,9 +367,27 @@ void tokenize_section(std::string_view fmt, Section& out) {
         // Named colour (`[Red]`) or indexed colour (`[Color12]`). Mac Excel
         // 365 and IronCalc silently discard these inside TEXT; we do the
         // same (the rest of the section continues to format the value).
+      } else if (const int dbnum = parse_dbnum_directive(body); dbnum > 0) {
+        // `[DBNum1]` / `[DBNum2]` / `[DBNum3]`: digit-substitution mode for
+        // the rest of the section. Multiple directives stack last-write-wins,
+        // matching Mac Excel's behaviour. The renderer applies the chosen
+        // mapping at digit-emit time.
+        switch (dbnum) {
+          case 1:
+            out.dbnum_mode = DbNumMode::kDBNum1;
+            break;
+          case 2:
+            out.dbnum_mode = DbNumMode::kDBNum2;
+            break;
+          case 3:
+            out.dbnum_mode = DbNumMode::kDBNum3;
+            break;
+          default:
+            break;
+        }
       } else {
-        // Anything else - conditional tests (`[>100]`), DBNum digits,
-        // unknown qualifiers - trips the invalid-bracket flag.
+        // Anything else - conditional tests (`[>100]`), unknown qualifiers -
+        // trips the invalid-bracket flag.
         out.has_invalid_bracket = true;
       }
       continue;

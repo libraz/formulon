@@ -80,6 +80,20 @@ struct Token {
   std::size_t lit_end = 0;
 };
 
+// DBNum digit-substitution mode controlled by the `[DBNum1]`, `[DBNum2]`,
+// `[DBNum3]` section directives. When set on a section, the renderer
+// substitutes ASCII decimal digits emitted for that section as follows:
+//   * kDBNum1: kanji weak-form numerals with positional kanji (千百十) on
+//     the main integer placeholder; per-digit kanji elsewhere (era, m, d).
+//   * kDBNum2: 大字 (formal-document) numerals with positional kanji.
+//   * kDBNum3: full-width Arabic digits (U+FF10..U+FF19).
+enum class DbNumMode : std::uint8_t {
+  kNone = 0,
+  kDBNum1,
+  kDBNum2,
+  kDBNum3,
+};
+
 struct Section {
   std::vector<Token> tokens;
 
@@ -90,6 +104,10 @@ struct Section {
   // qualifiers, so `apply_format` surfaces `#VALUE!` whenever this flag
   // is set on any section it would have rendered.
   bool has_invalid_bracket = false;
+
+  // DBNum1/2/3 digit-substitution mode. Set by the tokenizer when a
+  // `[DBNumN]` directive is observed; consumed by the renderer.
+  DbNumMode dbnum_mode = DbNumMode::kNone;
 
   // Precomputed summary for numeric classification. Populated by `classify`.
   bool is_date = false;

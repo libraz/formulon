@@ -173,32 +173,6 @@ entries:
     first_noted: 2026-04-26
     last_verified_excel_version: "16.108.1"
 
-  # -- TEXT format codes: DBNum (numeral system selector) ------------------
-  # `[DBNum1]` / `[DBNum2]` / `[DBNum3]` switch to kanji / 大字 / full-width
-  # numerals. Currently the bracket directive triggers #VALUE!: the format
-  # parser rejects the whole format string. Implementation requires
-  # numeral-table mapping + bracket-directive pre-processor.
-  - id: text_dbnum1
-    mode: skip-oracle
-    reason: "[DBNum1] kanji numerals not implemented; Excel: 一千二百三十四. Formulon: #VALUE!."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-  - id: text_dbnum2
-    mode: skip-oracle
-    reason: "[DBNum2] 大字 (formal-document numerals) not implemented; Excel: 壱阡弐百参拾四."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-  - id: text_dbnum3
-    mode: skip-oracle
-    reason: "[DBNum3] full-width Arabic not implemented; Excel: １２３４."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-  - id: text_dbnum1_with_era
-    mode: skip-oracle
-    reason: "[DBNum1] combined with era format — depends on both DBNum and era support."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-
   # -- TEXT format codes: fraction display (# ?/?, # ??/??) ---------------
   # Fraction codes render as ' 0/0' regardless of the numerator/denominator
   # inputs — best-rational-approximation is not yet implemented in

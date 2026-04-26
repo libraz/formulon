@@ -160,6 +160,140 @@ void append_pad2(std::string& out, unsigned n) {
   out.append(std::to_string(n));
 }
 
+// --- DBNum digit substitution -----------------------------------------
+//
+// `[DBNum1]` / `[DBNum2]` / `[DBNum3]` are *per-digit* substitutions in
+// Mac Excel 365 ja-JP. Despite their popular description as "positional
+// kanji" formats, the oracle corpus shows that Excel does NOT decompose
+// integers into 千 / 百 / 十 groups -- it simply rewrites each ASCII
+// digit through a fixed table. Concretely:
+//
+//   * `=TEXT(1234, "[DBNum1]0")` -> `一二三四` (NOT `一千二百三十四`).
+//   * `=TEXT(1234, "[DBNum2]0")` -> `壱弐参四` (NOT `壱阡弐百参拾四`).
+//   * `=TEXT(1234, "[DBNum3]0")` -> `１２３４` (full-width Arabic).
+//
+// Tables:
+//   * DBNum1: 〇一二三四五六七八九 (weak-form everyday kanji digits).
+//   * DBNum2: 零壱弐参四伍六七捌玖. Digit 4 is the everyday form 四 (not
+//     大字 肆) because Mac Excel's `1234` golden ends in 四. The 5/6/7/8/9
+//     entries are not exercised by the oracle corpus; we follow common
+//     convention (5=伍, 8=捌, 9=玖 are 大字; 6=六, 7=七 left as everyday
+//     since 4=四 sets that precedent).
+//   * DBNum3: U+FF10..U+FF19 (full-width Arabic digits).
+
+const char* dbnum1_digit(char ascii_digit) noexcept {
+  // 〇一二三四五六七八九 (each is a 3-byte UTF-8 code point).
+  static const char* kDigits[10] = {
+      "\xE3\x80\x87",  // 〇
+      "\xE4\xB8\x80",  // 一
+      "\xE4\xBA\x8C",  // 二
+      "\xE4\xB8\x89",  // 三
+      "\xE5\x9B\x9B",  // 四
+      "\xE4\xBA\x94",  // 五
+      "\xE5\x85\xAD",  // 六
+      "\xE4\xB8\x83",  // 七
+      "\xE5\x85\xAB",  // 八
+      "\xE4\xB9\x9D",  // 九
+  };
+  if (ascii_digit < '0' || ascii_digit > '9') {
+    return "";
+  }
+  return kDigits[static_cast<std::size_t>(ascii_digit - '0')];
+}
+
+const char* dbnum2_digit(char ascii_digit) noexcept {
+  // Mac Excel-observed 大字 mapping: ones digits = 零壱弐参四伍六七捌玖.
+  // (Note 4=四 not 肆, 7=七 not 漆, per Mac Excel's empirical output.)
+  static const char* kDigits[10] = {
+      "\xE9\x9B\xB6",  // 零
+      "\xE5\xA3\xB1",  // 壱
+      "\xE5\xBC\x90",  // 弐
+      "\xE5\x8F\x82",  // 参
+      "\xE5\x9B\x9B",  // 四 (everyday, matches Mac Excel oracle)
+      "\xE4\xBC\x8D",  // 伍
+      "\xE5\x85\xAD",  // 六 (everyday, matches Mac Excel oracle)
+      "\xE4\xB8\x83",  // 七 (everyday, matches Mac Excel oracle)
+      "\xE6\x8D\x8C",  // 捌
+      "\xE7\x8E\x96",  // 玖
+  };
+  if (ascii_digit < '0' || ascii_digit > '9') {
+    return "";
+  }
+  return kDigits[static_cast<std::size_t>(ascii_digit - '0')];
+}
+
+// Full-width Arabic digits U+FF10..U+FF19 (each is a 3-byte UTF-8 sequence
+// `EF BC 9X` for X in 0..9).
+const char* dbnum3_digit(char ascii_digit) noexcept {
+  static const char* kDigits[10] = {
+      "\xEF\xBC\x90", "\xEF\xBC\x91", "\xEF\xBC\x92", "\xEF\xBC\x93", "\xEF\xBC\x94",
+      "\xEF\xBC\x95", "\xEF\xBC\x96", "\xEF\xBC\x97", "\xEF\xBC\x98", "\xEF\xBC\x99",
+  };
+  if (ascii_digit < '0' || ascii_digit > '9') {
+    return "";
+  }
+  return kDigits[static_cast<std::size_t>(ascii_digit - '0')];
+}
+
+// Returns the per-digit substitution for `c` under `mode`, or an empty
+// string if no substitution applies (caller falls back to `c` verbatim).
+std::string_view dbnum_digit_subst(DbNumMode mode, char c) noexcept {
+  if (c < '0' || c > '9') {
+    return {};
+  }
+  switch (mode) {
+    case DbNumMode::kDBNum1:
+      return dbnum1_digit(c);
+    case DbNumMode::kDBNum2:
+      return dbnum2_digit(c);
+    case DbNumMode::kDBNum3:
+      return dbnum3_digit(c);
+    case DbNumMode::kNone:
+    default:
+      return {};
+  }
+}
+
+// Appends `value` to `out` with each digit substituted per `mode`. Used
+// for date components (era year, m, d, h, min, s) where positional kanji
+// do NOT apply -- only per-digit substitution.
+void append_int_dbnum(std::string& out, long long value, DbNumMode mode) {
+  std::string buf = std::to_string(value);
+  if (mode == DbNumMode::kNone) {
+    out.append(buf);
+    return;
+  }
+  for (char c : buf) {
+    if (c == '-') {
+      out.push_back('-');
+      continue;
+    }
+    const std::string_view sub = dbnum_digit_subst(mode, c);
+    if (!sub.empty()) {
+      out.append(sub);
+    } else {
+      out.push_back(c);
+    }
+  }
+}
+
+// Appends `value` zero-padded to 2 digits, with DBNum substitution applied.
+void append_pad2_dbnum(std::string& out, unsigned value, DbNumMode mode) {
+  if (mode == DbNumMode::kNone) {
+    append_pad2(out, value);
+    return;
+  }
+  if (value < 10u) {
+    const std::string_view zero = dbnum_digit_subst(mode, '0');
+    if (!zero.empty()) {
+      out.append(zero);
+    } else {
+      out.push_back('0');
+    }
+  }
+  append_int_dbnum(out, static_cast<long long>(value), mode);
+}
+
 // Rounds `v` to `decimals` fractional places, half-away-from-zero. The
 // result's integer and fractional digit strings are written into
 // `*int_digits` and `*frac_digits` (decimal digits only, no sign, no
@@ -563,8 +697,23 @@ void render_numeric(const Section& section, std::string_view fmt, double value, 
     if (section.thousands_separator && int_cursor > 0 && (n_int_digits - int_cursor) % 3 == 0) {
       result.push_back(',');
     }
-    result.push_back(digit);
+    const std::string_view sub = dbnum_digit_subst(section.dbnum_mode, digit);
+    if (!sub.empty()) {
+      result.append(sub);
+    } else {
+      result.push_back(digit);
+    }
     ++int_cursor;
+  };
+
+  // Helper: emit a single fractional digit with DBNum substitution.
+  auto emit_frac_digit_char = [&](char digit) {
+    const std::string_view sub = dbnum_digit_subst(section.dbnum_mode, digit);
+    if (!sub.empty()) {
+      result.append(sub);
+    } else {
+      result.push_back(digit);
+    }
   };
 
   for (std::size_t i = 0; i < section.tokens.size(); ++i) {
@@ -575,12 +724,12 @@ void render_numeric(const Section& section, std::string_view fmt, double value, 
       case Tok::DigitPad:
         if (past_point) {
           if (frac_cursor < frac_digits_str.size()) {
-            result.push_back(frac_digits_str[frac_cursor]);
+            emit_frac_digit_char(frac_digits_str[frac_cursor]);
             ++frac_cursor;
           } else {
             // Exceeds precision; emit padding based on token kind.
             if (tk.kind == Tok::DigitZero) {
-              result.push_back('0');
+              emit_frac_digit_char('0');
             } else if (tk.kind == Tok::DigitPad) {
               result.push_back(' ');
             }
@@ -698,27 +847,39 @@ void render_date(const Section& section, std::string_view fmt, double serial, st
     }
   }
 
+  const DbNumMode dbnum = section.dbnum_mode;
   for (std::size_t i = 0; i < section.tokens.size(); ++i) {
     const Token& tk = section.tokens[i];
     switch (tk.kind) {
       case Tok::DateY2: {
         unsigned y2 = static_cast<unsigned>(((ymd.y % 100) + 100) % 100);
-        append_pad2(out, y2);
+        append_pad2_dbnum(out, y2, dbnum);
         break;
       }
       case Tok::DateY4: {
         char buf[16];
         const int n = std::snprintf(buf, sizeof(buf), "%04d", ymd.y);
         if (n > 0) {
-          out.append(buf, static_cast<std::size_t>(n));
+          if (dbnum == DbNumMode::kNone) {
+            out.append(buf, static_cast<std::size_t>(n));
+          } else {
+            for (int k = 0; k < n; ++k) {
+              const std::string_view sub = dbnum_digit_subst(dbnum, buf[k]);
+              if (!sub.empty()) {
+                out.append(sub);
+              } else {
+                out.push_back(buf[k]);
+              }
+            }
+          }
         }
         break;
       }
       case Tok::DateM:
-        out.append(std::to_string(ymd.m));
+        append_int_dbnum(out, static_cast<long long>(ymd.m), dbnum);
         break;
       case Tok::DateMM:
-        append_pad2(out, ymd.m);
+        append_pad2_dbnum(out, ymd.m, dbnum);
         break;
       case Tok::DateMMM:
         out.append(month_short(ymd.m));
@@ -737,10 +898,10 @@ void render_date(const Section& section, std::string_view fmt, double serial, st
         break;
       }
       case Tok::DateD:
-        out.append(std::to_string(ymd.d));
+        append_int_dbnum(out, static_cast<long long>(ymd.d), dbnum);
         break;
       case Tok::DateDD:
-        append_pad2(out, ymd.d);
+        append_pad2_dbnum(out, ymd.d, dbnum);
         break;
       case Tok::DateDDD:
         out.append(weekday_short(sun0));
@@ -772,51 +933,51 @@ void render_date(const Section& section, std::string_view fmt, double serial, st
       case Tok::EraE: {
         const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
         const int era_year = ymd.y - era.year_anchor + 1;
-        out.append(std::to_string(era_year));
+        append_int_dbnum(out, static_cast<long long>(era_year), dbnum);
         break;
       }
       case Tok::EraEE: {
         const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
         const int era_year = ymd.y - era.year_anchor + 1;
         if (era_year >= 0 && era_year < 100) {
-          append_pad2(out, static_cast<unsigned>(era_year));
+          append_pad2_dbnum(out, static_cast<unsigned>(era_year), dbnum);
         } else {
-          out.append(std::to_string(era_year));
+          append_int_dbnum(out, static_cast<long long>(era_year), dbnum);
         }
         break;
       }
       case Tok::DateH:
-        out.append(std::to_string(hour_for_render));
+        append_int_dbnum(out, static_cast<long long>(hour_for_render), dbnum);
         break;
       case Tok::DateHH:
-        append_pad2(out, hour_for_render);
+        append_pad2_dbnum(out, hour_for_render, dbnum);
         break;
       case Tok::DateMin:
-        out.append(std::to_string(minute));
+        append_int_dbnum(out, static_cast<long long>(minute), dbnum);
         break;
       case Tok::DateMMMin:
-        append_pad2(out, minute);
+        append_pad2_dbnum(out, minute, dbnum);
         break;
       case Tok::DateS:
-        out.append(std::to_string(second));
+        append_int_dbnum(out, static_cast<long long>(second), dbnum);
         break;
       case Tok::DateSS:
-        append_pad2(out, second);
+        append_pad2_dbnum(out, second, dbnum);
         break;
       case Tok::DateElapsedH: {
         // Total hours since serial 0 (integer floor).
         const long long total_hours = static_cast<long long>(std::floor(serial * 24.0));
-        out.append(std::to_string(total_hours));
+        append_int_dbnum(out, total_hours, dbnum);
         break;
       }
       case Tok::DateElapsedM: {
         const long long total_minutes = static_cast<long long>(std::floor(serial * 1440.0));
-        out.append(std::to_string(total_minutes));
+        append_int_dbnum(out, total_minutes, dbnum);
         break;
       }
       case Tok::DateElapsedS: {
         const long long total_sec = static_cast<long long>(std::floor(serial * 86400.0));
-        out.append(std::to_string(total_sec));
+        append_int_dbnum(out, total_sec, dbnum);
         break;
       }
       case Tok::AmPm:
@@ -842,7 +1003,13 @@ void render_date(const Section& section, std::string_view fmt, double serial, st
             } else if (d < 0) {
               d = 0;
             }
-            out.push_back(static_cast<char>('0' + d));
+            const char ch = static_cast<char>('0' + d);
+            const std::string_view sub = dbnum_digit_subst(dbnum, ch);
+            if (!sub.empty()) {
+              out.append(sub);
+            } else {
+              out.push_back(ch);
+            }
             f -= static_cast<double>(d);
           }
         }
