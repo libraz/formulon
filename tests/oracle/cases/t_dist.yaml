@@ -60,3 +60,96 @@ cases:
   - id: t_inv_round_trip
     description: "T.INV(T.DIST(1, 5, TRUE), 5) - 1 should be 0 to tolerance"
     formula: "=T.INV(T.DIST(1, 5, TRUE), 5) - 1"
+
+  # =========================================================================
+  # Expanded probes: small / large df, tail behaviour, p boundary edges,
+  # error inputs, fractional truncation.
+  # =========================================================================
+
+  # -- T.DIST: small / large df --------------------------------------------
+  - id: t_dist_df_one_cauchy
+    description: "df=1 is Cauchy; CDF at x=1 = 0.75"
+    formula: "=T.DIST(1, 1, TRUE)"
+
+  - id: t_dist_df_large_normal_like
+    description: "df=10000 approximates standard normal; CDF at x=1 ~ NORM.S.DIST(1, TRUE)"
+    formula: "=T.DIST(1, 10000, TRUE)"
+
+  - id: t_dist_x_very_small
+    description: "Tail near zero on the left"
+    formula: "=T.DIST(-100, 5, TRUE)"
+
+  - id: t_dist_x_very_large
+    description: "Tail near 1 on the right"
+    formula: "=T.DIST(100, 5, TRUE)"
+
+  # -- T.DIST: error inputs ----------------------------------------------
+  - id: t_dist_negative_df_is_num
+    formula: "=T.DIST(0, -5, TRUE)"
+
+  - id: t_dist_fractional_df_truncates
+    description: "df=5.7 should truncate to 5 (matching Excel for integer-only df)"
+    formula: "=T.DIST(1, 5.7, TRUE)"
+
+  - id: t_dist_pdf_at_extreme_x
+    description: "PDF at x=10 — very small but finite"
+    formula: "=T.DIST(10, 5, FALSE)"
+
+  # -- T.DIST.RT --------------------------------------------------------
+  - id: t_dist_rt_at_zero
+    description: "Right-tail at x=0 is 0.5"
+    formula: "=T.DIST.RT(0, 10)"
+
+  - id: t_dist_rt_negative_x_is_num
+    description: "T.DIST.RT rejects negative x in Excel (#NUM!)"
+    formula: "=T.DIST.RT(-1, 10)"
+
+  # -- T.DIST.2T --------------------------------------------------------
+  - id: t_dist_2t_at_zero
+    description: "Two-tail at x=0 is 1.0 (the entire distribution mass)"
+    formula: "=T.DIST.2T(0, 10)"
+
+  - id: t_dist_2t_zero_df_is_num
+    formula: "=T.DIST.2T(2, 0)"
+
+  - id: t_dist_2t_negative_df_is_num
+    formula: "=T.DIST.2T(2, -5)"
+
+  # -- T.INV: edges ------------------------------------------------------
+  - id: t_inv_p_zero
+    description: "T.INV(0, df) -> -Inf or large negative; Excel may return #NUM! or large negative"
+    formula: "=T.INV(0, 10)"
+
+  - id: t_inv_p_one
+    description: "T.INV(1, df) -> +Inf or #NUM!"
+    formula: "=T.INV(1, 10)"
+
+  - id: t_inv_p_negative_is_num
+    formula: "=T.INV(-0.1, 10)"
+
+  - id: t_inv_p_above_one_is_num
+    formula: "=T.INV(1.5, 10)"
+
+  - id: t_inv_complement
+    description: "T.INV(0.95) = -T.INV(0.05) by symmetry"
+    formula: "=T.INV(0.95, 10) + T.INV(0.05, 10)"
+
+  # -- T.INV.2T: edges ---------------------------------------------------
+  - id: t_inv_2t_p_zero_is_num
+    description: "Two-tail p=0 has no finite x"
+    formula: "=T.INV.2T(0, 10)"
+
+  - id: t_inv_2t_p_one
+    description: "Two-tail p=1 -> 0"
+    formula: "=T.INV.2T(1, 10)"
+
+  - id: t_inv_2t_p_above_one_is_num
+    formula: "=T.INV.2T(1.5, 10)"
+
+  - id: t_inv_2t_round_trip
+    formula: "=T.INV.2T(T.DIST.2T(2, 10), 10) - 2"
+
+  # -- Cross-function symmetry -------------------------------------------
+  - id: t_dist_rt_plus_dist_is_1
+    description: "T.DIST(x, df, TRUE) + T.DIST.RT(x, df) == 1"
+    formula: "=T.DIST(1.5, 10, TRUE) + T.DIST.RT(1.5, 10)"

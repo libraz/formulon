@@ -634,6 +634,19 @@ entries:
     first_noted: 2026-04-26
     last_verified_excel_version: "16.108.1"
 
+  # -- T.INV.2T: p > 1 returns a number in Excel -------------------------
+  # `T.INV.2T(1.5, 10)` — Excel returns approx -0.6998 (likely computing
+  # T.INV.2T(p) as if p were folded, or wrapping out-of-range to a
+  # complement). Formulon rejects p > 1 with #NUM! per the documented
+  # 0 < p <= 1 contract. The Excel behaviour is undocumented and may be
+  # a stable Mac-quirk; Formulon should mirror for 1-bit parity.
+  - id: t_inv_2t_p_above_one_is_num
+    mode: skip-oracle
+    reason: "T.INV.2T(p>1, df): Excel returns a finite number (approx -0.6998 for p=1.5, df=10); Formulon: #NUM!. Mac quirk."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
+
   # -- Pre-existing oracle flake: [Red] colour directive ------------------
   # Mac Excel's read-back through xlwings has been observed to vary
   # between sessions for `=TEXT(5, "[Red]0.00")`: sometimes the cell

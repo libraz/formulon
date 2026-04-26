@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-23T05:26:30Z"
+    "generated_at": "2026-04-26T02:25:47Z"
   },
   "tolerance": {
     "abs": 1e-06,
@@ -119,6 +119,201 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      }
+    },
+    {
+      "id": "t_dist_df_one_cauchy",
+      "formula": "=T.DIST(1, 1, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.75
+      }
+    },
+    {
+      "id": "t_dist_df_large_normal_like",
+      "formula": "=T.DIST(1, 10000, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.8413326478347855
+      }
+    },
+    {
+      "id": "t_dist_x_very_small",
+      "formula": "=T.DIST(-100, 5, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.480007112311821e-10
+      }
+    },
+    {
+      "id": "t_dist_x_very_large",
+      "formula": "=T.DIST(100, 5, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.9999999990519993
+      }
+    },
+    {
+      "id": "t_dist_negative_df_is_num",
+      "formula": "=T.DIST(0, -5, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "t_dist_fractional_df_truncates",
+      "formula": "=T.DIST(1, 5.7, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.8183912661754387
+      }
+    },
+    {
+      "id": "t_dist_pdf_at_extreme_x",
+      "formula": "=T.DIST(10, 5, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0989816415343326e-05
+      }
+    },
+    {
+      "id": "t_dist_rt_at_zero",
+      "formula": "=T.DIST.RT(0, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "t_dist_rt_negative_x_is_num",
+      "formula": "=T.DIST.RT(-1, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.8295534338489701
+      }
+    },
+    {
+      "id": "t_dist_2t_at_zero",
+      "formula": "=T.DIST.2T(0, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "t_dist_2t_zero_df_is_num",
+      "formula": "=T.DIST.2T(2, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "t_dist_2t_negative_df_is_num",
+      "formula": "=T.DIST.2T(2, -5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "t_inv_p_zero",
+      "formula": "=T.INV(0, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "t_inv_p_one",
+      "formula": "=T.INV(1, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "t_inv_p_negative_is_num",
+      "formula": "=T.INV(-0.1, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "t_inv_p_above_one_is_num",
+      "formula": "=T.INV(1.5, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "t_inv_complement",
+      "formula": "=T.INV(0.95, 10) + T.INV(0.05, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "t_inv_2t_p_zero_is_num",
+      "formula": "=T.INV.2T(0, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "t_inv_2t_p_one",
+      "formula": "=T.INV.2T(1, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "t_inv_2t_p_above_one_is_num",
+      "formula": "=T.INV.2T(1.5, 10)",
+      "setup": {},
+      "skipped": "T.INV.2T(p>1, df): Excel returns a finite number (approx -0.6998 for p=1.5, df=10); Formulon: #NUM!. Mac quirk."
+    },
+    {
+      "id": "t_inv_2t_round_trip",
+      "formula": "=T.INV.2T(T.DIST.2T(2, 10), 10) - 2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "t_dist_rt_plus_dist_is_1",
+      "formula": "=T.DIST(1.5, 10, TRUE) + T.DIST.RT(1.5, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
       }
     }
   ]
