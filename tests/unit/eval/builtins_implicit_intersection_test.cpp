@@ -55,8 +55,8 @@ Value EvalSourceIn(std::string_view src, const Workbook& wb, const Sheet& curren
 // Evaluate `src` against a bound workbook anchored at the formula cell
 // (`row`, `col`) on the current sheet. Used for the `@`-prefixed
 // implicit-intersection cases.
-Value EvalSourceAt(std::string_view src, const Workbook& wb,
-                   const Sheet& current, std::uint32_t row, std::uint32_t col) {
+Value EvalSourceAt(std::string_view src, const Workbook& wb, const Sheet& current, std::uint32_t row,
+                   std::uint32_t col) {
   static thread_local Arena parse_arena;
   static thread_local Arena eval_arena;
   parse_arena.reset();
@@ -186,6 +186,94 @@ TEST(ImplicitIntersection, TwoDReturnsValue) {
   // Z3 -> row=2, col=25; range spans rows 0..4 cols 0..1, neither axis
   // aligns under our conservative 2D rule.
   const Value v = EvalSourceAt("=@A1:B5", wb, wb.sheet(0), 2U, 25U);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+// ---------------------------------------------------------------------------
+// Hybrid implicit intersection on bare RangeOp in scalar context.
+// When the formula cell is bound and falls inside a 1D range, the
+// row/col-aligned cell is returned (legacy II semantics, observationally
+// matches IronCalc's cached behavior). Otherwise (out of range, 2D, or
+// no formula cell bound) we fall back to the top-left, matching Mac's
+// spill anchor.
+// Verified Mac semantics: tests/oracle/cases/implicit_intersection.yaml.
+// ---------------------------------------------------------------------------
+
+TEST(RangeOp, ScalarColAlignedReturnsAlignedCell) {
+  // Single-column range A1:A5, formula bound to row 3 (0-based 2) -> A3.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(3.0));  // A3
+  wb.sheet(0).set_cell_value(3, 0, Value::number(4.0));
+  wb.sheet(0).set_cell_value(4, 0, Value::number(5.0));
+  // Formula at L3 -> row=2, col=11; row 2 is inside [0..4].
+  const Value v = EvalSourceAt("=A1:A5", wb, wb.sheet(0), 2U, 11U);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 3.0);
+}
+
+TEST(RangeOp, ScalarRowAlignedReturnsAlignedCell) {
+  // Single-row range A1:E1, formula bound to col 3 (0-based 2) -> C1.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(10.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(20.0));
+  wb.sheet(0).set_cell_value(0, 2, Value::number(30.0));  // C1
+  wb.sheet(0).set_cell_value(0, 3, Value::number(40.0));
+  wb.sheet(0).set_cell_value(0, 4, Value::number(50.0));
+  // Formula at C9 -> row=8, col=2; col 2 is inside [0..4].
+  const Value v = EvalSourceAt("=A1:E1", wb, wb.sheet(0), 8U, 2U);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 30.0);
+}
+
+TEST(RangeOp, ScalarOutOfRangeFallsBackToTopLeft) {
+  // Single-column range A3:A8, formula bound to row 1 (0-based 0).
+  // Row 0 is NOT in [2..7], so we fall back to the top-left A3.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(2, 0, Value::number(33.0));  // A3 = top-left
+  wb.sheet(0).set_cell_value(3, 0, Value::number(44.0));
+  wb.sheet(0).set_cell_value(7, 0, Value::number(88.0));
+  // Formula at L1 -> row=0, col=11.
+  const Value v = EvalSourceAt("=A3:A8", wb, wb.sheet(0), 0U, 11U);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 33.0);
+}
+
+TEST(RangeOp, Scalar2DRangeFallsBackToTopLeft) {
+  // 2D range A1:B5 -- alignment requires both axes; we fall back to A1.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(11.0));  // A1
+  wb.sheet(0).set_cell_value(0, 1, Value::number(12.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(21.0));
+  wb.sheet(0).set_cell_value(1, 1, Value::number(22.0));
+  // Formula at Z1 -> row=0, col=25.
+  const Value v = EvalSourceAt("=A1:B5", wb, wb.sheet(0), 0U, 25U);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 11.0);
+}
+
+TEST(RangeOp, ScalarNoFormulaCellFallsBackToTopLeft) {
+  // No formula cell bound (parser-driven smoke path) -- top-left.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(42.0));  // A1
+  wb.sheet(0).set_cell_value(2, 0, Value::number(99.0));
+  const Value v = EvalSourceIn("=A1:A5", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 42.0);
+}
+
+TEST(RangeOp, ScalarAtPrefixStrictUnchanged) {
+  // The @-prefix path must remain strict: row 0 is outside [2..7], so
+  // implicit intersection on @A3:A8 still returns #VALUE!. This guards
+  // against any accidental coupling of the new RangeOp branch with the
+  // ImplicitIntersection branch.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(2, 0, Value::number(33.0));
+  wb.sheet(0).set_cell_value(7, 0, Value::number(88.0));
+  // Formula at L1 -> row=0, col=11.
+  const Value v = EvalSourceAt("=@A3:A8", wb, wb.sheet(0), 0U, 11U);
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
