@@ -1,0 +1,108 @@
+suite: text_function_error_probes
+description: >
+  Mac Excel 365 (ja-JP) probe for whether text-family functions
+  (LEN / LOWER / UPPER / LEFT / RIGHT / MID / TRIM / PROPER) propagate
+  errors from their input or convert them to text. IronCalc's
+  STRING_HANDLING fixture treats `LEN(#DIV/0!)` as `LEN("#DIV/0!") = 7`
+  (textification of error display string), while Formulon currently
+  propagates the error. Each case probes one specific (function, error
+  type) pair so the probe results are unambiguous. The (LEFT, -1)
+  case is included to settle the order of negative-length validation
+  vs error-propagation. Mac's truth becomes the reference; we only
+  switch to text-conversion if Mac matches IronCalc.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  # ---------------------------------------------------------------------
+  # A) LEN with various error inputs.
+  - id: text_err_len_div0
+    description: "LEN(1/0) - #DIV/0! propagation vs textification"
+    formula: "=LEN(1/0)"
+
+  - id: text_err_len_na
+    description: "LEN(NA())"
+    formula: "=LEN(NA())"
+
+  - id: text_err_len_value
+    description: "LEN(\"abc\"+1) - #VALUE! propagation"
+    formula: "=LEN(\"abc\"+1)"
+
+  - id: text_err_len_ref
+    description: "LEN(#REF!)"
+    formula: "=LEN(#REF!)"
+
+  - id: text_err_len_name
+    description: "LEN(NoSuchName) - #NAME? propagation"
+    formula: "=LEN(NoSuchName)"
+
+  - id: text_err_len_num
+    description: "LEN(SQRT(-1)) - #NUM!"
+    formula: "=LEN(SQRT(-1))"
+
+  # ---------------------------------------------------------------------
+  # B) LOWER / UPPER / PROPER with errors.
+  - id: text_err_lower_div0
+    description: "LOWER(1/0)"
+    formula: "=LOWER(1/0)"
+
+  - id: text_err_upper_div0
+    description: "UPPER(1/0)"
+    formula: "=UPPER(1/0)"
+
+  - id: text_err_proper_na
+    description: "PROPER(NA())"
+    formula: "=PROPER(NA())"
+
+  # ---------------------------------------------------------------------
+  # C) LEFT / RIGHT / MID with errors.
+  - id: text_err_left_default_div0
+    description: "LEFT(1/0) - default num_chars=1"
+    formula: "=LEFT(1/0)"
+
+  - id: text_err_left_three_div0
+    description: "LEFT(1/0, 3)"
+    formula: "=LEFT(1/0, 3)"
+
+  - id: text_err_right_default_div0
+    description: "RIGHT(1/0)"
+    formula: "=RIGHT(1/0)"
+
+  - id: text_err_right_three_div0
+    description: "RIGHT(1/0, 3)"
+    formula: "=RIGHT(1/0, 3)"
+
+  - id: text_err_mid_div0
+    description: "MID(1/0, 2, 3)"
+    formula: "=MID(1/0, 2, 3)"
+
+  # ---------------------------------------------------------------------
+  # D) Negative length with error: probe order of validation.
+  # IronCalc returns #VALUE! for LEFT(error, -1) — negative-length
+  # validation wins. If Mac matches, we know Mac validates length
+  # before propagating. If Mac propagates the original error, we know
+  # Mac propagates first.
+  - id: text_err_left_neg_div0
+    description: "LEFT(1/0, -1) - negative length vs error precedence"
+    formula: "=LEFT(1/0, -1)"
+
+  - id: text_err_right_neg_na
+    description: "RIGHT(NA(), -1) - same precedence test"
+    formula: "=RIGHT(NA(), -1)"
+
+  # ---------------------------------------------------------------------
+  # E) TRIM with error.
+  - id: text_err_trim_div0
+    description: "TRIM(1/0)"
+    formula: "=TRIM(1/0)"
+
+  # ---------------------------------------------------------------------
+  # F) Concatenation with error: confirms error propagates through &.
+  - id: text_err_concat_div0
+    description: "(1/0) & \"x\" - confirm baseline error propagation"
+    formula: "=(1/0) & \"x\""
+
+  # ---------------------------------------------------------------------
+  # G) TEXT formatting an error.
+  - id: text_err_text_div0
+    description: "TEXT(1/0, \"0\")"
+    formula: "=TEXT(1/0, \"0\")"

@@ -1,0 +1,188 @@
+{
+  "suite": "text_function_error_probes",
+  "description": "Mac Excel 365 (ja-JP) probe for whether text-family functions (LEN / LOWER / UPPER / LEFT / RIGHT / MID / TRIM / PROPER) propagate errors from their input or convert them to text. IronCalc's STRING_HANDLING fixture treats `LEN(#DIV/0!)` as `LEN(\"#DIV/0!\") = 7` (textification of error display string), while Formulon currently propagates the error. Each case probes one specific (function, error type) pair so the probe results are unambiguous. The (LEFT, -1) case is included to settle the order of negative-length validation vs error-propagation. Mac's truth becomes the reference; we only switch to text-conversion if Mac matches IronCalc.\n",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-26T00:58:53Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "text_err_len_div0",
+      "formula": "=LEN(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "text_err_len_na",
+      "formula": "=LEN(NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "text_err_len_value",
+      "formula": "=LEN(\"abc\"+1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_err_len_ref",
+      "formula": "=LEN(#REF!)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "text_err_len_name",
+      "formula": "=LEN(NoSuchName)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "text_err_len_num",
+      "formula": "=LEN(SQRT(-1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "text_err_lower_div0",
+      "formula": "=LOWER(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "text_err_upper_div0",
+      "formula": "=UPPER(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "text_err_proper_na",
+      "formula": "=PROPER(NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "text_err_left_default_div0",
+      "formula": "=LEFT(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "text_err_left_three_div0",
+      "formula": "=LEFT(1/0, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "text_err_right_default_div0",
+      "formula": "=RIGHT(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "text_err_right_three_div0",
+      "formula": "=RIGHT(1/0, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "text_err_mid_div0",
+      "formula": "=MID(1/0, 2, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "text_err_left_neg_div0",
+      "formula": "=LEFT(1/0, -1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "text_err_right_neg_na",
+      "formula": "=RIGHT(NA(), -1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "text_err_trim_div0",
+      "formula": "=TRIM(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "text_err_concat_div0",
+      "formula": "=(1/0) & \"x\"",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "text_err_text_div0",
+      "formula": "=TEXT(1/0, \"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    }
+  ]
+}
