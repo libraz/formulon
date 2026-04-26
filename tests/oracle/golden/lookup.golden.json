@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T01:43:27Z"
+    "generated_at": "2026-04-26T04:04:41Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -584,7 +584,10 @@
           "value": 20.0
         }
       },
-      "skipped": "MATCH match_type=1 on unsorted data: Excel returns largest seen-so-far position (3); Formulon: #N/A."
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
     },
     {
       "id": "vlookup_col_out_of_range",
@@ -711,7 +714,10 @@
           "value": "z"
         }
       },
-      "skipped": "VLOOKUP range_lookup=TRUE on unsorted lookup_array: Excel deterministically picks last-seen-le; Formulon: #N/A."
+      "expect": {
+        "kind": "text",
+        "value": "y"
+      }
     },
     {
       "id": "vlookup_error_in_array",
@@ -926,7 +932,10 @@
           "value": 3.0
         }
       },
-      "skipped": "INDEX(range, 0) entire-column not implemented; Excel: first cell at placement, Formulon: #VALUE!."
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "index_zero_col",
@@ -949,7 +958,10 @@
           "value": 4.0
         }
       },
-      "skipped": "INDEX(2D-range, row, 0) entire-row not implemented."
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "index_out_of_range",

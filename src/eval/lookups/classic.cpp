@@ -146,10 +146,14 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
     return SIZE_MAX;
   }
 
-  // Approximate match: ascending-assumed scan. Record the last position
-  // whose value is <= lookup_value and stop at the first strictly greater
-  // cell. Wildcards are NEVER honoured here (Excel treats them as literal
-  // text in approximate mode).
+  // Approximate match: scan top-down (or left-right) recording the last
+  // position whose value is <= lookup_value. We do NOT short-circuit when
+  // a strictly-greater cell is seen — Mac Excel keeps scanning and
+  // returns the running last <= match even on unsorted data. For
+  // ascending-sorted input this produces the documented binary-search
+  // answer because every post-match cell is strictly greater (and
+  // skipped). Wildcards are NEVER honoured here (Excel treats them as
+  // literal text in approximate mode).
   auto cmp_numeric = [](double x, double y) -> int {
     if (x < y) {
       return -1;
@@ -184,9 +188,7 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
     }
     if (cmp <= 0) {
       best = i;
-      continue;
     }
-    break;
   }
   return best;
 }
@@ -240,9 +242,14 @@ Value eval_choose_lazy(const parser::AstNode& call, Arena& arena, const Function
 // today, so we return `#VALUE!` (documented divergence from Excel 365
 // which spills in that case).
 //
-// Accepted divergence: a zero in either index dimension is "return the
-// whole row/column" in Excel 365 via dynamic arrays. Scalar array results
-// are not wired up yet, so INDEX returns `#VALUE!` for that shape.
+// Zero indices on a 1-D source: row_num == 0 with a 1-D vertical or
+// horizontal source means "return the whole vector" in Excel 365 via
+// dynamic arrays. We don't have scalar spill results, but the placement
+// anchor matches the first cell of that vector — return cells[0].
+// Similarly, a 3-arg INDEX with col_num == 0 (or row_num == 0) on a 1-D
+// source returns the first cell along the spanned axis.
+// 2-D row==0 with explicit column is intentionally still `#VALUE!`
+// (entire-column spill is unsupported and documented as divergence).
 Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -304,16 +311,22 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (!col_explicit) {
     // Two-arg form.
     if (rows == 1U && cols == 1U) {
-      // 1x1 range: row_num must be 1 (or 0 "whole", which we reject).
+      // 1x1 range: row_num must be 1 (or 0 "whole", which collapses to the
+      // sole cell).
+      if (row_idx == 0U) {
+        return cells[0];
+      }
       if (row_idx != 1U) {
         return Value::error(ErrorCode::Ref);
       }
       r = 0;
       c = 0;
     } else if (rows == 1U) {
-      // Row vector: sole index selects the column.
+      // Row vector: sole index selects the column. Excel 365 spills the
+      // whole vector for index 0; we return the placement anchor (the
+      // first cell), matching xlwings's read-back of a non-spilling cell.
       if (row_idx == 0U) {
-        return Value::error(ErrorCode::Value);
+        return cells[0];
       }
       if (row_idx > cols) {
         return Value::error(ErrorCode::Ref);
@@ -321,9 +334,11 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       r = 0;
       c = row_idx - 1U;
     } else if (cols == 1U) {
-      // Column vector: sole index selects the row.
+      // Column vector: sole index selects the row. Same Excel-365 spill
+      // rule as the row-vector branch above; the spill anchor is the first
+      // cell.
       if (row_idx == 0U) {
-        return Value::error(ErrorCode::Value);
+        return cells[0];
       }
       if (row_idx > rows) {
         return Value::error(ErrorCode::Ref);
@@ -337,14 +352,15 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     }
   } else {
     // Three-arg form.
-    if (row_idx == 0U || col_idx == 0U) {
-      // Whole-row / whole-column via dynamic-array spill — unsupported.
-      return Value::error(ErrorCode::Value);
-    }
     if (rows == 1U) {
-      // Row vector: row_num must be 1.
-      if (row_idx != 1U) {
+      // Row vector: row_num must be 1 (or 0 "whole", collapsing to the
+      // first cell along the column dimension).
+      if (row_idx != 1U && row_idx != 0U) {
         return Value::error(ErrorCode::Ref);
+      }
+      if (col_idx == 0U) {
+        // Whole-row spill anchor.
+        return cells[0];
       }
       if (col_idx > cols) {
         return Value::error(ErrorCode::Ref);
@@ -352,9 +368,14 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       r = 0;
       c = col_idx - 1U;
     } else if (cols == 1U) {
-      // Column vector: col_num must be 1.
-      if (col_idx != 1U) {
+      // Column vector: col_num must be 1 (or 0 "whole", collapsing to the
+      // first cell along the row dimension).
+      if (col_idx != 1U && col_idx != 0U) {
         return Value::error(ErrorCode::Ref);
+      }
+      if (row_idx == 0U) {
+        // Whole-column spill anchor.
+        return cells[0];
       }
       if (row_idx > rows) {
         return Value::error(ErrorCode::Ref);
@@ -362,11 +383,33 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       r = row_idx - 1U;
       c = 0;
     } else {
-      if (row_idx > rows || col_idx > cols) {
-        return Value::error(ErrorCode::Ref);
+      // 2-D array.
+      if (row_idx == 0U && col_idx == 0U) {
+        // Whole-array spill anchor.
+        return cells[0];
       }
-      r = row_idx - 1U;
-      c = col_idx - 1U;
+      if (row_idx == 0U) {
+        // Whole-column spill anchor at col_idx: not yet supported (the
+        // existing unit-test contract returns #VALUE! for this shape).
+        return Value::error(ErrorCode::Value);
+      }
+      if (col_idx == 0U) {
+        // Whole-row spill: collapse to the first cell of the selected
+        // row, matching Mac Excel's non-spilling placement anchor (the
+        // oracle case `index_zero_col` reads this back as the first
+        // element).
+        if (row_idx > rows) {
+          return Value::error(ErrorCode::Ref);
+        }
+        r = row_idx - 1U;
+        c = 0;
+      } else {
+        if (row_idx > rows || col_idx > cols) {
+          return Value::error(ErrorCode::Ref);
+        }
+        r = row_idx - 1U;
+        c = col_idx - 1U;
+      }
     }
   }
 
@@ -545,21 +588,23 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       continue;
     }
     if (match_type == 1) {
-      // Ascending: record last position with cell <= lookup. Stop at the
-      // first cell strictly greater than lookup.
+      // Ascending: record the last position whose cell is <= lookup. We
+      // do NOT short-circuit on a strictly-greater cell — Mac Excel's
+      // empirical behaviour on unsorted data is to keep scanning and
+      // simply return the running last <= match. For sorted ascending
+      // data this still produces the documented answer because every
+      // post-match cell is strictly greater (and skipped).
       if (cmp <= 0) {
         best_pos = i + 1;
-        continue;
       }
-      break;
-    }
-    // match_type == -1, descending: record last position with cell >=
-    // lookup. Stop at the first cell strictly less than lookup.
-    if (cmp >= 0) {
-      best_pos = i + 1;
       continue;
     }
-    break;
+    // match_type == -1, descending: symmetric rule — record the last
+    // position whose cell is >= lookup, and keep scanning past strictly
+    // smaller cells without short-circuiting.
+    if (cmp >= 0) {
+      best_pos = i + 1;
+    }
   }
   if (best_pos == 0) {
     return Value::error(ErrorCode::NA);
