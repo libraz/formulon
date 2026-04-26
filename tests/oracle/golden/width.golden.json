@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T03:37:31Z"
+    "generated_at": "2026-04-26T23:19:45Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -221,6 +221,123 @@
       "expect": {
         "kind": "text",
         "value": "漢字"
+      }
+    },
+    {
+      "id": "dbcs_ascii_and_space",
+      "formula": "=DBCS(\"ABC 123\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ＡＢＣ　１２３"
+      }
+    },
+    {
+      "id": "dbcs_semivoiced_row",
+      "formula": "=DBCS(\"ﾊﾟﾋﾟﾌﾟﾍﾟﾎﾟ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "パピプペポ"
+      }
+    },
+    {
+      "id": "dbcs_unvoiced_row",
+      "formula": "=DBCS(\"ｱｲｳｴｵ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "アイウエオ"
+      }
+    },
+    {
+      "id": "dbcs_idempotent_on_fullwidth",
+      "formula": "=DBCS(\"ＡＢＣ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ＡＢＣ"
+      }
+    },
+    {
+      "id": "dbcs_idempotent_on_kanji",
+      "formula": "=DBCS(\"漢字\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "漢字"
+      }
+    },
+    {
+      "id": "dbcs_mixed_halfkata_kanji",
+      "formula": "=DBCS(\"漢ｱ字\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "漢ア字"
+      }
+    },
+    {
+      "id": "dbcs_orphan_dakuten",
+      "formula": "=DBCS(\"ﾞ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "゛"
+      }
+    },
+    {
+      "id": "dbcs_half_punctuation",
+      "formula": "=DBCS(\"!@#$%\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "！＠＃＄％"
+      }
+    },
+    {
+      "id": "dbcs_round_trip",
+      "formula": "=ASC(DBCS(\"ABC123\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ABC123"
+      }
+    },
+    {
+      "id": "dbcs_asc_round_trip",
+      "formula": "=DBCS(ASC(\"ＡＢＣ１２３\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ＡＢＣ１２３"
+      }
+    },
+    {
+      "id": "dbcs_bool_coerces",
+      "formula": "=DBCS(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ＴＲＵＥ"
+      }
+    },
+    {
+      "id": "dbcs_error_propagates",
+      "formula": "=DBCS(#DIV/0!)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "dbcs_long_halfkana_string",
+      "formula": "=DBCS(\"ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜｦﾝ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン"
       }
     },
     {

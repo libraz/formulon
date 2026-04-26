@@ -31,6 +31,17 @@
 #       prefer: mac-excel-365 | win-excel-365 | formulon
 #       first_noted: YYYY-MM-DD
 #       last_verified_excel_version: "16.xx.x (Build ...)"
+#       applies_to: [mac-365-ja_JP, win-365-ja_JP]   # optional; list of
+#                                                     # oracle target names
+#                                                     # from tools/oracle/
+#                                                     # targets.yaml. Default
+#                                                     # (omitted / null) =
+#                                                     # applies to every
+#                                                     # target. Entries with
+#                                                     # an unrecognised type
+#                                                     # are rejected loudly
+#                                                     # so typos surface
+#                                                     # immediately.
 
 entries:
   # -- xlwings empty-string round-trip gap ---------------------------------
@@ -150,11 +161,14 @@ entries:
   # -- JIS unsupported on current Mac Excel ja-JP build ------------------
   # Mac Excel 365 16.108.1 (ja-JP) returns `#NAME?` for every `=JIS(...)`
   # invocation in the oracle pipeline (every kana / ASCII / kanji / mixed
-  # input we tried). Formulon implements JIS correctly per the documented
-  # half-width-to-full-width mapping. Prefer Formulon here — these cases
-  # document a Mac Excel limitation rather than a Formulon gap. If a
-  # future Mac Excel version restores JIS, these entries should be
-  # removed.
+  # input we tried). Re-verified 2026-04-26 via fresh probe ids — the Mac
+  # bug is still live, not just a stale capture artefact. Formulon
+  # implements JIS correctly per the documented half-width-to-full-width
+  # mapping; the impl is Mac-verified by proxy through the dbcs_* mirror
+  # cases in tests/oracle/cases/width.yaml (Formulon registers JIS and
+  # DBCS to the same internal Jis() — see src/eval/builtins/text_width.cpp
+  # lines 466-467 — and Mac DBCS works correctly). If a future Mac Excel
+  # version restores JIS, these entries should be removed.
   - id: jis_ascii_and_space
     mode: skip-oracle
     reason: "JIS returns #NAME? on current Mac Excel (16.108.1, ja-JP); Formulon's mapping is correct."

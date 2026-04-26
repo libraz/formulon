@@ -113,12 +113,72 @@ cases:
     formula: "=ASC(JIS(\"ABC123\"))"
 
   # -- DBCS / JIS equivalence -------------------------------------------
+  # Mac Excel 16.108.1 ja-JP returns #NAME? for every JIS call (verified
+  # 2026-04-26 via tests/oracle/cases/jis_recheck.yaml during probe). The
+  # JIS-named cases above are therefore skip-oracle in tests/divergence.yaml.
+  # Formulon registers JIS and DBCS to the same internal Jis() (see
+  # src/eval/builtins/text_width.cpp:466-467), so the DBCS mirrors below
+  # provide a Mac-verified parity oracle for the impl. Whenever a new JIS
+  # case is added above, add the corresponding dbcs_* mirror here so the
+  # underlying conversion stays verified against Mac.
   - id: dbcs_voiced_recompose
     description: "DBCS recomposes ｶﾞ → ガ same as JIS"
     formula: "=DBCS(\"ｶﾞ\")"
 
   - id: dbcs_kanji_passthrough
     formula: "=DBCS(\"漢字\")"
+
+  - id: dbcs_ascii_and_space
+    description: "DBCS mirror of jis_ascii_and_space (Mac-verified parity)"
+    formula: "=DBCS(\"ABC 123\")"
+
+  - id: dbcs_semivoiced_row
+    description: "DBCS mirror of jis_semivoiced_row"
+    formula: "=DBCS(\"ﾊﾟﾋﾟﾌﾟﾍﾟﾎﾟ\")"
+
+  - id: dbcs_unvoiced_row
+    description: "DBCS mirror of jis_unvoiced_row"
+    formula: "=DBCS(\"ｱｲｳｴｵ\")"
+
+  - id: dbcs_idempotent_on_fullwidth
+    description: "DBCS mirror of jis_idempotent_on_fullwidth"
+    formula: "=DBCS(\"ＡＢＣ\")"
+
+  - id: dbcs_idempotent_on_kanji
+    description: "DBCS mirror of jis_idempotent_on_kanji"
+    formula: "=DBCS(\"漢字\")"
+
+  - id: dbcs_mixed_halfkata_kanji
+    description: "DBCS mirror of jis_mixed_halfkata_kanji"
+    formula: "=DBCS(\"漢ｱ字\")"
+
+  - id: dbcs_orphan_dakuten
+    description: "DBCS mirror of jis_orphan_dakuten"
+    formula: "=DBCS(\"ﾞ\")"
+
+  - id: dbcs_half_punctuation
+    description: "DBCS mirror of jis_half_punctuation"
+    formula: "=DBCS(\"!@#$%\")"
+
+  - id: dbcs_round_trip
+    description: "DBCS mirror of jis_round_trip — ASC(DBCS(...)) is identity"
+    formula: "=ASC(DBCS(\"ABC123\"))"
+
+  - id: dbcs_asc_round_trip
+    description: "DBCS mirror of asc_jis_round_trip — DBCS(ASC(...)) is identity"
+    formula: "=DBCS(ASC(\"ＡＢＣ１２３\"))"
+
+  - id: dbcs_bool_coerces
+    description: "DBCS mirror of jis_bool_coerces"
+    formula: "=DBCS(TRUE)"
+
+  - id: dbcs_error_propagates
+    description: "DBCS mirror of jis_error_propagates"
+    formula: "=DBCS(#DIV/0!)"
+
+  - id: dbcs_long_halfkana_string
+    description: "DBCS mirror of jis_long_halfkana_string"
+    formula: "=DBCS(\"ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜｦﾝ\")"
 
   # Empty-string / blank-cell probes omitted — xlwings cannot write the
   # empty string into a setup cell (it lands as genuinely blank), so the
