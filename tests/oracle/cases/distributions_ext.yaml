@@ -172,3 +172,115 @@ cases:
   - id: hypgeom_negative_k_is_num
     description: "k < 0 is treated as malformed input by Mac Excel; yields #NUM!"
     formula: "=HYPGEOM.DIST(-1, 4, 8, 20, FALSE)"
+
+  # =========================================================================
+  # Edge probes (appended 2026-04-26): boundary / domain-error coverage that
+  # the original 17 cases didn't exercise. Each probe targets a specific
+  # numerical edge: zero/negative shape parameters, support boundaries,
+  # large-argument behaviour, and legacy-spelling parity.
+  # =========================================================================
+
+  # -- BETA edge probes ----------------------------------------------------
+  - id: beta_dist_zero_alpha_is_num
+    description: "alpha == 0 is non-positive; yields #NUM!"
+    formula: "=BETA.DIST(0.5, 0, 3, TRUE)"
+
+  - id: beta_dist_negative_beta_is_num
+    description: "beta < 0; yields #NUM!"
+    formula: "=BETA.DIST(0.5, 2, -3, TRUE)"
+
+  - id: beta_dist_scaled_left_boundary_cdf
+    description: "BETA.DIST at x = A (left boundary, scaled form) CDF == 0"
+    formula: "=BETA.DIST(1, 8, 10, TRUE, 1, 3)"
+
+  - id: beta_dist_scaled_right_boundary_cdf
+    description: "BETA.DIST at x = B (right boundary, scaled form) CDF == 1"
+    formula: "=BETA.DIST(3, 8, 10, TRUE, 1, 3)"
+
+  - id: beta_dist_a_equals_b_is_num
+    description: "Degenerate scaling A == B; yields #NUM!"
+    formula: "=BETA.DIST(2, 2, 3, TRUE, 2, 2)"
+
+  - id: beta_dist_small_alpha_cdf
+    description: "BETA.DIST with very small alpha (0.01) is near 1 quickly"
+    formula: "=BETA.DIST(0.5, 0.01, 2, TRUE)"
+
+  - id: beta_inv_p_one_is_num
+    description: "BETA.INV with p = 1 is at the support boundary; yields #NUM!"
+    formula: "=BETA.INV(1, 2, 3)"
+
+  - id: beta_inv_scaled_round_trip
+    description: "BETA.INV with scaled support: inverse of BETA.DIST(1.8,...,1,3) is 1.8"
+    formula: "=BETA.INV(BETA.DIST(1.8, 8, 10, TRUE, 1, 3), 8, 10, 1, 3)"
+
+  - id: betadist_legacy_parity
+    description: "Legacy BETADIST(0.4, 8, 10) matches BETA.DIST(0.4, 8, 10, TRUE)"
+    formula: "=BETADIST(0.4, 8, 10)"
+
+  # -- GAMMA edge probes ---------------------------------------------------
+  - id: gamma_negative_one_is_num
+    description: "Γ(-1) is a pole; #NUM!"
+    formula: "=GAMMA(-1)"
+
+  - id: gamma_fractional
+    description: "Γ(1.5) = sqrt(pi)/2 ~ 0.886227"
+    formula: "=GAMMA(1.5)"
+
+  - id: gamma_large_overflow_is_num
+    description: "Γ(171) overflows IEEE 754 double; yields #NUM!"
+    formula: "=GAMMA(171)"
+
+  - id: gamma_dist_alpha_one_is_exponential_pdf
+    description: "GAMMA(alpha=1, beta=2) PDF at 1 = exp(-0.5)/2 ~ 0.303265"
+    formula: "=GAMMA.DIST(1, 1, 2, FALSE)"
+
+  - id: gamma_inv_p_zero_alpha_one
+    description: "GAMMA.INV(0, alpha, beta) is the support left endpoint = 0"
+    formula: "=GAMMA.INV(0, 1, 2)"
+
+  - id: gammaln_negative_non_integer_is_num
+    description: "Formulon rejects GAMMALN at non-positive reals (Excel may compute it)"
+    formula: "=GAMMALN(-0.5)"
+
+  # -- WEIBULL edge probes -------------------------------------------------
+  - id: weibull_zero_beta_is_num
+    description: "beta <= 0 yields #NUM!"
+    formula: "=WEIBULL.DIST(1, 2, 0, TRUE)"
+
+  - id: weibull_legacy_parity
+    description: "Legacy WEIBULL matches WEIBULL.DIST CDF"
+    formula: "=WEIBULL(105, 20, 100, TRUE)"
+
+  # -- LOGNORM edge probes -------------------------------------------------
+  - id: lognorm_dist_negative_sd_is_num
+    description: "sd < 0 yields #NUM!"
+    formula: "=LOGNORM.DIST(1, 0, -1, TRUE)"
+
+  - id: lognorm_inv_p_one_is_num
+    description: "LOGNORM.INV with p = 1 is undefined; yields #NUM!"
+    formula: "=LOGNORM.INV(1, 0, 1)"
+
+  - id: lognormdist_legacy_parity
+    description: "Legacy LOGNORMDIST(4, 3.5, 1.2) matches LOGNORM.DIST(...,TRUE)"
+    formula: "=LOGNORMDIST(4, 3.5, 1.2)"
+
+  - id: loginv_legacy_parity
+    description: "Legacy LOGINV matches LOGNORM.INV"
+    formula: "=LOGINV(0.5, 0, 1)"
+
+  # -- HYPGEOM edge probes -------------------------------------------------
+  - id: hypgeom_population_s_exceeds_population_is_num
+    description: "K > N is malformed; yields #NUM!"
+    formula: "=HYPGEOM.DIST(1, 4, 25, 20, FALSE)"
+
+  - id: hypgeom_sample_exceeds_population_is_num
+    description: "n > N is malformed; yields #NUM!"
+    formula: "=HYPGEOM.DIST(1, 25, 8, 20, FALSE)"
+
+  - id: hypgeom_cdf_below_support
+    description: "HYPGEOM.DIST CDF at k=0 (in support) is just the PMF at 0"
+    formula: "=HYPGEOM.DIST(0, 4, 8, 20, TRUE)"
+
+  - id: hypgeomdist_legacy_parity
+    description: "Legacy HYPGEOMDIST(1, 4, 8, 20) matches HYPGEOM.DIST(...,FALSE)"
+    formula: "=HYPGEOMDIST(1, 4, 8, 20)"

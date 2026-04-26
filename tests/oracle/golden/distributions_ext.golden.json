@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-23T06:37:48Z"
+    "generated_at": "2026-04-26T09:11:37Z"
   },
   "tolerance": {
     "abs": 1e-06,
@@ -353,6 +353,231 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      }
+    },
+    {
+      "id": "beta_dist_zero_alpha_is_num",
+      "formula": "=BETA.DIST(0.5, 0, 3, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "beta_dist_negative_beta_is_num",
+      "formula": "=BETA.DIST(0.5, 2, -3, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "beta_dist_scaled_left_boundary_cdf",
+      "formula": "=BETA.DIST(1, 8, 10, TRUE, 1, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "beta_dist_scaled_right_boundary_cdf",
+      "formula": "=BETA.DIST(3, 8, 10, TRUE, 1, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "beta_dist_a_equals_b_is_num",
+      "formula": "=BETA.DIST(2, 2, 3, TRUE, 2, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "beta_dist_small_alpha_cdf",
+      "formula": "=BETA.DIST(0.5, 0.01, 2, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.998057957914221
+      }
+    },
+    {
+      "id": "beta_inv_p_one_is_num",
+      "formula": "=BETA.INV(1, 2, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "beta_inv_scaled_round_trip",
+      "formula": "=BETA.INV(BETA.DIST(1.8, 8, 10, TRUE, 1, 3), 8, 10, 1, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.8000000000000003
+      }
+    },
+    {
+      "id": "betadist_legacy_parity",
+      "formula": "=BETADIST(0.4, 8, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.3594923429330944
+      }
+    },
+    {
+      "id": "gamma_negative_one_is_num",
+      "formula": "=GAMMA(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "gamma_fractional",
+      "formula": "=GAMMA(1.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.886226925452758
+      }
+    },
+    {
+      "id": "gamma_large_overflow_is_num",
+      "formula": "=GAMMA(171)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.257415615308e+306
+      }
+    },
+    {
+      "id": "gamma_dist_alpha_one_is_exponential_pdf",
+      "formula": "=GAMMA.DIST(1, 1, 2, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.3032653298563167
+      }
+    },
+    {
+      "id": "gamma_inv_p_zero_alpha_one",
+      "formula": "=GAMMA.INV(0, 1, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "gammaln_negative_non_integer_is_num",
+      "formula": "=GAMMALN(-0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "weibull_zero_beta_is_num",
+      "formula": "=WEIBULL.DIST(1, 2, 0, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "weibull_legacy_parity",
+      "formula": "=WEIBULL(105, 20, 100, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.929581390069277
+      }
+    },
+    {
+      "id": "lognorm_dist_negative_sd_is_num",
+      "formula": "=LOGNORM.DIST(1, 0, -1, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "lognorm_inv_p_one_is_num",
+      "formula": "=LOGNORM.INV(1, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "lognormdist_legacy_parity",
+      "formula": "=LOGNORMDIST(4, 3.5, 1.2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.03908355570680048
+      }
+    },
+    {
+      "id": "loginv_legacy_parity",
+      "formula": "=LOGINV(0.5, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "hypgeom_population_s_exceeds_population_is_num",
+      "formula": "=HYPGEOM.DIST(1, 4, 25, 20, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "hypgeom_sample_exceeds_population_is_num",
+      "formula": "=HYPGEOM.DIST(1, 25, 8, 20, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "hypgeom_cdf_below_support",
+      "formula": "=HYPGEOM.DIST(0, 4, 8, 20, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.10216718266253864
+      }
+    },
+    {
+      "id": "hypgeomdist_legacy_parity",
+      "formula": "=HYPGEOMDIST(1, 4, 8, 20)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.3632610939112486
       }
     }
   ]
