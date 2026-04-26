@@ -349,6 +349,46 @@ TEST(NumberFormatSignedZero, TwoSectionAccountingZero) {
   EXPECT_EQ(Render(-1.0 / 3.0, "0"), "0");
 }
 
+// ---------------------------------------------------------------------------
+// Fraction format (`# ?/?`, `# ??/??`, ...).
+// ---------------------------------------------------------------------------
+
+TEST(NumberFormatFraction, ProperFractionZeroIntegerSuppressed) {
+  // `# ?/?` with 0.5: integer 0 is suppressed by `#`, then a literal space,
+  // numerator '1', '/', denominator '2'.
+  EXPECT_EQ(Render(0.5, "# ?/?"), " 1/2");
+}
+
+TEST(NumberFormatFraction, MixedFractionWithIntegerOne) {
+  // 1.5 -> "1 1/2": integer 1 emits, literal space, then 1/2.
+  EXPECT_EQ(Render(1.5, "# ?/?"), "1 1/2");
+}
+
+TEST(NumberFormatFraction, NegativeMixedFraction) {
+  // -1.5 -> "-1 1/2": leading minus, then absolute-value rendering.
+  EXPECT_EQ(Render(-1.5, "# ?/?"), "-1 1/2");
+}
+
+TEST(NumberFormatFraction, TwoDigitNumeratorDenominator) {
+  // 0.123 with `# ??/??`. The Stern-Brocot best 2/2-digit approximation
+  // is 8/65 = 0.123076..., padded to 2-wide right-aligned with spaces.
+  EXPECT_EQ(Render(0.123, "# ?\?/?\?"), "  8/65");
+}
+
+TEST(NumberFormatFraction, ZeroPadPlaceholderDigitZero) {
+  // `0/0` (no `?`/`#`, only `0`): leading positions zero-pad rather than
+  // space-pad. 0.5 with `# 0/0` -> the integer is 0 with `#` (suppressed),
+  // then literal space, "1/2".
+  EXPECT_EQ(Render(0.5, "# 0/0"), " 1/2");
+}
+
+TEST(NumberFormatFraction, ImproperFractionNoIntegerGroup) {
+  // `?/?` (no leading integer group): the full magnitude becomes the
+  // numerator/denominator search target. 0.5 -> "1/2" with no integer
+  // group and no preceding space.
+  EXPECT_EQ(Render(0.5, "?/?"), "1/2");
+}
+
 }  // namespace
 }  // namespace text_format
 }  // namespace eval

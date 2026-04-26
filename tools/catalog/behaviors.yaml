@@ -114,7 +114,7 @@ groups:
         expected: impl
       - name: "# ?/? fraction format"
         probe_regex: '\?\s*/\s*\?'
-        expected: diverged
+        expected: impl
       - name: "0.00E+00 scientific"
         probe_regex: '0\.0+E\+'
         expected: impl

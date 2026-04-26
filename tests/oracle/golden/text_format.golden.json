@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T05:26:13Z"
+    "generated_at": "2026-04-26T05:36:03Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -587,25 +587,37 @@
       "id": "text_fraction_single_digit",
       "formula": "=TEXT(0.5, \"# ?/?\")",
       "setup": {},
-      "skipped": "# ?/? fraction not implemented; Excel: ' 1/2'. Formulon: ' 0/0'."
+      "expect": {
+        "kind": "text",
+        "value": " 1/2"
+      }
     },
     {
       "id": "text_fraction_two_digit",
       "formula": "=TEXT(0.123, \"# ??/??\")",
       "setup": {},
-      "skipped": "# ??/?? fraction with two-digit denominator not implemented."
+      "expect": {
+        "kind": "text",
+        "value": "  8/65"
+      }
     },
     {
       "id": "text_fraction_with_integer",
       "formula": "=TEXT(1.5, \"# ?/?\")",
       "setup": {},
-      "skipped": "Fraction with leading integer not implemented."
+      "expect": {
+        "kind": "text",
+        "value": "1 1/2"
+      }
     },
     {
       "id": "text_fraction_negative",
       "formula": "=TEXT(-1.5, \"# ?/?\")",
       "setup": {},
-      "skipped": "Negative fraction not implemented."
+      "expect": {
+        "kind": "text",
+        "value": "-1 1/2"
+      }
     },
     {
       "id": "text_three_section_positive",

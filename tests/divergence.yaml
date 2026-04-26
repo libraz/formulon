@@ -173,32 +173,6 @@ entries:
     first_noted: 2026-04-26
     last_verified_excel_version: "16.108.1"
 
-  # -- TEXT format codes: fraction display (# ?/?, # ??/??) ---------------
-  # Fraction codes render as ' 0/0' regardless of the numerator/denominator
-  # inputs — best-rational-approximation is not yet implemented in
-  # `src/eval/builtins/text_format.cpp`.
-  - id: text_fraction_single_digit
-    mode: skip-oracle
-    reason: "# ?/? fraction not implemented; Excel: ' 1/2'. Formulon: ' 0/0'."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-  - id: text_fraction_two_digit
-    mode: skip-oracle
-    reason: "# ??/?? fraction with two-digit denominator not implemented."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-  - id: text_fraction_with_integer
-    mode: skip-oracle
-    reason: "Fraction with leading integer not implemented."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-  - id: text_fraction_negative
-    mode: skip-oracle
-    reason: "Negative fraction not implemented."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-
-
   # -- Complex IMCSC: 1-ULP precision in last decimal --------------------
   # IMCSC(1+i): Excel ...0.303931001628427i, Formulon ...0.303931001628426i.
   # Drift is 1 ULP at the 15th significant digit; cannot pass the exact

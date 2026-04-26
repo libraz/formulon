@@ -754,7 +754,7 @@ void tokenize_section(std::string_view fmt, Section& out) {
   }
 }
 
-void classify(Section& section) noexcept {
+void classify(Section& section, std::string_view fmt) noexcept {
   disambiguate_minutes(section.tokens);
   bool any_date = false;
   bool any_at = false;
@@ -942,6 +942,92 @@ void classify(Section& section) noexcept {
   // `apply_format` already converts the section to the value-error path.
   if (section.is_date && (int_zero + int_opt + int_pad + frac_zero + frac_opt + frac_pad) > 0) {
     section.has_invalid_bracket = true;
+  }
+
+  // --- Fraction format detection (`# ?/?`, `0/0`, etc.) ----------------
+  //
+  // A fraction format has these features:
+  //   * Exactly one literal '/' byte token in the section.
+  //   * Immediately before the slash: a contiguous run of digit-placeholder
+  //     tokens (`#`/`?`/`0`) -- the numerator group.
+  //   * Immediately after the slash: a contiguous run of digit-placeholder
+  //     tokens -- the denominator group.
+  //   * Optionally before the numerator: an integer-placeholder run and
+  //     exactly one literal-space byte that visually separates the integer
+  //     from the numerator.
+  //   * No `.` (Point) token (fractions and decimal points are mutually
+  //     exclusive).
+  //
+  // When detected, we set `is_fraction` and the digit-group bounds; the
+  // renderer's `render_numeric` branches into `render_fraction` based on
+  // the flag. Date sections never qualify (the slash inside a date is a
+  // date separator).
+  auto is_digit_tok2 = [](Tok k) { return k == Tok::DigitZero || k == Tok::DigitOpt || k == Tok::DigitPad; };
+  auto is_single_byte_literal = [&fmt](const Token& tk, char want) {
+    if (tk.kind != Tok::Literal) {
+      return false;
+    }
+    if (tk.lit_end != tk.lit_begin + 1) {
+      return false;
+    }
+    if (tk.lit_begin >= fmt.size()) {
+      return false;
+    }
+    return fmt[tk.lit_begin] == want;
+  };
+  if (!any_date && point_index < 0) {
+    // Find slash candidate.
+    int slash_idx = -1;
+    int slash_count = 0;
+    for (std::size_t i = 0; i < section.tokens.size(); ++i) {
+      if (is_single_byte_literal(section.tokens[i], '/')) {
+        slash_idx = static_cast<int>(i);
+        ++slash_count;
+      }
+    }
+    if (slash_count == 1 && slash_idx > 0 && static_cast<std::size_t>(slash_idx) + 1 < section.tokens.size()) {
+      // Walk left from slash to find numerator group.
+      int num_end = slash_idx - 1;
+      int num_begin = num_end;
+      while (num_begin > 0 && is_digit_tok2(section.tokens[static_cast<std::size_t>(num_begin) - 1].kind)) {
+        --num_begin;
+      }
+      // Walk right from slash to find denominator group.
+      int den_begin = slash_idx + 1;
+      int den_end = den_begin;
+      while (static_cast<std::size_t>(den_end) + 1 <= section.tokens.size() &&
+             is_digit_tok2(section.tokens[static_cast<std::size_t>(den_end)].kind)) {
+        ++den_end;
+      }
+      // Numerator and denominator both need to be at least one digit.
+      const bool has_num = num_end >= num_begin && is_digit_tok2(section.tokens[static_cast<std::size_t>(num_begin)].kind);
+      const bool has_den = den_end > den_begin;
+      if (has_num && has_den) {
+        // Optional integer group: a literal-space immediately precedes the
+        // numerator group, and a digit-placeholder run precedes the space.
+        int int_begin = num_begin;
+        int int_end = num_begin;
+        if (num_begin >= 2 && is_single_byte_literal(section.tokens[static_cast<std::size_t>(num_begin) - 1], ' ') &&
+            is_digit_tok2(section.tokens[static_cast<std::size_t>(num_begin) - 2].kind)) {
+          int_end = num_begin - 1;  // exclusive: stops before the space.
+          int_begin = int_end;
+          while (int_begin > 0 && is_digit_tok2(section.tokens[static_cast<std::size_t>(int_begin) - 1].kind)) {
+            --int_begin;
+          }
+        }
+        section.is_fraction = true;
+        section.fraction_int_begin = int_begin;
+        section.fraction_int_end = int_end;
+        section.fraction_num_begin = num_begin;
+        section.fraction_num_end = num_end + 1;  // exclusive
+        section.fraction_den_begin = den_begin;
+        section.fraction_den_end = den_end;
+        section.fraction_slash_index = slash_idx;
+        section.fraction_int_max_digits = int_end - int_begin;
+        section.fraction_num_max_digits = (num_end + 1) - num_begin;
+        section.fraction_den_max_digits = den_end - den_begin;
+      }
+    }
   }
 }
 

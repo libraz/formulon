@@ -39,7 +39,7 @@ FormatStatus apply_format(double value, std::string_view format, std::string_vie
   for (const auto& raw : sections_raw) {
     Section s;
     number_format_detail::tokenize_section(raw, s);
-    number_format_detail::classify(s);
+    number_format_detail::classify(s, raw);
     sections.push_back(std::move(s));
   }
 

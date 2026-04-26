@@ -155,6 +155,30 @@ struct Section {
   int sci_digits = 0;
   // Number of fractional-second digits (after `[s]/s/ss` + `.0...`).
   int frac_sec_digits = 0;
+
+  // --- Fraction format (`# ?/?`, `# ??/??`, etc.) ----------------------
+  // When `is_fraction` is true the section renders `value` as an
+  // (optional integer + ) numerator / denominator triple computed by a
+  // bounded Stern-Brocot mediant search. The token-stream-walk path is
+  // bypassed; literals before the integer group, between integer and
+  // numerator, and after the denominator are still emitted from `tokens`.
+  bool is_fraction = false;
+  // Maximum digit count of each placeholder run. 10^N - 1 gives the cap
+  // used by the rational-approximation search.
+  int fraction_int_max_digits = 0;
+  int fraction_num_max_digits = 0;
+  int fraction_den_max_digits = 0;
+  // Inclusive token-index bounds for each digit-placeholder run. When
+  // `fraction_int_max_digits == 0` the integer group is absent and
+  // `fraction_int_begin == fraction_int_end`.
+  int fraction_int_begin = 0;
+  int fraction_int_end = 0;
+  int fraction_num_begin = 0;
+  int fraction_num_end = 0;
+  int fraction_den_begin = 0;
+  int fraction_den_end = 0;
+  // Index of the `/` literal token between numerator and denominator.
+  int fraction_slash_index = -1;
 };
 
 // --- Tokenizer entry points (implemented in number_format_tokenizer.cpp) ---
@@ -172,8 +196,11 @@ void tokenize_section(std::string_view fmt, Section& out);
 
 // Populate the numeric/date summary on `section`. Also detect fractional
 // seconds `.0...` that immediately follow a second token (used to format
-// sub-second precision).
-void classify(Section& section) noexcept;
+// sub-second precision). `fmt` is the original format byte-source from
+// which `tokenize_section` recorded literal-token spans; the fraction
+// detector inspects single-byte literals (`/` and ` `) to recognise
+// fraction formats like `# ?/?`.
+void classify(Section& section, std::string_view fmt) noexcept;
 
 // --- Renderer entry points (implemented in number_format_render.cpp) ---
 
