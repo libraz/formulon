@@ -59,3 +59,94 @@ cases:
   - id: amorlinc_first_period_prorated
     description: "AMORLINC first period (period 0) is YEARFRAC-prorated"
     formula: "=AMORLINC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 0, 0.15, 1)"
+
+  # =========================================================================
+  # Expanded probes: day-count basis sweep, error / boundary conditions,
+  # zero / negative / extreme inputs, frequency variations.
+  # =========================================================================
+
+  # -- ACCRINTM: basis sweep (0 / 1 / 2 / 3 / 4) --------------------------
+  # Same issue / settlement / rate / par; only the basis varies. Tests
+  # whether the day-count branches all produce Excel-correct results.
+  - id: accrintm_basis_0_us_30_360
+    description: "Basis 0: US 30/360 — 2008-04-01 to 2008-06-15 = 74/360 days"
+    formula: "=ACCRINTM(DATE(2008,4,1), DATE(2008,6,15), 0.1, 1000, 0)"
+
+  - id: accrintm_basis_1_actual_actual
+    formula: "=ACCRINTM(DATE(2008,4,1), DATE(2008,6,15), 0.1, 1000, 1)"
+
+  - id: accrintm_basis_2_actual_360
+    formula: "=ACCRINTM(DATE(2008,4,1), DATE(2008,6,15), 0.1, 1000, 2)"
+
+  - id: accrintm_basis_4_eu_30_360
+    description: "European 30/360 — different last-day rule from basis 0"
+    formula: "=ACCRINTM(DATE(2008,4,1), DATE(2008,6,15), 0.1, 1000, 4)"
+
+  # -- ACCRINTM: error / edge inputs --------------------------------------
+  - id: accrintm_zero_rate_is_zero
+    description: "Rate 0 -> accrued interest is 0"
+    formula: "=ACCRINTM(DATE(2008,4,1), DATE(2008,6,15), 0, 1000, 0)"
+
+  - id: accrintm_negative_rate_is_num
+    formula: "=ACCRINTM(DATE(2008,4,1), DATE(2008,6,15), -0.1, 1000, 0)"
+
+  - id: accrintm_zero_par_is_num
+    formula: "=ACCRINTM(DATE(2008,4,1), DATE(2008,6,15), 0.1, 0, 0)"
+
+  - id: accrintm_negative_par_is_num
+    formula: "=ACCRINTM(DATE(2008,4,1), DATE(2008,6,15), 0.1, -1000, 0)"
+
+  - id: accrintm_issue_after_settlement_is_num
+    description: "issue >= settlement -> #NUM!"
+    formula: "=ACCRINTM(DATE(2008,8,15), DATE(2008,4,1), 0.1, 1000, 0)"
+
+  - id: accrintm_invalid_basis_5_is_num
+    formula: "=ACCRINTM(DATE(2008,4,1), DATE(2008,6,15), 0.1, 1000, 5)"
+
+  - id: accrintm_basis_truncates_fractional
+    description: "Basis 1.7 should truncate to 1 (actual/actual)"
+    formula: "=ACCRINTM(DATE(2008,4,1), DATE(2008,6,15), 0.1, 1000, 1.7)"
+
+  # -- ACCRINT: frequency / basis variations ------------------------------
+  - id: accrint_freq_4_quarterly
+    description: "Quarterly frequency"
+    formula: "=ACCRINT(DATE(2008,3,1), DATE(2008,6,1), DATE(2008,5,1), 0.1, 1000, 4, 0, TRUE)"
+
+  - id: accrint_freq_12_monthly
+    formula: "=ACCRINT(DATE(2008,3,1), DATE(2008,4,1), DATE(2008,5,1), 0.1, 1000, 12, 0, TRUE)"
+
+  - id: accrint_invalid_freq_3_is_num
+    description: "Frequency must be 1, 2, or 4 — others are #NUM!"
+    formula: "=ACCRINT(DATE(2008,3,1), DATE(2008,8,31), DATE(2008,5,1), 0.1, 1000, 3, 0, TRUE)"
+
+  - id: accrint_zero_par_is_num
+    formula: "=ACCRINT(DATE(2008,3,1), DATE(2008,8,31), DATE(2008,5,1), 0.1, 0, 2, 0, TRUE)"
+
+  # -- VDB: edges --------------------------------------------------------
+  - id: vdb_factor_1_is_sln_like
+    description: "VDB with factor=1 is straight-line-like for the first period"
+    formula: "=VDB(2400, 300, 10, 0, 1, 1, FALSE)"
+
+  - id: vdb_negative_period_is_num
+    formula: "=VDB(2400, 300, 10, -1, 5, 2, FALSE)"
+
+  - id: vdb_start_period_gte_end_is_num
+    description: "start_period >= end_period -> #NUM!"
+    formula: "=VDB(2400, 300, 10, 5, 5, 2, FALSE)"
+
+  - id: vdb_factor_zero_is_num
+    formula: "=VDB(2400, 300, 10, 0, 5, 0, FALSE)"
+
+  - id: vdb_salvage_gt_cost_is_num
+    formula: "=VDB(300, 2400, 10, 0, 5, 2, FALSE)"
+
+  # -- AMORDEGRC: end of life --------------------------------------------
+  - id: amordegrc_zero_rate_is_num
+    formula: "=AMORDEGRC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0, 1)"
+
+  - id: amordegrc_negative_cost_is_num
+    formula: "=AMORDEGRC(-2400, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0.15, 1)"
+
+  - id: amordegrc_purchase_after_first_period_is_num
+    description: "purchase_date > first_period -> #NUM!"
+    formula: "=AMORDEGRC(2400, DATE(2009,1,15), DATE(2008,12,31), 300, 1, 0.15, 1)"
