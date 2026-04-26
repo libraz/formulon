@@ -87,16 +87,16 @@ groups:
         expected: impl
       - name: "aaaa / aaa (ja-JP weekday kanji)"
         probe_regex: 'aaa+'
-        expected: diverged
+        expected: impl
       - name: "gggg / ggg / g (ja-JP era)"
         probe_regex: 'ggg+|"g"'
-        expected: diverged
+        expected: impl
       - name: "[Red] colour bracket"
         probe: "[Red]"
         expected: diverged
       - name: "[>=N] conditional bracket"
         probe_regex: '\[\s*[<>=][^]]*\]'
-        expected: diverged
+        expected: impl
       - name: "[$-409] en-US locale prefix"
         probe: "[$-409]"
         expected: impl
@@ -145,25 +145,25 @@ groups:
         expected: impl
       - name: "平成 (Heisei) full form"
         probe: "平成"
-        expected: diverged
+        expected: impl
       - name: "昭和 (Showa) full form"
         probe: "昭和"
-        expected: diverged
+        expected: impl
       - name: "大正 (Taisho) full form"
         probe: "大正"
-        expected: diverged
+        expected: impl
       - name: "明治 (Meiji) full form"
         probe: "明治"
-        expected: diverged
+        expected: impl
       - name: "元年 (first-year marker)"
         probe: "元年"
         expected: impl
       - name: "R6.4.22 short Reiwa form"
         probe_regex: '"R\d'
-        expected: diverged
+        expected: impl
       - name: "H30.1.1 short Heisei form"
         probe_regex: '"H\d'
-        expected: diverged
+        expected: impl
 
   # -------------------------------------------------------------------------
   # CHAR / CODE: Mac Excel ja-JP uses CP932 / JIS X 0208. The ASCII and
