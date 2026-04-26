@@ -62,19 +62,30 @@ TEST(FinancialAccrint, CalcMethodTrueDefault) {
   EXPECT_NEAR(v.as_number(), 16.6667, 1e-3);
 }
 
-TEST(FinancialAccrint, CalcMethodFalseUsesFirstInterest) {
-  // calc_method=FALSE with settlement > first_interest: start should
-  // become first_interest. issue 2008-03-01, first_interest 2008-05-01,
-  // settlement 2008-08-31. YEARFRAC(2008-05-01, 2008-08-31, 0) = 120/360
-  // = 0.3333..., so result = 1000 * 0.1 * 0.3333 = 33.333.
-  const Value v = EvalSource("=ACCRINT(DATE(2008,3,1), DATE(2008,5,1), DATE(2008,8,31), 0.1, 1000, 2, 0, FALSE)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_NEAR(v.as_number(), 33.3333, 1e-3);
+TEST(FinancialAccrint, CalcMethodFalseAccruesFromIssue) {
+  // Mac Excel 365 (16.108.1, ja-JP) always accrues from issue to
+  // settlement, ignoring both `first_interest` and `calc_method`. The MS
+  // docs claim calc_method=FALSE switches the start to first_interest
+  // when settlement > first_interest, but the actual product does not.
+  // issue 2008-03-01, settlement 2008-08-31. YEARFRAC(0) = 180/360 = 0.5,
+  // so result = 1000 * 0.1 * 0.5 = 50.0 regardless of first_interest.
+  const Value v_far = EvalSource("=ACCRINT(DATE(2008,3,1), DATE(2008,5,1), DATE(2008,8,31), 0.1, 1000, 2, 0, FALSE)");
+  ASSERT_TRUE(v_far.is_number());
+  EXPECT_NEAR(v_far.as_number(), 50.0, 1e-3);
+
+  // calc_method=TRUE on the same (issue, settlement) must produce the
+  // same value: the calc_method argument is ignored, only validated for
+  // type correctness.
+  const Value v_true = EvalSource("=ACCRINT(DATE(2008,3,1), DATE(2008,5,1), DATE(2008,8,31), 0.1, 1000, 2, 0, TRUE)");
+  ASSERT_TRUE(v_true.is_number());
+  EXPECT_NEAR(v_true.as_number(), 50.0, 1e-3);
 }
 
-TEST(FinancialAccrint, CalcMethodFalseKeepsIssueWhenSettlementEarlier) {
-  // calc_method=FALSE with settlement < first_interest: start stays at
-  // issue. Mirrors the original MS example.
+TEST(FinancialAccrint, CalcMethodFalseEarlySettlementMatchesIssueAccrual) {
+  // Even when settlement < first_interest, Mac Excel still accrues from
+  // issue (this case happens to match the MS doc result coincidentally,
+  // because the doc-style calc_method=FALSE branch would also pick
+  // issue here). issue 2008-03-01, settlement 2008-05-01.
   const Value v = EvalSource("=ACCRINT(DATE(2008,3,1), DATE(2008,8,31), DATE(2008,5,1), 0.1, 1000, 2, 0, FALSE)");
   ASSERT_TRUE(v.is_number());
   EXPECT_NEAR(v.as_number(), 16.6667, 1e-3);
@@ -227,8 +238,18 @@ TEST(FinancialVdb, DefaultFactorIsTwo) {
   EXPECT_NEAR(a.as_number(), b.as_number(), 1e-10);
 }
 
-TEST(FinancialVdb, StartPeriodGeEndPeriodIsNum) {
+TEST(FinancialVdb, StartPeriodEqEndPeriodIsZero) {
+  // start_period == end_period is a zero-length interval: every clipped
+  // segment collapses to width 0 and the loop accumulates nothing. Mac
+  // Excel 365 returns 0.0 (no period of depreciation), not #NUM!.
   const Value v = EvalSource("=VDB(1000, 100, 5, 3, 3)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+}
+
+TEST(FinancialVdb, StartPeriodGtEndPeriodIsNum) {
+  // start_period > end_period is still rejected.
+  const Value v = EvalSource("=VDB(1000, 100, 5, 4, 3)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
@@ -251,10 +272,21 @@ TEST(FinancialVdb, NegativeCostIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(FinancialVdb, NonPositiveFactorIsNum) {
-  const Value v = EvalSource("=VDB(1000, 100, 5, 0, 1, 0)");
+TEST(FinancialVdb, NegativeFactorIsNum) {
+  // factor < 0 is rejected with #NUM!.
+  const Value v = EvalSource("=VDB(1000, 100, 5, 0, 1, -1)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialVdb, ZeroFactorFallsThroughToStraightLine) {
+  // factor == 0 makes the DDB rate 0, so straight-line wins on every
+  // period. For (cost=1000, salvage=100, life=5) the SL charge per full
+  // period is (1000 - 100) / 5 = 180. Mac Excel 365 returns this finite
+  // value rather than #NUM!.
+  const Value v = EvalSource("=VDB(1000, 100, 5, 0, 1, 0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 180.0, 1e-9);
 }
 
 TEST(FinancialVdb, NonPositiveLifeIsNum) {

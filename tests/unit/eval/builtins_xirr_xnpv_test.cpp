@@ -98,13 +98,15 @@ TEST(FinancialXnpv, MicrosoftReference) {
   EXPECT_NEAR(v.as_number(), 2086.647602, 1e-6);
 }
 
-TEST(FinancialXnpv, ZeroRateSumsUndiscountedTotal) {
-  // With rate = 0 every term collapses to v[i] / 1 = v[i]. Sum equals
-  // the undiscounted schedule total -10000 + 2750 + 4250 + 3250 + 2750 = 3000.
+TEST(FinancialXnpv, ZeroRateIsNum) {
+  // Mathematically rate = 0 collapses every term to v[i] and yields the
+  // undiscounted schedule total, but Mac Excel 365 (16.108.1, ja-JP)
+  // treats rate == 0 as an input error and surfaces #NUM! before any
+  // math runs. 1-bit parity requires the same behaviour.
   Workbook wb = MakeMicrosoftFixture();
   const Value v = EvalSourceIn("=XNPV(0, A1:A5, B1:B5)", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_number());
-  EXPECT_NEAR(v.as_number(), 3000.0, 1e-9);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(FinancialXnpv, RateMinusOneIsNum) {

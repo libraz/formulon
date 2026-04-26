@@ -79,9 +79,11 @@ TEST(BuiltinsWidthAsc, SemiVoicedKatakanaRow) {
 }
 
 TEST(BuiltinsWidthAsc, VoicedVu) {
+  // U+30F4 ヴ has no half-width counterpart in JIS X 0201, so Mac Excel
+  // 365 (ja-JP) leaves it unchanged rather than decomposing to ｳ + ﾞ.
   const Value v = EvalSource(u8"=ASC(\"ヴ\")");  // "ヴ"
   ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), u8"ｳﾞ");  // "ｳﾞ"
+  EXPECT_EQ(v.as_text(), u8"ヴ");  // "ヴ" (passthrough)
 }
 
 TEST(BuiltinsWidthAsc, HiraganaPassthrough) {

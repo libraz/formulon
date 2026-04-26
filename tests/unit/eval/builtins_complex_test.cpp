@@ -396,10 +396,14 @@ TEST(BuiltinsComplex, ImDivMixedSuffix) {
 }
 
 TEST(BuiltinsComplex, ImPowerSquare) {
-  // (1+i)^2 = 2i.
+  // (1+i)^2 mathematically equals 2i, but IMPOWER goes through the polar
+  // form (r=sqrt(2), theta=pi/4 -> doubled), and cos(pi/2) is not exactly
+  // zero in IEEE 754. Mac Excel 365 surfaces the residue rather than
+  // snapping it to zero, so the formatted text carries a ~1.22e-16 real
+  // part. 1-bit parity (per CLAUDE.md) requires the same output.
   const Value v = EvalSource("=IMPOWER(\"1+i\",2)");
   ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "2i");
+  EXPECT_EQ(v.as_text(), "1.22464679914735E-16+2i");
 }
 
 TEST(BuiltinsComplex, ImPowerInteger) {

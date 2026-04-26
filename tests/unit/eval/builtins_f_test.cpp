@@ -179,10 +179,13 @@ TEST(BuiltinsFInv, Median) {
   EXPECT_NEAR(v.as_number(), 0.93193316085104805, 1e-6);
 }
 
-TEST(BuiltinsFInv, PZeroIsNum) {
+TEST(BuiltinsFInv, PZeroIsLeftBoundary) {
+  // The F distribution's support starts at 0, so F.INV(0, ...) is the
+  // natural left-edge value and Mac Excel 365 returns 0.0 rather than
+  // #NUM! (mirroring how F.INV.RT accepts p == 1 at its right edge).
   const Value v = EvalSource("=F.INV(0, 5, 10)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
 }
 
 TEST(BuiltinsFInv, POneIsNum) {
