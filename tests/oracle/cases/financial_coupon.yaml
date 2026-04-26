@@ -78,3 +78,84 @@ cases:
   - id: couppcd_bad_basis_is_num
     description: "COUPPCD with basis 5 (not in {0..4}) -> #NUM!"
     formula: "=COUPPCD(DATE(2011,1,25), DATE(2011,11,15), 2, 5)"
+
+  # =========================================================================
+  # Expanded probes: basis sweep across every coupon function, frequency
+  # variations, settlement at coupon boundary, edge dates, error inputs.
+  # =========================================================================
+
+  # -- COUPNCD: basis sweep -----------------------------------------------
+  - id: coupncd_basis_0
+    formula: "=COUPNCD(DATE(2011,1,25), DATE(2011,11,15), 2, 0)"
+  - id: coupncd_basis_2
+    formula: "=COUPNCD(DATE(2011,1,25), DATE(2011,11,15), 2, 2)"
+  - id: coupncd_basis_3
+    formula: "=COUPNCD(DATE(2011,1,25), DATE(2011,11,15), 2, 3)"
+  - id: coupncd_basis_4
+    formula: "=COUPNCD(DATE(2011,1,25), DATE(2011,11,15), 2, 4)"
+
+  # -- COUPDAYBS: basis sweep ----------------------------------------------
+  - id: coupdaybs_basis_0
+    formula: "=COUPDAYBS(DATE(2011,1,25), DATE(2011,11,15), 2, 0)"
+  - id: coupdaybs_basis_2
+    formula: "=COUPDAYBS(DATE(2011,1,25), DATE(2011,11,15), 2, 2)"
+  - id: coupdaybs_basis_3
+    formula: "=COUPDAYBS(DATE(2011,1,25), DATE(2011,11,15), 2, 3)"
+  - id: coupdaybs_basis_4
+    formula: "=COUPDAYBS(DATE(2011,1,25), DATE(2011,11,15), 2, 4)"
+
+  # -- COUPDAYSNC: basis sweep --------------------------------------------
+  - id: coupdaysnc_basis_0
+    formula: "=COUPDAYSNC(DATE(2011,1,25), DATE(2011,11,15), 2, 0)"
+  - id: coupdaysnc_basis_2
+    formula: "=COUPDAYSNC(DATE(2011,1,25), DATE(2011,11,15), 2, 2)"
+  - id: coupdaysnc_basis_3
+    formula: "=COUPDAYSNC(DATE(2011,1,25), DATE(2011,11,15), 2, 3)"
+  - id: coupdaysnc_basis_4
+    formula: "=COUPDAYSNC(DATE(2011,1,25), DATE(2011,11,15), 2, 4)"
+
+  # -- COUPNUM: basis sweep ----------------------------------------------
+  - id: coupnum_basis_0
+    formula: "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 2, 0)"
+  - id: coupnum_basis_2
+    formula: "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 2, 2)"
+  - id: coupnum_basis_3
+    formula: "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 2, 3)"
+  - id: coupnum_basis_4
+    formula: "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 2, 4)"
+
+  # -- COUPPCD: edge dates ------------------------------------------------
+  - id: couppcd_settlement_at_coupon_boundary
+    description: "Settlement exactly on a coupon date"
+    formula: "=COUPPCD(DATE(2011,5,15), DATE(2011,11,15), 2, 1)"
+
+  - id: couppcd_settlement_just_before_coupon
+    description: "Settlement one day before a coupon date"
+    formula: "=COUPPCD(DATE(2011,5,14), DATE(2011,11,15), 2, 1)"
+
+  - id: couppcd_settlement_just_after_coupon
+    description: "Settlement one day after a coupon date"
+    formula: "=COUPPCD(DATE(2011,5,16), DATE(2011,11,15), 2, 1)"
+
+  # -- Fractional argument truncation -------------------------------------
+  - id: coupnum_frequency_truncates_fractional
+    description: "frequency=2.7 truncates to 2 (semi-annual)"
+    formula: "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 2.7, 1)"
+
+  - id: coupnum_basis_truncates_fractional
+    description: "basis=1.9 truncates to 1 (actual/actual)"
+    formula: "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 2, 1.9)"
+
+  # -- Bad inputs ---------------------------------------------------------
+  - id: coupncd_settlement_eq_maturity_is_num
+    description: "settlement == maturity -> #NUM!"
+    formula: "=COUPNCD(DATE(2011,11,15), DATE(2011,11,15), 2, 1)"
+
+  - id: coupnum_zero_frequency_is_num
+    formula: "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 0, 1)"
+
+  - id: coupnum_negative_frequency_is_num
+    formula: "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), -2, 1)"
+
+  - id: coupdays_negative_basis_is_num
+    formula: "=COUPDAYS(DATE(2011,1,25), DATE(2011,11,15), 2, -1)"
