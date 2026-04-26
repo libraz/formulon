@@ -221,3 +221,103 @@ cases:
   - id: slope_array_literal
     description: "Inline array-literal arguments: y={2,4,6}, x={1,2,3} -> slope = 2"
     formula: "=SLOPE({2,4,6}, {1,2,3})"
+
+  # ========================================================================
+  # STEYX edge probes (appended 2026-04-26)
+  #
+  # Mirror the CORREL / SLOPE edge layout above. The reference dataset
+  #   y = {2,4,5,4,5}, x = {1,2,3,4,5}
+  # yields sum_xx=10, sum_yy=6, sum_xy=6, residual_ss=6-36/10=2.4,
+  # so STEYX = sqrt(2.4/3) = sqrt(0.8) ~= 0.894427190999916.
+  # ========================================================================
+
+  - id: steyx_reference_dataset
+    description: "Reference dataset: STEYX = sqrt(0.8) ~ 0.8944"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 2, B2: 4, B3: 5, B4: 4, B5: 5 }
+    formula: "=STEYX(B1:B5, A1:A5)"
+
+  - id: steyx_horizontal_pair
+    description: "Row-vector pair on the reference dataset -> sqrt(0.8)"
+    setup: { A1: 2, B1: 4, C1: 5, D1: 4, E1: 5, A2: 1, B2: 2, C2: 3, D2: 4, E2: 5 }
+    formula: "=STEYX(A1:E1, A2:E2)"
+
+  - id: steyx_row_vs_column
+    description: "Row vs column with matching cell counts: pairs in row-major scan; reference dataset -> sqrt(0.8)"
+    setup: { A1: 2, B1: 4, C1: 5, D1: 4, E1: 5, A2: 1, A3: 2, A4: 3, A5: 4, A6: 5 }
+    formula: "=STEYX(A1:E1, A2:A6)"
+
+  - id: steyx_square_block
+    description: "2x2 vs 2x2 block: y={2,4;6,8} pairs with x={1,2;3,4} on a perfect line -> 0"
+    setup: { A1: 2, B1: 4, A2: 6, B2: 8, C1: 1, D1: 2, C2: 3, D2: 4 }
+    formula: "=STEYX(A1:B2, C1:D2)"
+
+  - id: steyx_constant_y_is_zero
+    description: "All y identical -> sum_yy=0, sum_xy=0 -> residual_ss=0 -> STEYX = 0"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 5, B2: 5, B3: 5 }
+    formula: "=STEYX(B1:B3, A1:A3)"
+
+  - id: steyx_collinear_x_is_div0
+    description: "All x identical (sum_xx=0) -> #DIV/0!"
+    setup: { A1: 7, A2: 7, A3: 7, B1: 2, B2: 4, B3: 6 }
+    formula: "=STEYX(B1:B3, A1:A3)"
+
+  - id: steyx_perfect_fit_clamped_to_zero
+    description: "y=2x exactly across cell range -> residual_ss should clamp non-negative -> 0"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 2, B2: 4, B3: 6, B4: 8, B5: 10 }
+    formula: "=STEYX(B1:B5, A1:A5)"
+
+  - id: steyx_skips_text_pair
+    description: "Text in either cell drops the pair; surviving (1,2),(2,4),(4,8),(5,10) are perfectly linear -> 0"
+    setup: { A1: 1, A2: 2, A3: "x", A4: 4, A5: 5, B1: 2, B2: 4, B3: 6, B4: 8, B5: 10 }
+    formula: "=STEYX(B1:B5, A1:A5)"
+
+  - id: steyx_skips_blank_pair
+    description: "Blank cell drops the pair; surviving 4 pairs on y=2x line -> 0"
+    setup: { A1: 1, A2: 2, A4: 4, A5: 5, B1: 2, B2: 4, B3: 6, B4: 8, B5: 10 }
+    formula: "=STEYX(B1:B5, A1:A5)"
+
+  - id: steyx_skips_bool_pair
+    description: "Boolean cells in a range are non-numeric and drop the pair; surviving 4 -> 0"
+    setup: { A1: 1, A2: 2, A3: true, A4: 4, A5: 5, B1: 2, B2: 4, B3: false, B4: 8, B5: 10 }
+    formula: "=STEYX(B1:B5, A1:A5)"
+
+  - id: steyx_too_few_after_drops_is_div0
+    description: "4 cells but two pairs dropped via text -> only 2 surviving pairs, n<3 -> #DIV/0!"
+    setup: { A1: 1, A2: "x", A3: 3, A4: "y", B1: 2, B2: 4, B3: 6, B4: 8 }
+    formula: "=STEYX(B1:B4, A1:A4)"
+
+  - id: steyx_error_in_y_first_wins
+    description: "Errors in both arrays: y-array (first) wins -> #N/A"
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+      B1: { kind: formula, formula: "=NA()" }
+      B2: { kind: formula, formula: "=1/0" }
+      B3: 6
+    formula: "=STEYX(B1:B3, A1:A3)"
+
+  - id: steyx_error_in_x_only
+    description: "Error only in x-array (second arg) propagates; #DIV/0!"
+    setup:
+      A1: 1
+      A2: { kind: formula, formula: "=1/0" }
+      A3: 3
+      B1: 2
+      B2: 4
+      B3: 6
+    formula: "=STEYX(B1:B3, A1:A3)"
+
+  - id: steyx_shape_mismatch_is_na
+    description: "Mismatched array sizes (3 vs 4) -> #N/A"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 2, B2: 4, B3: 6, B4: 8 }
+    formula: "=STEYX(B1:B4, A1:A3)"
+
+  - id: steyx_scalar_arg_is_na
+    description: "Scalar y argument is not array-shaped -> #N/A"
+    setup: { A1: 1, A2: 2, A3: 3 }
+    formula: "=STEYX(7, A1:A3)"
+
+  - id: steyx_array_literal_pair
+    description: "Inline array literals on the reference dataset -> sqrt(0.8)"
+    formula: "=STEYX({2;4;5;4;5}, {1;2;3;4;5})"
