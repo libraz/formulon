@@ -99,6 +99,16 @@ Expected<double, ErrorCode> read_optional_number(const Value* args, std::uint32_
 // safeguard that falls back to bisection if a Newton step would land
 // outside `[lo, hi]`.
 //
+// Convergence policy: termination is decided in *x-space* using a
+// relative bound `kTol * max(kTol, |x_new|)`, not on the CDF residual
+// `|cdf(x) - p|`. For tail-tiny probabilities (e.g. p ~ 1e-24 with a
+// true root x ~ 1e-12) the residual can fall well below `kTol` while
+// `x` is still many orders of magnitude away from the root, so a
+// residual-based stop returns gibberish. The `max(kTol, |x_new|)`
+// floor keeps the relative test meaningful when the answer sits at
+// the support boundary (|x| -> 0) without demanding sub-1e-24
+// precision, which would loop forever against double-precision noise.
+//
 // Returns NaN on non-convergence so wrappers can surface #NUM!.
 template <typename CdfFn, typename PdfFn>
 double BracketThenNewton(CdfFn cdf, PdfFn pdf, double lo, double hi, double p) {
@@ -106,8 +116,8 @@ double BracketThenNewton(CdfFn cdf, PdfFn pdf, double lo, double hi, double p) {
   constexpr int kNewtonIter = 100;
   constexpr double kTol = 1e-12;
 
-  // Bisection warm-up: tightens the bracket to ~1e-3 relative width before
-  // Newton starts, which keeps tail-steep CDFs from oscillating.
+  // Bisection warm-up: tightens the bracket before Newton starts, which
+  // keeps tail-steep CDFs from oscillating.
   for (int i = 0; i < kBisectIter; ++i) {
     const double mid = 0.5 * (lo + hi);
     const double c = cdf(mid);
@@ -119,7 +129,12 @@ double BracketThenNewton(CdfFn cdf, PdfFn pdf, double lo, double hi, double p) {
     } else {
       hi = mid;
     }
-    if ((hi - lo) < 1e-6 * std::max(1.0, std::abs(mid))) {
+    // Stop when the bracket is tight enough either in relative or
+    // absolute terms. The relative bound (`1e-6 * |mid|`) lets Newton
+    // take over fast for mid-range answers; the absolute bound
+    // (`kTol`) ensures we don't stop bisecting prematurely when the
+    // answer is at the support boundary (mid -> 0).
+    if ((hi - lo) < std::max(kTol, 1e-6 * std::abs(mid))) {
       break;
     }
   }
@@ -135,9 +150,6 @@ double BracketThenNewton(CdfFn cdf, PdfFn pdf, double lo, double hi, double p) {
     } else {
       hi = std::min(hi, x);
     }
-    if (std::abs(err) < kTol) {
-      return x;
-    }
     const double d = pdf(x);
     double x_new;
     if (d <= 0.0 || !std::isfinite(d)) {
@@ -149,7 +161,13 @@ double BracketThenNewton(CdfFn cdf, PdfFn pdf, double lo, double hi, double p) {
         x_new = 0.5 * (lo + hi);
       }
     }
-    if (std::abs(x_new - x) < kTol * std::max(1.0, std::abs(x))) {
+    // Relative-x convergence: 12 sig digits, with an absolute floor of
+    // kTol to handle answers genuinely at the support boundary (where
+    // |x| -> 0). The original `kTol * std::max(1.0, |x|)` floor of 1.0
+    // turned this into an absolute kTol check for `|x| < 1`, which (for
+    // tail-tiny answers like x ~ 1e-12) made the relative test
+    // vacuously easy and let Newton terminate at the wrong scale.
+    if (std::abs(x_new - x) < kTol * std::max(kTol, std::abs(x_new))) {
       return x_new;
     }
     x = x_new;

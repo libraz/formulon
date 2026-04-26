@@ -542,6 +542,30 @@ TEST(BuiltinsBetaInv, POneIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
+TEST(BuiltinsBetaInv, TailTinyProbabilityRecoversNearZeroAnswer) {
+  // For p far below the absolute Newton tolerance, the inverter must
+  // converge in x-space rather than terminating on |cdf(x)-p| < kTol.
+  // The true root for BETA.INV(3.038194444441917e-24, 2, 2.5, 0, 1.2)
+  // is ~1e-12 (i.e. y = 8.33e-13 in standard support, then rescaled
+  // by B - A = 1.2).
+  const Value v = EvalSource("=BETA.INV(3.038194444441917e-24, 2, 2.5, 0, 1.2)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 1.0e-12, 5e-8);
+}
+
+TEST(BuiltinsBetaInv, RoundTripTinyAtSupportBoundary) {
+  // BETA.INV must round-trip BETA.DIST near the support boundary even
+  // when the resulting CDF probability is extreme.
+  const Value cdf = EvalSource("=BETA.DIST(1e-12, 2, 2.5, TRUE, 0, 1.2)");
+  ASSERT_TRUE(cdf.is_number());
+  std::ostringstream oss;
+  oss << std::setprecision(17) << cdf.as_number();
+  const std::string formula = "=BETA.INV(" + oss.str() + ", 2, 2.5, 0, 1.2)";
+  const Value back = EvalSource(formula);
+  ASSERT_TRUE(back.is_number());
+  EXPECT_NEAR(back.as_number(), 1.0e-12, 5e-8);
+}
+
 // ---------------------------------------------------------------------------
 // GAMMA
 // ---------------------------------------------------------------------------
