@@ -87,3 +87,145 @@ cases:
   - id: xmatch_wildcard
     setup: { A1: "cat", A2: "cart", A3: "dog" }
     formula: "=XMATCH(\"ca?\",A1:A3,2)"
+
+  # =========================================================================
+  # Expanded probes — semantic edges around match modes, wildcards, error
+  # propagation, type coercion, sort-order requirements, and ja-JP edges.
+  # =========================================================================
+
+  # -- MATCH: wildcard variants -------------------------------------------
+  - id: match_text_star_wildcard
+    setup: { A1: "cat", A2: "cart", A3: "dog" }
+    formula: "=MATCH(\"ca*\",A1:A3,0)"
+
+  - id: match_text_escape_question
+    description: "Tilde-escape: literal '?' in lookup_value"
+    setup: { A1: "what", A2: "what?", A3: "where" }
+    formula: "=MATCH(\"what~?\",A1:A3,0)"
+
+  - id: match_case_insensitive
+    description: "MATCH is case-insensitive for ASCII text"
+    setup: { A1: "Apple", A2: "Banana" }
+    formula: "=MATCH(\"banana\",A1:A2,0)"
+
+  # -- MATCH: error / type edges ------------------------------------------
+  - id: match_error_in_array_propagates
+    setup:
+      A1: 10
+      A2: { kind: formula, formula: "=NA()" }
+      A3: 30
+    formula: "=MATCH(30,A1:A3,0)"
+
+  - id: match_error_lookup_value
+    setup: { A1: 10, A2: 20 }
+    formula: "=MATCH(#REF!,A1:A2,0)"
+
+  - id: match_bool_lookup_value
+    description: "Excel: booleans match cells holding TRUE/FALSE"
+    setup: { A1: true, A2: false }
+    formula: "=MATCH(FALSE,A1:A2,0)"
+
+  - id: match_unsorted_with_approx
+    description: "match_type=1 requires ascending sort; behaviour with unsorted data is undefined but Excel returns *something*"
+    setup: { A1: 30, A2: 10, A3: 20 }
+    formula: "=MATCH(15,A1:A3,1)"
+
+  # -- VLOOKUP: column out of range ---------------------------------------
+  - id: vlookup_col_out_of_range
+    setup: { A1: "apple", B1: 1, A2: "banana", B2: 2 }
+    formula: "=VLOOKUP(\"apple\",A1:B2,3,FALSE)"
+
+  - id: vlookup_zero_col
+    setup: { A1: "apple", B1: 1 }
+    formula: "=VLOOKUP(\"apple\",A1:B1,0,FALSE)"
+
+  - id: vlookup_negative_col
+    setup: { A1: "apple", B1: 1 }
+    formula: "=VLOOKUP(\"apple\",A1:B1,-1,FALSE)"
+
+  - id: vlookup_wildcard_with_exact
+    description: "Wildcard interpretation requires range_lookup=FALSE; * matches multi-char prefix"
+    setup: { A1: "apple", B1: 1, A2: "banana", B2: 2, A3: "blueberry", B3: 3 }
+    formula: "=VLOOKUP(\"b*\",A1:B3,2,FALSE)"
+
+  - id: vlookup_approx_unsorted
+    description: "range_lookup=TRUE on unsorted ascending data gives undefined-but-deterministic Excel value"
+    setup: { A1: 30, B1: "x", A2: 10, B2: "y", A3: 20, B3: "z" }
+    formula: "=VLOOKUP(15,A1:B3,2,TRUE)"
+
+  - id: vlookup_error_in_array
+    setup:
+      A1: "apple"
+      B1: 1
+      A2: { kind: formula, formula: "=NA()" }
+      B2: 2
+      A3: "cherry"
+      B3: 3
+    formula: "=VLOOKUP(\"cherry\",A1:B3,2,FALSE)"
+
+  # -- XLOOKUP: match_mode and search_mode --------------------------------
+  - id: xlookup_match_mode_larger
+    setup: { A1: 10, A2: 20, A3: 30, B1: "ten", B2: "twenty", B3: "thirty" }
+    formula: "=XLOOKUP(25,A1:A3,B1:B3,,1)"
+
+  - id: xlookup_wildcard_match_mode_2
+    setup: { A1: "apple", A2: "banana", A3: "cherry", B1: 1, B2: 2, B3: 3 }
+    formula: "=XLOOKUP(\"b*\",A1:A3,B1:B3,,2)"
+
+  - id: xlookup_search_reverse
+    setup: { A1: "x", A2: "y", A3: "x", B1: 1, B2: 2, B3: 3 }
+    formula: "=XLOOKUP(\"x\",A1:A3,B1:B3,,0,-1)"
+
+  - id: xlookup_no_match_no_default
+    setup: { A1: 10, A2: 20, B1: "ten", B2: "twenty" }
+    formula: "=XLOOKUP(99,A1:A2,B1:B2)"
+
+  - id: xlookup_error_in_lookup_array
+    setup:
+      A1: 10
+      A2: { kind: formula, formula: "=NA()" }
+      A3: 30
+      B1: "ten"
+      B2: "na"
+      B3: "thirty"
+    formula: "=XLOOKUP(30,A1:A3,B1:B3)"
+
+  # -- INDEX edge cases ---------------------------------------------------
+  - id: index_zero_row
+    description: "INDEX with row=0 returns the entire column (or behaves array-like)"
+    setup: { A1: 1, A2: 2, A3: 3 }
+    formula: "=INDEX(A1:A3,0)"
+
+  - id: index_zero_col
+    description: "INDEX with col=0 on 2D returns the entire row"
+    setup: { A1: 1, B1: 2, A2: 3, B2: 4 }
+    formula: "=INDEX(A1:B2,1,0)"
+
+  - id: index_out_of_range
+    setup: { A1: 1, A2: 2, A3: 3 }
+    formula: "=INDEX(A1:A3,5)"
+
+  - id: index_negative_row
+    setup: { A1: 1, A2: 2 }
+    formula: "=INDEX(A1:A2,-1)"
+
+  # -- CHOOSE edge cases --------------------------------------------------
+  - id: choose_index_zero
+    formula: "=CHOOSE(0,\"a\",\"b\",\"c\")"
+
+  - id: choose_index_negative
+    formula: "=CHOOSE(-1,\"a\",\"b\",\"c\")"
+
+  - id: choose_with_error_value
+    description: "CHOOSE with #REF! as the index propagates"
+    formula: "=CHOOSE(#REF!,\"a\",\"b\",\"c\")"
+
+  # -- ja-JP wildcard with full-width characters --------------------------
+  - id: match_jp_wildcard
+    description: "ja-JP wildcards: ? must match a single full-width char"
+    setup: { A1: "りんご", A2: "りんごジュース", A3: "ぶどう" }
+    formula: "=MATCH(\"り*\",A1:A3,0)"
+
+  - id: vlookup_jp_text
+    setup: { A1: "りんご", B1: 100, A2: "ぶどう", B2: 200 }
+    formula: "=VLOOKUP(\"ぶどう\",A1:B2,2,FALSE)"

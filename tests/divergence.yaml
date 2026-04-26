@@ -482,6 +482,41 @@ entries:
     prefer: mac-excel-365
     first_noted: 2026-04-26
 
+  # -- INDEX: row=0 / col=0 entire-axis return ---------------------------
+  # `=INDEX(A1:A3, 0)` should return the entire column as an implicit
+  # array; xlwings reads the first cell (1) at the placement. Formulon
+  # returns #VALUE! because the eager dispatch path requires a positive
+  # row/col index. Implementation requires INDEX to recognise 0 as a
+  # whole-axis selector and surface the implicit-intersection / spill
+  # anchor.
+  - id: index_zero_row
+    mode: skip-oracle
+    reason: "INDEX(range, 0) entire-column not implemented; Excel: first cell at placement, Formulon: #VALUE!."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
+  - id: index_zero_col
+    mode: skip-oracle
+    reason: "INDEX(2D-range, row, 0) entire-row not implemented."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+
+  # -- MATCH / VLOOKUP: approximate match on unsorted data ---------------
+  # Excel's binary search on unsorted data still returns a deterministic
+  # value (typically the largest seen-so-far that is <= lookup_value);
+  # Formulon plays safe with #N/A. The Excel behaviour is documented as
+  # "unspecified" but the oracle pins it for parity.
+  - id: match_unsorted_with_approx
+    mode: skip-oracle
+    reason: "MATCH match_type=1 on unsorted data: Excel returns largest seen-so-far position (3); Formulon: #N/A."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: vlookup_approx_unsorted
+    mode: skip-oracle
+    reason: "VLOOKUP range_lookup=TRUE on unsorted lookup_array: Excel deterministically picks last-seen-le; Formulon: #N/A."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+
   # -- Pre-existing oracle flake: [Red] colour directive ------------------
   # Mac Excel's read-back through xlwings has been observed to vary
   # between sessions for `=TEXT(5, "[Red]0.00")`: sometimes the cell

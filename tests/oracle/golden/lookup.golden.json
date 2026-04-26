@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-23T01:57:45Z"
+    "generated_at": "2026-04-26T01:43:27Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -445,6 +445,625 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      }
+    },
+    {
+      "id": "match_text_star_wildcard",
+      "formula": "=MATCH(\"ca*\",A1:A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "cat"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "cart"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "dog"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "match_text_escape_question",
+      "formula": "=MATCH(\"what~?\",A1:A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "what"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "what?"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "where"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "match_case_insensitive",
+      "formula": "=MATCH(\"banana\",A1:A2,0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Banana"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "match_error_in_array_propagates",
+      "formula": "=MATCH(30,A1:A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "match_error_lookup_value",
+      "formula": "=MATCH(#REF!,A1:A2,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "match_bool_lookup_value",
+      "formula": "=MATCH(FALSE,A1:A2,0)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "bool",
+          "value": false
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "match_unsorted_with_approx",
+      "formula": "=MATCH(15,A1:A3,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "skipped": "MATCH match_type=1 on unsorted data: Excel returns largest seen-so-far position (3); Formulon: #N/A."
+    },
+    {
+      "id": "vlookup_col_out_of_range",
+      "formula": "=VLOOKUP(\"apple\",A1:B2,3,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "vlookup_zero_col",
+      "formula": "=VLOOKUP(\"apple\",A1:B1,0,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "vlookup_negative_col",
+      "formula": "=VLOOKUP(\"apple\",A1:B1,-1,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "vlookup_wildcard_with_exact",
+      "formula": "=VLOOKUP(\"b*\",A1:B3,2,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "blueberry"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "vlookup_approx_unsorted",
+      "formula": "=VLOOKUP(15,A1:B3,2,TRUE)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B3": {
+          "kind": "text",
+          "value": "z"
+        }
+      },
+      "skipped": "VLOOKUP range_lookup=TRUE on unsorted lookup_array: Excel deterministically picks last-seen-le; Formulon: #N/A."
+    },
+    {
+      "id": "vlookup_error_in_array",
+      "formula": "=VLOOKUP(\"cherry\",A1:B3,2,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "cherry"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "xlookup_match_mode_larger",
+      "formula": "=XLOOKUP(25,A1:A3,B1:B3,,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ten"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "twenty"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "thirty"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "thirty"
+      }
+    },
+    {
+      "id": "xlookup_wildcard_match_mode_2",
+      "formula": "=XLOOKUP(\"b*\",A1:A3,B1:B3,,2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "cherry"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "xlookup_search_reverse",
+      "formula": "=XLOOKUP(\"x\",A1:A3,B1:B3,,0,-1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "xlookup_no_match_no_default",
+      "formula": "=XLOOKUP(99,A1:A2,B1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ten"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "twenty"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "xlookup_error_in_lookup_array",
+      "formula": "=XLOOKUP(30,A1:A3,B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "ten"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "na"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "thirty"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "thirty"
+      }
+    },
+    {
+      "id": "index_zero_row",
+      "formula": "=INDEX(A1:A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "skipped": "INDEX(range, 0) entire-column not implemented; Excel: first cell at placement, Formulon: #VALUE!."
+    },
+    {
+      "id": "index_zero_col",
+      "formula": "=INDEX(A1:B2,1,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "skipped": "INDEX(2D-range, row, 0) entire-row not implemented."
+    },
+    {
+      "id": "index_out_of_range",
+      "formula": "=INDEX(A1:A3,5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "index_negative_row",
+      "formula": "=INDEX(A1:A2,-1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "choose_index_zero",
+      "formula": "=CHOOSE(0,\"a\",\"b\",\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "choose_index_negative",
+      "formula": "=CHOOSE(-1,\"a\",\"b\",\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "choose_with_error_value",
+      "formula": "=CHOOSE(#REF!,\"a\",\"b\",\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "match_jp_wildcard",
+      "formula": "=MATCH(\"り*\",A1:A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "りんご"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "りんごジュース"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ぶどう"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "vlookup_jp_text",
+      "formula": "=VLOOKUP(\"ぶどう\",A1:B2,2,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "りんご"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ぶどう"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 200.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 200.0
       }
     }
   ]
