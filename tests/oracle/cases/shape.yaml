@@ -93,3 +93,123 @@ cases:
   - id: sumproduct_array_literal_mixed
     description: "Array-literal variant of two_arrays; 1*4+2*5+3*6 = 32"
     formula: "=SUMPRODUCT({1;2;3},{4;5;6})"
+
+  # =========================================================================
+  # Edge probes appended 2026-04-26 (Mac Excel 365 ja-JP, 16.108.1).
+  # Every case below was authored against the documented Excel rule and then
+  # re-checked through the oracle pipeline. Passing cases stay here unchanged;
+  # cases where Mac Excel diverges from the documented or intuitive answer
+  # are recorded in tests/divergence.yaml with prefer:/reason:.
+  # =========================================================================
+
+  # -- ROWS / COLUMNS shape edges -----------------------------------------
+
+  - id: rows_of_mixed_row_array_literal
+    description: "Jagged array literal {1,2;3,4,5}: parser rejects, surfaces #VALUE! per Excel."
+    formula: "=ROWS({1,2;3,4,5})"
+
+  - id: rows_of_let_rangeop
+    description: "LET binds a RangeOp; the range AST flows into ROWS via name resolution."
+    setup: { A1: 1, A2: 2, A3: 3, B1: 4, B2: 5, B3: 6, C1: 7, C2: 8, C3: 9 }
+    formula: "=LET(x, A1:C3, ROWS(x))"
+
+  - id: columns_of_horizontal_rangeop
+    description: "1x5 horizontal range -> COLUMNS=5"
+    setup: { A1: 1, B1: 2, C1: 3, D1: 4, E1: 5 }
+    formula: "=COLUMNS(A1:E1)"
+
+  - id: rows_of_indirect
+    description: "ROWS dives through INDIRECT to count the resolved rectangle."
+    setup: { A1: 1, A2: 2, A3: 3, B1: 4, B2: 5, B3: 6 }
+    formula: "=ROWS(INDIRECT(\"A1:B3\"))"
+
+  - id: columns_of_indirect
+    description: "COLUMNS dives through INDIRECT to count the resolved rectangle."
+    setup: { A1: 1, A2: 2, A3: 3, B1: 4, B2: 5, B3: 6 }
+    formula: "=COLUMNS(INDIRECT(\"A1:B3\"))"
+
+  - id: rows_of_scalar_number
+    description: "ROWS(42) -> 1 (Excel treats a bare scalar as 1x1)."
+    formula: "=ROWS(42)"
+
+  - id: columns_of_scalar_number
+    description: "COLUMNS(42) -> 1 (Excel treats a bare scalar as 1x1)."
+    formula: "=COLUMNS(42)"
+
+  # -- ROW / COLUMN with no argument --------------------------------------
+
+  - id: row_no_arg_returns_formula_row
+    description: "ROW() returns the formula cell's 1-based row. Driver puts the formula at Z1, so ROW()=1."
+    formula: "=ROW()"
+
+  - id: column_no_arg_returns_formula_col
+    description: "COLUMN() returns the formula cell's 1-based column. Driver puts the formula at Z1 (col 26)."
+    formula: "=COLUMN()"
+
+  - id: sum_of_row_over_vertical_range
+    description: "SUM(ROW(A1:A5)) = 1+2+3+4+5 = 15. Wrapped in SUM to avoid spill round-trip."
+    formula: "=SUM(ROW(A1:A5))"
+
+  - id: sumproduct_of_column_over_horizontal_range
+    description: "SUMPRODUCT(COLUMN(A1:E1)) = 1+2+3+4+5 = 15. Wrapped to consume the spill array."
+    formula: "=SUMPRODUCT(COLUMN(A1:E1))"
+
+  # -- SUMPRODUCT edge cases ----------------------------------------------
+
+  - id: sumproduct_boolean_array_coercion
+    description: "SUMPRODUCT((A1:A5>2)*1): boolean*1 coerces to 0/1; 3 cells (>2)."
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5 }
+    formula: "=SUMPRODUCT((A1:A5>2)*1)"
+
+  - id: sumproduct_boolean_implicit_and
+    description: "SUMPRODUCT((A1:A5>2)*(B1:B5<10), C1:C5): A>2 AND B<10 then sum C. Hits A3,A4 (>2); B<10 hits B1..B3,B5; AND -> A3 only -> C3=300."
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+      A4: 4
+      A5: 5
+      B1: 1
+      B2: 2
+      B3: 3
+      B4: 100
+      B5: 9
+      C1: 100
+      C2: 200
+      C3: 300
+      C4: 400
+      C5: 500
+    formula: "=SUMPRODUCT((A1:A5>2)*(B1:B5<10),C1:C5)"
+
+  - id: sumproduct_2d_arrays_elementwise
+    description: "Two 2x2 ranges multiplied elementwise; 1*5+2*6+3*7+4*8 = 5+12+21+32 = 70."
+    setup: { A1: 1, A2: 3, B1: 2, B2: 4, C1: 5, C2: 7, D1: 6, D2: 8 }
+    formula: "=SUMPRODUCT(A1:B2,C1:D2)"
+
+  - id: sumproduct_single_scalar
+    description: "SUMPRODUCT(42) -> 42 (single scalar arg)."
+    formula: "=SUMPRODUCT(42)"
+
+  - id: sumproduct_array_literal_two_horizontal
+    description: "SUMPRODUCT({1,2,3},{4,5,6}) = 4+10+18 = 32."
+    formula: "=SUMPRODUCT({1,2,3},{4,5,6})"
+
+  - id: sumproduct_error_in_array_literal
+    description: "SUMPRODUCT({1,2,#N/A}) propagates #N/A in scan order."
+    formula: "=SUMPRODUCT({1,2,#N/A})"
+
+  - id: sumproduct_text_in_array_literal
+    description: "SUMPRODUCT({1,2,\"hello\"}) -> #VALUE! in Excel; text in a literal context blocks coercion."
+    formula: "=SUMPRODUCT({1,2,\"hello\"})"
+
+  # -- Cross-family: ROWS / COLUMNS through other reference-returning calls
+
+  - id: rows_of_if_returning_rangeop
+    description: "ROWS(IF(TRUE,A1:B3,A1:B3)) - Excel preserves the reference shape through IF and reports 3."
+    setup: { A1: 1, A2: 2, A3: 3, B1: 4, B2: 5, B3: 6 }
+    formula: "=ROWS(IF(TRUE,A1:B3,A1:B3))"
+
+  - id: columns_of_choose_rangeop
+    description: "COLUMNS(CHOOSE(1,A1:B2,A1:B3)) -> 2 (CHOOSE returns the chosen reference)."
+    setup: { A1: 1, A2: 2, B1: 3, B2: 4 }
+    formula: "=COLUMNS(CHOOSE(1,A1:B2,A1:B3))"

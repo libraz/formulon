@@ -887,6 +887,45 @@ bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const Fun
     *out_is_range = (height > 1U) || (width > 1U);
     return true;
   }
+  if (strings::case_insensitive_eq(name, "IF")) {
+    // `IF(cond, then, [else])` preserves reference-shape: when both
+    // branches are range references Excel routes the picked branch
+    // through verbatim, so `ROWS(IF(TRUE, A1:B3, A1:B3))` reports 3
+    // rather than degrading to the scalar-fallback 1x1. We short-circuit
+    // on `cond` exactly like `eval_if_lazy`, then resolve the chosen
+    // branch as a range endpoint (which handles Ref / RangeOp / nested
+    // INDIRECT / OFFSET / CHOOSE / IF transparently).
+    const std::uint32_t arity = node.as_call_arity();
+    if (arity != 2U && arity != 3U) {
+      *out_err = ErrorCode::Value;
+      return false;
+    }
+    const Value cond = eval_node(node.as_call_arg(0), arena, registry, ctx);
+    if (cond.is_error()) {
+      *out_err = cond.as_error();
+      return false;
+    }
+    auto coerced = coerce_to_bool(cond);
+    if (!coerced) {
+      *out_err = coerced.error();
+      return false;
+    }
+    const std::uint32_t pick = coerced.value() ? 1U : (arity == 3U ? 2U : 1U);
+    if (!coerced.value() && arity == 2U) {
+      // `IF(FALSE, then)` returns boolean FALSE in Excel's scalar path,
+      // which is not a reference. Surface `#VALUE!` so the caller falls
+      // back to the scalar / non-reference branch.
+      *out_err = ErrorCode::Value;
+      return false;
+    }
+    const parser::AstNode& picked = node.as_call_arg(pick);
+    if (!resolve_range_endpoint(picked, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
+                                out_right_col, out_err)) {
+      return false;
+    }
+    *out_is_range = (*out_top_row != *out_bottom_row) || (*out_left_col != *out_right_col);
+    return true;
+  }
   if (strings::case_insensitive_eq(name, "CHOOSE")) {
     const std::uint32_t arity = node.as_call_arity();
     if (arity < 2U) {
@@ -948,6 +987,48 @@ bool resolve_range_endpoint(const parser::AstNode& node, Arena& arena, const Fun
     *out_left_col = r.col;
     *out_bottom_row = r.row;
     *out_right_col = r.col;
+    return true;
+  }
+  if (node.kind() == parser::NodeKind::RangeOp) {
+    // CHOOSE / IF can pick a range-shaped child (e.g. `CHOOSE(1, A1:B2,
+    // A1:B3)` or `IF(TRUE, A1:B3, A1:B3)`). Resolve each side as an
+    // endpoint and union the rectangles so callers see the full picked
+    // range, matching Excel's `ROWS(IF(...))` / `COLUMNS(CHOOSE(...))`
+    // semantics. Plain intersect-operand callers don't reach this branch
+    // because they split RangeOp themselves before recursing.
+    const parser::AstNode& lhs_ast = node.as_range_lhs();
+    const parser::AstNode& rhs_ast = node.as_range_rhs();
+    std::string_view lhs_sheet;
+    std::string_view rhs_sheet;
+    std::uint32_t lhs_top = 0;
+    std::uint32_t lhs_left = 0;
+    std::uint32_t lhs_bottom = 0;
+    std::uint32_t lhs_right = 0;
+    std::uint32_t rhs_top = 0;
+    std::uint32_t rhs_left = 0;
+    std::uint32_t rhs_bottom = 0;
+    std::uint32_t rhs_right = 0;
+    if (!resolve_range_endpoint(lhs_ast, arena, registry, ctx, &lhs_sheet, &lhs_top, &lhs_left, &lhs_bottom, &lhs_right,
+                                out_err) ||
+        !resolve_range_endpoint(rhs_ast, arena, registry, ctx, &rhs_sheet, &rhs_top, &rhs_left, &rhs_bottom, &rhs_right,
+                                out_err)) {
+      return false;
+    }
+    if (!lhs_sheet.empty() && !rhs_sheet.empty()) {
+      if (!strings::case_insensitive_eq(lhs_sheet, rhs_sheet)) {
+        *out_err = ErrorCode::Ref;
+        return false;
+      }
+      *out_sheet = lhs_sheet;
+    } else if (!lhs_sheet.empty()) {
+      *out_sheet = lhs_sheet;
+    } else {
+      *out_sheet = rhs_sheet;
+    }
+    *out_top_row = std::min(lhs_top, rhs_top);
+    *out_left_col = std::min(lhs_left, rhs_left);
+    *out_bottom_row = std::max(lhs_bottom, rhs_bottom);
+    *out_right_col = std::max(lhs_right, rhs_right);
     return true;
   }
   if (node.kind() == parser::NodeKind::Call) {

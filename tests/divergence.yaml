@@ -338,6 +338,64 @@ entries:
     first_noted: 2026-04-26
     last_verified_excel_version: "16.108.1"
 
+  # -- Jagged array literal: xlwings parse-error blank read-back ---------
+  # Mac Excel rejects `=ROWS({1,2;3,4,5})` at the formula level (jagged
+  # array rows). xlwings reads the rejection back as a blank cell rather
+  # than an error category, so the golden records `kind: blank`.
+  # Formulon's parser correctly surfaces a `#NAME?` for the malformed
+  # array literal. Same family of xlwings round-trip gaps as
+  # erf_precise_two_arg_rejected.
+  - id: rows_of_mixed_row_array_literal
+    mode: skip-oracle
+    reason: "Mac Excel rejects =ROWS({1,2;3,4,5}) at the formula level; xlwings reads the rejection back as blank. Formulon correctly surfaces #NAME? for the jagged array literal."
+    prefer: formulon
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
+
+  # -- ROW / COLUMN over a range argument: Excel 365 dynamic-array spill --
+  # Excel 365 spills `ROW(A1:A5)` to `{1;2;3;4;5}` and `COLUMN(A1:E1)` to
+  # `{1,2,3,4,5}`; consumers like SUM / SUMPRODUCT then iterate the spill.
+  # Formulon does not yet implement Value::Array, so ROW / COLUMN over a
+  # range collapses to the first row / column scalar (the rectangle's
+  # top-left). Wrap-with-SUM tests pass once the array runtime lands; until
+  # then they are documented divergences. Tracked in
+  # backup/plans/02-calc-engine.md array-spill milestone.
+  - id: sum_of_row_over_vertical_range
+    mode: skip-oracle
+    reason: "Excel 365 spills ROW(A1:A5) to {1;2;3;4;5}; Formulon collapses to the scalar 1 because Value::Array is not yet wired. SUM(ROW(A1:A5)) thus returns 1 instead of 15."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
+  - id: sumproduct_of_column_over_horizontal_range
+    mode: skip-oracle
+    reason: "Excel 365 spills COLUMN(A1:E1) to {1,2,3,4,5}; Formulon collapses to scalar 1. Same Value::Array gap as sum_of_row_over_vertical_range."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
+
+  # -- SUMPRODUCT over array-shaped subexpressions ------------------------
+  # SUMPRODUCT in Excel 365 evaluates each argument in array context, so
+  # `(A1:A5>2)` produces `{FALSE;FALSE;TRUE;TRUE;TRUE}` and the surrounding
+  # `*1` / `*(B<10)` operators broadcast over the array. Formulon's
+  # SUMPRODUCT only recognises Ref / RangeOp / ArrayLiteral as its
+  # argument shapes today; a comparison BinaryOp falls through to the
+  # eager-scalar path which collapses A1:A5 to its top-left cell, yielding
+  # 0 (or `#VALUE!` when both sides are arrays). Implementing array-shape
+  # propagation through arithmetic / comparison operators is the same
+  # Value::Array work that gates ROW(range) spill above.
+  - id: sumproduct_boolean_array_coercion
+    mode: skip-oracle
+    reason: "SUMPRODUCT((A1:A5>2)*1) needs array-shape propagation through `*` and the `>` comparison; Formulon collapses the comparison to a scalar because Value::Array is not yet wired."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
+  - id: sumproduct_boolean_implicit_and
+    mode: skip-oracle
+    reason: "SUMPRODUCT((A>2)*(B<10),C) requires array broadcasting through both comparison operators; same Value::Array gap as sumproduct_boolean_array_coercion."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
+
   # -- ERF.PRECISE arity rejection: Mac Excel returns blank, not error ----
   # Mac Excel 365 ja-JP refuses to evaluate `=ERF.PRECISE(1, 2)` (the
   # function is documented as strict 1-arg) and surfaces something the

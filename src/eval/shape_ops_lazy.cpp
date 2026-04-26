@@ -18,6 +18,7 @@
 
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
 #include "eval/reference_lazy.h"
 #include "parser/ast.h"
@@ -41,8 +42,21 @@ namespace {
 // For an `ArrayLiteral` both dimensions come from the AST directly. For
 // any other kind we simply evaluate it to determine whether it is an
 // error (and propagate if so); the shape is 1x1 otherwise.
-bool resolve_shape(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
+bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionRegistry& registry,
                    const EvalContext& ctx, std::uint32_t* out_rows, std::uint32_t* out_cols, Value* out_err) {
+  // LET-binding passthrough: `LET(x, A1:C3, ROWS(x))` parses `x` as a
+  // NameRef; we want the bound RangeOp / ArrayLiteral / OFFSET-call AST
+  // so the kind dispatch below sees the same shape it would for a literal
+  // `=ROWS(A1:C3)`. Single-cell Refs and scalar bindings are left as-is
+  // (the scalar fallback already returns 1x1 for them).
+  const parser::AstNode* effective = &raw_arg;
+  if (raw_arg.kind() == parser::NodeKind::NameRef) {
+    const parser::AstNode& resolved = resolve_name_ast(raw_arg, ctx.name_env());
+    if (&resolved != &raw_arg && is_range_shaped_ast(resolved)) {
+      effective = &resolved;
+    }
+  }
+  const parser::AstNode& arg_node = *effective;
   const parser::NodeKind k = arg_node.kind();
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
     std::vector<Value> scratch;

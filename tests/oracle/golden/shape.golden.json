@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-23T03:19:31Z"
+    "generated_at": "2026-04-26T10:03:08Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -369,6 +369,436 @@
       "expect": {
         "kind": "number",
         "value": 32.0
+      }
+    },
+    {
+      "id": "rows_of_mixed_row_array_literal",
+      "formula": "=ROWS({1,2;3,4,5})",
+      "setup": {},
+      "skipped": "Mac Excel rejects =ROWS({1,2;3,4,5}) at the formula level; xlwings reads the rejection back as blank. Formulon correctly surfaces #NAME? for the jagged array literal."
+    },
+    {
+      "id": "rows_of_let_rangeop",
+      "formula": "=LET(x, A1:C3, ROWS(x))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "columns_of_horizontal_rangeop",
+      "formula": "=COLUMNS(A1:E1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "rows_of_indirect",
+      "formula": "=ROWS(INDIRECT(\"A1:B3\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "columns_of_indirect",
+      "formula": "=COLUMNS(INDIRECT(\"A1:B3\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "rows_of_scalar_number",
+      "formula": "=ROWS(42)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "columns_of_scalar_number",
+      "formula": "=COLUMNS(42)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "row_no_arg_returns_formula_row",
+      "formula": "=ROW()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "column_no_arg_returns_formula_col",
+      "formula": "=COLUMN()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 26.0
+      }
+    },
+    {
+      "id": "sum_of_row_over_vertical_range",
+      "formula": "=SUM(ROW(A1:A5))",
+      "setup": {},
+      "skipped": "Excel 365 spills ROW(A1:A5) to {1;2;3;4;5}; Formulon collapses to the scalar 1 because Value::Array is not yet wired. SUM(ROW(A1:A5)) thus returns 1 instead of 15."
+    },
+    {
+      "id": "sumproduct_of_column_over_horizontal_range",
+      "formula": "=SUMPRODUCT(COLUMN(A1:E1))",
+      "setup": {},
+      "skipped": "Excel 365 spills COLUMN(A1:E1) to {1,2,3,4,5}; Formulon collapses to scalar 1. Same Value::Array gap as sum_of_row_over_vertical_range."
+    },
+    {
+      "id": "sumproduct_boolean_array_coercion",
+      "formula": "=SUMPRODUCT((A1:A5>2)*1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "skipped": "SUMPRODUCT((A1:A5>2)*1) needs array-shape propagation through `*` and the `>` comparison; Formulon collapses the comparison to a scalar because Value::Array is not yet wired."
+    },
+    {
+      "id": "sumproduct_boolean_implicit_and",
+      "formula": "=SUMPRODUCT((A1:A5>2)*(B1:B5<10),C1:C5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 400.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 500.0
+        }
+      },
+      "skipped": "SUMPRODUCT((A>2)*(B<10),C) requires array broadcasting through both comparison operators; same Value::Array gap as sumproduct_boolean_array_coercion."
+    },
+    {
+      "id": "sumproduct_2d_arrays_elementwise",
+      "formula": "=SUMPRODUCT(A1:B2,C1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 70.0
+      }
+    },
+    {
+      "id": "sumproduct_single_scalar",
+      "formula": "=SUMPRODUCT(42)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "sumproduct_array_literal_two_horizontal",
+      "formula": "=SUMPRODUCT({1,2,3},{4,5,6})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 32.0
+      }
+    },
+    {
+      "id": "sumproduct_error_in_array_literal",
+      "formula": "=SUMPRODUCT({1,2,#N/A})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumproduct_text_in_array_literal",
+      "formula": "=SUMPRODUCT({1,2,\"hello\"})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "rows_of_if_returning_rangeop",
+      "formula": "=ROWS(IF(TRUE,A1:B3,A1:B3))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "columns_of_choose_rangeop",
+      "formula": "=COLUMNS(CHOOSE(1,A1:B2,A1:B3))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
       }
     }
   ]
