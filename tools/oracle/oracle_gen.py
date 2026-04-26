@@ -32,11 +32,13 @@ from typing import Dict, List, Optional
 # package) and `python3 -m tools.oracle.oracle_gen` (package-style).
 try:  # pragma: no cover - trivial fallback
     from tools.oracle import case_schema
-    from tools.oracle.driver import ExcelOracle, CaseResult, EnvironmentInfo
+    from tools.oracle.drivers import select_driver
+    from tools.oracle.drivers.base import CaseResult, EnvironmentInfo
 except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import case_schema  # type: ignore
-    from driver import ExcelOracle, CaseResult, EnvironmentInfo  # type: ignore
+    from drivers import select_driver  # type: ignore
+    from drivers.base import CaseResult, EnvironmentInfo  # type: ignore
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -44,6 +46,52 @@ DEFAULT_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases"
 DEFAULT_GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "golden"
 DEFAULT_ENV_FILE = REPO_ROOT / "tests" / "oracle" / "ENVIRONMENT.md"
 DEFAULT_DIVERGENCE = REPO_ROOT / "tests" / "divergence.yaml"
+DEFAULT_TARGETS_FILE = Path(__file__).resolve().parent / "targets.yaml"
+
+
+def _load_targets(path: Path) -> Dict[str, object]:
+    """Loads `targets.yaml`. Raises RuntimeError on any read / parse error.
+
+    The file is required for `--target` resolution; oracle_gen will not
+    silently fall back to hard-coded paths so that a typo in `--target`
+    surfaces immediately rather than being papered over.
+    """
+
+    if not path.exists():
+        raise RuntimeError(f"oracle targets file not found: {path}")
+    try:
+        import yaml  # type: ignore
+
+        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception as exc:
+        raise RuntimeError(f"failed to parse {path}: {exc}") from exc
+    if not isinstance(doc, dict):
+        raise RuntimeError(f"{path} root must be a mapping")
+    targets = doc.get("targets")
+    if not isinstance(targets, dict) or not targets:
+        raise RuntimeError(f"{path} has no `targets:` mapping")
+    return doc
+
+
+def _resolve_target(
+    targets_doc: Dict[str, object], name: Optional[str]
+) -> Dict[str, object]:
+    """Returns the target record for `name` (or the primary if None)."""
+
+    targets = targets_doc.get("targets") or {}
+    if name is None:
+        name = targets_doc.get("primary")  # type: ignore[assignment]
+        if not isinstance(name, str):
+            raise RuntimeError("targets.yaml is missing a `primary:` entry")
+    if name not in targets:  # type: ignore[operator]
+        avail = ", ".join(sorted(targets.keys()))  # type: ignore[union-attr]
+        raise RuntimeError(f"unknown oracle target: {name!r} (available: {avail})")
+    record = targets[name]  # type: ignore[index]
+    if not isinstance(record, dict):
+        raise RuntimeError(f"target {name!r} must be a mapping")
+    record = dict(record)
+    record["_name"] = name
+    return record
 
 
 def _result_to_json(result: CaseResult) -> Dict[str, object]:
@@ -137,9 +185,17 @@ def _write_golden(
     )
 
 
-def _load_divergence_skips(path: Path) -> Dict[str, str]:
-    """Loads case-id -> reason from `tests/divergence.yaml` entries whose
-    `mode` is `skip-oracle`."""
+def _load_divergence_skips(path: Path, target_name: str) -> Dict[str, str]:
+    """Loads case-id -> reason from divergence YAML entries whose mode is
+    `skip-oracle` AND whose `applies_to` either includes `target_name` or
+    is absent (default = applies to all targets).
+
+    File-level read / parse failures fall back to an empty dict so a
+    completely missing or unreadable divergence file does not abort
+    generation. Entry-level type errors (e.g. `applies_to` is not a list)
+    are surfaced as `RuntimeError` so typos are caught by the caller
+    rather than silently masking entries.
+    """
 
     if not path.exists():
         return {}
@@ -158,8 +214,20 @@ def _load_divergence_skips(path: Path) -> Dict[str, str]:
             continue
         cid = entry.get("id")
         mode = entry.get("mode", "tolerance")
-        if mode == "skip-oracle" and isinstance(cid, str):
-            out[cid] = str(entry.get("reason", "divergence.yaml skip-oracle"))
+        if mode != "skip-oracle" or not isinstance(cid, str):
+            continue
+        if "applies_to" in entry and entry["applies_to"] is not None:
+            applies = entry["applies_to"]
+            if not isinstance(applies, list) or not all(
+                isinstance(x, str) for x in applies
+            ):
+                raise RuntimeError(
+                    f"{path}: entry {cid!r} has invalid `applies_to`: "
+                    f"expected list of strings, got {applies!r}"
+                )
+            if target_name not in applies:
+                continue
+        out[cid] = str(entry.get("reason", "divergence.yaml skip-oracle"))
     return out
 
 
@@ -189,12 +257,32 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="Run only the named suite(s); defaults to all YAML files.",
     )
     parser.add_argument(
+        "--target",
+        default=None,
+        metavar="NAME",
+        help=(
+            "Oracle target from tools/oracle/targets.yaml; defaults to the "
+            "`primary:` entry (mac-365-ja_JP). The target supplies "
+            "`output_dir` (-> --golden-dir) and `environment_md` unless "
+            "those are explicitly overridden on the command line."
+        ),
+    )
+    parser.add_argument(
+        "--targets-file",
+        type=Path,
+        default=DEFAULT_TARGETS_FILE,
+        help="Path to targets.yaml (rarely needs overriding).",
+    )
+    parser.add_argument(
         "--cases-dir", type=Path, default=DEFAULT_CASES_DIR,
         help="Directory of *.yaml case files.",
     )
     parser.add_argument(
-        "--golden-dir", type=Path, default=DEFAULT_GOLDEN_DIR,
-        help="Directory to write *.golden.json files to.",
+        "--golden-dir", type=Path, default=None,
+        help=(
+            "Directory to write *.golden.json files to. Overrides the "
+            "selected target's `output_dir`."
+        ),
     )
     parser.add_argument(
         "--divergence", type=Path, default=DEFAULT_DIVERGENCE,
@@ -210,6 +298,30 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    # Resolve target metadata. Errors here are fatal — we'd rather refuse
+    # to start than write goldens to a stale path on a typo.
+    try:
+        targets_doc = _load_targets(args.targets_file)
+        target = _resolve_target(targets_doc, args.target)
+    except RuntimeError as exc:
+        print(f"oracle-gen: {exc}", file=sys.stderr)
+        return 2
+
+    # Per-target paths, but always honour explicit CLI overrides.
+    target_output = target.get("output_dir")
+    if args.golden_dir is not None:
+        golden_dir = args.golden_dir
+    elif isinstance(target_output, str) and target_output:
+        golden_dir = REPO_ROOT / target_output
+    else:
+        golden_dir = DEFAULT_GOLDEN_DIR
+
+    target_env_md = target.get("environment_md")
+    if isinstance(target_env_md, str) and target_env_md:
+        env_md_path = REPO_ROOT / target_env_md
+    else:
+        env_md_path = DEFAULT_ENV_FILE
+
     suites = case_schema.discover_suites(args.cases_dir)
     if args.suite:
         wanted = set(args.suite)
@@ -218,11 +330,37 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"oracle-gen: no YAML suites found in {args.cases_dir}")
         return 0
 
-    skips = _load_divergence_skips(args.divergence)
+    try:
+        skips = _load_divergence_skips(args.divergence, target["_name"])
+
+        # Variants may declare an extra `divergence:` path in targets.yaml,
+        # interpreted relative to the repo root. Entries there override the
+        # primary file on key collision because they're more specific.
+        target_div = target.get("divergence")
+        if isinstance(target_div, str) and target_div:
+            variant_div_path = REPO_ROOT / target_div
+            if variant_div_path.exists():
+                variant_skips = _load_divergence_skips(
+                    variant_div_path, target["_name"]
+                )
+                skips.update(variant_skips)
+    except RuntimeError as exc:
+        print(f"oracle-gen: {exc}", file=sys.stderr)
+        return 2
 
     iso_now = _dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
-    with ExcelOracle(visible=args.visible) as oracle:
+    # Driver factory errors (wrong host OS, missing config) are fatal --
+    # we'd rather refuse to start than dump a confusing traceback halfway
+    # through. The factory's RuntimeError already carries an actionable
+    # message; just forward it as a regular CLI error.
+    try:
+        oracle_cm = select_driver(target, visible=args.visible)
+    except RuntimeError as exc:
+        print(f"oracle-gen: {exc}", file=sys.stderr)
+        return 2
+
+    with oracle_cm as oracle:
         env = oracle.probe_environment()
         env_json = _env_to_json(env, iso_now)
 
@@ -250,7 +388,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     date1904=env_copy.date1904,
                     iterative=env_copy.iterative,
                 )
-                out_path = args.golden_dir / f"{suite.name}.golden.json"
+                out_path = golden_dir / f"{suite.name}.golden.json"
                 _write_golden(
                     out_path,
                     suite,
@@ -265,7 +403,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 if args.strict:
                     return exit_code
 
-        _write_environment_md(DEFAULT_ENV_FILE, env, iso_now)
+        _write_environment_md(env_md_path, env, iso_now)
     return exit_code
 
 

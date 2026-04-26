@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <ostream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "tests/oracle/json_reader.h"
@@ -51,6 +52,11 @@ struct OracleCase {
   // "" or "exact" -> byte-equality; other values (e.g. "complex_text") select
   // a structured comparator in the verifier.
   std::string compare_mode;
+  // Variant tag (e.g. "win_excel"). Empty string means primary (Mac/ja-JP)
+  // and is used as the historical default; non-empty values are appended to
+  // the gtest parameter name as `__<tag>` so primary and variant cases
+  // never collide.
+  std::string variant;
 };
 
 /// Loads every `*.golden.json` file under `golden_dir` and flattens them
@@ -61,13 +67,26 @@ struct OracleCase {
 /// Returns an empty vector when `golden_dir` is empty or does not exist —
 /// the expected state while the oracle-gen pipeline has not yet been run
 /// on a Mac.
-std::vector<OracleCase> load_oracle_cases(const std::string& golden_dir);
+///
+/// `variant_tag` is stamped onto every loaded `OracleCase::variant`. The
+/// default empty string preserves the historical primary-only behaviour;
+/// callers loading a non-primary golden tree (e.g. a Win-Excel variant)
+/// should pass the matching tag so the verifier can disambiguate parameter
+/// names and report results per variant.
+std::vector<OracleCase> load_oracle_cases(const std::string& golden_dir, const std::string& variant_tag = "");
+
+/// Returns variant golden roots configured for this build, as
+/// (tag, golden_dir) pairs. Source priority:
+///   1. Env var FORMULON_ORACLE_VARIANT_DIRS (':' separated entries
+///      of the form "tag=/abs/path"), if set.
+///   2. Compile-time FORMULON_ORACLE_VARIANT_DIRS_DEFAULT, if set.
+///   3. Empty vector.
+std::vector<std::pair<std::string, std::string>> configured_variant_dirs();
 
 /// Translates an A1 address ("A1", "BC42") into 0-based `(row, col)`.
 /// Returns `false` on malformed input. Sheet qualifiers are rejected;
 /// goldens only carry local addresses.
-bool a1_to_row_col(const std::string& a1, std::uint32_t* out_row,
-                   std::uint32_t* out_col);
+bool a1_to_row_col(const std::string& a1, std::uint32_t* out_row, std::uint32_t* out_col);
 
 /// Returns the compile-time-configured golden directory, or an empty
 /// string when the build didn't set one. Declared here so tests can call

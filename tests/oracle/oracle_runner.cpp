@@ -5,15 +5,21 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "tests/oracle/json_reader.h"
 
 #ifndef FORMULON_ORACLE_GOLDEN_DIR
 #define FORMULON_ORACLE_GOLDEN_DIR ""
+#endif
+
+#ifndef FORMULON_ORACLE_VARIANT_DIRS_DEFAULT
+#define FORMULON_ORACLE_VARIANT_DIRS_DEFAULT ""
 #endif
 
 namespace formulon {
@@ -28,8 +34,7 @@ OracleCase make_load_error(const std::string& path, const std::string& detail) {
   OracleCase c;
   c.suite = std::filesystem::path(path).stem().string();
   // Strip the ".golden" left over after `.golden.json` → `.golden` stem.
-  if (c.suite.size() >= 7 &&
-      c.suite.compare(c.suite.size() - 7, 7, ".golden") == 0) {
+  if (c.suite.size() >= 7 && c.suite.compare(c.suite.size() - 7, 7, ".golden") == 0) {
     c.suite.resize(c.suite.size() - 7);
   }
   c.case_id = "<load-error>";
@@ -45,9 +50,9 @@ OracleCase make_load_error(const std::string& path, const std::string& detail) {
 
 }  // namespace
 
-bool a1_to_row_col(const std::string& a1, std::uint32_t* out_row,
-                   std::uint32_t* out_col) {
-  if (a1.empty() || out_row == nullptr || out_col == nullptr) return false;
+bool a1_to_row_col(const std::string& a1, std::uint32_t* out_row, std::uint32_t* out_col) {
+  if (a1.empty() || out_row == nullptr || out_col == nullptr)
+    return false;
   std::size_t i = 0;
   std::uint32_t col = 0;
   // Column letters: A..Z, AA..ZZ, ... (base-26 with digits 1..26, not 0..25).
@@ -63,15 +68,19 @@ bool a1_to_row_col(const std::string& a1, std::uint32_t* out_row,
       break;
     }
   }
-  if (i == 0 || i == a1.size()) return false;  // missing letters or missing row
+  if (i == 0 || i == a1.size())
+    return false;  // missing letters or missing row
   std::uint64_t row = 0;
   for (; i < a1.size(); ++i) {
     char c = a1[i];
-    if (c < '0' || c > '9') return false;
+    if (c < '0' || c > '9')
+      return false;
     row = row * 10 + static_cast<std::uint64_t>(c - '0');
-    if (row > 1048576ULL) return false;  // Excel max row
+    if (row > 1048576ULL)
+      return false;  // Excel max row
   }
-  if (row == 0 || col == 0) return false;
+  if (row == 0 || col == 0)
+    return false;
   *out_row = static_cast<std::uint32_t>(row - 1);
   *out_col = col - 1;
   return true;
@@ -81,28 +90,66 @@ std::string configured_golden_dir() {
   return std::string{FORMULON_ORACLE_GOLDEN_DIR};
 }
 
-std::vector<OracleCase> load_oracle_cases(const std::string& golden_dir) {
+std::vector<std::pair<std::string, std::string>> configured_variant_dirs() {
+  // Env var wins; falling back to the compile-time scan keeps `ctest` runs
+  // in a vanilla build tree functional without per-shell setup. Both
+  // sources share the same `tag=path[:tag=path]*` grammar.
+  std::string raw;
+  if (const char* env = std::getenv("FORMULON_ORACLE_VARIANT_DIRS"); env != nullptr) {
+    raw = env;
+  } else {
+    raw = FORMULON_ORACLE_VARIANT_DIRS_DEFAULT;
+  }
+
+  std::vector<std::pair<std::string, std::string>> out;
+  if (raw.empty())
+    return out;
+
+  std::size_t start = 0;
+  while (start <= raw.size()) {
+    std::size_t end = raw.find(':', start);
+    if (end == std::string::npos)
+      end = raw.size();
+    std::string entry = raw.substr(start, end - start);
+    start = end + 1;
+    if (entry.empty())
+      continue;
+    std::size_t eq = entry.find('=');
+    if (eq == std::string::npos || eq == 0 || eq + 1 >= entry.size()) {
+      // Silently skip malformed entries: the env var is operator-supplied
+      // and a typo should not crash the test binary at static-init time.
+      continue;
+    }
+    std::string tag = entry.substr(0, eq);
+    std::string path = entry.substr(eq + 1);
+    if (tag.empty() || path.empty())
+      continue;
+    out.emplace_back(std::move(tag), std::move(path));
+  }
+  return out;
+}
+
+std::vector<OracleCase> load_oracle_cases(const std::string& golden_dir, const std::string& variant_tag) {
   std::vector<OracleCase> out;
-  if (golden_dir.empty()) return out;
+  if (golden_dir.empty())
+    return out;
   std::error_code ec;
-  if (!std::filesystem::exists(golden_dir, ec) ||
-      !std::filesystem::is_directory(golden_dir, ec)) {
+  if (!std::filesystem::exists(golden_dir, ec) || !std::filesystem::is_directory(golden_dir, ec)) {
     return out;
   }
 
   std::vector<std::string> files;
-  for (const auto& entry :
-       std::filesystem::directory_iterator(golden_dir, ec)) {
-    if (!entry.is_regular_file(ec)) continue;
+  for (const auto& entry : std::filesystem::directory_iterator(golden_dir, ec)) {
+    if (!entry.is_regular_file(ec))
+      continue;
     const auto& path = entry.path();
-    if (path.extension() != ".json") continue;
+    if (path.extension() != ".json")
+      continue;
     // Accept only `*.golden.json`; other files in the dir are ignored so
     // things like a README or .gitkeep don't trip the loader.
     const std::string fname = path.filename().string();
     const std::string marker = ".golden.json";
-    if (fname.size() < marker.size() ||
-        fname.compare(fname.size() - marker.size(), marker.size(), marker) !=
-            0) {
+    if (fname.size() < marker.size() || fname.compare(fname.size() - marker.size(), marker.size(), marker) != 0) {
       continue;
     }
     files.push_back(path.string());
@@ -112,8 +159,7 @@ std::vector<OracleCase> load_oracle_cases(const std::string& golden_dir) {
   for (const std::string& file_path : files) {
     auto parsed = parse_json_file(file_path);
     if (!parsed.has_value()) {
-      out.push_back(
-          make_load_error(file_path, "parse: " + parsed.error().message));
+      out.push_back(make_load_error(file_path, "parse: " + parsed.error().message));
       continue;
     }
     const JsonValue& doc = parsed.value();
@@ -124,8 +170,7 @@ std::vector<OracleCase> load_oracle_cases(const std::string& golden_dir) {
     const JsonValue* suite_v = doc.find("suite");
     const JsonValue* env_v = doc.find("environment");
     const JsonValue* cases_v = doc.find("cases");
-    if (suite_v == nullptr || !suite_v->is_string() || cases_v == nullptr ||
-        !cases_v->is_array()) {
+    if (suite_v == nullptr || !suite_v->is_string() || cases_v == nullptr || !cases_v->is_array()) {
       out.push_back(make_load_error(file_path, "missing 'suite' or 'cases'"));
       continue;
     }
@@ -147,7 +192,8 @@ std::vector<OracleCase> load_oracle_cases(const std::string& golden_dir) {
     const JsonValue env = env_v ? *env_v : JsonValue::make_object({});
     std::size_t fallback_idx = 0;
     for (const JsonValue& c : cases_v->as_array()) {
-      if (!c.is_object()) continue;
+      if (!c.is_object())
+        continue;
       const JsonValue* id_v = c.find("id");
       std::string case_id;
       if (id_v && id_v->is_string()) {
@@ -165,8 +211,8 @@ std::vector<OracleCase> load_oracle_cases(const std::string& golden_dir) {
       oc.environment = env;
       oc.tolerance_abs = tol_abs;
       oc.tolerance_rel = tol_rel;
-      if (const JsonValue* tol = c.find("tolerance");
-          tol && tol->is_object()) {
+      oc.variant = variant_tag;
+      if (const JsonValue* tol = c.find("tolerance"); tol && tol->is_object()) {
         if (const JsonValue* a = tol->find("abs"); a && a->is_number()) {
           oc.tolerance_abs = a->as_number();
         }
@@ -174,12 +220,18 @@ std::vector<OracleCase> load_oracle_cases(const std::string& golden_dir) {
           oc.tolerance_rel = r->as_number();
         }
       }
-      if (const JsonValue* cm = c.find("compare_mode");
-          cm && cm->is_string()) {
+      if (const JsonValue* cm = c.find("compare_mode"); cm && cm->is_string()) {
         oc.compare_mode = cm->as_string();
       }
       out.push_back(std::move(oc));
     }
+  }
+  // Stamp variant on load-error sentinels too so a malformed variant
+  // golden surfaces under its own parameter name rather than colliding
+  // with a primary suite of the same basename.
+  for (OracleCase& oc : out) {
+    if (oc.variant.empty())
+      oc.variant = variant_tag;
   }
   return out;
 }

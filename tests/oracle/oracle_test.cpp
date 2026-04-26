@@ -19,8 +19,10 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <iterator>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "eval/eval_context.h"
@@ -54,15 +56,21 @@ bool display_name_to_code(std::string_view name, ErrorCode* out) {
     ErrorCode code;
   };
   static constexpr Entry kTable[] = {
-      {"#NULL!", ErrorCode::Null},    {"#DIV/0!", ErrorCode::Div0},
-      {"#VALUE!", ErrorCode::Value},  {"#REF!", ErrorCode::Ref},
-      {"#NAME?", ErrorCode::Name},    {"#NUM!", ErrorCode::Num},
-      {"#N/A", ErrorCode::NA},        {"#SPILL!", ErrorCode::Spill},
-      {"#CALC!", ErrorCode::Calc},    {"#FIELD!", ErrorCode::Field},
+      {"#NULL!", ErrorCode::Null},
+      {"#DIV/0!", ErrorCode::Div0},
+      {"#VALUE!", ErrorCode::Value},
+      {"#REF!", ErrorCode::Ref},
+      {"#NAME?", ErrorCode::Name},
+      {"#NUM!", ErrorCode::Num},
+      {"#N/A", ErrorCode::NA},
+      {"#SPILL!", ErrorCode::Spill},
+      {"#CALC!", ErrorCode::Calc},
+      {"#FIELD!", ErrorCode::Field},
       {"#BLOCKED!", ErrorCode::Blocked},
       {"#CONNECT!", ErrorCode::Connect},
       {"#EXTERNAL!", ErrorCode::External},
-      {"#BUSY!", ErrorCode::Busy},   {"#PYTHON!", ErrorCode::Python},
+      {"#BUSY!", ErrorCode::Busy},
+      {"#PYTHON!", ErrorCode::Python},
       {"#UNKNOWN!", ErrorCode::Unknown},
   };
   for (const auto& e : kTable) {
@@ -77,17 +85,19 @@ bool display_name_to_code(std::string_view name, ErrorCode* out) {
 // Applies a single {kind, value} JSON record to a cell. Returns nullptr on
 // success or a short error string on failure (unknown kind, missing value,
 // etc.) that the caller folds into the test failure message.
-const char* apply_cell_value(const JsonValue& spec, Sheet& sheet,
-                             std::uint32_t row, std::uint32_t col,
+const char* apply_cell_value(const JsonValue& spec, Sheet& sheet, std::uint32_t row, std::uint32_t col,
                              Arena& text_arena) {
-  if (!spec.is_object()) return "setup cell is not an object";
+  if (!spec.is_object())
+    return "setup cell is not an object";
   const JsonValue* kind_v = spec.find("kind");
-  if (kind_v == nullptr || !kind_v->is_string()) return "missing 'kind'";
+  if (kind_v == nullptr || !kind_v->is_string())
+    return "missing 'kind'";
   const std::string& kind = kind_v->as_string();
 
   if (kind == "formula") {
     const JsonValue* f = spec.find("formula");
-    if (f == nullptr || !f->is_string()) return "formula cell missing 'formula'";
+    if (f == nullptr || !f->is_string())
+      return "formula cell missing 'formula'";
     sheet.set_cell_formula(row, col, f->as_string());
     return nullptr;
   }
@@ -98,17 +108,20 @@ const char* apply_cell_value(const JsonValue& spec, Sheet& sheet,
     return nullptr;
   }
   if (kind == "number") {
-    if (val_v == nullptr || !val_v->is_number()) return "number missing 'value'";
+    if (val_v == nullptr || !val_v->is_number())
+      return "number missing 'value'";
     sheet.set_cell_value(row, col, Value::number(val_v->as_number()));
     return nullptr;
   }
   if (kind == "bool") {
-    if (val_v == nullptr || !val_v->is_bool()) return "bool missing 'value'";
+    if (val_v == nullptr || !val_v->is_bool())
+      return "bool missing 'value'";
     sheet.set_cell_value(row, col, Value::boolean(val_v->as_bool()));
     return nullptr;
   }
   if (kind == "text") {
-    if (val_v == nullptr || !val_v->is_string()) return "text missing 'value'";
+    if (val_v == nullptr || !val_v->is_string())
+      return "text missing 'value'";
     // Intern the string into the arena so the Value's string_view remains
     // valid for the lifetime of the test.
     const std::string& payload = val_v->as_string();
@@ -118,7 +131,8 @@ const char* apply_cell_value(const JsonValue& spec, Sheet& sheet,
   }
   if (kind == "error") {
     const JsonValue* code_v = spec.find("code");
-    if (code_v == nullptr || !code_v->is_string()) return "error missing 'code'";
+    if (code_v == nullptr || !code_v->is_string())
+      return "error missing 'code'";
     ErrorCode code;
     if (!display_name_to_code(code_v->as_string(), &code)) {
       return "error has unknown 'code'";
@@ -177,7 +191,8 @@ struct ParsedComplex {
 /// sign).
 ParsedComplex parse_excel_complex(std::string_view s) {
   ParsedComplex out;
-  if (s.empty()) return out;
+  if (s.empty())
+    return out;
 
   // Strip the imaginary suffix, if any. Excel uses `i`; Formulon currently
   // only emits `i`, but accept `j` for symmetry with the SUFFIX argument
@@ -194,22 +209,27 @@ ParsedComplex parse_excel_complex(std::string_view s) {
   std::size_t split = std::string_view::npos;
   for (std::size_t i = body.size(); i-- > 0;) {
     const char c = body[i];
-    if (c != '+' && c != '-') continue;
-    if (i == 0) break;  // leading sign on the real part
+    if (c != '+' && c != '-')
+      continue;
+    if (i == 0)
+      break;  // leading sign on the real part
     const char prev = body[i - 1];
-    if (prev == 'e' || prev == 'E') continue;  // exponent sign
+    if (prev == 'e' || prev == 'E')
+      continue;  // exponent sign
     split = i;
     break;
   }
 
   const auto parse_double = [](std::string_view sv, double* out_d) {
-    if (sv.empty()) return false;
+    if (sv.empty())
+      return false;
     // strtod requires a NUL-terminated buffer; copy into a small std::string.
     const std::string buf(sv);
     const char* begin = buf.c_str();
     char* end = nullptr;
     const double v = std::strtod(begin, &end);
-    if (end != begin + buf.size()) return false;
+    if (end != begin + buf.size())
+      return false;
     *out_d = v;
     return true;
   };
@@ -226,7 +246,8 @@ ParsedComplex parse_excel_complex(std::string_view s) {
       }
       out.real = 0.0;
     } else {
-      if (!parse_double(body, &out.real)) return out;
+      if (!parse_double(body, &out.real))
+        return out;
       out.imag = 0.0;
     }
     out.ok = true;
@@ -235,11 +256,13 @@ ParsedComplex parse_excel_complex(std::string_view s) {
 
   // Split present: there must be an imaginary suffix (otherwise we have a
   // trailing sign with no `i`, which is malformed).
-  if (!has_imag) return out;
+  if (!has_imag)
+    return out;
 
   const std::string_view real_part = body.substr(0, split);
   const std::string_view imag_part = body.substr(split);  // includes sign
-  if (!parse_double(real_part, &out.real)) return out;
+  if (!parse_double(real_part, &out.real))
+    return out;
   if (imag_part == "+") {
     out.imag = 1.0;
   } else if (imag_part == "-") {
@@ -254,27 +277,27 @@ ParsedComplex parse_excel_complex(std::string_view s) {
 // Component-wise comparator for Excel complex-number text. Returns an empty
 // string on match (real and imag both within tolerance); otherwise a short
 // diagnostic that quotes both sides verbatim.
-std::string compare_complex_text(const std::string& want, const std::string& got,
-                                 double tol_abs, double tol_rel) {
+std::string compare_complex_text(const std::string& want, const std::string& got, double tol_abs, double tol_rel) {
   const auto wc = parse_excel_complex(want);
   const auto gc = parse_excel_complex(got);
   if (!wc.ok || !gc.ok) {
-    return "text mismatch (complex parse failed): expected \"" + want +
-           "\", got \"" + got + "\"";
+    return "text mismatch (complex parse failed): expected \"" + want + "\", got \"" + got + "\"";
   }
   const auto component_ok = [&](double a, double b) {
     const double diff = std::abs(a - b);
-    if (diff == 0.0) return true;
-    if (tol_abs > 0.0 && diff <= tol_abs) return true;
+    if (diff == 0.0)
+      return true;
+    if (tol_abs > 0.0 && diff <= tol_abs)
+      return true;
     const double scale = std::max(std::abs(a), std::abs(b));
-    if (tol_rel > 0.0 && scale > 0.0 && diff / scale <= tol_rel) return true;
+    if (tol_rel > 0.0 && scale > 0.0 && diff / scale <= tol_rel)
+      return true;
     return false;
   };
   if (component_ok(wc.real, gc.real) && component_ok(wc.imag, gc.imag)) {
     return {};
   }
-  return "complex mismatch (within text but components diverge): expected \"" +
-         want + "\", got \"" + got + "\"";
+  return "complex mismatch (within text but components diverge): expected \"" + want + "\", got \"" + got + "\"";
 }
 
 // Compares `actual` to the golden `expect` JSON record under the given
@@ -284,10 +307,10 @@ std::string compare_complex_text(const std::string& want, const std::string& got
 // `compare_mode` is "" or "exact" for the historical strict path, or a
 // structured comparator key (e.g. "complex_text") that selects an
 // alternative routine when the strict byte-equality check fails.
-std::string compare_value(const JsonValue& expect, const Value& actual,
-                          double tol_abs, double tol_rel,
+std::string compare_value(const JsonValue& expect, const Value& actual, double tol_abs, double tol_rel,
                           std::string_view compare_mode) {
-  if (!expect.is_object()) return "golden 'expect' is not an object";
+  if (!expect.is_object())
+    return "golden 'expect' is not an object";
   const JsonValue* kind_v = expect.find("kind");
   if (kind_v == nullptr || !kind_v->is_string()) {
     return "golden 'expect' missing 'kind'";
@@ -295,65 +318,77 @@ std::string compare_value(const JsonValue& expect, const Value& actual,
   const std::string& kind = kind_v->as_string();
 
   if (kind == "blank") {
-    if (actual.is_blank()) return {};
+    if (actual.is_blank())
+      return {};
     return "expected blank, got " + format_value(actual);
   }
   if (kind == "number") {
-    if (!actual.is_number()) return "expected number, got " + format_value(actual);
+    if (!actual.is_number())
+      return "expected number, got " + format_value(actual);
     const JsonValue* val_v = expect.find("value");
-    if (val_v == nullptr || !val_v->is_number()) return "golden missing 'value'";
+    if (val_v == nullptr || !val_v->is_number())
+      return "golden missing 'value'";
     double want = val_v->as_number();
     double got = actual.as_number();
     // Exact equality is the strict path. When tolerances are non-zero, we
     // accept a match if either absolute or relative diff fits. NaN matches
     // NaN (Excel treats NaN as #NUM!, so this usually doesn't arise).
-    if (std::isnan(want) && std::isnan(got)) return {};
+    if (std::isnan(want) && std::isnan(got))
+      return {};
     double diff = std::abs(want - got);
     double scale = std::max(std::abs(want), std::abs(got));
-    if (diff == 0.0) return {};
-    if (tol_abs > 0.0 && diff <= tol_abs) return {};
-    if (tol_rel > 0.0 && scale > 0.0 && diff / scale <= tol_rel) return {};
-    return "number mismatch: expected " + std::to_string(want) + ", got " +
-           std::to_string(got);
+    if (diff == 0.0)
+      return {};
+    if (tol_abs > 0.0 && diff <= tol_abs)
+      return {};
+    if (tol_rel > 0.0 && scale > 0.0 && diff / scale <= tol_rel)
+      return {};
+    return "number mismatch: expected " + std::to_string(want) + ", got " + std::to_string(got);
   }
   if (kind == "bool") {
-    if (!actual.is_boolean()) return "expected bool, got " + format_value(actual);
+    if (!actual.is_boolean())
+      return "expected bool, got " + format_value(actual);
     const JsonValue* val_v = expect.find("value");
-    if (val_v == nullptr || !val_v->is_bool()) return "golden missing 'value'";
-    if (actual.as_boolean() == val_v->as_bool()) return {};
-    return std::string("bool mismatch: expected ") +
-           (val_v->as_bool() ? "TRUE" : "FALSE") + ", got " +
+    if (val_v == nullptr || !val_v->is_bool())
+      return "golden missing 'value'";
+    if (actual.as_boolean() == val_v->as_bool())
+      return {};
+    return std::string("bool mismatch: expected ") + (val_v->as_bool() ? "TRUE" : "FALSE") + ", got " +
            (actual.as_boolean() ? "TRUE" : "FALSE");
   }
   if (kind == "text") {
-    if (!actual.is_text()) return "expected text, got " + format_value(actual);
+    if (!actual.is_text())
+      return "expected text, got " + format_value(actual);
     const JsonValue* val_v = expect.find("value");
-    if (val_v == nullptr || !val_v->is_string()) return "golden missing 'value'";
+    if (val_v == nullptr || !val_v->is_string())
+      return "golden missing 'value'";
     const std::string& want_text = val_v->as_string();
     const std::string actual_text(actual.as_text());
 
     // Strict byte compare wins fast on the common path; structured
     // comparators only run when the bytes already disagree.
-    if (want_text == actual_text) return {};
+    if (want_text == actual_text)
+      return {};
 
     if (compare_mode == "complex_text") {
       return compare_complex_text(want_text, actual_text, tol_abs, tol_rel);
     }
 
-    return "text mismatch: expected \"" + want_text + "\", got \"" +
-           actual_text + "\"";
+    return "text mismatch: expected \"" + want_text + "\", got \"" + actual_text + "\"";
   }
   if (kind == "error") {
-    if (!actual.is_error()) return "expected error, got " + format_value(actual);
+    if (!actual.is_error())
+      return "expected error, got " + format_value(actual);
     const JsonValue* code_v = expect.find("code");
-    if (code_v == nullptr || !code_v->is_string()) return "golden missing 'code'";
+    if (code_v == nullptr || !code_v->is_string())
+      return "golden missing 'code'";
     ErrorCode want_code;
     if (!display_name_to_code(code_v->as_string(), &want_code)) {
       return "golden has unknown error 'code': " + code_v->as_string();
     }
-    if (actual.as_error() == want_code) return {};
-    return std::string("error mismatch: expected ") + code_v->as_string() +
-           ", got " + display_name(actual.as_error());
+    if (actual.as_error() == want_code)
+      return {};
+    return std::string("error mismatch: expected ") + code_v->as_string() + ", got " + display_name(actual.as_error());
   }
   return "unknown expect kind: " + kind;
 }
@@ -366,8 +401,21 @@ const std::vector<OracleCase>& oracle_cases() {
   // Loaded once at first call; `load_oracle_cases` is safe to call multiple
   // times but we cache to keep test discovery deterministic even if the
   // directory is mutated mid-run (it isn't, but it's cheap insurance).
-  static const std::vector<OracleCase> cached =
-      load_oracle_cases(configured_golden_dir());
+  //
+  // Variant goldens are appended after the primary set. Cases inherit the
+  // variant tag from the load call; the parameter-name printer uses it to
+  // suffix `__<tag>` so primary and variant entries never collide. When
+  // no variants are configured (the default build) the appended sequence
+  // is empty and the parameter list is bit-for-bit identical to the
+  // primary-only flow.
+  static const std::vector<OracleCase> cached = []() {
+    std::vector<OracleCase> all = load_oracle_cases(configured_golden_dir(), "");
+    for (const auto& [tag, dir] : configured_variant_dirs()) {
+      auto vc = load_oracle_cases(dir, tag);
+      all.insert(all.end(), std::make_move_iterator(vc.begin()), std::make_move_iterator(vc.end()));
+    }
+    return all;
+  }();
   return cached;
 }
 
@@ -382,8 +430,7 @@ TEST_P(OracleTest, Matches) {
   if (param.case_id == "<load-error>") {
     const JsonValue* detail = param.raw_case.find("error");
     FAIL() << "failed to load " << param.source_file << ": "
-           << (detail && detail->is_string() ? detail->as_string()
-                                              : std::string("unknown"));
+           << (detail && detail->is_string() ? detail->as_string() : std::string("unknown"));
     return;
   }
 
@@ -391,17 +438,14 @@ TEST_P(OracleTest, Matches) {
   // with a bare `"skipped": "<reason>"` field (no `expect`). The verifier
   // surfaces them as gtest-skipped so the pass-rate math still reflects them
   // as "known non-verified" rather than hiding the gap.
-  if (const JsonValue* skipped = param.raw_case.find("skipped");
-      skipped && skipped->is_string()) {
+  if (const JsonValue* skipped = param.raw_case.find("skipped"); skipped && skipped->is_string()) {
     GTEST_SKIP() << "divergence.yaml skip-oracle: " << skipped->as_string();
   }
 
   const JsonValue* formula_v = param.raw_case.find("formula");
   const JsonValue* expect_v = param.raw_case.find("expect");
-  if (formula_v == nullptr || !formula_v->is_string() ||
-      expect_v == nullptr || !expect_v->is_object()) {
-    FAIL() << "case " << param.suite << "." << param.case_id
-           << " is missing 'formula' or 'expect'";
+  if (formula_v == nullptr || !formula_v->is_string() || expect_v == nullptr || !expect_v->is_object()) {
+    FAIL() << "case " << param.suite << "." << param.case_id << " is missing 'formula' or 'expect'";
     return;
   }
   const std::string& formula_src = formula_v->as_string();
@@ -411,21 +455,17 @@ TEST_P(OracleTest, Matches) {
   Sheet& sheet = wb.sheet(0);
   Arena text_arena;
 
-  if (const JsonValue* setup = param.raw_case.find("setup");
-      setup && setup->is_object()) {
+  if (const JsonValue* setup = param.raw_case.find("setup"); setup && setup->is_object()) {
     for (const auto& entry : setup->as_object()) {
       std::uint32_t row = 0;
       std::uint32_t col = 0;
       if (!a1_to_row_col(entry.first, &row, &col)) {
-        FAIL() << param.suite << "." << param.case_id << ": invalid A1 address '"
-               << entry.first << "'";
+        FAIL() << param.suite << "." << param.case_id << ": invalid A1 address '" << entry.first << "'";
         return;
       }
-      const char* err_msg = apply_cell_value(entry.second, sheet, row, col,
-                                              text_arena);
+      const char* err_msg = apply_cell_value(entry.second, sheet, row, col, text_arena);
       if (err_msg != nullptr) {
-        FAIL() << param.suite << "." << param.case_id << ": setup[" << entry.first
-               << "]: " << err_msg;
+        FAIL() << param.suite << "." << param.case_id << ": setup[" << entry.first << "]: " << err_msg;
         return;
       }
     }
@@ -435,14 +475,14 @@ TEST_P(OracleTest, Matches) {
   // is stripped to match Formulon's parser expectation (the tokenizer treats
   // the formula body as starting at the first token after '=').
   std::string_view body = formula_src;
-  if (!body.empty() && body.front() == '=') body.remove_prefix(1);
+  if (!body.empty() && body.front() == '=')
+    body.remove_prefix(1);
 
   Arena parse_arena;
   Arena eval_arena;
   Parser p(body, parse_arena);
   AstNode* root = p.parse();
-  ASSERT_NE(root, nullptr) << param.suite << "." << param.case_id
-                            << ": parse failed for '" << formula_src << "'";
+  ASSERT_NE(root, nullptr) << param.suite << "." << param.case_id << ": parse failed for '" << formula_src << "'";
 
   // Use the full evaluator entry point so recursive cell refs, cycle
   // detection, and the default function registry all kick in — matching
@@ -469,9 +509,7 @@ TEST_P(OracleTest, Matches) {
   }
   Value actual = eval::evaluate(*root, eval_arena, registry, ctx);
 
-  std::string diff =
-      compare_value(*expect_v, actual, param.tolerance_abs, param.tolerance_rel,
-                    param.compare_mode);
+  std::string diff = compare_value(*expect_v, actual, param.tolerance_abs, param.tolerance_rel, param.compare_mode);
   if (!diff.empty()) {
     FAIL() << param.suite << "." << param.case_id << ": " << diff << "\n"
            << "  formula: " << formula_src << "\n"
@@ -481,21 +519,35 @@ TEST_P(OracleTest, Matches) {
 
 // Human-readable gtest parameter names so failures show up as
 // `OracleTest.Matches/<suite>_<case_id>` instead of a numeric index.
-std::string PrintParamName(
-    const ::testing::TestParamInfo<OracleCase>& info) {
+std::string PrintParamName(const ::testing::TestParamInfo<OracleCase>& info) {
   std::string name = info.param.suite + "_" + info.param.case_id;
+  // Variant suffix is omitted for primary cases so existing test names
+  // stay byte-identical to the pre-variant build. Non-empty tags get a
+  // `__<tag>` suffix that disambiguates parameter names across binaries
+  // and inside a single discovery pass.
+  if (!info.param.variant.empty()) {
+    name += "__" + info.param.variant;
+  }
   // gtest requires [A-Za-z0-9_]; fold everything else to '_'.
   for (char& c : name) {
-    if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-          (c >= '0' && c <= '9') || c == '_')) {
+    if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')) {
       c = '_';
     }
   }
   return name;
 }
 
-INSTANTIATE_TEST_SUITE_P(Oracle, OracleTest,
-                         ::testing::ValuesIn(oracle_cases()), PrintParamName);
+INSTANTIATE_TEST_SUITE_P(Oracle, OracleTest, ::testing::ValuesIn(oracle_cases()), PrintParamName);
+
+// The variant oracle binary loads only `tests/oracle/variants/<tag>/golden/`
+// and is expected to register zero parameters when no variants have been
+// scanned in (the default empty-`variants/` state). The instantiation above
+// then expands to nothing and gtest would otherwise fail the suite with
+// `GoogleTestVerification.UninstantiatedParameterizedTestSuite`. Allow that
+// state explicitly so an empty variant tree builds and runs cleanly; the
+// primary binary still exercises the same instantiation with 2k+ cases, so
+// no real coverage is lost by relaxing the check here.
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(OracleTest);
 
 }  // namespace
 }  // namespace oracle

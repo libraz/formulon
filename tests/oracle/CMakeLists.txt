@@ -93,3 +93,65 @@ formulon_apply_warnings(formulon_ironcalc_oracle_tests)
 add_test(NAME formulon_ironcalc_oracle
          COMMAND formulon_ironcalc_oracle_tests --gtest_brief=1)
 set_tests_properties(formulon_ironcalc_oracle PROPERTIES LABELS "ironcalc")
+
+# ---------------------------------------------------------------------------
+# Variant oracle target (opt-in)
+#
+# Loads goldens from tests/oracle/variants/<tag>/golden/ and tags each TEST_P
+# parameter with `__<tag>` so primary and variant test names never collide.
+# Built only when FORMULON_ORACLE_VARIANTS=ON; defaults to OFF so the
+# baseline build tree stays unchanged.
+#
+# Variant directories are scanned at configure time. The discovered list is
+# baked into the binary as a compile-time default; the env var
+# FORMULON_ORACLE_VARIANT_DIRS overrides this at runtime if set.
+# ---------------------------------------------------------------------------
+
+option(FORMULON_ORACLE_VARIANTS "Build the variant oracle test binary" OFF)
+
+if(FORMULON_ORACLE_VARIANTS)
+  set(_variant_root "${CMAKE_CURRENT_SOURCE_DIR}/variants")
+  set(_variant_dirs_default "")
+  if(EXISTS "${_variant_root}")
+    file(GLOB _variant_subdirs RELATIVE "${_variant_root}" "${_variant_root}/*")
+    foreach(_tag IN LISTS _variant_subdirs)
+      set(_golden "${_variant_root}/${_tag}/golden")
+      if(IS_DIRECTORY "${_golden}")
+        if(_variant_dirs_default STREQUAL "")
+          set(_variant_dirs_default "${_tag}=${_golden}")
+        else()
+          set(_variant_dirs_default "${_variant_dirs_default}:${_tag}=${_golden}")
+        endif()
+      endif()
+    endforeach()
+  endif()
+
+  add_executable(formulon_oracle_variant_tests ${FORMULON_ORACLE_TEST_SOURCES})
+
+  target_link_libraries(formulon_oracle_variant_tests
+    PRIVATE
+      formulon_static
+      gtest_main
+  )
+
+  target_include_directories(formulon_oracle_variant_tests
+    PRIVATE
+      ${CMAKE_SOURCE_DIR}/src
+      ${CMAKE_SOURCE_DIR}
+  )
+
+  # Empty primary dir so the binary loads ONLY variants. variant_dirs_default
+  # gets the configure-time scan; runtime env var still overrides.
+  target_compile_definitions(formulon_oracle_variant_tests
+    PRIVATE
+      FORMULON_ORACLE_GOLDEN_DIR=""
+      FORMULON_ORACLE_VARIANT_DIRS_DEFAULT="${_variant_dirs_default}"
+  )
+
+  formulon_apply_warnings(formulon_oracle_variant_tests)
+
+  gtest_discover_tests(formulon_oracle_variant_tests
+    DISCOVERY_MODE PRE_TEST
+    PROPERTIES LABELS "VARIANT"
+  )
+endif()

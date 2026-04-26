@@ -1,0 +1,31 @@
+# Oracle generation targets. The "primary" target is the canonical 1-bit
+# compatibility reference; variants are opt-in additional environments
+# whose goldens land under tests/oracle/variants/<name>/.
+primary: mac-365-ja_JP
+
+targets:
+  mac-365-ja_JP:
+    driver: macos_excel
+    runs_on: [Darwin]
+    locale: ja-JP
+    output_dir: tests/oracle/golden
+    environment_md: tests/oracle/ENVIRONMENT.md
+    # divergence: tests/divergence.yaml   # primary uses the global file
+                                          # via --divergence; variants set
+                                          # this to a per-target path
+                                          # (e.g. tests/oracle/variants/<name>/divergence.yaml).
+
+  win-365-ja_JP:
+    driver: windows_excel
+    # runs_on lists OS values that platform.system() returns. Linux here
+    # means WSL2 -- the bridge driver auto-detects via /proc/version and
+    # refuses on plain Linux.
+    runs_on: [Windows, Linux]
+    locale: ja-JP
+    output_dir: tests/oracle/variants/win-365-ja_JP/golden
+    environment_md: tests/oracle/variants/win-365-ja_JP/ENVIRONMENT.md
+    divergence: tests/oracle/variants/win-365-ja_JP/divergence.yaml
+    # win_python: filled in by `make oracle-setup` once it learns to
+    # discover a usable Windows Python from WSL2. Until then, set it
+    # manually, e.g.:
+    #   win_python: "/mnt/c/Users/<you>/AppData/Local/Programs/Python/Python312/python.exe"

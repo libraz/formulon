@@ -9,19 +9,25 @@ committed here as golden JSON.
 ```
 tests/oracle/
 ├── README.md                     (this file)
-├── CMakeLists.txt                formulon_oracle_tests target
-├── ENVIRONMENT.md                Excel version / locale snapshot (oracle-gen writes this)
+├── CMakeLists.txt                formulon_oracle_tests + opt-in formulon_oracle_variant_tests
+├── ENVIRONMENT.md                primary Excel version / locale snapshot (oracle-gen writes this)
 ├── json_reader.{h,cpp}           in-test JSON reader (no external dep)
-├── oracle_runner.{h,cpp}         case loader + A1 parser
+├── oracle_runner.{h,cpp}         case loader + A1 parser + variant dir resolution
 ├── oracle_test.cpp               parameterized TEST_P comparing Formulon to golden
-├── cases/                        human-authored YAML sources
+├── cases/                        human-authored YAML sources (shared across all targets)
 │   ├── count.yaml
 │   ├── countif.yaml
 │   ├── lookup.yaml
 │   ├── stats.yaml
 │   └── datetime.yaml
-└── golden/                       Excel-generated JSON (commit this)
-    └── <suite>.golden.json
+├── golden/                       primary (Mac/ja-JP) Excel output — commit this
+│   └── <suite>.golden.json
+└── variants/                     opt-in additional environments — commit per-target
+    └── <target>/                 e.g. win-365-ja_JP
+        ├── ENVIRONMENT.md
+        ├── divergence.yaml       (optional) per-variant overrides
+        └── golden/
+            └── <suite>.golden.json
 ```
 
 ## Flow
@@ -107,3 +113,30 @@ Known-diverging cases are listed in `tests/divergence.yaml`. Entries can
 either skip oracle generation (volatile functions) or widen the verifier
 tolerance (±1ulp transcendentals). Every entry requires a `reason` and
 the Excel build that exhibited it.
+
+Optional `applies_to: [target, ...]` field scopes an entry to specific
+targets; absent means it applies to every target. Per-variant overrides
+live in `variants/<target>/divergence.yaml` and merge on top of the
+primary file.
+
+## Variant oracles (opt-in)
+
+Variants under `variants/<target>/` capture the same case set under a
+different Excel environment (Windows Excel, alternative locales, ...).
+They never gate primary CI — they exist for divergence research.
+
+Build the variant test binary by enabling the CMake option:
+
+```bash
+cmake -B build -DFORMULON_ORACLE_VARIANTS=ON
+cmake --build build --target formulon_oracle_variant_tests
+cd build && ctest -L VARIANT --output-on-failure
+```
+
+Variant TEST_P parameter names get a `__<target>` suffix
+(`Oracle/OracleTest.Matches/<suite>_<case_id>__<target>`) so primary and
+variant entries are always distinguishable.
+
+Generation is host-dependent — see `tools/oracle/README.md` for the
+multi-target setup walkthrough (`make oracle-setup`, target manifest,
+WSL2 → Windows Excel bridge, `cli.py setup` preflight).

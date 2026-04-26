@@ -15,7 +15,8 @@ CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 
 
 .PHONY: all build release test test-slow test-all fmt lint clean \
         wasm wasm-debug test-wasm test-python \
-        oracle-setup oracle-gen oracle-verify \
+        oracle-setup oracle-setup-mac oracle-setup-wsl \
+        oracle-gen oracle-verify \
         ironcalc-import ironcalc-verify \
         fuzz-parser fuzz-xlsx fuzz-eval bench coverage \
         function-status behavior-status
@@ -91,31 +92,51 @@ ORACLE_VENV := $(ORACLE_DIR)/.venv
 ORACLE_GEN := $(ORACLE_VENV)/bin/python tools/oracle/oracle_gen.py
 
 oracle-setup:
-	@if [ "$$(uname -s)" != "Darwin" ]; then \
-	  echo "oracle-setup: xlwings driver is macOS only (got $$(uname -s))"; \
+	@uname_s=$$(uname -s); \
+	if [ "$$uname_s" = "Darwin" ]; then \
+	  $(MAKE) oracle-setup-mac; \
+	elif [ "$$uname_s" = "Linux" ] && grep -qi microsoft /proc/version 2>/dev/null; then \
+	  $(MAKE) oracle-setup-wsl; \
+	else \
+	  echo "oracle-setup: unsupported host $$uname_s"; \
+	  echo "  supported: macOS (Darwin) for primary, WSL2 (Linux+Microsoft) for windows variant"; \
 	  exit 1; \
 	fi
+
+oracle-setup-mac:
 	@if ! command -v rye >/dev/null 2>&1; then \
-	  echo "oracle-setup: rye not found in PATH."; \
+	  echo "oracle-setup-mac: rye not found in PATH."; \
 	  echo "  Install from https://rye.astral.sh/ (curl -sSf https://rye.astral.sh/get | bash)"; \
 	  echo "  or: brew install rye"; \
 	  exit 1; \
 	fi
 	@(cd $(ORACLE_DIR) && rye sync)
-	@echo "oracle-setup: venv ready at $(ORACLE_VENV)"
+	@echo "oracle-setup-mac: venv ready at $(ORACLE_VENV)"
 	@echo "Grant Automation permission: System Settings -> Privacy & Security"
 	@echo "    -> Automation -> (your terminal) -> Microsoft Excel"
+	@$(ORACLE_VENV)/bin/python tools/oracle/cli.py setup --target mac-365-ja_JP || true
 
-oracle-gen:
-	@if [ "$$(uname -s)" != "Darwin" ]; then \
-	  echo "oracle-gen: macOS only (got $$(uname -s))"; \
+oracle-setup-wsl:
+	@if ! command -v rye >/dev/null 2>&1; then \
+	  echo "oracle-setup-wsl: rye not found. Install: curl -sSf https://rye.astral.sh/get | bash"; \
 	  exit 1; \
 	fi
+	@(cd $(ORACLE_DIR) && rye sync)
+	@echo "oracle-setup-wsl: venv ready at $(ORACLE_VENV)"
+	@echo ""
+	@echo "Next steps for the Windows side (run in PowerShell, one-time):"
+	@echo "  winget install Python.Python.3.12"
+	@echo "  py -m pip install xlwings pywin32 pyyaml"
+	@echo ""
+	@echo "Then edit tools/oracle/targets.yaml and set win_python under win-365-ja_JP."
+	@$(ORACLE_VENV)/bin/python tools/oracle/cli.py setup --target win-365-ja_JP || true
+
+oracle-gen:
 	@if [ ! -x "$(ORACLE_VENV)/bin/python" ]; then \
 	  echo "oracle-gen: run 'make oracle-setup' first"; \
 	  exit 1; \
 	fi
-	@$(ORACLE_GEN) $(if $(SUITE),--suite $(SUITE),)
+	@$(ORACLE_GEN) $(if $(SUITE),--suite $(SUITE),) $(if $(TARGET),--target $(TARGET),)
 
 oracle-verify:
 	@if [ ! -f $(BUILD_DIR)/CMakeCache.txt ]; then \
