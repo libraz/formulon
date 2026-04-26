@@ -18,6 +18,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -148,11 +149,144 @@ std::string format_value(const Value& v) {
   }
 }
 
+/// Result of parsing an Excel complex-number text representation.
+///
+/// Excel complex numbers are formatted as `<real><sign><imag><suffix>` (or
+/// `<real>` alone, or `<sign><imag><suffix>` alone), where `<suffix>` is
+/// `i` or `j`. See `parse_excel_complex` for the precise grammar.
+struct ParsedComplex {
+  double real = 0.0;
+  double imag = 0.0;
+  bool ok = false;
+};
+
+/// Parses an Excel complex-number text into its real and imaginary parts.
+///
+/// Recognised shapes:
+///   `"3"`                                 -> {3, 0}
+///   `"4i"`                                -> {0, 4}
+///   `"i"`                                 -> {0, 1}
+///   `"-i"`                                -> {0, -1}
+///   `"-2.5+i"`                            -> {-2.5, 1}
+///   `"0.62-0.30i"`                        -> {0.62, -0.30}
+///   `"1.0e-3+2.5e+10i"`                   -> {1.0e-3, 2.5e10}
+///
+/// The split between real and imaginary parts is the LAST `+` or `-` in the
+/// trimmed string that is neither at position 0 (a leading sign on the real
+/// part) nor immediately after `e` / `E` (a scientific-notation exponent
+/// sign).
+ParsedComplex parse_excel_complex(std::string_view s) {
+  ParsedComplex out;
+  if (s.empty()) return out;
+
+  // Strip the imaginary suffix, if any. Excel uses `i`; Formulon currently
+  // only emits `i`, but accept `j` for symmetry with the SUFFIX argument
+  // family of IM* functions.
+  bool has_imag = false;
+  std::string_view body = s;
+  const char last = body.back();
+  if (last == 'i' || last == 'j') {
+    has_imag = true;
+    body.remove_suffix(1);
+  }
+
+  // Locate the split between real and imaginary parts.
+  std::size_t split = std::string_view::npos;
+  for (std::size_t i = body.size(); i-- > 0;) {
+    const char c = body[i];
+    if (c != '+' && c != '-') continue;
+    if (i == 0) break;  // leading sign on the real part
+    const char prev = body[i - 1];
+    if (prev == 'e' || prev == 'E') continue;  // exponent sign
+    split = i;
+    break;
+  }
+
+  const auto parse_double = [](std::string_view sv, double* out_d) {
+    if (sv.empty()) return false;
+    // strtod requires a NUL-terminated buffer; copy into a small std::string.
+    const std::string buf(sv);
+    const char* begin = buf.c_str();
+    char* end = nullptr;
+    const double v = std::strtod(begin, &end);
+    if (end != begin + buf.size()) return false;
+    *out_d = v;
+    return true;
+  };
+
+  if (split == std::string_view::npos) {
+    if (has_imag) {
+      // Whole trimmed body is the imaginary coefficient.
+      if (body.empty() || body == "+") {
+        out.imag = 1.0;
+      } else if (body == "-") {
+        out.imag = -1.0;
+      } else if (!parse_double(body, &out.imag)) {
+        return out;
+      }
+      out.real = 0.0;
+    } else {
+      if (!parse_double(body, &out.real)) return out;
+      out.imag = 0.0;
+    }
+    out.ok = true;
+    return out;
+  }
+
+  // Split present: there must be an imaginary suffix (otherwise we have a
+  // trailing sign with no `i`, which is malformed).
+  if (!has_imag) return out;
+
+  const std::string_view real_part = body.substr(0, split);
+  const std::string_view imag_part = body.substr(split);  // includes sign
+  if (!parse_double(real_part, &out.real)) return out;
+  if (imag_part == "+") {
+    out.imag = 1.0;
+  } else if (imag_part == "-") {
+    out.imag = -1.0;
+  } else if (!parse_double(imag_part, &out.imag)) {
+    return out;
+  }
+  out.ok = true;
+  return out;
+}
+
+// Component-wise comparator for Excel complex-number text. Returns an empty
+// string on match (real and imag both within tolerance); otherwise a short
+// diagnostic that quotes both sides verbatim.
+std::string compare_complex_text(const std::string& want, const std::string& got,
+                                 double tol_abs, double tol_rel) {
+  const auto wc = parse_excel_complex(want);
+  const auto gc = parse_excel_complex(got);
+  if (!wc.ok || !gc.ok) {
+    return "text mismatch (complex parse failed): expected \"" + want +
+           "\", got \"" + got + "\"";
+  }
+  const auto component_ok = [&](double a, double b) {
+    const double diff = std::abs(a - b);
+    if (diff == 0.0) return true;
+    if (tol_abs > 0.0 && diff <= tol_abs) return true;
+    const double scale = std::max(std::abs(a), std::abs(b));
+    if (tol_rel > 0.0 && scale > 0.0 && diff / scale <= tol_rel) return true;
+    return false;
+  };
+  if (component_ok(wc.real, gc.real) && component_ok(wc.imag, gc.imag)) {
+    return {};
+  }
+  return "complex mismatch (within text but components diverge): expected \"" +
+         want + "\", got \"" + got + "\"";
+}
+
 // Compares `actual` to the golden `expect` JSON record under the given
 // tolerance. Returns an empty string on match; otherwise a human-readable
 // diff message.
+//
+// `compare_mode` is "" or "exact" for the historical strict path, or a
+// structured comparator key (e.g. "complex_text") that selects an
+// alternative routine when the strict byte-equality check fails.
 std::string compare_value(const JsonValue& expect, const Value& actual,
-                          double tol_abs, double tol_rel) {
+                          double tol_abs, double tol_rel,
+                          std::string_view compare_mode) {
   if (!expect.is_object()) return "golden 'expect' is not an object";
   const JsonValue* kind_v = expect.find("kind");
   if (kind_v == nullptr || !kind_v->is_string()) {
@@ -195,12 +329,19 @@ std::string compare_value(const JsonValue& expect, const Value& actual,
     if (!actual.is_text()) return "expected text, got " + format_value(actual);
     const JsonValue* val_v = expect.find("value");
     if (val_v == nullptr || !val_v->is_string()) return "golden missing 'value'";
-    if (std::string_view(actual.as_text()) ==
-        std::string_view(val_v->as_string())) {
-      return {};
+    const std::string& want_text = val_v->as_string();
+    const std::string actual_text(actual.as_text());
+
+    // Strict byte compare wins fast on the common path; structured
+    // comparators only run when the bytes already disagree.
+    if (want_text == actual_text) return {};
+
+    if (compare_mode == "complex_text") {
+      return compare_complex_text(want_text, actual_text, tol_abs, tol_rel);
     }
-    return "text mismatch: expected \"" + val_v->as_string() + "\", got \"" +
-           std::string(actual.as_text()) + "\"";
+
+    return "text mismatch: expected \"" + want_text + "\", got \"" +
+           actual_text + "\"";
   }
   if (kind == "error") {
     if (!actual.is_error()) return "expected error, got " + format_value(actual);
@@ -329,7 +470,8 @@ TEST_P(OracleTest, Matches) {
   Value actual = eval::evaluate(*root, eval_arena, registry, ctx);
 
   std::string diff =
-      compare_value(*expect_v, actual, param.tolerance_abs, param.tolerance_rel);
+      compare_value(*expect_v, actual, param.tolerance_abs, param.tolerance_rel,
+                    param.compare_mode);
   if (!diff.empty()) {
     FAIL() << param.suite << "." << param.case_id << ": " << diff << "\n"
            << "  formula: " << formula_src << "\n"

@@ -117,6 +117,8 @@ def _write_golden(
         record["expect"] = _result_to_json(r)
         if c.tolerance is not None:
             record["tolerance"] = c.tolerance.to_dict()
+        if c.compare_mode is not None and c.compare_mode != "exact":
+            record["compare_mode"] = c.compare_mode
         cases_out.append(record)
 
     doc = {

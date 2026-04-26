@@ -27,6 +27,12 @@ import yaml
 # Lambda which the oracle pipeline doesn't exercise yet.
 KINDS = {"blank", "number", "bool", "text", "error", "formula"}
 
+# Recognised compare modes for the C++ verifier. `None` / "exact" means
+# strict byte-equality (the historical behaviour). Any other value selects
+# a structured comparator on the verifier side; see `compare_value` in
+# `tests/oracle/oracle_test.cpp`.
+COMPARE_MODES = {"exact", "complex_text"}
+
 
 @dataclass
 class Tolerance:
@@ -54,6 +60,11 @@ class Case:
     itself read it.
 
     `tolerance`, if set, overrides the suite default for this case only.
+
+    `compare_mode`, if set, switches the C++ verifier to a structured
+    comparator (e.g. `"complex_text"` parses both expected and actual text
+    as Excel complex numbers and applies `tolerance` to each component).
+    `None` or `"exact"` keeps the default strict byte equality.
     """
 
     id: str
@@ -61,6 +72,7 @@ class Case:
     setup: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     description: str = ""
     tolerance: Optional[Tolerance] = None
+    compare_mode: Optional[str] = None
     # Parsed author-side expectation, kept for documentation only. The
     # verifier compares against the golden JSON (Excel's observed output),
     # not this field.
@@ -187,6 +199,23 @@ def load_suite(path: Path) -> Suite:
             raw.get("tolerance"), where=f"{path}: case '{cid}'"
         )
 
+        compare_mode_raw = raw.get("compare_mode")
+        compare_mode: Optional[str] = None
+        if compare_mode_raw is not None:
+            if not isinstance(compare_mode_raw, str):
+                raise ValueError(
+                    f"{path}: case '{cid}' 'compare_mode' must be a string"
+                )
+            if compare_mode_raw not in COMPARE_MODES:
+                raise ValueError(
+                    f"{path}: case '{cid}' has unknown compare_mode "
+                    f"'{compare_mode_raw}'; expected one of {sorted(COMPARE_MODES)}"
+                )
+            # "exact" is the implicit default; normalise to None so the
+            # generator omits the field for the historical strict path.
+            if compare_mode_raw != "exact":
+                compare_mode = compare_mode_raw
+
         author_expect: Optional[Dict[str, Any]] = None
         if "expect" in raw and raw["expect"] is not None:
             author_expect = _normalise_value(
@@ -200,6 +229,7 @@ def load_suite(path: Path) -> Suite:
                 setup=setup,
                 description=raw.get("description", "") or "",
                 tolerance=case_tol if raw.get("tolerance") is not None else None,
+                compare_mode=compare_mode,
                 author_expect=author_expect,
             )
         )

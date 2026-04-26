@@ -147,17 +147,6 @@ entries:
     prefer: formulon
     first_noted: 2026-04-23
 
-  # -- Complex IMCSC: 1-ULP precision in last decimal --------------------
-  # IMCSC(1+i): Excel ...0.303931001628427i, Formulon ...0.303931001628426i.
-  # Drift is 1 ULP at the 15th significant digit; cannot pass the exact
-  # text comparison the oracle uses. Acceptable numerical agreement; the
-  # comparison would need to allow tolerance on parsed components.
-  - id: imcsc_one_plus_i
-    mode: skip-oracle
-    reason: "IMCSC: 1-ULP drift at 15th digit (Excel ...427i vs Formulon ...426i)."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-
   # -- JIS unsupported on current Mac Excel ja-JP build ------------------
   # Mac Excel 365 16.108.1 (ja-JP) returns `#NAME?` for every `=JIS(...)`
   # invocation in the oracle pipeline (every kana / ASCII / kanji / mixed

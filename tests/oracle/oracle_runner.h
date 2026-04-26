@@ -48,6 +48,9 @@ struct OracleCase {
   JsonValue environment;    // the suite's environment record (excel_version etc.)
   double tolerance_abs = 0.0;
   double tolerance_rel = 0.0;
+  // "" or "exact" -> byte-equality; other values (e.g. "complex_text") select
+  // a structured comparator in the verifier.
+  std::string compare_mode;
 };
 
 /// Loads every `*.golden.json` file under `golden_dir` and flattens them

@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T03:41:55Z"
+    "generated_at": "2026-04-26T21:51:52Z"
   },
   "tolerance": {
     "abs": 1e-05,
@@ -287,7 +287,15 @@
       "id": "imcsc_one_plus_i",
       "formula": "=IMCSC(\"1+i\")",
       "setup": {},
-      "skipped": "IMCSC: 1-ULP drift at 15th digit (Excel ...427i vs Formulon ...426i)."
+      "expect": {
+        "kind": "text",
+        "value": "0.621518017170428-0.303931001628427i"
+      },
+      "tolerance": {
+        "abs": 1e-14,
+        "rel": 0.0
+      },
+      "compare_mode": "complex_text"
     },
     {
       "id": "imlog2_two_plus_i",

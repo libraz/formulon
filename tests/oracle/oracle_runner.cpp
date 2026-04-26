@@ -174,6 +174,10 @@ std::vector<OracleCase> load_oracle_cases(const std::string& golden_dir) {
           oc.tolerance_rel = r->as_number();
         }
       }
+      if (const JsonValue* cm = c.find("compare_mode");
+          cm && cm->is_string()) {
+        oc.compare_mode = cm->as_string();
+      }
       out.push_back(std::move(oc));
     }
   }
