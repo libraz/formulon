@@ -19,7 +19,6 @@
 
 #include "eval/builtins/complex_num.h"
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -318,30 +317,13 @@ std::string format_complex(double re, double im, char suffix) {
   return out;
 }
 
-// Snaps results that are essentially zero to exact zero before formatting.
-// Many IM* impls arrive at (tiny_epsilon, something) or (something,
-// tiny_epsilon) via polar-form round-trips; without snapping, IMDIV("1+i",
-// "1-i") would render as "6.1E-17+i" instead of the expected "i". The
-// threshold is keyed off the magnitude of the other component so that we
-// never snap a legitimately-small-but-nonzero input.
-void snap_zeros(double* re, double* im) {
-  // Scale threshold by the magnitude of the non-snapped component plus 1
-  // (to handle both very large and very small complex magnitudes). 1e-14
-  // is tight enough to leave real numerical differences visible while
-  // collapsing accumulated floating-point dust.
-  const double scale = std::max({std::fabs(*re), std::fabs(*im), 1.0});
-  const double eps = 1e-14 * scale;
-  if (std::fabs(*re) < eps) {
-    *re = 0.0;
-  }
-  if (std::fabs(*im) < eps) {
-    *im = 0.0;
-  }
-}
-
-// Interns and returns a Text value for a (possibly-snapped) triple.
+// Interns and returns a Text value for the complex triple. We deliberately
+// do not snap tiny-but-nonzero components to zero: Mac Excel 365 surfaces
+// the IEEE residue from polar-form round-trips (e.g. IMSQRT("-1") renders
+// as "6.12E-17+i" rather than "i"), and 1-bit parity requires us to do the
+// same. Algebraic IM* impls that operate on direct real/imag arithmetic
+// (IMDIV, IMPRODUCT, IMSUM, ...) already produce exact zeros without help.
 Value text_complex(Complex z, Arena& arena) {
-  snap_zeros(&z.re, &z.im);
   return Value::text(arena.intern(format_complex(z.re, z.im, z.suffix)));
 }
 

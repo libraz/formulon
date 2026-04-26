@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T02:36:25Z"
+    "generated_at": "2026-04-26T03:41:55Z"
   },
   "tolerance": {
     "abs": 1e-05,
@@ -197,7 +197,10 @@
       "id": "impower_square",
       "formula": "=IMPOWER(\"1+i\",2)",
       "setup": {},
-      "skipped": "(1+i)^2: Excel emits the IEEE residue (1.22e-16+2i); Formulon snaps to 2i. snap_zeros divergence."
+      "expect": {
+        "kind": "text",
+        "value": "1.22464679914735E-16+2i"
+      }
     },
     {
       "id": "imln_one_plus_i",
@@ -416,13 +419,19 @@
       "id": "imsqrt_negative_one",
       "formula": "=IMSQRT(\"-1\")",
       "setup": {},
-      "skipped": "sqrt(-1): Excel emits 6.12e-17+i; Formulon snaps to i."
+      "expect": {
+        "kind": "text",
+        "value": "6.12323399573677E-17+i"
+      }
     },
     {
       "id": "imsqrt_negative_real",
       "formula": "=IMSQRT(\"-4\")",
       "setup": {},
-      "skipped": "sqrt(-4): Excel emits 1.22e-16+2i; Formulon snaps to 2i."
+      "expect": {
+        "kind": "text",
+        "value": "1.22464679914735E-16+2i"
+      }
     },
     {
       "id": "imsqrt_zero",
@@ -491,7 +500,10 @@
       "id": "imexp_pi_i",
       "formula": "=IMEXP(COMPLEX(0, PI()))",
       "setup": {},
-      "skipped": "exp(pi*i): Excel emits -1+3.23e-15i (Euler residue); Formulon snaps to -1."
+      "expect": {
+        "kind": "text",
+        "value": "-1+3.23108914886517E-15i"
+      }
     },
     {
       "id": "imexp_one_plus_i",
