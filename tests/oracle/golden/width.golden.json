@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T02:43:17Z"
+    "generated_at": "2026-04-26T03:37:31Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -53,7 +53,10 @@
       "id": "asc_voiced_vu",
       "formula": "=ASC(\"ヴ\")",
       "setup": {},
-      "skipped": "ASC(ヴ): Mac Excel preserves ヴ; Formulon decomposes to ｳﾞ."
+      "expect": {
+        "kind": "text",
+        "value": "ヴ"
+      }
     },
     {
       "id": "asc_hiragana_passthrough",
@@ -152,7 +155,10 @@
       "id": "asc_yen_sign",
       "formula": "=ASC(\"￥\")",
       "setup": {},
-      "skipped": "ASC(￥): Mac Excel maps to backslash per CP932 convention; Formulon preserves the full-width yen."
+      "expect": {
+        "kind": "text",
+        "value": "\\"
+      }
     },
     {
       "id": "asc_full_voiced_row",

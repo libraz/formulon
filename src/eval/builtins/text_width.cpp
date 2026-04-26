@@ -151,7 +151,7 @@ constexpr std::array<KatakanaMap, 92> kKatakanaFullToHalf = {{
     {0, 0},                 // U+30F1 ヱ (archaic)
     {0xFF66, 0},            // U+30F2 ヲ
     {0xFF9D, 0},            // U+30F3 ン
-    {0xFF73, kDakuten},     // U+30F4 ヴ
+    {0, 0},                 // U+30F4 ヴ (Mac Excel passes through unchanged)
     {0, 0},                 // U+30F5 ヵ (archaic)
     {0, 0},                 // U+30F6 ヶ (archaic)
     {0, 0},                 // U+30F7 ヷ (archaic)
@@ -333,6 +333,11 @@ Value Asc(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
       append_codepoint(out, cp - 0xFEE0);
     } else if (cp == 0x3000) {
       out.push_back(' ');
+    } else if (cp == 0xFFE5) {
+      // Full-width yen sign -> ASCII backslash. Mac Excel ja-JP follows the
+      // CP932 mapping where 0x5C is the yen position; the full-width yen
+      // collapses to U+005C even though a half-width yen U+00A5 also exists.
+      out.push_back('\\');
     } else if (cp >= 0x30A1 && cp <= 0x30FC) {
       const auto& m = kKatakanaFullToHalf[cp - 0x30A1];
       if (m.first == 0) {

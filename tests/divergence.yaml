@@ -781,26 +781,6 @@ entries:
     prefer: formulon
     first_noted: 2026-04-26
 
-  # -- ASC: ja-JP-specific char mappings ---------------------------------
-  # Two cases where Formulon's ASC mapping diverges from Mac Excel:
-  #   * ヴ — Mac preserves as a single full-width character, Formulon
-  #     decomposes into ｳ + ﾞ (the dakuten-decomposition path that's
-  #     correct for the ガ / パ rows but not for ヴ).
-  #   * ￥ — Mac maps the full-width yen sign to ASCII backslash (\),
-  #     reflecting CP932 / JIS X 0208 convention; Formulon preserves the
-  #     character.
-  - id: asc_voiced_vu
-    mode: skip-oracle
-    reason: "ASC(ヴ): Mac Excel preserves ヴ; Formulon decomposes to ｳﾞ."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
-  - id: asc_yen_sign
-    mode: skip-oracle
-    reason: "ASC(￥): Mac Excel maps to backslash per CP932 convention; Formulon preserves the full-width yen."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-
   # -- Pre-existing oracle flake: [Red] colour directive ------------------
   # Mac Excel's read-back through xlwings has been observed to vary
   # between sessions for `=TEXT(5, "[Red]0.00")`: sometimes the cell
