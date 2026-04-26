@@ -275,18 +275,6 @@ entries:
     first_noted: 2026-04-26
     last_verified_excel_version: "16.108.1"
 
-  # -- SUMIF single-cell sum_range extension -------------------------------
-  # Mac Excel SUMIF(criteria_range, criterion, sum_range) extends a
-  # single-cell sum_range to the shape of criteria_range starting at the
-  # given anchor. Formulon currently uses the literal one-cell sum_range
-  # without extension.
-  - id: sumif_sum_range_anchor_only
-    mode: skip-oracle
-    reason: "Mac Excel extends single-cell sum_range to criteria_range shape; Formulon does not. conditional_aggregates.cpp sum_range alignment gap."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
-
   # -- BESSELI: Formulon more accurate than Excel's A&S 9.8.1/9.8.2 -------
   # Excel's BESSELI uses the Abramowitz & Stegun rational polynomial
   # approximations (rated |epsilon| < ~1.9e-7) for I_n(x). Formulon's

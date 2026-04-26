@@ -754,7 +754,10 @@
           "value": 3.0
         }
       },
-      "skipped": "Mac Excel extends single-cell sum_range to criteria_range shape; Formulon does not. conditional_aggregates.cpp sum_range alignment gap."
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
     },
     {
       "id": "averageif_text_only_numeric_criterion",

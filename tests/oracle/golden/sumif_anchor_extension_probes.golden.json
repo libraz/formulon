@@ -1,0 +1,263 @@
+{
+  "suite": "sumif_anchor_extension_probes",
+  "description": "Mac Excel SUMIF / AVERAGEIF extend a single-cell sum_range / average_range to the shape of criteria_range starting at the given anchor. Probe both vertical and horizontal anchors, with and without matches, to pin Mac's exact rule before implementing the alignment fix in conditional_aggregates.cpp.\n",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-26T20:24:20Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "sumif_anchor_vertical",
+      "formula": "=SUMIF(A1:A3, \"x\", B1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "sumif_anchor_horizontal",
+      "formula": "=SUMIF(A1:C1, \"x\", A2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "y"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 40.0
+      }
+    },
+    {
+      "id": "sumif_anchor_offset_column",
+      "formula": "=SUMIF(A1:A3, \"x\", B2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 300.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 400.0
+      }
+    },
+    {
+      "id": "sumif_anchor_no_matches",
+      "formula": "=SUMIF(A1:A3, \"x\", B1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "y"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sumif_anchor_2d_criteria",
+      "formula": "=SUMIF(A1:B2, \"x\", C1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "y"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "averageif_anchor_vertical",
+      "formula": "=AVERAGEIF(A1:A3, \"x\", B1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "sumif_explicit_full_range_baseline",
+      "formula": "=SUMIF(A1:A3, \"x\", B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    }
+  ]
+}

@@ -17,8 +17,10 @@
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/lazy_impls.h"
+#include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
 #include "parser/ast.h"
+#include "parser/reference.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -145,10 +147,17 @@ Value eval_countif_lazy(const parser::AstNode& call, Arena& arena, const Functio
 // provided, `sum_range` must also be a range/Ref; the two are iterated in
 // parallel.
 //
-// Accepted divergence: if `sum_range` has a different cell count than
-// `range`, we iterate `min(range.size(), sum_range.size())` rather than
-// reshaping from the anchor as Excel does. Aligns with the
-// range-vs-direct divergence already documented in `eval_context.cpp`.
+// Single-cell sum_range anchor extension: Mac Excel treats a one-cell
+// `sum_range` Ref as the *top-left anchor* of an implicit rectangle that
+// matches `range`'s shape (rows x cols). For example
+// `=SUMIF(A1:A3, "x", B1)` behaves like `=SUMIF(A1:A3, "x", B1:B3)`. We
+// detect a single-cell-Ref `sum_range` (after LET-name passthrough) and
+// synthesise the corresponding `(lhs, rhs)` Reference pair, then route it
+// through `EvalContext::expand_range` so sheet-qualifier / out-of-bounds /
+// cross-sheet semantics stay identical to a literal `RangeOp` argument.
+// A multi-cell `sum_range` falls through to the existing
+// `min(range.size(), sum_range.size())` clamp path (range-vs-direct
+// divergence documented in `eval_context.cpp`).
 //
 // Matching cells whose sum-side value is not numeric (text, bool, blank)
 // are excluded from the sum. Matches Excel — SUMIF sums only numbers even
@@ -161,7 +170,10 @@ Value eval_sumif_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   }
   std::vector<Value> criteria_cells;
   ErrorCode range_err = ErrorCode::Value;
-  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &criteria_cells, &range_err)) {
+  std::uint32_t crit_rows = 0U;
+  std::uint32_t crit_cols = 0U;
+  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &criteria_cells, &range_err, &crit_rows,
+                         &crit_cols)) {
     return Value::error(range_err);
   }
   // Error criterion is NOT propagated; `parse_criterion` converts it to a
@@ -174,9 +186,35 @@ Value eval_sumif_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   const std::vector<Value>* sum_cells_ptr = nullptr;
   std::vector<Value> explicit_sum_cells;
   if (arity == 3) {
-    ErrorCode sum_err = ErrorCode::Value;
-    if (!resolve_range_arg(call.as_call_arg(2), arena, registry, ctx, &explicit_sum_cells, &sum_err)) {
-      return Value::error(sum_err);
+    // Single-cell-Ref sum_range gets extended to criteria_range's shape
+    // anchored at the Ref. See block comment above for the Mac rule.
+    // LET-binding passthrough mirrors `resolve_range_arg`'s NameRef
+    // handling so `=LET(b, B1, SUMIF(A1:A3,"x",b))` extends identically
+    // to the literal-Ref form.
+    const parser::AstNode& sum_arg_raw = call.as_call_arg(2);
+    const parser::AstNode* sum_arg = &sum_arg_raw;
+    if (sum_arg_raw.kind() == parser::NodeKind::NameRef) {
+      const parser::AstNode& resolved = resolve_name_ast(sum_arg_raw, ctx.name_env());
+      if (&resolved != &sum_arg_raw && resolved.kind() == parser::NodeKind::Ref) {
+        sum_arg = &resolved;
+      }
+    }
+    if (sum_arg->kind() == parser::NodeKind::Ref && (crit_rows > 1U || crit_cols > 1U)) {
+      const parser::Reference& anchor = sum_arg->as_ref();
+      parser::Reference lhs = anchor;
+      parser::Reference rhs = anchor;
+      rhs.row = anchor.row + crit_rows - 1U;
+      rhs.col = anchor.col + crit_cols - 1U;
+      auto expanded = ctx.expand_range(lhs, rhs, arena, registry);
+      if (!expanded) {
+        return Value::error(expanded.error());
+      }
+      explicit_sum_cells = std::move(expanded.value());
+    } else {
+      ErrorCode sum_err = ErrorCode::Value;
+      if (!resolve_range_arg(call.as_call_arg(2), arena, registry, ctx, &explicit_sum_cells, &sum_err)) {
+        return Value::error(sum_err);
+      }
     }
     sum_cells_ptr = &explicit_sum_cells;
   } else {
@@ -212,6 +250,11 @@ Value eval_sumif_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
 // averaging side, or `#DIV/0!` when no matches qualify. Non-numeric
 // matches (text, bool, blank) are excluded from both the numerator and
 // the denominator, matching Excel.
+//
+// Single-cell average_range anchor extension: same Mac rule as
+// `eval_sumif_lazy` — a one-cell `average_range` Ref is extended to
+// `range`'s shape, anchored at the Ref's row/col. See the SUMIF block
+// comment above for details.
 Value eval_averageif_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                           const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -220,7 +263,10 @@ Value eval_averageif_lazy(const parser::AstNode& call, Arena& arena, const Funct
   }
   std::vector<Value> criteria_cells;
   ErrorCode range_err = ErrorCode::Value;
-  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &criteria_cells, &range_err)) {
+  std::uint32_t crit_rows = 0U;
+  std::uint32_t crit_cols = 0U;
+  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &criteria_cells, &range_err, &crit_rows,
+                         &crit_cols)) {
     return Value::error(range_err);
   }
   // Error criterion is NOT propagated; `parse_criterion` converts it to a
@@ -231,9 +277,32 @@ Value eval_averageif_lazy(const parser::AstNode& call, Arena& arena, const Funct
   const std::vector<Value>* avg_cells_ptr = nullptr;
   std::vector<Value> explicit_avg_cells;
   if (arity == 3) {
-    ErrorCode avg_err = ErrorCode::Value;
-    if (!resolve_range_arg(call.as_call_arg(2), arena, registry, ctx, &explicit_avg_cells, &avg_err)) {
-      return Value::error(avg_err);
+    // Single-cell-Ref average_range gets extended to criteria_range's
+    // shape anchored at the Ref. Mirrors `eval_sumif_lazy`.
+    const parser::AstNode& avg_arg_raw = call.as_call_arg(2);
+    const parser::AstNode* avg_arg = &avg_arg_raw;
+    if (avg_arg_raw.kind() == parser::NodeKind::NameRef) {
+      const parser::AstNode& resolved = resolve_name_ast(avg_arg_raw, ctx.name_env());
+      if (&resolved != &avg_arg_raw && resolved.kind() == parser::NodeKind::Ref) {
+        avg_arg = &resolved;
+      }
+    }
+    if (avg_arg->kind() == parser::NodeKind::Ref && (crit_rows > 1U || crit_cols > 1U)) {
+      const parser::Reference& anchor = avg_arg->as_ref();
+      parser::Reference lhs = anchor;
+      parser::Reference rhs = anchor;
+      rhs.row = anchor.row + crit_rows - 1U;
+      rhs.col = anchor.col + crit_cols - 1U;
+      auto expanded = ctx.expand_range(lhs, rhs, arena, registry);
+      if (!expanded) {
+        return Value::error(expanded.error());
+      }
+      explicit_avg_cells = std::move(expanded.value());
+    } else {
+      ErrorCode avg_err = ErrorCode::Value;
+      if (!resolve_range_arg(call.as_call_arg(2), arena, registry, ctx, &explicit_avg_cells, &avg_err)) {
+        return Value::error(avg_err);
+      }
     }
     avg_cells_ptr = &explicit_avg_cells;
   } else {

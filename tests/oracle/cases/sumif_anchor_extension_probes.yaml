@@ -1,0 +1,44 @@
+suite: sumif_anchor_extension_probes
+description: >
+  Mac Excel SUMIF / AVERAGEIF extend a single-cell sum_range /
+  average_range to the shape of criteria_range starting at the given
+  anchor. Probe both vertical and horizontal anchors, with and without
+  matches, to pin Mac's exact rule before implementing the alignment
+  fix in conditional_aggregates.cpp.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: sumif_anchor_vertical
+    description: "SUMIF(A1:A3,'x',B1) -- B1 extends to B1:B3, sums where A=x -> 1+3 = 4"
+    setup: { A1: "x", A2: "y", A3: "x", B1: 1, B2: 2, B3: 3 }
+    formula: "=SUMIF(A1:A3, \"x\", B1)"
+
+  - id: sumif_anchor_horizontal
+    description: "SUMIF(A1:C1,'x',A2) -- A2 extends to A2:C2, sums where row1=x -> 10+30 = 40"
+    setup: { A1: "x", B1: "y", C1: "x", A2: 10, B2: 20, C2: 30 }
+    formula: "=SUMIF(A1:C1, \"x\", A2)"
+
+  - id: sumif_anchor_offset_column
+    description: "Anchor B2 with criteria A1:A3 -- extends to B2:B4 (same shape, offset)"
+    setup: { A1: "x", A2: "y", A3: "x", B2: 100, B3: 200, B4: 300 }
+    formula: "=SUMIF(A1:A3, \"x\", B2)"
+
+  - id: sumif_anchor_no_matches
+    description: "Single-cell anchor, criteria has no matches -> 0"
+    setup: { A1: "y", A2: "y", A3: "y", B1: 1, B2: 2, B3: 3 }
+    formula: "=SUMIF(A1:A3, \"x\", B1)"
+
+  - id: sumif_anchor_2d_criteria
+    description: "Criteria is 2x2 block A1:B2; anchor C1 extends to C1:D2 -> 10+30 (positions (0,0) and (1,0)) = 40"
+    setup: { A1: "x", B1: "y", A2: "y", B2: "x", C1: 10, D1: 20, C2: 30, D2: 40 }
+    formula: "=SUMIF(A1:B2, \"x\", C1)"
+
+  - id: averageif_anchor_vertical
+    description: "AVERAGEIF anchor-extension parity check: avg of B1, B3 where A=x -> (1+3)/2 = 2"
+    setup: { A1: "x", A2: "y", A3: "x", B1: 1, B2: 2, B3: 3 }
+    formula: "=AVERAGEIF(A1:A3, \"x\", B1)"
+
+  - id: sumif_explicit_full_range_baseline
+    description: "Baseline: explicit B1:B3 instead of single-cell B1 -- both should sum to 4"
+    setup: { A1: "x", A2: "y", A3: "x", B1: 1, B2: 2, B3: 3 }
+    formula: "=SUMIF(A1:A3, \"x\", B1:B3)"
