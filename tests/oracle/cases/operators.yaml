@@ -155,3 +155,134 @@ cases:
   - id: error_leftmost_wins
     description: "Left-most error wins: #DIV/0! beats #N/A"
     formula: "=1/0+NA()"
+
+  # =========================================================================
+  # Expanded probes: blank-cell coercion, bool ordering, mixed-type
+  # comparison, range/scalar implicit intersection in operators, overflow.
+  # =========================================================================
+
+  # -- Blank cell coercion in arithmetic / concat / compare ---------------
+  - id: blank_cell_plus_number
+    description: "=A1+5 where A1 is blank -> 5"
+    setup: {}
+    formula: "=A1+5"
+
+  - id: blank_cell_times_number
+    description: "Blank cell coerces to 0 in arithmetic"
+    setup: {}
+    formula: "=A1*5"
+
+  - id: blank_cell_concat_text
+    description: "=A1&\"x\" where A1 is blank -> \"x\""
+    setup: {}
+    formula: "=A1&\"x\""
+
+  - id: blank_cell_eq_zero
+    description: "Blank cell == 0 in equality"
+    setup: {}
+    formula: "=A1=0"
+
+  - id: blank_cell_eq_empty_string
+    description: "Blank cell == \"\" in equality"
+    setup: {}
+    formula: "=A1=\"\""
+
+  - id: blank_cell_lt_zero
+    description: "Blank cell < 0 — Excel: FALSE (blank coerces to 0 here)"
+    setup: {}
+    formula: "=A1<0"
+
+  # -- Bool ordering rules: TRUE > any text > any number ------------------
+  - id: cmp_true_gt_text
+    description: "Boolean TRUE > any text in mixed-type ordering"
+    formula: "=TRUE>\"zzz\""
+
+  - id: cmp_true_gt_number
+    description: "Boolean TRUE > any finite number in Excel ordering"
+    formula: "=TRUE>1E300"
+
+  - id: cmp_text_gt_number
+    description: "Any text > any number in Excel ordering"
+    formula: "=\"a\">1E300"
+
+  - id: cmp_false_gt_zero
+    description: "FALSE > 0 because FALSE is in the bool tier above numeric"
+    formula: "=FALSE>0"
+
+  # -- Mixed-type equality ------------------------------------------------
+  - id: cmp_text_number_eq_is_false
+    description: "\"5\" = 5 -> FALSE (Excel: text and number are different types)"
+    formula: "=\"5\"=5"
+
+  - id: cmp_numeric_text_lt_number
+    description: "\"5\" < 5 -> FALSE because text is in higher tier than number"
+    formula: "=\"5\"<5"
+
+  # -- Negative zero ------------------------------------------------------
+  - id: cmp_neg_zero_eq_zero
+    description: "-0 == 0 in IEEE; Excel agrees"
+    formula: "=-0=0"
+
+  - id: cmp_neg_zero_text_eq_text_zero
+    description: "TEXT(-0,\"0\") rendering — does Mac Excel emit \"0\" or \"-0\"?"
+    formula: "=TEXT(-0,\"0\")"
+
+  # -- Percent compounding ------------------------------------------------
+  - id: percent_compounded
+    description: "100%% -> 1; the unary % stacks"
+    formula: "=100%%"
+
+  - id: percent_after_arithmetic
+    description: "Excel parses 5+10% as 5 + (10%) = 5.1"
+    formula: "=5+10%"
+
+  # -- Power operator edges -----------------------------------------------
+  - id: power_zero_to_zero
+    description: "0^0 — IEEE returns 1; Excel agrees"
+    formula: "=0^0"
+
+  - id: power_negative_base_fractional_exp
+    description: "(-2)^0.5 — non-real result; Excel: #NUM!"
+    formula: "=(-2)^0.5"
+
+  - id: power_overflow
+    description: "10^309 overflows IEEE -> #NUM!"
+    formula: "=10^309"
+
+  # -- Date / serial arithmetic ------------------------------------------
+  - id: date_string_plus_number
+    description: "\"2024-01-01\"+1 — Excel coerces text-as-date and adds; result is the next-day serial"
+    formula: "=\"2024-01-01\"+1"
+
+  - id: time_string_times_number
+    description: "\"01:00\"*24 -> 1.0 (1 hour *24 = 1 day)"
+    formula: "=\"01:00\"*24"
+
+  # -- Concat with error / bool ------------------------------------------
+  - id: concat_error_propagates
+    description: "Error on left of & propagates"
+    formula: "=#REF!&\"x\""
+
+  - id: concat_bool_to_text
+    description: "TRUE & \"x\" -> \"TRUEx\""
+    formula: "=TRUE&\"x\""
+
+  # -- Implicit intersection / range as operand --------------------------
+  - id: range_plus_scalar_at_aligned_row
+    description: "=A1:A3+10 at Z1: spill anchor at A1 (row 1 in range), result 11"
+    setup: { A1: 1, A2: 2, A3: 3 }
+    formula: "=A1:A3+10"
+
+  - id: range_plus_scalar_at_excluded_row
+    description: "=A3:A8+10 at Z1: row 1 excluded; spill anchor reads A3+10=13"
+    setup: { A3: 3, A4: 4, A5: 5 }
+    formula: "=A3:A8+10"
+
+  # -- Floating-point edges -----------------------------------------------
+  - id: tiny_subnormal_arithmetic
+    description: "1e-308 / 1e10 — denormals collapse to 0 in some IEEE configs"
+    formula: "=1E-308/1E10"
+
+  - id: very_large_minus_self_is_zero
+    description: "1e15 - 1e15 = 0 cleanly"
+    formula: "=1E15-1E15"
