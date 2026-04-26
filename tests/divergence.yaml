@@ -517,33 +517,6 @@ entries:
     prefer: mac-excel-365
     first_noted: 2026-04-26
 
-  # -- XNPV / XIRR: input-validation strictness gaps ----------------------
-  # Mac Excel 365 rejects three scenarios that Formulon's solver
-  # currently handles with a numeric result. All three are valid as pure
-  # math but Mac Excel treats them as input errors:
-  #   * XNPV with rate = 0 (mathematically just sum(values))
-  #   * XNPV with unsorted dates (first date not the earliest)
-  #   * XIRR with extreme negative guess that drives Newton-Raphson out
-  #     of the well-defined region
-  # The fix in Formulon would tighten the input checks in
-  # `src/eval/builtins/financial_xirr_xnpv.cpp`.
-  - id: xnpv_zero_rate
-    mode: skip-oracle
-    reason: "XNPV(0, ...) — Mac Excel: #NUM!, Formulon: sum(values) by linearity. Mac quirk."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
-  - id: xnpv_first_date_after_others_is_num
-    mode: skip-oracle
-    reason: "XNPV unsorted dates: Excel #NUM!; Formulon does not enforce sort order."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-  - id: xirr_negative_guess
-    mode: skip-oracle
-    reason: "XIRR with extreme negative guess (-0.5): Excel #NUM!; Formulon's Newton-Raphson still converges to 0.373."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-
   # -- LET: range bindings flatten to scalar ------------------------------
   # `=LET(r, A1:A3, SUM(r))` should produce 60 (sum of the bound range)
   # but Formulon evaluates the binding once and stores it as a Value
@@ -583,44 +556,6 @@ entries:
     reason: "LET ja-JP identifier (りんご) rejected as #NAME?; Excel accepts."
     prefer: mac-excel-365
     first_noted: 2026-04-26
-
-  # -- ACCRINT: calc_method=FALSE first-interest semantics ---------------
-  # Per the MS docs, `calc_method=FALSE` accrues from `first_interest` to
-  # `settlement`. Mac Excel actually appears to use `issue -> settlement`
-  # regardless: with issue=2008-03-01 / first_interest=2008-05-01 /
-  # settlement=2008-08-31, Excel returns 50.0 (= par * rate * 0.5y =
-  # the issue-to-settlement period under 30/360), where Formulon's
-  # 33.33 matches the documented first-interest-to-settlement period.
-  # Mac quirk that Formulon should mirror for 1-bit parity.
-  - id: accrint_calc_method_false_first_interest
-    mode: skip-oracle
-    reason: "Mac Excel ignores calc_method=FALSE for the period start; uses issue->settlement (50.0). Formulon: 33.33 (first_interest->settlement)."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
-
-  # -- VDB: input-validation gaps -----------------------------------------
-  # Mac Excel is more permissive than expected; the `_is_num` suffix on
-  # these probes reflects the original (incorrect) hypothesis. Excel
-  # actually computes a number in each scenario:
-  #   * start_period == end_period: returns 0 (degenerate but valid)
-  #   * factor == 0: returns 0 (no depreciation)
-  #   * salvage > cost: returns the depreciable difference (negative)
-  # Formulon rejects all three with #NUM!. The fix is to relax the
-  # input checks in `src/eval/builtins/financial_depreciation.cpp::Vdb`.
-  - id: vdb_start_period_gte_end_is_num
-    mode: skip-oracle
-    reason: "VDB start_period == end_period: Excel returns 0; Formulon: #NUM!."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-  - id: vdb_factor_zero_is_num
-    mode: skip-oracle
-    reason: "VDB factor=0: Excel returns 0; Formulon: #NUM!."
-    prefer: mac-excel-365
-  - id: vdb_salvage_gt_cost_is_num
-    mode: skip-oracle
-    reason: "VDB salvage > cost: Excel returns negative depreciation (-2100); Formulon: #NUM!."
-    prefer: mac-excel-365
 
   # -- Complex IMCSC: 1-ULP precision in last decimal --------------------
   # IMCSC(1+i): Excel ...0.303931001628427i, Formulon ...0.303931001628426i.

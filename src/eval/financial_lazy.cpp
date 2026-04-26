@@ -567,6 +567,19 @@ bool collect_xpairs(XFinKind which, const parser::AstNode& values_arg, const par
       return false;
     }
   }
+  // Mac Excel requires the first date in an XNPV schedule to be the
+  // earliest. XIRR is order-agnostic because it root-finds, but XNPV
+  // anchors all discount factors at dates[0] and rejects any later
+  // entry that precedes it.
+  if (which == XFinKind::Xnpv && !pairs.empty()) {
+    const double anchor = pairs.front().first;
+    for (std::size_t i = 1; i < pairs.size(); ++i) {
+      if (pairs[i].first < anchor) {
+        *out_err = Value::error(ErrorCode::Num);
+        return false;
+      }
+    }
+  }
   // Sort by date ascending. Stable-sort keeps the original row order
   // for same-day entries, which matches Excel's behaviour when two
   // cash flows share a serial.
@@ -780,7 +793,10 @@ Value eval_xirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
       guess = coerced.value();
     }
   }
-  if (guess <= -1.0) {
+  // Mac Excel rejects any negative guess; Newton-Raphson would still
+  // converge from there, but Excel treats negative guesses as an input
+  // error (e.g. =XIRR(v, d, -0.5) -> #NUM!).
+  if (guess < 0.0) {
     return Value::error(ErrorCode::Num);
   }
 
@@ -818,10 +834,10 @@ Value eval_xnpv_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (!rate) {
     return Value::error(rate.error());
   }
-  // Excel / IronCalc reject any negative rate for XNPV. rate == 0 is
-  // still allowed — the discount factors collapse to 1 and the sum
-  // degenerates to the undiscounted total, which is well-defined.
-  if (rate.value() < 0.0) {
+  // Mac Excel 365 rejects rate <= 0 outright. Mathematically rate == 0
+  // would just collapse XNPV to sum(values), but Excel treats it as an
+  // input error so we mirror that for 1-bit parity.
+  if (rate.value() <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
 

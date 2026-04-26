@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T01:53:41Z"
+    "generated_at": "2026-04-26T03:55:19Z"
   },
   "tolerance": {
     "abs": 0.001,
@@ -108,7 +108,10 @@
           "value": 39904.0
         }
       },
-      "skipped": "XNPV(0, ...) — Mac Excel: #NUM!, Formulon: sum(values) by linearity. Mac quirk."
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
     },
     {
       "id": "xnpv_rate_minus_one_is_num",
@@ -399,7 +402,10 @@
           "value": 39448.0
         }
       },
-      "skipped": "XNPV unsorted dates: Excel #NUM!; Formulon does not enforce sort order."
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
     },
     {
       "id": "xnpv_blank_in_values_is_zero",
@@ -544,7 +550,10 @@
           "value": 39904.0
         }
       },
-      "skipped": "XIRR with extreme negative guess (-0.5): Excel #NUM!; Formulon's Newton-Raphson still converges to 0.373."
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
     },
     {
       "id": "xirr_extreme_guess",

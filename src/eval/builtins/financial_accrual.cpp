@@ -185,14 +185,15 @@ Value Accrint(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (freq != 1 && freq != 2 && freq != 4) {
     return Value::error(ErrorCode::Num);
   }
-  // calc_method=TRUE  -> accrue from `issue` to `settlement` (the default).
-  // calc_method=FALSE -> accrue from `first_interest` to `settlement` when
-  //                     `settlement > first_interest`, otherwise from
-  //                     `issue` to `settlement`.
-  double start = issue.value();
-  if (!calc_method.value() && settlement.value() > first_interest.value()) {
-    start = first_interest.value();
-  }
+  // Mac Excel 365 always accrues from `issue` to `settlement`, ignoring
+  // both `first_interest` and `calc_method`. The MS docs say
+  // calc_method=FALSE should switch to first_interest, but the actual
+  // Mac Excel build (16.108.1, ja-JP) does not — for 1-bit parity we
+  // mirror the observable behaviour rather than the docs. The
+  // calc_method argument is still validated for type correctness above.
+  (void)calc_method;
+  (void)first_interest;
+  const double start = issue.value();
   auto yf = yearfrac_accrual(start, settlement.value(), basis.value());
   if (!yf) {
     return Value::error(yf.error());

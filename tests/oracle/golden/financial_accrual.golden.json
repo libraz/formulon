@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T02:12:32Z"
+    "generated_at": "2026-04-26T03:55:40Z"
   },
   "tolerance": {
     "abs": 0.001,
@@ -35,7 +35,10 @@
       "id": "accrint_calc_method_false_first_interest",
       "formula": "=ACCRINT(DATE(2008,3,1), DATE(2008,5,1), DATE(2008,8,31), 0.1, 1000, 2, 0, FALSE)",
       "setup": {},
-      "skipped": "Mac Excel ignores calc_method=FALSE for the period start; uses issue->settlement (50.0). Formulon: 33.33 (first_interest->settlement)."
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
     },
     {
       "id": "accrintm_ms_doc",
@@ -275,19 +278,28 @@
       "id": "vdb_start_period_gte_end_is_num",
       "formula": "=VDB(2400, 300, 10, 5, 5, 2, FALSE)",
       "setup": {},
-      "skipped": "VDB start_period == end_period: Excel returns 0; Formulon: #NUM!."
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
     },
     {
       "id": "vdb_factor_zero_is_num",
       "formula": "=VDB(2400, 300, 10, 0, 5, 0, FALSE)",
       "setup": {},
-      "skipped": "VDB factor=0: Excel returns 0; Formulon: #NUM!."
+      "expect": {
+        "kind": "number",
+        "value": 1050.0
+      }
     },
     {
       "id": "vdb_salvage_gt_cost_is_num",
       "formula": "=VDB(300, 2400, 10, 0, 5, 2, FALSE)",
       "setup": {},
-      "skipped": "VDB salvage > cost: Excel returns negative depreciation (-2100); Formulon: #NUM!."
+      "expect": {
+        "kind": "number",
+        "value": -2100.0
+      }
     },
     {
       "id": "amordegrc_zero_rate_is_num",

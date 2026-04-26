@@ -483,12 +483,18 @@ Value Vdb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const double end_period = end_e.value();
   const double factor = factor_e.value();
   const bool no_switch = no_switch_e.value() != 0.0;
-  if (cost < 0.0 || salvage < 0.0 || life <= 0.0 || factor <= 0.0) {
+  if (cost < 0.0 || salvage < 0.0 || life <= 0.0 || factor < 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  if (start_period < 0.0 || start_period >= end_period || end_period > life) {
+  if (start_period < 0.0 || start_period > end_period || end_period > life) {
     return Value::error(ErrorCode::Num);
   }
+  // start_period == end_period is a zero-length interval: every
+  // segment-clip below produces seg_hi - seg_lo == 0, so the loop
+  // contributes nothing and `accumulated` stays at 0. factor == 0
+  // means no declining-balance acceleration; under no_switch=FALSE
+  // the SL switch picks up immediately and matches Mac Excel's
+  // observed result.
 
   // Walk integer periods 1..ceil(end_period), maintaining the running
   // book value. Each integer period `t` covers the half-open segment
@@ -524,13 +530,13 @@ Value Vdb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
         }
       }
     }
-    // Salvage floor: never depreciate below salvage.
+    // Salvage floor: depreciation drives book toward salvage, never
+    // past it. When salvage > cost the cap is negative and the first
+    // period's depreciation comes out negative — Mac Excel surfaces
+    // that as appreciation rather than #NUM!.
     const double cap = book - salvage;
     if (dep > cap) {
       dep = cap;
-    }
-    if (dep < 0.0) {
-      dep = 0.0;
     }
 
     // Clip integer-period segment (t-1, t] to [start_period, end_period].
@@ -541,7 +547,7 @@ Value Vdb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     }
     book -= dep;
     if (book <= salvage) {
-      // No further depreciation possible; remaining periods contribute 0.
+      // Book has converged to salvage; no further depreciation possible.
       break;
     }
   }
