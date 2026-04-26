@@ -199,7 +199,7 @@ bool is_voicing_base(std::uint32_t full_cp) {
 
 }  // namespace
 
-std::string fold_jp_text(std::string_view input, bool fold_fullwidth_digits) {
+std::string fold_jp_text(std::string_view input, bool fold_fullwidth_digits, bool fold_halfwidth_kana) {
   std::string out;
   out.reserve(input.size());
   std::size_t i = 0;
@@ -238,8 +238,13 @@ std::string fold_jp_text(std::string_view input, bool fold_fullwidth_digits) {
     }
 
     // Half-width katakana U+FF61..U+FF9D: map to full-width, optionally
-    // composing a trailing ﾞ / ﾟ from the next codepoint.
-    if (cp >= 0xFF61u && cp <= 0xFF9Du) {
+    // composing a trailing ﾞ / ﾟ from the next codepoint. D-function
+    // header callers pass `fold_halfwidth_kana = false`, in which case
+    // we suppress the entire branch — including the voicing-mark
+    // composition — so that `ｶﾞ` stays as the two-codepoint sequence
+    // FF76 FF9E and does not compose to ガ. See header for the Mac Excel
+    // empirical asymmetry that motivates this.
+    if (fold_halfwidth_kana && cp >= 0xFF61u && cp <= 0xFF9Du) {
       std::uint32_t base = kHalfToFullKana[cp - 0xFF61u];
       if (is_voicing_base(base) && i + n < input.size()) {
         std::size_t n2 = 0;
@@ -265,13 +270,16 @@ std::string fold_jp_text(std::string_view input, bool fold_fullwidth_digits) {
 
     // Standalone half-width voicing marks (no composable base preceded
     // them). Mac Excel ja-JP normalises these to the spacing combining
-    // marks U+309B (゛) and U+309C (゜).
-    if (cp == 0xFF9Eu) {
+    // marks U+309B (゛) and U+309C (゜) — but only when half-width kana
+    // folding is enabled. The D-function header path passes
+    // `fold_halfwidth_kana = false`, in which case the marks pass through
+    // unchanged so the comparison sees the raw FF9E / FF9F bytes.
+    if (fold_halfwidth_kana && cp == 0xFF9Eu) {
       encode_utf8(0x309Bu, &out);
       i += n;
       continue;
     }
-    if (cp == 0xFF9Fu) {
+    if (fold_halfwidth_kana && cp == 0xFF9Fu) {
       encode_utf8(0x309Cu, &out);
       i += n;
       continue;

@@ -1,0 +1,461 @@
+{
+  "suite": "dfunc_kana_folding_probes",
+  "description": "Mac Excel ja-JP D-functions (DSUM/DCOUNT/DGET/DAVERAGE/DMAX/DMIN) flow criterion text-equality through the same matcher that COUNTIF uses, so the kana fold from criteria.cpp should already cover the criterion-cell side. What is unverified is whether Mac also folds on the two header paths: (1) the `field` text argument resolved against database headers in resolve_field_column, and (2) the criteria-block header row resolved against database headers in find_db_column. These probes pin Mac's behaviour empirically before deciding whether database_lazy.cpp needs the same fold.\n",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-26T22:50:44Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "dsum_criterion_hira_eq_kata",
+      "formula": "=DSUM(A1:B4, \"売上\", D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "フルーツ"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "売上"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "アップル"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "アップル"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "ばなな"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "フルーツ"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "あっぷる"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 300.0
+      }
+    },
+    {
+      "id": "dcount_criterion_halfwidth_eq_fullwidth",
+      "formula": "=DCOUNT(A1:B4, \"売上\", D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "フルーツ"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "売上"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "アップル"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "アップル"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "ばなな"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "フルーツ"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "ｱｯﾌﾟﾙ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "dget_criterion_voiced_compose",
+      "formula": "=DGET(A1:B3, \"値\", D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "種別"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "値"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ガ"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ギ"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "種別"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "ｶﾞ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "dsum_field_arg_hira_vs_kata_header",
+      "formula": "=DSUM(A1:B3, \"ふるーつ\", D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "フルーツ"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "売上"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "アップル"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "アップル"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "フルーツ"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "アップル"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "dsum_field_arg_halfwidth_vs_fullwidth_header",
+      "formula": "=DSUM(A1:B3, \"ｳﾘｱｹﾞ\", D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "フルーツ"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "売上"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "アップル"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "アップル"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "フルーツ"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "アップル"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "dsum_field_arg_fullwidth_latin_vs_ascii_header",
+      "formula": "=DSUM(A1:B3, \"ＳＡＬＥＳ\", D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 300.0
+      }
+    },
+    {
+      "id": "dsum_field_arg_fullwidth_digits_vs_ascii_header",
+      "formula": "=DSUM(A1:B3, \"１\", D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "1"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "1"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "dsum_criteria_header_hira_vs_kata_db_header",
+      "formula": "=DSUM(A1:B4, \"売上\", D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "フルーツ"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "売上"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "アップル"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "アップル"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "ばなな"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "ふるーつ"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "アップル"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 300.0
+      }
+    },
+    {
+      "id": "dsum_criteria_header_halfwidth_vs_fullwidth_db_header",
+      "formula": "=DSUM(A1:B3, \"売上\", D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "フルーツ"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "売上"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "アップル"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "アップル"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "ﾌﾙｰﾂ"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "アップル"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "dsum_criteria_header_fullwidth_latin_vs_ascii_db_header",
+      "formula": "=DSUM(A1:B3, \"Sales\", D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "ＦＲＵＩＴ"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 300.0
+      }
+    }
+  ]
+}

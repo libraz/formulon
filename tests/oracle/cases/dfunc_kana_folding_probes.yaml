@@ -1,0 +1,169 @@
+suite: dfunc_kana_folding_probes
+description: >
+  Mac Excel ja-JP D-functions (DSUM/DCOUNT/DGET/DAVERAGE/DMAX/DMIN) flow
+  criterion text-equality through the same matcher that COUNTIF uses, so
+  the kana fold from criteria.cpp should already cover the criterion-cell
+  side. What is unverified is whether Mac also folds on the two header
+  paths: (1) the `field` text argument resolved against database headers
+  in resolve_field_column, and (2) the criteria-block header row resolved
+  against database headers in find_db_column. These probes pin Mac's
+  behaviour empirically before deciding whether database_lazy.cpp needs
+  the same fold.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  # ---------------------------------------------------------------------
+  # Criterion-value folding (already covered by criteria.cpp fold; these
+  # are guard rails to catch regressions if the criteria.cpp path ever
+  # diverges from the D-function caller's expectations).
+  # Database:
+  #   A1=フルーツ B1=売上
+  #   A2=アップル B2=100
+  #   A3=アップル B3=200
+  #   A4=ばなな   B4=50
+  # Criteria header always exact-match to db header.
+  # ---------------------------------------------------------------------
+  - id: dsum_criterion_hira_eq_kata
+    description: "Criterion 'あっぷる' (hira) sums katakana 'アップル' rows -> 100+200 = 300"
+    setup:
+      A1: "フルーツ"
+      B1: "売上"
+      A2: "アップル"
+      B2: 100
+      A3: "アップル"
+      B3: 200
+      A4: "ばなな"
+      B4: 50
+      D1: "フルーツ"
+      D2: "あっぷる"
+    formula: '=DSUM(A1:B4, "売上", D1:D2)'
+
+  - id: dcount_criterion_halfwidth_eq_fullwidth
+    description: "Criterion 'ｱｯﾌﾟﾙ' (half-width) counts full-width 'アップル' rows -> 2"
+    setup:
+      A1: "フルーツ"
+      B1: "売上"
+      A2: "アップル"
+      B2: 100
+      A3: "アップル"
+      B3: 200
+      A4: "ばなな"
+      B4: 50
+      D1: "フルーツ"
+      D2: "ｱｯﾌﾟﾙ"
+    formula: '=DCOUNT(A1:B4, "売上", D1:D2)'
+
+  - id: dget_criterion_voiced_compose
+    description: "Criterion 'ｶﾞ' (half-width voiced) finds full-width 'ガ' single row"
+    setup:
+      A1: "種別"
+      B1: "値"
+      A2: "ガ"
+      B2: 42
+      A3: "ギ"
+      B3: 99
+      D1: "種別"
+      D2: "ｶﾞ"
+    formula: '=DGET(A1:B3, "値", D1:D2)'
+
+  # ---------------------------------------------------------------------
+  # Field-argument header folding (resolve_field_column path).
+  # Database header 'フルーツ' (kata) — does the DSUM field arg "ふるーつ"
+  # (hira) resolve to the same column?
+  # ---------------------------------------------------------------------
+  - id: dsum_field_arg_hira_vs_kata_header
+    description: "field='ふるーつ' (hira) vs db header 'フルーツ' (kata) — does Mac fold?"
+    setup:
+      A1: "フルーツ"
+      B1: "売上"
+      A2: "アップル"
+      B2: 100
+      A3: "アップル"
+      B3: 200
+      D1: "フルーツ"
+      D2: "アップル"
+    formula: '=DSUM(A1:B3, "ふるーつ", D1:D2)'
+
+  - id: dsum_field_arg_halfwidth_vs_fullwidth_header
+    description: "field='ｳﾘｱｹﾞ' (half-width) vs db header '売上' — fold not applicable to kanji; expect Mac to use this column only if it folds via some other path"
+    setup:
+      A1: "フルーツ"
+      B1: "売上"
+      A2: "アップル"
+      B2: 100
+      A3: "アップル"
+      B3: 200
+      D1: "フルーツ"
+      D2: "アップル"
+    formula: '=DSUM(A1:B3, "ｳﾘｱｹﾞ", D1:D2)'
+
+  - id: dsum_field_arg_fullwidth_latin_vs_ascii_header
+    description: "field='ＳＡＬＥＳ' (full-width Latin) vs db header 'Sales' — does Mac fold?"
+    setup:
+      A1: "Fruit"
+      B1: "Sales"
+      A2: "Apple"
+      B2: 100
+      A3: "Apple"
+      B3: 200
+      D1: "Fruit"
+      D2: "Apple"
+    formula: '=DSUM(A1:B3, "ＳＡＬＥＳ", D1:D2)'
+
+  - id: dsum_field_arg_fullwidth_digits_vs_ascii_header
+    description: "field='１' (full-width digit text) vs db header '1' — does Mac fold for digit-text headers? (orthogonal to numeric-index path)"
+    setup:
+      A1: "1"
+      B1: "Sales"
+      A2: "Apple"
+      B2: 100
+      A3: "Apple"
+      B3: 200
+      D1: "1"
+      D2: "Apple"
+    formula: '=DSUM(A1:B3, "１", D1:D2)'
+
+  # ---------------------------------------------------------------------
+  # Criteria-block header folding (find_db_column path).
+  # Same database, but criteria header is hira while db header is kata.
+  # ---------------------------------------------------------------------
+  - id: dsum_criteria_header_hira_vs_kata_db_header
+    description: "criteria header 'ふるーつ' (hira) vs db header 'フルーツ' (kata) — does Mac fold?"
+    setup:
+      A1: "フルーツ"
+      B1: "売上"
+      A2: "アップル"
+      B2: 100
+      A3: "アップル"
+      B3: 200
+      A4: "ばなな"
+      B4: 50
+      D1: "ふるーつ"
+      D2: "アップル"
+    formula: '=DSUM(A1:B4, "売上", D1:D2)'
+
+  - id: dsum_criteria_header_halfwidth_vs_fullwidth_db_header
+    description: "criteria header 'ﾌﾙｰﾂ' (half-width) vs db header 'フルーツ' (full-width) — does Mac fold?"
+    setup:
+      A1: "フルーツ"
+      B1: "売上"
+      A2: "アップル"
+      B2: 100
+      A3: "アップル"
+      B3: 200
+      D1: "ﾌﾙｰﾂ"
+      D2: "アップル"
+    formula: '=DSUM(A1:B3, "売上", D1:D2)'
+
+  - id: dsum_criteria_header_fullwidth_latin_vs_ascii_db_header
+    description: "criteria header 'ＦＲＵＩＴ' (full-width Latin) vs db header 'Fruit' — does Mac fold?"
+    setup:
+      A1: "Fruit"
+      B1: "Sales"
+      A2: "Apple"
+      B2: 100
+      A3: "Apple"
+      B3: 200
+      D1: "ＦＲＵＩＴ"
+      D2: "Apple"
+    formula: '=DSUM(A1:B3, "Sales", D1:D2)'

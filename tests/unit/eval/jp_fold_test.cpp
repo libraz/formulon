@@ -108,6 +108,52 @@ TEST(JpFold, NonJpCodepointsPassThrough) {
   EXPECT_EQ(fold_jp_text("\xF0\x9F\x98\x80"), "\xF0\x9F\x98\x80");
 }
 
+// `fold_halfwidth_kana = false` covers the D-function header path
+// (DSUM / DCOUNT / DGET / etc.). Mac Excel deliberately leaves
+// half-width katakana — including the FF9E / FF9F voicing-mark
+// composition — unfolded when resolving the `field` argument or a
+// criteria-block header against the database header row, even though it
+// folds them in COUNTIF cell-vs-criterion comparisons.
+
+TEST(JpFold, HalfWidthKanaNoFoldPassThrough) {
+  // ﾌﾙｰﾂ (FF8C FF99 FF70 FF82) must pass through byte-for-byte under the
+  // D-function header rule; the corresponding default-mode result would
+  // fold to フルーツ (U+30D5 U+30EB U+30FC U+30C4).
+  EXPECT_EQ(fold_jp_text("\xEF\xBE\x8C\xEF\xBE\x99\xEF\xBD\xB0\xEF\xBE\x82",
+                         /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false),
+            "\xEF\xBE\x8C\xEF\xBE\x99\xEF\xBD\xB0\xEF\xBE\x82");
+}
+
+TEST(JpFold, HalfWidthVoicingNoCompose) {
+  // ｶﾞ (FF76 FF9E) must NOT compose to ガ (U+30AC); both codepoints pass
+  // through unchanged so the D-function header comparison sees the raw
+  // two-codepoint sequence.
+  EXPECT_EQ(fold_jp_text("\xEF\xBD\xB6\xEF\xBE\x9E",
+                         /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false),
+            "\xEF\xBD\xB6\xEF\xBE\x9E");
+  // Standalone FF9F also passes through unchanged (default mode would
+  // map to U+309C ゜).
+  EXPECT_EQ(fold_jp_text("\xEF\xBE\x9F",
+                         /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false),
+            "\xEF\xBE\x9F");
+}
+
+TEST(JpFold, HiraAndFullWidthLatinStillFoldUnderHalfKanaDisabled) {
+  // ふるーつ (U+3075 U+308B U+30FC U+3064) -> フルーツ (U+30D5 U+30EB
+  // U+30FC U+30C4); ＦＲＵＩＴ (U+FF26 U+FF32 U+FF35 U+FF29 U+FF34) ->
+  // FRUIT. Neither rule depends on `fold_halfwidth_kana`, so they must
+  // still apply under the D-function header asymmetric mode.
+  EXPECT_EQ(fold_jp_text("\xE3\x81\xB5\xE3\x82\x8B\xE3\x83\xBC\xE3\x81\xA4\xEF\xBC\xA6\xEF\xBC\xB2\xEF\xBC\xB5\xEF\xBC"
+                         "\xA9\xEF\xBC\xB4",
+                         /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false),
+            "\xE3\x83\x95\xE3\x83\xAB\xE3\x83\xBC\xE3\x83\x84"
+            "FRUIT");
+  // Full-width digit text ('１', U+FF11) still folds to ASCII '1' under
+  // the asymmetric mode; this is the rule the D-function field-arg path
+  // relies on.
+  EXPECT_EQ(fold_jp_text("\xEF\xBC\x91", /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false), "1");
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

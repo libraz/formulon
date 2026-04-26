@@ -24,6 +24,7 @@
 #include "eval/criteria.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
+#include "eval/jp_fold.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_args.h"
 #include "parser/ast.h"
@@ -94,7 +95,17 @@ bool resolve_field_column(const Value& field_value, const std::vector<Value>& db
     return true;
   }
   if (field_value.is_text()) {
-    const std::string_view needle = field_value.as_text();
+    // Mac Excel ja-JP folds the field-arg text and the database header
+    // text through a partial kana fold before comparing: hira/kata,
+    // full-width Latin -> ASCII, and full-width digits -> ASCII digits
+    // are folded; half-width katakana (U+FF61..U+FF9D) and the related
+    // standalone voicing marks are NOT folded. See
+    // `tests/oracle/cases/dfunc_kana_folding_probes.yaml`, in particular
+    // `dsum_field_arg_halfwidth_vs_fullwidth_header` (expects #VALUE!,
+    // i.e. no match) versus the hira/full-width-Latin/full-width-digit
+    // sibling cases (which all match).
+    const std::string folded_needle =
+        fold_jp_text(field_value.as_text(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false);
     for (std::uint32_t c = 0; c < db_cols; ++c) {
       const Value& hdr = db_cells[c];
       // Error / Blank / Bool / Number headers: use the text coercion for
@@ -104,7 +115,9 @@ bool resolve_field_column(const Value& field_value, const std::vector<Value>& db
       if (!coerced) {
         continue;
       }
-      if (strings::case_insensitive_eq(std::string_view(coerced.value()), needle)) {
+      const std::string folded_hdr =
+          fold_jp_text(coerced.value(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false);
+      if (strings::case_insensitive_eq(std::string_view(folded_hdr), std::string_view(folded_needle))) {
         *out_col_index = c;
         return true;
       }
@@ -129,13 +142,25 @@ std::uint32_t find_db_column(const Value& header_needle, const std::vector<Value
   if (!needle_coerced) {
     return db_cols;
   }
-  const std::string_view needle = std::string_view(needle_coerced.value());
+  // Mac Excel ja-JP folds the criteria-block header text and the database
+  // header text through a partial kana fold before comparing: hira/kata,
+  // full-width Latin -> ASCII, and full-width digits -> ASCII digits are
+  // folded; half-width katakana (U+FF61..U+FF9D) and the related
+  // standalone voicing marks are NOT folded. See
+  // `tests/oracle/cases/dfunc_kana_folding_probes.yaml`, in particular
+  // `dsum_criteria_header_halfwidth_vs_fullwidth_db_header` (expects 0,
+  // i.e. no match) versus the hira and full-width-Latin sibling cases
+  // (which both match).
+  const std::string folded_needle =
+      fold_jp_text(needle_coerced.value(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false);
   for (std::uint32_t c = 0; c < db_cols; ++c) {
     auto hdr_coerced = coerce_to_text(db_cells[c]);
     if (!hdr_coerced) {
       continue;
     }
-    if (strings::case_insensitive_eq(std::string_view(hdr_coerced.value()), needle)) {
+    const std::string folded_hdr =
+        fold_jp_text(hdr_coerced.value(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false);
+    if (strings::case_insensitive_eq(std::string_view(folded_hdr), std::string_view(folded_needle))) {
       return c;
     }
   }
