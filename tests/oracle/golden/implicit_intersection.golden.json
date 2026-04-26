@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-24T22:08:03Z"
+    "generated_at": "2026-04-26T00:51:06Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -280,6 +280,455 @@
         "A4": {
           "kind": "number",
           "value": 2.345
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "bare_col_range_first_cell_text",
+      "formula": "=A1:A3",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "hello"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "hello"
+      }
+    },
+    {
+      "id": "bare_col_range_anchor_error",
+      "formula": "=A1:A3",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 60.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "bare_col_range_error_off_anchor",
+      "formula": "=A1:A3",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "bare_col_range_blank_anchor",
+      "formula": "=A1:A3",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "arith_col_range_times_scalar",
+      "formula": "=A1:A5*2",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "arith_scalar_times_col_range",
+      "formula": "=2*A1:A5",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "arith_col_range_plus_col_range",
+      "formula": "=A1:A3+B1:B3",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "arith_col_range_plus_row_range",
+      "formula": "=A1:A3+B1:D1",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "comp_col_range_gt_scalar",
+      "formula": "=A1:A3>2",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "concat_col_range_with_text",
+      "formula": "=A1:A3&\"x\"",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "c"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "ax"
+      }
+    },
+    {
+      "id": "sum_col_range_includes_row",
+      "formula": "=SUM(A1:A5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "if_with_col_range_condition",
+      "formula": "=IF(A1:A3>1,\"yes\",\"no\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "no"
+      }
+    },
+    {
+      "id": "len_col_range_text",
+      "formula": "=LEN(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "abc"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "abcd"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "isblank_col_range",
+      "formula": "=ISBLANK(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "bare_2d_range_row_aligned_col_not",
+      "formula": "=A1:B5",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 22.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "bare_2d_range_col_aligned_row_not",
+      "formula": "=A3:AZ4",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "Z3": {
+          "kind": "number",
+          "value": 26.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 41.0
+        },
+        "Z4": {
+          "kind": "number",
+          "value": 56.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "at_at_prefix_col_range",
+      "formula": "=@@A1:A5",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "at_prefix_col_range_plus_scalar",
+      "formula": "=@A1:A5+100",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 142.0
+      }
+    },
+    {
+      "id": "at_prefix_2d_range_no_alignment",
+      "formula": "=@A3:B8",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 21.0
         }
       },
       "expect": {

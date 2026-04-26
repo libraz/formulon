@@ -147,3 +147,194 @@ cases:
       A3: 1.234
       A4: 2.345
     formula: "=ROUND(@A3:A8, 2)"
+
+  # ----------------------------------------------------------------------
+  # Expanded probes — Mac Excel 365 spill / IIE divergence surface
+  # ----------------------------------------------------------------------
+
+  # L) Range contains a text cell — does the spill anchor surface text?
+  - id: bare_col_range_first_cell_text
+    description: "=A1:A3 at Z1; A1 is text — anchor reads text"
+    setup:
+      A1: "hello"
+      A2: 99
+      A3: 100
+    formula: "=A1:A3"
+
+  # M) Range contains a #DIV/0! cell — error propagation through spill anchor.
+  - id: bare_col_range_anchor_error
+    description: "=A1:A3 where A1 = #DIV/0!"
+    setup:
+      A1: { kind: formula, formula: "=1/0" }
+      A2: 50
+      A3: 60
+    formula: "=A1:A3"
+
+  # N) Range contains an error cell off the anchor — should still spill anchor cleanly.
+  - id: bare_col_range_error_off_anchor
+    description: "=A1:A3 where A2 = #N/A; spill anchor (A1=10) wins at Z1"
+    setup:
+      A1: 10
+      A2: { kind: formula, formula: "=NA()" }
+      A3: 30
+    formula: "=A1:A3"
+
+  # O) Range over genuinely-blank cells — anchor read-back is blank.
+  - id: bare_col_range_blank_anchor
+    description: "=A1:A3 with all cells blank — reads as blank"
+    formula: "=A1:A3"
+
+  # P) Empty-string anchor: omitted because xlwings cannot write "" to a
+  # cell — it lands as genuinely blank, so the case doesn't probe what we
+  # intended (text vs blank distinction in spill anchors).
+
+  # Q) Range × scalar arithmetic — spill of element-wise op.
+  - id: arith_col_range_times_scalar
+    description: "=A1:A5*2 at Z1; spill anchor element-wise"
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+      A4: 4
+      A5: 5
+    formula: "=A1:A5*2"
+
+  # R) Scalar × range arithmetic (commutative form).
+  - id: arith_scalar_times_col_range
+    description: "=2*A1:A5 at Z1"
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+      A4: 4
+      A5: 5
+    formula: "=2*A1:A5"
+
+  # S) Range + range arithmetic, both same-shape.
+  - id: arith_col_range_plus_col_range
+    description: "=A1:A3 + B1:B3 at Z1; spill anchor sums first row"
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+      B1: 10
+      B2: 20
+      B3: 30
+    formula: "=A1:A3+B1:B3"
+
+  # T) Range + range, mismatched shapes — Excel: #N/A or #VALUE!.
+  - id: arith_col_range_plus_row_range
+    description: "Range shape mismatch: column + row -> Excel #VALUE! / spill 2D"
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+      B1: 10
+      C1: 20
+      D1: 30
+    formula: "=A1:A3+B1:D1"
+
+  # U) Comparison operator, range on left.
+  - id: comp_col_range_gt_scalar
+    description: "=A1:A3>2 at Z1"
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+    formula: "=A1:A3>2"
+
+  # V) Concat with range — text spill.
+  - id: concat_col_range_with_text
+    description: '=A1:A3 & "x" at Z1'
+    setup:
+      A1: "a"
+      A2: "b"
+      A3: "c"
+    formula: "=A1:A3&\"x\""
+
+  # W) SUM of a range — function consumes the range, no implicit intersection / spill.
+  - id: sum_col_range_includes_row
+    description: "=SUM(A1:A5) at Z1; SUM consumes the entire range"
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+      A4: 4
+      A5: 5
+    formula: "=SUM(A1:A5)"
+
+  # X) IF with range condition — spills boolean array? Or implicit intersection?
+  - id: if_with_col_range_condition
+    description: "=IF(A1:A3>1, \"yes\", \"no\") at Z1"
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+    formula: "=IF(A1:A3>1,\"yes\",\"no\")"
+
+  # Y) LEN with text-range — does LEN apply elementwise (spill) or implicit-intersect?
+  - id: len_col_range_text
+    description: "=LEN(A1:A3) at Z1"
+    setup:
+      A1: "ab"
+      A2: "abc"
+      A3: "abcd"
+    formula: "=LEN(A1:A3)"
+
+  # Z) ISBLANK on a range — Excel 365 spills booleans.
+  - id: isblank_col_range
+    description: "=ISBLANK(A1:A3) at Z1; A2 blank, A1/A3 numeric"
+    setup:
+      A1: 10
+      A3: 30
+    formula: "=ISBLANK(A1:A3)"
+
+  # AA) 2D range, row aligned, col not — pre-365 IIE picks row, spill places anchor.
+  - id: bare_2d_range_row_aligned_col_not
+    description: "=A1:B5 at Z1; row 1 in 1..5; col Z not in A..B; spill anchor=A1"
+    setup:
+      A1: 11
+      B1: 12
+      A2: 21
+      B2: 22
+    formula: "=A1:B5"
+
+  # BB) 2D range, col aligned, row not — symmetric to AA.
+  # Z = 26 so AA..AZ has Z column; using A..AZ to capture Z aligns col.
+  - id: bare_2d_range_col_aligned_row_not
+    description: "=A3:AZ4 at Z1; col Z in A..AZ; row 1 NOT in 3..4; spill 2D"
+    setup:
+      A3: 11
+      Z3: 26
+      A4: 41
+      Z4: 56
+    formula: "=A3:AZ4"
+
+  # CC) Bare single-row range (not column), formula in row 1: omitted —
+  # would include the formula cell Z1 in the range, producing a circular
+  # reference rather than a clean implicit-intersection / spill probe.
+
+  # DD) Nested @ — does double @-prefix collapse to single?
+  - id: at_at_prefix_col_range
+    description: "=@@A1:A5 at Z1; double @ should be idempotent"
+    setup:
+      A1: 42
+      A2: 99
+    formula: "=@@A1:A5"
+
+  # EE) Implicit intersection inside arithmetic — should pick scalar then add.
+  - id: at_prefix_col_range_plus_scalar
+    description: "=@A1:A5 + 100 at Z1; @ -> A1=42, +100 = 142"
+    setup:
+      A1: 42
+      A2: 99
+    formula: "=@A1:A5+100"
+
+  # FF) Implicit intersection on a 2D range — Mac semantics: #VALUE! when no axis aligns.
+  - id: at_prefix_2d_range_no_alignment
+    description: "=@A3:B8 at Z1; both axes excluded -> Excel #VALUE!"
+    setup:
+      A3: 11
+      B3: 12
+      A4: 21
+    formula: "=@A3:B8"
