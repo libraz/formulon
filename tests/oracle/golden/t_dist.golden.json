@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T02:25:47Z"
+    "generated_at": "2026-04-26T03:47:42Z"
   },
   "tolerance": {
     "abs": 1e-06,
@@ -296,7 +296,10 @@
       "id": "t_inv_2t_p_above_one_is_num",
       "formula": "=T.INV.2T(1.5, 10)",
       "setup": {},
-      "skipped": "T.INV.2T(p>1, df): Excel returns a finite number (approx -0.6998 for p=1.5, df=10); Formulon: #NUM!. Mac quirk."
+      "expect": {
+        "kind": "number",
+        "value": -0.6998120613124317
+      }
     },
     {
       "id": "t_inv_2t_round_trip",

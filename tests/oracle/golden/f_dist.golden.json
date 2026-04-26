@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T02:20:48Z"
+    "generated_at": "2026-04-26T03:47:26Z"
   },
   "tolerance": {
     "abs": 1e-06,
@@ -233,7 +233,10 @@
       "id": "f_inv_p_zero",
       "formula": "=F.INV(0, 5, 10)",
       "setup": {},
-      "skipped": "F.INV(0, df1, df2): Excel returns 0; Formulon: #NUM!. Lower-bound boundary relaxation."
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
     },
     {
       "id": "f_inv_p_just_below_one",

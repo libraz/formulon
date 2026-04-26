@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T02:30:53Z"
+    "generated_at": "2026-04-26T03:47:56Z"
   },
   "tolerance": {
     "abs": 1e-06,
@@ -179,7 +179,10 @@
       "id": "chisq_dist_df_huge_normal_like",
       "formula": "=CHISQ.DIST(10000, 10000, TRUE)",
       "setup": {},
-      "skipped": "CHISQ.DIST CDF drift at df=10000: Excel 0.50188 vs Formulon 0.49947 (delta 0.0024). Incomplete-gamma approximation differs at extreme df."
+      "expect": {
+        "kind": "number",
+        "value": 0.5018806340338173
+      }
     },
     {
       "id": "chisq_dist_fractional_df_truncates",

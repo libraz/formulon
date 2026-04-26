@@ -622,46 +622,6 @@ entries:
     reason: "VDB salvage > cost: Excel returns negative depreciation (-2100); Formulon: #NUM!."
     prefer: mac-excel-365
 
-  # -- F.INV: p=0 boundary returns 0 in Excel, #NUM! in Formulon ---------
-  # `=F.INV(0, df1, df2)` — Excel returns 0.0 (the lower bound of the F
-  # support), Formulon's solver rejects p=0 with #NUM!. Same boundary
-  # relaxation pattern as the VDB / NUMBERVALUE cases. Fix in
-  # `src/eval/builtins/distributions_f.cpp::FInv` to allow p=0.
-  - id: f_inv_p_zero
-    mode: skip-oracle
-    reason: "F.INV(0, df1, df2): Excel returns 0; Formulon: #NUM!. Lower-bound boundary relaxation."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
-
-  # -- T.INV.2T: p > 1 returns a number in Excel -------------------------
-  # `T.INV.2T(1.5, 10)` — Excel returns approx -0.6998 (likely computing
-  # T.INV.2T(p) as if p were folded, or wrapping out-of-range to a
-  # complement). Formulon rejects p > 1 with #NUM! per the documented
-  # 0 < p <= 1 contract. The Excel behaviour is undocumented and may be
-  # a stable Mac-quirk; Formulon should mirror for 1-bit parity.
-  - id: t_inv_2t_p_above_one_is_num
-    mode: skip-oracle
-    reason: "T.INV.2T(p>1, df): Excel returns a finite number (approx -0.6998 for p=1.5, df=10); Formulon: #NUM!. Mac quirk."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
-
-  # -- CHISQ.DIST: precision drift at very large df ----------------------
-  # `CHISQ.DIST(10000, 10000, TRUE)` — Excel: 0.50188, Formulon: 0.49947.
-  # Drift of ~0.0024 well outside the 1e-6 suite tolerance, suggesting a
-  # different incomplete-gamma series approximation at extreme df. By
-  # CLT chi-squared(df) -> N(df, 2df), so this is a regime where small
-  # numerical differences amplify.  Fix in
-  # `src/eval/stats/incomplete_gamma.cpp` (or wherever the CDF backend
-  # lives).
-  - id: chisq_dist_df_huge_normal_like
-    mode: skip-oracle
-    reason: "CHISQ.DIST CDF drift at df=10000: Excel 0.50188 vs Formulon 0.49947 (delta 0.0024). Incomplete-gamma approximation differs at extreme df."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
-
   # -- Complex IMCSC: 1-ULP precision in last decimal --------------------
   # IMCSC(1+i): Excel ...0.303931001628427i, Formulon ...0.303931001628426i.
   # Drift is 1 ULP at the 15th significant digit; cannot pass the exact

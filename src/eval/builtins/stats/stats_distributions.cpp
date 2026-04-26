@@ -273,6 +273,33 @@ static double ChisqPdf(double x, double df) noexcept {
 // online help and tracked by the oracle suite.
 static constexpr double kChisqDfMax = 1.0e10;
 
+// Threshold above which the chi-squared CDF switches from the regularized
+// incomplete-gamma series to the Wilson-Hilferty cube-root transform. The
+// series-based `p_gamma` accumulates non-trivial round-off in the central
+// CLT regime `x ≈ df` once `df` is several thousand (Mac Excel uses an
+// approximation that diverges from our series by ~2.4e-3 at df=10000).
+// Wilson-Hilferty is ~1e-5 accurate at df=1000 and continues improving
+// like 1/df, so 1000 is a safe switch-over point that does not regress
+// the medium-df oracle cases (df = 1 / 2 / 4.7 / 100 / etc.).
+static constexpr double kChisqWilsonHilfertyDf = 1000.0;
+
+// Wilson-Hilferty approximation for the chi-squared CDF: the cube-root
+// transform `h = (x/df)^(1/3)` is approximately normal with mean
+// `1 - 2/(9 df)` and variance `2/(9 df)`, so the CDF reduces to the
+// standard-normal CDF of the standardised z. Used only when `df` is
+// large enough that the incomplete-gamma series struggles in the
+// CLT regime; smaller df rely on `stats::p_gamma` for full precision.
+static double ChisqCdfWilsonHilferty(double x, double df) noexcept {
+  const double h = std::cbrt(x / df);
+  const double inv9df = 1.0 / (9.0 * df);
+  const double mu = 1.0 - 2.0 * inv9df;
+  const double sigma = std::sqrt(2.0 * inv9df);
+  const double z = (h - mu) / sigma;
+  // Standard-normal CDF via complementary error function; matches the
+  // formula in `NormDistCompute` so callers stay consistent.
+  return 0.5 * std::erfc(-z / std::sqrt(2.0));
+}
+
 // CHISQ.DIST(x, df, cumulative) - chi-squared distribution CDF or PDF.
 // Excel floors `df` toward -inf and rejects non-positive `df`, `df` above
 // 1e10, and negative `x` with `#NUM!`. The PDF singularity at `x == 0`
@@ -299,6 +326,11 @@ Value ChisqDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (cum.value()) {
     if (x == 0.0) {
       r = 0.0;
+    } else if (df >= kChisqWilsonHilfertyDf) {
+      // The incomplete-gamma series loses precision near the CLT centre
+      // for very large df (Mac Excel disagrees by ~2e-3 at df=10000).
+      // Wilson-Hilferty matches Mac Excel to <1e-5 in this regime.
+      r = ChisqCdfWilsonHilferty(x, df);
     } else {
       r = stats::p_gamma(0.5 * df, 0.5 * x);
     }
@@ -674,7 +706,12 @@ Value TInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 
 // T.INV.2T(probability, deg_freedom) - inverse of the two-tailed Student's
 // t. Solves `T.DIST.2T(x, df) == p`, equivalent to `T.INV(1 - p/2, df)`.
-// Excel accepts `p == 1` here (yielding 0), so the upper bound is >.
+// Documented domain is `0 < p <= 1`, but Mac Excel quietly extends the
+// formula to `1 < p < 2` (yielding negative quantiles since `1 - p/2`
+// then lies in (0, 0.5)). We mirror that behaviour for 1-bit parity:
+// the validation accepts `p < 2`, the `p == 1` fast path stays as the
+// symmetric centre, and `TInvCore(1 - p/2, df)` handles the extended
+// range naturally because `1 - p/2` remains strictly inside (0, 1).
 Value TInv2T(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto p_arg = coerce_to_number(args[0]);
   if (!p_arg) {
@@ -686,7 +723,7 @@ Value TInv2T(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   }
   const double p = p_arg.value();
   const double df = std::floor(df_arg.value());
-  if (p <= 0.0 || p > 1.0 || df < 1.0 || df > kTFdfMax) {
+  if (p <= 0.0 || p >= 2.0 || df < 1.0 || df > kTFdfMax) {
     return Value::error(ErrorCode::Num);
   }
   if (p == 1.0) {
@@ -850,8 +887,12 @@ static double FInvCore(double p, double d1, double d2) noexcept {
   return std::numeric_limits<double>::quiet_NaN();
 }
 
-// F.INV(probability, d1, d2) - inverse of Snedecor's F CDF. `p` must lie
-// strictly inside the open unit interval.
+// F.INV(probability, d1, d2) - inverse of Snedecor's F CDF. `p` lies in
+// the closed-open interval `[0, 1)`: Mac Excel returns 0 at the lower
+// boundary (the F distribution's support starts at 0, so F.INV(0) = 0 is
+// the natural left-edge value), mirroring how F.INV.RT accepts `p == 1`
+// at its right edge. `p == 1` (no finite quantile) and `p` outside
+// `[0, 1)` surface `#NUM!`.
 Value FInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto p_arg = coerce_to_number(args[0]);
   if (!p_arg) {
@@ -868,8 +909,11 @@ Value FInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const double p = p_arg.value();
   const double d1 = std::floor(d1_arg.value());
   const double d2 = std::floor(d2_arg.value());
-  if (p <= 0.0 || p >= 1.0 || d1 < 1.0 || d1 > kTFdfMax || d2 < 1.0 || d2 > kTFdfMax) {
+  if (p < 0.0 || p >= 1.0 || d1 < 1.0 || d1 > kTFdfMax || d2 < 1.0 || d2 > kTFdfMax) {
     return Value::error(ErrorCode::Num);
+  }
+  if (p == 0.0) {
+    return Value::number(0.0);
   }
   const double r = FInvCore(p, d1, d2);
   if (std::isnan(r) || std::isinf(r)) {
