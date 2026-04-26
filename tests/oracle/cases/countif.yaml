@@ -47,3 +47,185 @@ cases:
   - id: averageif_no_match_returns_div0
     setup: { A1: 10, A2: 20, A3: 30 }
     formula: "=AVERAGEIF(A1:A3,\">100\")"
+
+  # ---------------------------------------------------------------------
+  # Wildcard subtleties not covered by countif_edges.yaml.
+  # ---------------------------------------------------------------------
+
+  # "*" alone over a populated text range. Excel treats "*" as
+  # "any text", which means non-text cells (numbers / blanks) are
+  # excluded. Probe whether numeric cells participate.
+  - id: countif_wildcard_star_alone_text_only
+    description: "* alone matches all text cells; numbers and blanks excluded"
+    setup: { A1: "apple", A2: "", A3: 10, A4: "banana" }
+    formula: "=COUNTIF(A1:A4,\"*\")"
+
+  # "?" alone matches single-character cells only.
+  - id: countif_wildcard_q_alone_single_char
+    description: "? alone matches exactly one character"
+    setup: { A1: "a", A2: "ab", A3: "x", A4: "" }
+    formula: "=COUNTIF(A1:A4,\"?\")"
+
+  # "**" — does Excel collapse multiple asterisks?
+  - id: countif_wildcard_double_star
+    description: "** (two asterisks) — Excel collapses to a single * matching all text"
+    setup: { A1: "apple", A2: "ab", A3: 10 }
+    formula: "=COUNTIF(A1:A3,\"**\")"
+
+  # "~?" matches a literal question mark.
+  - id: countif_tilde_escapes_q
+    description: "~? matches a literal question mark"
+    setup: { A1: "a?b", A2: "ab", A3: "a?" }
+    formula: "=COUNTIF(A1:A3,\"a~?\")"
+
+  # "~~" — does Excel treat ~~ as a literal tilde? Excel docs state
+  # the escape works for * and ? but ~~ is officially a literal tilde.
+  - id: countif_tilde_escapes_tilde
+    description: "~~ matches a literal tilde character"
+    setup: { A1: "a~b", A2: "ab", A3: "~" }
+    formula: "=COUNTIF(A1:A3,\"~~\")"
+
+  # Escaped asterisk in middle of pattern combined with trailing *.
+  - id: countif_wildcard_escaped_star_middle
+    description: "App~* matches literal 'App*' anywhere; with trailing wildcard"
+    setup: { A1: "App*", A2: "Apple", A3: "App*123", A4: "Banana" }
+    formula: "=COUNTIF(A1:A4,\"App~**\")"
+
+  # ---------------------------------------------------------------------
+  # Comparator edge cases.
+  # ---------------------------------------------------------------------
+
+  # "=" with empty RHS — Excel treats this as "match blanks".
+  - id: countif_eq_empty_rhs
+    description: "=\"\" criterion; empty-RHS equality"
+    setup: { A1: "apple", A2: 10, A3: "banana" }
+    formula: "=COUNTIF(A1:A3,\"=\")"
+
+  # ">=" with empty RHS — under-specified comparator. Probe Mac.
+  - id: countif_gte_empty_rhs
+    description: ">= alone with empty RHS"
+    setup: { A1: 10, A2: 20, A3: "apple" }
+    formula: "=COUNTIF(A1:A3,\">=\")"
+
+  # "=apple*" — leading "=" before a wildcard pattern. Excel strips
+  # the literal "=" and applies wildcard matching.
+  - id: countif_eq_then_wildcard
+    description: "=app* — leading = is stripped, wildcard applies"
+    setup: { A1: "apple", A2: "application", A3: "banana" }
+    formula: "=COUNTIF(A1:A3,\"=app*\")"
+
+  # Numeric comparator against a text range: ">10" over text cells.
+  # In Excel, numeric ordering does not match text cells.
+  - id: countif_numeric_gt_against_text_range
+    description: ">10 over text-only range — no matches"
+    setup: { A1: "apple", A2: "banana", A3: "zebra" }
+    formula: "=COUNTIF(A1:A3,\">10\")"
+
+  # Text comparator against numeric range: ">apple" over numbers.
+  - id: countif_text_gt_against_number_range
+    description: ">apple over numeric-only range — no matches"
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=COUNTIF(A1:A3,\">apple\")"
+
+  # Comparator with leading whitespace — Excel preserves whitespace.
+  - id: countif_comparator_leading_space
+    description: "\" >10\" criterion: leading space is significant"
+    setup: { A1: 5, A2: 15, A3: 25 }
+    formula: "=COUNTIF(A1:A3,\" >10\")"
+
+  # ---------------------------------------------------------------------
+  # Type coercion in criteria.
+  # ---------------------------------------------------------------------
+
+  # Numeric cell-reference criterion.
+  - id: countif_cellref_number_criterion
+    description: "Cell criterion holds number 10"
+    setup: { A1: 10, A2: 20, A3: 10, B1: 10 }
+    formula: "=COUNTIF(A1:A3,B1)"
+
+  # Date-serial criterion via DATE().
+  - id: countif_date_serial_criterion
+    description: "Date criterion via DATE() against pre-loaded date serials"
+    setup: { A1: 45292, A2: 45293, A3: 45292 }
+    formula: "=COUNTIF(A1:A3,DATE(2024,1,1))"
+
+  # 0 as criterion — does it match FALSE coerced to 0?
+  - id: countif_zero_criterion_with_false
+    description: "0 criterion over range with FALSE/0/text"
+    setup: { A1: 0, A2: false, A3: "0", A4: 1 }
+    formula: "=COUNTIF(A1:A4,0)"
+
+  # ---------------------------------------------------------------------
+  # Case sensitivity — ASCII and ja-JP.
+  # ---------------------------------------------------------------------
+
+  # ASCII case insensitivity — APPLE matches apple.
+  - id: countif_case_insensitive_ascii
+    description: "Excel COUNTIF is ASCII case-insensitive"
+    setup: { A1: "Apple", A2: "APPLE", A3: "apple", A4: "Banana" }
+    formula: "=COUNTIF(A1:A4,\"apple\")"
+
+  # ja-JP: katakana vs hiragana of the same word — Excel does NOT
+  # equate them (no kana folding).
+  - id: countif_jp_katakana_vs_hiragana
+    description: "Katakana criterion against mixed katakana / hiragana"
+    setup: { A1: "アップル", A2: "あっぷる", A3: "アップル" }
+    formula: "=COUNTIF(A1:A3,\"アップル\")"
+
+  # ---------------------------------------------------------------------
+  # ja-JP / full-width specific.
+  # ---------------------------------------------------------------------
+
+  # Full-width comparator: '＞１０' (full-width > and digits 1, 0).
+  # Probe whether ja-JP Excel normalizes full-width to half-width
+  # for comparator parsing.
+  - id: countif_fullwidth_gt_digits
+    description: "Full-width '＞１０' comparator over numeric range"
+    setup: { A1: 5, A2: 15, A3: 25 }
+    formula: "=COUNTIF(A1:A3,\"＞１０\")"
+
+  # Full-width asterisk '＊' as criterion — does Excel treat it as
+  # literal or as a wildcard?
+  - id: countif_fullwidth_star_literal
+    description: "Full-width '＊' is a literal character (not a wildcard)"
+    setup: { A1: "＊", A2: "*", A3: "abc" }
+    formula: "=COUNTIF(A1:A3,\"＊\")"
+
+  # Hiragana wildcard prefix.
+  - id: countif_hiragana_wildcard_prefix
+    description: "Hiragana 'り*' matches words starting with り"
+    setup: { A1: "りんご", A2: "りんごジュース", A3: "ぶどう" }
+    formula: "=COUNTIF(A1:A3,\"り*\")"
+
+  # ---------------------------------------------------------------------
+  # SUMIF / AVERAGEIF specific gaps.
+  # ---------------------------------------------------------------------
+
+  # SUMIF with sum_range one-cell origin: Excel extends the sum_range
+  # to match the criteria_range shape starting at the given anchor.
+  - id: sumif_sum_range_anchor_only
+    description: "SUMIF with single-cell sum_range — extended to criteria range shape"
+    setup:
+      A1: "x"
+      A2: "y"
+      A3: "x"
+      B1: 1
+      B2: 2
+      B3: 3
+    formula: "=SUMIF(A1:A3,\"x\",B1)"
+
+  # AVERAGEIF where range has no numeric matches.
+  - id: averageif_text_only_numeric_criterion
+    description: "AVERAGEIF: numeric criterion over text-only range — #DIV/0!"
+    setup: { A1: "apple", A2: "banana", A3: "zebra" }
+    formula: "=AVERAGEIF(A1:A3,\">0\")"
+
+  # ---------------------------------------------------------------------
+  # Cell-reference criteria via concatenation.
+  # ---------------------------------------------------------------------
+
+  # `">"&B1` — concatenated comparator with numeric cell.
+  - id: countif_concat_gt_with_cell
+    description: "\">\"&B1 builds comparator >15 from cell"
+    setup: { A1: 10, A2: 20, A3: 30, B1: 15 }
+    formula: "=COUNTIF(A1:A3,\">\"&B1)"

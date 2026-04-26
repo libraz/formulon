@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-23T01:57:45Z"
+    "generated_at": "2026-04-26T08:32:27Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -265,6 +265,537 @@
       "expect": {
         "kind": "error",
         "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "countif_wildcard_star_alone_text_only",
+      "formula": "=COUNTIF(A1:A4,\"*\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "A2": {
+          "kind": "text",
+          "value": ""
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "banana"
+        }
+      },
+      "skipped": "Excel COUNTIF \"*\" matches text cells only; Formulon also counts numeric cells. Real impl gap in criteria.cpp wildcard path."
+    },
+    {
+      "id": "countif_wildcard_q_alone_single_char",
+      "formula": "=COUNTIF(A1:A4,\"?\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "text",
+          "value": ""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_wildcard_double_star",
+      "formula": "=COUNTIF(A1:A3,\"**\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_tilde_escapes_q",
+      "formula": "=COUNTIF(A1:A3,\"a~?\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a?b"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "a?"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "countif_tilde_escapes_tilde",
+      "formula": "=COUNTIF(A1:A3,\"~~\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a~b"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "~"
+        }
+      },
+      "skipped": "Mac Excel returns 0 for COUNTIF(\"~~\"); Formulon decodes ~~ as literal tilde. Excel ~~ behaviour is undocumented; aligning with Mac requires criteria.cpp tweak."
+    },
+    {
+      "id": "countif_wildcard_escaped_star_middle",
+      "formula": "=COUNTIF(A1:A4,\"App~**\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "App*"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "App*123"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Banana"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_eq_empty_rhs",
+      "formula": "=COUNTIF(A1:A3,\"=\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "banana"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "countif_gte_empty_rhs",
+      "formula": "=COUNTIF(A1:A3,\">=\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "countif_eq_then_wildcard",
+      "formula": "=COUNTIF(A1:A3,\"=app*\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "application"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "banana"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_numeric_gt_against_text_range",
+      "formula": "=COUNTIF(A1:A3,\">10\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "zebra"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "countif_text_gt_against_number_range",
+      "formula": "=COUNTIF(A1:A3,\">apple\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "countif_comparator_leading_space",
+      "formula": "=COUNTIF(A1:A3,\" >10\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 25.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "countif_cellref_number_criterion",
+      "formula": "=COUNTIF(A1:A3,B1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_date_serial_criterion",
+      "formula": "=COUNTIF(A1:A3,DATE(2024,1,1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 45292.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 45293.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 45292.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_zero_criterion_with_false",
+      "formula": "=COUNTIF(A1:A4,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A2": {
+          "kind": "bool",
+          "value": false
+        },
+        "A3": {
+          "kind": "text",
+          "value": "0"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_case_insensitive_ascii",
+      "formula": "=COUNTIF(A1:A4,\"apple\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "APPLE"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Banana"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "countif_jp_katakana_vs_hiragana",
+      "formula": "=COUNTIF(A1:A3,\"アップル\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "アップル"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "あっぷる"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "アップル"
+        }
+      },
+      "skipped": "Mac Excel ja-JP folds katakana and hiragana for COUNTIF equality; Formulon does strict codepoint compare. Adding kana folding to criteria.cpp matcher is a deeper change."
+    },
+    {
+      "id": "countif_fullwidth_gt_digits",
+      "formula": "=COUNTIF(A1:A3,\"＞１０\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 25.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "countif_fullwidth_star_literal",
+      "formula": "=COUNTIF(A1:A3,\"＊\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "＊"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "*"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "abc"
+        }
+      },
+      "skipped": "Mac Excel ja-JP folds full-width ＊ onto half-width * in COUNTIF equality; Formulon does strict compare. Same gap as full-width comparator handling in criteria.cpp."
+    },
+    {
+      "id": "countif_hiragana_wildcard_prefix",
+      "formula": "=COUNTIF(A1:A3,\"り*\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "りんご"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "りんごジュース"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ぶどう"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "sumif_sum_range_anchor_only",
+      "formula": "=SUMIF(A1:A3,\"x\",B1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "skipped": "Mac Excel extends single-cell sum_range to criteria_range shape; Formulon does not. conditional_aggregates.cpp sum_range alignment gap."
+    },
+    {
+      "id": "averageif_text_only_numeric_criterion",
+      "formula": "=AVERAGEIF(A1:A3,\">0\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "zebra"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "countif_concat_gt_with_cell",
+      "formula": "=COUNTIF(A1:A3,\">\"&B1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 15.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
       }
     }
   ]
