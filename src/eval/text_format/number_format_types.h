@@ -94,6 +94,19 @@ enum class DbNumMode : std::uint8_t {
   kDBNum3,
 };
 
+// Conditional comparison operator extracted from a `[op N]` section prefix.
+// Excel allows at most one such directive per section. When `kNone`, the
+// section is unconditional and dispatches via the standard sign-class rules.
+enum class CondOp : std::uint8_t {
+  kNone = 0,
+  kGt,  // `[>N]`
+  kGe,  // `[>=N]`
+  kLt,  // `[<N]`
+  kLe,  // `[<=N]`
+  kEq,  // `[=N]`
+  kNe,  // `[<>N]`
+};
+
 struct Section {
   std::vector<Token> tokens;
 
@@ -108,6 +121,12 @@ struct Section {
   // DBNum1/2/3 digit-substitution mode. Set by the tokenizer when a
   // `[DBNumN]` directive is observed; consumed by the renderer.
   DbNumMode dbnum_mode = DbNumMode::kNone;
+
+  // Conditional-section directive (`[>1000]`, `[<=0]`, etc.). When `cond_op`
+  // is non-`kNone`, `apply_format` consults the predicate `value <op> cond_value`
+  // to decide whether this section matches. At most one predicate per section.
+  CondOp cond_op = CondOp::kNone;
+  double cond_value = 0.0;
 
   // Precomputed summary for numeric classification. Populated by `classify`.
   bool is_date = false;

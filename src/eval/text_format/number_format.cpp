@@ -25,6 +25,7 @@ namespace eval {
 namespace text_format {
 
 FormatStatus apply_format(double value, std::string_view format, std::string_view original_text, std::string& out) {
+  using number_format_detail::CondOp;
   using number_format_detail::Section;
   if (format.empty()) {
     return FormatStatus::kOk;
@@ -46,6 +47,36 @@ FormatStatus apply_format(double value, std::string_view format, std::string_vie
   // source) and we have a text section (index 3 for 4-section formats; any
   // `@` token in a single-section format also applies), route there.
   const bool has_original_text = !original_text.empty();
+
+  // Returns true if `op(v, pred)` holds; `kNone` is treated as the always-true
+  // unconditional sentinel.
+  auto cond_match = [](CondOp op, double pred, double v) -> bool {
+    switch (op) {
+      case CondOp::kGt:
+        return v > pred;
+      case CondOp::kGe:
+        return v >= pred;
+      case CondOp::kLt:
+        return v < pred;
+      case CondOp::kLe:
+        return v <= pred;
+      case CondOp::kEq:
+        return v == pred;
+      case CondOp::kNe:
+        return v != pred;
+      case CondOp::kNone:
+        return true;
+    }
+    return false;
+  };
+
+  // Predicate-based dispatch (`[>N]` / `[<N]` / `[=N]` / ... section prefix).
+  // Excel's rule: when section 0 OR section 1 carries a predicate, sign-class
+  // dispatch is replaced by predicate matching. Sections are visited in
+  // declaration order; the first whose predicate holds wins. With three or
+  // more sections, section 2 is the unconditional fallback when neither
+  // predicate matches.
+  bool used_conditional = false;
   // Decide the section to use based on Excel's rules:
   //   1 section : apply to everything; text passes unformatted unless `@`
   //               is present.
@@ -54,6 +85,8 @@ FormatStatus apply_format(double value, std::string_view format, std::string_vie
   //   4 sections: section 0 = positive; section 1 = negative; section 2 = zero;
   //               section 3 = text.
   int chosen = 0;
+  const bool any_predicate = (!sections.empty() && sections[0].cond_op != CondOp::kNone) ||
+                             (sections.size() >= 2 && sections[1].cond_op != CondOp::kNone);
   if (has_original_text) {
     if (sections.size() >= 4) {
       chosen = 3;
@@ -61,6 +94,35 @@ FormatStatus apply_format(double value, std::string_view format, std::string_vie
       // Single-section with an `@`: route through the numeric walker but
       // `@` substitutes the text.
       chosen = 0;
+    }
+  } else if (any_predicate) {
+    used_conditional = true;
+    chosen = -1;
+    // Walk the first two sections, picking the first whose predicate holds.
+    // A section without a predicate (`cond_op == kNone`) acts as the
+    // catch-all in this position.
+    const std::size_t scan_limit = sections.size() < 2 ? sections.size() : 2;
+    for (std::size_t i = 0; i < scan_limit; ++i) {
+      if (cond_match(sections[i].cond_op, sections[i].cond_value, value)) {
+        chosen = static_cast<int>(i);
+        break;
+      }
+    }
+    if (chosen < 0) {
+      // Neither of sections 0/1 matched. Excel uses section 2 as the
+      // unconditional fallback when present; otherwise it falls through to
+      // section 1 (the predicateless section, by elimination) so that the
+      // user-supplied "else" arm renders. If both arms had predicates, fall
+      // back to section 0 to mirror Mac Excel's "first section wins" tiebreak.
+      if (sections.size() >= 3) {
+        chosen = 2;
+      } else if (sections.size() >= 2 && sections[1].cond_op == CondOp::kNone) {
+        chosen = 1;
+      } else if (!sections.empty() && sections[0].cond_op == CondOp::kNone) {
+        chosen = 0;
+      } else {
+        chosen = 0;
+      }
     }
   } else if (value > 0.0) {
     chosen = 0;
@@ -89,11 +151,17 @@ FormatStatus apply_format(double value, std::string_view format, std::string_vie
   // unless the format itself includes an explicit minus sign. The numeric
   // walker currently prefixes the minus from `signbit(scaled)`, so pass the
   // absolute value when we've chosen the dedicated negative section.
+  //
+  // When predicate-based dispatch picked the section, the chosen index no
+  // longer correlates with sign class — the value's sign should be rendered
+  // verbatim. Skip the abs-adjustment in that case.
   double render_value = value;
-  if (chosen == 1 && sections.size() >= 2) {
-    render_value = std::fabs(value);
-  } else if (chosen == 2 && sections.size() >= 3) {
-    render_value = std::fabs(value);
+  if (!used_conditional) {
+    if (chosen == 1 && sections.size() >= 2) {
+      render_value = std::fabs(value);
+    } else if (chosen == 2 && sections.size() >= 3) {
+      render_value = std::fabs(value);
+    }
   }
 
   if (section.is_text ||

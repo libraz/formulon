@@ -8,6 +8,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -99,6 +101,75 @@ bool is_color_specifier(std::string_view body) noexcept {
     }
   }
   return value >= 1 && value <= 56;
+}
+
+// Detects an Excel conditional-section directive of the form `[op N]`,
+// where `op` is one of `>`, `>=`, `<`, `<=`, `=`, `<>` and `N` is a literal
+// double. Leading whitespace is tolerated (Excel accepts `[> 100]`).
+//
+// Returns:
+//   * 1 on a successful parse: writes the operator and value to `*out_op` /
+//     `*out_value`.
+//   * -1 if the body looks like a predicate (starts with one of the six
+//     operator forms) but the numeric tail fails to parse fully. The caller
+//     should treat this as an invalid bracket so `apply_format` surfaces
+//     `#VALUE!` exactly as the legacy fallback path did.
+//   * 0 if the body does not look like a predicate at all (caller should
+//     continue trying other bracket interpretations).
+int parse_cond_directive(std::string_view body, CondOp* out_op, double* out_value) noexcept {
+  std::size_t k = 0;
+  while (k < body.size() && (body[k] == ' ' || body[k] == '\t')) {
+    ++k;
+  }
+  if (k >= body.size()) {
+    return 0;
+  }
+  CondOp op = CondOp::kNone;
+  // Match longest operator first (so `>=`/`<=`/`<>` win over `>`/`<`/`=`).
+  if (k + 1 < body.size() && body[k] == '>' && body[k + 1] == '=') {
+    op = CondOp::kGe;
+    k += 2;
+  } else if (k + 1 < body.size() && body[k] == '<' && body[k + 1] == '=') {
+    op = CondOp::kLe;
+    k += 2;
+  } else if (k + 1 < body.size() && body[k] == '<' && body[k + 1] == '>') {
+    op = CondOp::kNe;
+    k += 2;
+  } else if (body[k] == '>') {
+    op = CondOp::kGt;
+    k += 1;
+  } else if (body[k] == '<') {
+    op = CondOp::kLt;
+    k += 1;
+  } else if (body[k] == '=') {
+    op = CondOp::kEq;
+    k += 1;
+  } else {
+    return 0;
+  }
+  // Parse the remaining bytes as a finite double. We copy into a stack buffer
+  // so `std::strtod` sees a NUL terminator without depending on `body`'s
+  // backing being NUL-terminated.
+  if (k >= body.size()) {
+    return -1;
+  }
+  std::string buf(body.substr(k));
+  // Trim trailing whitespace.
+  while (!buf.empty() && (buf.back() == ' ' || buf.back() == '\t')) {
+    buf.pop_back();
+  }
+  if (buf.empty()) {
+    return -1;
+  }
+  char* endp = nullptr;
+  const double v = std::strtod(buf.c_str(), &endp);
+  if (endp == nullptr || endp == buf.c_str() ||
+      static_cast<std::size_t>(endp - buf.c_str()) != buf.size()) {
+    return -1;
+  }
+  *out_op = op;
+  *out_value = v;
+  return 1;
 }
 
 // Detects `[DBNumN]` (body length exactly 6 bytes after stripping brackets).
@@ -405,9 +476,22 @@ void tokenize_section(std::string_view fmt, Section& out) {
             break;
         }
       } else {
-        // Anything else - conditional tests (`[>100]`), unknown qualifiers -
-        // trips the invalid-bracket flag.
-        out.has_invalid_bracket = true;
+        // Conditional-section directive `[>1000]`, `[<=0]`, ...
+        // Only one predicate per section; if a second one appears,
+        // last-write-wins (matches Mac Excel: the rightmost directive
+        // shadows earlier ones in the same section).
+        CondOp cop = CondOp::kNone;
+        double cval = 0.0;
+        const int rc = parse_cond_directive(body, &cop, &cval);
+        if (rc > 0) {
+          out.cond_op = cop;
+          out.cond_value = cval;
+        } else {
+          // Either the body doesn't look like a predicate (rc == 0) or it
+          // does but the numeric tail failed to parse (rc < 0). Both surface
+          // as #VALUE! through the existing invalid-bracket channel.
+          out.has_invalid_bracket = true;
+        }
       }
       continue;
     }

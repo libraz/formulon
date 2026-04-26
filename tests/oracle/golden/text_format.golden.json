@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T05:19:12Z"
+    "generated_at": "2026-04-26T05:26:13Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -629,13 +629,19 @@
       "id": "text_conditional_gt_1000",
       "formula": "=TEXT(1500, \"[>1000]#,##0\\K;0\")",
       "setup": {},
-      "skipped": "[>1000] conditional section not implemented; Formulon returns #VALUE!."
+      "expect": {
+        "kind": "text",
+        "value": "1,500K"
+      }
     },
     {
       "id": "text_conditional_gt_1000_below",
       "formula": "=TEXT(500, \"[>1000]#,##0\\K;0\")",
       "setup": {},
-      "skipped": "[>1000] conditional section not implemented (below-threshold path)."
+      "expect": {
+        "kind": "text",
+        "value": "500"
+      }
     },
     {
       "id": "text_currency_jpy_locale",

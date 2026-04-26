@@ -225,10 +225,39 @@ TEST(NumberFormatBracketed, IndexedColorOutOfRangeIsValueError) {
   EXPECT_EQ(apply_format(5.0, "[Color57]0.00", out), FormatStatus::kValueError);
 }
 
-TEST(NumberFormatBracketed, ConditionalBracketStillRejected) {
-  // Conditional qualifiers such as `[>100]` are not implemented.
+TEST(NumberFormatBracketed, ConditionalGtMatch) {
+  // `[>100]` predicate holds for 1500: section 0 renders.
+  EXPECT_EQ(Render(1500.0, "[>1000]#,##0\\K;0"), "1,500K");
+}
+
+TEST(NumberFormatBracketed, ConditionalGtNoMatchFallsThrough) {
+  // `[>1000]` fails for 500: section 1 (the `0` arm) renders.
+  EXPECT_EQ(Render(500.0, "[>1000]#,##0\\K;0"), "500");
+}
+
+TEST(NumberFormatBracketed, ConditionalLeMatchesNegative) {
+  // `[<=0]` predicate holds for 0 and for negatives; with a single section
+  // the value is rendered verbatim (sign included).
+  EXPECT_EQ(Render(-5.0, "[<=0]0.00;0.00"), "-5.00");
+  EXPECT_EQ(Render(0.0, "[<=0]0.00;0.00"), "0.00");
+}
+
+TEST(NumberFormatBracketed, ConditionalEqOperator) {
+  // `[=42]` matches exactly the predicate value.
+  EXPECT_EQ(Render(42.0, "[=42]\"yes\";\"no\""), "yes");
+  EXPECT_EQ(Render(7.0, "[=42]\"yes\";\"no\""), "no");
+}
+
+TEST(NumberFormatBracketed, ConditionalNeOperator) {
+  // `[<>0]` triggers when the value is non-zero.
+  EXPECT_EQ(Render(7.0, "[<>0]\"nz\";\"zero\""), "nz");
+  EXPECT_EQ(Render(0.0, "[<>0]\"nz\";\"zero\""), "zero");
+}
+
+TEST(NumberFormatBracketed, ConditionalInvalidNumberStillRejected) {
+  // Predicate-shaped body with a non-numeric tail still surfaces #VALUE!.
   std::string out;
-  EXPECT_EQ(apply_format(5.0, "[>100]0.00", out), FormatStatus::kValueError);
+  EXPECT_EQ(apply_format(5.0, "[>abc]0.00", out), FormatStatus::kValueError);
 }
 
 TEST(NumberFormatBracketed, LocaleCurrencyDiscarded) {

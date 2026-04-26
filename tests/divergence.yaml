@@ -198,20 +198,6 @@ entries:
     prefer: mac-excel-365
     first_noted: 2026-04-26
 
-  # -- TEXT format codes: conditional brackets [<n] / [>n] ----------------
-  # Bracket-prefixed conditional sections are rejected by the format
-  # parser; Excel uses them to gate which section a value falls into.
-  # Currently any `[<` or `[>` directive returns #VALUE!.
-  - id: text_conditional_gt_1000
-    mode: skip-oracle
-    reason: "[>1000] conditional section not implemented; Formulon returns #VALUE!."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-  - id: text_conditional_gt_1000_below
-    mode: skip-oracle
-    reason: "[>1000] conditional section not implemented (below-threshold path)."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
 
   # -- Complex IMCSC: 1-ULP precision in last decimal --------------------
   # IMCSC(1+i): Excel ...0.303931001628427i, Formulon ...0.303931001628426i.
