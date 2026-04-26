@@ -511,17 +511,6 @@ entries:
     prefer: mac-excel-365
     first_noted: 2026-04-26
 
-  # -- LET: ja-JP identifier ----------------------------------------------
-  # Mac Excel accepts hiragana / katakana / kanji identifiers in LET
-  # (`=LET(りんご, 100, りんご*2)` -> 200). Formulon's parser rejects the
-  # name as #NAME?. The fix is in `src/parser/tokenizer.cpp` to admit
-  # full-width / CJK identifier characters.
-  - id: identifier_japanese
-    mode: skip-oracle
-    reason: "LET ja-JP identifier (りんご) rejected as #NAME?; Excel accepts."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-
   # -- Complex IMCSC: 1-ULP precision in last decimal --------------------
   # IMCSC(1+i): Excel ...0.303931001628427i, Formulon ...0.303931001628426i.
   # Drift is 1 ULP at the 15th significant digit; cannot pass the exact

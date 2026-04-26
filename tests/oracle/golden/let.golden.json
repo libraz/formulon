@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T02:04:22Z"
+    "generated_at": "2026-04-26T04:18:12Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -298,7 +298,10 @@
       "id": "identifier_japanese",
       "formula": "=LET(りんご, 100, りんご*2)",
       "setup": {},
-      "skipped": "LET ja-JP identifier (りんご) rejected as #NAME?; Excel accepts."
+      "expect": {
+        "kind": "number",
+        "value": 200.0
+      }
     },
     {
       "id": "bool_in_binding_arith",

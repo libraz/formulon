@@ -22,21 +22,27 @@ using detail::SpanRange;
 
 namespace {
 
-// Returns true iff `name` starts with `[A-Za-z_]` and continues with
-// `[A-Za-z0-9_.?]*`. Length must be non-zero and <= 255 bytes. This is the
-// identifier shape Excel accepts for LET bindings and defined names; stricter
-// than the tokenizer's Ident rule (which accepts numeric suffixes alone).
+// Returns true iff `name` starts with `[A-Za-z_]` or any non-ASCII (UTF-8
+// continuation) byte, and continues with `[A-Za-z0-9_.?]` plus non-ASCII
+// bytes. Length must be non-zero and <= 255 bytes. This mirrors the
+// tokenizer's identifier rule (`Tokenizer::is_ident_start_byte` /
+// `is_ident_cont_byte`) and matches the identifier shape Excel accepts for
+// LET bindings and defined names, including hiragana / katakana / kanji and
+// other locale-specific scripts. The shape is still stricter than the
+// tokenizer's Ident rule because it forbids a leading ASCII digit.
 bool IsLetNameShape(std::string_view name) noexcept {
   if (name.empty() || name.size() > 255) {
     return false;
   }
-  const char first = name[0];
-  if (!IsAsciiLetter(first) && first != '_') {
+  const auto first = static_cast<unsigned char>(name[0]);
+  if (!IsAsciiLetter(static_cast<char>(first)) && first != '_' && first < 0x80) {
     return false;
   }
   for (std::size_t i = 1; i < name.size(); ++i) {
-    const char c = name[i];
-    const bool ok = IsAsciiLetter(c) || IsAsciiDigit(c) || c == '_' || c == '.' || c == '?';
+    const auto byte = static_cast<unsigned char>(name[i]);
+    const char c = static_cast<char>(byte);
+    const bool ok =
+        IsAsciiLetter(c) || IsAsciiDigit(c) || c == '_' || c == '.' || c == '?' || byte >= 0x80;
     if (!ok) {
       return false;
     }
