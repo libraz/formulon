@@ -292,10 +292,32 @@ Value eval_sumproduct_lazy(const parser::AstNode& call, Arena& arena, const Func
   all_args.reserve(arity);
 
   for (std::uint32_t i = 0; i < arity; ++i) {
-    const parser::AstNode& arg_node = call.as_call_arg(i);
+    const parser::AstNode& raw_arg = call.as_call_arg(i);
+    // LET-binding passthrough: `=LET(r, A1:A3, SUMPRODUCT(r))` parses `r`
+    // as a NameRef; we want the bound RangeOp / ArrayLiteral / OFFSET-call
+    // / CHOOSE-call / IF-call AST so the kind dispatch below sees the same
+    // shape it would for a literal `=SUMPRODUCT(A1:A3)`. Single-cell Refs
+    // and scalar bindings are left as-is (the scalar fallback already
+    // returns 1x1 for them). This mirrors `resolve_shape` above.
+    const parser::AstNode* effective = &raw_arg;
+    if (raw_arg.kind() == parser::NodeKind::NameRef) {
+      const parser::AstNode& resolved = resolve_name_ast(raw_arg, ctx.name_env());
+      if (&resolved != &raw_arg && is_range_shaped_ast(resolved)) {
+        effective = &resolved;
+      }
+    }
+    const parser::AstNode& arg_node = *effective;
     const parser::NodeKind k = arg_node.kind();
     ArgArray a{};
     if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
+      ErrorCode err_code = ErrorCode::Value;
+      if (!resolve_range_arg(arg_node, arena, registry, ctx, &a.cells, &err_code, &a.rows, &a.cols)) {
+        return Value::error(err_code);
+      }
+    } else if (k == parser::NodeKind::Call) {
+      // OFFSET / CHOOSE / IF call after LET passthrough — route through
+      // `resolve_range_arg` so the rectangle (and its row/col shape) is
+      // expanded the same way as a literal `RangeOp` argument.
       ErrorCode err_code = ErrorCode::Value;
       if (!resolve_range_arg(arg_node, arena, registry, ctx, &a.cells, &err_code, &a.rows, &a.cols)) {
         return Value::error(err_code);

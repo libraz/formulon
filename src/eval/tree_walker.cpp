@@ -736,6 +736,58 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       }
       continue;
     }
+    // IF-as-range-producer mirrors the CHOOSE / OFFSET branches: when an
+    // aggregator receives `IF(cond, range1, range2)`, the picked branch
+    // must be flattened to a vector of cells. This is what makes
+    // `=LET(r, IF(TRUE, A1:A3, B1:B3), SUM(r))` aggregate the 3-cell
+    // range rather than collapse `r` to a scalar. `expand_if_call` shares
+    // the same evaluation / range-resolution / filter contracts as the
+    // CHOOSE / OFFSET expanders.
+    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Call &&
+        strings::case_insensitive_eq(arg_node.as_call_name(), "IF")) {
+      had_range_shaped_arg = true;
+      std::vector<Value> if_cells;
+      ErrorCode if_err = ErrorCode::Value;
+      if (!expand_if_call(arg_node, arena, registry, ctx, &if_cells, &if_err, nullptr, nullptr)) {
+        const Value err = Value::error(if_err);
+        if (def->propagate_errors) {
+          return err;
+        }
+        values.push_back(err);
+        continue;
+      }
+      for (const Value& v : if_cells) {
+        if (def->propagate_errors && v.is_error()) {
+          return v;
+        }
+        if (def->range_filter_numeric_only && v.kind() != ValueKind::Number) {
+          continue;
+        }
+        if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
+          continue;
+        }
+        if (def->range_filter_a_coerce) {
+          // A-family (AVERAGEA / MAXA / MINA / VAR{A,PA} / STDEV{A,PA}).
+          // Bool and Text cells inside a range are coerced to numbers rather
+          // than dropped: TRUE -> 1, FALSE -> 0, any text (including the
+          // empty string and numeric-looking strings like "3.14") -> 0.
+          // Blank cells are still skipped.
+          if (v.kind() == ValueKind::Blank) {
+            continue;
+          }
+          if (v.kind() == ValueKind::Bool) {
+            values.push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
+            continue;
+          }
+          if (v.kind() == ValueKind::Text) {
+            values.push_back(Value::number(0.0));
+            continue;
+          }
+        }
+        values.push_back(v);
+      }
+      continue;
+    }
     // CHOOSE-as-range-producer mirrors the OFFSET branch above: when an
     // aggregator receives `CHOOSE(idx, range1, range2, ...)`, the chosen
     // child must be flattened to a vector of cells (recursively, if it is
@@ -1135,8 +1187,7 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
           // whole chain.
           expr_for_binding = env.lookup_ast(expr_node.as_name());
         }
-        env = env.extend(node.as_let_binding_name(i), v, expr_for_binding,
-                         arena);
+        env = env.extend(node.as_let_binding_name(i), v, expr_for_binding, arena);
       }
       const EvalContext body_ctx = ctx.with_name_env(&env);
       return eval_node(node.as_let_body(), arena, registry, body_ctx);

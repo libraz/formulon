@@ -773,6 +773,58 @@ bool expand_choose_call(const parser::AstNode& call, Arena& arena, const Functio
   return resolve_range_arg(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
 }
 
+bool expand_if_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                    std::vector<Value>* out_cells, ErrorCode* out_err_code, std::uint32_t* out_rows,
+                    std::uint32_t* out_cols) {
+  const std::uint32_t arity = call.as_call_arity();
+  // `IF(cond, then, [else])` — Mac Excel preserves reference-shape through
+  // the picked branch, so `=LET(r, IF(TRUE, A1:A3, B1:B3), SUM(r))` should
+  // aggregate the 3-cell range rather than collapse to a scalar. Mirror
+  // `eval_if_lazy`'s short-circuit semantics: evaluate cond first (errors
+  // propagate left-to-right matching Excel), then recurse into the picked
+  // branch. The `IF(FALSE, then)` two-arity case returns boolean FALSE in
+  // Excel's scalar path — not a reference — so we surface `#VALUE!` and
+  // let the caller fall back to its scalar branch (see commit `e068a7f`'s
+  // `resolve_reference_call` IF block for the matching reasoning).
+  if (arity != 2U && arity != 3U) {
+    *out_err_code = ErrorCode::Value;
+    return false;
+  }
+  const Value cond = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (cond.is_error()) {
+    *out_err_code = cond.as_error();
+    return false;
+  }
+  auto coerced = coerce_to_bool(cond);
+  if (!coerced) {
+    *out_err_code = coerced.error();
+    return false;
+  }
+  if (!coerced.value() && arity == 2U) {
+    *out_err_code = ErrorCode::Value;
+    return false;
+  }
+  const std::uint32_t pick = coerced.value() ? 1U : 2U;
+  const parser::AstNode& chosen = call.as_call_arg(pick);
+  // Recurse so nested OFFSET / CHOOSE / IF chains also flatten cleanly.
+  // Any other shape (Ref, RangeOp, …) falls through to `resolve_range_arg`,
+  // which already knows how to handle them — including the
+  // "anything else -> #VALUE!" fallthrough for scalar children.
+  if (chosen.kind() == parser::NodeKind::Call) {
+    const std::string_view name = chosen.as_call_name();
+    if (strings::case_insensitive_eq(name, "OFFSET")) {
+      return expand_offset_call(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+    }
+    if (strings::case_insensitive_eq(name, "CHOOSE")) {
+      return expand_choose_call(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+    }
+    if (strings::case_insensitive_eq(name, "IF")) {
+      return expand_if_call(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+    }
+  }
+  return resolve_range_arg(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+}
+
 bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                             const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
                             std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
@@ -1052,8 +1104,8 @@ namespace {
 // true on success and writes the inclusive 0-based rectangle.
 bool resolve_intersect_operand(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                                const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
-                               std::uint32_t* out_left_col, std::uint32_t* out_bottom_row,
-                               std::uint32_t* out_right_col, ErrorCode* out_err) {
+                               std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                               ErrorCode* out_err) {
   if (node.kind() == parser::NodeKind::RangeOp) {
     const parser::AstNode& lhs_ast = node.as_range_lhs();
     const parser::AstNode& rhs_ast = node.as_range_rhs();

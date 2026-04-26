@@ -1,0 +1,41 @@
+suite: let_dynamic_range_probes
+description: >
+  LET-binding passthrough probes for dynamically chosen ranges:
+  `=LET(r, IF(cond, A1:A3, B1:B3), SUM(r))` and the analogous
+  CHOOSE form. Mac Excel preserves the picked branch's range shape
+  through the LET binding for SUM / COUNTA / SUMPRODUCT / ROWS.
+  These probes pin the cross-family LET + IF / CHOOSE behaviour so
+  the `is_range_shaped_ast` allowlist + `resolve_range_arg` IF
+  handler stay aligned with Mac.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: let_if_sum_range_branch
+    description: "LET binds r to IF(TRUE, A1:A3, B1:B3); SUM(r) should be 1+2+3 = 6"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 10, B2: 20, B3: 30 }
+    formula: "=LET(r, IF(TRUE, A1:A3, B1:B3), SUM(r))"
+
+  - id: let_if_sum_range_else_branch
+    description: "LET binds r to IF(FALSE, A1:A3, B1:B3); SUM(r) should be 60"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 10, B2: 20, B3: 30 }
+    formula: "=LET(r, IF(FALSE, A1:A3, B1:B3), SUM(r))"
+
+  - id: let_if_counta_range
+    description: "COUNTA over LET-IF range; both branches are 3-cell ranges -> COUNTA = 3"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 10, B2: 20, B3: 30 }
+    formula: "=LET(r, IF(TRUE, A1:A3, B1:B3), COUNTA(r))"
+
+  - id: let_if_sumproduct_range
+    description: "SUMPRODUCT over LET-IF range -> 1+2+3 = 6"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 10, B2: 20, B3: 30 }
+    formula: "=LET(r, IF(TRUE, A1:A3, B1:B3), SUMPRODUCT(r))"
+
+  - id: let_if_rows_range
+    description: "ROWS already works through reference_lazy IF; this is the baseline"
+    setup: { A1: 1, A2: 2, A3: 3 }
+    formula: "=LET(r, IF(TRUE, A1:A3, A1:A3), ROWS(r))"
+
+  - id: let_choose_sum
+    description: "Same pattern with CHOOSE instead of IF"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 10, B2: 20, B3: 30 }
+    formula: "=LET(r, CHOOSE(1, A1:A3, B1:B3), SUM(r))"

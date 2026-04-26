@@ -10,7 +10,9 @@
 #include <utility>
 #include <vector>
 
+#include "eval/coerce.h"
 #include "eval/eval_context.h"
+#include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
 #include "eval/reference_lazy.h"
 #include "parser/ast.h"
@@ -52,6 +54,41 @@ bool resolve_range_arg(const parser::AstNode& raw_arg, Arena& arena, const Funct
   }
   if (arg_node.kind() == parser::NodeKind::Call && strings::case_insensitive_eq(arg_node.as_call_name(), "CHOOSE")) {
     return expand_choose_call(arg_node, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+  }
+  if (arg_node.kind() == parser::NodeKind::Call && strings::case_insensitive_eq(arg_node.as_call_name(), "IF")) {
+    // `IF(cond, then, [else])` preserves reference-shape through the picked
+    // branch in Mac Excel, so `=LET(r, IF(TRUE, A1:A3, B1:B3), SUM(r))`
+    // aggregates the 3-cell range rather than collapsing `r` to a scalar.
+    // Short-circuit the condition exactly like `eval_if_lazy`, then recurse
+    // into the chosen branch so nested CHOOSE / OFFSET / RangeOp / Ref keep
+    // their existing expansion paths. Errors propagate left-to-right (cond
+    // first, then the chosen branch), matching Excel and `expand_choose_call`.
+    // For the `IF(FALSE, then)` two-arity case Excel's scalar path returns
+    // boolean FALSE — not a reference — so we surface `#VALUE!` and let the
+    // caller fall back to the scalar branch (mirrors the `IF` block in
+    // `resolve_reference_call` added in commit `e068a7f`).
+    const std::uint32_t arity = arg_node.as_call_arity();
+    if (arity != 2U && arity != 3U) {
+      *out_err_code = ErrorCode::Value;
+      return false;
+    }
+    const Value cond = eval_node(arg_node.as_call_arg(0), arena, registry, ctx);
+    if (cond.is_error()) {
+      *out_err_code = cond.as_error();
+      return false;
+    }
+    auto coerced = coerce_to_bool(cond);
+    if (!coerced) {
+      *out_err_code = coerced.error();
+      return false;
+    }
+    if (!coerced.value() && arity == 2U) {
+      *out_err_code = ErrorCode::Value;
+      return false;
+    }
+    const std::uint32_t pick = coerced.value() ? 1U : 2U;
+    const parser::AstNode& chosen = arg_node.as_call_arg(pick);
+    return resolve_range_arg(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
   }
   if (arg_node.kind() == parser::NodeKind::RangeOp) {
     const parser::AstNode& lhs_ast = arg_node.as_range_lhs();

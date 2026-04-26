@@ -1,0 +1,209 @@
+{
+  "suite": "let_dynamic_range_probes",
+  "description": "LET-binding passthrough probes for dynamically chosen ranges: `=LET(r, IF(cond, A1:A3, B1:B3), SUM(r))` and the analogous CHOOSE form. Mac Excel preserves the picked branch's range shape through the LET binding for SUM / COUNTA / SUMPRODUCT / ROWS. These probes pin the cross-family LET + IF / CHOOSE behaviour so the `is_range_shaped_ast` allowlist + `resolve_range_arg` IF handler stay aligned with Mac.\n",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-26T12:28:50Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "let_if_sum_range_branch",
+      "formula": "=LET(r, IF(TRUE, A1:A3, B1:B3), SUM(r))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "let_if_sum_range_else_branch",
+      "formula": "=LET(r, IF(FALSE, A1:A3, B1:B3), SUM(r))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "let_if_counta_range",
+      "formula": "=LET(r, IF(TRUE, A1:A3, B1:B3), COUNTA(r))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "let_if_sumproduct_range",
+      "formula": "=LET(r, IF(TRUE, A1:A3, B1:B3), SUMPRODUCT(r))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "let_if_rows_range",
+      "formula": "=LET(r, IF(TRUE, A1:A3, A1:A3), ROWS(r))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "let_choose_sum",
+      "formula": "=LET(r, CHOOSE(1, A1:A3, B1:B3), SUM(r))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    }
+  ]
+}

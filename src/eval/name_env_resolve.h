@@ -29,8 +29,7 @@ namespace eval {
 /// scalar / Value-only case). The returned reference always refers to a
 /// node that outlives the LET scope: bound ASTs come from the same parser
 /// arena that owns the LET node itself.
-inline const parser::AstNode& resolve_name_ast(const parser::AstNode& node,
-                                               const NameEnv* env) noexcept {
+inline const parser::AstNode& resolve_name_ast(const parser::AstNode& node, const NameEnv* env) noexcept {
   if (env == nullptr) {
     return node;
   }
@@ -54,9 +53,14 @@ inline const parser::AstNode& resolve_name_ast(const parser::AstNode& node,
 /// True when `node` is one of the AST shapes that the eager dispatcher and
 /// `resolve_range_arg` treat as range-producing: a `RangeOp` (`A1:B2`), an
 /// `ArrayLiteral` (`{1,2;3,4}`), or one of the reference-producing calls
-/// (`OFFSET`, `CHOOSE`, `INDIRECT`). Single-cell `Ref` is intentionally
+/// (`OFFSET`, `CHOOSE`, `INDIRECT`, `IF`). Single-cell `Ref` is intentionally
 /// excluded so that LET passthrough does not silently change the
 /// scalar-vs-range provenance of a `=LET(r, A1, SUM(r,B1))` formula.
+///
+/// `IF` is included because Mac Excel preserves reference-shape through the
+/// picked branch: `=LET(r, IF(TRUE, A1:A3, B1:B3), SUM(r))` evaluates as if
+/// `r` were `A1:A3`. The companion logic in `resolve_range_arg` short-
+/// circuits the condition and recurses into the chosen branch.
 inline bool is_range_shaped_ast(const parser::AstNode& node) noexcept {
   switch (node.kind()) {
     case parser::NodeKind::RangeOp:
@@ -64,9 +68,8 @@ inline bool is_range_shaped_ast(const parser::AstNode& node) noexcept {
       return true;
     case parser::NodeKind::Call: {
       const auto name = node.as_call_name();
-      return strings::case_insensitive_eq(name, "OFFSET") ||
-             strings::case_insensitive_eq(name, "CHOOSE") ||
-             strings::case_insensitive_eq(name, "INDIRECT");
+      return strings::case_insensitive_eq(name, "OFFSET") || strings::case_insensitive_eq(name, "CHOOSE") ||
+             strings::case_insensitive_eq(name, "INDIRECT") || strings::case_insensitive_eq(name, "IF");
     }
     default:
       return false;
