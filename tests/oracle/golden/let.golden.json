@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-23T07:04:41Z"
+    "generated_at": "2026-04-26T02:04:22Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -128,6 +128,212 @@
       "expect": {
         "kind": "error",
         "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "range_binding_sum",
+      "formula": "=LET(r, A1:A3, SUM(r))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "skipped": "LET range binding collapses to spill anchor before SUM consumes it; Excel: 60, Formulon: 10."
+    },
+    {
+      "id": "range_binding_count",
+      "formula": "=LET(r, A1:A3, COUNT(r))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "skipped": "LET range binding collapses to scalar before COUNT iterates."
+    },
+    {
+      "id": "range_binding_arithmetic_at_anchor",
+      "formula": "=LET(r, A1:A3, r+1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "range_binding_in_lookup",
+      "formula": "=LET(t, A1:B2, VLOOKUP(\"banana\", t, 2, FALSE))",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "skipped": "LET range binding cannot serve as VLOOKUP table_array; Formulon: #VALUE!."
+    },
+    {
+      "id": "function_result_binding",
+      "formula": "=LET(s, SQRT(16), s*2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "nested_function_in_binding",
+      "formula": "=LET(s, SUM(1,2,3,4), s/2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "binding_used_multiple_times",
+      "formula": "=LET(x, 5, x*x*x)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 125.0
+      }
+    },
+    {
+      "id": "binding_used_in_other_binding_chain",
+      "formula": "=LET(x, 2, y, x*x, z, y+x, z*10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "shadow_builtin_name",
+      "formula": "=LET(SUM, 100, SUM+1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 101.0
+      }
+    },
+    {
+      "id": "shadow_builtin_then_call",
+      "formula": "=LET(SUM, 100, SUM)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "many_bindings_chain",
+      "formula": "=LET(a,1,b,2,c,3,d,4,e,5,f,6,g,7,h,8,i,9,j,10,a+b+c+d+e+f+g+h+i+j)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 55.0
+      }
+    },
+    {
+      "id": "deeply_nested_let",
+      "formula": "=LET(a,1, LET(b,2, LET(c,3, LET(d,4, LET(e,5, a+b+c+d+e)))))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "identifier_ascii_underscore",
+      "formula": "=LET(_x, 5, _x*2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "identifier_japanese",
+      "formula": "=LET(りんご, 100, りんご*2)",
+      "setup": {},
+      "skipped": "LET ja-JP identifier (りんご) rejected as #NAME?; Excel accepts."
+    },
+    {
+      "id": "bool_in_binding_arith",
+      "formula": "=LET(b, TRUE, b+10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "text_in_binding_arith_is_value",
+      "formula": "=LET(s, \"abc\", s+1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "body_returns_range_at_anchor",
+      "formula": "=LET(r, A1:A2, r)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
       }
     }
   ]

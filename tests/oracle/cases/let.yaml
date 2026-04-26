@@ -58,3 +58,91 @@ cases:
   - id: binding_error_uncaught_propagates
     description: "Uncaught Div/0 from a binding flows into body arithmetic"
     formula: "=LET(x, 1/0, x+1)"
+
+  # =========================================================================
+  # Expanded probes: range bindings, function-result bindings, scope edges,
+  # name-collision-with-builtin probes, ja-JP identifiers, deep nesting.
+  # =========================================================================
+
+  # -- Range bindings -----------------------------------------------------
+  - id: range_binding_sum
+    description: "Bind a range, then SUM it"
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=LET(r, A1:A3, SUM(r))"
+
+  - id: range_binding_count
+    setup: { A1: 1, A2: "x", A3: 3 }
+    formula: "=LET(r, A1:A3, COUNT(r))"
+
+  - id: range_binding_arithmetic_at_anchor
+    description: "Range binding consumed by spill anchor at Z1"
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=LET(r, A1:A3, r+1)"
+
+  - id: range_binding_in_lookup
+    setup: { A1: "apple", B1: 1, A2: "banana", B2: 2 }
+    formula: "=LET(t, A1:B2, VLOOKUP(\"banana\", t, 2, FALSE))"
+
+  # -- Function-result bindings ------------------------------------------
+  - id: function_result_binding
+    description: "Bind a function call result"
+    formula: "=LET(s, SQRT(16), s*2)"
+
+  - id: nested_function_in_binding
+    formula: "=LET(s, SUM(1,2,3,4), s/2)"
+
+  # -- Reused binding -----------------------------------------------------
+  - id: binding_used_multiple_times
+    description: "Same name read three times — should not re-evaluate"
+    formula: "=LET(x, 5, x*x*x)"
+
+  - id: binding_used_in_other_binding_chain
+    description: "y depends on x, z depends on y — chain"
+    formula: "=LET(x, 2, y, x*x, z, y+x, z*10)"
+
+  # -- Name collision with builtin ---------------------------------------
+  - id: shadow_builtin_name
+    description: "Excel allows shadowing built-in function names — SUM bound to a value, then used as identifier"
+    formula: "=LET(SUM, 100, SUM+1)"
+
+  - id: shadow_builtin_then_call
+    description: "After binding SUM, the lexical binding wins over the function — SUM(1,2,3) becomes value(1,2,3)?"
+    formula: "=LET(SUM, 100, SUM)"
+
+  # -- Many bindings ------------------------------------------------------
+  - id: many_bindings_chain
+    description: "10 bindings chained in arithmetic"
+    formula: "=LET(a,1,b,2,c,3,d,4,e,5,f,6,g,7,h,8,i,9,j,10,a+b+c+d+e+f+g+h+i+j)"
+
+  # -- Deep nesting -------------------------------------------------------
+  - id: deeply_nested_let
+    description: "5 levels deep"
+    formula: "=LET(a,1, LET(b,2, LET(c,3, LET(d,4, LET(e,5, a+b+c+d+e)))))"
+
+  # Arity / parse-rejection probes (=LET(x), =LET(x,5), =LET(x,1,y,2)) and
+  # identifier_starts_with_digit omitted — Excel rejects these at formula
+  # entry, leaving the cell blank rather than evaluating to an error.
+
+  # -- Reserved-word identifier probes ----------------------------------
+  - id: identifier_ascii_underscore
+    formula: "=LET(_x, 5, _x*2)"
+
+  # -- ja-JP identifier --------------------------------------------------
+  - id: identifier_japanese
+    description: "Japanese identifier — Excel accepts hiragana/katakana/kanji"
+    formula: "=LET(りんご, 100, りんご*2)"
+
+  # -- Bool / text propagation through binding ---------------------------
+  - id: bool_in_binding_arith
+    description: "TRUE coerces to 1 in arithmetic"
+    formula: "=LET(b, TRUE, b+10)"
+
+  - id: text_in_binding_arith_is_value
+    description: "Non-numeric text in arithmetic context -> #VALUE!"
+    formula: "=LET(s, \"abc\", s+1)"
+
+  # -- Body returns range --------------------------------------------
+  - id: body_returns_range_at_anchor
+    description: "Body is a bare range — spill anchor reads first element"
+    setup: { A1: 42, A2: 99 }
+    formula: "=LET(r, A1:A2, r)"
