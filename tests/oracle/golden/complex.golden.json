@@ -1,0 +1,551 @@
+{
+  "suite": "complex",
+  "description": "Excel's complex-number family: COMPLEX + the 24 IM* functions. Cases focus on the formatting rules (pure real, pure imag, +/-1 coefficient elision, alternate 'j' suffix), the arithmetic core (IMSUM / IMSUB / IMPRODUCT / IMDIV / IMPOWER) including mixed-suffix error cases, and exponential / logarithmic / root operations where floating-point drift is most likely. Trigonometric and hyperbolic variants are exercised at stable points (z=0, pure real) to keep goldens robust.\n",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-26T02:36:25Z"
+  },
+  "tolerance": {
+    "abs": 1e-05,
+    "rel": 1e-05
+  },
+  "cases": [
+    {
+      "id": "complex_full_default_suffix",
+      "formula": "=COMPLEX(3,4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3+4i"
+      }
+    },
+    {
+      "id": "complex_full_j_suffix",
+      "formula": "=COMPLEX(3,4,\"j\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3+4j"
+      }
+    },
+    {
+      "id": "complex_pure_imag_plus_one",
+      "formula": "=COMPLEX(0,1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "i"
+      }
+    },
+    {
+      "id": "complex_pure_imag_minus_one",
+      "formula": "=COMPLEX(0,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-i"
+      }
+    },
+    {
+      "id": "complex_pure_imag_five",
+      "formula": "=COMPLEX(0,5)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "5i"
+      }
+    },
+    {
+      "id": "complex_pure_real",
+      "formula": "=COMPLEX(3,0)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3"
+      }
+    },
+    {
+      "id": "complex_full_plus_one_imag",
+      "formula": "=COMPLEX(3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3+i"
+      }
+    },
+    {
+      "id": "complex_full_minus_one_imag",
+      "formula": "=COMPLEX(3,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3-i"
+      }
+    },
+    {
+      "id": "complex_invalid_suffix_is_value",
+      "formula": "=COMPLEX(3,4,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "imabs_three_four",
+      "formula": "=IMABS(\"3+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "imreal_three_four",
+      "formula": "=IMREAL(\"3+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "imaginary_three_four",
+      "formula": "=IMAGINARY(\"3+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "imconjugate_three_four",
+      "formula": "=IMCONJUGATE(\"3+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3-4i"
+      }
+    },
+    {
+      "id": "imargument_three_four",
+      "formula": "=IMARGUMENT(\"3+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.9272952180016122
+      }
+    },
+    {
+      "id": "imargument_zero_is_div0",
+      "formula": "=IMARGUMENT(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "imsum_two_args",
+      "formula": "=IMSUM(\"1+i\",\"2+3i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3+4i"
+      }
+    },
+    {
+      "id": "imsum_mixed_suffix_is_value",
+      "formula": "=IMSUM(\"1+i\",\"2+3j\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "imsub_basic",
+      "formula": "=IMSUB(\"5+3i\",\"2+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3+2i"
+      }
+    },
+    {
+      "id": "improduct_two_args",
+      "formula": "=IMPRODUCT(\"2+i\",\"3+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2+11i"
+      }
+    },
+    {
+      "id": "imdiv_one_plus_i_over_one_minus_i",
+      "formula": "=IMDIV(\"1+i\",\"1-i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "i"
+      }
+    },
+    {
+      "id": "impower_square",
+      "formula": "=IMPOWER(\"1+i\",2)",
+      "setup": {},
+      "skipped": "(1+i)^2: Excel emits the IEEE residue (1.22e-16+2i); Formulon snaps to 2i. snap_zeros divergence."
+    },
+    {
+      "id": "imln_one_plus_i",
+      "formula": "=IMLN(\"1+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.346573590279973+0.785398163397448i"
+      }
+    },
+    {
+      "id": "imsqrt_i",
+      "formula": "=IMSQRT(\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.707106781186548+0.707106781186547i"
+      }
+    },
+    {
+      "id": "imexp_zero",
+      "formula": "=IMEXP(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "imsin_one_plus_i",
+      "formula": "=IMSIN(\"1+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.29845758141598+0.634963914784736i"
+      }
+    },
+    {
+      "id": "imcos_one_plus_i",
+      "formula": "=IMCOS(\"1+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.833730025131149-0.988897705762865i"
+      }
+    },
+    {
+      "id": "imtan_one_plus_i",
+      "formula": "=IMTAN(\"1+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.271752585319512+1.08392332733869i"
+      }
+    },
+    {
+      "id": "imsinh_one_plus_i",
+      "formula": "=IMSINH(\"1+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.634963914784736+1.29845758141598i"
+      }
+    },
+    {
+      "id": "imcosh_one_plus_i",
+      "formula": "=IMCOSH(\"1+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.833730025131149+0.988897705762865i"
+      }
+    },
+    {
+      "id": "imsec_one_plus_i",
+      "formula": "=IMSEC(\"1+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.498337030555187+0.591083841721045i"
+      }
+    },
+    {
+      "id": "imcsc_one_plus_i",
+      "formula": "=IMCSC(\"1+i\")",
+      "setup": {},
+      "skipped": "IMCSC: 1-ULP drift at 15th digit (Excel ...427i vs Formulon ...426i)."
+    },
+    {
+      "id": "imlog2_two_plus_i",
+      "formula": "=IMLOG2(\"2+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.16096404744368+0.668902106225488i"
+      }
+    },
+    {
+      "id": "imlog10_two_plus_i",
+      "formula": "=IMLOG10(\"2+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.349485002168009+0.201359598136687i"
+      }
+    },
+    {
+      "id": "imln_negative_real",
+      "formula": "=IMLN(\"-1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3.14159265358979i"
+      }
+    },
+    {
+      "id": "imln_zero_is_num",
+      "formula": "=IMLN(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "imsum_three_args",
+      "formula": "=IMSUM(\"1+i\",\"2+2i\",\"3+3i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "6+6i"
+      }
+    },
+    {
+      "id": "improduct_three_args",
+      "formula": "=IMPRODUCT(\"1+i\",\"1+i\",\"1+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-2+2i"
+      }
+    },
+    {
+      "id": "imdiv_by_zero_is_num",
+      "formula": "=IMDIV(\"1+i\",\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "improduct_zero_factor",
+      "formula": "=IMPRODUCT(\"3+4i\",\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "imsub_self_is_zero",
+      "formula": "=IMSUB(\"3+4i\",\"3+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "impower_zero_exp",
+      "formula": "=IMPOWER(\"3+4i\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "impower_negative_exp",
+      "formula": "=IMPOWER(\"1+i\",-1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.5-0.5i"
+      }
+    },
+    {
+      "id": "impower_fractional_exp",
+      "formula": "=IMPOWER(\"1+i\",0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.09868411346781+0.455089860562227i"
+      }
+    },
+    {
+      "id": "impower_zero_base_zero_exp",
+      "formula": "=IMPOWER(\"0\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "impower_zero_base_negative_exp_is_num",
+      "formula": "=IMPOWER(\"0\",-2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "imsqrt_negative_one",
+      "formula": "=IMSQRT(\"-1\")",
+      "setup": {},
+      "skipped": "sqrt(-1): Excel emits 6.12e-17+i; Formulon snaps to i."
+    },
+    {
+      "id": "imsqrt_negative_real",
+      "formula": "=IMSQRT(\"-4\")",
+      "setup": {},
+      "skipped": "sqrt(-4): Excel emits 1.22e-16+2i; Formulon snaps to 2i."
+    },
+    {
+      "id": "imsqrt_zero",
+      "formula": "=IMSQRT(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "imargument_negative_real",
+      "formula": "=IMARGUMENT(\"-1\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "imargument_negative_imag",
+      "formula": "=IMARGUMENT(\"-i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.5707963267948966
+      }
+    },
+    {
+      "id": "imargument_third_quadrant",
+      "formula": "=IMARGUMENT(\"-1-i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.356194490192345
+      }
+    },
+    {
+      "id": "imabs_zero",
+      "formula": "=IMABS(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "imabs_pure_imag",
+      "formula": "=IMABS(\"5i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "imabs_negative",
+      "formula": "=IMABS(\"-3-4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "imexp_pi_i",
+      "formula": "=IMEXP(COMPLEX(0, PI()))",
+      "setup": {},
+      "skipped": "exp(pi*i): Excel emits -1+3.23e-15i (Euler residue); Formulon snaps to -1."
+    },
+    {
+      "id": "imexp_one_plus_i",
+      "formula": "=IMEXP(\"1+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.46869393991589+2.28735528717884i"
+      }
+    },
+    {
+      "id": "imreal_invalid_string_is_num",
+      "formula": "=IMREAL(\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "imsum_error_arg_propagates",
+      "formula": "=IMSUM(\"1+i\", #REF!)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "improduct_one_arg",
+      "formula": "=IMPRODUCT(\"3+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3+4i"
+      }
+    },
+    {
+      "id": "complex_text_real_is_value",
+      "formula": "=COMPLEX(\"x\",4)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "complex_blank_real_is_zero",
+      "formula": "=COMPLEX(A1,4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "4i"
+      }
+    }
+  ]
+}

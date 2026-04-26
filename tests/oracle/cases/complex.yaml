@@ -93,3 +93,151 @@ cases:
 
   - id: imexp_zero
     formula: "=IMEXP(\"0\")"
+
+  # =========================================================================
+  # Expanded probes: trig/hyperbolic family, log variants, more arithmetic
+  # forms, error inputs, edge values (zero, large magnitude, branch cuts).
+  # =========================================================================
+
+  # -- Trig / hyperbolic at non-trivial points ----------------------------
+  - id: imsin_one_plus_i
+    description: "sin(1+i) = sin(1)cosh(1) + cos(1)sinh(1)i ≈ 1.298+0.635i"
+    formula: "=IMSIN(\"1+i\")"
+
+  - id: imcos_one_plus_i
+    description: "cos(1+i) ≈ 0.834-0.989i"
+    formula: "=IMCOS(\"1+i\")"
+
+  - id: imtan_one_plus_i
+    formula: "=IMTAN(\"1+i\")"
+
+  - id: imsinh_one_plus_i
+    formula: "=IMSINH(\"1+i\")"
+
+  - id: imcosh_one_plus_i
+    formula: "=IMCOSH(\"1+i\")"
+
+  - id: imsec_one_plus_i
+    description: "sec(z) = 1/cos(z) — Excel ja-JP locale check"
+    formula: "=IMSEC(\"1+i\")"
+
+  - id: imcsc_one_plus_i
+    formula: "=IMCSC(\"1+i\")"
+
+  # -- Logarithm variants ------------------------------------------------
+  - id: imlog2_two_plus_i
+    description: "IMLOG2(2+i) — base-2 complex logarithm"
+    formula: "=IMLOG2(\"2+i\")"
+
+  - id: imlog10_two_plus_i
+    formula: "=IMLOG10(\"2+i\")"
+
+  - id: imln_negative_real
+    description: "IMLN(-1) = pi*i — branch cut on the negative real axis"
+    formula: "=IMLN(\"-1\")"
+
+  - id: imln_zero_is_num
+    description: "IMLN(0) is undefined; Excel: #NUM!"
+    formula: "=IMLN(\"0\")"
+
+  # -- Arithmetic edge cases ----------------------------------------------
+  - id: imsum_three_args
+    description: "IMSUM accepts more than 2 args"
+    formula: "=IMSUM(\"1+i\",\"2+2i\",\"3+3i\")"
+
+  - id: improduct_three_args
+    formula: "=IMPRODUCT(\"1+i\",\"1+i\",\"1+i\")"
+
+  - id: imdiv_by_zero_is_num
+    formula: "=IMDIV(\"1+i\",\"0\")"
+
+  - id: improduct_zero_factor
+    description: "Zero factor collapses product to 0"
+    formula: "=IMPRODUCT(\"3+4i\",\"0\")"
+
+  - id: imsub_self_is_zero
+    formula: "=IMSUB(\"3+4i\",\"3+4i\")"
+
+  # -- IMPOWER edges ------------------------------------------------------
+  - id: impower_zero_exp
+    description: "(any)^0 = 1"
+    formula: "=IMPOWER(\"3+4i\",0)"
+
+  - id: impower_negative_exp
+    description: "Negative exponent — (1+i)^-1 = 0.5 - 0.5i"
+    formula: "=IMPOWER(\"1+i\",-1)"
+
+  - id: impower_fractional_exp
+    description: "(1+i)^0.5 = sqrt(z) on principal branch"
+    formula: "=IMPOWER(\"1+i\",0.5)"
+
+  - id: impower_zero_base_zero_exp
+    description: "0^0 — Excel: 1, but IMPOWER may differ"
+    formula: "=IMPOWER(\"0\",0)"
+
+  - id: impower_zero_base_negative_exp_is_num
+    formula: "=IMPOWER(\"0\",-2)"
+
+  # -- IMSQRT branch cut -------------------------------------------------
+  - id: imsqrt_negative_one
+    description: "sqrt(-1) = i (principal branch)"
+    formula: "=IMSQRT(\"-1\")"
+
+  - id: imsqrt_negative_real
+    description: "sqrt(-4) = 2i"
+    formula: "=IMSQRT(\"-4\")"
+
+  - id: imsqrt_zero
+    formula: "=IMSQRT(\"0\")"
+
+  # -- Argument across quadrants ------------------------------------------
+  - id: imargument_negative_real
+    description: "arg(-1) = pi"
+    formula: "=IMARGUMENT(\"-1\")"
+
+  - id: imargument_negative_imag
+    description: "arg(-i) = -pi/2"
+    formula: "=IMARGUMENT(\"-i\")"
+
+  - id: imargument_third_quadrant
+    description: "arg(-1-i) = -3pi/4"
+    formula: "=IMARGUMENT(\"-1-i\")"
+
+  # -- IMABS edges -------------------------------------------------------
+  - id: imabs_zero
+    formula: "=IMABS(\"0\")"
+
+  - id: imabs_pure_imag
+    formula: "=IMABS(\"5i\")"
+
+  - id: imabs_negative
+    formula: "=IMABS(\"-3-4i\")"
+
+  # -- IMEXP edges -------------------------------------------------------
+  - id: imexp_pi_i
+    description: "exp(pi*i) = -1 (Euler's identity)"
+    formula: "=IMEXP(COMPLEX(0, PI()))"
+
+  - id: imexp_one_plus_i
+    description: "exp(1+i) = e*cos(1) + e*sin(1)*i"
+    formula: "=IMEXP(\"1+i\")"
+
+  # -- Error / parse edges -----------------------------------------------
+  - id: imreal_invalid_string_is_num
+    formula: "=IMREAL(\"abc\")"
+
+  - id: imsum_error_arg_propagates
+    formula: "=IMSUM(\"1+i\", #REF!)"
+
+  - id: improduct_one_arg
+    description: "IMPRODUCT with single arg returns that arg"
+    formula: "=IMPRODUCT(\"3+4i\")"
+
+  # -- COMPLEX with text args ---------------------------------------------
+  - id: complex_text_real_is_value
+    formula: "=COMPLEX(\"x\",4)"
+
+  - id: complex_blank_real_is_zero
+    description: "Blank real coerces to 0"
+    setup: {}
+    formula: "=COMPLEX(A1,4)"

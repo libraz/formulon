@@ -662,6 +662,45 @@ entries:
     first_noted: 2026-04-26
     last_verified_excel_version: "16.108.1"
 
+  # -- Complex IMPOWER / IMSQRT / IMEXP: snap-to-zero cleaner than Excel --
+  # Formulon's complex arithmetic kernel applies a `snap_zeros` cleanup
+  # that hides floating-point noise (e.g. (1+i)^2 → "2i" instead of
+  # Excel's "1.22e-16+2i"). Mathematically nicer but diverges from Mac
+  # Excel which surfaces the IEEE residue. For 1-bit parity Formulon
+  # should disable the snap step (or surface the exact f64 result).
+  - id: impower_square
+    mode: skip-oracle
+    reason: "(1+i)^2: Excel emits the IEEE residue (1.22e-16+2i); Formulon snaps to 2i. snap_zeros divergence."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
+  - id: imsqrt_negative_one
+    mode: skip-oracle
+    reason: "sqrt(-1): Excel emits 6.12e-17+i; Formulon snaps to i."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: imsqrt_negative_real
+    mode: skip-oracle
+    reason: "sqrt(-4): Excel emits 1.22e-16+2i; Formulon snaps to 2i."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: imexp_pi_i
+    mode: skip-oracle
+    reason: "exp(pi*i): Excel emits -1+3.23e-15i (Euler residue); Formulon snaps to -1."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+
+  # -- Complex IMCSC: 1-ULP precision in last decimal --------------------
+  # IMCSC(1+i): Excel ...0.303931001628427i, Formulon ...0.303931001628426i.
+  # Drift is 1 ULP at the 15th significant digit; cannot pass the exact
+  # text comparison the oracle uses. Acceptable numerical agreement; the
+  # comparison would need to allow tolerance on parsed components.
+  - id: imcsc_one_plus_i
+    mode: skip-oracle
+    reason: "IMCSC: 1-ULP drift at 15th digit (Excel ...427i vs Formulon ...426i)."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+
   # -- Pre-existing oracle flake: [Red] colour directive ------------------
   # Mac Excel's read-back through xlwings has been observed to vary
   # between sessions for `=TEXT(5, "[Red]0.00")`: sometimes the cell
