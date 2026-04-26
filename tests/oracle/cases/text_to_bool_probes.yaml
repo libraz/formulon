@@ -55,6 +55,20 @@ cases:
     description: "AND(\"TRUE\", \"FALSE\")"
     formula: "=AND(\"TRUE\", \"FALSE\")"
 
+  - id: text_bool_and_whitespace
+    description: >-
+      AND("  TRUE  ", TRUE). Mac asymmetry: IF rejects whitespace-padded
+      bool-text (#VALUE!), but AND/OR/XOR/IFS go through the stricter
+      `logical_coerce` path which TRIMS surrounding ASCII whitespace
+      before matching TRUE/FALSE. This probe locks in TRUE.
+    formula: "=AND(\"  TRUE  \", TRUE)"
+
+  - id: text_bool_or_whitespace
+    description: >-
+      OR("  FALSE  ", FALSE). Sibling to text_bool_and_whitespace; locks
+      in FALSE and confirms the asymmetry holds for OR as well.
+    formula: "=OR(\"  FALSE  \", FALSE)"
+
   # ---------------------------------------------------------------------
   # D) BETA.DIST with text cumulative argument. This is the actual
   # IronCalc case (rows 48-49 of statistical/BETADIST_BETAINV.xlsx).

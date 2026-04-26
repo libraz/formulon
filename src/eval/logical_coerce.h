@@ -16,6 +16,16 @@
 //       - "TRUE"      -> true
 //       - "FALSE"     -> false
 //       - anything else (including "0" / "1") -> `#VALUE!`
+//
+//     Mac asymmetry note: this branch INTENTIONALLY trims surrounding
+//     ASCII whitespace, even though the generic `coerce_to_bool` used
+//     by IF does not. Mac Excel 365 (ja-JP) verifies this behaviour:
+//       =IF("  TRUE  ", 1, 2)         -> #VALUE!
+//       =AND("  TRUE  ", TRUE)        -> TRUE
+//       =OR("  FALSE  ", FALSE)       -> FALSE
+//     See `tests/oracle/cases/text_to_bool_probes.yaml` cases
+//     `text_bool_if_true_with_whitespace`, `text_bool_and_whitespace`,
+//     and `text_bool_or_whitespace` for the recorded ground truth.
 //   * Error propagates its code.
 //   * Array / Ref / Lambda -> `#VALUE!`.
 //

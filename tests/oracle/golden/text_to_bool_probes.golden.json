@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T10:21:13Z"
+    "generated_at": "2026-04-26T10:32:35Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -88,6 +88,24 @@
     {
       "id": "text_bool_and_true_false",
       "formula": "=AND(\"TRUE\", \"FALSE\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "text_bool_and_whitespace",
+      "formula": "=AND(\"  TRUE  \", TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "text_bool_or_whitespace",
+      "formula": "=OR(\"  FALSE  \", FALSE)",
       "setup": {},
       "expect": {
         "kind": "bool",
