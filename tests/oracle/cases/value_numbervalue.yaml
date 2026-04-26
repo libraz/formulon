@@ -126,3 +126,129 @@ cases:
 
   - id: numbervalue_empty_decimal_sep_is_value
     formula: "=NUMBERVALUE(\"1.5\", \"\")"
+
+  # =========================================================================
+  # ja-JP / locale-sensitive parsing — currency, full-width digits, parens
+  # negative, locale group/decimal separators. The TEXT format-side gaps
+  # registered in `tests/divergence.yaml` (era, DBNum, currency [$JPY-411])
+  # have symmetric input-side counterparts that this block probes.
+  # =========================================================================
+
+  # -- VALUE: ¥ (yen) currency prefix --------------------------------------
+  - id: value_yen_prefix
+    description: "¥1234 -> 1234"
+    formula: "=VALUE(\"¥1234\")"
+
+  - id: value_yen_prefix_thousands
+    description: "¥1,234,567 -> 1234567"
+    formula: "=VALUE(\"¥1,234,567\")"
+
+  - id: value_yen_prefix_with_decimal
+    description: "¥1234.56 -> 1234.56 (yen has no fractional unit but VALUE accepts)"
+    formula: "=VALUE(\"¥1234.56\")"
+
+  - id: value_yen_prefix_negative
+    description: "-¥1234 -> -1234 with leading minus"
+    formula: "=VALUE(\"-¥1234\")"
+
+  # -- VALUE: trailing-currency style (1234円) -----------------------------
+  - id: value_trailing_yen_kanji
+    description: "1234円 -> 1234 (Japanese trailing-currency form)"
+    formula: "=VALUE(\"1234円\")"
+
+  # -- VALUE: full-width digits --------------------------------------------
+  - id: value_fullwidth_digits
+    description: "Full-width Arabic digits ２０２４ -> 2024"
+    formula: "=VALUE(\"２０２４\")"
+
+  - id: value_fullwidth_digits_with_decimal
+    description: "Full-width digits with ASCII decimal ２.５ -> 2.5"
+    formula: "=VALUE(\"２.５\")"
+
+  - id: value_fullwidth_digits_with_yen
+    description: "¥２０２４ — full-width digits with yen prefix"
+    formula: "=VALUE(\"¥２０２４\")"
+
+  # -- VALUE: full-width percent / minus / parentheses ---------------------
+  - id: value_fullwidth_percent
+    description: "２５％ -> 0.25"
+    formula: "=VALUE(\"２５％\")"
+
+  - id: value_fullwidth_minus
+    description: "Full-width minus −1234 (U+2212) — Excel may or may not accept"
+    formula: "=VALUE(\"−1234\")"
+
+  - id: value_parenthesised_negative
+    description: "(1234) accounting-style negative -> -1234"
+    formula: "=VALUE(\"(1234)\")"
+
+  - id: value_parenthesised_with_yen
+    description: "(¥1234) -> -1234 accounting-style yen negative"
+    formula: "=VALUE(\"(¥1234)\")"
+
+  # -- VALUE: edge cases ---------------------------------------------------
+  - id: value_multiple_decimals_is_value
+    description: "1.2.3 has too many decimal points -> #VALUE!"
+    formula: "=VALUE(\"1.2.3\")"
+
+  - id: value_comma_only_no_grouping_is_value
+    description: ",,, alone is not a number"
+    formula: "=VALUE(\",,,\")"
+
+  - id: value_text_with_thousand_misplaced
+    description: "1,2 — bad thousands placement; some Excels accept, others reject"
+    formula: "=VALUE(\"1,2\")"
+
+  - id: value_scientific_no_exponent
+    description: "1.5E without exponent digits -> #VALUE!"
+    formula: "=VALUE(\"1.5E\")"
+
+  - id: value_scientific_e_with_plus_only
+    description: "1.5E+ alone -> #VALUE!"
+    formula: "=VALUE(\"1.5E+\")"
+
+  # -- NUMBERVALUE: locale separator probes -------------------------------
+  - id: numbervalue_jp_no_group_separator
+    description: "Plain comma-less integer with explicit decimal '.' (ja-JP usual form)"
+    formula: "=NUMBERVALUE(\"1234567.89\", \".\")"
+
+  - id: numbervalue_explicit_group_comma_dot_decimal
+    description: "Explicit US-style: comma group, dot decimal"
+    formula: "=NUMBERVALUE(\"1,234.56\", \".\", \",\")"
+
+  - id: numbervalue_fullwidth_digits
+    description: "Full-width digits passed to NUMBERVALUE"
+    formula: "=NUMBERVALUE(\"２０２４.５\", \".\")"
+
+  - id: numbervalue_yen_prefix_is_value
+    description: "NUMBERVALUE does not strip currency; ¥1234 -> #VALUE!"
+    formula: "=NUMBERVALUE(\"¥1234\", \".\")"
+
+  - id: numbervalue_percent_decimal
+    description: "12.5% with explicit '.' decimal -> 0.125"
+    formula: "=NUMBERVALUE(\"12.5%\", \".\")"
+
+  - id: numbervalue_double_percent
+    description: "Multiple trailing % apply repeatedly: 100%% -> 0.01"
+    formula: "=NUMBERVALUE(\"100%%\", \".\")"
+
+  - id: numbervalue_three_arg_space_group
+    description: "Three-arg form with space as group separator"
+    formula: "=NUMBERVALUE(\"1 234,56\", \",\", \" \")"
+
+  - id: numbervalue_trailing_currency_is_value
+    description: "1234円 — NUMBERVALUE should not strip kanji currency suffix"
+    formula: "=NUMBERVALUE(\"1234円\", \".\")"
+
+  - id: numbervalue_negative_parens
+    description: "(1234) -> #VALUE! (NUMBERVALUE doesn't accept accounting parens)"
+    formula: "=NUMBERVALUE(\"(1234)\", \".\")"
+
+  - id: numbervalue_blank_arg
+    description: "Blank arg -> #VALUE! (or 0 — Mac Excel-specific)"
+    setup: {}
+    formula: "=NUMBERVALUE(A1)"
+
+  - id: numbervalue_error_propagates
+    description: "NUMBERVALUE(#REF!) propagates"
+    formula: "=NUMBERVALUE(#REF!)"

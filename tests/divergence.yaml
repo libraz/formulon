@@ -419,6 +419,69 @@ entries:
     prefer: mac-excel-365
     first_noted: 2026-04-26
 
+  # -- VALUE / NUMBERVALUE: full-width Arabic digit normalisation ---------
+  # Same root cause as `datevalue_fullwidth_*`: the parser does not
+  # convert U+FF10..U+FF19 to ASCII before tokenising. Excel handles this
+  # transparently in both VALUE and NUMBERVALUE.
+  - id: value_fullwidth_digits
+    mode: skip-oracle
+    reason: "VALUE: full-width digits ２０２４ not normalised; Excel: 2024."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
+  - id: value_fullwidth_digits_with_decimal
+    mode: skip-oracle
+    reason: "VALUE: full-width digits with ASCII decimal not normalised."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: value_fullwidth_digits_with_yen
+    mode: skip-oracle
+    reason: "VALUE: ¥ prefix combined with full-width digits not handled."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: value_fullwidth_percent
+    mode: skip-oracle
+    reason: "VALUE: full-width percent ％ (U+FF05) not normalised to ASCII %."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: numbervalue_fullwidth_digits
+    mode: skip-oracle
+    reason: "NUMBERVALUE: full-width digit normalisation absent; same root cause as VALUE."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+
+  # -- VALUE / NUMBERVALUE: accounting-style parenthesised negative -------
+  # `(1234)` should resolve to -1234. Excel accepts the form for both
+  # VALUE and NUMBERVALUE; the original test design assumed NUMBERVALUE
+  # rejected it (see the misleading `_is_value` suffix on
+  # `numbervalue_negative_parens`).
+  - id: value_parenthesised_negative
+    mode: skip-oracle
+    reason: "VALUE: (1234) accounting-style negative not parsed; Excel: -1234."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: value_parenthesised_with_yen
+    mode: skip-oracle
+    reason: "VALUE: (¥1234) accounting-style yen negative not parsed."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+  - id: numbervalue_negative_parens
+    mode: skip-oracle
+    reason: "NUMBERVALUE: Excel accepts (1234) as -1234 contrary to the original assumption; Formulon rejects."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+
+  # -- NUMBERVALUE: blank arg coercion ------------------------------------
+  # Excel treats a blank cell as 0; Formulon returns #VALUE!. VALUE itself
+  # already treats empty string as 0 (the existing `value_empty_is_zero`
+  # case asserts that behaviour); NUMBERVALUE diverges and needs the same
+  # blank coercion.
+  - id: numbervalue_blank_arg
+    mode: skip-oracle
+    reason: "NUMBERVALUE: blank-cell coercion to 0 absent; Formulon: #VALUE!. Symmetric with VALUE's existing empty-string-is-zero handling."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+
   # -- Pre-existing oracle flake: [Red] colour directive ------------------
   # Mac Excel's read-back through xlwings has been observed to vary
   # between sessions for `=TEXT(5, "[Red]0.00")`: sometimes the cell
