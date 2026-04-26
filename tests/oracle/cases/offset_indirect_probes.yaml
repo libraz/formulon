@@ -1,0 +1,109 @@
+suite: offset_indirect_probes
+description: >
+  Mac Excel 365 (ja-JP) probe for two narrow questions that cannot be
+  inferred from existing oracle suites:
+
+    1. OFFSET with negative height/width: IronCalc rejects with #VALUE!.
+       The IronCalc workbook itself has the comment "Negative values in
+       width/height produce #VALUE!", but the probe pins Mac's actual
+       behavior to confirm — Formulon currently returns 0 (a silent
+       fall-through) and we need to know whether to fix the validator
+       or list this as a divergence.
+
+    2. ROW / COLUMN of INDIRECT pointing to a non-existent sheet:
+       IronCalc returns the row/column index of the referenced cell
+       (5 / 4 for "OTHER!D5") on the theory that ROW/COLUMN only
+       extract the index without resolving the value, even if the
+       sheet is missing. Formulon currently propagates #REF! from
+       INDIRECT. Mac's truth becomes the reference.
+
+  Spill / IIE behavior (the other 11 IronCalc failures in this cluster)
+  is already settled by tests/oracle/cases/implicit_intersection.yaml,
+  so this probe focuses only on the two open questions above.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  # ---------------------------------------------------------------------
+  # A) OFFSET with negative height — should be #VALUE! per the IronCalc
+  # workbook comment but probe Mac directly. Reference cell A1 = 5.
+  - id: offset_neg_height
+    description: "OFFSET(A1, 0, 0, -10, 1) - negative height"
+    setup:
+      A1: 5
+    formula: "=OFFSET(A1, 0, 0, -10, 1)"
+
+  - id: offset_neg_width
+    description: "OFFSET(A1, 0, 0, 1, -2) - negative width"
+    setup:
+      A1: 5
+    formula: "=OFFSET(A1, 0, 0, 1, -2)"
+
+  # B) Edge: zero height / width — Excel rejects with #REF!.
+  - id: offset_zero_height
+    description: "OFFSET(A1, 0, 0, 0, 1)"
+    setup:
+      A1: 5
+    formula: "=OFFSET(A1, 0, 0, 0, 1)"
+
+  - id: offset_zero_width
+    description: "OFFSET(A1, 0, 0, 1, 0)"
+    setup:
+      A1: 5
+    formula: "=OFFSET(A1, 0, 0, 1, 0)"
+
+  # B') Negative height/width with sufficient anchor offset to keep the
+  # resulting rectangle in-bounds. The IronCalc workbook K38 case
+  # (=OFFSET(RS33,2,2,-10,1)) is structurally this — anchor at (35,489)
+  # walking back 9 rows lands at row 26, all in-bounds. IronCalc says
+  # #VALUE!, but Formulon's existing references.golden.json shows
+  # OFFSET(A1,0,0,-1,1) returns 1.0 (in-bounds negative dim is fine).
+  # This probe pins which interpretation is right.
+  - id: offset_neg_height_in_bounds
+    description: "OFFSET(C5, 2, 2, -2, 1) - negative height, fits in grid"
+    setup:
+      E6: 60
+      E7: 70
+    formula: "=OFFSET(C5, 2, 2, -2, 1)"
+
+  - id: offset_neg_width_in_bounds
+    description: "OFFSET(C5, 2, 2, 1, -2) - negative width, fits in grid"
+    setup:
+      D7: 47
+      E7: 70
+    formula: "=OFFSET(C5, 2, 2, 1, -2)"
+
+  # ---------------------------------------------------------------------
+  # C) ROW(INDIRECT(non-existent-sheet!cell)). The IronCalc fixture
+  # writes "OTHER!D5" into J6 and expects ROW(INDIRECT(J6)) = 5.
+  # Probe Mac with the same indirection.
+  - id: row_indirect_missing_sheet_string
+    description: 'ROW(INDIRECT("OTHER!D5")) - sheet OTHER does not exist'
+    formula: '=ROW(INDIRECT("OTHER!D5"))'
+
+  - id: column_indirect_missing_sheet_string
+    description: 'COLUMN(INDIRECT("OTHER!D5"))'
+    formula: '=COLUMN(INDIRECT("OTHER!D5"))'
+
+  # D) Same questions via cell-stored text, mirroring the IronCalc setup.
+  - id: row_indirect_missing_sheet_via_cell
+    description: "ROW(INDIRECT(A1)) where A1 = OTHER!D5"
+    setup:
+      A1: "OTHER!D5"
+    formula: "=ROW(INDIRECT(A1))"
+
+  - id: column_indirect_missing_sheet_via_cell
+    description: "COLUMN(INDIRECT(A1)) where A1 = OTHER!D5"
+    setup:
+      A1: "OTHER!D5"
+    formula: "=COLUMN(INDIRECT(A1))"
+
+  # E) Sanity: ROW/COLUMN of INDIRECT to the SAME (existing) sheet.
+  # Pinning the trivial baseline so a regression in ROW/COLUMN itself
+  # doesn't masquerade as a missing-sheet semantics issue.
+  - id: row_indirect_same_sheet
+    description: 'ROW(INDIRECT("D5")) on current sheet'
+    formula: '=ROW(INDIRECT("D5"))'
+
+  - id: column_indirect_same_sheet
+    description: 'COLUMN(INDIRECT("D5")) on current sheet'
+    formula: '=COLUMN(INDIRECT("D5"))'

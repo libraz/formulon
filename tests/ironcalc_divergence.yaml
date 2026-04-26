@@ -112,3 +112,85 @@ entries:
     reason: "VALUE(\"2/3/2023\") returns 44960 in IronCalc, #VALUE! on Mac ja-JP. Probe: value_coercion_probes (value_slash_date_short)."
     prefer: mac
     first_noted: 2026-04-26
+
+  # -- ROUND family: range arg, formula cell out of alignment -------------
+  # IronCalc's strict legacy implicit-intersection collapses a column-
+  # range argument to #VALUE! when the formula cell's row falls outside
+  # the range. Mac Excel 365 instead spills the per-element rounded
+  # array; xlwings reads the spill anchor (the top-cell rounded value).
+  # Formulon matches Mac. Probe: implicit_intersection.golden.json
+  # (round_col_range_row_excluded etc).
+  - id: ironcalc_calc_tests_ROUND_Sheet1.L5
+    reason: "ROUND(J7:J10, 2) at L5: row 5 not in 7..10. IronCalc legacy II = #VALUE!; Mac spills, anchor = ROUND(J7,2). Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_ROUND_Sheet1.M5
+    reason: "ROUNDUP(J7:J10, 2) at M5: row 5 not in 7..10. IronCalc legacy II = #VALUE!; Mac spills. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_ROUND_Sheet1.N5
+    reason: "ROUNDDOWN(J7:J10, 2) at N5: row 5 not in 7..10. IronCalc legacy II = #VALUE!; Mac spills. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_ROUND_Sheet1.T5
+    reason: "ROUND(R7:R10, 2) at T5: row 5 not in 7..10. IronCalc legacy II = #VALUE!; Mac spills. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_ROUND_Sheet1.U5
+    reason: "ROUNDUP(R7:R10, 2) at U5: row 5 not in 7..10. IronCalc legacy II = #VALUE!; Mac spills. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_ROUND_Sheet1.V5
+    reason: "ROUNDDOWN(R7:R10, 2) at V5: row 5 not in 7..10. IronCalc legacy II = #VALUE!; Mac spills. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-04-26
+
+  # -- ROW_COLUM OFFSET: range/array result with II misalignment ----------
+  # Bare-range cell formulas and OFFSET array results trigger the same
+  # legacy-II vs spill divergence as the ROUND cases above. Mac spills
+  # to the formula cell as anchor; IronCalc returns #VALUE!. Formulon
+  # matches Mac. Probe: implicit_intersection.golden.json.
+  - id: ironcalc_calc_tests_ROW_COLUM_OFFSET.U5
+    reason: "Bare range =N2:P16 at U5: row 5 in range but col U not in N..P. IronCalc legacy II = #VALUE!; Mac spills. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_ROW_COLUM_OFFSET.I12
+    reason: "Bare range =H1:O3 at I12: row 12 not in 1..3. IronCalc legacy II = #VALUE!; Mac spills. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_ROW_COLUM_OFFSET.M12
+    reason: "OFFSET(A1,0,7,1,3) at M12 produces H1:J1; col M not in H..J. IronCalc legacy II = #VALUE!; Mac spills. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_ROW_COLUM_OFFSET.J19
+    reason: "Bare range =P2:P16 at J19: row 19 not in 2..16. IronCalc legacy II = #VALUE!; Mac spills. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_ROW_COLUM_OFFSET.K38
+    reason: "OFFSET(RS33,2,2,-10,1) at K38: in-bounds 10-row rect (Mac accepts negative dim when result fits); col K not in RS, IronCalc legacy II = #VALUE!; Mac spills with anchor = 0. Probe: offset_indirect_probes (offset_neg_height_in_bounds)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_ROW_COLUM_OFFSET.K39
+    reason: "OFFSET(RS33,2,2,2,-2) at K39: in-bounds 2x2 rect (Mac accepts negative dim when result fits); II misaligned. IronCalc = #VALUE!; Mac spills. Probe: offset_indirect_probes (offset_neg_width_in_bounds)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_ROW_COLUM_OFFSET.K43
+    reason: "OFFSET(W39,2,2,2) at K43 produces Y41:Y42; col K not in Y. IronCalc legacy II = #VALUE!; Mac spills with anchor = Y41. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-04-26
+
+  # -- ROW_COLUM ROW/COLUMN(INDIRECT): missing-sheet INDIRECT -------------
+  # IronCalc's ROW(INDIRECT("OTHER!D5")) returns 5 (the cell's row index)
+  # even when sheet "OTHER" does not exist, on the theory that ROW only
+  # extracts the index. Mac Excel 365 rejects with #REF! because INDIRECT
+  # itself fails when the sheet is missing, and the error propagates.
+  # Formulon matches Mac. Probe: offset_indirect_probes
+  # (row_indirect_missing_sheet_string, column_indirect_missing_sheet_string).
+  - id: ironcalc_calc_tests_ROW_COLUM_ROW_COLUMN.K6
+    reason: "ROW(INDIRECT(\"OTHER!D5\")) returns 5 in IronCalc; Mac propagates #REF! from missing-sheet INDIRECT. Probe: offset_indirect_probes."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_ROW_COLUM_ROW_COLUMN.L6
+    reason: "COLUMN(INDIRECT(\"OTHER!D5\")) returns 4 in IronCalc; Mac propagates #REF! from missing-sheet INDIRECT. Probe: offset_indirect_probes."
+    prefer: mac
+    first_noted: 2026-04-26

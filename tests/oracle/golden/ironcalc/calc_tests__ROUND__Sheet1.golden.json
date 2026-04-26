@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Sheet1",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:55:14Z"
+    "generated_at": "2026-04-26T01:35:28Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -389,55 +389,37 @@
       "id": "L5",
       "formula": "=ROUND(J7:J10, 2)",
       "setup": {},
-      "expect": {
-        "kind": "error",
-        "code": "#VALUE!"
-      }
+      "skipped": "ROUND(J7:J10, 2) at L5: row 5 not in 7..10. IronCalc legacy II = #VALUE!; Mac spills, anchor = ROUND(J7,2). Probe: implicit_intersection."
     },
     {
       "id": "M5",
       "formula": "=ROUNDUP(J7:J10, 2)",
       "setup": {},
-      "expect": {
-        "kind": "error",
-        "code": "#VALUE!"
-      }
+      "skipped": "ROUNDUP(J7:J10, 2) at M5: row 5 not in 7..10. IronCalc legacy II = #VALUE!; Mac spills. Probe: implicit_intersection."
     },
     {
       "id": "N5",
       "formula": "=ROUNDDOWN(J7:J10, 2)",
       "setup": {},
-      "expect": {
-        "kind": "error",
-        "code": "#VALUE!"
-      }
+      "skipped": "ROUNDDOWN(J7:J10, 2) at N5: row 5 not in 7..10. IronCalc legacy II = #VALUE!; Mac spills. Probe: implicit_intersection."
     },
     {
       "id": "T5",
       "formula": "=ROUND(R7:R10, 2)",
       "setup": {},
-      "expect": {
-        "kind": "error",
-        "code": "#VALUE!"
-      }
+      "skipped": "ROUND(R7:R10, 2) at T5: row 5 not in 7..10. IronCalc legacy II = #VALUE!; Mac spills. Probe: implicit_intersection."
     },
     {
       "id": "U5",
       "formula": "=ROUNDUP(R7:R10, 2)",
       "setup": {},
-      "expect": {
-        "kind": "error",
-        "code": "#VALUE!"
-      }
+      "skipped": "ROUNDUP(R7:R10, 2) at U5: row 5 not in 7..10. IronCalc legacy II = #VALUE!; Mac spills. Probe: implicit_intersection."
     },
     {
       "id": "V5",
       "formula": "=ROUNDDOWN(R7:R10, 2)",
       "setup": {},
-      "expect": {
-        "kind": "error",
-        "code": "#VALUE!"
-      }
+      "skipped": "ROUNDDOWN(R7:R10, 2) at V5: row 5 not in 7..10. IronCalc legacy II = #VALUE!; Mac spills. Probe: implicit_intersection."
     },
     {
       "id": "C6",
