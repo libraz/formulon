@@ -1,0 +1,85 @@
+suite: text_to_bool_probes
+description: >
+  Mac Excel 365 (ja-JP) probe for whether text strings "TRUE"/"true"/
+  "FALSE"/"false" coerce to bool when passed to a function argument that
+  expects a logical value. IronCalc accepts these strings (e.g.
+  BETA.DIST(..., "TRUE", ...)), but Formulon's `coerce_to_bool` currently
+  rejects them and surfaces #VALUE! — based on a comment that claims
+  Excel does the same. This probe settles the question by asking Mac
+  directly across IF, NOT, AND, BETA.DIST cumulative, and direct
+  coercion via N(). Mac's truth becomes the reference; we update
+  `coerce_to_bool` only if Mac actually accepts these strings.
+tolerance: { abs: 1e-12, rel: 0 }
+locale: ja-JP
+cases:
+  # ---------------------------------------------------------------------
+  # A) IF with text-bool condition. If Mac accepts "TRUE" as a logical,
+  # =IF("TRUE",1,0) returns 1; otherwise #VALUE!.
+  - id: text_bool_if_uppercase_true
+    description: "IF(\"TRUE\", 1, 0)"
+    formula: "=IF(\"TRUE\", 1, 0)"
+
+  - id: text_bool_if_lowercase_true
+    description: "IF(\"true\", 1, 0)"
+    formula: "=IF(\"true\", 1, 0)"
+
+  - id: text_bool_if_uppercase_false
+    description: "IF(\"FALSE\", 1, 0) - if accepted, returns 0"
+    formula: "=IF(\"FALSE\", 1, 0)"
+
+  - id: text_bool_if_mixed_case
+    description: "IF(\"True\", 1, 0)"
+    formula: "=IF(\"True\", 1, 0)"
+
+  - id: text_bool_if_garbage
+    description: "IF(\"yes\", 1, 0) - non-bool text should be #VALUE!"
+    formula: "=IF(\"yes\", 1, 0)"
+
+  # ---------------------------------------------------------------------
+  # B) NOT with text-bool. =NOT("TRUE") should be FALSE if accepted.
+  - id: text_bool_not_uppercase_true
+    description: "NOT(\"TRUE\") - bool result FALSE if accepted"
+    formula: "=NOT(\"TRUE\")"
+
+  - id: text_bool_not_lowercase_false
+    description: "NOT(\"false\")"
+    formula: "=NOT(\"false\")"
+
+  # ---------------------------------------------------------------------
+  # C) AND with text-bool. =AND("TRUE", "TRUE") = TRUE if accepted.
+  - id: text_bool_and_two_true
+    description: "AND(\"TRUE\", \"TRUE\")"
+    formula: "=AND(\"TRUE\", \"TRUE\")"
+
+  - id: text_bool_and_true_false
+    description: "AND(\"TRUE\", \"FALSE\")"
+    formula: "=AND(\"TRUE\", \"FALSE\")"
+
+  # ---------------------------------------------------------------------
+  # D) BETA.DIST with text cumulative argument. This is the actual
+  # IronCalc case (rows 48-49 of statistical/BETADIST_BETAINV.xlsx).
+  - id: text_bool_betadist_uppercase
+    description: "BETA.DIST(0.234, 2, 2.5, \"TRUE\", 0.15, 1.2)"
+    formula: "=BETA.DIST(0.234, 2, 2.5, \"TRUE\", 0.15, 1.2)"
+
+  - id: text_bool_betadist_lowercase
+    description: "BETA.DIST(0.234, 2, 2.5, \"true\", 0.15, 1.2)"
+    formula: "=BETA.DIST(0.234, 2, 2.5, \"true\", 0.15, 1.2)"
+
+  - id: text_bool_betadist_pdf_text
+    description: "BETA.DIST(0.234, 2, 2.5, \"FALSE\", 0.15, 1.2) - PDF mode"
+    formula: "=BETA.DIST(0.234, 2, 2.5, \"FALSE\", 0.15, 1.2)"
+
+  # ---------------------------------------------------------------------
+  # E) Direct coercion via N() / arithmetic. Less interesting because
+  # arithmetic forces numeric coercion, not bool. But N("TRUE") should
+  # return 0 (un-parseable as number) on Mac per the existing comment.
+  - id: text_bool_n_uppercase_true
+    description: "N(\"TRUE\") - direct numeric coercion test"
+    formula: "=N(\"TRUE\")"
+
+  # ---------------------------------------------------------------------
+  # F) NORM.DIST with text cumulative for cross-function confirmation.
+  - id: text_bool_normdist_uppercase
+    description: "NORM.DIST(0, 0, 1, \"TRUE\")"
+    formula: "=NORM.DIST(0, 0, 1, \"TRUE\")"

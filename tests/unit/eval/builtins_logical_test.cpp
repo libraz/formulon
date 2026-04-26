@@ -425,9 +425,11 @@ TEST(BuiltinsIfna, ThreeArgsIsArityViolation) {
 }
 
 // ---------------------------------------------------------------------------
-// Bool coercion follow-up: with the corrected `coerce_to_bool`, IF rejects
-// the literal text "TRUE" (which is not a numeric string) but accepts "1".
-// These cases pin the audit fix in `coerce.cpp`.
+// Bool coercion follow-up: Mac Excel 365 (ja-JP) probes (`tests/oracle/
+// golden/text_to_bool_probes.golden.json`) confirm that `coerce_to_bool`
+// accepts the literal strings "TRUE" / "FALSE" (ASCII case-insensitive,
+// ASCII-trimmed) in addition to numeric strings. Arbitrary truthy text
+// such as "yes" remains #VALUE!.
 // ---------------------------------------------------------------------------
 
 TEST(BuiltinsLogicalCoerce, IfAcceptsNumericText) {
@@ -436,10 +438,37 @@ TEST(BuiltinsLogicalCoerce, IfAcceptsNumericText) {
   EXPECT_EQ(v.as_text(), "y");
 }
 
-TEST(BuiltinsLogicalCoerce, IfRejectsLiteralTrueText) {
-  // Excel surfaces #VALUE! here: the literal string "TRUE" is not a numeric
-  // string and so fails the bool coercion path.
+TEST(BuiltinsLogicalCoerce, IfAcceptsLiteralTrueText) {
+  // Mac Excel: `=IF("TRUE", "y", "n")` -> "y".
   const Value v = EvalSource("=IF(\"TRUE\", \"y\", \"n\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "y");
+}
+
+TEST(BuiltinsLogicalCoerce, IfAcceptsLowercaseFalseText) {
+  // Case-insensitive: lowercase "false" coerces to FALSE.
+  const Value v = EvalSource("=IF(\"false\", \"y\", \"n\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "n");
+}
+
+TEST(BuiltinsLogicalCoerce, IfAcceptsMixedCaseTrueText) {
+  // Mixed-case "True" also coerces to TRUE.
+  const Value v = EvalSource("=IF(\"True\", \"y\", \"n\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "y");
+}
+
+TEST(BuiltinsLogicalCoerce, IfAcceptsTrimmedTrueText) {
+  // ASCII whitespace around "TRUE" is tolerated.
+  const Value v = EvalSource("=IF(\"  TRUE  \", \"y\", \"n\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "y");
+}
+
+TEST(BuiltinsLogicalCoerce, IfRejectsArbitraryText) {
+  // Only "TRUE" / "FALSE" are recognised; "yes" still surfaces #VALUE!.
+  const Value v = EvalSource("=IF(\"yes\", \"y\", \"n\")");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }

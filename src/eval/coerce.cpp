@@ -245,12 +245,23 @@ Expected<bool, ErrorCode> coerce_to_bool(const Value& v) {
     case ValueKind::Blank:
       return false;
     case ValueKind::Text: {
-      // Excel coerces text to bool by routing through the numeric rule:
-      // the text is parsed as a number, and a successful parse becomes
-      // `false` iff the value is exactly zero. The literal strings
-      // `"TRUE"` and `"FALSE"` are NOT recognised here (they fail the
-      // numeric parse and surface as `#VALUE!`); only bool literals
-      // (TRUE / FALSE without quotes) and numeric strings round-trip.
+      // Mac Excel 365 (ja-JP) accepts the literal strings "TRUE" / "FALSE"
+      // (ASCII case-insensitive, ASCII-trimmed) wherever a Bool is expected
+      // via this lenient coercion path: e.g. `=IF("TRUE", 1, 0)` -> 1,
+      // `=NOT("false")` -> TRUE, `=BETA.DIST(..., "TRUE", ...)`. Only the
+      // exact words are recognised; arbitrary truthy text such as "yes"
+      // still falls through to the numeric path and surfaces #VALUE!.
+      // Numeric strings ("0", "1", "1.5") are still accepted via the
+      // numeric fallback below, so `=IF("1", "y", "n")` keeps returning
+      // "y". For the stricter sibling rule used by AND / OR / XOR / IFS
+      // (which rejects numeric text), see `eval/logical_coerce.h`.
+      const std::string_view trimmed = strings::trim(v.as_text());
+      if (strings::case_insensitive_eq(trimmed, "TRUE")) {
+        return true;
+      }
+      if (strings::case_insensitive_eq(trimmed, "FALSE")) {
+        return false;
+      }
       auto coerced = coerce_to_number(v);
       if (!coerced) {
         return coerced.error();
