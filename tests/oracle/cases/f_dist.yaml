@@ -50,3 +50,99 @@ cases:
   - id: f_inv_round_trip
     description: "F.INV(F.DIST(2, 5, 10, TRUE), 5, 10) - 2 should be 0 to tolerance"
     formula: "=F.INV(F.DIST(2, 5, 10, TRUE), 5, 10) - 2"
+
+  # =========================================================================
+  # Expanded probes: degree-of-freedom edges, tail probabilities, very
+  # small / very large F values, error inputs.
+  # =========================================================================
+
+  # -- F.DIST: small / large degrees of freedom ---------------------------
+  - id: f_dist_df_small_1_1
+    description: "Cauchy-like F(1,1) at x=1 -> 0.5"
+    formula: "=F.DIST(1, 1, 1, TRUE)"
+
+  - id: f_dist_df_large_100_100
+    description: "F(100,100) is highly concentrated near 1; CDF at 1.5"
+    formula: "=F.DIST(1.5, 100, 100, TRUE)"
+
+  - id: f_dist_x_very_small
+    description: "Tail behaviour at x = 0.01"
+    formula: "=F.DIST(0.01, 5, 10, TRUE)"
+
+  - id: f_dist_x_very_large
+    description: "Tail behaviour at x = 100"
+    formula: "=F.DIST(100, 5, 10, TRUE)"
+
+  - id: f_dist_pdf_at_zero
+    description: "PDF at x = 0 — diverges for df1 < 2; numerator = 1 at x=0 for df1=2"
+    formula: "=F.DIST(0, 2, 10, FALSE)"
+
+  - id: f_dist_pdf_x_zero_df1_one
+    description: "PDF at x=0 with df1=1 — should be Inf or #NUM!"
+    formula: "=F.DIST(0, 1, 10, FALSE)"
+
+  # -- F.DIST: error inputs -----------------------------------------------
+  - id: f_dist_zero_df1_is_num
+    formula: "=F.DIST(2, 0, 10, TRUE)"
+
+  - id: f_dist_zero_df2_is_num
+    formula: "=F.DIST(2, 5, 0, TRUE)"
+
+  - id: f_dist_negative_df1_is_num
+    formula: "=F.DIST(2, -5, 10, TRUE)"
+
+  - id: f_dist_negative_df2_is_num
+    formula: "=F.DIST(2, 5, -10, TRUE)"
+
+  - id: f_dist_fractional_df_truncates
+    description: "df1=5.7, df2=10.9 — Excel truncates to 5 / 10"
+    formula: "=F.DIST(2, 5.7, 10.9, TRUE)"
+
+  # -- F.DIST.RT --------------------------------------------------------
+  - id: f_dist_rt_at_zero
+    description: "Right-tail at x=0 should be 1.0"
+    formula: "=F.DIST.RT(0, 5, 10)"
+
+  - id: f_dist_rt_negative_x_is_num
+    formula: "=F.DIST.RT(-1, 5, 10)"
+
+  - id: f_dist_rt_x_very_large
+    description: "Right-tail at x=100 — very small probability"
+    formula: "=F.DIST.RT(100, 5, 10)"
+
+  # -- F.INV: edges ------------------------------------------------------
+  - id: f_inv_p_zero
+    description: "F.INV(0, ...) should be 0"
+    formula: "=F.INV(0, 5, 10)"
+
+  - id: f_inv_p_just_below_one
+    description: "Tail quantile near 1 — F.INV(0.999, 5, 10)"
+    formula: "=F.INV(0.999, 5, 10)"
+
+  - id: f_inv_p_negative_is_num
+    formula: "=F.INV(-0.1, 5, 10)"
+
+  - id: f_inv_p_one_is_num
+    description: "p=1 has no finite quantile"
+    formula: "=F.INV(1, 5, 10)"
+
+  - id: f_inv_p_above_one_is_num
+    formula: "=F.INV(1.5, 5, 10)"
+
+  # -- F.INV.RT: edges ---------------------------------------------------
+  - id: f_inv_rt_p_zero_is_num
+    description: "F.INV.RT(0, ...) — right-tail of 0 has no finite x"
+    formula: "=F.INV.RT(0, 5, 10)"
+
+  - id: f_inv_rt_p_one
+    description: "F.INV.RT(1, ...) -> 0"
+    formula: "=F.INV.RT(1, 5, 10)"
+
+  # -- Round-trip F.INV.RT with F.DIST.RT --------------------------------
+  - id: f_inv_rt_round_trip
+    formula: "=F.INV.RT(F.DIST.RT(2, 5, 10), 5, 10) - 2"
+
+  # -- Symmetry between F.INV and F.INV.RT -------------------------------
+  - id: f_inv_complement
+    description: "F.INV(0.95) == F.INV.RT(0.05)"
+    formula: "=F.INV(0.95, 5, 10) - F.INV.RT(0.05, 5, 10)"

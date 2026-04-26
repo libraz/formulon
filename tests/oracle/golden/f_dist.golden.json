@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-23T05:26:30Z"
+    "generated_at": "2026-04-26T02:20:48Z"
   },
   "tolerance": {
     "abs": 1e-06,
@@ -97,6 +97,210 @@
     {
       "id": "f_inv_round_trip",
       "formula": "=F.INV(F.DIST(2, 5, 10, TRUE), 5, 10) - 2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "f_dist_df_small_1_1",
+      "formula": "=F.DIST(1, 1, 1, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5000000000000001
+      }
+    },
+    {
+      "id": "f_dist_df_large_100_100",
+      "formula": "=F.DIST(1.5, 100, 100, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.9780695578699148
+      }
+    },
+    {
+      "id": "f_dist_x_very_small",
+      "formula": "=F.DIST(0.01, 5, 10, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.038069889266109e-05
+      }
+    },
+    {
+      "id": "f_dist_x_very_large",
+      "formula": "=F.DIST(100, 5, 10, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.9999999668309241
+      }
+    },
+    {
+      "id": "f_dist_pdf_at_zero",
+      "formula": "=F.DIST(0, 2, 10, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "f_dist_pdf_x_zero_df1_one",
+      "formula": "=F.DIST(0, 1, 10, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "f_dist_zero_df1_is_num",
+      "formula": "=F.DIST(2, 0, 10, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "f_dist_zero_df2_is_num",
+      "formula": "=F.DIST(2, 5, 0, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "f_dist_negative_df1_is_num",
+      "formula": "=F.DIST(2, -5, 10, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "f_dist_negative_df2_is_num",
+      "formula": "=F.DIST(2, 5, -10, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "f_dist_fractional_df_truncates",
+      "formula": "=F.DIST(2, 5.7, 10.9, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.8358050491002612
+      }
+    },
+    {
+      "id": "f_dist_rt_at_zero",
+      "formula": "=F.DIST.RT(0, 5, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "f_dist_rt_negative_x_is_num",
+      "formula": "=F.DIST.RT(-1, 5, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "f_dist_rt_x_very_large",
+      "formula": "=F.DIST.RT(100, 5, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.316907599210103e-08
+      }
+    },
+    {
+      "id": "f_inv_p_zero",
+      "formula": "=F.INV(0, 5, 10)",
+      "setup": {},
+      "skipped": "F.INV(0, df1, df2): Excel returns 0; Formulon: #NUM!. Lower-bound boundary relaxation."
+    },
+    {
+      "id": "f_inv_p_just_below_one",
+      "formula": "=F.INV(0.999, 5, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.480722468097897
+      }
+    },
+    {
+      "id": "f_inv_p_negative_is_num",
+      "formula": "=F.INV(-0.1, 5, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "f_inv_p_one_is_num",
+      "formula": "=F.INV(1, 5, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "f_inv_p_above_one_is_num",
+      "formula": "=F.INV(1.5, 5, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "f_inv_rt_p_zero_is_num",
+      "formula": "=F.INV.RT(0, 5, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "f_inv_rt_p_one",
+      "formula": "=F.INV.RT(1, 5, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "f_inv_rt_round_trip",
+      "formula": "=F.INV.RT(F.DIST.RT(2, 5, 10), 5, 10) - 2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "f_inv_complement",
+      "formula": "=F.INV(0.95, 5, 10) - F.INV.RT(0.05, 5, 10)",
       "setup": {},
       "expect": {
         "kind": "number",

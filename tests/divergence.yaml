@@ -622,6 +622,18 @@ entries:
     reason: "VDB salvage > cost: Excel returns negative depreciation (-2100); Formulon: #NUM!."
     prefer: mac-excel-365
 
+  # -- F.INV: p=0 boundary returns 0 in Excel, #NUM! in Formulon ---------
+  # `=F.INV(0, df1, df2)` — Excel returns 0.0 (the lower bound of the F
+  # support), Formulon's solver rejects p=0 with #NUM!. Same boundary
+  # relaxation pattern as the VDB / NUMBERVALUE cases. Fix in
+  # `src/eval/builtins/distributions_f.cpp::FInv` to allow p=0.
+  - id: f_inv_p_zero
+    mode: skip-oracle
+    reason: "F.INV(0, df1, df2): Excel returns 0; Formulon: #NUM!. Lower-bound boundary relaxation."
+    prefer: mac-excel-365
+    first_noted: 2026-04-26
+    last_verified_excel_version: "16.108.1"
+
   # -- Pre-existing oracle flake: [Red] colour directive ------------------
   # Mac Excel's read-back through xlwings has been observed to vary
   # between sessions for `=TEXT(5, "[Red]0.00")`: sometimes the cell
