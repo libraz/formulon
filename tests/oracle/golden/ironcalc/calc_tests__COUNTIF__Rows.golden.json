@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Rows",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:55:14Z"
+    "generated_at": "2026-04-26T01:53:10Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -488,10 +488,7 @@
           "formula": "=\"\""
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 1.0
-      }
+      "skipped": "COUNTIF(range, #N/A criterion) counts all 2 #N/A cells on Mac; IronCalc cache says 1. Probe: countif_edges (countif_error_criterion_na_over_two_na = 2)."
     },
     {
       "id": "AB2",
@@ -530,10 +527,7 @@
           "formula": "=\"\""
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 1.0
-      }
+      "skipped": "COUNTIF(Y2:Y8, CONCAT(<>, Z2=#N/A)). CONCAT propagates #N/A; criterion becomes #N/A; Mac counts 2 #N/A cells. IronCalc=1. Probe: countif_edges (countif_concat_ne_error_mixed_range, concat_of_ne_and_error_alone)."
     },
     {
       "id": "AI2",
@@ -1191,10 +1185,7 @@
           "value": true
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 3.0
-      }
+      "skipped": "COUNTIF(AG2:AG15, AH3=TRUE) — Mac matches 3 bool TRUE + 1 text \"TRUE\" = 4; IronCalc is type-strict and counts only 3. Probe: countif_edges (countif_cell_criterion_bool_true_with_text = 4)."
     },
     {
       "id": "AJ3",
@@ -1237,10 +1228,7 @@
           "value": true
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 11.0
-      }
+      "skipped": "COUNTIF(AG2:AG15, CONCAT(<>, AH3=TRUE)). Criterion becomes \"<>TRUE\"; Mac counts 4 explicit non-TRUE + 6 blanks = 10; IronCalc=11. Probe: countif_edges (countif_concat_ne_bool_true_over_range_with_blanks = 6 over an 8-populated + 2-blank range)."
     },
     {
       "id": "C4",
@@ -1671,10 +1659,7 @@
           "formula": "=1/0"
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 4.0
-      }
+      "skipped": "COUNTIF(T2:T15, U4='<brown') case-insensitively matches Albert/Bernanrd/Albert = 3; errors and blanks excluded. IronCalc=4. Probe: countif_edges (countif_lex_lt_brown_names = 3, countif_lex_lt_brown_with_errors_blank)."
     },
     {
       "id": "AA4",
@@ -1717,10 +1702,7 @@
           "formula": "=\"\""
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 1.0
-      }
+      "skipped": "Same as AA2 with criterion at Z4; Mac=2, IronCalc=1. Probe: countif_edges (countif_error_criterion_na_over_two_na)."
     },
     {
       "id": "AB4",
@@ -1759,10 +1741,7 @@
           "formula": "=\"\""
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 6.0
-      }
+      "skipped": "Same as AB2 with Z4=#N/A; Mac=2, IronCalc=6. Probe: countif_edges (countif_concat_ne_error_mixed_range)."
     },
     {
       "id": "AI4",
@@ -3021,10 +3000,7 @@
           "value": true
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 3.0
-      }
+      "skipped": "Same as AI3 with criterion AH6 (text \"TRUE\"); Mac=4, IronCalc=3. Probe: countif_edges (countif_cellref_text_true_uppercase)."
     },
     {
       "id": "AJ6",
@@ -3067,10 +3043,7 @@
           "value": true
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 11.0
-      }
+      "skipped": "Same as AJ3 with criterion AH6; Mac=10, IronCalc=11. Probe: countif_edges (countif_concat_ne_bool_true_over_range_with_blanks)."
     },
     {
       "id": "C7",
@@ -4125,10 +4098,7 @@
           "formula": "=1/0"
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 2.0
-      }
+      "skipped": "COUNTIF(T2:T15, #DIV/0! criterion) counts all 3 #DIV/0! cells (1 literal + 2 formula-produced); IronCalc cache says 2. Probe: countif_edges (countif_error_criterion_div0_mixed_source = 3)."
     },
     {
       "id": "AA8",
@@ -4949,10 +4919,7 @@
           "formula": "=1/0"
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 2.0
-      }
+      "skipped": "Same as V8 with criterion U10 = literal #DIV/0!; Mac=3, IronCalc=2. Probe: countif_edges (countif_error_criterion_div0_mixed_source)."
     },
     {
       "id": "AI10",
@@ -4995,10 +4962,7 @@
           "value": true
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 3.0
-      }
+      "skipped": "Same as AI3 with criterion AH10; Mac=4, IronCalc=3. Probe: countif_edges (countif_cell_criterion_bool_true_with_text)."
     },
     {
       "id": "AJ10",
@@ -5041,10 +5005,7 @@
           "value": true
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 11.0
-      }
+      "skipped": "Same as AJ3 with criterion AH10; Mac=10, IronCalc=11. Probe: countif_edges (countif_concat_ne_bool_true_over_range_with_blanks)."
     },
     {
       "id": "I11",

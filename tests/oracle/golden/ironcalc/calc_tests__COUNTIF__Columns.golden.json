@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Columns",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:55:14Z"
+    "generated_at": "2026-04-26T01:53:10Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -3808,10 +3808,7 @@
           "formula": "=1/0"
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 4.0
-      }
+      "skipped": "COUNTIF(B18:O18, D19='<brown') over the same name+error mix as V4; Mac=3, IronCalc=4. Probe: countif_edges (countif_lex_lt_brown_names)."
     },
     {
       "id": "E20",
@@ -4036,10 +4033,7 @@
           "formula": "=1/0"
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 2.0
-      }
+      "skipped": "COUNTIF(B18:O18, #DIV/0! criterion via formula =1/0) counts all 3 #DIV/0! cells; IronCalc=2. Probe: countif_edges (countif_error_criterion_div0_mixed_source)."
     },
     {
       "id": "I20",
@@ -4152,10 +4146,7 @@
           "formula": "=1/0"
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 2.0
-      }
+      "skipped": "Same as H20 with criterion J19 = literal #DIV/0!; Mac=3, IronCalc=2. Probe: countif_edges (countif_error_criterion_div0_mixed_source)."
     },
     {
       "id": "K20",
@@ -4369,10 +4360,7 @@
           "formula": "=\"\""
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 1.0
-      }
+      "skipped": "COUNTIF(B25:O25, #N/A criterion) counts all 2 #N/A cells; IronCalc=1. Probe: countif_edges (countif_error_criterion_na_over_two_na)."
     },
     {
       "id": "C27",
@@ -4461,10 +4449,7 @@
           "formula": "=\"\""
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 1.0
-      }
+      "skipped": "Same pattern as B27 with criterion D26; Mac=2, IronCalc=1. Probe: countif_edges (countif_error_criterion_na_over_two_na)."
     },
     {
       "id": "E27",
@@ -4675,10 +4660,7 @@
           "formula": "=\"\""
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 1.0
-      }
+      "skipped": "COUNTIF(B25:H25, CONCAT(<>, B26=#N/A)). Mac criterion is #N/A; counts 2 #N/A cells. IronCalc=1. Probe: countif_edges (countif_concat_ne_error_mixed_range)."
     },
     {
       "id": "C28",
@@ -4759,10 +4741,7 @@
           "formula": "=\"\""
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 6.0
-      }
+      "skipped": "Same as B28 with criterion D26; Mac=2, IronCalc=6. Probe: countif_edges (countif_concat_ne_error_mixed_range)."
     },
     {
       "id": "E28",
@@ -5003,10 +4982,7 @@
           "value": true
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 3.0
-      }
+      "skipped": "COUNTIF(B33:O33, C34=TRUE bool) over mixed bool/number/text TRUE; Mac=4, IronCalc=3. Probe: countif_edges (countif_cell_criterion_bool_true_with_text)."
     },
     {
       "id": "D35",
@@ -5141,10 +5117,7 @@
           "value": true
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 3.0
-      }
+      "skipped": "Same as C35 with criterion F34 (text \"true\"); Mac=4, IronCalc=3. Probe: countif_edges (countif_text_true_lowercase, countif_cellref_text_true_lowercase)."
     },
     {
       "id": "G35",
@@ -5317,10 +5290,7 @@
           "value": true
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 3.0
-      }
+      "skipped": "Same as C35 with criterion J34 (text \"TRUE\"); Mac=4, IronCalc=3. Probe: countif_edges (countif_cellref_text_true_uppercase)."
     },
     {
       "id": "K35",
@@ -5489,10 +5459,7 @@
           "value": true
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 11.0
-      }
+      "skipped": "COUNTIF(B33:O33, CONCAT(<>, C34=TRUE)). Mac=10 (4 explicit non-TRUE + 6 blanks); IronCalc=11. Probe: countif_edges (countif_concat_ne_bool_true_over_range_with_blanks)."
     },
     {
       "id": "D36",
@@ -5627,10 +5594,7 @@
           "value": true
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 11.0
-      }
+      "skipped": "Same as C36 with criterion F34 (text \"true\"); Mac=10, IronCalc=11. Probe: countif_edges (countif_concat_ne_text_true_over_range_with_blanks)."
     },
     {
       "id": "G36",
@@ -5803,10 +5767,7 @@
           "value": true
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 11.0
-      }
+      "skipped": "Same as C36 with criterion J34 (text \"TRUE\"); Mac=10, IronCalc=11. Probe: countif_edges (countif_concat_ne_text_true_over_range_with_blanks)."
     },
     {
       "id": "K36",

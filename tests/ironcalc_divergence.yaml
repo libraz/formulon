@@ -194,3 +194,208 @@ entries:
     reason: "COLUMN(INDIRECT(\"OTHER!D5\")) returns 4 in IronCalc; Mac propagates #REF! from missing-sheet INDIRECT. Probe: offset_indirect_probes."
     prefer: mac
     first_noted: 2026-04-26
+
+  # -- COUNTIF / COUNTIFS criterion-engine divergences --------------------
+  # All entries below come from IronCalc's COUNTIF_Rows / COUNTIF_Columns /
+  # COUNTIFS_Rows2 suites, which encode 5 distinct semantic positions where
+  # IronCalc's cached values disagree with Mac Excel 365 (ja-JP). Formulon
+  # matches Mac in every case. Probe corpus: countif_edges.golden.json
+  # (31 cases). The reason text below names the specific countif_edges
+  # case that pins the relevant Mac behaviour.
+  #
+  # Pattern A: error-criterion equality. COUNTIF(range, errcell) where
+  # errcell = #N/A or #DIV/0! counts every range cell that holds the same
+  # error code (literal or formula-produced). IronCalc only counts a
+  # subset (often 1). Mac probes: countif_error_criterion_na_over_two_na,
+  # countif_error_criterion_div0_over_div0, countif_error_criterion_div0_mixed_source.
+  #
+  # Pattern B: CONCAT("<>", errcell). CONCAT propagates the error
+  # unchanged (probe: concat_of_ne_and_error_alone -> #N/A). COUNTIF then
+  # treats the criterion as the bare error and matches range cells with
+  # that exact error code. IronCalc instead textifies "<>#N/A" and
+  # produces a different count. Mac probes:
+  # countif_concat_ne_error_text_range, countif_concat_ne_error_mixed_range.
+  #
+  # Pattern C: text "<brown" lex less-than over names mixed with errors
+  # / blanks. Mac case-insensitively counts only Albert + Bernanrd (twice
+  # for double-listed names); errors and blanks never match. IronCalc
+  # over-counts by one. Mac probes: countif_lex_lt_brown_names,
+  # countif_lex_lt_brown_with_errors_blank.
+  #
+  # Pattern D: cell criterion holding bool TRUE over a range that mixes
+  # bool TRUE/FALSE, number 1, and text "TRUE". Mac counts text "TRUE"
+  # as matching bool TRUE (display-form coercion); IronCalc is type-
+  # strict and excludes the text cell. Mac probes:
+  # countif_cell_criterion_bool_true_with_text,
+  # countif_cellref_text_true_uppercase.
+  #
+  # Pattern E: CONCAT("<>", TRUE) over the same mixed range with blank
+  # cells. Mac counts blanks as matching "<>TRUE" but excludes text
+  # "TRUE" (mirror of Pattern D). IronCalc over-counts by one. Mac
+  # probe: countif_concat_ne_bool_true_over_range_with_blanks.
+
+  # Pattern A — error-criterion equality
+  - id: ironcalc_calc_tests_COUNTIF_Rows.AA2
+    reason: "COUNTIF(range, #N/A criterion) counts all 2 #N/A cells on Mac; IronCalc cache says 1. Probe: countif_edges (countif_error_criterion_na_over_two_na = 2)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIF_Rows.AA4
+    reason: "Same as AA2 with criterion at Z4; Mac=2, IronCalc=1. Probe: countif_edges (countif_error_criterion_na_over_two_na)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIF_Rows.V8
+    reason: "COUNTIF(T2:T15, #DIV/0! criterion) counts all 3 #DIV/0! cells (1 literal + 2 formula-produced); IronCalc cache says 2. Probe: countif_edges (countif_error_criterion_div0_mixed_source = 3)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIF_Rows.V10
+    reason: "Same as V8 with criterion U10 = literal #DIV/0!; Mac=3, IronCalc=2. Probe: countif_edges (countif_error_criterion_div0_mixed_source)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIF_Columns.B27
+    reason: "COUNTIF(B25:O25, #N/A criterion) counts all 2 #N/A cells; IronCalc=1. Probe: countif_edges (countif_error_criterion_na_over_two_na)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIF_Columns.D27
+    reason: "Same pattern as B27 with criterion D26; Mac=2, IronCalc=1. Probe: countif_edges (countif_error_criterion_na_over_two_na)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIF_Columns.H20
+    reason: "COUNTIF(B18:O18, #DIV/0! criterion via formula =1/0) counts all 3 #DIV/0! cells; IronCalc=2. Probe: countif_edges (countif_error_criterion_div0_mixed_source)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIF_Columns.J20
+    reason: "Same as H20 with criterion J19 = literal #DIV/0!; Mac=3, IronCalc=2. Probe: countif_edges (countif_error_criterion_div0_mixed_source)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIFS_Rows2.T8
+    reason: "COUNTIFS(R2:R15, #DIV/0! criterion via =1/0) counts all 3 #DIV/0! cells; IronCalc=2. Probe: countif_edges (countif_error_criterion_div0_mixed_source)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIFS_Rows2.T10
+    reason: "Same as T8 with literal #DIV/0! criterion; Mac=3, IronCalc=2. Probe: countif_edges (countif_error_criterion_div0_mixed_source)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIFS_Rows2.X2
+    reason: "COUNTIFS(V2:V15, #N/A criterion) counts all 2 #N/A cells; IronCalc=1. Probe: countif_edges (countif_error_criterion_na_over_two_na)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIFS_Rows2.X4
+    reason: "Same as X2 with criterion W4; Mac=2, IronCalc=1. Probe: countif_edges (countif_error_criterion_na_over_two_na)."
+    prefer: mac
+    first_noted: 2026-04-26
+
+  # Pattern B — CONCAT("<>", error) → criterion is the propagated error
+  - id: ironcalc_calc_tests_COUNTIF_Rows.AB2
+    reason: "COUNTIF(Y2:Y8, CONCAT(<>, Z2=#N/A)). CONCAT propagates #N/A; criterion becomes #N/A; Mac counts 2 #N/A cells. IronCalc=1. Probe: countif_edges (countif_concat_ne_error_mixed_range, concat_of_ne_and_error_alone)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIF_Rows.AB4
+    reason: "Same as AB2 with Z4=#N/A; Mac=2, IronCalc=6. Probe: countif_edges (countif_concat_ne_error_mixed_range)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIF_Columns.B28
+    reason: "COUNTIF(B25:H25, CONCAT(<>, B26=#N/A)). Mac criterion is #N/A; counts 2 #N/A cells. IronCalc=1. Probe: countif_edges (countif_concat_ne_error_mixed_range)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIF_Columns.D28
+    reason: "Same as B28 with criterion D26; Mac=2, IronCalc=6. Probe: countif_edges (countif_concat_ne_error_mixed_range)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIFS_Rows2.Y2
+    reason: "COUNTIFS(V2:V8, CONCAT(<>, W2=#N/A)). Mac criterion is #N/A; counts 2 #N/A cells. IronCalc=1. Probe: countif_edges (countif_concat_ne_error_mixed_range)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIFS_Rows2.Y4
+    reason: "Same as Y2 with criterion W4; Mac=2, IronCalc=6. Probe: countif_edges (countif_concat_ne_error_mixed_range)."
+    prefer: mac
+    first_noted: 2026-04-26
+
+  # Pattern C — text "<brown" lex less-than over names + errors + blanks
+  - id: ironcalc_calc_tests_COUNTIF_Rows.V4
+    reason: "COUNTIF(T2:T15, U4='<brown') case-insensitively matches Albert/Bernanrd/Albert = 3; errors and blanks excluded. IronCalc=4. Probe: countif_edges (countif_lex_lt_brown_names = 3, countif_lex_lt_brown_with_errors_blank)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIF_Columns.D20
+    reason: "COUNTIF(B18:O18, D19='<brown') over the same name+error mix as V4; Mac=3, IronCalc=4. Probe: countif_edges (countif_lex_lt_brown_names)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIFS_Rows2.T4
+    reason: "COUNTIFS(R2:R15, S4='<brown') over the same name+error mix; Mac=3, IronCalc=4. Probe: countif_edges (countif_lex_lt_brown_names)."
+    prefer: mac
+    first_noted: 2026-04-26
+
+  # Pattern D — cell criterion bool TRUE over mixed bool/number/text "TRUE"
+  - id: ironcalc_calc_tests_COUNTIF_Rows.AI3
+    reason: "COUNTIF(AG2:AG15, AH3=TRUE) — Mac matches 3 bool TRUE + 1 text \"TRUE\" = 4; IronCalc is type-strict and counts only 3. Probe: countif_edges (countif_cell_criterion_bool_true_with_text = 4)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIF_Rows.AI6
+    reason: "Same as AI3 with criterion AH6 (text \"TRUE\"); Mac=4, IronCalc=3. Probe: countif_edges (countif_cellref_text_true_uppercase)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIF_Rows.AI10
+    reason: "Same as AI3 with criterion AH10; Mac=4, IronCalc=3. Probe: countif_edges (countif_cell_criterion_bool_true_with_text)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIF_Columns.C35
+    reason: "COUNTIF(B33:O33, C34=TRUE bool) over mixed bool/number/text TRUE; Mac=4, IronCalc=3. Probe: countif_edges (countif_cell_criterion_bool_true_with_text)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIF_Columns.F35
+    reason: "Same as C35 with criterion F34 (text \"true\"); Mac=4, IronCalc=3. Probe: countif_edges (countif_text_true_lowercase, countif_cellref_text_true_lowercase)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIF_Columns.J35
+    reason: "Same as C35 with criterion J34 (text \"TRUE\"); Mac=4, IronCalc=3. Probe: countif_edges (countif_cellref_text_true_uppercase)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIFS_Rows2.AD3
+    reason: "COUNTIFS(AB2:AB15, AC3=TRUE) — same Pattern D over the COUNTIFS suite; Mac=4, IronCalc=3. Probe: countif_edges (countif_cell_criterion_bool_true_with_text)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIFS_Rows2.AD6
+    reason: "Same as AD3 with criterion AC6; Mac=4, IronCalc=3. Probe: countif_edges (countif_cell_criterion_bool_true_with_text)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIFS_Rows2.AD10
+    reason: "Same as AD3 with criterion AC10; Mac=4, IronCalc=3. Probe: countif_edges (countif_cell_criterion_bool_true_with_text)."
+    prefer: mac
+    first_noted: 2026-04-26
+
+  # Pattern E — CONCAT("<>", TRUE) over same mixed range with blanks
+  - id: ironcalc_calc_tests_COUNTIF_Rows.AJ3
+    reason: "COUNTIF(AG2:AG15, CONCAT(<>, AH3=TRUE)). Criterion becomes \"<>TRUE\"; Mac counts 4 explicit non-TRUE + 6 blanks = 10; IronCalc=11. Probe: countif_edges (countif_concat_ne_bool_true_over_range_with_blanks = 6 over an 8-populated + 2-blank range)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIF_Rows.AJ6
+    reason: "Same as AJ3 with criterion AH6; Mac=10, IronCalc=11. Probe: countif_edges (countif_concat_ne_bool_true_over_range_with_blanks)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIF_Rows.AJ10
+    reason: "Same as AJ3 with criterion AH10; Mac=10, IronCalc=11. Probe: countif_edges (countif_concat_ne_bool_true_over_range_with_blanks)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIF_Columns.C36
+    reason: "COUNTIF(B33:O33, CONCAT(<>, C34=TRUE)). Mac=10 (4 explicit non-TRUE + 6 blanks); IronCalc=11. Probe: countif_edges (countif_concat_ne_bool_true_over_range_with_blanks)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIF_Columns.F36
+    reason: "Same as C36 with criterion F34 (text \"true\"); Mac=10, IronCalc=11. Probe: countif_edges (countif_concat_ne_text_true_over_range_with_blanks)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIF_Columns.J36
+    reason: "Same as C36 with criterion J34 (text \"TRUE\"); Mac=10, IronCalc=11. Probe: countif_edges (countif_concat_ne_text_true_over_range_with_blanks)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIFS_Rows2.AE3
+    reason: "COUNTIFS(AB2:AB15, CONCAT(<>, AC3=TRUE)) — same Pattern E over the COUNTIFS suite; Mac=10, IronCalc=11. Probe: countif_edges (countif_concat_ne_bool_true_over_range_with_blanks)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIFS_Rows2.AE6
+    reason: "Same as AE3 with criterion AC6; Mac=10, IronCalc=11. Probe: countif_edges (countif_concat_ne_bool_true_over_range_with_blanks)."
+    prefer: mac
+    first_noted: 2026-04-26
+  - id: ironcalc_calc_tests_COUNTIFS_Rows2.AE10
+    reason: "Same as AE3 with criterion AC10; Mac=10, IronCalc=11. Probe: countif_edges (countif_concat_ne_bool_true_over_range_with_blanks)."
+    prefer: mac
+    first_noted: 2026-04-26
