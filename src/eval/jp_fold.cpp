@@ -199,7 +199,7 @@ bool is_voicing_base(std::uint32_t full_cp) {
 
 }  // namespace
 
-std::string fold_jp_text(std::string_view input) {
+std::string fold_jp_text(std::string_view input, bool fold_fullwidth_digits) {
   std::string out;
   out.reserve(input.size());
   std::size_t i = 0;
@@ -216,8 +216,16 @@ std::string fold_jp_text(std::string_view input) {
     }
 
     // Full-width ASCII U+FF01..U+FF5E -> half-width ASCII (-0xFEE0).
+    // Lookup callers (MATCH / VLOOKUP / HLOOKUP / XLOOKUP / XMATCH) pass
+    // `fold_fullwidth_digits = false` to keep U+FF10..U+FF19 unfolded,
+    // matching the Mac Excel asymmetry documented in the header.
     if (cp >= 0xFF01u && cp <= 0xFF5Eu) {
-      encode_utf8(cp - 0xFEE0u, &out);
+      const bool is_fullwidth_digit = cp >= 0xFF10u && cp <= 0xFF19u;
+      if (is_fullwidth_digit && !fold_fullwidth_digits) {
+        encode_utf8(cp, &out);
+      } else {
+        encode_utf8(cp - 0xFEE0u, &out);
+      }
       i += n;
       continue;
     }

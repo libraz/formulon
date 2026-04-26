@@ -1,0 +1,341 @@
+{
+  "suite": "lookup_kana_folding_probes",
+  "description": "Mac Excel ja-JP COUNTIF / SUMIF text equality folds kana variants (hiragana<->katakana, half<->full kana with voicing composition, full<->half ASCII). The criteria.cpp matcher implements that fold. Lookup functions (VLOOKUP, HLOOKUP, MATCH, XLOOKUP, XMATCH) use separate text-equality paths, so it is unclear whether Mac applies the same fold there. These probes pin Mac's behaviour empirically before deciding whether the lookup family needs the same fix.\n",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-26T22:24:23Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "match_exact_hira_eq_kata",
+      "formula": "=MATCH(\"あ\", A1:A3, 0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ア"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "い"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "う"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "match_exact_kata_eq_hira",
+      "formula": "=MATCH(\"ア\", A1:A3, 0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "あ"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "い"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "う"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "match_exact_halfwidth_eq_fullwidth",
+      "formula": "=MATCH(\"ｱ\", A1:A3, 0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ア"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "イ"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ウ"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "match_exact_fullwidth_ascii",
+      "formula": "=MATCH(\"ＡＢＣ\", A1:A3, 0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ABC"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "DEF"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "GHI"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "match_exact_fullwidth_digits",
+      "formula": "=MATCH(\"１２３\", A1:A3, 0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "123"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "456"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "789"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "match_wildcard_hira_prefix_over_kata",
+      "formula": "=MATCH(\"あ*\", A1:A3, 0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "アップル"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ばなな"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "アイス"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "vlookup_exact_hira_eq_kata",
+      "formula": "=VLOOKUP(\"あ\", A1:B3, 2, FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ア"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "い"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "う"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "vlookup_exact_halfwidth_eq_fullwidth",
+      "formula": "=VLOOKUP(\"ｱ\", A1:B3, 2, FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ア"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "イ"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ウ"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "xlookup_exact_hira_eq_kata",
+      "formula": "=XLOOKUP(\"あ\", A1:A3, B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ア"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "い"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "う"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "xlookup_exact_voiced_compose",
+      "formula": "=XLOOKUP(\"ｶﾞ\", A1:A3, B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ガ"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "ギ"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "グ"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "xmatch_exact_hira_eq_kata",
+      "formula": "=XMATCH(\"あ\", A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ア"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "い"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "う"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "hlookup_exact_hira_eq_kata",
+      "formula": "=HLOOKUP(\"あ\", A1:C2, 2, FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "ア"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "い"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "う"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    }
+  ]
+}

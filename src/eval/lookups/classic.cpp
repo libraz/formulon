@@ -18,6 +18,7 @@
 #include "eval/criteria.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
+#include "eval/jp_fold.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_args.h"
 #include "parser/ast.h"
@@ -107,13 +108,21 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
     // treated as a literal X. Every other kind-pairing is a literal
     // equality compare.
     if (lookup_value.is_text()) {
-      const std::string pat_lower = strings::to_ascii_lower(lookup_value.as_text());
+      // Mac Excel ja-JP folds kana variants (hira<->kata, half<->full-width
+      // katakana with voicing composition, full<->half-width ASCII letters
+      // / punctuation / space) before text equality. Apply `fold_jp_text`
+      // on both sides BEFORE ASCII-lowercasing so e.g. `ｶﾞ` -> `ガ`,
+      // `Ａ` -> `a`. Full-width digits are deliberately NOT folded for
+      // lookups (Mac asymmetry — see jp_fold.h).
+      const std::string pat_lower =
+          strings::to_ascii_lower(fold_jp_text(lookup_value.as_text(), /*fold_fullwidth_digits=*/false));
       for (std::size_t i = 0; i < n; ++i) {
         const Value& cell = cell_at(i);
         if (!cell.is_text()) {
           continue;
         }
-        const std::string cell_lower = strings::to_ascii_lower(cell.as_text());
+        const std::string cell_lower =
+            strings::to_ascii_lower(fold_jp_text(cell.as_text(), /*fold_fullwidth_digits=*/false));
         if (wildcard_match(pat_lower, cell_lower)) {
           return i;
         }
@@ -169,7 +178,10 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
     int cmp = 0;  // sign of (cell - lookup_value)
     bool comparable = false;
     if (lookup_value.is_text() && cell.is_text()) {
-      cmp = strings::case_insensitive_compare(cell.as_text(), lookup_value.as_text());
+      // ja-JP fold (see exact-mode branch above) before the ASCII
+      // case-insensitive compare so kana variants order together.
+      cmp = strings::case_insensitive_compare(fold_jp_text(cell.as_text(), /*fold_fullwidth_digits=*/false),
+                                              fold_jp_text(lookup_value.as_text(), /*fold_fullwidth_digits=*/false));
       comparable = true;
     } else if ((lookup_value.is_number() || lookup_value.is_blank()) && (cell.is_number() || cell.is_blank())) {
       const double lv = lookup_value.is_blank() ? 0.0 : lookup_value.as_number();
@@ -505,13 +517,17 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       // wildcards is still correct — `~*` becomes a literal `*` compare,
       // `foo` becomes a byte-exact compare. Lowering both sides gives
       // Excel's case-insensitive ASCII equality.
-      const std::string pat_lower = strings::to_ascii_lower(lookup.as_text());
+      // ja-JP fold (see classic.cpp::lookup_scan) before lower-casing so
+      // MATCH agrees with Mac Excel on kana / full-width variants.
+      const std::string pat_lower =
+          strings::to_ascii_lower(fold_jp_text(lookup.as_text(), /*fold_fullwidth_digits=*/false));
       for (std::size_t i = 0; i < n; ++i) {
         const Value& cell = cells[i];
         if (!cell.is_text()) {
           continue;
         }
-        const std::string cell_lower = strings::to_ascii_lower(cell.as_text());
+        const std::string cell_lower =
+            strings::to_ascii_lower(fold_jp_text(cell.as_text(), /*fold_fullwidth_digits=*/false));
         if (wildcard_match(pat_lower, cell_lower)) {
           return Value::number(static_cast<double>(i + 1));
         }
@@ -559,7 +575,12 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     }
     return 0;
   };
-  auto cmp_text = [](std::string_view a, std::string_view b) -> int { return strings::case_insensitive_compare(a, b); };
+  auto cmp_text = [](std::string_view a, std::string_view b) -> int {
+    // ja-JP fold (see classic.cpp::lookup_scan) so kana variants order
+    // together in MATCH approximate mode.
+    return strings::case_insensitive_compare(fold_jp_text(a, /*fold_fullwidth_digits=*/false),
+                                             fold_jp_text(b, /*fold_fullwidth_digits=*/false));
+  };
 
   // `last_valid_pos` is the running best position under the ordering rule.
   // For type=+1 we want the largest position whose value is <= target; for

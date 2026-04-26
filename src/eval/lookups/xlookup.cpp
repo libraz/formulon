@@ -16,6 +16,7 @@
 #include "eval/criteria.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
+#include "eval/jp_fold.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_args.h"
 #include "parser/ast.h"
@@ -88,7 +89,12 @@ bool xlookup_cmp(const Value& cell, const Value& lookup, int* out_cmp) {
   }
   // Same kind — compare values directly.
   if (cell_rank == 1) {
-    *out_cmp = strings::case_insensitive_compare(cell.as_text(), lookup.as_text());
+    // ja-JP fold (see classic.cpp::lookup_scan) before the ASCII
+    // case-insensitive compare so kana variants order together in
+    // XLOOKUP / XMATCH approximate paths. Full-width digits are NOT
+    // folded for lookups (Mac asymmetry — see jp_fold.h).
+    *out_cmp = strings::case_insensitive_compare(fold_jp_text(cell.as_text(), /*fold_fullwidth_digits=*/false),
+                                                 fold_jp_text(lookup.as_text(), /*fold_fullwidth_digits=*/false));
     return true;
   }
   if (cell_rank == 2) {
@@ -116,8 +122,14 @@ bool xlookup_exact_eq(const Value& cell, const Value& lookup, bool wildcards) {
     if (!cell.is_text()) {
       return false;
     }
-    const std::string pat_lower = strings::to_ascii_lower(lookup.as_text());
-    const std::string cell_lower = strings::to_ascii_lower(cell.as_text());
+    // ja-JP fold (see classic.cpp::lookup_scan) before lower-casing so
+    // XLOOKUP / XMATCH exact mode treats kana / full-width variants
+    // identically to Mac Excel. Full-width digits are NOT folded for
+    // lookups (Mac asymmetry — see jp_fold.h).
+    const std::string pat_lower =
+        strings::to_ascii_lower(fold_jp_text(lookup.as_text(), /*fold_fullwidth_digits=*/false));
+    const std::string cell_lower =
+        strings::to_ascii_lower(fold_jp_text(cell.as_text(), /*fold_fullwidth_digits=*/false));
     if (wildcards) {
       return wildcard_match(pat_lower, cell_lower);
     }

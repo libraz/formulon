@@ -1,0 +1,91 @@
+suite: lookup_kana_folding_probes
+description: >
+  Mac Excel ja-JP COUNTIF / SUMIF text equality folds kana variants
+  (hiragana<->katakana, half<->full kana with voicing composition,
+  full<->half ASCII). The criteria.cpp matcher implements that fold.
+  Lookup functions (VLOOKUP, HLOOKUP, MATCH, XLOOKUP, XMATCH) use
+  separate text-equality paths, so it is unclear whether Mac applies
+  the same fold there. These probes pin Mac's behaviour empirically
+  before deciding whether the lookup family needs the same fix.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  # ---------------------------------------------------------------------
+  # MATCH exact-match (third arg = 0): lookup behaviour without lookup_value
+  # coercion to a row. Returns 1-based position or #N/A.
+  # ---------------------------------------------------------------------
+  - id: match_exact_hira_eq_kata
+    description: "MATCH(あ, [ア,い,う], 0) -- does hiragana criterion match katakana cell?"
+    setup: { A1: "ア", A2: "い", A3: "う" }
+    formula: "=MATCH(\"あ\", A1:A3, 0)"
+
+  - id: match_exact_kata_eq_hira
+    description: "MATCH(ア, [あ,い,う], 0) -- mirror"
+    setup: { A1: "あ", A2: "い", A3: "う" }
+    formula: "=MATCH(\"ア\", A1:A3, 0)"
+
+  - id: match_exact_halfwidth_eq_fullwidth
+    description: "MATCH(ｱ, [ア,イ,ウ], 0) -- half-width vs full-width katakana"
+    setup: { A1: "ア", A2: "イ", A3: "ウ" }
+    formula: "=MATCH(\"ｱ\", A1:A3, 0)"
+
+  - id: match_exact_fullwidth_ascii
+    description: "MATCH(ＡＢＣ, [ABC, DEF, GHI], 0) -- full-width Latin"
+    setup: { A1: "ABC", A2: "DEF", A3: "GHI" }
+    formula: "=MATCH(\"ＡＢＣ\", A1:A3, 0)"
+
+  - id: match_exact_fullwidth_digits
+    description: "MATCH(１２３, [123, 456, 789], 0) -- full-width digits as text"
+    setup: { A1: "123", A2: "456", A3: "789" }
+    formula: "=MATCH(\"１２３\", A1:A3, 0)"
+
+  # ---------------------------------------------------------------------
+  # MATCH wildcard: third arg = 0, criterion contains *. Mac's COUNTIF
+  # wildcard path operates after the fold; check parity for MATCH.
+  # ---------------------------------------------------------------------
+  - id: match_wildcard_hira_prefix_over_kata
+    description: "MATCH(あ*, [アップル, ばなな, アイス], 0) -- hira prefix matches kata word?"
+    setup: { A1: "アップル", A2: "ばなな", A3: "アイス" }
+    formula: "=MATCH(\"あ*\", A1:A3, 0)"
+
+  # ---------------------------------------------------------------------
+  # VLOOKUP exact-match (fourth arg = FALSE).
+  # ---------------------------------------------------------------------
+  - id: vlookup_exact_hira_eq_kata
+    description: "VLOOKUP(あ, [ア=10, い=20, う=30], 2, FALSE)"
+    setup: { A1: "ア", B1: 10, A2: "い", B2: 20, A3: "う", B3: 30 }
+    formula: "=VLOOKUP(\"あ\", A1:B3, 2, FALSE)"
+
+  - id: vlookup_exact_halfwidth_eq_fullwidth
+    description: "VLOOKUP(ｱ, [ア=10, イ=20, ウ=30], 2, FALSE)"
+    setup: { A1: "ア", B1: 10, A2: "イ", B2: 20, A3: "ウ", B3: 30 }
+    formula: "=VLOOKUP(\"ｱ\", A1:B3, 2, FALSE)"
+
+  # ---------------------------------------------------------------------
+  # XLOOKUP exact-match (default).
+  # ---------------------------------------------------------------------
+  - id: xlookup_exact_hira_eq_kata
+    description: "XLOOKUP(あ, [ア,い,う], [10,20,30])"
+    setup: { A1: "ア", A2: "い", A3: "う", B1: 10, B2: 20, B3: 30 }
+    formula: "=XLOOKUP(\"あ\", A1:A3, B1:B3)"
+
+  - id: xlookup_exact_voiced_compose
+    description: "XLOOKUP(ｶﾞ, [ガ, ギ, グ], [1,2,3]) -- half-width voiced composes"
+    setup: { A1: "ガ", A2: "ギ", A3: "グ", B1: 1, B2: 2, B3: 3 }
+    formula: "=XLOOKUP(\"ｶﾞ\", A1:A3, B1:B3)"
+
+  # ---------------------------------------------------------------------
+  # XMATCH exact-match (default match_mode = 0).
+  # ---------------------------------------------------------------------
+  - id: xmatch_exact_hira_eq_kata
+    description: "XMATCH(あ, [ア, い, う]) -- 1-based"
+    setup: { A1: "ア", A2: "い", A3: "う" }
+    formula: "=XMATCH(\"あ\", A1:A3)"
+
+  # ---------------------------------------------------------------------
+  # HLOOKUP exact-match (fourth arg = FALSE).
+  # ---------------------------------------------------------------------
+  - id: hlookup_exact_hira_eq_kata
+    description: "HLOOKUP(あ, [ア, い, う; 10, 20, 30], 2, FALSE)"
+    setup: { A1: "ア", B1: "い", C1: "う", A2: 10, B2: 20, C2: 30 }
+    formula: "=HLOOKUP(\"あ\", A1:C2, 2, FALSE)"
