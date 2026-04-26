@@ -15,6 +15,7 @@
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/logical_coerce.h"
+#include "eval/name_env_resolve.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/strings.h"
@@ -115,7 +116,21 @@ Value eval_count_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   }
   double total = 0.0;
   for (std::uint32_t i = 0; i < arity; ++i) {
-    const parser::AstNode& arg_node = call.as_call_arg(i);
+    const parser::AstNode& raw_arg = call.as_call_arg(i);
+    // LET-binding passthrough: a `=LET(r, A1:A3, COUNT(r))` binding hands
+    // us a NameRef whose resolved AST is the original RangeOp, and Excel
+    // counts it with range-provenance semantics (Bool / Text / Blank
+    // skipped). Without this lookup the NameRef would fall through to the
+    // scalar path and collapse to the spill anchor.
+    const parser::AstNode* effective = &raw_arg;
+    if (raw_arg.kind() == parser::NodeKind::NameRef) {
+      const parser::AstNode& resolved =
+          resolve_name_ast(raw_arg, ctx.name_env());
+      if (&resolved != &raw_arg && is_range_shaped_ast(resolved)) {
+        effective = &resolved;
+      }
+    }
+    const parser::AstNode& arg_node = *effective;
     if (arg_node.kind() == parser::NodeKind::RangeOp) {
       // Range argument: count only Number cells; Bool / Text / Blank /
       // Error are skipped. Only literal A1:B2 rectangles are expanded, to

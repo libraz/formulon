@@ -25,6 +25,7 @@
 #include "eval/lookups/classic.h"
 #include "eval/lookups/xlookup.h"
 #include "eval/name_env.h"
+#include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
 #include "eval/rank_lazy.h"
 #include "eval/reference_lazy.h"
@@ -523,7 +524,22 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
   // the deferred error after the loop completes.
   bool any_scalar_blank_for_reject_any = false;
   for (std::uint32_t i = 0; i < arity; ++i) {
-    const parser::AstNode& arg_node = node.as_call_arg(i);
+    const parser::AstNode& raw_arg = node.as_call_arg(i);
+    // LET-binding passthrough: when the caller wrote `SUM(r)` where `r` is
+    // bound to a RangeOp / ArrayLiteral / OFFSET / CHOOSE / INDIRECT, the
+    // dispatcher must see the underlying range AST or it would fall back
+    // to the scalar path and collapse the binding to its spill anchor.
+    // Substitute only when the resolved AST is genuinely range-shaped so
+    // that a NameRef bound to a scalar (or a single-cell Ref) continues to
+    // flow through the existing scalar branch with its original provenance.
+    const parser::AstNode* effective = &raw_arg;
+    if (raw_arg.kind() == parser::NodeKind::NameRef) {
+      const parser::AstNode& resolved = resolve_name_ast(raw_arg, ctx.name_env());
+      if (&resolved != &raw_arg && is_range_shaped_ast(resolved)) {
+        effective = &resolved;
+      }
+    }
+    const parser::AstNode& arg_node = *effective;
     // Minimal array-literal support: when a range-aware function receives
     // a `{a;b;c}` style literal, flatten it in row-major order exactly like
     // a RangeOp argument. This is just enough to let LARGE / SMALL /
@@ -1082,6 +1098,12 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       //     them: `LET(x, 1/0, IFERROR(x, 99))` returns 99.
       //   * Names are ASCII-case-insensitive and a later binding with the
       //     same name shadows earlier ones in subsequent expressions.
+      //   * Range-shaped initialisers (RangeOp, ArrayLiteral, OFFSET/CHOOSE/
+      //     INDIRECT calls, single-cell Refs, or NameRefs that resolve to
+      //     such) keep a pointer to their source AST in the binding so that
+      //     range-aware consumers (SUM, COUNT, VLOOKUP, ...) can re-dispatch
+      //     on the underlying shape rather than seeing only the spill-anchor
+      //     scalar that `eval_node` collapses a bare RangeOp to.
       NameEnv env;
       const NameEnv* parent = ctx.name_env();
       // Start from whatever the caller supplied; extending `NameEnv` makes
@@ -1094,7 +1116,27 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
         const parser::AstNode& expr_node = node.as_let_binding_expr(i);
         const EvalContext inner_ctx = ctx.with_name_env(&env);
         const Value v = eval_node(expr_node, arena, registry, inner_ctx);
-        env = env.extend(node.as_let_binding_name(i), v, arena);
+        // Record the AST source for genuinely range-shaped bindings only:
+        // `RangeOp`, `ArrayLiteral`, and the reference-producing calls
+        // (`OFFSET`, `CHOOSE`, `INDIRECT`). Single-cell `Ref` and scalar
+        // shapes bind by Value -- recording their AST would either be
+        // unused (the resolve helper skips non-range shapes) or risk
+        // re-evaluating side-effecting / expensive sub-expressions on
+        // every NameRef read. NameRef-on-NameRef is transitive: if the
+        // RHS already resolves to a range-shaped AST in the (possibly
+        // outer) scope, we inherit that AST so `=LET(s, r, SUM(s))` works
+        // when `r` is itself a range binding.
+        const parser::AstNode* expr_for_binding = nullptr;
+        if (is_range_shaped_ast(expr_node)) {
+          expr_for_binding = &expr_node;
+        } else if (expr_node.kind() == parser::NodeKind::NameRef) {
+          // `env` already reflects every previously bound name in this LET
+          // (and, via `parent`, any outer LETs); a single lookup walks the
+          // whole chain.
+          expr_for_binding = env.lookup_ast(expr_node.as_name());
+        }
+        env = env.extend(node.as_let_binding_name(i), v, expr_for_binding,
+                         arena);
       }
       const EvalContext body_ctx = ctx.with_name_env(&env);
       return eval_node(node.as_let_body(), arena, registry, body_ctx);

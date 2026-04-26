@@ -482,35 +482,6 @@ entries:
     prefer: mac-excel-365
     first_noted: 2026-04-26
 
-  # -- LET: range bindings flatten to scalar ------------------------------
-  # `=LET(r, A1:A3, SUM(r))` should produce 60 (sum of the bound range)
-  # but Formulon evaluates the binding once and stores it as a Value
-  # variant that already collapses to the spill anchor (A1=10), so SUM(r)
-  # sees a single cell. Same root cause for COUNT and VLOOKUP bindings.
-  # The fix is in how `src/eval/special_forms_lazy.cpp::LetBinding`
-  # captures range-shaped sub-expressions — it needs to preserve
-  # range-ness for downstream aggregator / lookup consumers, the same
-  # way `expand_offset_call` integrates with `resolve_range_arg`.
-  # Note: bare body references like `=LET(r, A1:A3, r)` and arithmetic
-  # like `=LET(r, A1:A3, r+1)` *do* pass because the spill-anchor read
-  # at Z1 happens to match the (incorrectly) collapsed first-cell value.
-  - id: range_binding_sum
-    mode: skip-oracle
-    reason: "LET range binding collapses to spill anchor before SUM consumes it; Excel: 60, Formulon: 10."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
-  - id: range_binding_count
-    mode: skip-oracle
-    reason: "LET range binding collapses to scalar before COUNT iterates."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-  - id: range_binding_in_lookup
-    mode: skip-oracle
-    reason: "LET range binding cannot serve as VLOOKUP table_array; Formulon: #VALUE!."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-
   # -- Complex IMCSC: 1-ULP precision in last decimal --------------------
   # IMCSC(1+i): Excel ...0.303931001628427i, Formulon ...0.303931001628426i.
   # Drift is 1 ULP at the 15th significant digit; cannot pass the exact

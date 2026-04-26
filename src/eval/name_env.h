@@ -35,6 +35,9 @@
 #include "value.h"
 
 namespace formulon {
+namespace parser {
+class AstNode;
+}  // namespace parser
 namespace eval {
 
 /// Immutable, arena-allocated linked-frame environment.
@@ -61,11 +64,37 @@ class NameEnv {
     return nullptr;
   }
 
+  /// Returns the AST node a `name` was bound to, or `nullptr` when the name
+  /// is unbound or its binding carries only a `Value` (the common case for
+  /// scalar initialisers). Range-shaped initialisers (`A1:B2`, `OFFSET(...)`,
+  /// `CHOOSE(...)`, `{1;2;3}`) record their AST so range-aware consumers
+  /// (SUM, COUNT, VLOOKUP, ...) can treat the bound name as if the original
+  /// range AST had been written inline. Walks frames head-to-tail so a
+  /// freshly extended binding shadows earlier ones.
+  const parser::AstNode* lookup_ast(std::string_view name) const noexcept {
+    for (const Binding* b = head_; b != nullptr; b = b->prev) {
+      if (strings::case_insensitive_eq(b->name, name)) {
+        return b->expr;
+      }
+    }
+    return nullptr;
+  }
+
   /// Returns a new environment with `(name, value)` pushed on top. The
   /// returned env shares its tail with `*this`; the underlying `Binding`
   /// node lives in `arena`. Returns a copy of `*this` unchanged if arena
   /// allocation fails (the caller surfaces the resulting `#NAME?` on lookup).
   NameEnv extend(std::string_view name, Value value, Arena& arena) const noexcept {
+    return extend(name, value, /*expr=*/nullptr, arena);
+  }
+
+  /// Like `extend(name, value, arena)` but additionally records `expr` as the
+  /// AST source of the binding. Range-aware consumers can recover this AST
+  /// via `lookup_ast` and re-dispatch on the original RangeOp / ArrayLiteral
+  /// / OFFSET-call shape. Pass `nullptr` for `expr` to opt back into the
+  /// Value-only behaviour (equivalent to the 3-argument overload).
+  NameEnv extend(std::string_view name, Value value,
+                 const parser::AstNode* expr, Arena& arena) const noexcept {
     auto* frame = arena.create<Binding>();
     if (frame == nullptr) {
       return *this;
@@ -76,6 +105,7 @@ class NameEnv {
     // the invariant explicit for future callers (e.g. LAMBDA).
     frame->name = arena.intern(name);
     frame->value = value;
+    frame->expr = expr;
     frame->prev = head_;
     NameEnv next;
     next.head_ = frame;
@@ -100,6 +130,11 @@ class NameEnv {
     Binding() noexcept : value(Value::blank()) {}
     std::string_view name;
     Value value;
+    /// Optional pointer to the AST node the name was bound to. Non-null only
+    /// for range-shaped initialisers; consumers must keep the parsing arena
+    /// alive for the duration of evaluation (the same invariant as for the
+    /// AST nodes themselves).
+    const parser::AstNode* expr = nullptr;
     const Binding* prev = nullptr;
   };
 

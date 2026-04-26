@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T04:18:12Z"
+    "generated_at": "2026-04-26T04:28:51Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -147,7 +147,10 @@
           "value": 30.0
         }
       },
-      "skipped": "LET range binding collapses to spill anchor before SUM consumes it; Excel: 60, Formulon: 10."
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
     },
     {
       "id": "range_binding_count",
@@ -166,7 +169,10 @@
           "value": 3.0
         }
       },
-      "skipped": "LET range binding collapses to scalar before COUNT iterates."
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
     },
     {
       "id": "range_binding_arithmetic_at_anchor",
@@ -211,7 +217,10 @@
           "value": 2.0
         }
       },
-      "skipped": "LET range binding cannot serve as VLOOKUP table_array; Formulon: #VALUE!."
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
     },
     {
       "id": "function_result_binding",

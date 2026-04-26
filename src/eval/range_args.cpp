@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "eval/eval_context.h"
+#include "eval/name_env_resolve.h"
 #include "eval/reference_lazy.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
@@ -22,9 +23,22 @@
 namespace formulon {
 namespace eval {
 
-bool resolve_range_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
+bool resolve_range_arg(const parser::AstNode& raw_arg, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
                        std::uint32_t* out_rows, std::uint32_t* out_cols) {
+  // LET-binding passthrough: when a caller wrote `VLOOKUP(key, t, 2, FALSE)`
+  // with `t` bound to a RangeOp / OFFSET-call / ArrayLiteral via LET, the
+  // shape decisions below need the original AST, not the NameRef. Single-
+  // cell Refs and scalar bindings are intentionally left as-is so the
+  // existing 1-cell / scalar-fallback semantics are preserved.
+  const parser::AstNode* effective = &raw_arg;
+  if (raw_arg.kind() == parser::NodeKind::NameRef) {
+    const parser::AstNode& resolved = resolve_name_ast(raw_arg, ctx.name_env());
+    if (&resolved != &raw_arg && is_range_shaped_ast(resolved)) {
+      effective = &resolved;
+    }
+  }
+  const parser::AstNode& arg_node = *effective;
   // OFFSET(...) and CHOOSE(...) both produce a rectangle that aggregator-
   // family callers (SUM, AVERAGE, COUNTIF, …) must be able to iterate as if
   // it were a literal `RangeOp`. Forward to the dedicated expansion helpers
