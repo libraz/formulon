@@ -15,6 +15,7 @@
 #include "eval/coerce.h"
 #include "eval/conditional_aggregates.h"
 #include "eval/database_lazy.h"
+#include "eval/dynamic_array_lazy.h"
 #include "eval/eval_context.h"
 #include "eval/financial_lazy.h"
 #include "eval/function_registry.h"
@@ -149,6 +150,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"DVAR", &eval_dvar_lazy},
     {"DVARP", &eval_dvarp_lazy},
     {"F.TEST", &eval_f_test_lazy},
+    {"FILTER", &eval_filter_lazy},
     // FORECAST is the legacy spelling kept by Excel for back-compat;
     // its impl and arity are identical to FORECAST.LINEAR.
     {"FORECAST", &eval_forecast_linear_lazy},
