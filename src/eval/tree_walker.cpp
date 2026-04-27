@@ -152,6 +152,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"DSUM", &eval_dsum_lazy},
     {"DVAR", &eval_dvar_lazy},
     {"DVARP", &eval_dvarp_lazy},
+    {"EXPAND", &eval_expand_lazy},
     {"F.TEST", &eval_f_test_lazy},
     {"FILTER", &eval_filter_lazy},
     // FORECAST is the legacy spelling kept by Excel for back-compat;
@@ -220,6 +221,8 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"SWITCH", &eval_switch_lazy},
     {"T.TEST", &eval_t_test_lazy},
     {"TAKE", &eval_take_lazy},
+    {"TOCOL", &eval_tocol_lazy},
+    {"TOROW", &eval_torow_lazy},
     {"TRANSPOSE", &eval_transpose_lazy},
     // TTEST is the pre-2010 legacy spelling of T.TEST; same impl.
     {"TTEST", &eval_t_test_lazy},
@@ -228,6 +231,8 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"VSTACK", &eval_vstack_lazy},
     {"WORKDAY", &eval_workday_lazy},
     {"WORKDAY.INTL", &eval_workday_intl_lazy},
+    {"WRAPCOLS", &eval_wrapcols_lazy},
+    {"WRAPROWS", &eval_wraprows_lazy},
     {"XIRR", &eval_xirr_lazy},
     {"XLOOKUP", &eval_xlookup_lazy},
     {"XMATCH", &eval_xmatch_lazy},

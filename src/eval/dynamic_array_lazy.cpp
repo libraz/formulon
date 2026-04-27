@@ -1188,5 +1188,434 @@ Value eval_drop_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   return Value::array(out);
 }
 
+Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 2U || arity > 4U) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  const Value array_v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
+  if (array_v.is_error()) {
+    return array_v;
+  }
+  if (!array_v.is_array()) {
+    return Value::error(ErrorCode::Value);
+  }
+  const ArrayValue* array = array_v.as_array();
+
+  // Resolve the new row count. `rows` is required.
+  const Value rows_v = eval_node(call.as_call_arg(1), arena, registry, ctx);
+  if (rows_v.is_error()) {
+    return rows_v;
+  }
+  auto rows_c = coerce_to_number(rows_v);
+  if (!rows_c) {
+    return Value::error(rows_c.error());
+  }
+  const double rows_d = std::trunc(rows_c.value());
+  if (rows_d < static_cast<double>(array->rows)) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  // Resolve the new column count. Optional; defaults to the existing
+  // column count (no horizontal expansion).
+  std::uint32_t out_cols = array->cols;
+  if (arity >= 3U) {
+    const Value cols_v = eval_node(call.as_call_arg(2), arena, registry, ctx);
+    if (cols_v.is_error()) {
+      return cols_v;
+    }
+    auto cols_c = coerce_to_number(cols_v);
+    if (!cols_c) {
+      return Value::error(cols_c.error());
+    }
+    const double cols_d = std::trunc(cols_c.value());
+    if (cols_d < static_cast<double>(array->cols)) {
+      return Value::error(ErrorCode::Value);
+    }
+    out_cols = static_cast<std::uint32_t>(cols_d);
+  }
+  const auto out_rows = static_cast<std::uint32_t>(rows_d);
+
+  // Resolve the pad value. Default is #N/A. If `pad_with` is supplied as
+  // an array (range / range literal), Excel takes the scalar at cell 0
+  // and pads with that — matching the dispatcher's scalar coercion path
+  // for non-array contexts. Errors at the argument level propagate.
+  Value pad = Value::error(ErrorCode::NA);
+  if (arity == 4U) {
+    const Value pad_v = eval_node(call.as_call_arg(3), arena, registry, ctx);
+    if (pad_v.is_error()) {
+      return pad_v;
+    }
+    if (pad_v.is_array()) {
+      const ArrayValue* pa = pad_v.as_array();
+      if (pa->rows == 0U || pa->cols == 0U) {
+        return Value::error(ErrorCode::Value);
+      }
+      pad = pa->cells[0];
+    } else {
+      pad = pad_v;
+    }
+  }
+
+  const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
+  Value* buffer = arena.create_array<Value>(total);
+  if (buffer == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  for (std::uint32_t r = 0; r < out_rows; ++r) {
+    for (std::uint32_t c = 0; c < out_cols; ++c) {
+      const std::size_t dst = static_cast<std::size_t>(r) * out_cols + c;
+      if (r < array->rows && c < array->cols) {
+        buffer[dst] = array->cells[static_cast<std::size_t>(r) * array->cols + c];
+      } else {
+        buffer[dst] = pad;
+      }
+    }
+  }
+
+  ArrayValue* out = arena.create<ArrayValue>();
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  out->rows = out_rows;
+  out->cols = out_cols;
+  out->cells = buffer;
+  return Value::array(out);
+}
+
+namespace {
+
+/// Walk every cell of `array` and append it to `out` (subject to the
+/// `ignore` bitmask) using the iteration order set by `scan_by_column`.
+/// Returns `false` on a coercion / argument-validation failure with the
+/// caller-visible error written into `error_out`.
+bool collect_tocol_torow_cells(const ArrayValue& array, std::int64_t ignore_mask, bool scan_by_column,
+                               std::vector<Value>& out, Value& error_out) {
+  // Mac Excel restricts the bitmask to 0..3 inclusive. Any other integer
+  // surfaces #VALUE!.
+  if (ignore_mask < 0 || ignore_mask > 3) {
+    error_out = Value::error(ErrorCode::Value);
+    return false;
+  }
+  const bool skip_blanks = (ignore_mask & 1) != 0;
+  const bool skip_errors = (ignore_mask & 2) != 0;
+
+  auto consider = [&](const Value& v) {
+    if (skip_blanks && v.is_blank()) {
+      return;
+    }
+    if (skip_errors && v.is_error()) {
+      return;
+    }
+    out.push_back(v);
+  };
+
+  if (scan_by_column) {
+    for (std::uint32_t c = 0; c < array.cols; ++c) {
+      for (std::uint32_t r = 0; r < array.rows; ++r) {
+        consider(array.cells[static_cast<std::size_t>(r) * array.cols + c]);
+      }
+    }
+  } else {
+    for (std::uint32_t r = 0; r < array.rows; ++r) {
+      for (std::uint32_t c = 0; c < array.cols; ++c) {
+        consider(array.cells[static_cast<std::size_t>(r) * array.cols + c]);
+      }
+    }
+  }
+  return true;
+}
+
+/// Resolve the (`ignore`, `scan_by_column`) optional args shared by
+/// TOCOL / TOROW. `arity` is the call arity (1..3); the call's first
+/// argument is the source array, hence the optional args are at indices
+/// 1 and 2 here.
+bool resolve_tocol_torow_options(const parser::AstNode& call, std::uint32_t arity, Arena& arena,
+                                 const FunctionRegistry& registry, const EvalContext& ctx,
+                                 std::int64_t& ignore_mask, bool& scan_by_column, Value& error_out) {
+  ignore_mask = 0;
+  scan_by_column = false;
+  if (arity >= 2U) {
+    const Value ig_v = eval_node(call.as_call_arg(1), arena, registry, ctx);
+    if (ig_v.is_error()) {
+      error_out = ig_v;
+      return false;
+    }
+    auto coerced = coerce_to_number(ig_v);
+    if (!coerced) {
+      error_out = Value::error(coerced.error());
+      return false;
+    }
+    ignore_mask = static_cast<std::int64_t>(std::trunc(coerced.value()));
+  }
+  if (arity >= 3U) {
+    const Value sc_v = eval_node(call.as_call_arg(2), arena, registry, ctx);
+    if (sc_v.is_error()) {
+      error_out = sc_v;
+      return false;
+    }
+    auto coerced_b = coerce_to_bool(sc_v);
+    if (!coerced_b) {
+      error_out = Value::error(coerced_b.error());
+      return false;
+    }
+    scan_by_column = coerced_b.value();
+  }
+  return true;
+}
+
+/// Build a 1xN or Nx1 ArrayValue from the gathered cells. Returns nullptr
+/// on arena OOM. Callers that need to surface a specific error should
+/// pre-validate and not call this with `cells.empty()`.
+ArrayValue* materialise_vector(std::vector<Value>&& cells, bool as_column, Arena& arena) {
+  const auto n = static_cast<std::uint32_t>(cells.size());
+  Value* buffer = arena.create_array<Value>(cells.size());
+  if (buffer == nullptr) {
+    return nullptr;
+  }
+  for (std::size_t i = 0; i < cells.size(); ++i) {
+    buffer[i] = cells[i];
+  }
+  ArrayValue* out = arena.create<ArrayValue>();
+  if (out == nullptr) {
+    return nullptr;
+  }
+  if (as_column) {
+    out->rows = n;
+    out->cols = 1;
+  } else {
+    out->rows = 1;
+    out->cols = n;
+  }
+  out->cells = buffer;
+  return out;
+}
+
+}  // namespace
+
+Value eval_tocol_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 1U || arity > 3U) {
+    return Value::error(ErrorCode::Value);
+  }
+  const Value array_v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
+  if (array_v.is_error()) {
+    return array_v;
+  }
+  if (!array_v.is_array()) {
+    return Value::error(ErrorCode::Value);
+  }
+  const ArrayValue* array = array_v.as_array();
+
+  std::int64_t ignore_mask = 0;
+  bool scan_by_column = false;
+  Value err = Value::error(ErrorCode::Value);
+  if (!resolve_tocol_torow_options(call, arity, arena, registry, ctx, ignore_mask, scan_by_column, err)) {
+    return err;
+  }
+
+  std::vector<Value> kept;
+  kept.reserve(static_cast<std::size_t>(array->rows) * static_cast<std::size_t>(array->cols));
+  if (!collect_tocol_torow_cells(*array, ignore_mask, scan_by_column, kept, err)) {
+    return err;
+  }
+  if (kept.empty()) {
+    return Value::error(ErrorCode::Calc);
+  }
+  ArrayValue* out = materialise_vector(std::move(kept), /*as_column=*/true, arena);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::array(out);
+}
+
+Value eval_torow_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 1U || arity > 3U) {
+    return Value::error(ErrorCode::Value);
+  }
+  const Value array_v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
+  if (array_v.is_error()) {
+    return array_v;
+  }
+  if (!array_v.is_array()) {
+    return Value::error(ErrorCode::Value);
+  }
+  const ArrayValue* array = array_v.as_array();
+
+  std::int64_t ignore_mask = 0;
+  bool scan_by_column = false;
+  Value err = Value::error(ErrorCode::Value);
+  if (!resolve_tocol_torow_options(call, arity, arena, registry, ctx, ignore_mask, scan_by_column, err)) {
+    return err;
+  }
+
+  std::vector<Value> kept;
+  kept.reserve(static_cast<std::size_t>(array->rows) * static_cast<std::size_t>(array->cols));
+  if (!collect_tocol_torow_cells(*array, ignore_mask, scan_by_column, kept, err)) {
+    return err;
+  }
+  if (kept.empty()) {
+    return Value::error(ErrorCode::Calc);
+  }
+  ArrayValue* out = materialise_vector(std::move(kept), /*as_column=*/false, arena);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::array(out);
+}
+
+namespace {
+
+/// WRAPCOLS / WRAPROWS share an arg layout: a 1D `vector`, an integer
+/// `wrap_count >= 1`, and an optional scalar `pad_with` (default #N/A).
+/// Returns true and writes `flat`, `wrap_count`, `pad` on success;
+/// `false` and the caller-visible error otherwise.
+bool resolve_wrap_args(const parser::AstNode& call, std::uint32_t arity, Arena& arena,
+                       const FunctionRegistry& registry, const EvalContext& ctx,
+                       const ArrayValue*& vector_arr, std::uint32_t& wrap_count, Value& pad,
+                       Value& error_out) {
+  if (arity < 2U || arity > 3U) {
+    error_out = Value::error(ErrorCode::Value);
+    return false;
+  }
+  const Value v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
+  if (v.is_error()) {
+    error_out = v;
+    return false;
+  }
+  if (!v.is_array()) {
+    error_out = Value::error(ErrorCode::Value);
+    return false;
+  }
+  const ArrayValue* arr = v.as_array();
+  // `vector` must be 1D in either orientation; a 2D rectangle is rejected
+  // here (the WRAP family is for vectors only).
+  if (arr->rows != 1U && arr->cols != 1U) {
+    error_out = Value::error(ErrorCode::Value);
+    return false;
+  }
+  vector_arr = arr;
+
+  const Value wc_v = eval_node(call.as_call_arg(1), arena, registry, ctx);
+  if (wc_v.is_error()) {
+    error_out = wc_v;
+    return false;
+  }
+  auto wc_c = coerce_to_number(wc_v);
+  if (!wc_c) {
+    error_out = Value::error(wc_c.error());
+    return false;
+  }
+  const double wc_d = std::trunc(wc_c.value());
+  if (wc_d < 1.0) {
+    error_out = Value::error(ErrorCode::Num);
+    return false;
+  }
+  wrap_count = static_cast<std::uint32_t>(wc_d);
+
+  pad = Value::error(ErrorCode::NA);
+  if (arity == 3U) {
+    const Value p_v = eval_node(call.as_call_arg(2), arena, registry, ctx);
+    if (p_v.is_error()) {
+      error_out = p_v;
+      return false;
+    }
+    if (p_v.is_array()) {
+      const ArrayValue* pa = p_v.as_array();
+      if (pa->rows == 0U || pa->cols == 0U) {
+        error_out = Value::error(ErrorCode::Value);
+        return false;
+      }
+      pad = pa->cells[0];
+    } else {
+      pad = p_v;
+    }
+  }
+  return true;
+}
+
+}  // namespace
+
+Value eval_wraprows_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  const ArrayValue* vector_arr = nullptr;
+  std::uint32_t wrap_count = 0;
+  Value pad = Value::error(ErrorCode::NA);
+  Value err = Value::error(ErrorCode::Value);
+  if (!resolve_wrap_args(call, arity, arena, registry, ctx, vector_arr, wrap_count, pad, err)) {
+    return err;
+  }
+  // The vector's natural flat order is row-major, which is what we want
+  // both for a row vector (1xN) and a column vector (Nx1) — both have
+  // their cells already laid out left-to-right / top-to-bottom in
+  // `cells` (since rows or cols == 1). Total cell count is rows * cols.
+  const std::size_t n = static_cast<std::size_t>(vector_arr->rows) * static_cast<std::size_t>(vector_arr->cols);
+  // Output rows is ceil(n / wrap_count); output cols is wrap_count.
+  // The trailing row is padded with `pad` if the division leaves a remainder.
+  const std::uint32_t out_cols = wrap_count;
+  const std::uint32_t out_rows =
+      static_cast<std::uint32_t>((n + static_cast<std::size_t>(wrap_count) - 1) / wrap_count);
+  const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
+  Value* buffer = arena.create_array<Value>(total);
+  if (buffer == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  for (std::size_t i = 0; i < total; ++i) {
+    buffer[i] = (i < n) ? vector_arr->cells[i] : pad;
+  }
+  ArrayValue* out = arena.create<ArrayValue>();
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  out->rows = out_rows;
+  out->cols = out_cols;
+  out->cells = buffer;
+  return Value::array(out);
+}
+
+Value eval_wrapcols_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  const ArrayValue* vector_arr = nullptr;
+  std::uint32_t wrap_count = 0;
+  Value pad = Value::error(ErrorCode::NA);
+  Value err = Value::error(ErrorCode::Value);
+  if (!resolve_wrap_args(call, arity, arena, registry, ctx, vector_arr, wrap_count, pad, err)) {
+    return err;
+  }
+  const std::size_t n = static_cast<std::size_t>(vector_arr->rows) * static_cast<std::size_t>(vector_arr->cols);
+  // Output rows is wrap_count; output cols is ceil(n / wrap_count). Cells
+  // fill column-major: the i-th input cell goes to (i % wrap_count, i /
+  // wrap_count). Trailing slots in the final column become `pad`.
+  const std::uint32_t out_rows = wrap_count;
+  const std::uint32_t out_cols =
+      static_cast<std::uint32_t>((n + static_cast<std::size_t>(wrap_count) - 1) / wrap_count);
+  const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
+  Value* buffer = arena.create_array<Value>(total);
+  if (buffer == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  for (std::size_t i = 0; i < total; ++i) {
+    const std::size_t r = i / out_cols;
+    const std::size_t c = i % out_cols;
+    const std::size_t flat = c * out_rows + r;
+    buffer[i] = (flat < n) ? vector_arr->cells[flat] : pad;
+  }
+  ArrayValue* out = arena.create<ArrayValue>();
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  out->rows = out_rows;
+  out->cols = out_cols;
+  out->cells = buffer;
+  return Value::array(out);
+}
+
 }  // namespace eval
 }  // namespace formulon

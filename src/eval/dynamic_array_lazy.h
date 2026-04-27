@@ -2,10 +2,11 @@
 //
 // Lazy impls for dynamic-array spilling builtins that need per-argument AST
 // shape inspection: `FILTER`, `UNIQUE`, `SORT`, `SORTBY`, `HSTACK`, `VSTACK`,
-// `CHOOSECOLS`, `CHOOSEROWS`, `DROP`, `TAKE`. These functions either produce
-// an `ArrayValue` whose footprint depends on the input array's 2D shape, or
-// accept a range argument they must keep as a 2D rectangle (the eager
-// dispatcher would flatten range cells into a 1D vector and lose the shape).
+// `CHOOSECOLS`, `CHOOSEROWS`, `DROP`, `TAKE`, `EXPAND`, `TOCOL`, `TOROW`,
+// `WRAPCOLS`, `WRAPROWS`. These functions either produce an `ArrayValue`
+// whose footprint depends on the input array's 2D shape, or accept a range
+// argument they must keep as a 2D rectangle (the eager dispatcher would
+// flatten range cells into a 1D vector and lose the shape).
 //
 // Sibling of `eval/shape_ops_lazy.h` (which hosts the SUMPRODUCT-side helpers
 // and TRANSPOSE) and `eval/builtins/dynamic_array.cpp` (the eager-arg
@@ -228,6 +229,75 @@ Value eval_take_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
 /// Excel's documented behaviour for "nothing left").
 Value eval_drop_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx);
+
+/// `EXPAND(array, rows, [columns], [pad_with])` — pads `array` with the
+/// scalar `pad_with` (default `#N/A`) up to `rows` rows and `columns`
+/// columns. The original cells stay anchored at the top-left.
+///
+/// Argument rules (matches Mac Excel):
+///   * `rows` must be `>= array.rows`; `columns` must be `>= array.cols`
+///     (or omitted, in which case the column count is unchanged).
+///     A target smaller than the existing axis surfaces `#VALUE!`.
+///   * Both dimensions are coerced via `coerce_to_number` and truncated
+///     toward zero.
+///   * `pad_with`, if omitted, is `#N/A`. A scalar; arrays / refs are
+///     evaluated normally and only their scalar payload is used.
+///   * Argument-level errors propagate verbatim.
+///   * Arity 2..4.
+Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx);
+
+/// `TOCOL(array, [ignore], [scan_by_column])` — flattens a 2D array into
+/// a single column.
+///
+/// Arguments:
+///   * `ignore` (default 0): bitmask controlling which cells to skip.
+///       0 -> keep all cells.
+///       1 -> skip blank cells.
+///       2 -> skip error cells.
+///       3 -> skip both blanks and errors.
+///     Coerced via `coerce_to_number` + truncate-toward-zero; any other
+///     integer value surfaces `#VALUE!`.
+///   * `scan_by_column` (default FALSE): FALSE iterates row-major
+///     (left-to-right, top-to-bottom); TRUE iterates column-major
+///     (top-to-bottom, left-to-right). Coerced via `coerce_to_bool`.
+///
+/// If every cell is filtered out, surfaces `#CALC!` (matches Mac Excel's
+/// documented "no values to return" surface for the dynamic-array
+/// reshape family).
+Value eval_tocol_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx);
+
+/// `TOROW(array, [ignore], [scan_by_column])` — symmetric variant of
+/// `TOCOL`, returning a single row instead of a single column. The
+/// `ignore` bitmask and `scan_by_column` flag have the same semantics
+/// and the same error policy.
+Value eval_torow_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx);
+
+/// `WRAPROWS(vector, wrap_count, [pad_with])` — flattens `vector`
+/// row-major and wraps it into a 2D array whose rows are `wrap_count`
+/// wide. The final row, if short, is padded with the scalar `pad_with`
+/// (default `#N/A`).
+///
+/// Argument rules:
+///   * `vector` must be 1D (one row OR one column). 2D arrays surface
+///     `#VALUE!` (matches Mac Excel's per-function 1D constraint).
+///     Scalar args become `(1, 1)` and pass.
+///   * `wrap_count` is coerced + truncated toward zero. `< 1` surfaces
+///     `#NUM!`.
+///   * `pad_with` defaults to `#N/A` if omitted; otherwise it is taken
+///     as scalar (its first cell if an array).
+///   * Argument-level errors propagate verbatim.
+///   * Arity 2..3.
+Value eval_wraprows_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx);
+
+/// `WRAPCOLS(vector, wrap_count, [pad_with])` — symmetric variant of
+/// `WRAPROWS`, wrapping into columns `wrap_count` tall instead of rows
+/// `wrap_count` wide. All argument and error semantics match.
+Value eval_wrapcols_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx);
 
 }  // namespace eval
 }  // namespace formulon

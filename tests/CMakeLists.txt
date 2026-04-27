@@ -120,6 +120,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/stack_eval_test.cpp
   unit/eval/choose_axis_eval_test.cpp
   unit/eval/take_drop_eval_test.cpp
+  unit/eval/array_reshape_eval_test.cpp
   unit/parser/spill_ref_test.cpp
   unit/registry_catalog_test.cpp
 )
