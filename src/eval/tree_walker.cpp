@@ -24,6 +24,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/lookups/classic.h"
 #include "eval/lookups/xlookup.h"
+#include "eval/matrix_ops_lazy.h"
 #include "eval/name_env.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
@@ -184,8 +185,11 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"LOOKUP", &eval_lookup_lazy},
     {"MATCH", &eval_match_lazy},
     {"MAXIFS", &eval_maxifs_lazy},
+    {"MDETERM", &eval_mdeterm_lazy},
     {"MINIFS", &eval_minifs_lazy},
+    {"MINVERSE", &eval_minverse_lazy},
     {"MIRR", &eval_mirr_lazy},
+    {"MMULT", &eval_mmult_lazy},
     {"NETWORKDAYS", &eval_networkdays_lazy},
     {"NETWORKDAYS.INTL", &eval_networkdays_intl_lazy},
     {"OFFSET", &eval_offset_lazy},
