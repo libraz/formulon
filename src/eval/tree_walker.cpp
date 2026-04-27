@@ -22,6 +22,7 @@
 #include "eval/hypothesis_lazy.h"
 #include "eval/info_lazy.h"
 #include "eval/lazy_impls.h"
+#include "eval/linest_lazy.h"
 #include "eval/lookups/classic.h"
 #include "eval/lookups/xlookup.h"
 #include "eval/matrix_ops_lazy.h"
@@ -183,6 +184,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"ISFORMULA", &eval_isformula_lazy},
     {"ISREF", &eval_isref_lazy},
     {"IRR", &eval_irr_lazy},
+    {"LINEST", &eval_linest_lazy},
     {"LOOKUP", &eval_lookup_lazy},
     {"MATCH", &eval_match_lazy},
     {"MAXIFS", &eval_maxifs_lazy},

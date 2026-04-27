@@ -1,0 +1,566 @@
+// Copyright 2026 libraz. Licensed under the MIT License.
+//
+// LINEST implementation. See linest_lazy.h for the user-facing
+// contract; this file owns the numerical recipe (build the design
+// matrix, form the normal equations, solve via Gauss-Jordan with
+// partial pivoting, optionally derive the regression statistics).
+//
+// The matrix kernel is intentionally hand-rolled — same `~150 line`
+// budget as MINVERSE — to keep the WASM size policy intact (no Eigen,
+// no LAPACK).
+
+#include "eval/linest_lazy.h"
+
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <vector>
+
+#include "eval/lazy_impls.h"
+#include "eval/shape_ops_lazy.h"
+#include "parser/ast.h"
+#include "utils/arena.h"
+#include "utils/error.h"
+#include "value.h"
+
+namespace formulon {
+namespace eval {
+namespace {
+
+/// Materialises an array argument as an `ArrayValue` (scalars wrap to
+/// 1x1). On failure writes the propagating error into `*out_err`.
+bool resolve_array(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                   const ArrayValue** out, Value* out_err) {
+  const Value v = eval_node_as_array(arg, arena, registry, ctx);
+  if (v.is_error()) {
+    *out_err = v;
+    return false;
+  }
+  if (!v.is_array()) {
+    *out_err = Value::error(ErrorCode::Value);
+    return false;
+  }
+  *out = v.as_array();
+  return true;
+}
+
+/// Strict numeric coercion for LINEST inputs. Numbers pass through;
+/// Booleans coerce to 1/0; Blank/Text/Error fail. Errors propagate
+/// verbatim via `*out_err` (and `false`); non-numeric non-error cells
+/// surface as `#VALUE!`. Mac Excel's matrix-strict rule.
+bool coerce_cell(const Value& cell, double* out, Value* out_err) {
+  if (cell.is_error()) {
+    *out_err = cell;
+    return false;
+  }
+  if (cell.is_number()) {
+    *out = cell.as_number();
+    return true;
+  }
+  if (cell.is_boolean()) {
+    *out = cell.as_boolean() ? 1.0 : 0.0;
+    return true;
+  }
+  *out_err = Value::error(ErrorCode::Value);
+  return false;
+}
+
+/// Evaluates a flat-cell scan over an entire `ArrayValue`, populating
+/// `out` with the coerced doubles in row-major order. Returns `false`
+/// on the first non-numeric / error cell.
+bool coerce_array(const ArrayValue& src, std::vector<double>& out, Value* out_err) {
+  const std::size_t n = static_cast<std::size_t>(src.rows) * static_cast<std::size_t>(src.cols);
+  out.resize(n);
+  for (std::size_t i = 0; i < n; ++i) {
+    if (!coerce_cell(src.cells[i], &out[i], out_err)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// Flat row-major buffer + shape returned by `make_double_array`.
+ArrayValue* make_double_array(const std::vector<Value>& data, std::uint32_t rows, std::uint32_t cols, Arena& arena) {
+  const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+  Value* buffer = arena.create_array<Value>(n);
+  if (buffer == nullptr) {
+    return nullptr;
+  }
+  for (std::size_t i = 0; i < n; ++i) {
+    buffer[i] = data[i];
+  }
+  ArrayValue* arr = arena.create<ArrayValue>();
+  if (arr == nullptr) {
+    return nullptr;
+  }
+  arr->rows = rows;
+  arr->cols = cols;
+  arr->cells = buffer;
+  return arr;
+}
+
+/// Returns true if `v` is finite, false for NaN / +-inf. Used to gate
+/// final result cells; LINEST surfaces `#NUM!` for any non-finite
+/// statistic.
+bool is_finite(double v) noexcept {
+  return !std::isnan(v) && !std::isinf(v);
+}
+
+/// Evaluates an optional scalar Boolean argument. Numbers coerce
+/// to false (zero) / true (non-zero); Booleans pass through; errors
+/// propagate via `*out_err` (returning `false`); other types -> `#VALUE!`.
+bool eval_bool_arg(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                   bool default_value, bool* out, Value* out_err) {
+  const Value v = eval_node(arg, arena, registry, ctx);
+  if (v.is_error()) {
+    *out_err = v;
+    return false;
+  }
+  if (v.is_blank()) {
+    *out = default_value;
+    return true;
+  }
+  if (v.is_boolean()) {
+    *out = v.as_boolean();
+    return true;
+  }
+  if (v.is_number()) {
+    *out = v.as_number() != 0.0;
+    return true;
+  }
+  *out_err = Value::error(ErrorCode::Value);
+  return false;
+}
+
+/// Solves `A * X = B` in-place via Gauss-Jordan with partial pivoting.
+/// `aug` is a row-major `n x w` buffer with `w = n + extra` and the
+/// augmented columns laid out to the right of `A`. On return, the left
+/// `n` columns are the identity and the right `extra` columns hold the
+/// solution. Returns `false` on numeric singularity (zero pivot); on
+/// failure `aug` is left in an indeterminate state and the caller
+/// should treat the system as singular.
+bool gauss_jordan(std::vector<double>& aug, std::uint32_t n, std::uint32_t w) {
+  for (std::uint32_t k = 0; k < n; ++k) {
+    std::uint32_t pivot = k;
+    double pivot_abs = std::fabs(aug[static_cast<std::size_t>(k) * w + k]);
+    for (std::uint32_t r = k + 1U; r < n; ++r) {
+      const double v = std::fabs(aug[static_cast<std::size_t>(r) * w + k]);
+      if (v > pivot_abs) {
+        pivot_abs = v;
+        pivot = r;
+      }
+    }
+    if (pivot_abs == 0.0) {
+      return false;
+    }
+    if (pivot != k) {
+      for (std::uint32_t c = 0; c < w; ++c) {
+        const std::size_t a_idx = static_cast<std::size_t>(k) * w + c;
+        const std::size_t b_idx = static_cast<std::size_t>(pivot) * w + c;
+        const double tmp = aug[a_idx];
+        aug[a_idx] = aug[b_idx];
+        aug[b_idx] = tmp;
+      }
+    }
+    const double diag = aug[static_cast<std::size_t>(k) * w + k];
+    for (std::uint32_t c = 0; c < w; ++c) {
+      aug[static_cast<std::size_t>(k) * w + c] /= diag;
+    }
+    for (std::uint32_t r = 0; r < n; ++r) {
+      if (r == k) {
+        continue;
+      }
+      const double f = aug[static_cast<std::size_t>(r) * w + k];
+      if (f == 0.0) {
+        continue;
+      }
+      for (std::uint32_t c = 0; c < w; ++c) {
+        aug[static_cast<std::size_t>(r) * w + c] -= f * aug[static_cast<std::size_t>(k) * w + c];
+      }
+    }
+  }
+  return true;
+}
+
+/// One observation row in the design matrix view: the `k` predictor
+/// values plus an implicit constant `1` (when `with_const`). The
+/// caller indexes `m` rows of these.
+struct DesignMatrix {
+  std::uint32_t m;           // observations
+  std::uint32_t k;           // predictors (X columns)
+  bool with_const;           // include intercept column
+  std::vector<double> data;  // row-major, m x p (p = k or k+1)
+  std::vector<double> y;     // length m
+};
+
+/// Forms `A = X^T X` (p x p) and `b = X^T y` (length p) given the
+/// design matrix view `dm`. `p` = `k + (with_const ? 1 : 0)`.
+void normal_equations(const DesignMatrix& dm, std::vector<double>& a, std::vector<double>& b) {
+  const std::uint32_t p = dm.k + (dm.with_const ? 1U : 0U);
+  const std::uint32_t m = dm.m;
+  a.assign(static_cast<std::size_t>(p) * p, 0.0);
+  b.assign(p, 0.0);
+  for (std::uint32_t i = 0; i < m; ++i) {
+    for (std::uint32_t r = 0; r < p; ++r) {
+      const double xri = dm.data[static_cast<std::size_t>(i) * p + r];
+      b[r] += xri * dm.y[i];
+      for (std::uint32_t c = 0; c < p; ++c) {
+        a[static_cast<std::size_t>(r) * p + c] += xri * dm.data[static_cast<std::size_t>(i) * p + c];
+      }
+    }
+  }
+}
+
+/// Builds the design matrix from a known_y array and an optional
+/// known_x array. `known_y` may be 1 x m or m x 1; the orientation
+/// determines how `known_x` is read. If `x_arr` is `nullptr`, the
+/// predictor defaults to the index sequence `{1, 2, ..., m}`.
+///
+/// Returns `false` on shape mismatch (writes `#REF!` / `#VALUE!` into
+/// `*out_err`) or on a non-numeric / error cell (propagates verbatim).
+bool build_design_matrix(const ArrayValue& y_arr, const ArrayValue* x_arr, bool with_const, DesignMatrix* dm,
+                         Value* out_err) {
+  // y must be 1-D (column m x 1 or row 1 x m).
+  const bool y_is_col = y_arr.cols == 1U && y_arr.rows >= 1U;
+  const bool y_is_row = y_arr.rows == 1U && y_arr.cols >= 1U;
+  if (!y_is_col && !y_is_row) {
+    *out_err = Value::error(ErrorCode::Ref);
+    return false;
+  }
+  const std::uint32_t m = y_is_col ? y_arr.rows : y_arr.cols;
+
+  // Coerce y first; errors here propagate (left-to-right rule: y first).
+  std::vector<double> y_vec;
+  if (!coerce_array(y_arr, y_vec, out_err)) {
+    return false;
+  }
+
+  // Determine k (number of predictors) and the predictor scan rule.
+  std::uint32_t k = 0;
+  std::vector<double> x_data;  // m x k row-major
+  if (x_arr == nullptr) {
+    // Default predictor: {1, 2, ..., m} as a single column.
+    k = 1U;
+    x_data.resize(m);
+    for (std::uint32_t i = 0; i < m; ++i) {
+      x_data[i] = static_cast<double>(i + 1U);
+    }
+  } else {
+    std::vector<double> x_vec;
+    if (!coerce_array(*x_arr, x_vec, out_err)) {
+      return false;
+    }
+    // Match orientation against y. The "observation axis" of x must
+    // equal m. Mac Excel accepts either layout; the other axis becomes k.
+    if (y_is_col) {
+      // y is m x 1; x should be m x k.
+      if (x_arr->rows != m) {
+        // Allow x as 1 x m as a fallback (single-variable, transposed).
+        if (x_arr->rows == 1U && x_arr->cols == m) {
+          k = 1U;
+          x_data = x_vec;  // already length m
+        } else if (x_arr->cols == m && x_arr->rows >= 1U) {
+          // x is k x m: transpose to m x k.
+          k = x_arr->rows;
+          x_data.resize(static_cast<std::size_t>(m) * k);
+          for (std::uint32_t i = 0; i < m; ++i) {
+            for (std::uint32_t j = 0; j < k; ++j) {
+              x_data[static_cast<std::size_t>(i) * k + j] = x_vec[static_cast<std::size_t>(j) * m + i];
+            }
+          }
+        } else {
+          *out_err = Value::error(ErrorCode::Ref);
+          return false;
+        }
+      } else {
+        // x is m x k (the canonical column-y layout).
+        k = x_arr->cols;
+        x_data = x_vec;  // already row-major m x k
+      }
+    } else {
+      // y is 1 x m; x should be k x m (row layout, predictors stacked).
+      if (x_arr->cols != m) {
+        // Allow x as m x 1 as a fallback (single-variable).
+        if (x_arr->cols == 1U && x_arr->rows == m) {
+          k = 1U;
+          x_data = x_vec;
+        } else if (x_arr->rows == m && x_arr->cols >= 1U) {
+          // x is m x k: take row-major m x k as-is.
+          k = x_arr->cols;
+          x_data = x_vec;
+        } else {
+          *out_err = Value::error(ErrorCode::Ref);
+          return false;
+        }
+      } else {
+        // x is k x m: transpose to m x k.
+        k = x_arr->rows;
+        x_data.resize(static_cast<std::size_t>(m) * k);
+        for (std::uint32_t i = 0; i < m; ++i) {
+          for (std::uint32_t j = 0; j < k; ++j) {
+            x_data[static_cast<std::size_t>(i) * k + j] = x_vec[static_cast<std::size_t>(j) * m + i];
+          }
+        }
+      }
+    }
+  }
+
+  const std::uint32_t p = k + (with_const ? 1U : 0U);
+  // Need at least p observations for the system to be solvable, plus
+  // 1 more if we want a non-zero residual df (which LINEST always
+  // requires for the SE statistics — but not for the bare coefficients).
+  // Reject degenerate dimension up front.
+  if (m == 0U || k == 0U) {
+    *out_err = Value::error(ErrorCode::Ref);
+    return false;
+  }
+
+  dm->m = m;
+  dm->k = k;
+  dm->with_const = with_const;
+  dm->y = std::move(y_vec);
+  dm->data.resize(static_cast<std::size_t>(m) * p);
+  for (std::uint32_t i = 0; i < m; ++i) {
+    for (std::uint32_t j = 0; j < k; ++j) {
+      dm->data[static_cast<std::size_t>(i) * p + j] = x_data[static_cast<std::size_t>(i) * k + j];
+    }
+    if (with_const) {
+      dm->data[static_cast<std::size_t>(i) * p + k] = 1.0;
+    }
+  }
+  return true;
+}
+
+/// Builds the LINEST output array. `coeffs` is in normal index order
+/// (`coeffs[j]` = coefficient on column j of the design matrix); the
+/// output presents them in reverse — `[b_k, b_{k-1}, ..., b_1, b_0]`
+/// — which is Excel's right-to-left convention.
+ArrayValue* build_simple_output(const std::vector<double>& coeffs, std::uint32_t k, bool with_const, Arena& arena) {
+  // Output is always 1 x (k+1). When `with_const=false`, the trailing
+  // intercept slot is zero (Excel's documented behaviour).
+  const std::uint32_t out_cols = k + 1U;
+  std::vector<Value> cells(out_cols, Value::blank());
+  for (std::uint32_t j = 0; j < k; ++j) {
+    // coefficient for x_{j+1} (1-based) lives at index j; rendered at
+    // column position (k - 1 - j).
+    const double v = coeffs[j];
+    cells[k - 1U - j] = is_finite(v) ? Value::number(v) : Value::error(ErrorCode::Num);
+  }
+  if (with_const) {
+    const double v = coeffs[k];
+    cells[k] = is_finite(v) ? Value::number(v) : Value::error(ErrorCode::Num);
+  } else {
+    cells[k] = Value::number(0.0);
+  }
+  return make_double_array(cells, 1U, out_cols, arena);
+}
+
+/// Builds the 5x(k+1) statistics matrix. `inv_a` is `A^{-1}` (the
+/// inverse of `X^T X`) in normal index order. `coeffs` is in the same
+/// order. The reverse-ordering and the `#N/A` padding rules mirror
+/// `build_simple_output`.
+ArrayValue* build_stats_output(const std::vector<double>& coeffs, const std::vector<double>& inv_a,
+                               const DesignMatrix& dm, double ss_resid, double ss_total, double mean_y, Arena& arena) {
+  const std::uint32_t k = dm.k;
+  const std::uint32_t p = k + (dm.with_const ? 1U : 0U);
+  const std::uint32_t out_cols = k + 1U;
+  const std::uint32_t out_rows = 5U;
+  std::vector<Value> cells(static_cast<std::size_t>(out_rows) * out_cols, Value::error(ErrorCode::NA));
+
+  const double m = static_cast<double>(dm.m);
+  const double df_resid_d = m - static_cast<double>(p);
+  const double k_d = static_cast<double>(k);
+
+  // Row 1: coefficients in reverse order. Intercept slot is 0 when
+  // const=false.
+  for (std::uint32_t j = 0; j < k; ++j) {
+    const double v = coeffs[j];
+    cells[k - 1U - j] = is_finite(v) ? Value::number(v) : Value::error(ErrorCode::Num);
+  }
+  cells[k] = dm.with_const ? (is_finite(coeffs[k]) ? Value::number(coeffs[k]) : Value::error(ErrorCode::Num))
+                           : Value::number(0.0);
+
+  // Row 2: standard errors. SE[j] = sqrt(inv_a[j,j] * ss_resid / df_resid).
+  // df_resid <= 0 (under-determined system) makes SE undefined -> #N/A.
+  // When const=false, SE for the intercept slot is #N/A (no intercept
+  // was estimated).
+  const bool df_ok = df_resid_d > 0.0;
+  const double sigma2 = df_ok ? ss_resid / df_resid_d : 0.0;
+  for (std::uint32_t j = 0; j < k; ++j) {
+    if (!df_ok) {
+      cells[out_cols + (k - 1U - j)] = Value::error(ErrorCode::NA);
+      continue;
+    }
+    const double var = sigma2 * inv_a[static_cast<std::size_t>(j) * p + j];
+    const double se = (var >= 0.0 && is_finite(var)) ? std::sqrt(var) : std::nan("");
+    cells[out_cols + (k - 1U - j)] = is_finite(se) ? Value::number(se) : Value::error(ErrorCode::NA);
+  }
+  if (dm.with_const) {
+    if (!df_ok) {
+      cells[out_cols + k] = Value::error(ErrorCode::NA);
+    } else {
+      const double var = sigma2 * inv_a[static_cast<std::size_t>(k) * p + k];
+      const double se = (var >= 0.0 && is_finite(var)) ? std::sqrt(var) : std::nan("");
+      cells[out_cols + k] = is_finite(se) ? Value::number(se) : Value::error(ErrorCode::NA);
+    }
+  } else {
+    cells[out_cols + k] = Value::error(ErrorCode::NA);
+  }
+
+  // Row 3: [r^2, se_y, #N/A, ...]. Suppress `mean_y` warning when
+  // const=false (reference is unused on that branch by design).
+  (void)mean_y;
+  const double r2 = (ss_total > 0.0 && is_finite(ss_total)) ? 1.0 - ss_resid / ss_total : std::nan("");
+  cells[2U * out_cols + 0U] = is_finite(r2) ? Value::number(r2) : Value::error(ErrorCode::NA);
+  if (df_ok) {
+    const double sey = std::sqrt(sigma2);
+    cells[2U * out_cols + 1U] = is_finite(sey) ? Value::number(sey) : Value::error(ErrorCode::NA);
+  } else {
+    cells[2U * out_cols + 1U] = Value::error(ErrorCode::NA);
+  }
+
+  // Row 4: [F, df_resid, #N/A, ...]. F = (ss_reg / k) / (ss_resid / df_resid).
+  if (df_ok) {
+    const double ss_reg = ss_total - ss_resid;
+    const double f = (k_d > 0.0 && ss_resid > 0.0) ? (ss_reg / k_d) / (ss_resid / df_resid_d) : std::nan("");
+    cells[3U * out_cols + 0U] = is_finite(f) ? Value::number(f) : Value::error(ErrorCode::NA);
+  } else {
+    cells[3U * out_cols + 0U] = Value::error(ErrorCode::NA);
+  }
+  cells[3U * out_cols + 1U] = Value::number(df_resid_d);
+
+  // Row 5: [ss_reg, ss_resid, #N/A, ...].
+  const double ss_reg = ss_total - ss_resid;
+  cells[4U * out_cols + 0U] = is_finite(ss_reg) ? Value::number(ss_reg) : Value::error(ErrorCode::NA);
+  cells[4U * out_cols + 1U] = is_finite(ss_resid) ? Value::number(ss_resid) : Value::error(ErrorCode::NA);
+
+  return make_double_array(cells, out_rows, out_cols, arena);
+}
+
+}  // namespace
+
+Value eval_linest_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 1U || arity > 4U) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  const ArrayValue* y_arr = nullptr;
+  Value err = Value::blank();
+  if (!resolve_array(call.as_call_arg(0), arena, registry, ctx, &y_arr, &err)) {
+    return err;
+  }
+
+  const ArrayValue* x_arr = nullptr;
+  if (arity >= 2U) {
+    if (!resolve_array(call.as_call_arg(1), arena, registry, ctx, &x_arr, &err)) {
+      return err;
+    }
+  }
+
+  bool with_const = true;
+  if (arity >= 3U) {
+    if (!eval_bool_arg(call.as_call_arg(2), arena, registry, ctx, true, &with_const, &err)) {
+      return err;
+    }
+  }
+
+  bool want_stats = false;
+  if (arity >= 4U) {
+    if (!eval_bool_arg(call.as_call_arg(3), arena, registry, ctx, false, &want_stats, &err)) {
+      return err;
+    }
+  }
+
+  DesignMatrix dm;
+  if (!build_design_matrix(*y_arr, x_arr, with_const, &dm, &err)) {
+    return err;
+  }
+
+  const std::uint32_t p = dm.k + (with_const ? 1U : 0U);
+  if (dm.m < p) {
+    // Fewer observations than parameters -> system is under-determined.
+    return Value::error(ErrorCode::Num);
+  }
+
+  // Form the normal equations A * beta = b, A = X^T X, b = X^T y.
+  std::vector<double> a;
+  std::vector<double> b;
+  normal_equations(dm, a, b);
+
+  // Solve [A | b | I] -> [I | beta | A^-1] in one Gauss-Jordan pass so
+  // both the coefficient vector and the inverse matrix fall out together.
+  // A^-1 is needed for the per-coefficient standard errors when stats=true.
+  const std::uint32_t w = p + 1U + p;  // n + 1 (rhs) + n (identity)
+  std::vector<double> aug(static_cast<std::size_t>(p) * w, 0.0);
+  for (std::uint32_t r = 0; r < p; ++r) {
+    for (std::uint32_t c = 0; c < p; ++c) {
+      aug[static_cast<std::size_t>(r) * w + c] = a[static_cast<std::size_t>(r) * p + c];
+    }
+    aug[static_cast<std::size_t>(r) * w + p] = b[r];
+    aug[static_cast<std::size_t>(r) * w + (p + 1U + r)] = 1.0;
+  }
+
+  if (!gauss_jordan(aug, p, w)) {
+    return Value::error(ErrorCode::Num);
+  }
+
+  std::vector<double> coeffs(p, 0.0);
+  std::vector<double> inv_a(static_cast<std::size_t>(p) * p, 0.0);
+  for (std::uint32_t r = 0; r < p; ++r) {
+    coeffs[r] = aug[static_cast<std::size_t>(r) * w + p];
+    for (std::uint32_t c = 0; c < p; ++c) {
+      inv_a[static_cast<std::size_t>(r) * p + c] = aug[static_cast<std::size_t>(r) * w + (p + 1U + c)];
+    }
+  }
+
+  if (!want_stats) {
+    // `build_simple_output` reads coeffs[0..k-1] always and coeffs[k]
+    // only on the `with_const=true` branch — so `coeffs.size() == p`
+    // is correct in both branches.
+    ArrayValue* arr = build_simple_output(coeffs, dm.k, with_const, arena);
+    if (arr == nullptr) {
+      return Value::error(ErrorCode::Num);
+    }
+    return Value::array(arr);
+  }
+
+  // Compute residuals and SS quantities for the stats block.
+  // ŷ_i = Σ_j coeffs[j] * X[i,j].
+  double ss_resid = 0.0;
+  double sum_y = 0.0;
+  for (std::uint32_t i = 0; i < dm.m; ++i) {
+    double yhat = 0.0;
+    for (std::uint32_t j = 0; j < p; ++j) {
+      yhat += coeffs[j] * dm.data[static_cast<std::size_t>(i) * p + j];
+    }
+    const double e = dm.y[i] - yhat;
+    ss_resid += e * e;
+    sum_y += dm.y[i];
+  }
+  const double mean_y = sum_y / static_cast<double>(dm.m);
+
+  // ss_total: centred when an intercept is fitted, raw sum-of-squares
+  // when const=false. Matches Mac Excel's r^2 / F definitions.
+  double ss_total = 0.0;
+  if (with_const) {
+    for (std::uint32_t i = 0; i < dm.m; ++i) {
+      const double d = dm.y[i] - mean_y;
+      ss_total += d * d;
+    }
+  } else {
+    for (std::uint32_t i = 0; i < dm.m; ++i) {
+      ss_total += dm.y[i] * dm.y[i];
+    }
+  }
+
+  ArrayValue* arr = build_stats_output(coeffs, inv_a, dm, ss_resid, ss_total, mean_y, arena);
+  if (arr == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::array(arr);
+}
+
+}  // namespace eval
+}  // namespace formulon

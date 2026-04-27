@@ -145,6 +145,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/shape_ops_lazy.cpp
   src/eval/workdays_lazy.cpp
   src/eval/financial_lazy.cpp
+  src/eval/linest_lazy.cpp
   src/eval/reference_lazy.cpp
   src/eval/regression_lazy.cpp
   src/eval/series_sum_lazy.cpp
