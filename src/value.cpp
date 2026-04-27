@@ -31,6 +31,26 @@ std::string_view Value::as_text() const {
   return data_.text;
 }
 
+const ArrayValue* Value::as_array() const {
+  FM_CHECK(kind_ == ValueKind::Array, "Value::as_array() on non-Array");
+  return data_.array;
+}
+
+std::uint32_t Value::as_array_rows() const {
+  FM_CHECK(kind_ == ValueKind::Array, "Value::as_array_rows() on non-Array");
+  return data_.array->rows;
+}
+
+std::uint32_t Value::as_array_cols() const {
+  FM_CHECK(kind_ == ValueKind::Array, "Value::as_array_cols() on non-Array");
+  return data_.array->cols;
+}
+
+const Value* Value::as_array_cells() const {
+  FM_CHECK(kind_ == ValueKind::Array, "Value::as_array_cells() on non-Array");
+  return data_.array->cells;
+}
+
 std::string Value::debug_to_string() const {
   switch (kind_) {
     case ValueKind::Blank:
@@ -60,8 +80,19 @@ std::string Value::debug_to_string() const {
       out.append("\")");
       return out;
     }
-    case ValueKind::Array:
-      return "Array(<unimplemented>)";
+    case ValueKind::Array: {
+      // Show only the shape: cell contents could be arbitrarily long, and
+      // the shape is the load-bearing identifier for debugging shape /
+      // broadcasting bugs.
+      std::string out;
+      out.reserve(24);
+      out.append("Array(");
+      out.append(std::to_string(data_.array != nullptr ? data_.array->rows : 0));
+      out.push_back('x');
+      out.append(std::to_string(data_.array != nullptr ? data_.array->cols : 0));
+      out.push_back(')');
+      return out;
+    }
     case ValueKind::Ref:
       return "Ref(<unimplemented>)";
     case ValueKind::Lambda:
@@ -88,7 +119,26 @@ bool operator==(const Value& a, const Value& b) noexcept {
       return a.data_.error == b.data_.error;
     case ValueKind::Text:
       return a.data_.text == b.data_.text;
-    case ValueKind::Array:
+    case ValueKind::Array: {
+      const ArrayValue* lhs = a.data_.array;
+      const ArrayValue* rhs = b.data_.array;
+      if (lhs == rhs) {
+        return true;
+      }
+      if (lhs == nullptr || rhs == nullptr) {
+        return false;
+      }
+      if (lhs->rows != rhs->rows || lhs->cols != rhs->cols) {
+        return false;
+      }
+      const std::size_t n = static_cast<std::size_t>(lhs->rows) * static_cast<std::size_t>(lhs->cols);
+      for (std::size_t i = 0; i < n; ++i) {
+        if (!(lhs->cells[i] == rhs->cells[i])) {
+          return false;
+        }
+      }
+      return true;
+    }
     case ValueKind::Ref:
     case ValueKind::Lambda:
       // Not yet reachable: these kinds have no factory yet, so no

@@ -5,14 +5,18 @@
 // backup/plans/02-calc-engine.md §2.1 for the authoritative specification.
 //
 // The current scope of this header covers the scalar variants `Blank`,
-// `Number`, `Bool`, `Error`, and `Text`. The `Array`, `Ref`, and `Lambda`
-// variants reserve slots in `ValueKind` but do not yet have factories or
-// accessors: those will follow once their backing types exist
-// (`ArrayValue`, cell reference representation, LAMBDA closures).
+// `Number`, `Bool`, `Error`, and `Text`, plus `Array`, which is implemented
+// as a non-owning pointer to an arena-backed `ArrayValue` (same lifetime
+// contract as the `Text` `string_view`: callers must keep the arena alive
+// for as long as any `Value::Array` references it). The `Ref` and `Lambda`
+// variants still reserve slots in `ValueKind` but do not yet have factories
+// or accessors: those will follow once their backing types exist (cell
+// reference representation, LAMBDA closures).
 //
 // `Value` is intentionally trivially copyable so it can be passed freely
-// through the evaluator's value stack without heap allocation. This
-// invariant must be revisited once the non-scalar variants land.
+// through the evaluator's value stack without heap allocation. The `Array`
+// variant preserves this property because its payload is a single 8-byte
+// pointer.
 
 #ifndef FORMULON_VALUE_H_
 #define FORMULON_VALUE_H_
@@ -23,6 +27,8 @@
 #include <type_traits>
 
 namespace formulon {
+
+struct ArrayValue;
 
 /// Discriminator tag for every variant a cell may hold.
 ///
@@ -175,16 +181,19 @@ constexpr const char* display_name(ErrorCode e) noexcept {
 /// Scalar `Value` atom of the Formulon calc engine.
 ///
 /// The scalar variants (`Blank`, `Number`, `Bool`, `Error`, `Text`) carry
-/// factories; the kind queries for `Array`/`Ref`/`Lambda` exist but always
-/// return false until those variants are implemented. All factories are
-/// `noexcept` and never allocate. The `Text` payload is a non-owning
-/// `string_view`: the caller is responsible for keeping the underlying
-/// storage alive for at least the lifetime of the `Value`.
+/// factories, as does `Array` (whose payload is a non-owning pointer to an
+/// arena-backed `ArrayValue`). The kind queries for `Ref`/`Lambda` exist but
+/// always return false until those variants are implemented. All factories
+/// are `noexcept` and never allocate. The `Text` and `Array` payloads are
+/// non-owning views into arena storage: the caller is responsible for
+/// keeping the underlying storage alive for at least the lifetime of the
+/// `Value`.
 ///
-/// Accessors (`as_number()`, `as_boolean()`, `as_error()`, `as_text()`) are
-/// precondition-checked: invoking one on a mismatched kind aborts the
-/// process via `FM_CHECK`. Callers must gate access with the corresponding
-/// `is_*()` query, or branch on `kind()`.
+/// Accessors (`as_number()`, `as_boolean()`, `as_error()`, `as_text()`,
+/// `as_array()` / `as_array_rows()` / `as_array_cols()` /
+/// `as_array_cells()`) are precondition-checked: invoking one on a
+/// mismatched kind aborts the process via `FM_CHECK`. Callers must gate
+/// access with the corresponding `is_*()` query, or branch on `kind()`.
 class Value {
  public:
   /// Builds a `Blank` value. This is the zero-state used by empty cells.
@@ -228,11 +237,22 @@ class Value {
     return out;
   }
 
+  /// Builds an `Array` value referencing `arr`. The caller owns the
+  /// arena-backed storage (both the `ArrayValue` itself and its `cells`
+  /// buffer) and must keep it alive for the lifetime of the returned value,
+  /// matching the `Text` lifetime contract.
+  static Value array(const ArrayValue* arr) noexcept {
+    Value out;
+    out.kind_ = ValueKind::Array;
+    out.data_.array = arr;
+    return out;
+  }
+
   /// Returns the discriminator tag for this value.
   ValueKind kind() const noexcept { return kind_; }
 
-  // Kind queries: one per variant. Queries for not-yet-implemented variants
-  // (`Text`, `Array`, `Ref`, `Lambda`) always return false for now.
+  // Kind queries: one per variant. `is_ref()` and `is_lambda()` always
+  // return false until those variants are implemented.
   bool is_blank() const noexcept { return kind_ == ValueKind::Blank; }
   bool is_number() const noexcept { return kind_ == ValueKind::Number; }
   bool is_boolean() const noexcept { return kind_ == ValueKind::Bool; }
@@ -254,6 +274,20 @@ class Value {
   /// Returns the text payload as a non-owning view. Aborts if
   /// `kind() != Text`.
   std::string_view as_text() const;
+
+  /// Returns the (non-owning) array payload pointer. Aborts if
+  /// `kind() != Array`.
+  const ArrayValue* as_array() const;
+
+  /// Returns the array's row count. Aborts if `kind() != Array`.
+  std::uint32_t as_array_rows() const;
+
+  /// Returns the array's column count. Aborts if `kind() != Array`.
+  std::uint32_t as_array_cols() const;
+
+  /// Returns the array's row-major cell pointer. Aborts if
+  /// `kind() != Array`. Indexing: cell `(r, c)` is `cells[r * cols + c]`.
+  const Value* as_array_cells() const;
 
   /// Debug-formatting helper, not an Excel display string.
   ///
@@ -285,6 +319,9 @@ class Value {
     /// `uint32_t text_id` indexing a workbook-scoped SharedStringPool,
     /// which will shrink the union back toward 8 bytes.
     std::string_view text;
+    /// Non-owning pointer into arena-allocated `ArrayValue` storage; same
+    /// lifetime contract as `text`.
+    const ArrayValue* array;
     Payload() noexcept : number(0.0) {}
   };
 
@@ -292,15 +329,31 @@ class Value {
   Payload data_;
 };
 
-// `Value` is currently scalar-only. Keeping it trivially copyable means the
-// evaluator can pass values by value through the VM stack and arg packs
-// without moves or allocations. This invariant must be revisited when
-// `Text`/`Array`/`Ref`/`Lambda` land.
-static_assert(std::is_trivially_copyable_v<Value>, "Value is scalar-only and must be trivially copyable");
+/// Backing storage for `Value::Array`. Allocated in the per-evaluation
+/// `Arena` alongside its `cells` array (also arena-allocated). Both pointers
+/// must remain valid for as long as any `Value::Array` references them, the
+/// same contract as the non-owning `string_view` of `Value::Text`. Cells are
+/// stored in row-major order; index `(r, c)` is `cells[r * cols + c]`.
+struct ArrayValue {
+  std::uint32_t rows;
+  std::uint32_t cols;
+  const Value* cells;  // arena-owned; row-major; size = rows * cols
+};
 
-// The payload union is now driven by the 16-byte `string_view` text
-// member (and will later be driven by a 16-byte `Reference` payload, see
-// backup/plans/02-calc-engine.md §2.1). With a 1-byte tag and 7 bytes of
+// `ArrayValue` is created via `Arena::create<>` which forbids destructors.
+static_assert(std::is_trivially_destructible_v<ArrayValue>,
+              "ArrayValue must be trivially destructible to live in Arena::create");
+
+// Keeping `Value` trivially copyable means the evaluator can pass values by
+// value through the VM stack and arg packs without moves or allocations.
+// Every variant payload (including the `Array` 8-byte pointer) preserves
+// this property. This invariant must be revisited when `Ref`/`Lambda` land.
+static_assert(std::is_trivially_copyable_v<Value>, "Value must be trivially copyable");
+
+// The payload union is driven by the 16-byte `string_view` text member
+// (and will later be driven by a 16-byte `Reference` payload, see
+// backup/plans/02-calc-engine.md §2.1). The `Array` payload is an 8-byte
+// pointer that fits inside the existing budget. With a 1-byte tag and
 // alignment padding the struct lands at 24 bytes on every platform
 // Formulon targets.
 static_assert(sizeof(Value) <= 24, "Value must fit within 24 bytes");

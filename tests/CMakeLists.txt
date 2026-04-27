@@ -14,6 +14,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/strings_test.cpp
   unit/arena_test.cpp
   unit/value_test.cpp
+  unit/value_array_test.cpp
   unit/sheet_test.cpp
   unit/workbook_test.cpp
   unit/utils/double_format_test.cpp
