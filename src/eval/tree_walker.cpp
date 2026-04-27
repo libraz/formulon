@@ -165,6 +165,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     // `formula_text` directly — the eager path would flatten the argument
     // to a Value before we could see the reference.
     {"FORMULATEXT", &eval_formulatext_lazy},
+    {"FREQUENCY", &eval_frequency_lazy},
     // FTEST is the pre-2010 legacy spelling of F.TEST; same impl.
     {"FTEST", &eval_f_test_lazy},
     {"HLOOKUP", &eval_hlookup_lazy},

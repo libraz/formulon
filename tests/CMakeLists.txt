@@ -122,6 +122,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/take_drop_eval_test.cpp
   unit/eval/array_reshape_eval_test.cpp
   unit/eval/matrix_ops_eval_test.cpp
+  unit/eval/frequency_eval_test.cpp
   unit/parser/spill_ref_test.cpp
   unit/registry_catalog_test.cpp
 )

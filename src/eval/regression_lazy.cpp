@@ -488,5 +488,95 @@ Value eval_forecast_linear_lazy(const parser::AstNode& call, Arena& arena, const
   return finite_number(intercept + slope * x);
 }
 
+Value eval_frequency_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                          const EvalContext& ctx) {
+  if (call.as_call_arity() != 2U) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  ResolvedArray data_arr{};
+  Value err = Value::blank();
+  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, &data_arr, &err)) {
+    return err;
+  }
+  ResolvedArray bins_arr{};
+  if (!resolve_array_arg(call.as_call_arg(1), arena, registry, ctx, &bins_arr, &err)) {
+    return err;
+  }
+
+  // Error propagation: data_array first, then bins_array. Each scanned
+  // in row-major order. Mac Excel surfaces the leftmost error verbatim;
+  // non-error / non-numeric cells are silently skipped at the counting
+  // step below.
+  for (const Value& v : data_arr.cells) {
+    if (v.is_error()) {
+      return v;
+    }
+  }
+  for (const Value& v : bins_arr.cells) {
+    if (v.is_error()) {
+      return v;
+    }
+  }
+
+  // Distil bins_array into a flat numeric vector preserving given order.
+  // Non-numeric cells (including Bool) drop out; Excel does not coerce
+  // here. The "as-given" ordering is required for Excel-compatible
+  // bucketing — we deliberately do NOT sort.
+  std::vector<double> bins;
+  bins.reserve(bins_arr.cells.size());
+  for (const Value& v : bins_arr.cells) {
+    if (v.is_number()) {
+      bins.push_back(v.as_number());
+    }
+  }
+  const std::size_t n_bins = bins.size();
+
+  // Allocate the count buffer. Even with zero numeric bins the result is
+  // a 1x1 array containing the total numeric data count (matches Mac
+  // Excel's documented degenerate case for empty bins).
+  std::vector<std::uint64_t> counts(n_bins + 1U, 0U);
+
+  // Walk data_array. For each numeric cell, find the first bin index i
+  // where value <= bins[i]; if none satisfies, drop into the trailing
+  // extra slot.
+  for (const Value& v : data_arr.cells) {
+    if (!v.is_number()) {
+      continue;
+    }
+    const double x = v.as_number();
+    bool placed = false;
+    for (std::size_t i = 0; i < n_bins; ++i) {
+      if (x <= bins[i]) {
+        counts[i] += 1U;
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      counts[n_bins] += 1U;
+    }
+  }
+
+  // Materialise as a column ArrayValue. With zero numeric bins, this is
+  // a 1x1 array; otherwise (n_bins + 1) x 1.
+  const std::uint32_t out_rows = static_cast<std::uint32_t>(n_bins + 1U);
+  Value* buffer = arena.create_array<Value>(out_rows);
+  if (buffer == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  for (std::uint32_t i = 0; i < out_rows; ++i) {
+    buffer[i] = Value::number(static_cast<double>(counts[i]));
+  }
+  ArrayValue* arr = arena.create<ArrayValue>();
+  if (arr == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  arr->rows = out_rows;
+  arr->cols = 1U;
+  arr->cells = buffer;
+  return Value::array(arr);
+}
+
 }  // namespace eval
 }  // namespace formulon

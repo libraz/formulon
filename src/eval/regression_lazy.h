@@ -103,6 +103,25 @@ Value eval_sumx2my2_lazy(const parser::AstNode& call, Arena& arena, const Functi
 Value eval_sumxmy2_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx);
 
+/// `FREQUENCY(data_array, bins_array)` — distribution count.
+///
+/// Returns a column-shaped `ArrayValue` of size `num_numeric_bins + 1`.
+/// For each numeric cell in `data_array`, FREQUENCY scans `bins_array`
+/// in given order and increments the first bin whose value is `>= x`;
+/// if no bin satisfies that, the value lands in the trailing "extra"
+/// slot (always present, equal to the count of values exceeding every
+/// bin). Non-numeric cells in either array (Blank / Bool / Text) are
+/// silently skipped — no coercion. Error cells in either array
+/// propagate verbatim, with `data_array` scanned first then
+/// `bins_array` (leftmost-wins, row-major within each).
+///
+/// `bins_array` is taken as-given (Excel does NOT sort it internally);
+/// pathological orderings produce pathological bucketing. An empty (or
+/// fully non-numeric) `bins_array` returns a `1x1` array containing
+/// `len(numeric_data)` — Microsoft's documented degenerate case.
+Value eval_frequency_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                          const EvalContext& ctx);
+
 }  // namespace eval
 }  // namespace formulon
 
