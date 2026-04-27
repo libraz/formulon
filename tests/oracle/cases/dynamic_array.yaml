@@ -1,0 +1,37 @@
+suite: dynamic_array
+description: Dynamic-array (spilling) functions. SEQUENCE is the first acceptance case for cell-level spill machinery; the oracle reads back the anchor scalar (top-left of the spill region) since xlwings does not surface phantom cells through a single-cell read.
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  # -- SEQUENCE -----------------------------------------------------------
+  - id: sequence_3
+    description: "SEQUENCE(3) spills to a 3x1 column vector; oracle reads the anchor (1)."
+    formula: "=SEQUENCE(3)"
+
+  - id: sequence_2_3
+    description: "SEQUENCE(2,3) spills to a 2x3 grid; oracle reads the anchor (1)."
+    formula: "=SEQUENCE(2,3)"
+
+  - id: sequence_2_2_10_5
+    description: "SEQUENCE(2,2,10,5); oracle reads the anchor (10)."
+    formula: "=SEQUENCE(2,2,10,5)"
+
+  - id: sequence_3_1_10_neg2
+    description: "SEQUENCE(3,1,10,-2); negative step yields [10,8,6]; anchor reads as 10."
+    formula: "=SEQUENCE(3,1,10,-2)"
+
+  - id: sequence_3_1_half_quarter
+    description: "SEQUENCE(3,1,0.5,0.25); fractional start/step yield [0.5,0.75,1.0]; anchor reads as 0.5."
+    formula: "=SEQUENCE(3,1,0.5,0.25)"
+
+  - id: sequence_zero_rows_value
+    description: "SEQUENCE(0) -> #VALUE! per Mac Excel (rows must be a positive integer)."
+    formula: "=SEQUENCE(0)"
+
+  - id: sequence_negative_rows_value
+    description: "SEQUENCE(-1) -> #VALUE! (truncates to -1, fails the positive-integer guard)."
+    formula: "=SEQUENCE(-1)"
+
+  - id: sequence_text_arg_value
+    description: "SEQUENCE(\"abc\") -> #VALUE! via numeric coercion failure on the rows arg."
+    formula: "=SEQUENCE(\"abc\")"

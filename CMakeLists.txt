@@ -88,6 +88,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins/cube.cpp
   src/eval/builtins/datetime.cpp
   src/eval/builtins/distributions.cpp
+  src/eval/builtins/dynamic_array.cpp
   src/eval/builtins/engineering.cpp
   src/eval/builtins/engineering_convert.cpp
   src/eval/builtins/engineering_special.cpp

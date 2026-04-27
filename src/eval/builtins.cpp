@@ -16,6 +16,7 @@
 #include "eval/builtins/cube.h"
 #include "eval/builtins/datetime.h"
 #include "eval/builtins/distributions.h"
+#include "eval/builtins/dynamic_array.h"
 #include "eval/builtins/engineering.h"
 #include "eval/builtins/engineering_convert.h"
 #include "eval/builtins/engineering_special.h"
@@ -54,6 +55,7 @@ void register_builtins(FunctionRegistry& registry) {
   register_text_width_builtins(registry);
   register_info_builtins(registry);
   register_datetime_builtins(registry);
+  register_dynamic_array_builtins(registry);
   register_financial_builtins(registry);
   register_financial_coupon_builtins(registry);
   register_distribution_builtins(registry);
