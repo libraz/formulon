@@ -13,6 +13,7 @@
 
 #include "eval/areas_lazy.h"
 #include "eval/builtins/aggregate.h"
+#include "eval/cell_lazy.h"
 #include "eval/coerce.h"
 #include "eval/conditional_aggregates.h"
 #include "eval/database_lazy.h"
@@ -128,6 +129,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"AREAS", &eval_areas_lazy},
     {"AVERAGEIF", &eval_averageif_lazy},
     {"AVERAGEIFS", &eval_averageifs_lazy},
+    {"CELL", &eval_cell_lazy},
     // CHITEST is the pre-2010 legacy spelling of CHISQ.TEST; same impl.
     {"CHISQ.TEST", &eval_chisq_test_lazy},
     {"CHITEST", &eval_chisq_test_lazy},
