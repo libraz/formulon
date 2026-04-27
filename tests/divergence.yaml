@@ -297,27 +297,6 @@ entries:
     first_noted: 2026-04-26
     last_verified_excel_version: "16.108.1"
 
-  # -- ROW / COLUMN over a range argument: Excel 365 dynamic-array spill --
-  # Excel 365 spills `ROW(A1:A5)` to `{1;2;3;4;5}` and `COLUMN(A1:E1)` to
-  # `{1,2,3,4,5}`; consumers like SUM / SUMPRODUCT then iterate the spill.
-  # Formulon does not yet implement Value::Array, so ROW / COLUMN over a
-  # range collapses to the first row / column scalar (the rectangle's
-  # top-left). Wrap-with-SUM tests pass once the array runtime lands; until
-  # then they are documented divergences. Tracked in
-  # backup/plans/02-calc-engine.md array-spill milestone.
-  - id: sum_of_row_over_vertical_range
-    mode: skip-oracle
-    reason: "Excel 365 spills ROW(A1:A5) to {1;2;3;4;5}; Formulon collapses to the scalar 1 because Value::Array is not yet wired. SUM(ROW(A1:A5)) thus returns 1 instead of 15."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
-  - id: sumproduct_of_column_over_horizontal_range
-    mode: skip-oracle
-    reason: "Excel 365 spills COLUMN(A1:E1) to {1,2,3,4,5}; Formulon collapses to scalar 1. Same Value::Array gap as sum_of_row_over_vertical_range."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
-
   # -- SUMPRODUCT over array-shaped subexpressions ------------------------
   # SUMPRODUCT in Excel 365 evaluates each argument in array context, so
   # `(A1:A5>2)` produces `{FALSE;FALSE;TRUE;TRUE;TRUE}` and the surrounding

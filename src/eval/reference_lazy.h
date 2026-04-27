@@ -123,6 +123,29 @@ bool expand_if_call(const parser::AstNode& call, Arena& arena, const FunctionReg
                     std::vector<Value>* out_cells, ErrorCode* out_err_code, std::uint32_t* out_rows,
                     std::uint32_t* out_cols);
 
+/// Expands `Call("ROW", arg)` into a vertical column of 1-based row indices
+/// when `arg` resolves to a multi-row reference. ROW() with no argument
+/// returns the formula cell's 1-based row as a 1x1 (or `#VALUE!` when no
+/// formula cell is bound). Mirrors `expand_offset_call`'s contract: returns
+/// `true` on success, fills `*out_cells` / `*out_rows` / `*out_cols`; on
+/// failure returns `false` and writes the Excel error code to
+/// `*out_err_code`. `*out_cols` is always 1.
+///
+/// Used by aggregator-family callers (SUM, AVERAGE, SUMPRODUCT, …) so
+/// `=SUM(ROW(A1:A5))` aggregates `{1;2;3;4;5}` to 15. The `eval_row_lazy`
+/// scalar path is intentionally left collapsing to the first row, matching
+/// Mac Excel's scalar-context output for a bare `=ROW(A1:A5)`.
+bool expand_row_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
+                     std::uint32_t* out_rows, std::uint32_t* out_cols);
+
+/// Expands `Call("COLUMN", arg)` into a horizontal row of 1-based column
+/// indices when `arg` resolves to a multi-column reference. Mirrors
+/// `expand_row_call` but along the column axis: `*out_rows` is always 1.
+bool expand_column_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
+                        std::uint32_t* out_rows, std::uint32_t* out_cols);
+
 /// Attempts to resolve `node` as a reference-returning call, producing a
 /// rectangular reference without dereferencing. Recognises INDIRECT (A1-style)
 /// and nested OFFSET. On success writes the rectangle (0-based, inclusive)

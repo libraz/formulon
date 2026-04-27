@@ -18,6 +18,7 @@
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
@@ -823,6 +824,154 @@ bool expand_if_call(const parser::AstNode& call, Arena& arena, const FunctionReg
     }
   }
   return resolve_range_arg(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+}
+
+namespace {
+
+// Shared body of `expand_row_call` / `expand_column_call`. `want_row`
+// picks the axis: when true, fills `out_cells` with 1-based row indices
+// drawn from `[top..bottom]` of the resolved rectangle and reports
+// `(rows = bottom-top+1, cols = 1)`; when false, fills with column
+// indices from `[left..right]` and reports `(rows = 1, cols = right-left+1)`.
+//
+// The shape inspection mirrors `eval_row_or_column` in `shape_ops_lazy.cpp`:
+// LET-bound NameRefs are looked through, single-cell `Ref` becomes a 1x1,
+// `RangeOp(Ref, Ref)` covers the full row / column span, and a nested
+// reference-returning `Call` (INDIRECT / OFFSET / IF / CHOOSE) routes
+// through `resolve_reference_call`. Anything else evaluates the subtree
+// to surface errors and otherwise reports `#VALUE!`. The 0-arity branch
+// (bare `=ROW()` / `=COLUMN()`) emits a single 1x1 indexed by the
+// formula cell, or `#VALUE!` if no formula cell is bound.
+bool expand_row_or_column_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                               const EvalContext& ctx, bool want_row, std::vector<Value>* out_cells,
+                               ErrorCode* out_err_code, std::uint32_t* out_rows, std::uint32_t* out_cols) {
+  const std::uint32_t arity = call.as_call_arity();
+  out_cells->clear();
+  if (arity == 0U) {
+    if (!ctx.has_formula_cell()) {
+      *out_err_code = ErrorCode::Value;
+      return false;
+    }
+    const std::uint32_t idx = want_row ? ctx.formula_row() : ctx.formula_col();
+    out_cells->push_back(Value::number(static_cast<double>(idx + 1U)));
+    if (out_rows != nullptr) {
+      *out_rows = 1U;
+    }
+    if (out_cols != nullptr) {
+      *out_cols = 1U;
+    }
+    return true;
+  }
+  if (arity != 1U) {
+    *out_err_code = ErrorCode::Value;
+    return false;
+  }
+
+  // LET-binding passthrough: `=LET(r, A1:A3, SUM(ROW(r)))` parses `r` as
+  // a NameRef. Mirror `eval_row_or_column`'s rule: accept the broader
+  // "Ref OR range-shaped" set so a single-cell binding still yields a
+  // meaningful row / column index.
+  const parser::AstNode& raw_arg = call.as_call_arg(0);
+  const parser::AstNode* effective = &raw_arg;
+  if (raw_arg.kind() == parser::NodeKind::NameRef) {
+    const parser::AstNode& resolved = resolve_name_ast(raw_arg, ctx.name_env());
+    if (&resolved != &raw_arg && (resolved.kind() == parser::NodeKind::Ref || is_range_shaped_ast(resolved))) {
+      effective = &resolved;
+    }
+  }
+  const parser::AstNode& arg = *effective;
+
+  std::uint32_t top = 0;
+  std::uint32_t left = 0;
+  std::uint32_t bottom = 0;
+  std::uint32_t right = 0;
+  bool resolved_rect = false;
+
+  const parser::NodeKind k = arg.kind();
+  if (k == parser::NodeKind::Ref) {
+    const parser::Reference& r = arg.as_ref();
+    top = bottom = r.row;
+    left = right = r.col;
+    resolved_rect = true;
+  } else if (k == parser::NodeKind::RangeOp) {
+    const parser::AstNode& lhs_ast = arg.as_range_lhs();
+    const parser::AstNode& rhs_ast = arg.as_range_rhs();
+    if (lhs_ast.kind() != parser::NodeKind::Ref || rhs_ast.kind() != parser::NodeKind::Ref) {
+      *out_err_code = ErrorCode::Value;
+      return false;
+    }
+    const parser::Reference& lhs = lhs_ast.as_ref();
+    const parser::Reference& rhs = rhs_ast.as_ref();
+    top = std::min(lhs.row, rhs.row);
+    bottom = std::max(lhs.row, rhs.row);
+    left = std::min(lhs.col, rhs.col);
+    right = std::max(lhs.col, rhs.col);
+    resolved_rect = true;
+  } else if (k == parser::NodeKind::Call) {
+    std::string_view sheet;
+    bool is_range = false;
+    ErrorCode err = ErrorCode::Value;
+    if (resolve_reference_call(arg, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &is_range, &err)) {
+      resolved_rect = true;
+    } else {
+      // Fall through to the scalar-evaluate branch so subtree errors propagate.
+    }
+  }
+
+  if (resolved_rect) {
+    if (want_row) {
+      const std::uint32_t height = bottom - top + 1U;
+      out_cells->reserve(height);
+      for (std::uint32_t r = top; r <= bottom; ++r) {
+        out_cells->push_back(Value::number(static_cast<double>(r + 1U)));
+      }
+      if (out_rows != nullptr) {
+        *out_rows = height;
+      }
+      if (out_cols != nullptr) {
+        *out_cols = 1U;
+      }
+    } else {
+      const std::uint32_t width = right - left + 1U;
+      out_cells->reserve(width);
+      for (std::uint32_t c = left; c <= right; ++c) {
+        out_cells->push_back(Value::number(static_cast<double>(c + 1U)));
+      }
+      if (out_rows != nullptr) {
+        *out_rows = 1U;
+      }
+      if (out_cols != nullptr) {
+        *out_cols = width;
+      }
+    }
+    return true;
+  }
+
+  // Evaluate the subtree to surface any errors verbatim (e.g. `ROW(1/0)`),
+  // otherwise reject non-references with `#VALUE!`.
+  const Value v = eval_node(arg, arena, registry, ctx);
+  if (v.is_error()) {
+    *out_err_code = v.as_error();
+    return false;
+  }
+  *out_err_code = ErrorCode::Value;
+  return false;
+}
+
+}  // namespace
+
+bool expand_row_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
+                     std::uint32_t* out_rows, std::uint32_t* out_cols) {
+  return expand_row_or_column_call(call, arena, registry, ctx, /*want_row=*/true, out_cells, out_err_code, out_rows,
+                                   out_cols);
+}
+
+bool expand_column_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
+                        std::uint32_t* out_rows, std::uint32_t* out_cols) {
+  return expand_row_or_column_call(call, arena, registry, ctx, /*want_row=*/false, out_cells, out_err_code, out_rows,
+                                   out_cols);
 }
 
 bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,

@@ -839,6 +839,94 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       }
       continue;
     }
+    // ROW(range) / COLUMN(range) as an aggregator argument: Excel 365 spills
+    // them to `{1;2;3;...}` / `{1,2,3,...}` and the surrounding aggregator
+    // iterates the spill. Without a `Value::Array` runtime the scalar path
+    // collapses to the rectangle's first row / column; this branch unpacks
+    // the indices directly so `=SUM(ROW(A1:A5))` aggregates 15 rather than
+    // the scalar 1. Mirrors the OFFSET / CHOOSE / IF branches above; the
+    // emitted cells are always `Number`, so `range_filter_*` rules pass
+    // them through unchanged.
+    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Call &&
+        strings::case_insensitive_eq(arg_node.as_call_name(), "ROW")) {
+      had_range_shaped_arg = true;
+      std::vector<Value> row_cells;
+      ErrorCode row_err = ErrorCode::Value;
+      if (!expand_row_call(arg_node, arena, registry, ctx, &row_cells, &row_err, nullptr, nullptr)) {
+        const Value err = Value::error(row_err);
+        if (def->propagate_errors) {
+          return err;
+        }
+        values.push_back(err);
+        continue;
+      }
+      for (const Value& v : row_cells) {
+        if (def->propagate_errors && v.is_error()) {
+          return v;
+        }
+        if (def->range_filter_numeric_only && v.kind() != ValueKind::Number) {
+          continue;
+        }
+        if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
+          continue;
+        }
+        if (def->range_filter_a_coerce) {
+          if (v.kind() == ValueKind::Blank) {
+            continue;
+          }
+          if (v.kind() == ValueKind::Bool) {
+            values.push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
+            continue;
+          }
+          if (v.kind() == ValueKind::Text) {
+            values.push_back(Value::number(0.0));
+            continue;
+          }
+        }
+        values.push_back(v);
+      }
+      continue;
+    }
+    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Call &&
+        strings::case_insensitive_eq(arg_node.as_call_name(), "COLUMN")) {
+      had_range_shaped_arg = true;
+      std::vector<Value> col_cells;
+      ErrorCode col_err = ErrorCode::Value;
+      if (!expand_column_call(arg_node, arena, registry, ctx, &col_cells, &col_err, nullptr, nullptr)) {
+        const Value err = Value::error(col_err);
+        if (def->propagate_errors) {
+          return err;
+        }
+        values.push_back(err);
+        continue;
+      }
+      for (const Value& v : col_cells) {
+        if (def->propagate_errors && v.is_error()) {
+          return v;
+        }
+        if (def->range_filter_numeric_only && v.kind() != ValueKind::Number) {
+          continue;
+        }
+        if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
+          continue;
+        }
+        if (def->range_filter_a_coerce) {
+          if (v.kind() == ValueKind::Blank) {
+            continue;
+          }
+          if (v.kind() == ValueKind::Bool) {
+            values.push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
+            continue;
+          }
+          if (v.kind() == ValueKind::Text) {
+            values.push_back(Value::number(0.0));
+            continue;
+          }
+        }
+        values.push_back(v);
+      }
+      continue;
+    }
     Value v = eval_node(arg_node, arena, registry, ctx);
     if (def->propagate_errors && v.is_error()) {
       return v;

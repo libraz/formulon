@@ -561,13 +561,19 @@
       "id": "sum_of_row_over_vertical_range",
       "formula": "=SUM(ROW(A1:A5))",
       "setup": {},
-      "skipped": "Excel 365 spills ROW(A1:A5) to {1;2;3;4;5}; Formulon collapses to the scalar 1 because Value::Array is not yet wired. SUM(ROW(A1:A5)) thus returns 1 instead of 15."
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
     },
     {
       "id": "sumproduct_of_column_over_horizontal_range",
       "formula": "=SUMPRODUCT(COLUMN(A1:E1))",
       "setup": {},
-      "skipped": "Excel 365 spills COLUMN(A1:E1) to {1,2,3,4,5}; Formulon collapses to scalar 1. Same Value::Array gap as sum_of_row_over_vertical_range."
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
     },
     {
       "id": "sumproduct_boolean_array_coercion",

@@ -55,6 +55,18 @@ bool resolve_range_arg(const parser::AstNode& raw_arg, Arena& arena, const Funct
   if (arg_node.kind() == parser::NodeKind::Call && strings::case_insensitive_eq(arg_node.as_call_name(), "CHOOSE")) {
     return expand_choose_call(arg_node, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
   }
+  // ROW(range) / COLUMN(range) spill in Excel 365 to a vertical / horizontal
+  // array of 1-based indices. Without a `Value::Array` runtime the scalar
+  // path collapses to the rectangle's first row / column, so the seam here
+  // unpacks the indices directly into the aggregator's range buffer (mirrors
+  // OFFSET / CHOOSE / IF). `=SUM(ROW(A1:A5))` therefore aggregates
+  // `{1;2;3;4;5}` rather than the scalar 1.
+  if (arg_node.kind() == parser::NodeKind::Call && strings::case_insensitive_eq(arg_node.as_call_name(), "ROW")) {
+    return expand_row_call(arg_node, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+  }
+  if (arg_node.kind() == parser::NodeKind::Call && strings::case_insensitive_eq(arg_node.as_call_name(), "COLUMN")) {
+    return expand_column_call(arg_node, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+  }
   if (arg_node.kind() == parser::NodeKind::Call && strings::case_insensitive_eq(arg_node.as_call_name(), "IF")) {
     // `IF(cond, then, [else])` preserves reference-shape through the picked
     // branch in Mac Excel, so `=LET(r, IF(TRUE, A1:A3, B1:B3), SUM(r))`
