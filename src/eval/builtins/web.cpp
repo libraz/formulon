@@ -105,10 +105,14 @@ Value EncodeUrl(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 //   * Empty node set      -> #N/A  (Excel's documented no-match code)
 //   * Parse / select OK   -> first node's text content.
 //
-// TODO(filterxml-array): Excel 365's dynamic-array engine spills the entire
-// node set into a vertical array; Formulon does not yet have ArrayValue, so
-// we collapse multi-node results to the first node's text. Revisit once
-// ArrayValue lands.
+// TODO(filterxml-spill): Excel 365's dynamic-array engine spills the entire
+// node set into a vertical array on the worksheet. Formulon now has
+// `Value::Array` (used by SUMPRODUCT operator broadcasting), but a bare
+// `=FILTERXML(...)` cell still has no spill plumbing through OOXML
+// serialization, the C-API, or downstream consumers. Returning a
+// `Value::Array` cell value here without spill would worsen the user
+// experience vs. the current "first node's text" fallback. Revisit once
+// dynamic-array spill semantics land at the cell level.
 //
 // pugixml quirks worth noting:
 //   * Its XPath engine implements XPath 1.0 only. XPath 2.0+ features (`for`,
@@ -171,8 +175,8 @@ Value FilterXml(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
     return Value::error(ErrorCode::NA);
   }
 
-  // TODO(filterxml-array): multi-node spill is deferred until ArrayValue
-  // lands; for now we return the first node's text content.
+  // Multi-node spill is deferred until dynamic-array spill semantics land
+  // at the cell level (see TODO above); for now return the first node's text.
   return Value::text(arena.intern(node_text(nodes.first())));
 }
 

@@ -136,8 +136,11 @@ TEST(BuiltinsWebFilterXml, ReturnsSingleNodeText) {
 }
 
 TEST(BuiltinsWebFilterXml, MultiNodeSetReturnsFirst) {
-  // TODO(filterxml-array): Excel spills to a vertical array; until
-  // ArrayValue lands we collapse to the first node's text.
+  // Mac Excel 365 spills the full node set to adjacent cells via dynamic-
+  // array spill, which Formulon does not yet implement at the cell level.
+  // Returning a Value::Array here without spill plumbing would be worse
+  // than the current scalar fallback, so we return the first node's text.
+  // See TODO(filterxml-spill) in src/eval/builtins/web.cpp.
   const Value v = EvalSource("=FILTERXML(\"<r><a>1</a><a>2</a></r>\",\"//a\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "1");
