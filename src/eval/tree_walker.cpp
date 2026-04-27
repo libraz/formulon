@@ -146,6 +146,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"DMAX", &eval_dmax_lazy},
     {"DMIN", &eval_dmin_lazy},
     {"DPRODUCT", &eval_dproduct_lazy},
+    {"DROP", &eval_drop_lazy},
     {"DSTDEV", &eval_dstdev_lazy},
     {"DSTDEVP", &eval_dstdevp_lazy},
     {"DSUM", &eval_dsum_lazy},
@@ -218,6 +219,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"SUMXMY2", &eval_sumxmy2_lazy},
     {"SWITCH", &eval_switch_lazy},
     {"T.TEST", &eval_t_test_lazy},
+    {"TAKE", &eval_take_lazy},
     {"TRANSPOSE", &eval_transpose_lazy},
     // TTEST is the pre-2010 legacy spelling of T.TEST; same impl.
     {"TTEST", &eval_t_test_lazy},

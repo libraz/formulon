@@ -2,10 +2,10 @@
 //
 // Lazy impls for dynamic-array spilling builtins that need per-argument AST
 // shape inspection: `FILTER`, `UNIQUE`, `SORT`, `SORTBY`, `HSTACK`, `VSTACK`,
-// `CHOOSECOLS`, `CHOOSEROWS`. These functions either produce an `ArrayValue`
-// whose footprint depends on the input array's 2D shape, or accept a range
-// argument they must keep as a 2D rectangle (the eager dispatcher would
-// flatten range cells into a 1D vector and lose the shape).
+// `CHOOSECOLS`, `CHOOSEROWS`, `DROP`, `TAKE`. These functions either produce
+// an `ArrayValue` whose footprint depends on the input array's 2D shape, or
+// accept a range argument they must keep as a 2D rectangle (the eager
+// dispatcher would flatten range cells into a 1D vector and lose the shape).
 //
 // Sibling of `eval/shape_ops_lazy.h` (which hosts the SUMPRODUCT-side helpers
 // and TRANSPOSE) and `eval/builtins/dynamic_array.cpp` (the eager-arg
@@ -192,6 +192,42 @@ Value eval_choosecols_lazy(const parser::AstNode& call, Arena& arena, const Func
 /// semantics, error policy, and arity bounds match.
 Value eval_chooserows_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                            const EvalContext& ctx);
+
+/// `TAKE(array, rows, [columns])` — returns a sub-array taken from one
+/// corner of `array`.
+///
+/// Sign-based corner selection (matches Mac Excel):
+///   * Positive `rows` -> take from the TOP edge (first |rows| rows).
+///   * Negative `rows` -> take from the BOTTOM edge (last |rows| rows).
+///   * Positive `columns` -> take from the LEFT edge.
+///   * Negative `columns` -> take from the RIGHT edge.
+///   * `columns` omitted -> all columns.
+///   * `|rows|` >= `array.rows` -> take all rows; `|columns|` >=
+///     `array.cols` -> take all columns. (Excel does NOT error on this;
+///     it clamps.)
+///   * `rows == 0` -> resulting axis is 0-sized -> `#CALC!`. Same for
+///     `columns == 0`. (`rows` omitted is fine; defaults to "all rows".)
+///
+/// `rows` / `columns` are coerced via `coerce_to_number` and truncated
+/// toward zero. Argument-level errors propagate verbatim.
+Value eval_take_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx);
+
+/// `DROP(array, rows, [columns])` — returns the sub-array remaining after
+/// dropping `rows` and `columns` from one corner of `array`.
+///
+/// Sign-based corner selection mirrors `TAKE`:
+///   * Positive `rows` -> drop the TOP |rows| rows.
+///   * Negative `rows` -> drop the BOTTOM |rows| rows.
+///   * Positive `columns` -> drop from the LEFT.
+///   * Negative `columns` -> drop from the RIGHT.
+///   * `columns` omitted -> drop no columns.
+///
+/// If `|rows|` >= `array.rows` or `|columns|` >= `array.cols` the
+/// resulting axis is 0-sized and DROP surfaces `#CALC!` (matches Mac
+/// Excel's documented behaviour for "nothing left").
+Value eval_drop_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx);
 
 }  // namespace eval
 }  // namespace formulon

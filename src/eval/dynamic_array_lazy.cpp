@@ -1005,5 +1005,188 @@ Value eval_chooserows_lazy(const parser::AstNode& call, Arena& arena, const Func
   return Value::array(out);
 }
 
+namespace {
+
+/// Decode a signed (rows or columns) argument for TAKE / DROP into a
+/// half-open `[lo, hi)` slice of the source axis. `take == true` selects
+/// the cells that will be retained; `take == false` selects the cells
+/// that will be dropped (and so the retained range is the complement,
+/// computed in-place by this helper). On success populates `lo` / `hi`
+/// and returns `true`. On argument error / coercion failure / zero (TAKE
+/// only) / over-removal (DROP only), returns `false` and writes the
+/// caller-visible error.
+///
+/// Mac Excel semantics summary:
+///   * Positive count -> operate on the leading edge.
+///   * Negative count -> operate on the trailing edge.
+///   * `|count|` clamps to `axis_size` (TAKE returns the whole axis;
+///     DROP returns nothing -> #CALC!).
+///   * Omitted argument: TAKE keeps all cells on that axis; DROP drops
+///     none. Caller signals "omitted" by passing `nullptr` for `node`.
+bool resolve_take_drop_range(const parser::AstNode* node, std::uint32_t axis_size, bool take, Arena& arena,
+                             const FunctionRegistry& registry, const EvalContext& ctx, std::uint32_t& lo,
+                             std::uint32_t& hi, Value& error_out) {
+  if (node == nullptr) {
+    lo = 0;
+    hi = axis_size;
+    return true;
+  }
+  const Value v = eval_node(*node, arena, registry, ctx);
+  if (v.is_error()) {
+    error_out = v;
+    return false;
+  }
+  auto coerced = coerce_to_number(v);
+  if (!coerced) {
+    error_out = Value::error(coerced.error());
+    return false;
+  }
+  const double count = std::trunc(coerced.value());
+  if (take) {
+    if (count == 0.0) {
+      error_out = Value::error(ErrorCode::Calc);
+      return false;
+    }
+    if (count > 0.0) {
+      const auto take_n =
+          (count >= static_cast<double>(axis_size)) ? axis_size : static_cast<std::uint32_t>(count);
+      lo = 0;
+      hi = take_n;
+      return true;
+    }
+    const double abs_count = -count;
+    const auto take_n =
+        (abs_count >= static_cast<double>(axis_size)) ? axis_size : static_cast<std::uint32_t>(abs_count);
+    lo = axis_size - take_n;
+    hi = axis_size;
+    return true;
+  }
+  if (count >= 0.0) {
+    if (count >= static_cast<double>(axis_size)) {
+      error_out = Value::error(ErrorCode::Calc);
+      return false;
+    }
+    lo = static_cast<std::uint32_t>(count);
+    hi = axis_size;
+    return true;
+  }
+  const double abs_count = -count;
+  if (abs_count >= static_cast<double>(axis_size)) {
+    error_out = Value::error(ErrorCode::Calc);
+    return false;
+  }
+  lo = 0;
+  hi = axis_size - static_cast<std::uint32_t>(abs_count);
+  return true;
+}
+
+/// Materialise a 2D row-major slice `[row_lo, row_hi) x [col_lo, col_hi)`
+/// of `src` into the caller arena. Returns nullptr on arena OOM. Both
+/// half-open intervals must satisfy `lo <= hi <= src axis size`.
+ArrayValue* materialise_slice(const ArrayValue& src, std::uint32_t row_lo, std::uint32_t row_hi,
+                              std::uint32_t col_lo, std::uint32_t col_hi, Arena& arena) {
+  const std::uint32_t out_rows = row_hi - row_lo;
+  const std::uint32_t out_cols = col_hi - col_lo;
+  const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
+  Value* buffer = arena.create_array<Value>(total);
+  if (buffer == nullptr) {
+    return nullptr;
+  }
+  for (std::uint32_t r = 0; r < out_rows; ++r) {
+    for (std::uint32_t c = 0; c < out_cols; ++c) {
+      buffer[static_cast<std::size_t>(r) * out_cols + c] =
+          src.cells[static_cast<std::size_t>(row_lo + r) * src.cols + (col_lo + c)];
+    }
+  }
+  ArrayValue* out = arena.create<ArrayValue>();
+  if (out == nullptr) {
+    return nullptr;
+  }
+  out->rows = out_rows;
+  out->cols = out_cols;
+  out->cells = buffer;
+  return out;
+}
+
+}  // namespace
+
+Value eval_take_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 2U || arity > 3U) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  const Value array_v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
+  if (array_v.is_error()) {
+    return array_v;
+  }
+  if (!array_v.is_array()) {
+    return Value::error(ErrorCode::Value);
+  }
+  const ArrayValue* array = array_v.as_array();
+
+  std::uint32_t row_lo = 0;
+  std::uint32_t row_hi = 0;
+  Value err = Value::error(ErrorCode::Value);
+  if (!resolve_take_drop_range(&call.as_call_arg(1), array->rows, /*take=*/true, arena, registry, ctx,
+                               row_lo, row_hi, err)) {
+    return err;
+  }
+  std::uint32_t col_lo = 0;
+  std::uint32_t col_hi = array->cols;
+  if (arity == 3U) {
+    if (!resolve_take_drop_range(&call.as_call_arg(2), array->cols, /*take=*/true, arena, registry, ctx,
+                                 col_lo, col_hi, err)) {
+      return err;
+    }
+  }
+
+  ArrayValue* out = materialise_slice(*array, row_lo, row_hi, col_lo, col_hi, arena);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::array(out);
+}
+
+Value eval_drop_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 2U || arity > 3U) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  const Value array_v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
+  if (array_v.is_error()) {
+    return array_v;
+  }
+  if (!array_v.is_array()) {
+    return Value::error(ErrorCode::Value);
+  }
+  const ArrayValue* array = array_v.as_array();
+
+  std::uint32_t row_lo = 0;
+  std::uint32_t row_hi = 0;
+  Value err = Value::error(ErrorCode::Value);
+  if (!resolve_take_drop_range(&call.as_call_arg(1), array->rows, /*take=*/false, arena, registry, ctx,
+                               row_lo, row_hi, err)) {
+    return err;
+  }
+  std::uint32_t col_lo = 0;
+  std::uint32_t col_hi = array->cols;
+  if (arity == 3U) {
+    if (!resolve_take_drop_range(&call.as_call_arg(2), array->cols, /*take=*/false, arena, registry, ctx,
+                                 col_lo, col_hi, err)) {
+      return err;
+    }
+  }
+
+  ArrayValue* out = materialise_slice(*array, row_lo, row_hi, col_lo, col_hi, arena);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::array(out);
+}
+
 }  // namespace eval
 }  // namespace formulon
