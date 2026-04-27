@@ -131,6 +131,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/date_time.cpp
   src/eval/date_text_parse.cpp
   src/eval/range_args.cpp
+  src/eval/scalar_ops.cpp
   src/eval/special_forms_lazy.cpp
   src/eval/areas_lazy.cpp
   src/eval/conditional_aggregates.cpp
