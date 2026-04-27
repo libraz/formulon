@@ -36,6 +36,7 @@
 #include "eval/series_sum_lazy.h"
 #include "eval/shape_ops_lazy.h"
 #include "eval/special_forms_lazy.h"
+#include "eval/textsplit_lazy.h"
 #include "eval/workdays_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -230,6 +231,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"SWITCH", &eval_switch_lazy},
     {"T.TEST", &eval_t_test_lazy},
     {"TAKE", &eval_take_lazy},
+    {"TEXTSPLIT", &eval_textsplit_lazy},
     {"TOCOL", &eval_tocol_lazy},
     {"TOROW", &eval_torow_lazy},
     {"TRANSPOSE", &eval_transpose_lazy},
