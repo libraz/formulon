@@ -125,6 +125,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/frequency_eval_test.cpp
   unit/eval/linest_eval_test.cpp
   unit/eval/trend_eval_test.cpp
+  unit/eval/logest_growth_eval_test.cpp
   unit/parser/spill_ref_test.cpp
   unit/registry_catalog_test.cpp
 )

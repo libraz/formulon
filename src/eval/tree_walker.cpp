@@ -169,6 +169,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"FREQUENCY", &eval_frequency_lazy},
     // FTEST is the pre-2010 legacy spelling of F.TEST; same impl.
     {"FTEST", &eval_f_test_lazy},
+    {"GROWTH", &eval_growth_lazy},
     {"HLOOKUP", &eval_hlookup_lazy},
     {"HSTACK", &eval_hstack_lazy},
     {"IF", &eval_if_lazy},
@@ -185,6 +186,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"ISREF", &eval_isref_lazy},
     {"IRR", &eval_irr_lazy},
     {"LINEST", &eval_linest_lazy},
+    {"LOGEST", &eval_logest_lazy},
     {"LOOKUP", &eval_lookup_lazy},
     {"MATCH", &eval_match_lazy},
     {"MAXIFS", &eval_maxifs_lazy},

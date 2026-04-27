@@ -88,6 +88,38 @@ Value eval_linest_lazy(const parser::AstNode& call, Arena& arena, const Function
 Value eval_trend_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx);
 
+/// `LOGEST(known_y, [known_x], [const]=TRUE, [stats]=FALSE)` — fits
+/// the exponential model `y = b * m_1^x_1 * m_2^x_2 * ... * m_k^x_k`
+/// by running LINEST on `ln(y)` against `known_x` and then
+/// exponentiating the row-1 coefficients in the output. Rows 2 through
+/// 5 of the `stats=TRUE` block are left on the linear (log) scale —
+/// matching Microsoft's documented behaviour: "the additional
+/// statistics are calculated using the linear transformation, so the
+/// additional statistics from LOGEST are comparable to those from
+/// LINEST".
+///
+/// When `const=FALSE`, the trailing intercept slot is `1` (i.e.
+/// `exp(0)`) rather than `0` — `LOGEST` reports the multiplicative
+/// identity for the suppressed `b` term.
+///
+/// Errors:
+///   - any `y <= 0` -> `#NUM!` because `ln` is undefined;
+///   - all other diagnostics match LINEST.
+Value eval_logest_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx);
+
+/// `GROWTH(known_y, [known_x], [new_x], [const]=TRUE)` — predicted
+/// `y` values along the LOGEST exponential fit, evaluated at `new_x`.
+/// Internally takes `ln(y)`, fits via LINEST, then computes
+/// `exp(beta . [features, 1])` for each row of `new_x`. Argument
+/// shape rules and the orientation of the output mirror TREND.
+///
+/// Errors:
+///   - any `y <= 0` -> `#NUM!`;
+///   - all other diagnostics match TREND / LINEST.
+Value eval_growth_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx);
+
 }  // namespace eval
 }  // namespace formulon
 

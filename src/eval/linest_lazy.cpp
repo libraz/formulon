@@ -376,26 +376,28 @@ bool build_design_matrix(const ArrayValue& y_arr, const ArrayValue* x_arr, bool 
   return true;
 }
 
-/// Builds the LINEST output array. `coeffs` is in normal index order
-/// (`coeffs[j]` = coefficient on column j of the design matrix); the
-/// output presents them in reverse — `[b_k, b_{k-1}, ..., b_1, b_0]`
-/// — which is Excel's right-to-left convention.
-ArrayValue* build_simple_output(const std::vector<double>& coeffs, std::uint32_t k, bool with_const, Arena& arena) {
-  // Output is always 1 x (k+1). When `with_const=false`, the trailing
-  // intercept slot is zero (Excel's documented behaviour).
+/// Builds the LINEST / LOGEST output array. `coeffs` is in normal
+/// index order (`coeffs[j]` = coefficient on column j of the design
+/// matrix); the output presents them in reverse —
+/// `[b_k, b_{k-1}, ..., b_1, b_0]` — which is Excel's right-to-left
+/// convention. When `log_form=true`, every coefficient cell is
+/// exponentiated and the suppressed-intercept slot becomes `1.0`
+/// (i.e. `exp(0)`) — this is the LOGEST output rule.
+ArrayValue* build_simple_output(const std::vector<double>& coeffs, std::uint32_t k, bool with_const, Arena& arena,
+                                bool log_form = false) {
   const std::uint32_t out_cols = k + 1U;
   std::vector<Value> cells(out_cols, Value::blank());
   for (std::uint32_t j = 0; j < k; ++j) {
-    // coefficient for x_{j+1} (1-based) lives at index j; rendered at
-    // column position (k - 1 - j).
-    const double v = coeffs[j];
+    const double raw = coeffs[j];
+    const double v = log_form ? std::exp(raw) : raw;
     cells[k - 1U - j] = is_finite(v) ? Value::number(v) : Value::error(ErrorCode::Num);
   }
   if (with_const) {
-    const double v = coeffs[k];
+    const double raw = coeffs[k];
+    const double v = log_form ? std::exp(raw) : raw;
     cells[k] = is_finite(v) ? Value::number(v) : Value::error(ErrorCode::Num);
   } else {
-    cells[k] = Value::number(0.0);
+    cells[k] = Value::number(log_form ? 1.0 : 0.0);
   }
   return make_double_array(cells, 1U, out_cols, arena);
 }
@@ -403,9 +405,13 @@ ArrayValue* build_simple_output(const std::vector<double>& coeffs, std::uint32_t
 /// Builds the 5x(k+1) statistics matrix. `inv_a` is `A^{-1}` (the
 /// inverse of `X^T X`) in normal index order. `coeffs` is in the same
 /// order. The reverse-ordering and the `#N/A` padding rules mirror
-/// `build_simple_output`.
+/// `build_simple_output`. When `log_form=true`, only row 1
+/// (coefficients) is exponentiated; rows 2-5 stay on the linear /
+/// log-domain scale because Excel's LOGEST documents that the
+/// "additional statistics" are computed on the linearised model.
 ArrayValue* build_stats_output(const std::vector<double>& coeffs, const std::vector<double>& inv_a,
-                               const DesignMatrix& dm, double ss_resid, double ss_total, double mean_y, Arena& arena) {
+                               const DesignMatrix& dm, double ss_resid, double ss_total, double mean_y, Arena& arena,
+                               bool log_form = false) {
   const std::uint32_t k = dm.k;
   const std::uint32_t p = k + (dm.with_const ? 1U : 0U);
   const std::uint32_t out_cols = k + 1U;
@@ -416,14 +422,20 @@ ArrayValue* build_stats_output(const std::vector<double>& coeffs, const std::vec
   const double df_resid_d = m - static_cast<double>(p);
   const double k_d = static_cast<double>(k);
 
-  // Row 1: coefficients in reverse order. Intercept slot is 0 when
-  // const=false.
+  // Row 1: coefficients in reverse order. Intercept slot is 0 (LINEST)
+  // or 1 (LOGEST) when const=false.
   for (std::uint32_t j = 0; j < k; ++j) {
-    const double v = coeffs[j];
+    const double raw = coeffs[j];
+    const double v = log_form ? std::exp(raw) : raw;
     cells[k - 1U - j] = is_finite(v) ? Value::number(v) : Value::error(ErrorCode::Num);
   }
-  cells[k] = dm.with_const ? (is_finite(coeffs[k]) ? Value::number(coeffs[k]) : Value::error(ErrorCode::Num))
-                           : Value::number(0.0);
+  if (dm.with_const) {
+    const double raw = coeffs[k];
+    const double v = log_form ? std::exp(raw) : raw;
+    cells[k] = is_finite(v) ? Value::number(v) : Value::error(ErrorCode::Num);
+  } else {
+    cells[k] = Value::number(log_form ? 1.0 : 0.0);
+  }
 
   // Row 2: standard errors. SE[j] = sqrt(inv_a[j,j] * ss_resid / df_resid).
   // df_resid <= 0 (under-determined system) makes SE undefined -> #N/A.
@@ -721,6 +733,199 @@ Value eval_trend_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       s += coeffs[j] * pred_design[static_cast<std::size_t>(i) * p + j];
     }
     cells.push_back(is_finite(s) ? Value::number(s) : Value::error(ErrorCode::Num));
+  }
+
+  const std::uint32_t out_rows = y_is_col ? n_obs : 1U;
+  const std::uint32_t out_cols = y_is_col ? 1U : n_obs;
+  ArrayValue* arr = make_double_array(cells, out_rows, out_cols, arena);
+  if (arr == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::array(arr);
+}
+
+namespace {
+
+/// Replaces every entry of `dm.y` with `ln(y_i)`. Returns `false` if
+/// any `y_i <= 0` — `ln` is undefined there, and Mac Excel's
+/// LOGEST / GROWTH surface `#NUM!` in that case.
+bool log_transform_y(DesignMatrix& dm) {
+  for (std::uint32_t i = 0; i < dm.m; ++i) {
+    if (!(dm.y[i] > 0.0)) {
+      return false;
+    }
+    dm.y[i] = std::log(dm.y[i]);
+  }
+  return true;
+}
+
+}  // namespace
+
+Value eval_logest_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx) {
+  // Same argument shape as LINEST. The only differences are the
+  // log-transform on `y` before solving and the `exp()` of the row-1
+  // coefficients in the output.
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 1U || arity > 4U) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  const ArrayValue* y_arr = nullptr;
+  Value err = Value::blank();
+  if (!resolve_array(call.as_call_arg(0), arena, registry, ctx, &y_arr, &err)) {
+    return err;
+  }
+  const ArrayValue* x_arr = nullptr;
+  if (arity >= 2U) {
+    if (!resolve_array(call.as_call_arg(1), arena, registry, ctx, &x_arr, &err)) {
+      return err;
+    }
+  }
+  bool with_const = true;
+  if (arity >= 3U) {
+    if (!eval_bool_arg(call.as_call_arg(2), arena, registry, ctx, true, &with_const, &err)) {
+      return err;
+    }
+  }
+  bool want_stats = false;
+  if (arity >= 4U) {
+    if (!eval_bool_arg(call.as_call_arg(3), arena, registry, ctx, false, &want_stats, &err)) {
+      return err;
+    }
+  }
+
+  DesignMatrix dm;
+  if (!build_design_matrix(*y_arr, x_arr, with_const, &dm, &err)) {
+    return err;
+  }
+  if (!log_transform_y(dm)) {
+    return Value::error(ErrorCode::Num);
+  }
+  const std::uint32_t p = dm.k + (with_const ? 1U : 0U);
+  if (dm.m < p) {
+    return Value::error(ErrorCode::Num);
+  }
+
+  std::vector<double> coeffs;
+  std::vector<double> inv_a;
+  if (!solve_normal_equations(dm, /*want_inv=*/want_stats, &coeffs, &inv_a)) {
+    return Value::error(ErrorCode::Num);
+  }
+
+  if (!want_stats) {
+    ArrayValue* arr = build_simple_output(coeffs, dm.k, with_const, arena, /*log_form=*/true);
+    if (arr == nullptr) {
+      return Value::error(ErrorCode::Num);
+    }
+    return Value::array(arr);
+  }
+
+  // Residuals on the linearised log-y scale. Same recipe as LINEST.
+  double ss_resid = 0.0;
+  double sum_y = 0.0;
+  for (std::uint32_t i = 0; i < dm.m; ++i) {
+    double yhat = 0.0;
+    for (std::uint32_t j = 0; j < p; ++j) {
+      yhat += coeffs[j] * dm.data[static_cast<std::size_t>(i) * p + j];
+    }
+    const double e = dm.y[i] - yhat;
+    ss_resid += e * e;
+    sum_y += dm.y[i];
+  }
+  const double mean_y = sum_y / static_cast<double>(dm.m);
+  double ss_total = 0.0;
+  if (with_const) {
+    for (std::uint32_t i = 0; i < dm.m; ++i) {
+      const double d = dm.y[i] - mean_y;
+      ss_total += d * d;
+    }
+  } else {
+    for (std::uint32_t i = 0; i < dm.m; ++i) {
+      ss_total += dm.y[i] * dm.y[i];
+    }
+  }
+
+  ArrayValue* arr = build_stats_output(coeffs, inv_a, dm, ss_resid, ss_total, mean_y, arena, /*log_form=*/true);
+  if (arr == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::array(arr);
+}
+
+Value eval_growth_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx) {
+  // Same argument shape as TREND. The body is the TREND recipe with
+  // a `log()` on `y` before solving and an `exp()` on the predicted
+  // log-scale `y_hat`.
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 1U || arity > 4U) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  const ArrayValue* y_arr = nullptr;
+  Value err = Value::blank();
+  if (!resolve_array(call.as_call_arg(0), arena, registry, ctx, &y_arr, &err)) {
+    return err;
+  }
+  const ArrayValue* x_arr = nullptr;
+  if (arity >= 2U) {
+    if (!resolve_array(call.as_call_arg(1), arena, registry, ctx, &x_arr, &err)) {
+      return err;
+    }
+  }
+  const ArrayValue* new_x_arr = nullptr;
+  if (arity >= 3U) {
+    if (!resolve_array(call.as_call_arg(2), arena, registry, ctx, &new_x_arr, &err)) {
+      return err;
+    }
+  }
+  bool with_const = true;
+  if (arity >= 4U) {
+    if (!eval_bool_arg(call.as_call_arg(3), arena, registry, ctx, true, &with_const, &err)) {
+      return err;
+    }
+  }
+
+  DesignMatrix dm;
+  if (!build_design_matrix(*y_arr, x_arr, with_const, &dm, &err)) {
+    return err;
+  }
+  if (!log_transform_y(dm)) {
+    return Value::error(ErrorCode::Num);
+  }
+  const std::uint32_t p = dm.k + (with_const ? 1U : 0U);
+  if (dm.m < p) {
+    return Value::error(ErrorCode::Num);
+  }
+
+  std::vector<double> coeffs;
+  std::vector<double> unused_inv;
+  if (!solve_normal_equations(dm, /*want_inv=*/false, &coeffs, &unused_inv)) {
+    return Value::error(ErrorCode::Num);
+  }
+
+  const bool y_is_col = y_arr->cols == 1U && y_arr->rows >= 1U;
+  std::vector<double> pred_design;
+  std::uint32_t n_obs = 0;
+  if (new_x_arr == nullptr) {
+    n_obs = dm.m;
+    pred_design = dm.data;
+  } else {
+    if (!resolve_new_x_design(*new_x_arr, dm, y_is_col, with_const, &pred_design, &n_obs, &err)) {
+      return err;
+    }
+  }
+
+  std::vector<Value> cells;
+  cells.reserve(n_obs);
+  for (std::uint32_t i = 0; i < n_obs; ++i) {
+    double s = 0.0;
+    for (std::uint32_t j = 0; j < p; ++j) {
+      s += coeffs[j] * pred_design[static_cast<std::size_t>(i) * p + j];
+    }
+    const double y_hat = std::exp(s);
+    cells.push_back(is_finite(y_hat) ? Value::number(y_hat) : Value::error(ErrorCode::Num));
   }
 
   const std::uint32_t out_rows = y_is_col ? n_obs : 1U;
