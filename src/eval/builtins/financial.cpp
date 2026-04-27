@@ -25,6 +25,7 @@
 #include <cstdint>
 
 #include "eval/builtins/financial_bond_simple.h"
+#include "eval/builtins/financial_duration.h"
 #include "eval/builtins/financial_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
@@ -775,6 +776,13 @@ void register_financial_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"PRICEMAT", 5u, 6u, &financial_detail::PriceMat});
   registry.register_function(FunctionDef{"YIELDDISC", 4u, 5u, &financial_detail::YieldDisc});
   registry.register_function(FunctionDef{"YIELDMAT", 5u, 6u, &financial_detail::YieldMat});
+
+  // Macaulay / modified duration. Both share the (settlement, maturity,
+  // coupon, yld, frequency, [basis=0]) signature: 5 required + optional
+  // basis (min 5, max 6). Implementations live in
+  // `financial_duration.cpp`.
+  registry.register_function(FunctionDef{"DURATION", 5u, 6u, &financial_detail::Duration});
+  registry.register_function(FunctionDef{"MDURATION", 5u, 6u, &financial_detail::MDuration});
 
   // STOCKHISTORY: stub returning #VALUE!. Formulon is a pure calc engine
   // and does not perform network / market-data I/O. Accepts any tail of

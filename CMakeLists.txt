@@ -99,6 +99,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins/financial_bond_simple.cpp
   src/eval/builtins/financial_coupon.cpp
   src/eval/builtins/financial_depreciation.cpp
+  src/eval/builtins/financial_duration.cpp
   src/eval/builtins/financial_misc.cpp
   src/eval/builtins/financial_rates.cpp
   src/eval/builtins/info.cpp
