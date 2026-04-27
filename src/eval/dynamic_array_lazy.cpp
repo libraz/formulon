@@ -3,6 +3,7 @@
 #include "eval/dynamic_array_lazy.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <numeric>
@@ -691,6 +692,309 @@ Value eval_sortby_lazy(const parser::AstNode& call, Arena& arena, const Function
     }
   }
 
+  ArrayValue* out = arena.create<ArrayValue>();
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  out->rows = out_rows;
+  out->cols = out_cols;
+  out->cells = buffer;
+  return Value::array(out);
+}
+
+namespace {
+
+/// Resolve every call argument as a Value::Array, propagating the first
+/// error verbatim. Returns true on success and populates `out`. The
+/// returned ArrayValue pointers borrow from the caller arena, which must
+/// outlive their use.
+bool resolve_stack_args(const parser::AstNode& call, std::uint32_t arity, Arena& arena,
+                        const FunctionRegistry& registry, const EvalContext& ctx,
+                        std::vector<const ArrayValue*>& out, Value& error_out) {
+  out.reserve(arity);
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    const Value v = eval_node_as_array(call.as_call_arg(i), arena, registry, ctx);
+    if (v.is_error()) {
+      error_out = v;
+      return false;
+    }
+    if (!v.is_array()) {
+      error_out = Value::error(ErrorCode::Value);
+      return false;
+    }
+    out.push_back(v.as_array());
+  }
+  return true;
+}
+
+}  // namespace
+
+Value eval_hstack_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  // Excel's documented HSTACK accepts up to 254 array references; reject
+  // 0-arg explicitly (no array context to spill into) and use 254 as the
+  // safety ceiling.
+  if (arity < 1U || arity > 254U) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  std::vector<const ArrayValue*> arrays;
+  Value err = Value::error(ErrorCode::Value);
+  if (!resolve_stack_args(call, arity, arena, registry, ctx, arrays, err)) {
+    return err;
+  }
+
+  // Output shape: row count is the max input row count; column count is
+  // the sum of input column counts. Empty inputs are impossible because
+  // `eval_node_as_array` always wraps to at least 1x1.
+  std::uint32_t out_rows = 0;
+  std::size_t out_cols_sz = 0;
+  for (const ArrayValue* a : arrays) {
+    if (a->rows > out_rows) {
+      out_rows = a->rows;
+    }
+    out_cols_sz += static_cast<std::size_t>(a->cols);
+  }
+  if (out_cols_sz > static_cast<std::size_t>(0xFFFFFFFFU)) {
+    return Value::error(ErrorCode::Num);
+  }
+  const auto out_cols = static_cast<std::uint32_t>(out_cols_sz);
+  const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
+  Value* buffer = arena.create_array<Value>(total);
+  if (buffer == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+
+  // Fill the buffer column-band by column-band. Cells above each input's
+  // row count get #N/A per Mac Excel's stack-family contract.
+  std::uint32_t col_off = 0;
+  for (const ArrayValue* a : arrays) {
+    for (std::uint32_t r = 0; r < out_rows; ++r) {
+      for (std::uint32_t c = 0; c < a->cols; ++c) {
+        const std::size_t dst = static_cast<std::size_t>(r) * out_cols + col_off + c;
+        if (r < a->rows) {
+          buffer[dst] = a->cells[static_cast<std::size_t>(r) * a->cols + c];
+        } else {
+          buffer[dst] = Value::error(ErrorCode::NA);
+        }
+      }
+    }
+    col_off += a->cols;
+  }
+
+  ArrayValue* out = arena.create<ArrayValue>();
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  out->rows = out_rows;
+  out->cols = out_cols;
+  out->cells = buffer;
+  return Value::array(out);
+}
+
+Value eval_vstack_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 1U || arity > 254U) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  std::vector<const ArrayValue*> arrays;
+  Value err = Value::error(ErrorCode::Value);
+  if (!resolve_stack_args(call, arity, arena, registry, ctx, arrays, err)) {
+    return err;
+  }
+
+  // Output shape: row count is the sum of input row counts; column count
+  // is the max input column count.
+  std::size_t out_rows_sz = 0;
+  std::uint32_t out_cols = 0;
+  for (const ArrayValue* a : arrays) {
+    out_rows_sz += static_cast<std::size_t>(a->rows);
+    if (a->cols > out_cols) {
+      out_cols = a->cols;
+    }
+  }
+  if (out_rows_sz > static_cast<std::size_t>(0xFFFFFFFFU)) {
+    return Value::error(ErrorCode::Num);
+  }
+  const auto out_rows = static_cast<std::uint32_t>(out_rows_sz);
+  const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
+  Value* buffer = arena.create_array<Value>(total);
+  if (buffer == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+
+  // Fill the buffer row-band by row-band. Cells past each input's column
+  // count get #N/A.
+  std::uint32_t row_off = 0;
+  for (const ArrayValue* a : arrays) {
+    for (std::uint32_t r = 0; r < a->rows; ++r) {
+      for (std::uint32_t c = 0; c < out_cols; ++c) {
+        const std::size_t dst = static_cast<std::size_t>(row_off + r) * out_cols + c;
+        if (c < a->cols) {
+          buffer[dst] = a->cells[static_cast<std::size_t>(r) * a->cols + c];
+        } else {
+          buffer[dst] = Value::error(ErrorCode::NA);
+        }
+      }
+    }
+    row_off += a->rows;
+  }
+
+  ArrayValue* out = arena.create<ArrayValue>();
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  out->rows = out_rows;
+  out->cols = out_cols;
+  out->cells = buffer;
+  return Value::array(out);
+}
+
+namespace {
+
+/// Resolve a 1-based / negative index argument to a 0-based axis index.
+/// Returns `true` and writes `out` on success; `false` and writes the
+/// caller-visible error value on coercion failure or out-of-range.
+bool resolve_choose_index(const parser::AstNode& node, std::uint32_t axis_size, Arena& arena,
+                          const FunctionRegistry& registry, const EvalContext& ctx, std::uint32_t& out,
+                          Value& error_out) {
+  const Value v = eval_node(node, arena, registry, ctx);
+  if (v.is_error()) {
+    error_out = v;
+    return false;
+  }
+  auto coerced = coerce_to_number(v);
+  if (!coerced) {
+    error_out = Value::error(coerced.error());
+    return false;
+  }
+  // Truncate-toward-zero on the user-supplied index. `0` after truncation
+  // is invalid; positives map to `[1, axis_size]`, negatives to
+  // `[-axis_size, -1]`. Anything else surfaces #VALUE!.
+  const double truncated = std::trunc(coerced.value());
+  if (truncated == 0.0) {
+    error_out = Value::error(ErrorCode::Value);
+    return false;
+  }
+  if (truncated > 0.0) {
+    if (truncated > static_cast<double>(axis_size)) {
+      error_out = Value::error(ErrorCode::Value);
+      return false;
+    }
+    out = static_cast<std::uint32_t>(truncated) - 1U;
+    return true;
+  }
+  // Negative index path. `-1` maps to the last element (`axis_size - 1`).
+  const double abs_idx = -truncated;
+  if (abs_idx > static_cast<double>(axis_size)) {
+    error_out = Value::error(ErrorCode::Value);
+    return false;
+  }
+  out = axis_size - static_cast<std::uint32_t>(abs_idx);
+  return true;
+}
+
+}  // namespace
+
+Value eval_choosecols_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  // Need `(array, col_num1, ...)`; cap at 254 indices (Excel ceiling) +
+  // 1 array slot = 255 args.
+  if (arity < 2U || arity > 255U) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  const Value array_v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
+  if (array_v.is_error()) {
+    return array_v;
+  }
+  if (!array_v.is_array()) {
+    return Value::error(ErrorCode::Value);
+  }
+  const ArrayValue* array = array_v.as_array();
+
+  // Resolve each index in turn. `resolve_choose_index` handles coercion,
+  // truncation, sign mapping, and bounds in one place.
+  std::vector<std::uint32_t> picks;
+  picks.reserve(arity - 1U);
+  for (std::uint32_t i = 1; i < arity; ++i) {
+    std::uint32_t idx = 0;
+    Value err = Value::error(ErrorCode::Value);
+    if (!resolve_choose_index(call.as_call_arg(i), array->cols, arena, registry, ctx, idx, err)) {
+      return err;
+    }
+    picks.push_back(idx);
+  }
+
+  const std::uint32_t out_rows = array->rows;
+  const auto out_cols = static_cast<std::uint32_t>(picks.size());
+  const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
+  Value* buffer = arena.create_array<Value>(total);
+  if (buffer == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  for (std::uint32_t r = 0; r < out_rows; ++r) {
+    for (std::uint32_t k = 0; k < out_cols; ++k) {
+      const std::uint32_t src_col = picks[k];
+      buffer[static_cast<std::size_t>(r) * out_cols + k] =
+          array->cells[static_cast<std::size_t>(r) * array->cols + src_col];
+    }
+  }
+  ArrayValue* out = arena.create<ArrayValue>();
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  out->rows = out_rows;
+  out->cols = out_cols;
+  out->cells = buffer;
+  return Value::array(out);
+}
+
+Value eval_chooserows_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 2U || arity > 255U) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  const Value array_v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
+  if (array_v.is_error()) {
+    return array_v;
+  }
+  if (!array_v.is_array()) {
+    return Value::error(ErrorCode::Value);
+  }
+  const ArrayValue* array = array_v.as_array();
+
+  std::vector<std::uint32_t> picks;
+  picks.reserve(arity - 1U);
+  for (std::uint32_t i = 1; i < arity; ++i) {
+    std::uint32_t idx = 0;
+    Value err = Value::error(ErrorCode::Value);
+    if (!resolve_choose_index(call.as_call_arg(i), array->rows, arena, registry, ctx, idx, err)) {
+      return err;
+    }
+    picks.push_back(idx);
+  }
+
+  const auto out_rows = static_cast<std::uint32_t>(picks.size());
+  const std::uint32_t out_cols = array->cols;
+  const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
+  Value* buffer = arena.create_array<Value>(total);
+  if (buffer == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  for (std::uint32_t k = 0; k < out_rows; ++k) {
+    const std::uint32_t src_row = picks[k];
+    for (std::uint32_t c = 0; c < out_cols; ++c) {
+      buffer[static_cast<std::size_t>(k) * out_cols + c] =
+          array->cells[static_cast<std::size_t>(src_row) * array->cols + c];
+    }
+  }
   ArrayValue* out = arena.create<ArrayValue>();
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);

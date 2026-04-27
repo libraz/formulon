@@ -1,11 +1,11 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
 // Lazy impls for dynamic-array spilling builtins that need per-argument AST
-// shape inspection: `FILTER`, future `SORT` / `UNIQUE` / `SORTBY` / `RANDARRAY`.
-// These functions either produce an `ArrayValue` whose footprint depends on
-// the input array's 2D shape, or accept a range argument they must keep as a
-// 2D rectangle (the eager dispatcher would flatten range cells into a 1D
-// vector and lose the shape).
+// shape inspection: `FILTER`, `UNIQUE`, `SORT`, `SORTBY`, `HSTACK`, `VSTACK`,
+// `CHOOSECOLS`, `CHOOSEROWS`. These functions either produce an `ArrayValue`
+// whose footprint depends on the input array's 2D shape, or accept a range
+// argument they must keep as a 2D rectangle (the eager dispatcher would
+// flatten range cells into a 1D vector and lose the shape).
 //
 // Sibling of `eval/shape_ops_lazy.h` (which hosts the SUMPRODUCT-side helpers
 // and TRANSPOSE) and `eval/builtins/dynamic_array.cpp` (the eager-arg
@@ -149,6 +149,49 @@ Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
 /// input order (stable sort).
 Value eval_sortby_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx);
+
+/// `HSTACK(array1, array2, ...)` — concatenates the inputs horizontally
+/// (column-wise). Output rows = `max(input.rows)`; output cols =
+/// `sum(input.cols)`. Cells in a shorter input that are above the output
+/// row count are filled with `#N/A` (Mac Excel's documented behaviour for
+/// the stack family).
+///
+/// Scalar arguments are treated as `(1, 1)` arrays. Range / Ref /
+/// RangeOp arguments preserve their 2D shape via `eval_node_as_array`.
+/// Argument-level errors propagate verbatim. Arity 1..253 (Excel's
+/// observed ceiling); anything else surfaces `#VALUE!`.
+Value eval_hstack_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx);
+
+/// `VSTACK(array1, array2, ...)` — concatenates the inputs vertically
+/// (row-wise). Output rows = `sum(input.rows)`; output cols =
+/// `max(input.cols)`. Cells in a narrower input that are beyond its
+/// column count are filled with `#N/A`.
+///
+/// Scalar / shape / error / arity rules match `HSTACK`.
+Value eval_vstack_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx);
+
+/// `CHOOSECOLS(array, col_num1, [col_num2], ...)` — returns an array
+/// composed of the columns of `array` named by the index arguments, in
+/// the order given.
+///
+/// Indices are 1-based after `coerce_to_number` + truncate-toward-zero.
+/// Negative indices count from the right end (`-1` is the last column,
+/// `-array.cols` is the first). Index `0`, or any index whose absolute
+/// value exceeds `array.cols`, surfaces `#VALUE!`. Indices may repeat;
+/// e.g. `CHOOSECOLS(A, 2, 2, 1)` is valid and yields a 3-column result.
+///
+/// Argument-level errors (in `array` or any index) propagate verbatim.
+/// Arity 2..254 (Excel's observed ceiling); anything else -> `#VALUE!`.
+Value eval_choosecols_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx);
+
+/// `CHOOSEROWS(array, row_num1, [row_num2], ...)` — symmetric variant of
+/// `CHOOSECOLS` operating on rows instead of columns. All argument
+/// semantics, error policy, and arity bounds match.
+Value eval_chooserows_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx);
 
 }  // namespace eval
 }  // namespace formulon
