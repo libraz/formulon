@@ -267,6 +267,60 @@ Value RandArray(const Value* args, std::uint32_t arity, Arena& arena) {
   return Value::array(arr);
 }
 
+/// MUNIT(n). Returns the `n x n` identity matrix as an `ArrayValue`.
+///
+/// Coercion / error rules (Mac Excel 365, ja-JP):
+///   * `n` coerces via `coerce_to_number`.
+///   * `n` is truncated toward zero. `n <= 0` surfaces `#VALUE!` (matches
+///     Mac Excel's per-call "non-positive dimension" surface).
+///   * `n` exceeding `Sheet::kMaxRows` / `Sheet::kMaxCols`, or `n*n`
+///     exceeding `kMaxSequenceCells`, surfaces `#NUM!` (the same ceiling
+///     as SEQUENCE / RANDARRAY -- a hand-tuned 1M-cell limit that
+///     comfortably fits any realistic identity matrix).
+///
+/// Allocation: the cells buffer is arena-allocated and zero-initialised
+/// via `Value::number(0.0)` per slot, with the diagonal overwritten by
+/// `Value::number(1.0)`. Both the buffer and the `ArrayValue` header live
+/// in `arena`, matching the SEQUENCE / RANDARRAY contract.
+Value MUnit(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  auto n_c = coerce_to_number(args[0]);
+  if (!n_c) {
+    return Value::error(n_c.error());
+  }
+  // Truncate-toward-zero: MUNIT(3.7) yields a 3x3 matrix (matches Excel).
+  const double n_t = std::trunc(n_c.value());
+  if (!(n_t > 0.0)) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (n_t > static_cast<double>(Sheet::kMaxRows) || n_t > static_cast<double>(Sheet::kMaxCols)) {
+    return Value::error(ErrorCode::Num);
+  }
+  const auto n = static_cast<std::uint32_t>(n_t);
+  const std::size_t total = static_cast<std::size_t>(n) * static_cast<std::size_t>(n);
+  if (total > kMaxSequenceCells) {
+    return Value::error(ErrorCode::Num);
+  }
+
+  Value* buffer = arena.create_array<Value>(total);
+  if (buffer == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  for (std::size_t i = 0; i < total; ++i) {
+    buffer[i] = Value::number(0.0);
+  }
+  for (std::uint32_t i = 0; i < n; ++i) {
+    buffer[static_cast<std::size_t>(i) * n + i] = Value::number(1.0);
+  }
+  ArrayValue* arr = arena.create<ArrayValue>();
+  if (arr == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  arr->rows = n;
+  arr->cols = n;
+  arr->cells = buffer;
+  return Value::array(arr);
+}
+
 }  // namespace
 
 void register_dynamic_array_builtins(FunctionRegistry& registry) {
@@ -279,6 +333,8 @@ void register_dynamic_array_builtins(FunctionRegistry& registry) {
   // RANDARRAY: zero required + five optional (rows, cols, min, max,
   // whole_number). Same dispatcher policy as SEQUENCE.
   registry.register_function(FunctionDef{"RANDARRAY", 0u, 5u, &RandArray});
+  // MUNIT: single required arg (matrix size).
+  registry.register_function(FunctionDef{"MUNIT", 1u, 1u, &MUnit});
 }
 
 }  // namespace eval

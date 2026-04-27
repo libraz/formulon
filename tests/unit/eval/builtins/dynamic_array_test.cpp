@@ -693,6 +693,86 @@ TEST(BuiltinsRandarray, OversizeReturnsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
+// ---------------------------------------------------------------------------
+// MUNIT -- direct function-pointer tests
+// ---------------------------------------------------------------------------
+
+const FunctionDef* MUnitDef() {
+  const FunctionDef* def = default_registry().lookup("MUNIT");
+  EXPECT_NE(def, nullptr) << "MUNIT must be registered in the default registry";
+  return def;
+}
+
+Value CallMUnit(Arena& arena, Value n) {
+  const FunctionDef* def = MUnitDef();
+  if (def == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  Value buf[1] = {n};
+  return def->impl(buf, 1U, arena);
+}
+
+TEST(BuiltinsMunit, ThreeReturns3x3Identity) {
+  Arena arena;
+  const Value v = CallMUnit(arena, Value::number(3));
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 3U);
+  EXPECT_EQ(v.as_array_cols(), 3U);
+  const Value* cells = v.as_array_cells();
+  for (std::uint32_t r = 0; r < 3U; ++r) {
+    for (std::uint32_t c = 0; c < 3U; ++c) {
+      const double expected = (r == c) ? 1.0 : 0.0;
+      EXPECT_DOUBLE_EQ(cells[r * 3U + c].as_number(), expected);
+    }
+  }
+}
+
+TEST(BuiltinsMunit, OneReturns1x1) {
+  Arena arena;
+  const Value v = CallMUnit(arena, Value::number(1));
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 1.0);
+}
+
+TEST(BuiltinsMunit, FractionalArgTruncates) {
+  // 3.7 -> 3.
+  Arena arena;
+  const Value v = CallMUnit(arena, Value::number(3.7));
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 3U);
+}
+
+TEST(BuiltinsMunit, ZeroArgReturnsValue) {
+  Arena arena;
+  const Value v = CallMUnit(arena, Value::number(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsMunit, NegativeArgReturnsValue) {
+  Arena arena;
+  const Value v = CallMUnit(arena, Value::number(-1));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsMunit, OversizeReturnsNum) {
+  // n=2000 -> 4M cells, exceeds the 1M kMaxSequenceCells ceiling.
+  Arena arena;
+  const Value v = CallMUnit(arena, Value::number(2000));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(BuiltinsMunit, TextArgPropagatesValue) {
+  Arena arena;
+  const Value v = CallMUnit(arena, Value::text("hello"));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon
