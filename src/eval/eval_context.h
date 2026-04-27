@@ -230,6 +230,18 @@ class EvalContext {
     return copy;
   }
 
+  /// Returns a copy of `*this` whose `mutable_sheet()` is `&sheet`. Opting
+  /// in to a mutable sheet authorises `dispatch_array_result` to commit
+  /// dynamic-array spills on `sheet` for any formula cell anchored on the
+  /// same sheet. The base `current_sheet_` (read-only view) is unchanged;
+  /// callers that need both a read view and write authority typically pass
+  /// the same sheet to both bindings.
+  EvalContext with_mutable_sheet(Sheet& sheet) const noexcept {
+    EvalContext copy = *this;
+    copy.mutable_sheet_ = &sheet;
+    return copy;
+  }
+
   /// Returns the 0-based row of the formula cell that owns the currently
   /// evaluated expression, or `kNoFormulaCell` when no cell is bound (e.g.
   /// ad-hoc expression evaluation in the CLI).
@@ -242,11 +254,41 @@ class EvalContext {
   /// True when the context is anchored at a specific formula cell.
   bool has_formula_cell() const noexcept { return formula_row_ != kNoFormulaCell; }
 
+  /// Returns the sheet this context may mutate (for spill commits), or
+  /// `nullptr` when no mutable sheet was bound. Distinct from
+  /// `current_sheet()`: the latter is the read-only resolution target;
+  /// `mutable_sheet()` is the explicit opt-in that authorises spill writes.
+  Sheet* mutable_sheet() const noexcept { return mutable_sheet_; }
+
+  /// Commits an Array result as a dynamic-array spill anchored at the
+  /// currently bound formula cell, returning the post-dispatch scalar value
+  /// the caller should propagate.
+  ///
+  /// Behaviour:
+  ///   1. Non-Array `v` is returned unchanged (the common scalar path).
+  ///   2. If `mutable_sheet()` is null, the caller did not opt in to spill;
+  ///      `v` is returned unchanged.
+  ///   3. If `has_formula_cell()` is false, there is no anchor address to
+  ///      spill into; `v` is returned unchanged.
+  ///   4. A degenerate `0 x N` / `N x 0` array (which the producers should
+  ///      never emit) yields `#VALUE!` defensively.
+  ///   5. Otherwise the array's row-major cells are deep-copied (text
+  ///      payloads will be re-interned by `Sheet::commit_spill`) and
+  ///      committed at `(formula_row(), formula_col())` on `mutable_sheet()`.
+  ///      The return value is `mutable_sheet()->resolve_cell_value(...)` at
+  ///      the anchor, which is either `cells[0]` on success or `#SPILL!` on
+  ///      collision per the `commit_spill` contract.
+  Value dispatch_array_result(Value v) const;
+
  private:
   const Sheet* current_sheet_ = nullptr;
   EvalState* state_ = nullptr;
   const Workbook* workbook_ = nullptr;
   const NameEnv* name_env_ = nullptr;
+  // Spill-write authority for the current `evaluate()` call. Decoupled from
+  // `current_sheet_` so that ad-hoc / read-only contexts (CLI eval, tests
+  // that only resolve refs) cannot accidentally mutate the sheet.
+  Sheet* mutable_sheet_ = nullptr;
   std::uint32_t formula_row_ = kNoFormulaCell;
   std::uint32_t formula_col_ = kNoFormulaCell;
 };

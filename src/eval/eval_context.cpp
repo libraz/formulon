@@ -7,6 +7,7 @@
 #include "eval/eval_context.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 #include <vector>
@@ -185,14 +186,71 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena,
   } else {
     // Anchor the recursive evaluation at the target cell so ROW() / COLUMN()
     // inside the referenced formula return the referenced cell's coordinates
-    // rather than inheriting the caller's anchor.
-    result = evaluate(*root, arena, registry,
-                      this->with_formula_cell(prefix.row, prefix.col));
+    // rather than inheriting the caller's anchor. The new context inherits
+    // `mutable_sheet_` (regular member, copied by `with_formula_cell`).
+    const EvalContext child_ctx = this->with_formula_cell(prefix.row, prefix.col);
+    result = evaluate(*root, arena, registry, child_ctx);
+
+    // If the recursive formula produced an Array AND the target cell lives
+    // on the sheet we are authorised to mutate, commit the spill now and
+    // memoise the resulting scalar (anchor cell value, or #SPILL! on
+    // collision). Cross-sheet recursive arrays are intentionally left
+    // un-spilled here: spill commits across sheets are out of scope and
+    // would mutate a sheet the caller did not opt in to.
+    if (mutable_sheet_ != nullptr && prefix.target_sheet == mutable_sheet_ && result.is_array()) {
+      result = child_ctx.dispatch_array_result(result);
+    }
   }
 
   state_->pop_cell(prefix.target_sheet, prefix.row, prefix.col);
   state_->memoize(prefix.target_sheet, prefix.row, prefix.col, result);
   return result;
+}
+
+Value EvalContext::dispatch_array_result(Value v) const {
+  // Scalar passthrough — the common case. Cheap kind-check, no allocation.
+  if (!v.is_array()) {
+    return v;
+  }
+  // No write authority bound: caller did not opt in to spill, so we behave
+  // like a read-only context and surface the array verbatim. The eventual
+  // top-level consumer (writer / caller) decides what to do.
+  if (mutable_sheet_ == nullptr) {
+    return v;
+  }
+  // No anchor address: nothing to spill into. Defensive — the recursive
+  // resolver only invokes us with a formula-cell anchor bound, but ad-hoc
+  // callers may not.
+  if (!has_formula_cell()) {
+    return v;
+  }
+
+  const std::uint32_t rows = v.as_array_rows();
+  const std::uint32_t cols = v.as_array_cols();
+  if (rows == 0U || cols == 0U) {
+    // Producers never emit a degenerate shape today; surface #VALUE! so
+    // the caller does not silently discard the result.
+    return Value::error(ErrorCode::Value);
+  }
+
+  // Deep-copy the row-major cells into an owned vector. Text payloads in
+  // `cells` are still string_views into the source arena; that's fine —
+  // `Sheet::commit_spill` re-interns Text bytes into its own owned_strings
+  // so the spill region's lifetime is independent of the producing arena.
+  const Value* src = v.as_array_cells();
+  const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+  std::vector<Value> cells_vec;
+  cells_vec.reserve(total);
+  for (std::size_t i = 0; i < total; ++i) {
+    cells_vec.push_back(src[i]);
+  }
+
+  // commit_spill sets the anchor's cached_value to either cells[0] (on
+  // success) or #SPILL! (on collision); resolve_cell_value at the anchor
+  // returns that stored value. The bool return is intentionally ignored:
+  // either outcome is encoded in the resolved value the caller receives.
+  (void)mutable_sheet_->commit_spill(formula_row_, formula_col_, rows, cols, std::move(cells_vec));
+  return mutable_sheet_->resolve_cell_value(formula_row_, formula_col_);
 }
 
 Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(

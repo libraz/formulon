@@ -56,6 +56,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/array_producer_test.cpp
   unit/eval/builtins_row_column_array_test.cpp
   unit/eval/sumproduct_array_test.cpp
+  unit/eval/eval_spill_dispatch_test.cpp
   unit/eval/builtins_stats_test.cpp
   unit/eval/builtins_subtotal_test.cpp
   unit/eval/builtins_stats_exc_test.cpp
