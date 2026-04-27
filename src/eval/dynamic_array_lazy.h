@@ -89,6 +89,36 @@ Value eval_filter_lazy(const parser::AstNode& call, Arena& arena, const Function
 Value eval_unique_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx);
 
+/// `SORT(array, [sort_index], [sort_order], [by_col])` — returns `array`
+/// with its rows (default) or columns (`by_col = TRUE`) reordered by the
+/// values in the `sort_index`-th column / row.
+///
+/// Arguments:
+///   * `sort_index` (1-based): column to sort by when `by_col = FALSE`,
+///     or row to sort by when `by_col = TRUE`. Defaults to 1. Must be in
+///     `[1, cols]` (rows version: `[1, rows]`); out-of-range -> `#VALUE!`.
+///   * `sort_order`: `1` ascending (default) or `-1` descending. Any other
+///     value -> `#VALUE!`.
+///   * `by_col`: FALSE (default) sorts rows; TRUE sorts columns. Coerced
+///     via `coerce_to_bool` like the UNIQUE flag.
+///
+/// Cell ordering (Excel-canonical, ascending):
+///   1. Numbers (ascending numeric).
+///   2. Text (ASCII case-insensitive lex via `strings::case_insensitive_eq`
+///      / lowercase compare; matches the SWITCH / UNIQUE precedent).
+///   3. FALSE.
+///   4. TRUE.
+///   5. Errors (by error-code value).
+///   6. Blank cells (always last regardless of `sort_order`; matches Excel's
+///      "blanks last" surface for SORT).
+///
+/// The sort is stable (`std::stable_sort`) so rows that compare equal in
+/// the chosen key column retain their original input order. Errors in
+/// `array` cells are preserved verbatim in the output; SORT does not
+/// short-circuit on them.
+Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx);
+
 }  // namespace eval
 }  // namespace formulon
 
