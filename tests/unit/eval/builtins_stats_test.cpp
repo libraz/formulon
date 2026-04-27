@@ -249,6 +249,116 @@ TEST(BuiltinsMode, Range) {
 }
 
 // ---------------------------------------------------------------------------
+// MODE.MULT
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsModeMult, SingleModeReturnsOneRowArray) {
+  // Only 2 repeats; result is a 1x1 array containing 2.
+  const Value v = EvalSource("=MODE.MULT(1, 2, 3, 2, 4)");
+  ASSERT_TRUE(v.is_array());
+  const ArrayValue* arr = v.as_array();
+  EXPECT_EQ(arr->rows, 1u);
+  EXPECT_EQ(arr->cols, 1u);
+  ASSERT_TRUE(arr->cells[0].is_number());
+  EXPECT_DOUBLE_EQ(arr->cells[0].as_number(), 2.0);
+}
+
+TEST(BuiltinsModeMult, TiedModesReturnedInFirstOccurrenceOrder) {
+  // 1 appears 2x, 2 appears 3x, 3 appears 3x. Ties between 2 and 3 at
+  // frequency 3; first occurrence order is 2 (pos 1) then 3 (pos 2).
+  const Value v = EvalSource("=MODE.MULT(1, 2, 3, 1, 2, 3, 2, 3)");
+  ASSERT_TRUE(v.is_array());
+  const ArrayValue* arr = v.as_array();
+  EXPECT_EQ(arr->rows, 2u);
+  EXPECT_EQ(arr->cols, 1u);
+  ASSERT_TRUE(arr->cells[0].is_number());
+  ASSERT_TRUE(arr->cells[1].is_number());
+  EXPECT_DOUBLE_EQ(arr->cells[0].as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(arr->cells[1].as_number(), 3.0);
+}
+
+TEST(BuiltinsModeMult, TieBreakDoesNotReorderByMagnitude) {
+  // 7 and 2 each appear twice; 7 appears first in source so it leads the
+  // output even though it is the larger value.
+  const Value v = EvalSource("=MODE.MULT(7, 2, 7, 2)");
+  ASSERT_TRUE(v.is_array());
+  const ArrayValue* arr = v.as_array();
+  EXPECT_EQ(arr->rows, 2u);
+  EXPECT_EQ(arr->cols, 1u);
+  EXPECT_DOUBLE_EQ(arr->cells[0].as_number(), 7.0);
+  EXPECT_DOUBLE_EQ(arr->cells[1].as_number(), 2.0);
+}
+
+TEST(BuiltinsModeMult, AllUniqueIsNa) {
+  const Value v = EvalSource("=MODE.MULT(1, 2, 3, 4, 5)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsModeMult, EmptyNumericSliceIsNa) {
+  // Only non-numeric values: text and bool are silently skipped (same rule
+  // as MODE / MODE.SNGL), leaving an empty numeric slice.
+  const Value v = EvalSource("=MODE.MULT(\"a\", \"b\", TRUE, FALSE)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsModeMult, NonNumericsAreSkippedSameAsMode) {
+  // Only the two 4s repeat (text "4" and TRUE are skipped, not coerced).
+  // Output is a 1x1 array containing 4.
+  const Value v = EvalSource("=MODE.MULT(1, \"4\", 4, TRUE, 4, 2)");
+  ASSERT_TRUE(v.is_array());
+  const ArrayValue* arr = v.as_array();
+  EXPECT_EQ(arr->rows, 1u);
+  EXPECT_EQ(arr->cols, 1u);
+  EXPECT_DOUBLE_EQ(arr->cells[0].as_number(), 4.0);
+}
+
+TEST(BuiltinsModeMult, ErrorPropagates) {
+  const Value v = EvalSource("=MODE.MULT(1, 2, 1/0, 2)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+TEST(BuiltinsModeMult, RangeInput) {
+  // 3 appears twice; result is 1x1 array containing 3.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(3.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(3.0));
+  wb.sheet(0).set_cell_value(3, 0, Value::number(5.0));
+  const Value v = EvalSourceIn("=MODE.MULT(A1:A4)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array());
+  const ArrayValue* arr = v.as_array();
+  EXPECT_EQ(arr->rows, 1u);
+  EXPECT_EQ(arr->cols, 1u);
+  EXPECT_DOUBLE_EQ(arr->cells[0].as_number(), 3.0);
+}
+
+TEST(BuiltinsModeMult, RangeWithMultipleModes) {
+  // 2 and 4 both appear twice in the range; output preserves first-
+  // occurrence order (2 in row 1, 4 in row 2).
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(2.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(4.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(2.0));
+  wb.sheet(0).set_cell_value(3, 0, Value::number(4.0));
+  wb.sheet(0).set_cell_value(4, 0, Value::number(7.0));
+  const Value v = EvalSourceIn("=MODE.MULT(A1:A5)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array());
+  const ArrayValue* arr = v.as_array();
+  EXPECT_EQ(arr->rows, 2u);
+  EXPECT_EQ(arr->cols, 1u);
+  EXPECT_DOUBLE_EQ(arr->cells[0].as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(arr->cells[1].as_number(), 4.0);
+}
+
+TEST(BuiltinsModeMult, ZeroArgRejected) {
+  const Value v = EvalSource("=MODE.MULT()");
+  ASSERT_TRUE(v.is_error());
+}
+
+// ---------------------------------------------------------------------------
 // LARGE / SMALL
 // ---------------------------------------------------------------------------
 

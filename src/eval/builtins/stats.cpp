@@ -320,6 +320,72 @@ static Value Mode(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return Value::number(best_value);
 }
 
+// MODE.MULT(value, ...) - vertical (column) array of every value tied for
+// the maximum frequency. Order is first-occurrence in the input. If no
+// value repeats (or the numeric slice is empty), the result is `#N/A`,
+// matching MODE / MODE.SNGL. The output is always a 1-column array even
+// when only one mode exists (Excel: MODE.MULT({1,2,1}) -> {1} as a 1x1
+// vertical array, which spills as a single cell).
+static Value ModeMult(const Value* args, std::uint32_t arity, Arena& arena) {
+  std::vector<double> xs = collect_numerics(args, arity);
+  if (xs.empty()) {
+    return Value::error(ErrorCode::NA);
+  }
+  // First-occurrence-ordered frequency table. n is small in practice for
+  // MODE.MULT so an O(n^2) scan beats a hash map (no allocator churn,
+  // smaller code).
+  std::vector<double> uniq;
+  std::vector<std::size_t> counts;
+  uniq.reserve(xs.size());
+  counts.reserve(xs.size());
+  for (double v : xs) {
+    bool found = false;
+    for (std::size_t i = 0; i < uniq.size(); ++i) {
+      if (uniq[i] == v) {
+        ++counts[i];
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      uniq.push_back(v);
+      counts.push_back(1);
+    }
+  }
+  std::size_t best_count = 0;
+  for (std::size_t c : counts) {
+    if (c > best_count) {
+      best_count = c;
+    }
+  }
+  if (best_count < 2u) {
+    return Value::error(ErrorCode::NA);
+  }
+  std::vector<double> modes;
+  modes.reserve(uniq.size());
+  for (std::size_t i = 0; i < uniq.size(); ++i) {
+    if (counts[i] == best_count) {
+      modes.push_back(uniq[i]);
+    }
+  }
+  const auto rows = static_cast<std::uint32_t>(modes.size());
+  Value* buffer = arena.create_array<Value>(rows);
+  if (buffer == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  for (std::size_t i = 0; i < modes.size(); ++i) {
+    buffer[i] = Value::number(modes[i]);
+  }
+  ArrayValue* arr = arena.create<ArrayValue>();
+  if (arr == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  arr->rows = rows;
+  arr->cols = 1u;
+  arr->cells = buffer;
+  return Value::array(arr);
+}
+
 // LARGE(array, k) - k-th largest numeric. Implemented as the SMALL dual:
 // `LARGE(arr, k) == SMALL(arr, N + 1 - k)` with TRUNC indexing on the
 // derived position. The bounds check is performed on the *raw* k, not on
@@ -996,6 +1062,15 @@ void register_stats_builtins(FunctionRegistry& registry) {
     // MODE.SNGL is Excel 2010+'s canonical spelling; implementation is
     // identical to MODE. Registry already handles the dotted name.
     FunctionDef def{"MODE.SNGL", 1u, kVariadic, &stats_detail::Mode};
+    def.accepts_ranges = true;
+    registry.register_function(def);
+  }
+  {
+    // MODE.MULT returns a vertical-array spill of every value tied for
+    // the maximum frequency. Same input rules as MODE / MODE.SNGL
+    // (numeric-only filter via `collect_numerics`), but the output is an
+    // ArrayValue rather than a scalar.
+    FunctionDef def{"MODE.MULT", 1u, kVariadic, &stats_detail::ModeMult};
     def.accepts_ranges = true;
     registry.register_function(def);
   }
