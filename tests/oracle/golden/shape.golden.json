@@ -600,7 +600,10 @@
           "value": 5.0
         }
       },
-      "skipped": "SUMPRODUCT((A1:A5>2)*1) needs array-shape propagation through `*` and the `>` comparison; Formulon collapses the comparison to a scalar because Value::Array is not yet wired."
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
     },
     {
       "id": "sumproduct_boolean_implicit_and",
@@ -667,7 +670,10 @@
           "value": 500.0
         }
       },
-      "skipped": "SUMPRODUCT((A>2)*(B<10),C) requires array broadcasting through both comparison operators; same Value::Array gap as sumproduct_boolean_array_coercion."
+      "expect": {
+        "kind": "number",
+        "value": 800.0
+      }
     },
     {
       "id": "sumproduct_2d_arrays_elementwise",

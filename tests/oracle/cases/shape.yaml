@@ -162,7 +162,7 @@ cases:
     formula: "=SUMPRODUCT((A1:A5>2)*1)"
 
   - id: sumproduct_boolean_implicit_and
-    description: "SUMPRODUCT((A1:A5>2)*(B1:B5<10), C1:C5): A>2 AND B<10 then sum C. Hits A3,A4 (>2); B<10 hits B1..B3,B5; AND -> A3 only -> C3=300."
+    description: "SUMPRODUCT((A1:A5>2)*(B1:B5<10), C1:C5): cellwise (A>2)*(B<10) then dot-product with C. (A>2) hits A3,A4,A5; (B<10) hits B1,B2,B3,B5; AND by position is positions 3,5 -> C3+C5 = 300+500 = 800."
     setup:
       A1: 1
       A2: 2

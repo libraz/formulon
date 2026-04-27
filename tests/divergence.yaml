@@ -297,29 +297,6 @@ entries:
     first_noted: 2026-04-26
     last_verified_excel_version: "16.108.1"
 
-  # -- SUMPRODUCT over array-shaped subexpressions ------------------------
-  # SUMPRODUCT in Excel 365 evaluates each argument in array context, so
-  # `(A1:A5>2)` produces `{FALSE;FALSE;TRUE;TRUE;TRUE}` and the surrounding
-  # `*1` / `*(B<10)` operators broadcast over the array. Formulon's
-  # SUMPRODUCT only recognises Ref / RangeOp / ArrayLiteral as its
-  # argument shapes today; a comparison BinaryOp falls through to the
-  # eager-scalar path which collapses A1:A5 to its top-left cell, yielding
-  # 0 (or `#VALUE!` when both sides are arrays). Implementing array-shape
-  # propagation through arithmetic / comparison operators is the same
-  # Value::Array work that gates ROW(range) spill above.
-  - id: sumproduct_boolean_array_coercion
-    mode: skip-oracle
-    reason: "SUMPRODUCT((A1:A5>2)*1) needs array-shape propagation through `*` and the `>` comparison; Formulon collapses the comparison to a scalar because Value::Array is not yet wired."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
-  - id: sumproduct_boolean_implicit_and
-    mode: skip-oracle
-    reason: "SUMPRODUCT((A>2)*(B<10),C) requires array broadcasting through both comparison operators; same Value::Array gap as sumproduct_boolean_array_coercion."
-    prefer: mac-excel-365
-    first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
-
   # -- ERF.PRECISE arity rejection: Mac Excel returns blank, not error ----
   # Mac Excel 365 ja-JP refuses to evaluate `=ERF.PRECISE(1, 2)` (the
   # function is documented as strict 1-arg) and surfaces something the

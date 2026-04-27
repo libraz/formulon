@@ -319,6 +319,10 @@ Value eval_column_lazy(const parser::AstNode& call, Arena& arena, const Function
 //   * ArrayLiteral args are walked by `flatten_array_literal`, which
 //     evaluates each element through `eval_node` so nested calls /
 //     literals behave correctly.
+//   * BinaryOp / UnaryOp args are evaluated in array context via
+//     `eval_node_as_array`, so `(A1:A5>2)*1` and `(A>2)*(B<10)` produce
+//     a cellwise rectangle that participates in the SUMPRODUCT rather
+//     than collapsing to a scalar at the top-level operator.
 //   * Scalar (any other) args evaluate to a 1x1 vector.
 //   * Errors propagate in row-major scan order: arrays are inspected
 //     left-to-right, and within each array top-to-bottom row-major.
@@ -378,6 +382,28 @@ Value eval_sumproduct_lazy(const parser::AstNode& call, Arena& arena, const Func
       if (!flatten_array_literal(arg_node, arena, registry, ctx, &a.cells, &a.rows, &a.cols, &err)) {
         return err;
       }
+    } else if (k == parser::NodeKind::BinaryOp || k == parser::NodeKind::UnaryOp) {
+      // Array-context evaluation: BinaryOp / UnaryOp args carry range-shaped
+      // subexpressions that must be broadcast cellwise. `eval_node_as_array`
+      // recurses through scalar_ops to produce an ArrayValue (or scalar error
+      // on shape mismatch / left-most-error short-circuit). This is what makes
+      // `=SUMPRODUCT((A1:A5>2)*1)` and `=SUMPRODUCT((A>2)*(B<10), C)` compute
+      // the cellwise product instead of collapsing to scalar.
+      const Value arr_v = eval_node_as_array(arg_node, arena, registry, ctx);
+      if (arr_v.is_error()) {
+        return arr_v;
+      }
+      // `eval_node_as_array` is contracted to return either an Array or a
+      // scalar Error; the is_array() check is defensive against future API
+      // drift.
+      if (!arr_v.is_array()) {
+        return Value::error(ErrorCode::Value);
+      }
+      const ArrayValue* arr = arr_v.as_array();
+      a.rows = arr->rows;
+      a.cols = arr->cols;
+      const std::size_t n = static_cast<std::size_t>(arr->rows) * static_cast<std::size_t>(arr->cols);
+      a.cells.assign(arr->cells, arr->cells + n);
     } else {
       // Scalar argument: evaluate and treat as 1x1.
       const Value v = eval_node(arg_node, arena, registry, ctx);
