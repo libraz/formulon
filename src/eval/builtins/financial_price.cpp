@@ -38,6 +38,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include "eval/builtins/financial_clean_price.h"
 #include "eval/builtins/financial_helpers.h"
 #include "eval/coerce.h"
 #include "eval/coupon_schedule.h"
@@ -66,10 +67,13 @@ Expected<double, ErrorCode> read_date(const Value* args, std::uint32_t index) {
   return t;
 }
 
+}  // namespace
+
 // Computes the clean price per 100 face. Returns `#NUM!` on any
 // validation or numerical failure. Factored out of the Value-returning
-// `Price` so a future YIELD impl (Newton iteration over yld) can call
-// the same closed form without re-parsing arguments.
+// `Price` so YIELD (Newton iteration over yld in `financial_yield.cpp`)
+// can call the same closed form without re-parsing arguments. Declared in
+// `financial_clean_price.h` so the YIELD TU can include only that header.
 Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t arity) {
   auto settlement = read_date(args, 0);
   if (!settlement) {
@@ -172,8 +176,6 @@ Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t
   }
   return price;
 }
-
-}  // namespace
 
 // --- PRICE(settlement, maturity, rate, yld, redemption, frequency,
 //           [basis=0]) -----------------------------------------------------

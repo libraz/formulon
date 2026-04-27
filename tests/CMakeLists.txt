@@ -93,6 +93,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_financial_bond_simple_test.cpp
   unit/eval/builtins_financial_duration_test.cpp
   unit/eval/builtins_financial_price_test.cpp
+  unit/eval/builtins_financial_yield_test.cpp
   unit/eval/builtins_regression_test.cpp
   unit/eval/builtins_hypothesis_test.cpp
   unit/eval/builtins_sumsq_test.cpp

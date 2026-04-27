@@ -28,6 +28,7 @@
 #include "eval/builtins/financial_duration.h"
 #include "eval/builtins/financial_helpers.h"
 #include "eval/builtins/financial_price.h"
+#include "eval/builtins/financial_yield.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
@@ -787,11 +788,17 @@ void register_financial_builtins(FunctionRegistry& registry) {
 
   // Regular-period bond pricing. Signature is (settlement, maturity,
   // rate, yld, redemption, frequency, [basis=0]) -- 6 required + optional
-  // basis (min 6, max 7). YIELD will join this TU later (Newton iteration
-  // over the same closed form). Implementation lives in
-  // `financial_price.cpp`.
+  // basis (min 6, max 7). PRICE and YIELD share the closed-form
+  // clean-price kernel in `financial_clean_price.h`; YIELD inverts it via
+  // Newton-Raphson. Implementations live in `financial_price.cpp` and
+  // `financial_yield.cpp`.
   {
     FunctionDef def{"PRICE", 6u, 7u, &financial_detail::Price};
+    def.propagate_errors = true;
+    registry.register_function(def);
+  }
+  {
+    FunctionDef def{"YIELD", 6u, 7u, &financial_detail::Yield};
     def.propagate_errors = true;
     registry.register_function(def);
   }

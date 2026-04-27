@@ -103,6 +103,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins/financial_misc.cpp
   src/eval/builtins/financial_price.cpp
   src/eval/builtins/financial_rates.cpp
+  src/eval/builtins/financial_yield.cpp
   src/eval/builtins/info.cpp
   src/eval/builtins/logical.cpp
   src/eval/builtins/math.cpp
