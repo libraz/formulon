@@ -12,6 +12,7 @@
 //      dispatch, spill-aware reads, OOXML anchor / phantom suppression);
 //      SEQUENCE is the first acceptance test for that machinery.
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
@@ -542,6 +543,154 @@ TEST(BuiltinsTranspose, Transpose_TextValuesPassThrough) {
   EXPECT_EQ(cells[2].as_text(), std::string_view("b"));
   ASSERT_TRUE(cells[3].is_text());
   EXPECT_EQ(cells[3].as_text(), std::string_view("d"));
+}
+
+// ---------------------------------------------------------------------------
+// RANDARRAY -- direct function-pointer tests
+// ---------------------------------------------------------------------------
+
+const FunctionDef* RandArrayDef() {
+  const FunctionDef* def = default_registry().lookup("RANDARRAY");
+  EXPECT_NE(def, nullptr) << "RANDARRAY must be registered in the default registry";
+  return def;
+}
+
+Value CallRandArray(Arena& arena, std::initializer_list<Value> args) {
+  const FunctionDef* def = RandArrayDef();
+  if (def == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  Value buf[5] = {Value::blank(), Value::blank(), Value::blank(), Value::blank(), Value::blank()};
+  std::size_t i = 0;
+  for (const Value& v : args) {
+    if (i >= 5U) {
+      break;
+    }
+    buf[i++] = v;
+  }
+  return def->impl(buf, static_cast<std::uint32_t>(args.size()), arena);
+}
+
+TEST(BuiltinsRandarray, ZeroArgsReturnsScalarRange01) {
+  // RANDARRAY() -> 1x1 array with a single uniform real in [0, 1).
+  Arena arena;
+  const Value v = CallRandArray(arena, {});
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 1U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  const Value& cell = v.as_array_cells()[0];
+  ASSERT_TRUE(cell.is_number());
+  EXPECT_GE(cell.as_number(), 0.0);
+  EXPECT_LT(cell.as_number(), 1.0);
+}
+
+TEST(BuiltinsRandarray, ShapeRowsByCols) {
+  // RANDARRAY(3, 4) -> 3x4 numeric grid in [0, 1).
+  Arena arena;
+  const Value v = CallRandArray(arena, {Value::number(3), Value::number(4)});
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  ASSERT_EQ(v.as_array_cols(), 4U);
+  const Value* cells = v.as_array_cells();
+  for (std::size_t i = 0; i < 12U; ++i) {
+    ASSERT_TRUE(cells[i].is_number());
+    EXPECT_GE(cells[i].as_number(), 0.0);
+    EXPECT_LT(cells[i].as_number(), 1.0);
+  }
+}
+
+TEST(BuiltinsRandarray, RealRangeRespected) {
+  // 100 cells in [10, 20) -- bound check + statistical "not all equal"
+  // guard so a regression that fills the array with `min` is caught.
+  Arena arena;
+  const Value v = CallRandArray(
+      arena, {Value::number(10), Value::number(10), Value::number(10), Value::number(20)});
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 10U);
+  ASSERT_EQ(v.as_array_cols(), 10U);
+  const Value* cells = v.as_array_cells();
+  bool any_distinct = false;
+  for (std::size_t i = 0; i < 100U; ++i) {
+    ASSERT_TRUE(cells[i].is_number());
+    EXPECT_GE(cells[i].as_number(), 10.0);
+    EXPECT_LT(cells[i].as_number(), 20.0);
+    if (i > 0 && cells[i].as_number() != cells[0].as_number()) {
+      any_distinct = true;
+    }
+  }
+  EXPECT_TRUE(any_distinct) << "RANDARRAY produced 100 identical samples; check RNG wiring";
+}
+
+TEST(BuiltinsRandarray, WholeNumberIntegerInclusiveRange) {
+  // whole_number = TRUE samples integers in [1, 6] (a six-sided die).
+  Arena arena;
+  const Value v = CallRandArray(arena, {Value::number(50), Value::number(1), Value::number(1),
+                                        Value::number(6), Value::boolean(true)});
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 50U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  const Value* cells = v.as_array_cells();
+  for (std::size_t i = 0; i < 50U; ++i) {
+    ASSERT_TRUE(cells[i].is_number());
+    const double n = cells[i].as_number();
+    EXPECT_GE(n, 1.0);
+    EXPECT_LE(n, 6.0);
+    EXPECT_EQ(std::trunc(n), n) << "whole_number=TRUE must produce integer values";
+  }
+}
+
+TEST(BuiltinsRandarray, MinEqualsMaxIsDeterministic) {
+  // When min == max (and whole_number=FALSE) every cell must equal the
+  // shared bound -- guards against `uniform_real_distribution`'s
+  // implementation-defined behaviour at degenerate ranges.
+  Arena arena;
+  const Value v = CallRandArray(arena, {Value::number(2), Value::number(2), Value::number(7.5),
+                                        Value::number(7.5)});
+  ASSERT_TRUE(v.is_array());
+  const Value* cells = v.as_array_cells();
+  for (std::size_t i = 0; i < 4U; ++i) {
+    ASSERT_TRUE(cells[i].is_number());
+    EXPECT_DOUBLE_EQ(cells[i].as_number(), 7.5);
+  }
+}
+
+TEST(BuiltinsRandarray, MinGreaterThanMaxReturnsValue) {
+  Arena arena;
+  const Value v = CallRandArray(arena, {Value::number(1), Value::number(1), Value::number(5),
+                                        Value::number(2)});
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsRandarray, WholeNumberWithFractionalBoundReturnsValue) {
+  // whole_number = TRUE with min = 1.5 must surface #VALUE!.
+  Arena arena;
+  const Value v = CallRandArray(arena, {Value::number(1), Value::number(1), Value::number(1.5),
+                                        Value::number(10), Value::boolean(true)});
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsRandarray, ZeroRowsReturnsValue) {
+  Arena arena;
+  const Value v = CallRandArray(arena, {Value::number(0), Value::number(3)});
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsRandarray, NegativeColsReturnsValue) {
+  Arena arena;
+  const Value v = CallRandArray(arena, {Value::number(2), Value::number(-1)});
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsRandarray, OversizeReturnsNum) {
+  // Hit the kMaxSequenceCells (1<<20) ceiling shared with SEQUENCE.
+  Arena arena;
+  const Value v = CallRandArray(arena, {Value::number(2000), Value::number(2000)});
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 }  // namespace

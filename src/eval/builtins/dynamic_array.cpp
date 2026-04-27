@@ -24,9 +24,11 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <random>
 
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
+#include "eval/rng.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -130,6 +132,141 @@ Value Sequence(const Value* args, std::uint32_t arity, Arena& arena) {
   return Value::array(arr);
 }
 
+/// RANDARRAY([rows], [cols], [min], [max], [whole_number]).
+///
+/// Returns a `rows x cols` row-major array of independent uniform samples.
+/// Defaults: `rows = 1`, `cols = 1`, `min = 0`, `max = 1`,
+/// `whole_number = FALSE` (matches Mac Excel 365).
+///
+/// Distribution:
+///   * `whole_number = FALSE`: each cell is a uniform real in
+///     `[min, max)` (open at the upper bound, matching
+///     `std::uniform_real_distribution`).
+///   * `whole_number = TRUE`: each cell is a uniform integer in the
+///     closed interval `[min, max]`. Both bounds must already be
+///     integers; `min` or `max` with a non-zero fractional part surfaces
+///     `#VALUE!` per Microsoft's documented behaviour.
+///
+/// Errors:
+///   * Any argument failing `coerce_to_number` propagates.
+///   * `rows <= 0` or `cols <= 0` -> `#VALUE!`.
+///   * `rows`, `cols`, or `rows * cols` exceeding the same ceilings used
+///     by SEQUENCE -> `#NUM!`.
+///   * `min > max` -> `#VALUE!`.
+///   * `whole_number = TRUE` with a non-integer bound -> `#VALUE!`.
+///
+/// RNG: shared per-thread Mersenne Twister via `thread_local_rng()` (same
+/// stream as RAND / RANDBETWEEN).
+Value RandArray(const Value* args, std::uint32_t arity, Arena& arena) {
+  double rows_d = 1.0;
+  if (arity >= 1U) {
+    auto c = coerce_to_number(args[0]);
+    if (!c) {
+      return Value::error(c.error());
+    }
+    rows_d = c.value();
+  }
+  double cols_d = 1.0;
+  if (arity >= 2U) {
+    auto c = coerce_to_number(args[1]);
+    if (!c) {
+      return Value::error(c.error());
+    }
+    cols_d = c.value();
+  }
+  double min_v = 0.0;
+  if (arity >= 3U) {
+    auto c = coerce_to_number(args[2]);
+    if (!c) {
+      return Value::error(c.error());
+    }
+    min_v = c.value();
+  }
+  double max_v = 1.0;
+  if (arity >= 4U) {
+    auto c = coerce_to_number(args[3]);
+    if (!c) {
+      return Value::error(c.error());
+    }
+    max_v = c.value();
+  }
+  bool whole_number = false;
+  if (arity >= 5U) {
+    auto b = coerce_to_bool(args[4]);
+    if (!b) {
+      return Value::error(b.error());
+    }
+    whole_number = b.value();
+  }
+
+  // Shape validation. SEQUENCE precedent: truncate-toward-zero, reject
+  // <= 0 with #VALUE!, reject oversize with #NUM!.
+  const double rows_t = std::trunc(rows_d);
+  const double cols_t = std::trunc(cols_d);
+  if (!(rows_t > 0.0) || !(cols_t > 0.0)) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (rows_t > static_cast<double>(Sheet::kMaxRows) || cols_t > static_cast<double>(Sheet::kMaxCols)) {
+    return Value::error(ErrorCode::Num);
+  }
+  const auto rows = static_cast<std::uint32_t>(rows_t);
+  const auto cols = static_cast<std::uint32_t>(cols_t);
+  const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+  if (n > kMaxSequenceCells) {
+    return Value::error(ErrorCode::Num);
+  }
+
+  // Bounds validation.
+  if (std::isnan(min_v) || std::isnan(max_v) || std::isinf(min_v) || std::isinf(max_v)) {
+    return Value::error(ErrorCode::Num);
+  }
+  if (min_v > max_v) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (whole_number) {
+    if (std::trunc(min_v) != min_v || std::trunc(max_v) != max_v) {
+      return Value::error(ErrorCode::Value);
+    }
+  }
+
+  Value* buffer = arena.create_array<Value>(n);
+  if (buffer == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  std::mt19937_64& rng = thread_local_rng();
+  if (whole_number) {
+    const auto lo = static_cast<std::int64_t>(min_v);
+    const auto hi = static_cast<std::int64_t>(max_v);
+    std::uniform_int_distribution<std::int64_t> dist(lo, hi);
+    for (std::size_t i = 0; i < n; ++i) {
+      buffer[i] = Value::number(static_cast<double>(dist(rng)));
+    }
+  } else {
+    // `std::uniform_real_distribution` matches Excel's documented
+    // half-open `[min, max)` for non-whole RANDARRAY. When `min == max`
+    // the distribution returns `min` deterministically.
+    if (min_v == max_v) {
+      for (std::size_t i = 0; i < n; ++i) {
+        buffer[i] = Value::number(min_v);
+      }
+    } else {
+      std::uniform_real_distribution<double> dist(min_v, max_v);
+      for (std::size_t i = 0; i < n; ++i) {
+        buffer[i] = Value::number(dist(rng));
+      }
+    }
+  }
+
+  ArrayValue* arr = arena.create<ArrayValue>();
+  if (arr == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  arr->rows = rows;
+  arr->cols = cols;
+  arr->cells = buffer;
+  return Value::array(arr);
+}
+
 }  // namespace
 
 void register_dynamic_array_builtins(FunctionRegistry& registry) {
@@ -139,6 +276,9 @@ void register_dynamic_array_builtins(FunctionRegistry& registry) {
   // scalar-coercion path, and any pre-evaluated error short-circuits before
   // the impl runs.
   registry.register_function(FunctionDef{"SEQUENCE", 1u, 4u, &Sequence});
+  // RANDARRAY: zero required + five optional (rows, cols, min, max,
+  // whole_number). Same dispatcher policy as SEQUENCE.
+  registry.register_function(FunctionDef{"RANDARRAY", 0u, 5u, &RandArray});
 }
 
 }  // namespace eval

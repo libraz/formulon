@@ -5,11 +5,9 @@
 // every call. The engine achieves this for free because `FunctionDef` has
 // no cached-result slot; the dispatcher re-runs `impl` on each reference.
 //
-// RNG storage: a single `thread_local std::mt19937_64` lazily seeded from
-// `std::random_device` the first time it is touched on each thread. The
-// engine is reachable from multiple host threads via the WASM binding;
-// per-thread state avoids contention and guarantees that independent
-// sheets/threads pull from independent sequences without a global mutex.
+// The thread-local Mersenne Twister itself lives in `eval/rng.{h,cpp}` so
+// that the dynamic-array RANDARRAY impl in `builtins/dynamic_array.cpp`
+// can pull from the same per-thread sequence as the scalar variants.
 
 #include "eval/builtins/math_rng.h"
 
@@ -19,6 +17,7 @@
 
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
+#include "eval/rng.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -27,21 +26,12 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// Per-thread 64-bit Mersenne Twister. Lazily seeded from `std::random_device`
-// on first touch. Encapsulated behind a function to guarantee correct
-// thread-local initialisation order across translation units and to avoid
-// leaking RNG state into the public header.
-std::mt19937_64& rng_for_current_thread() {
-  thread_local std::mt19937_64 rng{std::random_device{}()};
-  return rng;
-}
-
 /// RAND(). Returns a uniform random double in the half-open interval
 /// [0.0, 1.0). Zero arguments. Volatile: each call draws a fresh sample
 /// from the thread-local Mersenne Twister.
 Value Rand_(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
   std::uniform_real_distribution<double> dist(0.0, 1.0);
-  return Value::number(dist(rng_for_current_thread()));
+  return Value::number(dist(thread_local_rng()));
 }
 
 /// RANDBETWEEN(bottom, top). Returns a uniform random integer in the closed
@@ -71,7 +61,7 @@ Value RandBetween_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/)
   const auto lo = static_cast<std::int64_t>(lo_d);
   const auto hi = static_cast<std::int64_t>(hi_d);
   std::uniform_int_distribution<std::int64_t> dist(lo, hi);
-  return Value::number(static_cast<double>(dist(rng_for_current_thread())));
+  return Value::number(static_cast<double>(dist(thread_local_rng())));
 }
 
 }  // namespace
