@@ -16,6 +16,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/value_test.cpp
   unit/value_array_test.cpp
   unit/sheet_test.cpp
+  unit/sheet_spill_test.cpp
   unit/workbook_test.cpp
   unit/utils/double_format_test.cpp
   unit/deps/miniz_smoke_test.cpp
