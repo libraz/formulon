@@ -27,6 +27,7 @@
 #include "eval/builtins/financial_bond_simple.h"
 #include "eval/builtins/financial_duration.h"
 #include "eval/builtins/financial_helpers.h"
+#include "eval/builtins/financial_price.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
@@ -783,6 +784,17 @@ void register_financial_builtins(FunctionRegistry& registry) {
   // `financial_duration.cpp`.
   registry.register_function(FunctionDef{"DURATION", 5u, 6u, &financial_detail::Duration});
   registry.register_function(FunctionDef{"MDURATION", 5u, 6u, &financial_detail::MDuration});
+
+  // Regular-period bond pricing. Signature is (settlement, maturity,
+  // rate, yld, redemption, frequency, [basis=0]) -- 6 required + optional
+  // basis (min 6, max 7). YIELD will join this TU later (Newton iteration
+  // over the same closed form). Implementation lives in
+  // `financial_price.cpp`.
+  {
+    FunctionDef def{"PRICE", 6u, 7u, &financial_detail::Price};
+    def.propagate_errors = true;
+    registry.register_function(def);
+  }
 
   // STOCKHISTORY: stub returning #VALUE!. Formulon is a pure calc engine
   // and does not perform network / market-data I/O. Accepts any tail of
