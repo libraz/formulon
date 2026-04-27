@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "io/ooxml_writer_cell.h"
+#include "io/xml_escape.h"
 #include "miniz.h"
 #include "sheet.h"
 #include "utils/error.h"
@@ -32,39 +33,6 @@
 namespace formulon {
 namespace io {
 namespace {
-
-// ---------------------------------------------------------------------------
-// XML escaping
-// ---------------------------------------------------------------------------
-
-/// Appends `in` to `out` with the five XML-critical characters escaped:
-/// ampersand, less-than, greater-than, double-quote, apostrophe. Non-ASCII
-/// bytes (UTF-8 continuation bytes etc.) are emitted verbatim so Japanese
-/// sheet names round-trip unchanged.
-void AppendXmlEscaped(std::string& out, std::string_view in) {
-  for (char raw : in) {
-    switch (raw) {
-      case '&':
-        out.append("&amp;");
-        break;
-      case '<':
-        out.append("&lt;");
-        break;
-      case '>':
-        out.append("&gt;");
-        break;
-      case '"':
-        out.append("&quot;");
-        break;
-      case '\'':
-        out.append("&apos;");
-        break;
-      default:
-        out.push_back(raw);
-        break;
-    }
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Part builders

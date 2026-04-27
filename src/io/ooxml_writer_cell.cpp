@@ -28,45 +28,13 @@
 #include <vector>
 
 #include "cell.h"
+#include "io/xml_escape.h"
 #include "sheet.h"
 #include "value.h"
 
 namespace formulon {
 namespace io {
 namespace {
-
-// ---------------------------------------------------------------------------
-// XML escaping
-// ---------------------------------------------------------------------------
-
-// Local copy: ooxml_writer.cpp's anonymous-namespace AppendXmlEscaped is not
-// reachable here, and the two emitters can plausibly diverge later (e.g.
-// shared-string interning may want a tighter escape set). 20 LOC is
-// comfortably below the duplication-cost threshold.
-void AppendXmlEscaped(std::string& out, std::string_view in) {
-  for (char raw : in) {
-    switch (raw) {
-      case '&':
-        out.append("&amp;");
-        break;
-      case '<':
-        out.append("&lt;");
-        break;
-      case '>':
-        out.append("&gt;");
-        break;
-      case '"':
-        out.append("&quot;");
-        break;
-      case '\'':
-        out.append("&apos;");
-        break;
-      default:
-        out.push_back(raw);
-        break;
-    }
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Number formatting

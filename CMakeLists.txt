@@ -71,6 +71,7 @@ set(FORMULON_CORE_SOURCES
   src/workbook.cpp
   src/io/ooxml_writer.cpp
   src/io/ooxml_writer_cell.cpp
+  src/io/xml_escape.cpp
   src/parser/tokenizer.cpp
   src/parser/ast.cpp
   src/parser/ast_dump.cpp
