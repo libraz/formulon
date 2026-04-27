@@ -101,15 +101,12 @@ TEST(SpillRefEval, SumOverSpillRef) {
   EXPECT_DOUBLE_EQ(v.as_number(), 60.0);
 }
 
-TEST(SpillRefEval, SpillRefArithmeticParsesAndEvaluates) {
-  // `=A1#+B1#` over two 1x1 spills: the parser accepts the form and
-  // evaluation reaches the BinaryOp. The scalar arithmetic path does not
-  // yet implement array-context broadcasting, so the result is currently
-  // `#VALUE!` (Array operand fails `coerce_to_number`). Mac Excel would
-  // spill this to a single-cell array of 50; closing that gap is a
-  // follow-up that needs array-aware BinaryOp dispatch — tracked outside
-  // this test. What we lock in here is the parser shape and the absence
-  // of any crash / wrong-error path.
+TEST(SpillRefEval, SpillRefArithmeticBroadcasts1x1) {
+  // `=A1#+B1#` over two 1x1 spills: the BinaryOp now broadcasts cellwise
+  // when either operand is a Value::Array, so the result is a 1x1 Array
+  // containing 50. Without a mutable_sheet bound the EvalContext leaves
+  // the Array un-spilled (see `EvalContext::dispatch_array_result`'s
+  // mutable_sheet gate), so callers see Value::Array directly here.
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   ASSERT_TRUE(sheet.commit_spill(0U, 0U, 1U, 1U, std::vector<Value>{Value::number(42.0)}));
@@ -121,16 +118,225 @@ TEST(SpillRefEval, SpillRefArithmeticParsesAndEvaluates) {
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=A1#+B1#", &parse_arena, &eval_arena, ctx);
-  if (v.is_number()) {
-    EXPECT_DOUBLE_EQ(v.as_number(), 50.0);
-  } else if (v.is_array()) {
-    ASSERT_EQ(v.as_array_rows(), 1U);
-    ASSERT_EQ(v.as_array_cols(), 1U);
-    EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 50.0);
-  } else {
-    ASSERT_TRUE(v.is_error());
-    EXPECT_EQ(v.as_error(), ErrorCode::Value);
-  }
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 50.0);
+}
+
+// ---------------------------------------------------------------------------
+// Top-level array broadcasting (BinaryOp / UnaryOp)
+// ---------------------------------------------------------------------------
+//
+// These pin the cellwise broadcast path through `eval_node`'s BinaryOp /
+// UnaryOp dispatch. SpillRef is the most convenient way to introduce a
+// Value::Array operand without needing to wire a recalc driver, but the
+// behaviour exercised here is independent of the Array's source: any
+// future array-producing builtin (FILTER, SORT, RANDARRAY) will go through
+// the same code path.
+
+TEST(SpillRefBroadcast, EqualShapeArraysAddCellwise) {
+  // Two 3x1 spills added cellwise -> 3x1 Array of [11, 22, 33].
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  ASSERT_TRUE(sheet.commit_spill(
+      0U, 0U, 3U, 1U,
+      std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
+  ASSERT_TRUE(sheet.commit_spill(
+      0U, 1U, 3U, 1U,
+      std::vector<Value>{Value::number(1.0), Value::number(2.0), Value::number(3.0)}));
+
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=A1#+B1#", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 11.0);
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 22.0);
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 33.0);
+}
+
+TEST(SpillRefBroadcast, ScalarOnRightBroadcastsAcrossArray) {
+  // `=A1#+1` -> 3x1 Array of [11, 21, 31]. Scalar RHS broadcasts.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  ASSERT_TRUE(sheet.commit_spill(
+      0U, 0U, 3U, 1U,
+      std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
+
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=A1#+1", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 11.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 21.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 31.0);
+}
+
+TEST(SpillRefBroadcast, ScalarOnLeftBroadcastsAcrossArray) {
+  // `=2*A1#` -> 3x1 Array of [20, 40, 60]. Scalar LHS broadcasts.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  ASSERT_TRUE(sheet.commit_spill(
+      0U, 0U, 3U, 1U,
+      std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
+
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=2*A1#", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 20.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 40.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 60.0);
+}
+
+TEST(SpillRefBroadcast, ShapeMismatchYieldsValue) {
+  // 3x1 + 2x1: incompatible shapes (no 1x1 broadcast slot) collapse to
+  // scalar `#VALUE!`. Mac Excel does NOT spill an array of `#VALUE!` cells
+  // in this case — the whole expression short-circuits.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  ASSERT_TRUE(sheet.commit_spill(
+      0U, 0U, 3U, 1U,
+      std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
+  ASSERT_TRUE(sheet.commit_spill(
+      0U, 1U, 2U, 1U, std::vector<Value>{Value::number(1.0), Value::number(2.0)}));
+
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=A1#+B1#", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(SpillRefBroadcast, UnaryMinusBroadcastsAcrossArray) {
+  // `=-A1#` -> 3x1 Array of [-10, -20, -30]. Top-level UnaryOp dispatch
+  // routes through broadcast_unary when the operand is a Value::Array.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  ASSERT_TRUE(sheet.commit_spill(
+      0U, 0U, 3U, 1U,
+      std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
+
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=-A1#", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), -10.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), -20.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), -30.0);
+}
+
+TEST(SpillRefBroadcast, ConcatBroadcastsAcrossArray) {
+  // `=A1#&"!"` -> 2x1 Array of ["10!", "20!"]. The `&` concat operator
+  // broadcasts through the same per-cell helper.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 2U, 1U,
+                                 std::vector<Value>{Value::number(10.0), Value::number(20.0)}));
+
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=A1#&\"!\"", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 2U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  EXPECT_EQ(v.as_array_cells()[0].as_text(), "10!");
+  EXPECT_EQ(v.as_array_cells()[1].as_text(), "20!");
+}
+
+TEST(SpillRefBroadcast, ComparisonBroadcastsAcrossArray) {
+  // `=A1#>15` -> 3x1 Array of [FALSE, TRUE, TRUE]. Relational operators
+  // broadcast cellwise through apply_comparison.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  ASSERT_TRUE(sheet.commit_spill(
+      0U, 0U, 3U, 1U,
+      std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
+
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=A1#>15", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  EXPECT_EQ(v.as_array_cells()[0].as_boolean(), false);
+  EXPECT_EQ(v.as_array_cells()[1].as_boolean(), true);
+  EXPECT_EQ(v.as_array_cells()[2].as_boolean(), true);
+}
+
+TEST(SpillRefBroadcast, PerCellErrorPropagatesPerCell) {
+  // A spill region containing a #DIV/0! cell propagates that error in just
+  // the corresponding output cell, not the entire array. The remaining
+  // cells compute normally. Mac Excel's behaviour: per-cell error transit.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 1U,
+                                 std::vector<Value>{Value::number(10.0), Value::error(ErrorCode::Div0),
+                                                    Value::number(30.0)}));
+
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=A1#+1", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 11.0);
+  ASSERT_TRUE(v.as_array_cells()[1].is_error());
+  EXPECT_EQ(v.as_array_cells()[1].as_error(), ErrorCode::Div0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 31.0);
+}
+
+TEST(SpillRefBroadcast, ArrayMinusArrayBroadcastsViaSubtraction) {
+  // Combined sanity check: subtraction operator over two equal-shape arrays.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  ASSERT_TRUE(sheet.commit_spill(
+      0U, 0U, 2U, 1U, std::vector<Value>{Value::number(100.0), Value::number(50.0)}));
+  ASSERT_TRUE(sheet.commit_spill(
+      0U, 1U, 2U, 1U, std::vector<Value>{Value::number(40.0), Value::number(20.0)}));
+
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=A1#-B1#", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 60.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 30.0);
 }
 
 TEST(SpillRefEval, SpillRefAnchorOnPhantomReturnsRef) {
