@@ -37,6 +37,7 @@
 #include "eval/shape_ops_lazy.h"
 #include "eval/special_forms_lazy.h"
 #include "eval/textsplit_lazy.h"
+#include "eval/trimrange_lazy.h"
 #include "eval/workdays_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -236,6 +237,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"TOROW", &eval_torow_lazy},
     {"TRANSPOSE", &eval_transpose_lazy},
     {"TREND", &eval_trend_lazy},
+    {"TRIMRANGE", &eval_trimrange_lazy},
     // TTEST is the pre-2010 legacy spelling of T.TEST; same impl.
     {"TTEST", &eval_t_test_lazy},
     {"UNIQUE", &eval_unique_lazy},
