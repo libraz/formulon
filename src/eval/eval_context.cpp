@@ -115,13 +115,12 @@ ResolvePrefix resolve_prefix(const Sheet* current_sheet,
     return out;
   }
   const Cell* cell = target->cell_at(ref.row, ref.col);
-  if (cell == nullptr) {
-    out.value = Value::blank();
-    return out;
-  }
-  if (cell->formula_text.empty()) {
-    // Literal cell — hand back its cached value verbatim.
-    out.value = cell->cached_value;
+  // Phantom-aware read: a cell that is either absent, or stored as a literal,
+  // is fed through `resolve_cell_value` so that phantom cells of a committed
+  // spill region are visible to cross-cell references. The formula branch
+  // below still requires the stored cell because we need `formula_text`.
+  if (cell == nullptr || cell->formula_text.empty()) {
+    out.value = target->resolve_cell_value(ref.row, ref.col);
     return out;
   }
   out.kind = ResolvePrefix::Kind::Formula;
