@@ -94,6 +94,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_regression_test.cpp
   unit/eval/builtins_hypothesis_test.cpp
   unit/eval/builtins_sumsq_test.cpp
+  unit/eval/builtins_percentof_test.cpp
   unit/eval/builtins_sumx_test.cpp
   unit/eval/builtins_series_sum_test.cpp
   unit/eval/builtins_rank_test.cpp

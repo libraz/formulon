@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "eval/areas_lazy.h"
+#include "eval/builtins/aggregate.h"
 #include "eval/coerce.h"
 #include "eval/conditional_aggregates.h"
 #include "eval/database_lazy.h"
@@ -109,6 +110,7 @@ namespace {
 //   RANK / RANK.EQ / RANK.AVG /
 //   PERCENTRANK / PERCENTRANK.INC /
 //   PERCENTRANK.EXC                            -> src/eval/rank_lazy.cpp
+//   PERCENTOF                                  -> src/eval/builtins/aggregate.cpp
 // Each family publishes its externs via its own header
 // (`eval/special_forms_lazy.h`, `eval/conditional_aggregates.h`,
 // `eval/lookups/classic.h`, `eval/lookups/xlookup.h`,
@@ -203,6 +205,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     // PEARSON is mathematically identical to CORREL (Pearson product-moment
     // correlation coefficient); Excel keeps both names for back-compat.
     {"PEARSON", &eval_correl_lazy},
+    {"PERCENTOF", &eval_percentof_lazy},
     {"PERCENTRANK", &eval_percentrank_inc_lazy},
     {"PERCENTRANK.EXC", &eval_percentrank_exc_lazy},
     {"PERCENTRANK.INC", &eval_percentrank_inc_lazy},

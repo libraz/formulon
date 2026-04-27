@@ -8,15 +8,32 @@
 #ifndef FORMULON_EVAL_BUILTINS_AGGREGATE_H_
 #define FORMULON_EVAL_BUILTINS_AGGREGATE_H_
 
+#include "utils/arena.h"
+#include "value.h"
+
 namespace formulon {
+
+namespace parser {
+class AstNode;
+}  // namespace parser
+
 namespace eval {
 
+class EvalContext;
 class FunctionRegistry;
 
 /// Registers the aggregate built-in functions (SUM, SUMSQ, MIN, MAX, AVERAGE,
 /// PRODUCT, COUNT, COUNTA, COUNTBLANK, CONCAT, CONCATENATE, LEN) into
 /// `registry`. Intended to be invoked from `register_builtins`.
 void register_aggregate_builtins(FunctionRegistry& registry);
+
+/// PERCENTOF(data_subset, data_all) lazy impl. Returns
+/// `SUM(data_subset) / SUM(data_all)` with SUM-style coercion: range/array
+/// non-numerics are silently skipped, while direct scalar arguments coerce
+/// (TRUE -> 1, "5" -> 5, "abc" -> #VALUE!). The dispatch table in
+/// `tree_walker.cpp` references this extern by unqualified name.
+Value eval_percentof_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                          const EvalContext& ctx);
 
 }  // namespace eval
 }  // namespace formulon

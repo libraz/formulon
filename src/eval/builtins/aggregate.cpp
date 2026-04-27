@@ -2,20 +2,31 @@
 //
 // Implementation of Formulon's aggregate built-in functions:
 // SUM, SUMSQ, MIN, MAX, AVERAGE, PRODUCT, COUNT, COUNTA, COUNTBLANK, CONCAT,
-// CONCATENATE, and LEN. Each impl follows the same recipe as the rest of
-// the builtin catalog: coerce arguments via `eval/coerce.h`, propagate the
-// left-most coercion error, and return a `Value`.
+// CONCATENATE, LEN, and PERCENTOF. Most impls follow the same recipe as the
+// rest of the builtin catalog: coerce arguments via `eval/coerce.h`,
+// propagate the left-most coercion error, and return a `Value`. PERCENTOF
+// is the exception — it must compute per-argument totals, so it lives at
+// the bottom of this file as a lazy impl (registered via the central
+// dispatch table in `tree_walker.cpp` rather than this file's registrar).
 
 #include "eval/builtins/aggregate.h"
 
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "eval/coerce.h"
+#include "eval/eval_context.h"
 #include "eval/function_registry.h"
+#include "eval/lazy_impls.h"
+#include "eval/name_env_resolve.h"
+#include "eval/range_args.h"
 #include "eval/utf8_length.h"
+#include "parser/ast.h"
 #include "utils/arena.h"
+#include "utils/error.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -240,7 +251,180 @@ Value CountBlank(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return Value::number(total);
 }
 
+// SUM-style per-argument total used by PERCENTOF. Mirrors the eager SUM
+// dispatch path's two provenance rules:
+//
+//   * For range-shaped args (`Ref` / `RangeOp` / `SpillRef`, plus the
+//     reference-producing calls `OFFSET` / `CHOOSE` / `IF` / `ROW` /
+//     `COLUMN` that `resolve_range_arg` already expands) and for inline
+//     `{a;b;c}` array literals, Bool / Text / Blank cells are silently
+//     dropped. This is the same filter that `range_filter_numeric_only`
+//     applies in `tree_walker.cpp`.
+//   * For any other (scalar) arg, `coerce_to_number` runs: TRUE -> 1,
+//     FALSE -> 0, blank -> 0, "5" -> 5, "abc" -> #VALUE!.
+//
+// On success writes the computed total to `*out_total`. On any error
+// (range expansion failure, error cell inside a range, error scalar,
+// non-coercible scalar text) writes the propagating Value to `*out_err`
+// and returns `false`. Errors discovered while walking a range follow
+// canonical row-major scan order, matching SUM and SUMPRODUCT.
+//
+// This is *not* a refactor of SUM: SUM rides the eager dispatcher because
+// it produces a single total over its concatenated arg vector. PERCENTOF
+// must compute per-argument totals (numerator vs. denominator), which the
+// eager path collapses into one flat values vector — that boundary is the
+// architectural reason this helper exists alongside SUM rather than being
+// extracted from it.
+bool sum_arg_for_percentof(const parser::AstNode& raw_arg, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx, double* out_total, Value* out_err) {
+  // LET-binding passthrough: `=LET(r, A1:A3, PERCENTOF(r, A1:A10))` parses
+  // `r` as a `NameRef`; we want to see the bound RangeOp / ArrayLiteral /
+  // OFFSET-call shape so the kind dispatch below treats it the same way as
+  // the literal argument. Single-cell Refs and pure scalar bindings stay as
+  // NameRef so the scalar-coerce branch handles them via `eval_node`.
+  const parser::AstNode* effective = &raw_arg;
+  if (raw_arg.kind() == parser::NodeKind::NameRef) {
+    const parser::AstNode& resolved = resolve_name_ast(raw_arg, ctx.name_env());
+    if (&resolved != &raw_arg && is_range_shaped_ast(resolved)) {
+      effective = &resolved;
+    }
+  }
+  const parser::AstNode& arg_node = *effective;
+  const parser::NodeKind k = arg_node.kind();
+
+  // Range-shaped args (and the reference-producing calls that expand to
+  // rectangles) go through `resolve_range_arg`; cells receive the
+  // numeric-only provenance filter.
+  const bool is_range_call =
+      k == parser::NodeKind::Call && (strings::case_insensitive_eq(arg_node.as_call_name(), "OFFSET") ||
+                                      strings::case_insensitive_eq(arg_node.as_call_name(), "CHOOSE") ||
+                                      strings::case_insensitive_eq(arg_node.as_call_name(), "IF") ||
+                                      strings::case_insensitive_eq(arg_node.as_call_name(), "ROW") ||
+                                      strings::case_insensitive_eq(arg_node.as_call_name(), "COLUMN"));
+  if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || k == parser::NodeKind::SpillRef ||
+      is_range_call) {
+    std::vector<Value> cells;
+    ErrorCode range_err = ErrorCode::Value;
+    if (!resolve_range_arg(arg_node, arena, registry, ctx, &cells, &range_err)) {
+      *out_err = Value::error(range_err);
+      return false;
+    }
+    double total = 0.0;
+    for (const Value& v : cells) {
+      if (v.is_error()) {
+        *out_err = v;
+        return false;
+      }
+      // Range-sourced provenance: only Number cells contribute.
+      if (!v.is_number()) {
+        continue;
+      }
+      total += v.as_number();
+    }
+    if (std::isnan(total) || std::isinf(total)) {
+      *out_err = Value::error(ErrorCode::Num);
+      return false;
+    }
+    *out_total = total;
+    return true;
+  }
+
+  // Inline array literal: walk in row-major order with the same range-like
+  // filter (Bool / Text / Blank are dropped, errors propagate).
+  if (k == parser::NodeKind::ArrayLiteral) {
+    const std::uint32_t rows = arg_node.as_array_rows();
+    const std::uint32_t cols = arg_node.as_array_cols();
+    double total = 0.0;
+    for (std::uint32_t r = 0; r < rows; ++r) {
+      for (std::uint32_t c = 0; c < cols; ++c) {
+        const Value v = eval_node(arg_node.as_array_element(r, c), arena, registry, ctx);
+        if (v.is_error()) {
+          *out_err = v;
+          return false;
+        }
+        if (!v.is_number()) {
+          continue;
+        }
+        total += v.as_number();
+      }
+    }
+    if (std::isnan(total) || std::isinf(total)) {
+      *out_err = Value::error(ErrorCode::Num);
+      return false;
+    }
+    *out_total = total;
+    return true;
+  }
+
+  // Scalar argument: evaluate and coerce strictly (matching SUM's direct-
+  // scalar branch). TRUE -> 1, "5" -> 5, "abc" -> #VALUE!, blank -> 0.
+  const Value v = eval_node(arg_node, arena, registry, ctx);
+  if (v.is_error()) {
+    *out_err = v;
+    return false;
+  }
+  auto coerced = coerce_to_number(v);
+  if (!coerced) {
+    *out_err = Value::error(coerced.error());
+    return false;
+  }
+  const double total = coerced.value();
+  if (std::isnan(total) || std::isinf(total)) {
+    *out_err = Value::error(ErrorCode::Num);
+    return false;
+  }
+  *out_total = total;
+  return true;
+}
+
 }  // namespace
+
+// PERCENTOF(data_subset, data_all)
+//
+// Excel 365 (Sep 2024 GA) ratio aggregator. Returns
+// `SUM(data_subset) / SUM(data_all)` with SUM-style coercion:
+//
+//   * Range-sourced cells: Bool / Text / Blank skipped silently.
+//   * Inline `{...}` array literals: same filter as ranges.
+//   * Direct scalar args: full `coerce_to_number` rules apply, so a direct
+//     TRUE coerces to 1, "5" to 5, and "abc" to #VALUE!.
+//
+// Error precedence (left-to-right):
+//   1. `data_subset` evaluation / coercion error -> that error.
+//   2. `data_all` evaluation / coercion error    -> that error.
+//   3. `SUM(data_all) == 0`                      -> #DIV/0!.
+//
+// WHY a lazy impl rather than the eager `accepts_ranges` registration the
+// task brief proposes: the eager dispatcher in `tree_walker.cpp`
+// concatenates every flattened argument into a single `values` vector
+// before invoking the impl, so an eager PERCENTOF would have no way to
+// distinguish where `data_subset` ends and `data_all` begins for a call
+// like `=PERCENTOF(A1:A2, B1:B3)`. We need per-argument totals, hence
+// lazy dispatch — the same architectural reason SUMPRODUCT and the *IFS
+// family are lazy.
+Value eval_percentof_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                          const EvalContext& ctx) {
+  if (call.as_call_arity() != 2U) {
+    return Value::error(ErrorCode::Value);
+  }
+  double numerator = 0.0;
+  Value err = Value::blank();
+  if (!sum_arg_for_percentof(call.as_call_arg(0), arena, registry, ctx, &numerator, &err)) {
+    return err;
+  }
+  double denominator = 0.0;
+  if (!sum_arg_for_percentof(call.as_call_arg(1), arena, registry, ctx, &denominator, &err)) {
+    return err;
+  }
+  if (denominator == 0.0) {
+    return Value::error(ErrorCode::Div0);
+  }
+  const double r = numerator / denominator;
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
 
 void register_aggregate_builtins(FunctionRegistry& registry) {
   {
@@ -318,6 +502,11 @@ void register_aggregate_builtins(FunctionRegistry& registry) {
   // rectangles, and must walk inline `{...}` array literals element by
   // element. Pre-evaluating every arg via the eager path would erase
   // both pieces of information.
+  //
+  // PERCENTOF (Excel 365, Sep 2024 GA) is also lazy: see
+  // `eval_percentof_lazy` near the top of this file. It needs per-argument
+  // SUM totals (numerator vs. denominator), which the eager dispatcher
+  // collapses into a single concatenated `args[]` vector.
 
   // Counting aggregators. Both are range-aware and opt out of the
   // dispatcher's left-most-error rule so the impl itself decides which
