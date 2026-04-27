@@ -67,6 +67,27 @@ class FunctionRegistry;
 Value eval_linest_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx);
 
+/// `TREND(known_y, [known_x], [new_x], [const]=TRUE)` — predicted
+/// `y` values along the same least-squares fit that LINEST would
+/// estimate, evaluated at `new_x`. Internally fits the model the same
+/// way (normal equations + Gauss-Jordan), then computes
+/// `y_hat = beta . [features, 1]` for each row of `new_x`.
+///
+/// `new_x` is optional. When omitted, it defaults to `known_x`, which
+/// makes TREND return the fitted values at the original observations.
+/// `new_x` must carry the same predictor count `k` as `known_x` along
+/// the predictor axis; the orthogonal axis carries the new
+/// observation count `N`. The output is a 1-D array of length `N`
+/// whose orientation matches `known_y` — column when `known_y` is a
+/// column, row otherwise.
+///
+/// Error semantics match LINEST: matrix-strict numeric coercion,
+/// left-to-right error propagation (`known_y` -> `known_x` ->
+/// `new_x`), `#REF!` on shape mismatch, `#NUM!` on singular system /
+/// under-determined data.
+Value eval_trend_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx);
+
 }  // namespace eval
 }  // namespace formulon
 

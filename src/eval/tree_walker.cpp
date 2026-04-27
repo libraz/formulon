@@ -231,6 +231,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"TOCOL", &eval_tocol_lazy},
     {"TOROW", &eval_torow_lazy},
     {"TRANSPOSE", &eval_transpose_lazy},
+    {"TREND", &eval_trend_lazy},
     // TTEST is the pre-2010 legacy spelling of T.TEST; same impl.
     {"TTEST", &eval_t_test_lazy},
     {"UNIQUE", &eval_unique_lazy},
