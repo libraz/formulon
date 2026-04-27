@@ -552,5 +552,154 @@ Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   return Value::array(out);
 }
 
+Value eval_sortby_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  // Need at least `(array, by_array1)`. Cap at 13 (six keys) -- a safety
+  // ceiling that comfortably exceeds any realistic SORTBY usage and keeps
+  // the small-vectors local.
+  if (arity < 2U || arity > 13U) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  const Value array_v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
+  if (array_v.is_error()) {
+    return array_v;
+  }
+  if (!array_v.is_array()) {
+    return Value::error(ErrorCode::Value);
+  }
+  const ArrayValue* array = array_v.as_array();
+  if (array->rows == 0U || array->cols == 0U) {
+    return Value::error(ErrorCode::Calc);
+  }
+
+  // Axis inference + per-key collection. The first by_array picks the axis;
+  // subsequent ones must agree on shape. We hold borrowed pointers to the
+  // ArrayValue cells -- safe because each `eval_node_as_array` allocates
+  // into the caller arena that outlives this call.
+  bool axis_decided = false;
+  bool by_col = false;
+  std::uint32_t lanes = 0;
+  struct KeySpec {
+    const ArrayValue* arr;
+    bool descending;
+  };
+  std::vector<KeySpec> keys;
+  keys.reserve((arity - 1U + 1U) / 2U);
+
+  for (std::uint32_t i = 1; i < arity; i += 2U) {
+    const Value by_v = eval_node_as_array(call.as_call_arg(i), arena, registry, ctx);
+    if (by_v.is_error()) {
+      return by_v;
+    }
+    if (!by_v.is_array()) {
+      return Value::error(ErrorCode::Value);
+    }
+    const ArrayValue* by = by_v.as_array();
+
+    // Decide axis from the first key, then enforce match on the rest.
+    if (!axis_decided) {
+      if (by->cols == 1U && by->rows == array->rows) {
+        by_col = false;
+        lanes = array->rows;
+      } else if (by->rows == 1U && by->cols == array->cols) {
+        by_col = true;
+        lanes = array->cols;
+      } else {
+        return Value::error(ErrorCode::Value);
+      }
+      axis_decided = true;
+    } else {
+      const bool matches = by_col ? (by->rows == 1U && by->cols == lanes)
+                                  : (by->cols == 1U && by->rows == lanes);
+      if (!matches) {
+        return Value::error(ErrorCode::Value);
+      }
+    }
+
+    // Optional per-key order (1 or -1). Default ascending when absent.
+    bool descending = false;
+    if (i + 1U < arity) {
+      const Value v = eval_node(call.as_call_arg(i + 1U), arena, registry, ctx);
+      if (v.is_error()) {
+        return v;
+      }
+      auto coerced = coerce_to_number(v);
+      if (!coerced) {
+        return Value::error(coerced.error());
+      }
+      const double n = coerced.value();
+      if (n == 1.0) {
+        descending = false;
+      } else if (n == -1.0) {
+        descending = true;
+      } else {
+        return Value::error(ErrorCode::Value);
+      }
+    }
+    keys.push_back(KeySpec{by, descending});
+  }
+
+  // Lane-key accessor. Both axes flatten to a 1D index since each by_array
+  // is 1D by construction (column-vector or row-vector matching `lanes`).
+  auto key_at = [](const ArrayValue* by, std::uint32_t idx) -> const Value& { return by->cells[idx]; };
+
+  // Build permutation, sort with multi-key compare. Stable so rows that
+  // tie on every key keep their input order.
+  std::vector<std::uint32_t> perm(lanes);
+  std::iota(perm.begin(), perm.end(), 0U);
+  std::stable_sort(perm.begin(), perm.end(), [&](std::uint32_t a, std::uint32_t b) {
+    for (const KeySpec& k : keys) {
+      const Value& ka = key_at(k.arr, a);
+      const Value& kb = key_at(k.arr, b);
+      if (sort_lane_less(ka, kb, k.descending)) {
+        return true;
+      }
+      if (sort_lane_less(kb, ka, k.descending)) {
+        return false;
+      }
+      // Equal under this key -> fall through to next.
+    }
+    return false;
+  });
+
+  // Materialise output, preserving input shape (axis-only reorder).
+  const ArrayValue& arr_ref = *array;
+  const std::uint32_t out_rows = array->rows;
+  const std::uint32_t out_cols = array->cols;
+  const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
+  Value* buffer = arena.create_array<Value>(total);
+  if (buffer == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  if (by_col) {
+    for (std::uint32_t r = 0; r < out_rows; ++r) {
+      for (std::uint32_t i = 0; i < lanes; ++i) {
+        const std::uint32_t src_col = perm[i];
+        buffer[static_cast<std::size_t>(r) * out_cols + i] =
+            arr_ref.cells[static_cast<std::size_t>(r) * arr_ref.cols + src_col];
+      }
+    }
+  } else {
+    for (std::uint32_t i = 0; i < lanes; ++i) {
+      const std::uint32_t src_row = perm[i];
+      for (std::uint32_t c = 0; c < out_cols; ++c) {
+        buffer[static_cast<std::size_t>(i) * out_cols + c] =
+            arr_ref.cells[static_cast<std::size_t>(src_row) * arr_ref.cols + c];
+      }
+    }
+  }
+
+  ArrayValue* out = arena.create<ArrayValue>();
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  out->rows = out_rows;
+  out->cols = out_cols;
+  out->cells = buffer;
+  return Value::array(out);
+}
+
 }  // namespace eval
 }  // namespace formulon

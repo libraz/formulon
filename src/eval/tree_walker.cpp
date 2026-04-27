@@ -205,6 +205,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"SHEETS", &eval_sheets_lazy},
     {"SLOPE", &eval_slope_lazy},
     {"SORT", &eval_sort_lazy},
+    {"SORTBY", &eval_sortby_lazy},
     {"STEYX", &eval_steyx_lazy},
     {"SUMIF", &eval_sumif_lazy},
     {"SUMIFS", &eval_sumifs_lazy},

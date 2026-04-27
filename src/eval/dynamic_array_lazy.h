@@ -119,6 +119,37 @@ Value eval_unique_lazy(const parser::AstNode& call, Arena& arena, const Function
 Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx);
 
+/// `SORTBY(array, by_array1, [order1], [by_array2, order2], ...)` — sorts
+/// `array` by one or more parallel key vectors (out-of-band keys), in
+/// contrast to SORT which keys off a column / row inside `array` itself.
+///
+/// Argument layout (variadic, alternating `by_array` / `order` after the
+/// first slot):
+///   * `arity = 2`: one key, ascending.
+///   * `arity = 3`: one key, with explicit order.
+///   * `arity = 4`: two keys, second uses default ascending.
+///   * `arity = 5`: two keys, both with explicit orders.
+///   * ... and so on. Maximum supported arity is 13 (six keys); deeper
+///     calls return `#VALUE!`.
+///
+/// Axis inference: the first `by_array` decides the axis.
+///   * `(N, 1)` column-vector with `array.rows == N` -> sort rows.
+///   * `(1, N)` row-vector with `array.cols == N` -> sort columns.
+///   * Anything else, or a subsequent `by_array_k` whose shape doesn't
+///     match the first, surfaces `#VALUE!`.
+///
+/// Each `order_k` must be `1` or `-1` (matches SORT). The cell ordering
+/// inside each key is the same Excel-canonical ranking used by SORT
+/// (Number < Text < Bool FALSE < Bool TRUE < Error < Blank, with text
+/// compared ASCII case-insensitively, and blanks always sinking to the
+/// end regardless of `order_k`).
+///
+/// Multi-key compare walks keys left-to-right and decides at the first
+/// non-equal key. Rows that compare equal under all keys retain their
+/// input order (stable sort).
+Value eval_sortby_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx);
+
 }  // namespace eval
 }  // namespace formulon
 
