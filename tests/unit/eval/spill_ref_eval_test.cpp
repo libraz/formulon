@@ -391,6 +391,100 @@ TEST(SpillRefEval, QualifiedSpillRef) {
   EXPECT_EQ(v.as_array_cells()[1], Value::number(11.0));
 }
 
+// ---------------------------------------------------------------------------
+// LET passthrough
+// ---------------------------------------------------------------------------
+//
+// `is_range_shaped_ast` now includes SpillRef, so a LET-bound SpillRef
+// preserves its range provenance when consumed by range-aware callers
+// (SUM, AVERAGE, COUNTIF, lookups). The companion fix in
+// `resolve_range_arg` lets non-aggregator consumers expand the spill into
+// their own row-major buffer.
+
+TEST(SpillRefLet, SumOverLetBoundSpill) {
+  // `=LET(s, A1#, SUM(s))` -> 60. The aggregator dispatcher's existing
+  // SpillRef branch fires after LET passthrough substitutes the SpillRef
+  // AST for the NameRef.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  ASSERT_TRUE(sheet.commit_spill(
+      0U, 0U, 3U, 1U,
+      std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
+
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=LET(s, A1#, SUM(s))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 60.0);
+}
+
+TEST(SpillRefLet, BroadcastOverLetBoundSpill) {
+  // `=LET(s, A1#, s+1)` -> 3x1 Array of [11, 21, 31]. The BinaryOp eager
+  // path sees the NameRef return a Value::Array (the bound spill region's
+  // cells) and routes through broadcast_binop.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  ASSERT_TRUE(sheet.commit_spill(
+      0U, 0U, 3U, 1U,
+      std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
+
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=LET(s, A1#, s+1)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 11.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 21.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 31.0);
+}
+
+TEST(SpillRefLet, CountIfOverLetBoundSpill) {
+  // COUNTIF goes through `resolve_range_arg`, which now has its own
+  // SpillRef branch. Pre-commit a 4-cell spill with two values >= 20 and
+  // verify COUNTIF resolves the binding through the new branch.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 4U, 1U,
+                                 std::vector<Value>{Value::number(5.0), Value::number(20.0),
+                                                    Value::number(30.0), Value::number(15.0)}));
+
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=LET(s, A1#, COUNTIF(s, \">=20\"))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
+TEST(SpillRefLet, TransitiveLetBindingPreservesShape) {
+  // `=LET(s, A1#, t, s, SUM(t))` -> 60. The NameRef-on-NameRef transitivity
+  // in LetBinding's `expr_for_binding` lookup propagates the SpillRef AST
+  // through `t`'s binding so SUM still sees a range.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  ASSERT_TRUE(sheet.commit_spill(
+      0U, 0U, 3U, 1U,
+      std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
+
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=LET(s, A1#, t, s, SUM(t))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 60.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

@@ -17,10 +17,12 @@
 #include "eval/reference_lazy.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
+#include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/strings.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
@@ -162,6 +164,54 @@ bool resolve_range_arg(const parser::AstNode& raw_arg, Arena& arena, const Funct
     }
     if (out_cols != nullptr) {
       *out_cols = 1U;
+    }
+    return true;
+  }
+  if (arg_node.kind() == parser::NodeKind::SpillRef) {
+    // Spilled-range `A1#`: resolve the spill region anchored at the
+    // reference and copy its row-major cells into the output buffer.
+    // Mirrors the dispatcher's SpillRef branch in `tree_walker.cpp` so any
+    // range-aware consumer (lookup, conditional aggregator, regression,
+    // workdays, …) accepts a SpillRef passed through a LET binding without
+    // collapsing to its anchor scalar.
+    const parser::Reference& sr = arg_node.as_spill_ref();
+    const Sheet* current = ctx.current_sheet();
+    if (current == nullptr) {
+      *out_err_code = ErrorCode::Name;
+      return false;
+    }
+    const Sheet* target = current;
+    if (!sr.sheet.empty()) {
+      const Workbook* wb = ctx.workbook();
+      if (wb == nullptr) {
+        *out_err_code = ErrorCode::Ref;
+        return false;
+      }
+      target = wb->sheet_by_name(sr.sheet);
+      if (target == nullptr) {
+        *out_err_code = ErrorCode::Ref;
+        return false;
+      }
+    }
+    if (sr.row >= Sheet::kMaxRows || sr.col >= Sheet::kMaxCols) {
+      *out_err_code = ErrorCode::Ref;
+      return false;
+    }
+    const SpillRegion* region = target->spill_region_at_anchor(sr.row, sr.col);
+    if (region == nullptr) {
+      *out_err_code = ErrorCode::Ref;
+      return false;
+    }
+    out_cells->clear();
+    out_cells->reserve(region->cells.size());
+    for (const Value& v : region->cells) {
+      out_cells->push_back(v);
+    }
+    if (out_rows != nullptr) {
+      *out_rows = region->rows;
+    }
+    if (out_cols != nullptr) {
+      *out_cols = region->cols;
     }
     return true;
   }

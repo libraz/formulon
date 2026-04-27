@@ -52,19 +52,26 @@ inline const parser::AstNode& resolve_name_ast(const parser::AstNode& node, cons
 
 /// True when `node` is one of the AST shapes that the eager dispatcher and
 /// `resolve_range_arg` treat as range-producing: a `RangeOp` (`A1:B2`), an
-/// `ArrayLiteral` (`{1,2;3,4}`), or one of the reference-producing calls
-/// (`OFFSET`, `CHOOSE`, `INDIRECT`, `IF`). Single-cell `Ref` is intentionally
-/// excluded so that LET passthrough does not silently change the
-/// scalar-vs-range provenance of a `=LET(r, A1, SUM(r,B1))` formula.
+/// `ArrayLiteral` (`{1,2;3,4}`), a `SpillRef` (`A1#`), or one of the
+/// reference-producing calls (`OFFSET`, `CHOOSE`, `INDIRECT`, `IF`). Single-
+/// cell `Ref` is intentionally excluded so that LET passthrough does not
+/// silently change the scalar-vs-range provenance of a `=LET(r, A1,
+/// SUM(r,B1))` formula.
 ///
 /// `IF` is included because Mac Excel preserves reference-shape through the
 /// picked branch: `=LET(r, IF(TRUE, A1:A3, B1:B3), SUM(r))` evaluates as if
 /// `r` were `A1:A3`. The companion logic in `resolve_range_arg` short-
 /// circuits the condition and recurses into the chosen branch.
+///
+/// `SpillRef` is included so `=LET(s, A1#, SUM(s))` re-dispatches the
+/// SpillRef AST through the eager dispatcher's existing `SpillRef` branch
+/// (and, for non-aggregator consumers, through `resolve_range_arg`'s
+/// matching branch) rather than collapsing the binding to its anchor scalar.
 inline bool is_range_shaped_ast(const parser::AstNode& node) noexcept {
   switch (node.kind()) {
     case parser::NodeKind::RangeOp:
     case parser::NodeKind::ArrayLiteral:
+    case parser::NodeKind::SpillRef:
       return true;
     case parser::NodeKind::Call: {
       const auto name = node.as_call_name();
