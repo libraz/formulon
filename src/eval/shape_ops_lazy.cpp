@@ -623,5 +623,106 @@ Value eval_binop_array_ctx(const parser::AstNode& node, Arena& arena, const Func
   return Value::array(make_array_value(arena, out_rows, out_cols, out));
 }
 
+Value eval_transpose_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                          const EvalContext& ctx) {
+  if (call.as_call_arity() != 1U) {
+    return Value::error(ErrorCode::Value);
+  }
+  const parser::AstNode& arg = call.as_call_arg(0);
+
+  // ArrayLiteral arg: materialise cells one-by-one preserving error cells
+  // verbatim. The `flatten_array_literal` helper shared with SUMPRODUCT
+  // short-circuits on the first error to match SUMPRODUCT semantics, but
+  // TRANSPOSE must keep error cells in place — Mac Excel returns
+  // `=TRANSPOSE({1,#N/A;2,3})` as an array containing #N/A at the
+  // corresponding transposed position.
+  if (arg.kind() == parser::NodeKind::ArrayLiteral) {
+    const std::uint32_t in_rows = arg.as_array_rows();
+    const std::uint32_t in_cols = arg.as_array_cols();
+    const std::uint32_t out_rows = in_cols;
+    const std::uint32_t out_cols = in_rows;
+    const std::size_t n = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
+    Value* buffer = arena.create_array<Value>(n);
+    if (buffer == nullptr) {
+      return Value::error(ErrorCode::Num);
+    }
+    for (std::uint32_t r = 0; r < in_rows; ++r) {
+      for (std::uint32_t c = 0; c < in_cols; ++c) {
+        const Value cell = eval_node(arg.as_array_element(r, c), arena, registry, ctx);
+        // Per-cell error pass-through: errors land at their transposed
+        // position rather than short-circuiting the whole call.
+        buffer[static_cast<std::size_t>(c) * in_rows + r] = cell;
+      }
+    }
+    ArrayValue* arr = arena.create<ArrayValue>();
+    if (arr == nullptr) {
+      return Value::error(ErrorCode::Num);
+    }
+    arr->rows = out_rows;
+    arr->cols = out_cols;
+    arr->cells = buffer;
+    return Value::array(arr);
+  }
+
+  // For range-shaped args (Ref / RangeOp / reference-producing calls)
+  // route through `eval_node_as_array` so the underlying 2D shape is
+  // preserved. For every other arg shape (scalar literals, arithmetic,
+  // calls returning scalars), evaluate directly via `eval_node` so a
+  // scalar error short-circuits the whole TRANSPOSE — matching the eager
+  // dispatcher's `propagate_errors=true` rule that would otherwise apply.
+  Value v = Value::blank();
+  if (arg.kind() == parser::NodeKind::Ref || arg.kind() == parser::NodeKind::RangeOp ||
+      arg.kind() == parser::NodeKind::SpillRef || is_range_producing_call(arg)) {
+    v = eval_node_as_array(arg, arena, registry, ctx);
+  } else {
+    v = eval_node(arg, arena, registry, ctx);
+  }
+  if (v.is_error()) {
+    return v;
+  }
+  if (!v.is_array()) {
+    // Defensive: the contract of `eval_node_as_array` is "Array or Error".
+    // Treat any other shape as a 1x1 fall-through so TRANSPOSE remains
+    // total over its input domain.
+    Value* one = arena.create_array<Value>(1);
+    if (one == nullptr) {
+      return Value::error(ErrorCode::Num);
+    }
+    one[0] = v;
+    ArrayValue* arr = arena.create<ArrayValue>();
+    if (arr == nullptr) {
+      return Value::error(ErrorCode::Num);
+    }
+    arr->rows = 1U;
+    arr->cols = 1U;
+    arr->cells = one;
+    return Value::array(arr);
+  }
+  const ArrayValue* src = v.as_array();
+  const std::uint32_t out_rows = src->cols;
+  const std::uint32_t out_cols = src->rows;
+  const std::size_t n = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
+  Value* buffer = arena.create_array<Value>(n);
+  if (buffer == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  // Row-major fill: dst[c * src->rows + r] = src[r * src->cols + c]. The
+  // scalar 1x1 case is degenerate (both dimensions are 1) so the loop runs
+  // once and yields the same single cell back, consistent with Mac Excel.
+  for (std::uint32_t r = 0; r < src->rows; ++r) {
+    for (std::uint32_t c = 0; c < src->cols; ++c) {
+      buffer[static_cast<std::size_t>(c) * src->rows + r] = src->cells[static_cast<std::size_t>(r) * src->cols + c];
+    }
+  }
+  ArrayValue* arr = arena.create<ArrayValue>();
+  if (arr == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  arr->rows = out_rows;
+  arr->cols = out_cols;
+  arr->cells = buffer;
+  return Value::array(arr);
+}
+
 }  // namespace eval
 }  // namespace formulon

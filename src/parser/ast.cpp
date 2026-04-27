@@ -87,6 +87,20 @@ AstNode* make_ref(Arena& arena, const Reference& r) {
   return n;
 }
 
+AstNode* make_spill_ref(Arena& arena, const Reference& r) {
+  AstNode* n = arena.create<AstNode>();
+  if (n == nullptr) {
+    return nullptr;
+  }
+  n->kind_ = NodeKind::SpillRef;
+  // Reuse the Ref payload slot; the discriminator distinguishes them. The
+  // anchor reference is structurally a single cell — `is_full_col` /
+  // `is_full_row` are rejected at parse time before this factory runs.
+  n->data_.ref = r;
+  n->data_.ref.sheet = arena.intern(r.sheet);
+  return n;
+}
+
 AstNode* make_external_ref(Arena& arena, std::uint32_t book_id, std::string_view sheet, const Reference& cell) {
   // Heap-allocate the payload so the AstNode union stays small (see the size
   // budget asserted in ast.h).
@@ -351,6 +365,11 @@ const Value& AstNode::as_literal() const {
 
 const Reference& AstNode::as_ref() const {
   FM_CHECK(kind_ == NodeKind::Ref, "AstNode::as_ref on non-Ref");
+  return data_.ref;
+}
+
+const Reference& AstNode::as_spill_ref() const {
+  FM_CHECK(kind_ == NodeKind::SpillRef, "AstNode::as_spill_ref on non-SpillRef");
   return data_.ref;
 }
 

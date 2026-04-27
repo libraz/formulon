@@ -35,3 +35,28 @@ cases:
   - id: sequence_text_arg_value
     description: "SEQUENCE(\"abc\") -> #VALUE! via numeric coercion failure on the rows arg."
     formula: "=SEQUENCE(\"abc\")"
+
+  # -- TRANSPOSE ----------------------------------------------------------
+  - id: transpose_array_literal
+    description: "TRANSPOSE({1,2,3;4,5,6}) -> 3x2; oracle reads the anchor (1)."
+    formula: "=TRANSPOSE({1,2,3;4,5,6})"
+
+  - id: transpose_range
+    description: "TRANSPOSE(A1:B2) where A1:B2 = {1,2;3,4} -> 2x2; anchor reads as 1."
+    setup:
+      A1: 1
+      B1: 2
+      A2: 3
+      B2: 4
+    formula: "=TRANSPOSE(A1:B2)"
+
+  - id: transpose_scalar
+    description: "TRANSPOSE(42) returns the scalar (Excel reads back the 1x1 anchor)."
+    formula: "=TRANSPOSE(42)"
+
+  # -- Spilled-range `#` -------------------------------------------------
+  - id: spill_ref_after_sequence_sum
+    description: "A1=SEQUENCE(3); A1# returns the entire spill; SUM consumes it = 6."
+    setup:
+      A1: "=SEQUENCE(3)"
+    formula: "=SUM(A1#)"

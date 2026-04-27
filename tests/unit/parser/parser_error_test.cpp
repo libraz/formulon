@@ -119,14 +119,20 @@ TEST(ParserErrors, UnclosedCallParen) {
   EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::ExpectedCloseParen));
 }
 
-TEST(ParserErrors, SpilledHashIsUnsupported) {
+TEST(ParserErrors, BareHashIsRejected) {
+  // `=#` has no Excel meaning. The tokenizer only emits TokenKind::Hash
+  // when the byte is adjacent to a preceding CellRef; standalone `#`
+  // falls through the error-literal scanner and surfaces as
+  // LexerInvalidErrorLiteral plus a parser-level UnexpectedToken
+  // diagnostic. The spilled-range postfix `=A1#` is accepted and
+  // exercised in spill_ref_test.cpp.
   Arena a;
-  Parser p("=A1#", a);
+  Parser p("=#", a);
   (void)p.parse();
-  // The spilled-range `#` parses as an UnsupportedConstruct after A1 is
-  // consumed; trailing-token recovery may also surface UnexpectedToken.
-  EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::UnsupportedConstruct) ||
-              HasErrorCode(p.errors(), ParseErrorCode::UnexpectedToken));
+  ASSERT_FALSE(p.errors().empty());
+  EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::LexerInvalidErrorLiteral) ||
+              HasErrorCode(p.errors(), ParseErrorCode::UnexpectedToken) ||
+              HasErrorCode(p.errors(), ParseErrorCode::UnsupportedConstruct));
 }
 
 TEST(ParserErrors, LexerErrorIsPromoted) {

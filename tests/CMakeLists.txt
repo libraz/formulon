@@ -112,6 +112,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_xirr_xnpv_test.cpp
   unit/eval/builtins_service_stubs_test.cpp
   unit/eval/builtins/dynamic_array_test.cpp
+  unit/eval/spill_ref_eval_test.cpp
+  unit/parser/spill_ref_test.cpp
   unit/registry_catalog_test.cpp
 )
 

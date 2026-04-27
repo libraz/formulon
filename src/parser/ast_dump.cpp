@@ -140,6 +140,15 @@ void DumpInto(const AstNode& node, std::string& out) {
       out.push_back(')');
       return;
 
+    case NodeKind::SpillRef:
+      // Spilled-range reference (`A1#`): dumped with a trailing `#` after
+      // the anchor's A1 spelling so the corpus stays unambiguous against
+      // ordinary refs.
+      out.append("(spill-ref ");
+      out.append(format_a1(node.as_spill_ref()));
+      out.append("#)");
+      return;
+
     case NodeKind::ExternalRef: {
       out.append("(ext-ref [");
       out.append(std::to_string(node.as_external_ref_book_id()));

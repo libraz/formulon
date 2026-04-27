@@ -68,6 +68,13 @@ enum class NodeKind : std::uint8_t {
   /// site by the parser. Consumers (compiler, dumper) must treat this as an
   /// opaque sentinel and propagate `#NAME?` / `#REF!` semantics if reached.
   ErrorPlaceholder = 17,
+  /// Spilled-range reference (Excel's postfix `#` operator, e.g. `=A1#`).
+  /// Refers to "the entire spill region anchored at this cell". The payload
+  /// is the anchor `Reference`; the evaluator resolves it via
+  /// `Sheet::spill_region_at_anchor` and yields an `ArrayValue`. The anchor
+  /// must be a single cell (the parser rejects `=A1:B2#`); whole-column /
+  /// whole-row anchors are also rejected at parse time.
+  SpillRef = 18,
 };
 
 /// Binary operator catalog covering arithmetic, concat, and comparisons.
@@ -131,6 +138,9 @@ class AstNode final {
 
   // --- Ref -----------------------------------------------------------------
   const Reference& as_ref() const;
+
+  // --- SpillRef ------------------------------------------------------------
+  const Reference& as_spill_ref() const;
 
   // --- ExternalRef ---------------------------------------------------------
   std::uint32_t as_external_ref_book_id() const;
@@ -209,6 +219,7 @@ class AstNode final {
   // nodes) installs arena-owned child / name arrays.
   friend AstNode* make_literal(Arena&, Value);
   friend AstNode* make_ref(Arena&, const Reference&);
+  friend AstNode* make_spill_ref(Arena&, const Reference&);
   friend AstNode* make_external_ref(Arena&, std::uint32_t, std::string_view, const Reference&);
   friend AstNode* make_structured_ref(Arena&, std::string_view, std::string_view, StructuredRefModifier);
   friend AstNode* make_name_ref(Arena&, std::string_view);
@@ -341,6 +352,13 @@ AstNode* make_literal(Arena& arena, Value v);
 /// Builds a `Ref` node from the structural reference `r`. The sheet view is
 /// re-interned into `arena` so the caller's storage need not outlive the AST.
 AstNode* make_ref(Arena& arena, const Reference& r);
+
+/// Builds a `SpillRef` node — the postfix `#` operator applied to a single-
+/// cell reference. The payload `r` is the anchor cell; sheet view is
+/// re-interned into `arena`. Whole-column / whole-row references are not
+/// valid spill anchors; the parser is expected to reject those before
+/// reaching this factory.
+AstNode* make_spill_ref(Arena& arena, const Reference& r);
 
 /// Builds an `ExternalRef` node referencing `[book_id]sheet!cell`.
 AstNode* make_external_ref(Arena& arena, std::uint32_t book_id, std::string_view sheet, const Reference& cell);

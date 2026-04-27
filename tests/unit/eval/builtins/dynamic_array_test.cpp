@@ -366,6 +366,184 @@ TEST(SpillPipeline, PostSpillCellReadObservesPhantom) {
   EXPECT_DOUBLE_EQ(out.as_number(), 2.0);
 }
 
+// ---------------------------------------------------------------------------
+// TRANSPOSE tests (lazy-dispatched, defined in shape_ops_lazy.cpp)
+// ---------------------------------------------------------------------------
+//
+// TRANSPOSE conceptually belongs to the dynamic-array family but rides the
+// lazy-dispatch seam in `tree_walker.cpp` because it must inspect the
+// per-argument AST shape (the eager dispatcher would flatten a Range arg
+// to a row-major scalar vector and TRANSPOSE would lose the 2D shape).
+// The end-to-end pipeline still treats the produced ArrayValue as a
+// dynamic-array spill candidate when committed via `dispatch_array_result`.
+
+// Convenience: parse `src`, evaluate, return the resulting Value with no
+// dispatch. The returned ArrayValue lives in `eval_arena`.
+Value EvalNoDispatch(std::string_view src, Arena* parse_arena, Arena* eval_arena, const EvalContext& ctx) {
+  parser::Parser p(src, *parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  EXPECT_TRUE(p.errors().empty()) << "unexpected errors for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return evaluate(*root, *eval_arena, default_registry(), ctx);
+}
+
+TEST(BuiltinsTranspose, Transpose_2x3ArrayLiteral) {
+  // `=TRANSPOSE({1,2,3;4,5,6})` -> 3x2 with cells [1,4,2,5,3,6] in
+  // row-major order (i.e. column-major over the original literal).
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalNoDispatch("=TRANSPOSE({1,2,3;4,5,6})", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 3U);
+  EXPECT_EQ(v.as_array_cols(), 2U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_EQ(cells[0], Value::number(1.0));
+  EXPECT_EQ(cells[1], Value::number(4.0));
+  EXPECT_EQ(cells[2], Value::number(2.0));
+  EXPECT_EQ(cells[3], Value::number(5.0));
+  EXPECT_EQ(cells[4], Value::number(3.0));
+  EXPECT_EQ(cells[5], Value::number(6.0));
+}
+
+TEST(BuiltinsTranspose, Transpose_RangeArg) {
+  // `=TRANSPOSE(A1:B2)` over A1:B2 = {{1, 2}; {3, 4}} -> {{1, 3}; {2, 4}}.
+  // This exercises the lazy-dispatch seam: a Range argument retains its
+  // 2D shape via `eval_node_as_array` rather than collapsing to a vector.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0U, 0U, Value::number(1.0));
+  sheet.set_cell_value(0U, 1U, Value::number(2.0));
+  sheet.set_cell_value(1U, 0U, Value::number(3.0));
+  sheet.set_cell_value(1U, 1U, Value::number(4.0));
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalNoDispatch("=TRANSPOSE(A1:B2)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 2U);
+  EXPECT_EQ(v.as_array_cols(), 2U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_EQ(cells[0], Value::number(1.0));
+  EXPECT_EQ(cells[1], Value::number(3.0));
+  EXPECT_EQ(cells[2], Value::number(2.0));
+  EXPECT_EQ(cells[3], Value::number(4.0));
+}
+
+TEST(BuiltinsTranspose, Transpose_Scalar) {
+  // `=TRANSPOSE(42)` -> 1x1 array with the scalar wrapped. Mac Excel
+  // returns the same scalar; the engine wraps it in a degenerate 1x1
+  // ArrayValue so the spill pipeline observes a uniform Array shape.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalNoDispatch("=TRANSPOSE(42)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  EXPECT_EQ(v.as_array_cells()[0], Value::number(42.0));
+}
+
+TEST(BuiltinsTranspose, Transpose_PreservesErrors) {
+  // `=TRANSPOSE({1,#N/A;2,3})` -> 2x2 with the error cell pass-through.
+  // TRANSPOSE does not propagate errors at the function level — it just
+  // moves cells; `#N/A` lands at its transposed position intact.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalNoDispatch("=TRANSPOSE({1,#N/A;2,3})", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 2U);
+  EXPECT_EQ(v.as_array_cols(), 2U);
+  const Value* cells = v.as_array_cells();
+  // Expected layout (row-major): [1, 2, #N/A, 3].
+  EXPECT_EQ(cells[0], Value::number(1.0));
+  EXPECT_EQ(cells[1], Value::number(2.0));
+  ASSERT_TRUE(cells[2].is_error());
+  EXPECT_EQ(cells[2].as_error(), ErrorCode::NA);
+  EXPECT_EQ(cells[3], Value::number(3.0));
+}
+
+TEST(BuiltinsTranspose, Transpose_Twice) {
+  // TRANSPOSE is its own inverse: `=TRANSPOSE(TRANSPOSE({1,2,3;4,5,6}))`
+  // returns the original 2x3 array.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalNoDispatch("=TRANSPOSE(TRANSPOSE({1,2,3;4,5,6}))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 2U);
+  EXPECT_EQ(v.as_array_cols(), 3U);
+  const Value* cells = v.as_array_cells();
+  for (std::size_t i = 0; i < 6U; ++i) {
+    EXPECT_EQ(cells[i], Value::number(static_cast<double>(i + 1U))) << "i=" << i;
+  }
+}
+
+TEST(BuiltinsTranspose, Transpose_PropagatesArgError) {
+  // `=TRANSPOSE(1/0)`: the argument evaluates to `#DIV/0!`. TRANSPOSE
+  // surfaces the scalar error verbatim (no array wrapper) so callers see
+  // the canonical short-circuit shape.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalNoDispatch("=TRANSPOSE(1/0)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+TEST(BuiltinsTranspose, Transpose_TextValuesPassThrough) {
+  // `=TRANSPOSE({"a","b";"c","d"})` -> 2x2 with cells {"a","c","b","d"}.
+  // Text payloads survive the transposition unchanged (the cells are
+  // shallow-copied; the string_view storage is the literal's arena which
+  // outlives the eval arena for the duration of the assertion).
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalNoDispatch("=TRANSPOSE({\"a\",\"b\";\"c\",\"d\"})", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 2U);
+  EXPECT_EQ(v.as_array_cols(), 2U);
+  const Value* cells = v.as_array_cells();
+  ASSERT_TRUE(cells[0].is_text());
+  EXPECT_EQ(cells[0].as_text(), std::string_view("a"));
+  ASSERT_TRUE(cells[1].is_text());
+  EXPECT_EQ(cells[1].as_text(), std::string_view("c"));
+  ASSERT_TRUE(cells[2].is_text());
+  EXPECT_EQ(cells[2].as_text(), std::string_view("b"));
+  ASSERT_TRUE(cells[3].is_text());
+  EXPECT_EQ(cells[3].as_text(), std::string_view("d"));
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

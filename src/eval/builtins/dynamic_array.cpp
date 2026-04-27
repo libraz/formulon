@@ -2,12 +2,20 @@
 //
 // Implementation of Formulon's dynamic-array (spilling) built-ins.
 //
-// SEQUENCE is the only entry registered today; it is the simplest member of
-// the family (no range-arg dependency, deterministic output) and therefore
-// the canonical acceptance test for the cell-level spill pipeline:
-// `=SEQUENCE(3)` typed into a formula cell exercises the entire chain
-// (function-impl array production -> EvalContext::dispatch_array_result ->
-// Sheet::commit_spill -> Sheet::resolve_cell_value for downstream readers).
+// SEQUENCE is registered here; it is the simplest member of the family
+// (no range-arg dependency, deterministic output) and the canonical
+// acceptance test for the cell-level spill pipeline: `=SEQUENCE(3)` typed
+// into a formula cell exercises the entire chain (function-impl array
+// production -> EvalContext::dispatch_array_result -> Sheet::commit_spill
+// -> Sheet::resolve_cell_value for downstream readers).
+//
+// TRANSPOSE conceptually belongs to this family but lives in
+// `eval/shape_ops_lazy.cpp` because it requires per-argument AST shape
+// inspection (a Range / RangeOp argument must keep its 2D shape; the
+// eager dispatcher would flatten it to a row-major scalar vector). Lookups
+// for TRANSPOSE go through the central `kLazyDispatch[]` table in
+// `tree_walker.cpp`.
+//
 // See `backup/plans/02-calc-engine.md` §2.6 for the wider dynamic-array
 // design and `sheet.h` for the spill-table contract.
 

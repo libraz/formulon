@@ -6,6 +6,7 @@
 //
 // Operator binding-power scheme (higher = tighter):
 //
+//   Postfix `#`           90   (spilled-range; only valid on a single Ref)
 //   Range `:`             80   (left-assoc binary)
 //   Prefix unary `+`/`-`  70
 //   Postfix `%`           60
@@ -54,6 +55,7 @@ using detail::kBpComparison;
 using detail::kBpConcat;
 using detail::kBpIntersect;
 using detail::kBpMulDiv;
+using detail::kBpPostfixHash;
 using detail::kBpPostfixPercent;
 using detail::kBpPow;
 using detail::kBpRange;
@@ -523,6 +525,54 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       continue;
     }
 
+    // Postfix `#`: spilled-range operator (e.g. `=A1#`). Only valid on a
+    // single-cell `Ref` atom; reject anything else (range, full-column /
+    // full-row, function call, arithmetic) with a diagnostic and consume
+    // the `#` so the surrounding context keeps parsing. Bound tighter than
+    // `:` so that `=A1:B2#` first consumes `#` against `B2` (yielding a
+    // SpillRef), and the `:` shape check then rejects SpillRef as a range
+    // endpoint. `=A1#+B1#` similarly parses as
+    // `SpillRef(A1)+SpillRef(B1)`.
+    if (kind == TokenKind::Hash) {
+      if (kBpPostfixHash < min_bp) {
+        --depth_;
+        return lhs;
+      }
+      // Always consume `#` so we never re-enter the loop on the same token,
+      // even on rejection. The diagnostic carries the Hash token's range.
+      const Token& hash_tok = advance();
+      if (lhs->kind() != NodeKind::Ref) {
+        record_error_with_token(ParseErrorCode::UnsupportedConstruct, hash_tok.range, hash_tok.lexeme);
+        // Surface an `ErrorPlaceholder` so siblings keep parsing.
+        AstNode* placeholder = make_error_placeholder(arena_);
+        if (placeholder != nullptr) {
+          placeholder->set_range(SpanRange(lhs->range(), hash_tok.range));
+        }
+        lhs = placeholder != nullptr ? placeholder : lhs;
+        continue;
+      }
+      const Reference& r = lhs->as_ref();
+      if (r.is_full_col || r.is_full_row) {
+        // `A:A#` / `1:1#` are not legal Excel spill anchors.
+        record_error_with_token(ParseErrorCode::UnsupportedConstruct, hash_tok.range, hash_tok.lexeme);
+        AstNode* placeholder = make_error_placeholder(arena_);
+        if (placeholder != nullptr) {
+          placeholder->set_range(SpanRange(lhs->range(), hash_tok.range));
+        }
+        lhs = placeholder != nullptr ? placeholder : lhs;
+        continue;
+      }
+      AstNode* node = make_spill_ref(arena_, r);
+      if (node == nullptr) {
+        bailed_ = true;
+        --depth_;
+        return lhs;
+      }
+      node->set_range(SpanRange(lhs->range(), hash_tok.range));
+      lhs = node;
+      continue;
+    }
+
     int right_bp = 0;
     int bp = InfixBindingPower(kind, &right_bp);
     // Whitespace only carries binding power when the LHS is reference-shaped.
@@ -567,10 +617,15 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       // evaluator's `resolve_range_endpoint` discriminates between
       // reference-producing calls and value-producing calls (the latter
       // surface as `#VALUE!` at eval time via `resolve_reference_call`).
+      // SpillRef is rejected on both sides: `A1#:B2` and `A1:B2#` are not
+      // legal Excel range expressions (the spill operator is terminal).
+      const NodeKind lk = lhs->kind();
       const NodeKind rk = rhs->kind();
-      if (rk != NodeKind::Ref && rk != NodeKind::NameRef && rk != NodeKind::ExternalRef &&
-          rk != NodeKind::StructuredRef && rk != NodeKind::RangeOp && rk != NodeKind::Call &&
-          rk != NodeKind::ErrorPlaceholder) {
+      if (lk == NodeKind::SpillRef || rk == NodeKind::SpillRef) {
+        record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
+      } else if (rk != NodeKind::Ref && rk != NodeKind::NameRef && rk != NodeKind::ExternalRef &&
+                 rk != NodeKind::StructuredRef && rk != NodeKind::RangeOp && rk != NodeKind::Call &&
+                 rk != NodeKind::ErrorPlaceholder) {
         record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
       }
       node = make_range_op(arena_, lhs, rhs);

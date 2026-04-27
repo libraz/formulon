@@ -17,6 +17,12 @@ namespace detail {
 
 // Binding-power constants. See parser.cpp header comment for the precedence
 // table.
+//
+// Postfix `#` (spilled-range operator) sits above `:` so that `=A1:B2#`
+// parses as `RangeOp(A1, SpillRef(B2))`; the `:` RHS shape check then
+// rejects the SpillRef since spill anchors are single cells, never range
+// endpoints.
+inline constexpr int kBpPostfixHash = 90;
 inline constexpr int kBpRange = 80;
 // Space-as-intersection sits below `:` (range) and above prefix unary, matching
 // Excel's precedence table. The token only retains binding power when it sits

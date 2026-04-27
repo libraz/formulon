@@ -60,6 +60,17 @@ Value eval_column_lazy(const parser::AstNode& call, Arena& arena, const Function
 Value eval_sumproduct_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                            const EvalContext& ctx);
 
+/// `TRANSPOSE(array)` — swaps rows and columns. Returns a `(cols, rows)`
+/// array whose element at `(c, r)` is the input's element at `(r, c)`.
+/// A scalar argument is treated as a 1x1 array (returned unchanged in
+/// shape). Range / Ref / ArrayLiteral / arithmetic-broadcast arguments
+/// are routed through `eval_node_as_array` so the underlying 2D shape is
+/// preserved before the transpose. Errors propagate verbatim. The returned
+/// `ArrayValue` and its cells are allocated in `arena`; Text payloads
+/// reference whatever storage their source held (arena or SpillRegion).
+Value eval_transpose_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                          const EvalContext& ctx);
+
 /// Evaluates `node` in array context, always returning a `Value::Array`
 /// (or a scalar `Value::error(...)` on failure).
 ///

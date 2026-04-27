@@ -38,6 +38,7 @@
 #include "utils/arena.h"
 #include "utils/strings.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
@@ -210,6 +211,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"SUMXMY2", &eval_sumxmy2_lazy},
     {"SWITCH", &eval_switch_lazy},
     {"T.TEST", &eval_t_test_lazy},
+    {"TRANSPOSE", &eval_transpose_lazy},
     // TTEST is the pre-2010 legacy spelling of T.TEST; same impl.
     {"TTEST", &eval_t_test_lazy},
     {"VLOOKUP", &eval_vlookup_lazy},
@@ -375,6 +377,74 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       }
       if (short_circuit) {
         return propagated_err;
+      }
+      continue;
+    }
+    // Spilled-range `A1#` argument: resolve the spill region anchored at
+    // the reference and flatten its row-major cells into the values
+    // vector. Mirrors the RangeOp branch below; the same provenance-aware
+    // filters apply because cells inside a spill region behave the same
+    // way as cells inside an ordinary range when consumed by SUM /
+    // AVERAGE / MIN / MAX / etc. A missing spill yields `#REF!`; an
+    // unbound context yields `#NAME?`. Errors short-circuit per
+    // `propagate_errors`.
+    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::SpillRef) {
+      had_range_shaped_arg = true;
+      const parser::Reference& sr = arg_node.as_spill_ref();
+      const Sheet* current = ctx.current_sheet();
+      const Sheet* target = current;
+      ErrorCode spill_err = ErrorCode::Ref;
+      if (current == nullptr) {
+        spill_err = ErrorCode::Name;
+      } else if (!sr.sheet.empty()) {
+        const Workbook* wb = ctx.workbook();
+        if (wb == nullptr) {
+          target = nullptr;
+        } else {
+          target = wb->sheet_by_name(sr.sheet);
+        }
+      }
+      if (target == nullptr || sr.row >= Sheet::kMaxRows || sr.col >= Sheet::kMaxCols) {
+        const Value err = Value::error(spill_err);
+        if (def->propagate_errors) {
+          return err;
+        }
+        values.push_back(err);
+        continue;
+      }
+      const SpillRegion* region = target->spill_region_at_anchor(sr.row, sr.col);
+      if (region == nullptr) {
+        const Value err = Value::error(ErrorCode::Ref);
+        if (def->propagate_errors) {
+          return err;
+        }
+        values.push_back(err);
+        continue;
+      }
+      for (const Value& v : region->cells) {
+        if (def->propagate_errors && v.is_error()) {
+          return v;
+        }
+        if (def->range_filter_numeric_only && v.kind() != ValueKind::Number) {
+          continue;
+        }
+        if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
+          continue;
+        }
+        if (def->range_filter_a_coerce) {
+          if (v.kind() == ValueKind::Blank) {
+            continue;
+          }
+          if (v.kind() == ValueKind::Bool) {
+            values.push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
+            continue;
+          }
+          if (v.kind() == ValueKind::Text) {
+            values.push_back(Value::number(0.0));
+            continue;
+          }
+        }
+        values.push_back(v);
       }
       continue;
     }
@@ -999,6 +1069,60 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
 
     case parser::NodeKind::Ref:
       return ctx.resolve_ref(node.as_ref(), arena, registry);
+
+    case parser::NodeKind::SpillRef: {
+      // Excel's `=A1#` operator: yields the entire spill region anchored at
+      // the referenced cell as a `Value::Array`. Resolution rules:
+      //   * Unbound context (no current sheet)             -> #NAME?
+      //   * Qualified anchor with no workbook bound        -> #REF!
+      //   * Qualified anchor with missing target sheet     -> #REF!
+      //   * Anchor row/col >= Sheet::kMax{Rows,Cols}       -> #REF!
+      //   * No spill region anchored at this address       -> #REF!
+      //
+      // The returned ArrayValue header lives in the eval `arena`; its cells
+      // buffer holds shallow copies of the SpillRegion's `Value`s. Text
+      // payloads point into `SpillRegion::owned_strings`, which lives on
+      // Sheet and outlives any single evaluation arena (zero-copy reuse).
+      const parser::Reference& r = node.as_spill_ref();
+      const Sheet* current = ctx.current_sheet();
+      if (current == nullptr) {
+        return Value::error(ErrorCode::Name);
+      }
+      const Sheet* target = current;
+      if (!r.sheet.empty()) {
+        const Workbook* wb = ctx.workbook();
+        if (wb == nullptr) {
+          return Value::error(ErrorCode::Ref);
+        }
+        target = wb->sheet_by_name(r.sheet);
+        if (target == nullptr) {
+          return Value::error(ErrorCode::Ref);
+        }
+      }
+      if (r.row >= Sheet::kMaxRows || r.col >= Sheet::kMaxCols) {
+        return Value::error(ErrorCode::Ref);
+      }
+      const SpillRegion* region = target->spill_region_at_anchor(r.row, r.col);
+      if (region == nullptr) {
+        return Value::error(ErrorCode::Ref);
+      }
+      const std::size_t n = static_cast<std::size_t>(region->rows) * static_cast<std::size_t>(region->cols);
+      Value* buffer = arena.create_array<Value>(n);
+      if (buffer == nullptr) {
+        return Value::error(ErrorCode::Num);
+      }
+      for (std::size_t i = 0; i < n; ++i) {
+        buffer[i] = region->cells[i];
+      }
+      ArrayValue* arr = arena.create<ArrayValue>();
+      if (arr == nullptr) {
+        return Value::error(ErrorCode::Num);
+      }
+      arr->rows = region->rows;
+      arr->cols = region->cols;
+      arr->cells = buffer;
+      return Value::array(arr);
+    }
 
     case parser::NodeKind::NameRef: {
       // Lexical-scope lookup for LET (and, eventually, LAMBDA) bindings.
