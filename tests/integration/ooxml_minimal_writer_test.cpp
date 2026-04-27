@@ -13,11 +13,14 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "gtest/gtest.h"
 #include "miniz.h"
 #include "pugixml.hpp"
+#include "sheet.h"
+#include "value.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -161,6 +164,92 @@ TEST(OoxmlMinimalWriter, SheetRenamePropagatesToWorkbookXml) {
   ASSERT_TRUE(static_cast<bool>(sheet));
   // pugixml returns UTF-8 bytes verbatim; compare against the raw UTF-8.
   EXPECT_STREQ(sheet.attribute("name").value(), "\xE3\x82\xAB\xE3\x82\xB9\xE3\x82\xBF\xE3\x83\xA0");
+}
+
+// ---------------------------------------------------------------------------
+// Cell-writer integration: round-trip through save() and pugixml.
+// ---------------------------------------------------------------------------
+
+TEST(CellRoundTrip, NumberSavesAndExtracts) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0U, 0U, Value::number(42.5));
+  auto result = wb.save();
+  ASSERT_TRUE(static_cast<bool>(result)) << "save() failed: " << result.error().message;
+
+  const std::string body = ExtractEntry(result.value(), "xl/worksheets/sheet1.xml");
+  ASSERT_FALSE(body.empty());
+
+  pugi::xml_document doc;
+  pugi::xml_parse_result parse = doc.load_buffer(body.data(), body.size());
+  ASSERT_TRUE(static_cast<bool>(parse)) << "sheet1.xml parse failed: " << parse.description();
+
+  pugi::xml_node v = doc.child("worksheet").child("sheetData").child("row").child("c").child("v");
+  ASSERT_TRUE(static_cast<bool>(v));
+  EXPECT_STREQ(v.text().get(), "42.5");
+}
+
+TEST(CellRoundTrip, BlankOmitted) {
+  Workbook wb = Workbook::create();
+  // Default sheet: no cells written. sheetData should be empty (no <c>).
+  auto result = wb.save();
+  ASSERT_TRUE(static_cast<bool>(result));
+
+  const std::string body = ExtractEntry(result.value(), "xl/worksheets/sheet1.xml");
+  ASSERT_FALSE(body.empty());
+
+  pugi::xml_document doc;
+  pugi::xml_parse_result parse = doc.load_buffer(body.data(), body.size());
+  ASSERT_TRUE(static_cast<bool>(parse));
+
+  pugi::xml_node sheet_data = doc.child("worksheet").child("sheetData");
+  // The node may or may not exist depending on self-closing vs explicit
+  // form. Either way, no <c> children are allowed.
+  if (sheet_data) {
+    EXPECT_FALSE(static_cast<bool>(sheet_data.child("row")));
+    EXPECT_FALSE(static_cast<bool>(sheet_data.child("c")));
+  }
+}
+
+TEST(CellRoundTrip, UnicodeText) {
+  Workbook wb = Workbook::create();
+  // "日本" in UTF-8: E6 97 A5 E6 9C AC.
+  wb.sheet(0).set_cell_value(0U, 0U, Value::text("\xE6\x97\xA5\xE6\x9C\xAC"));
+  auto result = wb.save();
+  ASSERT_TRUE(static_cast<bool>(result));
+
+  const std::string body = ExtractEntry(result.value(), "xl/worksheets/sheet1.xml");
+  ASSERT_NE(body.find("\xE6\x97\xA5\xE6\x9C\xAC"), std::string::npos) << body;
+}
+
+TEST(SpillRoundTrip, AnchorHasArrayType) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_formula(0U, 0U, "=SEQUENCE(3)");
+  std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0)};
+  ASSERT_TRUE(wb.sheet(0).commit_spill(0U, 0U, 3U, 1U, std::move(cells)));
+
+  auto result = wb.save();
+  ASSERT_TRUE(static_cast<bool>(result));
+
+  const std::string body = ExtractEntry(result.value(), "xl/worksheets/sheet1.xml");
+  ASSERT_NE(body.find("<f t=\"array\">SEQUENCE(3)</f>"), std::string::npos) << body;
+}
+
+TEST(SpillRoundTrip, PhantomCellsAbsent) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_formula(0U, 0U, "=SEQUENCE(2,2)");
+  std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0), Value::number(4.0)};
+  ASSERT_TRUE(wb.sheet(0).commit_spill(0U, 0U, 2U, 2U, std::move(cells)));
+
+  auto result = wb.save();
+  ASSERT_TRUE(static_cast<bool>(result));
+
+  const std::string body = ExtractEntry(result.value(), "xl/worksheets/sheet1.xml");
+  // The anchor must be present.
+  EXPECT_NE(body.find("r=\"A1\""), std::string::npos) << body;
+  // Phantoms must be absent from the worksheet XML.
+  EXPECT_EQ(body.find("r=\"B1\""), std::string::npos) << body;
+  EXPECT_EQ(body.find("r=\"A2\""), std::string::npos) << body;
+  EXPECT_EQ(body.find("r=\"B2\""), std::string::npos) << body;
 }
 
 }  // namespace

@@ -22,6 +22,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/ooxml_writer_cell.h"
 #include "miniz.h"
 #include "sheet.h"
 #include "utils/error.h"
@@ -157,12 +158,15 @@ std::string BuildWorkbookRels(std::size_t sheet_count) {
   return out;
 }
 
-std::string BuildWorksheetXml() {
+std::string BuildWorksheetXml(const Sheet& sheet) {
+  std::string sheet_data = BuildSheetDataXml(sheet);
   std::string out;
-  out.reserve(192);
+  out.reserve(192U + sheet_data.size());
   out.append(kXmlDecl);
   out.append("<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n");
-  out.append("  <sheetData/>\n");
+  out.append("  ");
+  out.append(sheet_data);
+  out.push_back('\n');
   out.append("</worksheet>\n");
   return out;
 }
@@ -289,7 +293,7 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
     std::string part_path("xl/worksheets/sheet");
     part_path.append(std::to_string(i + 1));
     part_path.append(".xml");
-    auto result = AddPart(writer.get(), part_path, BuildWorksheetXml());
+    auto result = AddPart(writer.get(), part_path, BuildWorksheetXml(wb.sheet(i)));
     if (!result) {
       return result.error();
     }
