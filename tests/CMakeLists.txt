@@ -114,6 +114,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins/dynamic_array_test.cpp
   unit/eval/spill_ref_eval_test.cpp
   unit/eval/filter_eval_test.cpp
+  unit/eval/unique_eval_test.cpp
   unit/parser/spill_ref_test.cpp
   unit/registry_catalog_test.cpp
 )

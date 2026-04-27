@@ -56,6 +56,39 @@ class FunctionRegistry;
 Value eval_filter_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx);
 
+/// `UNIQUE(array, [by_col], [exactly_once])` — returns the distinct rows
+/// (default) or columns (`by_col=TRUE`) of `array`, in first-occurrence
+/// order.
+///
+/// Equality semantics (matches Mac Excel):
+///   * Different value kinds never equal (Number 0 != Bool FALSE,
+///     Blank != Text "").
+///   * Numbers compare bit-exact via `==`.
+///   * Booleans compare exactly.
+///   * Errors compare by code.
+///   * Text is ASCII case-insensitive (Excel-canonical), via
+///     `strings::case_insensitive_eq`. This matches `=A1=B1` and the
+///     `SWITCH` precedent in `special_forms_lazy`.
+///   * Blank cells compare equal to each other.
+///   * A row / column matches an earlier one only when ALL of its cells
+///     match cellwise.
+///
+/// Modes:
+///   * `exactly_once = FALSE` (default): return each distinct row / col
+///     once, preserving the order of first occurrence.
+///   * `exactly_once = TRUE`: return only rows / cols that occur exactly
+///     once in the input. Duplicated rows are dropped entirely.
+///
+/// Empty input or zero matches in `exactly_once = TRUE` mode surfaces
+/// `#CALC!` (Mac Excel's documented surface for "no values returned").
+///
+/// Errors in `array` cells are preserved verbatim in the output; UNIQUE
+/// does not coerce or evaluate cell contents (it only routes them).
+/// Equality across `Error`-typed cells uses error-code comparison so
+/// `#N/A == #N/A` and they collapse into a single output row.
+Value eval_unique_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx);
+
 }  // namespace eval
 }  // namespace formulon
 

@@ -216,6 +216,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"TRANSPOSE", &eval_transpose_lazy},
     // TTEST is the pre-2010 legacy spelling of T.TEST; same impl.
     {"TTEST", &eval_t_test_lazy},
+    {"UNIQUE", &eval_unique_lazy},
     {"VLOOKUP", &eval_vlookup_lazy},
     {"WORKDAY", &eval_workday_lazy},
     {"WORKDAY.INTL", &eval_workday_intl_lazy},
