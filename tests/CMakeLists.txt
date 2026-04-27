@@ -52,6 +52,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/info_lazy_test.cpp
   unit/eval/builtins_count_test.cpp
   unit/eval/builtins_shape_test.cpp
+  unit/eval/array_producer_test.cpp
   unit/eval/builtins_row_column_array_test.cpp
   unit/eval/builtins_stats_test.cpp
   unit/eval/builtins_subtotal_test.cpp

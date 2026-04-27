@@ -16,15 +16,18 @@
 #include <cstdint>
 #include <vector>
 
+#include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
 #include "eval/reference_lazy.h"
+#include "eval/scalar_ops.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "utils/arena.h"
 #include "utils/error.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -142,6 +145,40 @@ double sumproduct_coerce(const Value& v) {
   return 0.0;
 }
 
+// Builds a freshly arena-allocated `ArrayValue` from a flat row-major cell
+// vector and shape. The cells are copied into a fresh arena buffer so the
+// caller's vector can go out of scope safely; both the buffer and the
+// `ArrayValue` header live in `arena` for the same lifetime contract as
+// `Value::Text`.
+const ArrayValue* make_array_value(Arena& arena, std::uint32_t rows, std::uint32_t cols,
+                                   const std::vector<Value>& cells) {
+  const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+  Value* buffer = arena.create_array<Value>(n);
+  for (std::size_t i = 0; i < n; ++i) {
+    buffer[i] = cells[i];
+  }
+  ArrayValue* arr = arena.create<ArrayValue>();
+  arr->rows = rows;
+  arr->cols = cols;
+  arr->cells = buffer;
+  return arr;
+}
+
+// True for the reference-shaped `Call` names that `resolve_range_arg`
+// already knows how to expand into a flat row-major rectangle. Kept
+// alongside the array-context dispatch so the two seams stay in sync
+// when a new reference-producing builtin (XLOOKUP-style spilling, etc.)
+// is added.
+bool is_range_producing_call(const parser::AstNode& call_node) {
+  if (call_node.kind() != parser::NodeKind::Call) {
+    return false;
+  }
+  const std::string_view name = call_node.as_call_name();
+  return strings::case_insensitive_eq(name, "OFFSET") || strings::case_insensitive_eq(name, "CHOOSE") ||
+         strings::case_insensitive_eq(name, "IF") || strings::case_insensitive_eq(name, "ROW") ||
+         strings::case_insensitive_eq(name, "COLUMN");
+}
+
 }  // namespace
 
 Value eval_rows_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -206,8 +243,7 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
   const parser::AstNode* effective = &raw_arg;
   if (raw_arg.kind() == parser::NodeKind::NameRef) {
     const parser::AstNode& resolved = resolve_name_ast(raw_arg, ctx.name_env());
-    if (&resolved != &raw_arg &&
-        (resolved.kind() == parser::NodeKind::Ref || is_range_shaped_ast(resolved))) {
+    if (&resolved != &raw_arg && (resolved.kind() == parser::NodeKind::Ref || is_range_shaped_ast(resolved))) {
       effective = &resolved;
     }
   }
@@ -394,6 +430,171 @@ Value eval_sumproduct_lazy(const parser::AstNode& call, Arena& arena, const Func
     return Value::error(ErrorCode::Num);
   }
   return Value::number(total);
+}
+
+Value eval_node_as_array(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx) {
+  // LET-binding NameRef passthrough: mirror the pattern used by the other
+  // shape-aware seams so `=LET(r, A1:A3, r+1)` sees the bound RangeOp / Call
+  // AST rather than the NameRef wrapper.
+  const parser::AstNode* effective = &node;
+  if (node.kind() == parser::NodeKind::NameRef) {
+    const parser::AstNode& resolved = resolve_name_ast(node, ctx.name_env());
+    if (&resolved != &node && (resolved.kind() == parser::NodeKind::Ref || is_range_shaped_ast(resolved))) {
+      effective = &resolved;
+    }
+  }
+  const parser::AstNode& target = *effective;
+  const parser::NodeKind k = target.kind();
+
+  // BinaryOp -> recurse into the cellwise broadcaster.
+  if (k == parser::NodeKind::BinaryOp) {
+    return eval_binop_array_ctx(target, arena, registry, ctx);
+  }
+
+  // UnaryOp -> evaluate operand as array, then apply cellwise.
+  if (k == parser::NodeKind::UnaryOp) {
+    const Value inner = eval_node_as_array(target.as_unary_operand(), arena, registry, ctx);
+    if (inner.is_error()) {
+      return inner;
+    }
+    // `eval_node_as_array` is contracted to return either an Array or a
+    // scalar Error; any other shape would be a bug in this seam.
+    if (!inner.is_array()) {
+      return Value::error(ErrorCode::Value);
+    }
+    const ArrayValue* in_arr = inner.as_array();
+    const std::size_t n = static_cast<std::size_t>(in_arr->rows) * static_cast<std::size_t>(in_arr->cols);
+    std::vector<Value> out;
+    out.reserve(n);
+    for (std::size_t i = 0; i < n; ++i) {
+      out.push_back(apply_unary(target.as_unary_op(), in_arr->cells[i]));
+    }
+    return Value::array(make_array_value(arena, in_arr->rows, in_arr->cols, out));
+  }
+
+  // Range-shaped AST: Ref / RangeOp / one of the reference-producing Calls.
+  // `resolve_range_arg` already knows how to expand each of these into a
+  // flat row-major vector + shape, so reuse it to keep the expansion path
+  // identical to the conditional-aggregator and lookup families.
+  if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || is_range_producing_call(target)) {
+    std::vector<Value> cells;
+    std::uint32_t rows = 0;
+    std::uint32_t cols = 0;
+    ErrorCode err = ErrorCode::Value;
+    if (!resolve_range_arg(target, arena, registry, ctx, &cells, &err, &rows, &cols)) {
+      return Value::error(err);
+    }
+    return Value::array(make_array_value(arena, rows, cols, cells));
+  }
+
+  // ArrayLiteral: walk the literal via the existing flatten helper.
+  if (k == parser::NodeKind::ArrayLiteral) {
+    std::vector<Value> cells;
+    std::uint32_t rows = 0;
+    std::uint32_t cols = 0;
+    Value err = Value::blank();
+    if (!flatten_array_literal(target, arena, registry, ctx, &cells, &rows, &cols, &err)) {
+      return err;
+    }
+    return Value::array(make_array_value(arena, rows, cols, cells));
+  }
+
+  // Scalar fallback. Evaluate normally, then wrap into a 1x1 array. Errors
+  // stay scalar so they can short-circuit the broadcaster in the caller.
+  // A pre-existing Array (some future array-producing builtin) is forwarded
+  // unchanged so eval_node_as_array remains idempotent on its outputs.
+  const Value v = eval_node(target, arena, registry, ctx);
+  if (v.is_error()) {
+    return v;
+  }
+  if (v.is_array()) {
+    return v;
+  }
+  const std::vector<Value> single{v};
+  return Value::array(make_array_value(arena, 1U, 1U, single));
+}
+
+Value eval_binop_array_ctx(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx) {
+  const Value lhs = eval_node_as_array(node.as_binary_lhs(), arena, registry, ctx);
+  if (lhs.is_error()) {
+    return lhs;
+  }
+  const Value rhs = eval_node_as_array(node.as_binary_rhs(), arena, registry, ctx);
+  if (rhs.is_error()) {
+    return rhs;
+  }
+  // Both operands are guaranteed Array post the array-context contract.
+  const ArrayValue* la = lhs.as_array();
+  const ArrayValue* ra = rhs.as_array();
+
+  // Shape resolution. A 1x1 operand broadcasts against any shape; otherwise
+  // the rectangles must match exactly. Mismatch yields a scalar `#VALUE!`,
+  // matching Mac Excel's whole-expression short-circuit (it does NOT spill
+  // an array of `#VALUE!` cells).
+  std::uint32_t out_rows = la->rows;
+  std::uint32_t out_cols = la->cols;
+  if (la->rows == 1U && la->cols == 1U) {
+    out_rows = ra->rows;
+    out_cols = ra->cols;
+  } else if (ra->rows == 1U && ra->cols == 1U) {
+    // out_rows / out_cols already taken from `la`.
+  } else if (la->rows != ra->rows || la->cols != ra->cols) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  const parser::BinOp op = node.as_binary_op();
+  std::vector<Value> out;
+  out.reserve(static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols));
+  for (std::uint32_t r = 0; r < out_rows; ++r) {
+    for (std::uint32_t c = 0; c < out_cols; ++c) {
+      // Broadcast-aware indexing: a 1x1 operand always reads cell 0, while
+      // any non-1x1 operand indexes its own row-major position. The pattern
+      // is subtle because the conditional collapses both axes to a single
+      // index when (and only when) the operand is the broadcast scalar.
+      const std::size_t li = (la->rows == 1U && la->cols == 1U) ? 0U : static_cast<std::size_t>(r) * la->cols + c;
+      const std::size_t ri = (ra->rows == 1U && ra->cols == 1U) ? 0U : static_cast<std::size_t>(r) * ra->cols + c;
+      const Value& lv = la->cells[li];
+      const Value& rv = ra->cells[ri];
+
+      // Per-cell error propagation: an error cell yields an error cell in
+      // the output, with the leftmost operand winning.
+      if (lv.is_error()) {
+        out.push_back(lv);
+        continue;
+      }
+      if (rv.is_error()) {
+        out.push_back(rv);
+        continue;
+      }
+
+      if (op == parser::BinOp::Concat) {
+        out.push_back(apply_concat(lv, rv, arena));
+        continue;
+      }
+      if (op == parser::BinOp::Eq || op == parser::BinOp::NotEq || op == parser::BinOp::Lt ||
+          op == parser::BinOp::LtEq || op == parser::BinOp::Gt || op == parser::BinOp::GtEq) {
+        out.push_back(apply_comparison(op, lv, rv));
+        continue;
+      }
+      // Arithmetic. Coerce each cell to a number; cell-level coercion
+      // failures become per-cell errors so the surrounding rectangle
+      // still surfaces (e.g. `={1,"x"} + 1` -> `{2, #VALUE!}`).
+      auto ln = coerce_to_number(lv);
+      if (!ln) {
+        out.push_back(Value::error(ln.error()));
+        continue;
+      }
+      auto rn = coerce_to_number(rv);
+      if (!rn) {
+        out.push_back(Value::error(rn.error()));
+        continue;
+      }
+      out.push_back(apply_arithmetic(op, ln.value(), rn.value()));
+    }
+  }
+  return Value::array(make_array_value(arena, out_rows, out_cols, out));
 }
 
 }  // namespace eval
