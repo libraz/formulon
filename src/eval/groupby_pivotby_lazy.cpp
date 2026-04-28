@@ -627,9 +627,7 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   }
 
   if (group_repr.empty()) {
-    // No data rows survived the filter (or input was empty after header
-    // stripping). Mac Excel surfaces #CALC! for "no values to return".
-    return Value::error(ErrorCode::Calc);
+    return Value::error(ErrorCode::Value);
   }
 
   // -- Aggregate per group -------------------------------------------------
@@ -1024,7 +1022,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   }
 
   if (row_repr.empty() || col_repr.empty()) {
-    return Value::error(ErrorCode::Calc);
+    return Value::error(ErrorCode::Value);
   }
 
   const std::size_t n_rows = row_repr.size();

@@ -1245,9 +1245,9 @@ groups:
       - name: "filter_array length mismatch -> #VALUE!"
         probe: '=GROUPBY({"A";"B";"A"}, {1;2;3}, SUM, 0, 0, 0, {TRUE;FALSE;TRUE;TRUE})'
         expected: impl
-      - name: "filter_array excludes all -> error (Mac #VALUE!, Formulon #CALC!)"
+      - name: "filter_array excludes all -> #VALUE!"
         probe: '=GROUPBY({"A";"B"}, {1;2}, SUM, 0, 0, 0, {FALSE;FALSE})'
-        expected: diverged
+        expected: impl
 
   # -------------------------------------------------------------------------
   # PIVOTBY — Excel 365 dynamic-array pivot. Returns a 2D spill of the
@@ -1276,9 +1276,9 @@ groups:
       - name: "filter_array length mismatch -> #VALUE!"
         probe: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, SUM, 0, 0, 0, 0, 0, {TRUE;FALSE;TRUE})'
         expected: impl
-      - name: "filter_array excludes all -> error (Mac #VALUE!, Formulon #CALC!)"
+      - name: "filter_array excludes all -> #VALUE!"
         probe: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, SUM, 0, 0, 0, 0, 0, {FALSE;FALSE})'
-        expected: diverged
+        expected: impl
 
   # -------------------------------------------------------------------------
   # FILTER — dynamic-array row / column filter. Six perspectives covering
@@ -1397,3 +1397,164 @@ groups:
       - name: "invalid order (not +/-1) -> #VALUE!"
         probe: '=SORTBY({"A";"B"}, {1;2}, 99)'
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # LINEST — multivariate ordinary least-squares regression. Seven
+  # perspectives covering univariate stats=FALSE / stats=TRUE spills,
+  # multivariate spill, const=FALSE intercept-suppression, plus three
+  # live error returns (shape mismatch, singular X^T X, non-numeric cell).
+  # -------------------------------------------------------------------------
+
+  - function: "LINEST"
+    aspect: "least-squares regression"
+    behaviors:
+      - name: "univariate stats=FALSE -> 1x(k+1) spill"
+        probe: '=LINEST({1;2;3;4;5}, {1;2;3;4;5})'
+        expected: diverged
+      - name: "univariate stats=TRUE -> 5x(k+1) spill"
+        probe: '=LINEST({1;2;3;4;5}, {1;2;3;4;5}, TRUE, TRUE)'
+        expected: diverged
+      - name: "multivariate (k>=2) -> spill"
+        probe: '=LINEST({1;2;4;7}, {1,1;2,1;3,2;4,3})'
+        expected: diverged
+      - name: "const=FALSE suppresses intercept -> spill"
+        probe: '=LINEST({1;2;3}, {1;2;3}, FALSE)'
+        expected: diverged
+      - name: "shape mismatch (known_x rows differ) -> error"
+        probe: '=LINEST({1;2;3}, {1;2})'
+        expected: impl
+      - name: "singular X^T X (collinear x) -> spill (Mac) / #NUM! (Formulon)"
+        probe: '=LINEST({1;2;3;4}, {1,2;1,2;1,2;1,2})'
+        expected: diverged
+      - name: "non-numeric cell in known_y -> #VALUE!"
+        probe: '=LINEST({1;"x";3}, {1;2;3})'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # TREND — predicted y values along the LINEST fit, evaluated at new_x.
+  # Seven perspectives mirror LINEST: univariate (omit / with new_x),
+  # multivariate, const=FALSE, plus three live error returns.
+  # -------------------------------------------------------------------------
+
+  - function: "TREND"
+    aspect: "least-squares prediction"
+    behaviors:
+      - name: "univariate, new_x omitted (defaults to known_x) -> spill"
+        probe: '=TREND({2;4;6}, {1;2;3})'
+        expected: diverged
+      - name: "univariate with explicit new_x -> spill"
+        probe: '=TREND({2;4;6}, {1;2;3}, {4;5})'
+        expected: diverged
+      - name: "multivariate -> spill"
+        probe: '=TREND({1;2;4;7}, {1,1;2,1;3,2;4,3})'
+        expected: diverged
+      - name: "const=FALSE forces zero intercept -> spill"
+        probe: '=TREND({2;4;6}, {1;2;3}, , FALSE)'
+        expected: diverged
+      - name: "shape mismatch -> error"
+        probe: '=TREND({1;2;3}, {1;2})'
+        expected: impl
+      - name: "singular system (collinear x) -> spill (Mac) / #NUM! (Formulon)"
+        probe: '=TREND({1;2;3;4}, {1,2;1,2;1,2;1,2})'
+        expected: diverged
+      - name: "non-numeric cell in known_y -> #VALUE!"
+        probe: '=TREND({1;"x";3}, {1;2;3})'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # LOGEST — exponential regression via LINEST on ln(y). Seven perspectives:
+  # univariate stats=FALSE / stats=TRUE spills, multivariate spill,
+  # const=FALSE intercept slot=1, plus three live error returns
+  # (y<=0 -> #NUM!, shape mismatch, non-numeric cell).
+  # -------------------------------------------------------------------------
+
+  - function: "LOGEST"
+    aspect: "exponential regression"
+    behaviors:
+      - name: "univariate stats=FALSE -> 1x(k+1) spill"
+        probe: '=LOGEST({2;4;8;16}, {1;2;3;4})'
+        expected: diverged
+      - name: "univariate stats=TRUE -> 5x(k+1) spill"
+        probe: '=LOGEST({2;4;8;16}, {1;2;3;4}, TRUE, TRUE)'
+        expected: diverged
+      - name: "multivariate -> spill"
+        probe: '=LOGEST({2;4;8;16}, {1,0;2,0;3,1;4,1})'
+        expected: diverged
+      - name: "const=FALSE -> trailing slot is exp(0)=1 in spill"
+        probe: '=LOGEST({2;4;8;16}, {1;2;3;4}, FALSE)'
+        expected: diverged
+      - name: "y <= 0 -> #NUM! (ln undefined)"
+        probe: '=LOGEST({1;-2;3}, {1;2;3})'
+        expected: impl
+      - name: "shape mismatch -> error"
+        probe: '=LOGEST({1;2;3}, {1;2})'
+        expected: impl
+      - name: "non-numeric cell in known_y -> #VALUE!"
+        probe: '=LOGEST({1;"x";3}, {1;2;3})'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # GROWTH — predicted y values along the LOGEST exponential fit,
+  # evaluated at new_x. Seven perspectives parallel TREND: univariate
+  # (omit / with new_x), multivariate, const=FALSE, plus three live
+  # error returns (y<=0 -> #NUM!, shape mismatch, non-numeric cell).
+  # -------------------------------------------------------------------------
+
+  - function: "GROWTH"
+    aspect: "exponential prediction"
+    behaviors:
+      - name: "univariate, new_x omitted (defaults to known_x) -> spill"
+        probe: '=GROWTH({2;4;8;16}, {1;2;3;4})'
+        expected: diverged
+      - name: "univariate with explicit new_x -> spill"
+        probe: '=GROWTH({2;4;8;16}, {1;2;3;4}, {5;6})'
+        expected: diverged
+      - name: "multivariate -> spill"
+        probe: '=GROWTH({2;4;8;16}, {1,0;2,0;3,1;4,1})'
+        expected: diverged
+      - name: "const=FALSE -> spill"
+        probe: '=GROWTH({2;4;8;16}, {1;2;3;4}, , FALSE)'
+        expected: diverged
+      - name: "y <= 0 -> #NUM! (ln undefined)"
+        probe: '=GROWTH({1;-2;3}, {1;2;3})'
+        expected: impl
+      - name: "shape mismatch -> error"
+        probe: '=GROWTH({1;2;3}, {1;2})'
+        expected: impl
+      - name: "non-numeric cell in known_y -> #VALUE!"
+        probe: '=GROWTH({1;"x";3}, {1;2;3})'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # FREQUENCY — distribution count returning a column of size
+  # `numeric_bins + 1`. Seven perspectives covering basic 3-bin
+  # distribution, empty / fully-non-numeric bins (1x1 spill), text in
+  # data silently skipped, unsorted bins (Excel does NOT sort), all
+  # data exceeds all bins (extra-slot fills), data-array error and
+  # bins-array error propagation.
+  # -------------------------------------------------------------------------
+
+  - function: "FREQUENCY"
+    aspect: "distribution count"
+    behaviors:
+      - name: "basic 3-bin distribution -> 4x1 spill"
+        probe: '=FREQUENCY({1;2;3;4;5;6;7;8;9;10}, {3;6;9})'
+        expected: diverged
+      - name: "empty / fully-non-numeric bins -> 1x1 spill"
+        probe: '=FREQUENCY({1;2;3}, {})'
+        expected: diverged
+      - name: "text in data_array silently skipped -> spill"
+        probe: '=FREQUENCY({1;"x";5;"y";9}, {3;6;9})'
+        expected: diverged
+      - name: "unsorted bins (Excel does not sort) -> spill"
+        probe: '=FREQUENCY({1;2;3;4;5;6}, {6;3;9})'
+        expected: diverged
+      - name: "all data exceeds all bins (extra slot fills) -> spill"
+        probe: '=FREQUENCY({100;200;300}, {1;2;3})'
+        expected: diverged
+      - name: "data_array error cell -> propagates"
+        probe: '=FREQUENCY({1;#N/A;3}, {2;4})'
+        expected: impl
+      - name: "bins_array error cell -> silently skipped (becomes spill)"
+        probe: '=FREQUENCY({1;2;3}, {2;#N/A})'
+        expected: diverged

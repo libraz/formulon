@@ -110,10 +110,11 @@ Value eval_sumxmy2_lazy(const parser::AstNode& call, Arena& arena, const Functio
 /// in given order and increments the first bin whose value is `>= x`;
 /// if no bin satisfies that, the value lands in the trailing "extra"
 /// slot (always present, equal to the count of values exceeding every
-/// bin). Non-numeric cells in either array (Blank / Bool / Text) are
-/// silently skipped — no coercion. Error cells in either array
-/// propagate verbatim, with `data_array` scanned first then
-/// `bins_array` (leftmost-wins, row-major within each).
+/// bin). Non-numeric cells (Blank / Bool / Text) are silently skipped
+/// — no coercion. Error cells in `data_array` propagate verbatim
+/// (row-major scan, leftmost wins). Error cells in `bins_array` are
+/// treated as non-numeric and silently skipped, matching Mac Excel's
+/// observed behaviour.
 ///
 /// `bins_array` is taken as-given (Excel does NOT sort it internally);
 /// pathological orderings produce pathological bucketing. An empty (or

@@ -35,5 +35,5 @@ cases:
     formula: '=GROUPBY({"A";"B";"A"}, {1;2;3}, SUM, 0, 0, 0, {TRUE;FALSE;TRUE;TRUE})'
 
   - id: groupby_filter_array_excludes_all
-    description: 'GROUPBY({"A";"B"}, {1;2}, SUM, 0, 0, 0, {FALSE;FALSE}) -> #CALC! (filter eliminates every row)'
+    description: 'GROUPBY({"A";"B"}, {1;2}, SUM, 0, 0, 0, {FALSE;FALSE}) -> #VALUE! (filter eliminates every row)'
     formula: '=GROUPBY({"A";"B"}, {1;2}, SUM, 0, 0, 0, {FALSE;FALSE})'

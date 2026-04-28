@@ -421,12 +421,12 @@ TEST(PivotBy, FilterArrayLengthMismatchYieldsValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(PivotBy, FilterArrayAllExcludedYieldsCalcError) {
+TEST(PivotBy, FilterArrayAllExcludedYieldsValueError) {
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 0, 0,"
       "         {FALSE;FALSE})");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
-  EXPECT_EQ(v.as_error(), ErrorCode::Calc);
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 // ---------------------------------------------------------------------------

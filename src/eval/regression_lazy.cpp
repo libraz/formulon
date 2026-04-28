@@ -504,16 +504,13 @@ Value eval_frequency_lazy(const parser::AstNode& call, Arena& arena, const Funct
     return err;
   }
 
-  // Error propagation: data_array first, then bins_array. Each scanned
-  // in row-major order. Mac Excel surfaces the leftmost error verbatim;
-  // non-error / non-numeric cells are silently skipped at the counting
-  // step below.
+  // Error propagation: data_array errors propagate verbatim (leftmost
+  // wins, row-major scan). bins_array errors are silently skipped — Mac
+  // Excel treats error cells in the bin list as non-numeric and ignores
+  // them, just like Blank / Bool / Text cells (verified against
+  // FREQUENCY({1;2;3}, {2;#N/A}) returning the {2;#N/A} bins reduced to
+  // [2] with count<=2 in slot 0).
   for (const Value& v : data_arr.cells) {
-    if (v.is_error()) {
-      return v;
-    }
-  }
-  for (const Value& v : bins_arr.cells) {
     if (v.is_error()) {
       return v;
     }

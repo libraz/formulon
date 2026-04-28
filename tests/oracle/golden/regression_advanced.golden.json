@@ -1,0 +1,260 @@
+{
+  "suite": "regression_advanced",
+  "description": "Advanced regression family — LINEST, TREND, LOGEST, GROWTH, FREQUENCY (Excel 365). 35 perspectives (7 per function). Spill outputs flow through the same skip-oracle path as MUNIT and TEXTSPLIT (oracle compare_value cannot navigate ArrayValue). Live cases cover scalar error returns — LINEST/TREND/LOGEST/GROWTH share three error perspectives each (shape mismatch, singular system or y<=0, non-numeric cell); FREQUENCY surfaces error-cell propagation from data_array and bins_array. Tolerance widened to 1e-10 for stats-block fit metrics.",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-28T18:11:50Z"
+  },
+  "tolerance": {
+    "abs": 1e-10,
+    "rel": 1e-10
+  },
+  "cases": [
+    {
+      "id": "linest_univariate_stats_false",
+      "formula": "=LINEST({1;2;3;4;5}, {1;2;3;4;5})",
+      "setup": {},
+      "skipped": "LINEST stats=FALSE returns a 1x(k+1) spill of regression coefficients; oracle compare_value only handles scalars. Unit tests in linest_eval_test.cpp cover the slope/intercept content."
+    },
+    {
+      "id": "linest_univariate_stats_true",
+      "formula": "=LINEST({1;2;3;4;5}, {1;2;3;4;5}, TRUE, TRUE)",
+      "setup": {},
+      "skipped": "LINEST stats=TRUE returns a 5x(k+1) statistics matrix (coefficients, SEs, R^2, F, df_resid, ss_reg, ss_resid); oracle compare_value only handles scalars. Unit tests in linest_eval_test.cpp cover the full block."
+    },
+    {
+      "id": "linest_multivariate_basic",
+      "formula": "=LINEST({1;2;4;7}, {1,1;2,1;3,2;4,3})",
+      "setup": {},
+      "skipped": "LINEST multivariate (k>=2) returns a 1x(k+1) spill; oracle compare_value only handles scalars. Unit tests in linest_eval_test.cpp cover multivariate dispatch."
+    },
+    {
+      "id": "linest_const_false_no_intercept",
+      "formula": "=LINEST({1;2;3}, {1;2;3}, FALSE)",
+      "setup": {},
+      "skipped": "LINEST const=FALSE returns a spill with intercept slot=0; oracle compare_value only handles scalars. Unit tests in linest_eval_test.cpp cover intercept-suppression."
+    },
+    {
+      "id": "linest_shape_mismatch_error",
+      "formula": "=LINEST({1;2;3}, {1;2})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "linest_singular_collinear_num",
+      "formula": "=LINEST({1;2;3;4}, {1,2;1,2;1,2;1,2})",
+      "setup": {},
+      "skipped": "Bug-class divergence: Mac LINEST on rank-deficient X (perfectly collinear predictors {1,2;1,2;1,2;1,2}) returns a spill anchored at 0 (a partial least-squares fit), while Formulon's gauss_jordan kernel at linest_lazy.cpp:240 fails on zero-pivot and returns #NUM!. Mac's behaviour is consistent with using SVD or pseudo-inverse fallback. The follow-up fix would either (a) replace gauss_jordan with an SVD path that handles rank deficiency or (b) collapse collinear columns and report partial coefficients; either way the documented 'singular -> #NUM!' policy in linest_lazy.h:62-64 needs revision."
+    },
+    {
+      "id": "linest_non_numeric_value",
+      "formula": "=LINEST({1;\"x\";3}, {1;2;3})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "trend_univariate_omit_new_x",
+      "formula": "=TREND({2;4;6}, {1;2;3})",
+      "setup": {},
+      "skipped": "TREND with new_x omitted returns a column-vector spill of fitted y; oracle compare_value only handles scalars. Unit tests in trend_eval_test.cpp cover the default-new_x path."
+    },
+    {
+      "id": "trend_univariate_with_new_x",
+      "formula": "=TREND({2;4;6}, {1;2;3}, {4;5})",
+      "setup": {},
+      "skipped": "TREND with explicit new_x returns a vector spill at the new observations; oracle compare_value only handles scalars. Unit tests in trend_eval_test.cpp cover the new_x path."
+    },
+    {
+      "id": "trend_multivariate_basic",
+      "formula": "=TREND({1;2;4;7}, {1,1;2,1;3,2;4,3})",
+      "setup": {},
+      "skipped": "TREND multivariate returns a vector spill at the original observations; oracle compare_value only handles scalars. Unit tests in trend_eval_test.cpp cover multivariate prediction."
+    },
+    {
+      "id": "trend_const_false_no_intercept",
+      "formula": "=TREND({2;4;6}, {1;2;3}, , FALSE)",
+      "setup": {},
+      "skipped": "TREND const=FALSE forces fit through the origin and returns a vector spill; oracle compare_value only handles scalars. Unit tests in trend_eval_test.cpp cover intercept-suppression."
+    },
+    {
+      "id": "trend_shape_mismatch_error",
+      "formula": "=TREND({1;2;3}, {1;2})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "trend_singular_collinear_num",
+      "formula": "=TREND({1;2;3;4}, {1,2;1,2;1,2;1,2})",
+      "setup": {},
+      "skipped": "Bug-class divergence parallel to linest_singular_collinear_num: Mac TREND on rank-deficient X returns a spill anchored at 2.5 (mean-y fit), Formulon returns #NUM! from the same gauss_jordan failure path. The fix that closes LINEST also closes TREND."
+    },
+    {
+      "id": "trend_non_numeric_value",
+      "formula": "=TREND({1;\"x\";3}, {1;2;3})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "logest_univariate_stats_false",
+      "formula": "=LOGEST({2;4;8;16}, {1;2;3;4})",
+      "setup": {},
+      "skipped": "LOGEST stats=FALSE returns a 1x(k+1) spill of exp-coefficients; oracle compare_value only handles scalars. Unit tests in logest_growth_eval_test.cpp cover the m/b extraction."
+    },
+    {
+      "id": "logest_univariate_stats_true",
+      "formula": "=LOGEST({2;4;8;16}, {1;2;3;4}, TRUE, TRUE)",
+      "setup": {},
+      "skipped": "LOGEST stats=TRUE returns a 5x(k+1) matrix (rows 2-5 stay on the linear log scale per Microsoft docs); oracle compare_value only handles scalars. Unit tests in logest_growth_eval_test.cpp cover the stats block."
+    },
+    {
+      "id": "logest_multivariate_basic",
+      "formula": "=LOGEST({2;4;8;16}, {1,0;2,0;3,1;4,1})",
+      "setup": {},
+      "skipped": "LOGEST multivariate returns a 1x(k+1) spill of exp-coefficients; oracle compare_value only handles scalars. Unit tests in logest_growth_eval_test.cpp cover multivariate exp dispatch."
+    },
+    {
+      "id": "logest_const_false_intercept_one",
+      "formula": "=LOGEST({2;4;8;16}, {1;2;3;4}, FALSE)",
+      "setup": {},
+      "skipped": "LOGEST const=FALSE puts exp(0)=1 in the intercept slot of the spill; oracle compare_value only handles scalars. Unit tests in logest_growth_eval_test.cpp cover the multiplicative-identity slot."
+    },
+    {
+      "id": "logest_negative_y_num",
+      "formula": "=LOGEST({1;-2;3}, {1;2;3})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "logest_shape_mismatch_error",
+      "formula": "=LOGEST({1;2;3}, {1;2})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "logest_non_numeric_value",
+      "formula": "=LOGEST({1;\"x\";3}, {1;2;3})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "growth_univariate_omit_new_x",
+      "formula": "=GROWTH({2;4;8;16}, {1;2;3;4})",
+      "setup": {},
+      "skipped": "GROWTH with new_x omitted returns a column-vector exp-fit spill at known_x; oracle compare_value only handles scalars. Unit tests in logest_growth_eval_test.cpp cover the default-new_x path."
+    },
+    {
+      "id": "growth_univariate_with_new_x",
+      "formula": "=GROWTH({2;4;8;16}, {1;2;3;4}, {5;6})",
+      "setup": {},
+      "skipped": "GROWTH with explicit new_x returns a vector spill at the new observations; oracle compare_value only handles scalars. Unit tests in logest_growth_eval_test.cpp cover the new_x path."
+    },
+    {
+      "id": "growth_multivariate_basic",
+      "formula": "=GROWTH({2;4;8;16}, {1,0;2,0;3,1;4,1})",
+      "setup": {},
+      "skipped": "GROWTH multivariate returns a vector exp-fit spill; oracle compare_value only handles scalars. Unit tests in logest_growth_eval_test.cpp cover multivariate exp prediction."
+    },
+    {
+      "id": "growth_const_false_no_intercept",
+      "formula": "=GROWTH({2;4;8;16}, {1;2;3;4}, , FALSE)",
+      "setup": {},
+      "skipped": "GROWTH const=FALSE forces fit through y=1 and returns a vector spill; oracle compare_value only handles scalars. Unit tests in logest_growth_eval_test.cpp cover intercept-suppression."
+    },
+    {
+      "id": "growth_negative_y_num",
+      "formula": "=GROWTH({1;-2;3}, {1;2;3})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "growth_shape_mismatch_error",
+      "formula": "=GROWTH({1;2;3}, {1;2})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "growth_non_numeric_value",
+      "formula": "=GROWTH({1;\"x\";3}, {1;2;3})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "frequency_basic_three_bins",
+      "formula": "=FREQUENCY({1;2;3;4;5;6;7;8;9;10}, {3;6;9})",
+      "setup": {},
+      "skipped": "FREQUENCY returns an (numeric_bins+1)x1 column spill of bucket counts; oracle compare_value only handles scalars. Unit tests in frequency_eval_test.cpp cover the basic distribution."
+    },
+    {
+      "id": "frequency_empty_bins",
+      "formula": "=FREQUENCY({1;2;3}, {})",
+      "setup": {},
+      "skipped": "FREQUENCY with empty bins returns a 1x1 spill containing the count of numeric data; oracle compare_value only handles scalars. Unit tests in frequency_eval_test.cpp cover the degenerate-bins case."
+    },
+    {
+      "id": "frequency_text_in_data_skipped",
+      "formula": "=FREQUENCY({1;\"x\";5;\"y\";9}, {3;6;9})",
+      "setup": {},
+      "skipped": "FREQUENCY silently skips non-numeric data cells and returns a column spill; oracle compare_value only handles scalars. Unit tests in frequency_eval_test.cpp cover the skip-text path."
+    },
+    {
+      "id": "frequency_unsorted_bins",
+      "formula": "=FREQUENCY({1;2;3;4;5;6}, {6;3;9})",
+      "setup": {},
+      "skipped": "FREQUENCY does NOT sort bins internally; the output reflects the given bin order as a column spill; oracle compare_value only handles scalars. Unit tests in frequency_eval_test.cpp cover unsorted-bin order."
+    },
+    {
+      "id": "frequency_all_data_exceeds_bins",
+      "formula": "=FREQUENCY({100;200;300}, {1;2;3})",
+      "setup": {},
+      "skipped": "FREQUENCY routes data exceeding all bins into the trailing extra slot; the output is a column spill; oracle compare_value only handles scalars. Unit tests in frequency_eval_test.cpp cover the extra-slot fill."
+    },
+    {
+      "id": "frequency_data_error_propagates",
+      "formula": "=FREQUENCY({1;#N/A;3}, {2;4})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "frequency_bins_error_propagates",
+      "formula": "=FREQUENCY({1;2;3}, {2;#N/A})",
+      "setup": {},
+      "skipped": "FREQUENCY silently skips error cells in bins_array (matches Mac Excel) and returns a column spill; oracle compare_value only handles scalars. Unit test BuiltinsFrequency.ErrorInBinsArraySilentlySkipped covers the silent-skip semantics."
+    }
+  ]
+}

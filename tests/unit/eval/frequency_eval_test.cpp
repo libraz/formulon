@@ -199,8 +199,11 @@ TEST(BuiltinsFrequency, ErrorInDataArrayPropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
-TEST(BuiltinsFrequency, ErrorInBinsArrayPropagates) {
-  // #DIV/0! in bins_array propagates when data_array has no errors.
+TEST(BuiltinsFrequency, ErrorInBinsArraySilentlySkipped) {
+  // Errors in bins_array are treated as non-numeric and silently
+  // skipped (matches Mac Excel). With every bin cell being an error,
+  // the bins reduce to the empty list and the result is the degenerate
+  // 1x1 array containing count(numeric_data).
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
@@ -208,8 +211,10 @@ TEST(BuiltinsFrequency, ErrorInBinsArrayPropagates) {
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=FREQUENCY({1;2;3}, {#DIV/0!})", &parse_arena, &eval_arena, ctx);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 3.0);
 }
 
 TEST(BuiltinsFrequency, DataErrorBeatsBinError) {

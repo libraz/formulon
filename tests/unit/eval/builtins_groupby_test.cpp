@@ -314,10 +314,10 @@ TEST(GroupBy, FilterArrayLengthMismatchYieldsValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(GroupBy, FilterArrayAllExcludedYieldsCalcError) {
+TEST(GroupBy, FilterArrayAllExcludedYieldsValueError) {
   const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {1;2}, SUM, 0, 0, 0, {FALSE;FALSE})");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
-  EXPECT_EQ(v.as_error(), ErrorCode::Calc);
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 // ---------------------------------------------------------------------------
@@ -371,10 +371,10 @@ TEST(GroupBy, LambdaWrongArityYieldsValueError) {
 // Empty data
 // ---------------------------------------------------------------------------
 
-TEST(GroupBy, AllExcludedAfterFilterYieldsCalcError) {
+TEST(GroupBy, AllExcludedAfterFilterYieldsValueError) {
   const Value v = EvalSrc("=GROUPBY({\"A\"}, {10}, SUM, 0, 0, 0, {FALSE})");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
-  EXPECT_EQ(v.as_error(), ErrorCode::Calc);
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 // ---------------------------------------------------------------------------

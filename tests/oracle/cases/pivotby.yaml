@@ -35,5 +35,5 @@ cases:
     formula: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, SUM, 0, 0, 0, 0, 0, {TRUE;FALSE;TRUE})'
 
   - id: pivotby_filter_array_excludes_all
-    description: 'PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, SUM, 0, 0, 0, 0, 0, {FALSE;FALSE}) -> error (Formulon #CALC!, Mac #VALUE!)'
+    description: 'PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, SUM, 0, 0, 0, 0, 0, {FALSE;FALSE}) -> #VALUE! (filter eliminates every row)'
     formula: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, SUM, 0, 0, 0, 0, 0, {FALSE;FALSE})'
