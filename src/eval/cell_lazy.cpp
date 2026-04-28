@@ -327,15 +327,16 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
       }
       return resolved;
     }
-    // "type": "b" for blank, "l" for any text (incl. ""), "v" for
-    // everything else (number, bool, error). Errors short-circuit only
-    // when they came from the reference argument itself; an error
-    // *value* sitting in a cell still classifies as "v".
+    // "type": "b" for blank or empty-string text, "l" for non-empty text,
+    // "v" for everything else (number, bool, error). Errors short-circuit
+    // only when they came from the reference argument itself; an error
+    // *value* sitting in a cell still classifies as "v". Mac Excel folds
+    // an empty string to "b" rather than "l".
     if (resolved.is_blank()) {
       return arena_text(arena, "b");
     }
     if (resolved.is_text()) {
-      return arena_text(arena, "l");
+      return arena_text(arena, resolved.as_text().empty() ? "b" : "l");
     }
     return arena_text(arena, "v");
   }
@@ -346,7 +347,12 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   // argument itself is a top-level error literal that path is rare;
   // the spec calls for fixed stubs here so we don't pre-evaluate.
   if (key == "filename") {
-    // No filesystem path on the Workbook yet.
+    // No filesystem path on the Workbook yet. Mac returns blank when the
+    // workbook has never been saved; we surface empty text instead so
+    // the top-level blank-as-zero rule (`evaluate()` in tree_walker)
+    // does not collapse the result to 0. The discrepancy is logged as a
+    // divergence; the case is skip-oracle until the workbook gains a
+    // path field.
     return arena_text(arena, "");
   }
   if (key == "format") {
@@ -362,7 +368,11 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return Value::number(0.0);
   }
   if (key == "prefix") {
-    // No text-alignment metadata yet (apostrophe / caret / quote / backslash).
+    // No text-alignment metadata yet (apostrophe / caret / quote /
+    // backslash). Mac returns blank when no prefix character is set;
+    // we surface empty text instead so the top-level blank-as-zero rule
+    // does not collapse the result to 0. Tracked as a divergence;
+    // skip-oracle until the style subsystem lands.
     return arena_text(arena, "");
   }
   if (key == "protect") {

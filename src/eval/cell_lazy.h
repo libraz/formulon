@@ -59,14 +59,22 @@ class FunctionRegistry;
 ///                     (matching Excel's blank-as-zero rule); all other
 ///                     shapes (Number / Bool / Text / Error) pass
 ///                     through unchanged.
-///   * `"type"`      - `"b"` for blank cells, `"l"` for text (including
-///                     the empty string `""`), `"v"` for everything else
+///   * `"type"`      - `"b"` for blank cells or an empty-string text
+///                     value (Mac folds `""` to `"b"`), `"l"` for any
+///                     non-empty text, `"v"` for everything else
 ///                     (number, bool, error).
-///   * `"filename"`  - always `""`; the workbook has no filesystem path.
+///   * `"filename"`  - always `""` (Mac returns blank); the workbook has
+///                     no filesystem path. Empty text avoids the
+///                     top-level blank-as-zero collapse; the divergence
+///                     is skip-oracle until the workbook gains a path
+///                     field.
 ///   * `"format"`    - always `"G"`; no style subsystem yet.
 ///   * `"color"`     - always `0`; no negative-number color flag yet.
 ///   * `"parentheses"` - always `0`; no parenthesis-format flag yet.
-///   * `"prefix"`    - always `""`; no text-alignment metadata yet.
+///   * `"prefix"`    - always `""` (Mac returns blank); no text-alignment
+///                     metadata yet. Empty text avoids the top-level
+///                     blank-as-zero collapse; skip-oracle until the
+///                     style subsystem lands.
 ///   * `"protect"`   - always `1`; cells are default-locked until the
 ///                     style subsystem lands.
 ///   * `"width"`     - always a 1x2 array `{8, TRUE}`; no column-width

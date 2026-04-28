@@ -1,0 +1,31 @@
+suite: volatile
+description: "Volatile / non-deterministic functions (NOW / TODAY / RAND / RANDBETWEEN / RANDARRAY). Each member draws from a wall-clock or PRNG source that is intrinsically non-reproducible, so every case is registered as skip-oracle in tests/divergence.yaml. The closure exists purely to declare the divergence cluster — there is no oracle comparison."
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # =========================================================================
+  # Each case below is `mode: skip-oracle` (see tests/divergence.yaml).
+  # Implementation correctness is enforced by the unit-test suite (range
+  # checks, shape checks); oracle parity is not meaningful for volatile
+  # values.
+  # =========================================================================
+
+  - id: volatile_now_clock
+    description: "NOW() returns the current wall-clock date-time serial; non-reproducible."
+    formula: '=NOW()'
+
+  - id: volatile_today_clock
+    description: "TODAY() returns the current wall-clock date serial; non-reproducible."
+    formula: '=TODAY()'
+
+  - id: volatile_rand_uniform
+    description: "RAND() draws a uniform [0,1) value from the engine PRNG; non-reproducible."
+    formula: '=RAND()'
+
+  - id: volatile_randbetween_int
+    description: "RANDBETWEEN(1,10) draws a uniform integer in [1,10]; non-reproducible."
+    formula: '=RANDBETWEEN(1, 10)'
+
+  - id: volatile_randarray_2x2
+    description: "RANDARRAY(2,2) spills a 2x2 uniform draw; non-reproducible. Anchor cell holds the top-left value."
+    formula: '=RANDARRAY(2, 2)'

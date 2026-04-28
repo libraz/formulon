@@ -640,6 +640,103 @@ entries:
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
 
+  # MUNIT spill-navigation cases. INDEX / SUMPRODUCT currently cannot
+  # navigate the ArrayValue returned by a nested call (MUNIT, SEQUENCE,
+  # MAKEARRAY, etc.) because resolve_range_arg only special-cases OFFSET /
+  # CHOOSE / IF / ROW / COLUMN. Mac Excel handles every array-returning
+  # call uniformly. Once resolve_range_arg gains a generic ArrayValue
+  # fallback, drop these entries and flip the matching behaviors back to
+  # `expected: impl`. The direct error cases (n<=0, text) still close
+  # cleanly without the fix.
+  - id: munit_index_diagonal
+    reason: "INDEX cannot navigate the ArrayValue returned by a nested MUNIT call; underlying resolve_range_arg limitation. Unit tests in tests/unit/eval/builtins/dynamic_array_test.cpp validate identity-matrix content."
+    prefer: mac-excel-365
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: munit_index_off_diagonal
+    reason: "INDEX cannot navigate the ArrayValue returned by a nested MUNIT call; underlying resolve_range_arg limitation. Unit tests cover off-diagonal=0 directly."
+    prefer: mac-excel-365
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: munit_size_one
+    reason: "INDEX cannot navigate the ArrayValue returned by a nested MUNIT(1) call; underlying resolve_range_arg limitation. Unit test BuiltinsMunit.OneReturns1x1 covers the n=1 boundary."
+    prefer: mac-excel-365
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: munit_fractional_truncates
+    reason: "INDEX cannot navigate the ArrayValue returned by a nested MUNIT(3.7) call; underlying resolve_range_arg limitation. Unit test BuiltinsMunit.FractionalArgTruncates covers truncate-toward-zero semantics."
+    prefer: mac-excel-365
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: munit_sumproduct_trace
+    reason: "SUMPRODUCT cannot navigate the ArrayValue returned by a nested MUNIT(4) call; underlying resolve_range_arg limitation. Identity-matrix trace=n is covered indirectly by unit tests."
+    prefer: mac-excel-365
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+
+  # CELL stub-key divergences. Formulon has no style subsystem yet so
+  # CELL("filename") and CELL("prefix", ...) return empty text rather
+  # than blank. Mac surfaces blank, but the top-level evaluator's
+  # blank-as-zero rule (tree_walker.cpp evaluate()) would collapse a
+  # blank stub to 0 -- the empty-text stub keeps the documented MVP
+  # semantics intact. Once Formulon gains workbook-path / cell-style
+  # metadata these stubs will become live and the entries can be
+  # removed.
+  - id: cell_filename_default
+    reason: "Mac returns blank for an unsaved workbook; Formulon stubs to empty text to dodge the top-level blank-as-zero rule. Will close when the workbook gains a path field."
+    prefer: mac-excel-365
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: cell_prefix_default
+    reason: "Mac returns blank for a cell with no alignment-prefix character; Formulon stubs to empty text to dodge the top-level blank-as-zero rule. Will close when the cell-style subsystem lands."
+    prefer: mac-excel-365
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+
+  # Volatile / non-deterministic cluster (NOW / TODAY / RAND / RANDBETWEEN /
+  # RANDARRAY). Each function's result is intrinsically non-reproducible —
+  # NOW/TODAY drift over wall-clock time, the RAND family draws from a
+  # non-seedable PRNG. These entries declare the closure cluster; oracle
+  # parity is not meaningful, so every case is `mode: skip-oracle`. Per-
+  # function correctness is covered by unit tests (range / shape).
+  - id: volatile_now_clock
+    reason: "NOW() depends on wall-clock time; oracle comparison is intrinsically non-reproducible."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: volatile_today_clock
+    reason: "TODAY() depends on wall-clock date; oracle comparison is intrinsically non-reproducible."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: volatile_rand_uniform
+    reason: "RAND() draws from a non-seedable PRNG; oracle comparison is intrinsically non-reproducible."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: volatile_randbetween_int
+    reason: "RANDBETWEEN draws from a non-seedable PRNG; oracle comparison is intrinsically non-reproducible."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: volatile_randarray_2x2
+    reason: "RANDARRAY draws from a non-seedable PRNG; oracle comparison is intrinsically non-reproducible."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

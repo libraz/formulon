@@ -96,6 +96,19 @@ families:
     min_perspectives_per_member: 5
     cluster_reason: "Shared PCRE2 backend; case-sensitivity / pattern-syntax / resource-limit perspectives co-evolve."
 
+  # -- Pre-2010 stat aliases ------------------------------------------------
+  # Backward-compat spellings that delegate to PERCENTILE.INC / QUARTILE.INC /
+  # STDEV.S / VAR.S (already covered by stats.yaml). They share the legacy-
+  # alias closure perspective: same sample data, same expected values, only
+  # the function name differs. Closing them as a family keeps the perspectives
+  # parallel (basic / boundary / interpolation / singleton-error / out-of-
+  # range) and the case fixture compact.
+  - name: stat_legacy
+    members: [PERCENTILE, QUARTILE, STDEV, VAR]
+    category_file: tests/oracle/cases/stat_legacy.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Pre-2010 aliases of PERCENTILE.INC / QUARTILE.INC / STDEV.S / VAR.S; closure perspectives parallel across the cluster."
+
   # -- Volatile / non-deterministic -----------------------------------------
   - name: volatile
     members: [NOW, TODAY, RAND, RANDBETWEEN, RANDARRAY]

@@ -1,0 +1,100 @@
+suite: stat_legacy
+description: Pre-2010 stat aliases (PERCENTILE / QUARTILE / STDEV / VAR) — alias dispatch verified on parallel perspectives. Result-equivalent to the .INC / .S forms covered by stats.yaml.
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # =========================================================================
+  # PERCENTILE(array, k) — alias for PERCENTILE.INC.
+  # =========================================================================
+
+  - id: percentile_legacy_alias_median
+    description: "PERCENTILE({1;2;3;4;5}, 0.5) returns the median (3) — alias of PERCENTILE.INC"
+    formula: '=PERCENTILE({1;2;3;4;5}, 0.5)'
+
+  - id: percentile_legacy_alias_zero_k
+    description: "PERCENTILE({10;20;30}, 0) returns the lower-boundary value (10)"
+    formula: '=PERCENTILE({10;20;30}, 0)'
+
+  - id: percentile_legacy_alias_one_k
+    description: "PERCENTILE({10;20;30}, 1) returns the upper-boundary value (30)"
+    formula: '=PERCENTILE({10;20;30}, 1)'
+
+  - id: percentile_legacy_alias_interp
+    description: "PERCENTILE({1;2;3;4}, 0.25) interpolates between ranks 0 and 1 -> 1.75"
+    formula: '=PERCENTILE({1;2;3;4}, 0.25)'
+
+  - id: percentile_legacy_alias_out_of_range
+    description: "PERCENTILE({1;2;3}, 1.5) -> #NUM! (k must be in [0,1])"
+    formula: '=PERCENTILE({1;2;3}, 1.5)'
+
+  # =========================================================================
+  # QUARTILE(array, quart) — alias for QUARTILE.INC.
+  # =========================================================================
+
+  - id: quartile_legacy_alias_q0_min
+    description: "QUARTILE({1;2;3;4;5}, 0) returns the minimum (1)"
+    formula: '=QUARTILE({1;2;3;4;5}, 0)'
+
+  - id: quartile_legacy_alias_q2_median
+    description: "QUARTILE({1;2;3;4;5}, 2) returns the median (3)"
+    formula: '=QUARTILE({1;2;3;4;5}, 2)'
+
+  - id: quartile_legacy_alias_q3
+    description: "QUARTILE({1;2;3;4;5;6;7;8;9}, 3) returns the third quartile (7)"
+    formula: '=QUARTILE({1;2;3;4;5;6;7;8;9}, 3)'
+
+  - id: quartile_legacy_alias_q4_max
+    description: "QUARTILE({1;2;3;4;5}, 4) returns the maximum (5)"
+    formula: '=QUARTILE({1;2;3;4;5}, 4)'
+
+  - id: quartile_legacy_alias_invalid
+    description: "QUARTILE({1;2;3}, 5) -> #NUM! (quart must be in {0,1,2,3,4})"
+    formula: '=QUARTILE({1;2;3}, 5)'
+
+  # =========================================================================
+  # STDEV(value, ...) — alias for STDEV.S (sample standard deviation).
+  # =========================================================================
+
+  - id: stdev_legacy_alias_basic
+    description: "STDEV(1,2,3,4,5) sample sd = sqrt(2.5) ~ 1.5811388..."
+    formula: '=STDEV(1,2,3,4,5)'
+
+  - id: stdev_legacy_alias_array
+    description: "STDEV({2;4;4;4;5;5;7;9}) sample sd ~ 2.1380899..."
+    formula: '=STDEV({2;4;4;4;5;5;7;9})'
+
+  - id: stdev_legacy_alias_two_values
+    description: "STDEV(1, 3) sample sd = sqrt(2) ~ 1.4142136..."
+    formula: '=STDEV(1, 3)'
+
+  - id: stdev_legacy_alias_negative
+    description: "STDEV(-1,-2,-3) sample sd = 1 (negative values are normal numbers)"
+    formula: '=STDEV(-1,-2,-3)'
+
+  - id: stdev_legacy_alias_singleton_div0
+    description: "STDEV(5) -> #DIV/0! (sample sd needs >=2 values)"
+    formula: '=STDEV(5)'
+
+  # =========================================================================
+  # VAR(value, ...) — alias for VAR.S (sample variance).
+  # =========================================================================
+
+  - id: var_legacy_alias_basic
+    description: "VAR(1,2,3,4,5) sample variance = 2.5"
+    formula: '=VAR(1,2,3,4,5)'
+
+  - id: var_legacy_alias_array
+    description: "VAR({2;4;4;4;5;5;7;9}) sample variance ~ 4.5714286..."
+    formula: '=VAR({2;4;4;4;5;5;7;9})'
+
+  - id: var_legacy_alias_two_values
+    description: "VAR(1, 3) sample variance = 2"
+    formula: '=VAR(1, 3)'
+
+  - id: var_legacy_alias_negative
+    description: "VAR(-1,-2,-3) sample variance = 1"
+    formula: '=VAR(-1,-2,-3)'
+
+  - id: var_legacy_alias_singleton_div0
+    description: "VAR(5) -> #DIV/0! (sample variance needs >=2 values)"
+    formula: '=VAR(5)'

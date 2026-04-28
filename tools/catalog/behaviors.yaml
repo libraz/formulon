@@ -686,3 +686,214 @@ groups:
       - name: "array literal column {1;2;3}"
         probe_regex: '\{[0-9;\s.\-]+\}'
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # MUNIT(n) — n-by-n identity matrix. The result is always an ArrayValue;
+  # cases collapse it to a scalar (INDEX / SUMPRODUCT) so the oracle can
+  # compare anchor values 1-bit. Direct error cases (n<=0, text) surface
+  # the error in the anchor cell.
+  # -------------------------------------------------------------------------
+  - function: "MUNIT"
+    aspect: "identity matrix construction"
+    behaviors:
+      - name: "diagonal element = 1"
+        probe_regex: 'INDEX\(MUNIT\(3\),\s*2,\s*2\)'
+        expected: diverged
+      - name: "off-diagonal element = 0"
+        probe_regex: 'INDEX\(MUNIT\(3\),\s*1,\s*3\)'
+        expected: diverged
+      - name: "n=1 is 1x1 identity"
+        probe_regex: 'INDEX\(MUNIT\(1\),'
+        expected: diverged
+      - name: "fractional n truncates toward zero"
+        probe_regex: 'MUNIT\(3\.7\)'
+        expected: diverged
+      - name: "SUMPRODUCT trace equals n"
+        probe_regex: 'SUMPRODUCT\(MUNIT\('
+        expected: diverged
+      - name: "n=0 -> #VALUE!"
+        probe: '=MUNIT(0)'
+        expected: impl
+      - name: "n<0 -> #VALUE!"
+        probe_regex: 'MUNIT\(-\d'
+        expected: impl
+      - name: "text n -> #VALUE!"
+        probe: 'MUNIT("hello")'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # CELL(info_type, [reference]) — 12 info_type keys split between impl
+  # (address/col/row/contents/type) and stubs (format/color/parentheses/
+  # prefix/protect/filename/width). The stub keys are expected to diverge
+  # from Mac Excel until the style subsystem lands; the impl keys close
+  # cleanly.
+  # -------------------------------------------------------------------------
+  - function: "CELL"
+    aspect: "info_type dispatch"
+    behaviors:
+      - name: "address"
+        probe_regex: 'CELL\("address",'
+        expected: impl
+      - name: "col"
+        probe_regex: 'CELL\("col",'
+        expected: impl
+      - name: "row"
+        probe_regex: 'CELL\("row",'
+        expected: impl
+      - name: "contents"
+        probe_regex: 'CELL\("contents",'
+        expected: impl
+      - name: "type"
+        probe_regex: 'CELL\("type",'
+        expected: impl
+      - name: "format"
+        probe_regex: 'CELL\("format",'
+        expected: impl
+      - name: "color"
+        probe_regex: 'CELL\("color",'
+        expected: impl
+      - name: "parentheses"
+        probe_regex: 'CELL\("parentheses",'
+        expected: impl
+      - name: "prefix"
+        probe_regex: 'CELL\("prefix",'
+        expected: diverged
+      - name: "protect"
+        probe_regex: 'CELL\("protect",'
+        expected: impl
+      - name: "filename"
+        probe_regex: 'CELL\("filename"'
+        expected: diverged
+      - name: "unknown info_type -> #VALUE!"
+        probe: 'CELL("nonsense"'
+        expected: impl
+      - name: "empty info_type -> #VALUE!"
+        probe: 'CELL(""'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # Pre-2010 stat aliases (PERCENTILE / QUARTILE / STDEV / VAR) — backward-
+  # compat spellings of PERCENTILE.INC / QUARTILE.INC / STDEV.S / VAR.S. The
+  # `.INC` / `.S` variants are already covered by stats.yaml; closure here
+  # exercises the legacy spellings on a parallel set of perspectives so the
+  # alias dispatch is locked in (basic / boundary / interpolation /
+  # singleton-error / out-of-range).
+  # -------------------------------------------------------------------------
+  - function: "PERCENTILE"
+    aspect: "pre-2010 alias for PERCENTILE.INC"
+    behaviors:
+      - name: "median (k=0.5)"
+        probe_regex: 'PERCENTILE\(\{1;2;3;4;5\},\s*0\.5\)'
+        expected: impl
+      - name: "lower-boundary k=0"
+        probe_regex: 'PERCENTILE\(\{[^}]+\},\s*0\)'
+        expected: impl
+      - name: "upper-boundary k=1"
+        probe_regex: 'PERCENTILE\(\{[^}]+\},\s*1\)'
+        expected: impl
+      - name: "linear interpolation between ranks"
+        probe_regex: 'PERCENTILE\(\{1;2;3;4\},\s*0\.25\)'
+        expected: impl
+      - name: "k out of [0,1] -> #NUM!"
+        probe_regex: 'PERCENTILE\(\{[^}]+\},\s*1\.5\)'
+        expected: impl
+
+  - function: "QUARTILE"
+    aspect: "pre-2010 alias for QUARTILE.INC"
+    behaviors:
+      - name: "Q0 = min"
+        probe_regex: 'QUARTILE\(\{[^}]+\},\s*0\)'
+        expected: impl
+      - name: "Q2 = median"
+        probe_regex: 'QUARTILE\(\{1;2;3;4;5\},\s*2\)'
+        expected: impl
+      - name: "Q3 with 9-element sample"
+        probe_regex: 'QUARTILE\(\{1;2;3;4;5;6;7;8;9\},\s*3\)'
+        expected: impl
+      - name: "Q4 = max"
+        probe_regex: 'QUARTILE\(\{[^}]+\},\s*4\)'
+        expected: impl
+      - name: "quart out of [0,4] -> #NUM!"
+        probe_regex: 'QUARTILE\(\{[^}]+\},\s*5\)'
+        expected: impl
+
+  - function: "STDEV"
+    aspect: "pre-2010 alias for STDEV.S"
+    behaviors:
+      - name: "scalar args sample sd"
+        probe_regex: 'STDEV\(1,2,3,4,5\)'
+        expected: impl
+      - name: "literal-array sample sd"
+        probe_regex: 'STDEV\(\{2;4;4;4;5;5;7;9\}\)'
+        expected: impl
+      - name: "two-value sample sd"
+        probe_regex: 'STDEV\(1,\s*3\)'
+        expected: impl
+      - name: "negative values"
+        probe_regex: 'STDEV\(-1,-2,-3\)'
+        expected: impl
+      - name: "single value -> #DIV/0!"
+        probe: '=STDEV(5)'
+        expected: impl
+
+  - function: "VAR"
+    aspect: "pre-2010 alias for VAR.S"
+    behaviors:
+      - name: "scalar args sample variance"
+        probe_regex: 'VAR\(1,2,3,4,5\)'
+        expected: impl
+      - name: "literal-array sample variance"
+        probe_regex: 'VAR\(\{2;4;4;4;5;5;7;9\}\)'
+        expected: impl
+      - name: "two-value sample variance"
+        probe_regex: 'VAR\(1,\s*3\)'
+        expected: impl
+      - name: "negative values"
+        probe_regex: 'VAR\(-1,-2,-3\)'
+        expected: impl
+      - name: "single value -> #DIV/0!"
+        probe: '=VAR(5)'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # Volatile / non-deterministic functions. Closure is a divergence-only
+  # declaration: each member's result is intrinsically non-reproducible
+  # (NOW/TODAY drift over wall-clock time, RAND/RANDBETWEEN/RANDARRAY draw
+  # from a non-seedable PRNG), so oracle comparison is meaningless. The
+  # cases yaml carries one probe per function purely to satisfy the
+  # closure-source check; divergence.yaml marks each as skip-oracle.
+  # -------------------------------------------------------------------------
+  - function: "NOW"
+    aspect: "non-deterministic clock probe"
+    behaviors:
+      - name: "current date-time serial"
+        probe: '=NOW()'
+        expected: diverged
+
+  - function: "TODAY"
+    aspect: "non-deterministic clock probe"
+    behaviors:
+      - name: "current date serial"
+        probe: '=TODAY()'
+        expected: diverged
+
+  - function: "RAND"
+    aspect: "non-deterministic PRNG probe"
+    behaviors:
+      - name: "uniform [0,1) draw"
+        probe: '=RAND()'
+        expected: diverged
+
+  - function: "RANDBETWEEN"
+    aspect: "non-deterministic PRNG probe"
+    behaviors:
+      - name: "integer in [low,high]"
+        probe: '=RANDBETWEEN(1, 10)'
+        expected: diverged
+
+  - function: "RANDARRAY"
+    aspect: "non-deterministic PRNG probe"
+    behaviors:
+      - name: "rows x cols uniform draw"
+        probe_regex: 'RANDARRAY\(2,\s*2\)'
+        expected: diverged

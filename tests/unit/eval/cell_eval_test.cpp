@@ -174,13 +174,14 @@ TEST(BuiltinsCellType, BlankCellIsB) {
   EXPECT_EQ(std::string(v.as_text()), "b");
 }
 
-TEST(BuiltinsCellType, EmptyStringFormulaIsL) {
-  // Empty text "" is NOT blank in Excel: CELL("type") -> "l".
+TEST(BuiltinsCellType, EmptyStringFormulaIsB) {
+  // Mac Excel folds an empty string `""` to "b" (blank), not "l" -- a
+  // non-empty text value is required to surface "l".
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text(""));
   const Value v = EvalSourceIn("=CELL(\"type\", A1)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(std::string(v.as_text()), "l");
+  EXPECT_EQ(std::string(v.as_text()), "b");
 }
 
 // ---------------------------------------------------------------------------
@@ -189,6 +190,10 @@ TEST(BuiltinsCellType, EmptyStringFormulaIsL) {
 // ---------------------------------------------------------------------------
 
 TEST(BuiltinsCellFilename, AlwaysEmpty) {
+  // Mac surfaces blank for an unsaved workbook, but Formulon returns
+  // empty text so the top-level blank-as-zero rule does not collapse
+  // the result to 0. Tracked as a documented divergence in
+  // tests/divergence.yaml.
   Workbook wb = Workbook::create();
   const Value v = EvalSourceIn("=CELL(\"filename\")", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_text());
@@ -217,6 +222,9 @@ TEST(BuiltinsCellParentheses, AlwaysZero) {
 }
 
 TEST(BuiltinsCellPrefix, AlwaysEmpty) {
+  // Mac surfaces blank for a cell with no alignment prefix, but Formulon
+  // returns empty text so the top-level blank-as-zero rule does not
+  // collapse the result to 0. Tracked in tests/divergence.yaml.
   Workbook wb = Workbook::create();
   const Value v = EvalSourceIn("=CELL(\"prefix\", A1)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_text());

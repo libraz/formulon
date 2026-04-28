@@ -1,0 +1,104 @@
+suite: cell
+description: CELL(info_type, [reference]) — info_type dispatch covering address/col/row/contents/type and the metadata stubs (filename/format/color/parentheses/prefix/protect/width).
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # =========================================================================
+  # CELL(info_type, [reference])
+  # info_type matches ASCII case-insensitive. The 5 impl keys
+  # (address / col / row / contents / type) are answered against the
+  # top-left cell of `reference`; the 7 stub keys (filename / format /
+  # color / parentheses / prefix / protect / width) currently return safe
+  # fixed values until Formulon's style subsystem lands.
+  # =========================================================================
+
+  # -- address -------------------------------------------------------------
+  - id: cell_address_simple
+    description: '"address" returns the A1 form with $ anchors'
+    formula: '=CELL("address", A1)'
+
+  - id: cell_address_other_cell
+    description: '"address" returns the absolute address of B5'
+    formula: '=CELL("address", B5)'
+
+  # -- col / row -----------------------------------------------------------
+  - id: cell_col_b5
+    description: '"col" returns 1-based column index of the top-left cell'
+    formula: '=CELL("col", B5)'
+
+  - id: cell_row_b5
+    description: '"row" returns 1-based row index of the top-left cell'
+    formula: '=CELL("row", B5)'
+
+  - id: cell_col_range_top_left
+    description: '"col" inspects only the top-left of a multi-cell range'
+    formula: '=CELL("col", C3:E5)'
+
+  # -- contents ------------------------------------------------------------
+  - id: cell_contents_number
+    description: '"contents" returns the cell value (number)'
+    setup: { A1: 42 }
+    formula: '=CELL("contents", A1)'
+
+  - id: cell_contents_text
+    description: '"contents" returns the cell value (text)'
+    setup: { A1: "hello" }
+    formula: '=CELL("contents", A1)'
+
+  - id: cell_contents_blank_returns_zero
+    description: '"contents" of a blank cell returns 0'
+    formula: '=CELL("contents", A1)'
+
+  # -- type ----------------------------------------------------------------
+  - id: cell_type_blank
+    description: '"type" returns "b" for blank'
+    formula: '=CELL("type", A1)'
+
+  - id: cell_type_number
+    description: '"type" returns "v" for number'
+    setup: { A1: 3.14 }
+    formula: '=CELL("type", A1)'
+
+  - id: cell_type_text
+    description: '"type" returns "l" for text'
+    setup: { A1: "hello" }
+    formula: '=CELL("type", A1)'
+
+  - id: cell_type_empty_string
+    description: '"type" returns "l" for an empty string (Mac semantics)'
+    setup: { A1: "" }
+    formula: '=CELL("type", A1)'
+
+  # -- format / color / parentheses / prefix / protect / width / filename --
+  - id: cell_format_general
+    description: '"format" returns the current cell number-format code'
+    formula: '=CELL("format", A1)'
+
+  - id: cell_color_default
+    description: '"color" returns 1 if cell formats negative numbers in color, else 0'
+    formula: '=CELL("color", A1)'
+
+  - id: cell_parentheses_default
+    description: '"parentheses" returns 1 if cell formats positives or all numbers with parentheses, else 0'
+    formula: '=CELL("parentheses", A1)'
+
+  - id: cell_prefix_default
+    description: '"prefix" returns the alignment-prefix character (\ or "" when none)'
+    formula: '=CELL("prefix", A1)'
+
+  - id: cell_protect_default
+    description: '"protect" returns 1 if the cell is locked, else 0'
+    formula: '=CELL("protect", A1)'
+
+  - id: cell_filename_default
+    description: '"filename" returns the workbook filename (empty when not saved)'
+    formula: '=CELL("filename")'
+
+  # -- error / arity ------------------------------------------------------
+  - id: cell_unknown_info_type
+    description: 'Unknown info_type surfaces #VALUE!'
+    formula: '=CELL("nonsense", A1)'
+
+  - id: cell_empty_info_type
+    description: 'Empty info_type surfaces #VALUE!'
+    formula: '=CELL("", A1)'
