@@ -24,6 +24,7 @@
 #include "eval/function_registry.h"
 #include "eval/hypothesis_lazy.h"
 #include "eval/info_lazy.h"
+#include "eval/lambda_helpers_lazy.h"
 #include "eval/lambda_value.h"
 #include "eval/lazy_impls.h"
 #include "eval/linest_lazy.h"
@@ -133,6 +134,8 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"AREAS", &eval_areas_lazy},
     {"AVERAGEIF", &eval_averageif_lazy},
     {"AVERAGEIFS", &eval_averageifs_lazy},
+    {"BYCOL", &eval_bycol_lazy},
+    {"BYROW", &eval_byrow_lazy},
     {"CELL", &eval_cell_lazy},
     // CHITEST is the pre-2010 legacy spelling of CHISQ.TEST; same impl.
     {"CHISQ.TEST", &eval_chisq_test_lazy},
@@ -198,6 +201,8 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"LINEST", &eval_linest_lazy},
     {"LOGEST", &eval_logest_lazy},
     {"LOOKUP", &eval_lookup_lazy},
+    {"MAKEARRAY", &eval_makearray_lazy},
+    {"MAP", &eval_map_lazy},
     {"MATCH", &eval_match_lazy},
     {"MAXIFS", &eval_maxifs_lazy},
     {"MDETERM", &eval_mdeterm_lazy},
@@ -219,9 +224,11 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"RANK", &eval_rank_eq_lazy},
     {"RANK.AVG", &eval_rank_avg_lazy},
     {"RANK.EQ", &eval_rank_eq_lazy},
+    {"REDUCE", &eval_reduce_lazy},
     {"ROW", &eval_row_lazy},
     {"ROWS", &eval_rows_lazy},
     {"RSQ", &eval_rsq_lazy},
+    {"SCAN", &eval_scan_lazy},
     {"SERIESSUM", &eval_series_sum_lazy},
     // SHEET / SHEETS consult the bound Workbook + current Sheet on the
     // EvalContext; AST introspection of an optional reference argument
