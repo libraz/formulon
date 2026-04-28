@@ -803,6 +803,29 @@ entries:
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
 
+  # PIVOTBY spill outputs and the parallel filter-empty bug-class
+  # divergence. The pivot result is a 2D ArrayValue; oracle compare_value
+  # only handles scalars. Same read_array_arg path as GROUPBY -- the
+  # closure is contributor-safe.
+  - id: pivotby_bare_sum
+    reason: "PIVOTBY returns a 2D ArrayValue; oracle compare_value only handles scalars. Unit test PivotBy.BareSumName covers bare-name aggregator dispatch."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: pivotby_lambda_sum
+    reason: "PIVOTBY with a LAMBDA aggregator returns a 2D ArrayValue; oracle compare_value only handles scalars. Unit test PivotBy.BasicTwoByTwoLambdaAggregatorSum covers inline-LAMBDA dispatch."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: pivotby_filter_array_excludes_all
+    reason: "Bug-class divergence parallel to groupby_filter_array_excludes_all: Formulon returns #CALC! when filter_array eliminates every row; Mac Excel 365 surfaces #VALUE!. The unit test PivotBy.FilterArrayAllExcludedYieldsCalcError encodes the wrong expectation; the same follow-up fix that covers GROUPBY (groupby_pivotby_lazy.cpp:632) must also change line 1027."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+
   # CELL stub-key divergences. Formulon has no style subsystem yet so
   # CELL("filename") and CELL("prefix", ...) return empty text rather
   # than blank. Mac surfaces blank, but the top-level evaluator's

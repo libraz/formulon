@@ -1,0 +1,62 @@
+{
+  "suite": "pivotby",
+  "description": "PIVOTBY dynamic-array pivot (Excel 365). Six perspectives parallel GROUPBY's structure — bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name ->",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-28T17:44:27Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "pivotby_bare_sum",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 0, 0)",
+      "setup": {},
+      "skipped": "PIVOTBY returns a 2D ArrayValue; oracle compare_value only handles scalars. Unit test PivotBy.BareSumName covers bare-name aggregator dispatch."
+    },
+    {
+      "id": "pivotby_lambda_sum",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, LAMBDA(v, SUM(v)), 0, 0, 0, 0, 0)",
+      "setup": {},
+      "skipped": "PIVOTBY with a LAMBDA aggregator returns a 2D ArrayValue; oracle compare_value only handles scalars. Unit test PivotBy.BasicTwoByTwoLambdaAggregatorSum covers inline-LAMBDA dispatch."
+    },
+    {
+      "id": "pivotby_unknown_name_error",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, NOPE_NAME, 0, 0, 0, 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "pivotby_field_headers_out_of_range",
+      "formula": "=PIVOTBY({\"A\"}, {\"X\"}, {1}, SUM, 5, 0, 0, 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pivotby_filter_array_length_mismatch",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 0, 0, {TRUE;FALSE;TRUE})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pivotby_filter_array_excludes_all",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 0, 0, {FALSE;FALSE})",
+      "setup": {},
+      "skipped": "Bug-class divergence parallel to groupby_filter_array_excludes_all: Formulon returns #CALC! when filter_array eliminates every row; Mac Excel 365 surfaces #VALUE!. The unit test PivotBy.FilterArrayAllExcludedYieldsCalcError encodes the wrong expectation; the same follow-up fix that covers GROUPBY (groupby_pivotby_lazy.cpp:632) must also change line 1027."
+    }
+  ]
+}

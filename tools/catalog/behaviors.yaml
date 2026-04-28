@@ -1248,3 +1248,34 @@ groups:
       - name: "filter_array excludes all -> error (Mac #VALUE!, Formulon #CALC!)"
         probe: '=GROUPBY({"A";"B"}, {1;2}, SUM, 0, 0, 0, {FALSE;FALSE})'
         expected: diverged
+
+  # -------------------------------------------------------------------------
+  # PIVOTBY — Excel 365 dynamic-array pivot. Returns a 2D spill of the
+  # cross-tabulation (row keys x col keys plus headers / totals). Six
+  # perspectives parallel GROUPBY: bare-name aggregator dispatch (spill),
+  # LAMBDA aggregator dispatch (spill), unknown name -> #NAME?,
+  # field_headers out of range -> #VALUE!, filter_array length mismatch
+  # -> #VALUE!, filter_array empty selection -> error.
+  # -------------------------------------------------------------------------
+
+  - function: "PIVOTBY"
+    aspect: "dynamic-array pivot"
+    behaviors:
+      - name: "bare SUM aggregator -> 2D spill"
+        probe: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, SUM, 0, 0, 0, 0, 0)'
+        expected: diverged
+      - name: "LAMBDA aggregator -> 2D spill"
+        probe: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, LAMBDA(v, SUM(v)), 0, 0, 0, 0, 0)'
+        expected: diverged
+      - name: "unknown bare aggregator name -> #NAME?"
+        probe: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, NOPE_NAME, 0, 0, 0, 0, 0)'
+        expected: impl
+      - name: "field_headers out of range -> #VALUE!"
+        probe: '=PIVOTBY({"A"}, {"X"}, {1}, SUM, 5, 0, 0, 0, 0)'
+        expected: impl
+      - name: "filter_array length mismatch -> #VALUE!"
+        probe: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, SUM, 0, 0, 0, 0, 0, {TRUE;FALSE;TRUE})'
+        expected: impl
+      - name: "filter_array excludes all -> error (Mac #VALUE!, Formulon #CALC!)"
+        probe: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, SUM, 0, 0, 0, 0, 0, {FALSE;FALSE})'
+        expected: diverged
