@@ -600,6 +600,72 @@ groups:
         expected: impl
 
   # -------------------------------------------------------------------------
+  # REGEXTEST — PCRE2-backed Excel regex predicate.
+  # -------------------------------------------------------------------------
+  - function: "REGEXTEST"
+    aspect: "regex predicate"
+    behaviors:
+      - name: "simple match (TRUE)"
+        probe_regex: 'REGEXTEST\("abc123",\s*"\[0-9\]\+"\)'
+        expected: impl
+      - name: "no match (FALSE)"
+        probe_regex: 'REGEXTEST\("abcdef",'
+        expected: impl
+      - name: "case-insensitive default"
+        probe_regex: 'REGEXTEST\("ABC",\s*"abc"\)'
+        expected: impl
+      - name: "case-sensitive (case_sensitivity=1)"
+        probe_regex: 'REGEXTEST\("ABC",\s*"abc",\s*1\)'
+        expected: impl
+      - name: "invalid pattern -> #VALUE!"
+        probe: 'REGEXTEST("abc", "[")'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # REGEXEXTRACT — return_mode 0/1/2/3 result-shape selector.
+  # -------------------------------------------------------------------------
+  - function: "REGEXEXTRACT"
+    aspect: "regex extraction"
+    behaviors:
+      - name: "mode 0 first-match scalar"
+        probe_regex: 'REGEXEXTRACT\([^,]+,\s*"\[0-9\]\+"\)'
+        expected: impl
+      - name: "mode 1 all-matches column"
+        probe_regex: 'REGEXEXTRACT\([^,]+,\s*"\[0-9\]\+",\s*1\)'
+        expected: diverged
+      - name: "mode 2 capture groups row"
+        probe_regex: 'REGEXEXTRACT\([^,]+,[^,]+,\s*2\)'
+        expected: diverged
+      - name: "mode 3 capture groups matrix"
+        probe_regex: 'REGEXEXTRACT\([^,]+,[^,]+,\s*3\)'
+        expected: diverged
+      - name: "no match -> #N/A"
+        probe_regex: 'REGEXEXTRACT\([^,]+,\s*"xyz_nomatch"'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # REGEXREPLACE — occurrence selector (0=global, N=Nth match).
+  # -------------------------------------------------------------------------
+  - function: "REGEXREPLACE"
+    aspect: "regex replacement"
+    behaviors:
+      - name: "global replace (occurrence=0 default)"
+        probe_regex: 'REGEXREPLACE\("aXbXcX",[^,]+,[^,]+\)'
+        expected: impl
+      - name: "first-only (occurrence=1)"
+        probe_regex: 'REGEXREPLACE\("aXbXcX",[^,]+,[^,]+,\s*1\)'
+        expected: impl
+      - name: "Nth match (occurrence=3)"
+        probe_regex: 'REGEXREPLACE\("aXbXcX",[^,]+,[^,]+,\s*3\)'
+        expected: impl
+      - name: "no match returns text unchanged"
+        probe_regex: 'REGEXREPLACE\("abc",\s*"X",'
+        expected: impl
+      - name: "negative occurrence -> #VALUE!"
+        probe_regex: 'REGEXREPLACE\([^,]+,[^,]+,[^,]+,\s*-1\)'
+        expected: impl
+
+  # -------------------------------------------------------------------------
   # Shape of function arguments. Scalars, cell references, ranges, and
   # array literals all feed the same dispatcher, but the coercion path
   # differs — this group exists to make sure each shape has at least one

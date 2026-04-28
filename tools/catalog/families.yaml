@@ -86,6 +86,16 @@ families:
     min_perspectives_per_member: 5
     cluster_reason: "Shared Holt-Winters core; Nelder-Mead drift tolerance and timeline-shape errors co-evolve."
 
+  # -- Regex (PCRE2-backed) -------------------------------------------------
+  # Three Excel 365 regex functions share the same PCRE2 8-bit backend
+  # (compile / match kernel, option set, resource limits). They co-evolve
+  # on Excel-flavored regex dialect quirks and #CALC! exhaustion paths.
+  - name: text_regex
+    members: [REGEXTEST, REGEXEXTRACT, REGEXREPLACE]
+    category_file: tests/oracle/cases/text_regex.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Shared PCRE2 backend; case-sensitivity / pattern-syntax / resource-limit perspectives co-evolve."
+
   # -- Volatile / non-deterministic -----------------------------------------
   - name: volatile
     members: [NOW, TODAY, RAND, RANDBETWEEN, RANDARRAY]

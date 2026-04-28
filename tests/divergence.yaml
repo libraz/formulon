@@ -614,6 +614,32 @@ entries:
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
 
+  # REGEXEXTRACT spill-mode results — Mac's xlwings oracle generator
+  # captures only the spill anchor cell (a scalar), while Formulon's
+  # impl correctly returns an ArrayValue. Modes 1 (N x 1) and 2 (1 x G)
+  # therefore look like text-vs-array-shape mismatches even though both
+  # carry the same first element. Mode 3 (N x G) is additionally not
+  # exposed on Mac 16.108.1 (returns #VALUE!). Unit tests in
+  # tests/unit/eval/builtins_regex_test.cpp validate the spill shapes.
+  - id: regexextract_mode_1_all_matches
+    reason: "Spill-mode result; xlwings captures only the spill anchor cell. Formulon correctly returns the (N x 1) array; unit tests validate the shape."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: regexextract_mode_2_capture_groups
+    reason: "Spill-mode result; xlwings captures only the spill anchor cell. Formulon correctly returns the (1 x G) array; unit tests validate the shape."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: regexextract_mode_3_all_capture_groups
+    reason: "Mac Excel 365 16.108.1 returns #VALUE! for REGEXEXTRACT return_mode=3; Formulon implements per MS docs and validates via unit tests."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

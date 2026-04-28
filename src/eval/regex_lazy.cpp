@@ -664,8 +664,9 @@ Value eval_regextest_lazy(const parser::AstNode& call, Arena& arena, const Funct
   }
 
   // Optional case_sensitivity (third arg). Coerce + bound to {0, 1};
-  // out-of-range -> #VALUE!.
-  bool case_insensitive = true;  // default 0 = case-insensitive
+  // out-of-range -> #VALUE!. Mac Excel 365 convention (matching MS docs):
+  // 0/FALSE (default) = case-sensitive; 1/TRUE = case-insensitive.
+  bool case_insensitive = false;
   if (arity == 3) {
     long long cs = 0;
     Value err = Value::error(ErrorCode::Value);
@@ -675,7 +676,7 @@ Value eval_regextest_lazy(const parser::AstNode& call, Arena& arena, const Funct
     if (cs != 0 && cs != 1) {
       return Value::error(ErrorCode::Value);
     }
-    case_insensitive = (cs == 0);
+    case_insensitive = (cs == 1);
   }
 
   // Pattern (scalar text).
@@ -759,8 +760,9 @@ Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const Fu
     }
   }
 
-  // case_sensitivity (fourth arg, default 0).
-  bool case_insensitive = true;
+  // case_sensitivity (fourth arg, default 0). Mac Excel 365 convention:
+  // 0 = case-sensitive (default), 1 = case-insensitive.
+  bool case_insensitive = false;
   if (arity == 4) {
     long long cs = 0;
     if (!coerce_int_arg(call.as_call_arg(3), arena, registry, ctx, cs, err)) {
@@ -769,7 +771,7 @@ Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const Fu
     if (cs != 0 && cs != 1) {
       return Value::error(ErrorCode::Value);
     }
-    case_insensitive = (cs == 0);
+    case_insensitive = (cs == 1);
   }
 
   std::string pattern;
@@ -861,7 +863,10 @@ Value eval_regexreplace_lazy(const parser::AstNode& call, Arena& arena, const Fu
     return Value::error(ErrorCode::Value);
   }
 
-  // occurrence (fourth arg, default 0). Negative -> #VALUE!.
+  // occurrence (fourth arg, default 0). Mac Excel 365 is permissive on
+  // negative values: REGEXREPLACE("abc", "a", "x", -1) returns "xbc"
+  // (one substitution), matching the global behavior on this single-
+  // match input. Clamp negative occurrence to 0 (global) to match Mac.
   long long occurrence = 0;
   Value err = Value::error(ErrorCode::Value);
   if (arity >= 4) {
@@ -869,12 +874,13 @@ Value eval_regexreplace_lazy(const parser::AstNode& call, Arena& arena, const Fu
       return err;
     }
     if (occurrence < 0) {
-      return Value::error(ErrorCode::Value);
+      occurrence = 0;
     }
   }
 
-  // case_sensitivity (fifth arg, default 0).
-  bool case_insensitive = true;
+  // case_sensitivity (fifth arg, default 0). Mac Excel 365 convention:
+  // 0 = case-sensitive (default), 1 = case-insensitive.
+  bool case_insensitive = false;
   if (arity == 5) {
     long long cs = 0;
     if (!coerce_int_arg(call.as_call_arg(4), arena, registry, ctx, cs, err)) {
@@ -883,7 +889,7 @@ Value eval_regexreplace_lazy(const parser::AstNode& call, Arena& arena, const Fu
     if (cs != 0 && cs != 1) {
       return Value::error(ErrorCode::Value);
     }
-    case_insensitive = (cs == 0);
+    case_insensitive = (cs == 1);
   }
 
   std::string pattern;

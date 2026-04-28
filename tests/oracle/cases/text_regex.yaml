@@ -1,0 +1,76 @@
+suite: text_regex
+description: REGEXTEST / REGEXEXTRACT / REGEXREPLACE — PCRE2-backed regex closure against Mac Excel 365 (ja-JP).
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # =========================================================================
+  # REGEXTEST(text, pattern, [case_sensitivity=0]) -> Bool
+  # =========================================================================
+
+  - id: regextest_simple_match
+    description: "Pattern matches anywhere in text -> TRUE"
+    formula: '=REGEXTEST("abc123", "[0-9]+")'
+
+  - id: regextest_no_match
+    description: "Pattern never matches -> FALSE"
+    formula: '=REGEXTEST("abcdef", "[0-9]+")'
+
+  - id: regextest_case_insensitive_default
+    description: "Default case_sensitivity=0 (ignore case)"
+    formula: '=REGEXTEST("ABC", "abc")'
+
+  - id: regextest_case_sensitive
+    description: "case_sensitivity=1 -> case-sensitive match fails"
+    formula: '=REGEXTEST("ABC", "abc", 1)'
+
+  - id: regextest_invalid_pattern
+    description: "Unbalanced character class -> #VALUE!"
+    formula: '=REGEXTEST("abc", "[")'
+
+  # =========================================================================
+  # REGEXEXTRACT(text, pattern, [return_mode=0], [case_sensitivity=0])
+  # =========================================================================
+
+  - id: regexextract_mode_0_first_match
+    description: "Mode 0 (default) returns scalar text of first whole match"
+    formula: '=REGEXEXTRACT("foo123bar456", "[0-9]+")'
+
+  - id: regexextract_mode_1_all_matches
+    description: "Mode 1 returns column array of all whole matches"
+    formula: '=REGEXEXTRACT("foo123bar456", "[0-9]+", 1)'
+
+  - id: regexextract_mode_2_capture_groups
+    description: "Mode 2 returns row array of capture groups from FIRST match"
+    formula: '=REGEXEXTRACT("john@example", "(\w+)@(\w+)", 2)'
+
+  - id: regexextract_mode_3_all_capture_groups
+    description: "Mode 3 returns 2D array (N x G) of capture groups from every match"
+    formula: '=REGEXEXTRACT("a1 b2 c3", "(\w)(\d)", 3)'
+
+  - id: regexextract_no_match
+    description: "No match -> #N/A"
+    formula: '=REGEXEXTRACT("abc", "xyz_nomatch")'
+
+  # =========================================================================
+  # REGEXREPLACE(text, pattern, replacement, [occurrence=0], [case_sensitivity=0])
+  # =========================================================================
+
+  - id: regexreplace_global_default
+    description: "occurrence=0 (default) replaces every match (PCRE2_SUBSTITUTE_GLOBAL)"
+    formula: '=REGEXREPLACE("aXbXcX", "X", "-")'
+
+  - id: regexreplace_first_only
+    description: "occurrence=1 replaces only the first match"
+    formula: '=REGEXREPLACE("aXbXcX", "X", "-", 1)'
+
+  - id: regexreplace_nth_match
+    description: "occurrence=3 replaces only the third match"
+    formula: '=REGEXREPLACE("aXbXcX", "X", "-", 3)'
+
+  - id: regexreplace_no_match_passthrough
+    description: "No match returns the original text unchanged"
+    formula: '=REGEXREPLACE("abc", "X", "-")'
+
+  - id: regexreplace_negative_occurrence
+    description: "Negative occurrence -> #VALUE!"
+    formula: '=REGEXREPLACE("abc", "a", "x", -1)'

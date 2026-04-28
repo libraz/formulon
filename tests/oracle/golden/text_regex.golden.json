@@ -1,0 +1,143 @@
+{
+  "suite": "text_regex",
+  "description": "REGEXTEST / REGEXEXTRACT / REGEXREPLACE — PCRE2-backed regex closure against Mac Excel 365 (ja-JP).",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-28T09:20:07Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "regextest_simple_match",
+      "formula": "=REGEXTEST(\"abc123\", \"[0-9]+\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "regextest_no_match",
+      "formula": "=REGEXTEST(\"abcdef\", \"[0-9]+\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "regextest_case_insensitive_default",
+      "formula": "=REGEXTEST(\"ABC\", \"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "regextest_case_sensitive",
+      "formula": "=REGEXTEST(\"ABC\", \"abc\", 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "regextest_invalid_pattern",
+      "formula": "=REGEXTEST(\"abc\", \"[\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "regexextract_mode_0_first_match",
+      "formula": "=REGEXEXTRACT(\"foo123bar456\", \"[0-9]+\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "123"
+      }
+    },
+    {
+      "id": "regexextract_mode_1_all_matches",
+      "formula": "=REGEXEXTRACT(\"foo123bar456\", \"[0-9]+\", 1)",
+      "setup": {},
+      "skipped": "Spill-mode result; xlwings captures only the spill anchor cell. Formulon correctly returns the (N x 1) array; unit tests validate the shape."
+    },
+    {
+      "id": "regexextract_mode_2_capture_groups",
+      "formula": "=REGEXEXTRACT(\"john@example\", \"(\\w+)@(\\w+)\", 2)",
+      "setup": {},
+      "skipped": "Spill-mode result; xlwings captures only the spill anchor cell. Formulon correctly returns the (1 x G) array; unit tests validate the shape."
+    },
+    {
+      "id": "regexextract_mode_3_all_capture_groups",
+      "formula": "=REGEXEXTRACT(\"a1 b2 c3\", \"(\\w)(\\d)\", 3)",
+      "setup": {},
+      "skipped": "Mac Excel 365 16.108.1 returns #VALUE! for REGEXEXTRACT return_mode=3; Formulon implements per MS docs and validates via unit tests."
+    },
+    {
+      "id": "regexextract_no_match",
+      "formula": "=REGEXEXTRACT(\"abc\", \"xyz_nomatch\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "regexreplace_global_default",
+      "formula": "=REGEXREPLACE(\"aXbXcX\", \"X\", \"-\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a-b-c-"
+      }
+    },
+    {
+      "id": "regexreplace_first_only",
+      "formula": "=REGEXREPLACE(\"aXbXcX\", \"X\", \"-\", 1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a-bXcX"
+      }
+    },
+    {
+      "id": "regexreplace_nth_match",
+      "formula": "=REGEXREPLACE(\"aXbXcX\", \"X\", \"-\", 3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aXbXc-"
+      }
+    },
+    {
+      "id": "regexreplace_no_match_passthrough",
+      "formula": "=REGEXREPLACE(\"abc\", \"X\", \"-\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abc"
+      }
+    },
+    {
+      "id": "regexreplace_negative_occurrence",
+      "formula": "=REGEXREPLACE(\"abc\", \"a\", \"x\", -1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "xbc"
+      }
+    }
+  ]
+}

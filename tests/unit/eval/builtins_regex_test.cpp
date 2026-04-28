@@ -64,21 +64,24 @@ TEST(RegexTest, BasicNoMatchFalse) {
   EXPECT_FALSE(v.as_boolean());
 }
 
-TEST(RegexTest, CaseInsensitiveByDefault) {
-  // Default case_sensitivity = 0 -> case-insensitive.
+TEST(RegexTest, CaseSensitiveByDefault) {
+  // Mac Excel 365 / MS docs convention: default case_sensitivity = 0 is
+  // CASE-SENSITIVE. "hello" pattern does not match "Hello World".
   const Value v = EvalSource("=REGEXTEST(\"Hello World\", \"hello\")");
-  ASSERT_TRUE(v.is_boolean());
-  EXPECT_TRUE(v.as_boolean());
-}
-
-TEST(RegexTest, CaseSensitiveExplicit) {
-  const Value v = EvalSource("=REGEXTEST(\"Hello World\", \"hello\", 1)");
   ASSERT_TRUE(v.is_boolean());
   EXPECT_FALSE(v.as_boolean());
 }
 
+TEST(RegexTest, CaseInsensitiveExplicit) {
+  // case_sensitivity=1 -> case-insensitive; "hello" now matches "Hello".
+  const Value v = EvalSource("=REGEXTEST(\"Hello World\", \"hello\", 1)");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
 TEST(RegexTest, CaseSensitiveExplicitMatches) {
-  const Value v = EvalSource("=REGEXTEST(\"Hello World\", \"Hello\", 1)");
+  // case_sensitivity=0 (explicit) is the same as default: case-sensitive.
+  const Value v = EvalSource("=REGEXTEST(\"Hello World\", \"Hello\", 0)");
   ASSERT_TRUE(v.is_boolean());
   EXPECT_TRUE(v.as_boolean());
 }
@@ -190,17 +193,19 @@ TEST(RegexExtract, Mode0NoMatchIsNA) {
   EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
-TEST(RegexExtract, Mode0CaseInsensitive) {
+TEST(RegexExtract, Mode0CaseSensitiveByDefaultNoMatch) {
+  // Default case_sensitivity=0 -> case-sensitive (Mac convention).
+  // "hello" pattern does not match "HELLO".
   const Value v = EvalSource("=REGEXEXTRACT(\"HELLO world\", \"hello\")");
-  ASSERT_TRUE(v.is_text());
-  // Result is the matched substring as it appears in the source.
-  EXPECT_EQ(v.as_text(), "HELLO");
-}
-
-TEST(RegexExtract, Mode0CaseSensitiveNoMatch) {
-  const Value v = EvalSource("=REGEXEXTRACT(\"HELLO world\", \"hello\", 0, 1)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(RegexExtract, Mode0CaseInsensitiveExplicit) {
+  // case_sensitivity=1 -> case-insensitive; "hello" matches "HELLO".
+  const Value v = EvalSource("=REGEXEXTRACT(\"HELLO world\", \"hello\", 0, 1)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "HELLO");
 }
 
 // ---------------------------------------------------------------------------
@@ -381,10 +386,12 @@ TEST(RegexReplace, OccurrenceExceedsTotalReturnsOriginal) {
   EXPECT_EQ(v.as_text(), "abc 123 def 456 ghi 789");
 }
 
-TEST(RegexReplace, NegativeOccurrenceIsValueError) {
+TEST(RegexReplace, NegativeOccurrenceIsPermissive) {
+  // Mac Excel 365 is permissive on negative occurrence: it folds to
+  // global replacement. Formulon clamps to 0 to match.
   const Value v = EvalSource("=REGEXREPLACE(\"abc\", \"a\", \"#\", -1)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "#bc");
 }
 
 TEST(RegexReplace, EmptyReplacementDeletesMatches) {
@@ -433,36 +440,45 @@ TEST(RegexReplace, DoubleDollarLiteral) {
 // REGEXREPLACE — case sensitivity
 // ---------------------------------------------------------------------------
 
-TEST(RegexReplace, CaseInsensitiveDefault) {
+TEST(RegexReplace, CaseSensitiveDefault) {
+  // Default case_sensitivity=0 -> case-sensitive (Mac convention).
+  // Only the lowercase "hello" is replaced.
   const Value v = EvalSource("=REGEXREPLACE(\"Hello HELLO hello\", \"hello\", \"#\")");
   ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "# # #");
+  EXPECT_EQ(v.as_text(), "Hello HELLO #");
 }
 
-TEST(RegexReplace, CaseSensitiveExplicit) {
+TEST(RegexReplace, CaseInsensitiveExplicit) {
+  // case_sensitivity=1 -> case-insensitive; all three variants are
+  // replaced.
   const Value v = EvalSource("=REGEXREPLACE(\"Hello HELLO hello\", \"hello\", \"#\", 0, 1)");
   ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "Hello HELLO #");
+  EXPECT_EQ(v.as_text(), "# # #");
 }
 
 // ---------------------------------------------------------------------------
 // Cross-cutting: case_sensitivity and pattern length cap
 // ---------------------------------------------------------------------------
 
-TEST(RegexCrossCutting, RegextestCaseSensitive) {
+TEST(RegexCrossCutting, RegextestCaseInsensitive) {
+  // case_sensitivity=1 -> case-insensitive; "foo" matches "FOO".
   const Value v = EvalSource("=REGEXTEST(\"FOO\", \"foo\", 1)");
   ASSERT_TRUE(v.is_boolean());
-  EXPECT_FALSE(v.as_boolean());
+  EXPECT_TRUE(v.as_boolean());
 }
 
-TEST(RegexCrossCutting, RegexextractCaseSensitive) {
-  const Value v = EvalSource("=REGEXEXTRACT(\"FOO foo\", \"foo\", 0, 1)");
+TEST(RegexCrossCutting, RegexextractCaseSensitiveDefault) {
+  // case_sensitivity=0 (default) -> case-sensitive; "foo" matches only
+  // the lowercase occurrence.
+  const Value v = EvalSource("=REGEXEXTRACT(\"FOO foo\", \"foo\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "foo");
 }
 
-TEST(RegexCrossCutting, RegexreplaceCaseSensitive) {
-  const Value v = EvalSource("=REGEXREPLACE(\"FOO foo\", \"foo\", \"#\", 0, 1)");
+TEST(RegexCrossCutting, RegexreplaceCaseSensitiveDefault) {
+  // case_sensitivity=0 (default) -> case-sensitive; only "foo" is
+  // replaced.
+  const Value v = EvalSource("=REGEXREPLACE(\"FOO foo\", \"foo\", \"#\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "FOO #");
 }

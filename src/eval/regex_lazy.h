@@ -36,9 +36,11 @@ class FunctionRegistry;
 
 /// `REGEXTEST(text, pattern, [case_sensitivity=0])` -> Bool. Returns TRUE
 /// when `pattern` matches anywhere in `text`. `case_sensitivity` must
-/// coerce to {0, 1}; any other value yields `#VALUE!`. Resource exhaustion
-/// (match_limit / depth_limit) returns FALSE rather than `#CALC!` because
-/// the test is a predicate by intent.
+/// coerce to {0, 1}; any other value yields `#VALUE!`. The convention
+/// matches Mac Excel 365 / MS docs: `0`/FALSE (default) is
+/// case-sensitive, `1`/TRUE is case-insensitive. Resource exhaustion
+/// (match_limit / depth_limit) returns FALSE rather than `#CALC!`
+/// because the test is a predicate by intent.
 Value eval_regextest_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                           const EvalContext& ctx);
 
@@ -57,9 +59,10 @@ Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const Fu
 /// `REGEXREPLACE(text, pattern, replacement, [occurrence=0],
 /// [case_sensitivity=0])`. `occurrence == 0` replaces every match
 /// (PCRE2_SUBSTITUTE_GLOBAL); `occurrence == N > 0` replaces only the
-/// N-th match; negative values yield `#VALUE!`. When `occurrence`
-/// exceeds the number of matches the original `text` is returned
-/// unchanged. Resource exhaustion yields `#CALC!`.
+/// N-th match. Mac Excel 365 is permissive on negative values: they
+/// fold to global replacement. When `occurrence` exceeds the number of
+/// matches the original `text` is returned unchanged. Resource
+/// exhaustion yields `#CALC!`.
 Value eval_regexreplace_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                              const EvalContext& ctx);
 
