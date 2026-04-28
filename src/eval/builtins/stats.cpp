@@ -522,20 +522,19 @@ static Value PercentileExc(const Value* args, std::uint32_t arity, Arena& /*aren
 }
 
 // QUARTILE.INC(array, quart) / QUARTILE(array, quart) - quartile by
-// `PERCENTILE.INC(array, quart/4)`. `quart` must be an integer in
-// {0, 1, 2, 3, 4}; non-integer or out-of-range yields `#NUM!`.
+// `PERCENTILE.INC(array, quart/4)`. `quart` must be in [0, 5);
+// Excel truncates a fractional `quart` toward zero, so `1.5` is `Q1`.
 static Value QuartileInc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const std::uint32_t data_count = arity - 1u;
   auto q_raw = read_kth_arg(args[arity - 1u]);
   if (!q_raw) {
     return Value::error(q_raw.error());
   }
-  const double q = q_raw.value();
-  // Excel truncates QUARTILE's quart toward zero and rejects values
-  // outside [0, 4]. A fractional quart (e.g. 1.5) is rejected.
-  if (q < 0.0 || q > 4.0 || std::floor(q) != q) {
+  const double q_in = q_raw.value();
+  if (q_in < 0.0 || q_in >= 5.0) {
     return Value::error(ErrorCode::Num);
   }
+  const double q = std::trunc(q_in);
   std::vector<double> xs = collect_numerics(args, data_count);
   if (xs.empty()) {
     return Value::error(ErrorCode::Num);
@@ -560,18 +559,20 @@ static Value QuartileInc(const Value* args, std::uint32_t arity, Arena& /*arena*
 
 // QUARTILE.EXC(array, quart) - exclusive quartile, equivalent to
 // `PERCENTILE.EXC(array, quart/4)` with `quart` restricted to {1, 2, 3}.
-// Unlike QUARTILE.INC there is no Q0 or Q4: `quart <= 0`, `quart >= 4`, or
-// a non-integer `quart` yields `#NUM!`. Empty numeric slice yields `#NUM!`.
+// Unlike QUARTILE.INC there is no Q0 or Q4: `quart < 1` or `quart >= 4`
+// yields `#NUM!`. Excel truncates a fractional `quart` toward zero, so
+// `quart = 1.5` is treated as `1`. Empty numeric slice yields `#NUM!`.
 static Value QuartileExc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const std::uint32_t data_count = arity - 1u;
   auto q_raw = read_kth_arg(args[arity - 1u]);
   if (!q_raw) {
     return Value::error(q_raw.error());
   }
-  const double q = q_raw.value();
-  if (q < 1.0 || q > 3.0 || std::floor(q) != q) {
+  const double q_in = q_raw.value();
+  if (q_in < 1.0 || q_in >= 4.0) {
     return Value::error(ErrorCode::Num);
   }
+  const double q = std::trunc(q_in);
   std::vector<double> xs = collect_numerics(args, data_count);
   if (xs.empty()) {
     return Value::error(ErrorCode::Num);
@@ -957,11 +958,11 @@ static Value Skew(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // SKEW.P(value, ...) - population skewness,
 // `(1 / n) * sum(((x_i - mean) / sigma)^3)` where `sigma` is the
 // population stdev. A constant data set (sigma == 0) yields `#DIV/0!`;
-// fewer than 1 numeric input also yields `#DIV/0!` so callers never see
-// a silent zero.
+// matching Excel, fewer than 3 numeric inputs also yields `#DIV/0!` so
+// callers never see a degenerate near-symmetric zero.
 static Value SkewP(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   std::vector<double> xs = collect_numerics(args, arity);
-  if (xs.empty()) {
+  if (xs.size() < 3u) {
     return Value::error(ErrorCode::Div0);
   }
   const MeanSS ms = compute_mean_ss(xs);

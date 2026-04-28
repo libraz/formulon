@@ -215,6 +215,13 @@ TEST(BuiltinsSkewP, ConstantIsDiv0) {
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
+TEST(BuiltinsSkewP, TooFewIsDiv0) {
+  // Excel rejects SKEW.P with fewer than 3 numeric inputs.
+  const Value v = EvalSource("=SKEW.P(1,2)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
 // ---------------------------------------------------------------------------
 // KURT
 // ---------------------------------------------------------------------------

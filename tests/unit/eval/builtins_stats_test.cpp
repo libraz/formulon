@@ -650,10 +650,13 @@ TEST(BuiltinsQuartileInc, QNegativeIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(BuiltinsQuartileInc, QFractionalIsNum) {
-  const Value v = EvalSource("=QUARTILE.INC(1, 2, 3, 4, 1.5)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+TEST(BuiltinsQuartileInc, QFractionalTruncatesTowardZero) {
+  // Excel truncates a fractional quart toward zero: 1.5 -> Q1 -> P25 of {1,2,3,4}.
+  const Value q15 = EvalSource("=QUARTILE.INC(1, 2, 3, 4, 1.5)");
+  const Value q1 = EvalSource("=QUARTILE.INC(1, 2, 3, 4, 1)");
+  ASSERT_TRUE(q15.is_number());
+  ASSERT_TRUE(q1.is_number());
+  EXPECT_DOUBLE_EQ(q15.as_number(), q1.as_number());
 }
 
 TEST(BuiltinsQuartileInc, AliasMatchesCanonical) {

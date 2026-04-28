@@ -202,10 +202,11 @@ TEST(BuiltinsQuartileExc, QFourIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(BuiltinsQuartileExc, QFractionalIsNum) {
+TEST(BuiltinsQuartileExc, QFractionalTruncatesTowardZero) {
+  // Excel truncates a fractional quart toward zero: 1.5 -> Q1 -> PERCENTILE.EXC(., 0.25).
   const Value v = EvalSource("=QUARTILE.EXC({1;2;3;4;5}, 1.5)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.5);
 }
 
 TEST(BuiltinsQuartileExc, EmptyNumericSliceIsNum) {
