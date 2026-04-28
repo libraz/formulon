@@ -1,0 +1,90 @@
+suite: external_stubs
+description: "External / stub-only cluster (IMAGE / PY / RTD / STOCKHISTORY / WEBSERVICE / COPILOT / DETECTLANGUAGE / TRANSLATE / ARRAYTOTEXT / FILTERXML / INFO / CUBE×7 / GETPIVOTDATA / PHONETIC). Every member dispatches to an external service or out-of-band workbook metadata that Formulon does not embed; closure is a divergence-only declaration with each case marked skip-oracle in tests/divergence.yaml."
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # =========================================================================
+  # Each case is `mode: skip-oracle`. Stub-return correctness is enforced by
+  # unit tests; oracle parity is impractical because the underlying service
+  # / metadata is unavailable in the oracle harness.
+  # =========================================================================
+
+  - id: external_stub_image
+    description: "IMAGE() fetches a network image; Formulon stubs to #VALUE!"
+    formula: '=IMAGE("https://example.com/img.png")'
+
+  - id: external_stub_py
+    description: "PY() runs Python in the cloud; Formulon stubs to #NAME?"
+    formula: '=PY("import math")'
+
+  - id: external_stub_rtd
+    description: "RTD() reads from a COM real-time data server; Formulon stubs to #N/A"
+    formula: '=RTD("server", "topic", "p1")'
+
+  - id: external_stub_stockhistory
+    description: "STOCKHISTORY() pulls market data; Formulon stubs to a fixed-error surface"
+    formula: '=STOCKHISTORY("MSFT", DATE(2024,1,1))'
+
+  - id: external_stub_webservice
+    description: "WEBSERVICE() makes an HTTP request; Formulon stubs to #VALUE!"
+    formula: '=WEBSERVICE("https://example.com")'
+
+  - id: external_stub_copilot
+    description: "COPILOT() dispatches to an LLM backend; Formulon stubs to #NAME?"
+    formula: '=COPILOT("hello")'
+
+  - id: external_stub_detectlanguage
+    description: "DETECTLANGUAGE() calls a translation cloud; Formulon stubs to #NAME?"
+    formula: '=DETECTLANGUAGE("hello world")'
+
+  - id: external_stub_translate
+    description: "TRANSLATE() calls a translation cloud; Formulon stubs to #NAME?"
+    formula: '=TRANSLATE("hello", "en", "ja")'
+
+  - id: external_stub_arraytotext
+    description: "ARRAYTOTEXT() serialises a spill array; impl exists but full Excel-format parity unverified"
+    formula: '=ARRAYTOTEXT({1;2;3})'
+
+  - id: external_stub_filterxml
+    description: "FILTERXML() runs an XPath query; impl exists via pugixml but Excel XPath dialect parity unverified"
+    formula: '=FILTERXML("<r><a>1</a><a>2</a></r>", "//a")'
+
+  - id: external_stub_info
+    description: "INFO() returns environment-specific values (locale, version, paths); not portable across hosts"
+    formula: '=INFO("system")'
+
+  - id: external_stub_cubekpimember
+    description: "CUBEKPIMEMBER() requires a cube connection; Formulon has none, returns #NAME?"
+    formula: '=CUBEKPIMEMBER("conn", "kpi", 1)'
+
+  - id: external_stub_cubemember
+    description: "CUBEMEMBER() requires a cube connection; Formulon has none, returns #NAME?"
+    formula: '=CUBEMEMBER("conn", "[Measures].[Sales]")'
+
+  - id: external_stub_cubememberproperty
+    description: "CUBEMEMBERPROPERTY() requires a cube connection; Formulon has none, returns #NAME?"
+    formula: '=CUBEMEMBERPROPERTY("conn", "[Measures].[Sales]", "Caption")'
+
+  - id: external_stub_cuberankedmember
+    description: "CUBERANKEDMEMBER() requires a cube connection; Formulon has none, returns #NAME?"
+    formula: '=CUBERANKEDMEMBER("conn", "set", 1)'
+
+  - id: external_stub_cubeset
+    description: "CUBESET() requires a cube connection; Formulon has none, returns #NAME?"
+    formula: '=CUBESET("conn", "{[A].[B]}")'
+
+  - id: external_stub_cubesetcount
+    description: "CUBESETCOUNT() requires a cube set; Formulon has none, returns #NAME?"
+    formula: '=CUBESETCOUNT(A1)'
+
+  - id: external_stub_cubevalue
+    description: "CUBEVALUE() requires a cube connection; Formulon has none, returns #NAME?"
+    formula: '=CUBEVALUE("conn", "[Measures].[Sales]")'
+
+  - id: external_stub_getpivotdata
+    description: "GETPIVOTDATA() requires a pivot anchor; Formulon has no pivot tables wired, returns #REF!"
+    formula: '=GETPIVOTDATA("amount", A1)'
+
+  - id: external_stub_phonetic
+    description: "PHONETIC() reads OOXML rPh annotations; Formulon does not surface them, so passthrough text differs from Mac"
+    formula: '=PHONETIC("テスト")'

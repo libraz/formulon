@@ -897,3 +897,152 @@ groups:
       - name: "rows x cols uniform draw"
         probe_regex: 'RANDARRAY\(2,\s*2\)'
         expected: diverged
+
+  # -------------------------------------------------------------------------
+  # External / stub-only cluster. These functions either dispatch to an
+  # external service (network / cloud / Python runtime / RTD COM provider /
+  # cube data source) that Formulon does not embed, or they read out-of-band
+  # workbook metadata (rPh annotations, pivot anchors) the engine does not
+  # carry. Each member returns a fixed error / passthrough surface; the
+  # closure is a divergence-only declaration. The cases yaml carries one
+  # probe per function and divergence.yaml marks each as skip-oracle.
+  # -------------------------------------------------------------------------
+  - function: "IMAGE"
+    aspect: "external image fetch stub"
+    behaviors:
+      - name: "URL argument -> #VALUE!"
+        probe_regex: 'IMAGE\("https?://'
+        expected: diverged
+
+  - function: "PY"
+    aspect: "embedded Python stub"
+    behaviors:
+      - name: "Python source -> #NAME?"
+        probe_regex: 'PY\("'
+        expected: diverged
+
+  - function: "RTD"
+    aspect: "real-time-data COM stub"
+    behaviors:
+      - name: "server/topic args -> #N/A"
+        probe_regex: 'RTD\("'
+        expected: diverged
+
+  - function: "STOCKHISTORY"
+    aspect: "online stock data stub"
+    behaviors:
+      - name: "ticker + date args -> stub error"
+        probe_regex: 'STOCKHISTORY\("'
+        expected: diverged
+
+  - function: "WEBSERVICE"
+    aspect: "HTTP fetch stub"
+    behaviors:
+      - name: "URL argument -> #VALUE!"
+        probe_regex: 'WEBSERVICE\("https?://'
+        expected: diverged
+
+  - function: "COPILOT"
+    aspect: "LLM-backed Copilot stub"
+    behaviors:
+      - name: "prompt argument -> #NAME?"
+        probe_regex: 'COPILOT\("'
+        expected: diverged
+
+  - function: "DETECTLANGUAGE"
+    aspect: "language-detection cloud stub"
+    behaviors:
+      - name: "text argument -> #NAME?"
+        probe_regex: 'DETECTLANGUAGE\("'
+        expected: diverged
+
+  - function: "TRANSLATE"
+    aspect: "translation cloud stub"
+    behaviors:
+      - name: "text + locale args -> #NAME?"
+        probe_regex: 'TRANSLATE\("'
+        expected: diverged
+
+  - function: "ARRAYTOTEXT"
+    aspect: "spill-array text serialiser"
+    behaviors:
+      - name: "literal array -> Excel-format text"
+        probe_regex: 'ARRAYTOTEXT\(\{'
+        expected: diverged
+
+  - function: "FILTERXML"
+    aspect: "XPath query against XML text"
+    behaviors:
+      - name: "well-formed XML + XPath"
+        probe_regex: 'FILTERXML\("<'
+        expected: diverged
+
+  - function: "INFO"
+    aspect: "environment-key dispatch"
+    behaviors:
+      - name: "directory key -> environment-specific"
+        probe_regex: 'INFO\("'
+        expected: diverged
+
+  - function: "CUBEKPIMEMBER"
+    aspect: "OLAP KPI lookup stub"
+    behaviors:
+      - name: "no cube connection -> #NAME?"
+        probe_regex: 'CUBEKPIMEMBER\("'
+        expected: diverged
+
+  - function: "CUBEMEMBER"
+    aspect: "OLAP member lookup stub"
+    behaviors:
+      - name: "no cube connection -> #NAME?"
+        probe_regex: 'CUBEMEMBER\("'
+        expected: diverged
+
+  - function: "CUBEMEMBERPROPERTY"
+    aspect: "OLAP member-property stub"
+    behaviors:
+      - name: "no cube connection -> #NAME?"
+        probe_regex: 'CUBEMEMBERPROPERTY\("'
+        expected: diverged
+
+  - function: "CUBERANKEDMEMBER"
+    aspect: "OLAP ranked-member stub"
+    behaviors:
+      - name: "no cube connection -> #NAME?"
+        probe_regex: 'CUBERANKEDMEMBER\("'
+        expected: diverged
+
+  - function: "CUBESET"
+    aspect: "OLAP set-construction stub"
+    behaviors:
+      - name: "no cube connection -> #NAME?"
+        probe_regex: 'CUBESET\("'
+        expected: diverged
+
+  - function: "CUBESETCOUNT"
+    aspect: "OLAP set-cardinality stub"
+    behaviors:
+      - name: "no cube connection -> #NAME?"
+        probe: '=CUBESETCOUNT(A1)'
+        expected: diverged
+
+  - function: "CUBEVALUE"
+    aspect: "OLAP cell-value stub"
+    behaviors:
+      - name: "no cube connection -> #NAME?"
+        probe_regex: 'CUBEVALUE\("'
+        expected: diverged
+
+  - function: "GETPIVOTDATA"
+    aspect: "pivot anchor lookup stub"
+    behaviors:
+      - name: "no pivot context -> #REF!"
+        probe_regex: 'GETPIVOTDATA\("'
+        expected: diverged
+
+  - function: "PHONETIC"
+    aspect: "rPh-annotation lookup stub"
+    behaviors:
+      - name: "text passthrough (no rPh)"
+        probe_regex: 'PHONETIC\("'
+        expected: diverged

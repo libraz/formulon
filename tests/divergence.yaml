@@ -737,6 +737,135 @@ entries:
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
 
+  # External / stub-only cluster (IMAGE / PY / RTD / STOCKHISTORY /
+  # WEBSERVICE / COPILOT / DETECTLANGUAGE / TRANSLATE / ARRAYTOTEXT /
+  # FILTERXML / INFO / CUBE×7 / GETPIVOTDATA / PHONETIC). Each member
+  # dispatches to a service or out-of-band metadata source the engine does
+  # not embed; oracle parity is impractical because the underlying
+  # service / metadata is unavailable in the harness. Stub return-codes
+  # are covered by unit tests; these entries declare the divergence
+  # cluster and exclude the cases from oracle-verify.
+  - id: external_stub_image
+    reason: "IMAGE fetches a network image; Formulon does no network I/O and stubs to #VALUE!. Oracle parity requires an embedded image client."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: external_stub_py
+    reason: "PY runs Python in the cloud; Formulon does not embed a Python runtime and stubs to #NAME!. Oracle parity requires the Microsoft 365 PY service."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: external_stub_rtd
+    reason: "RTD reads from a real-time data COM server; Formulon has no provider runtime and stubs to #N/A. Oracle parity requires a registered COM RTD server."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: external_stub_stockhistory
+    reason: "STOCKHISTORY pulls live market data; Formulon does no network I/O. Oracle parity requires Microsoft 365 stock data subscription."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: external_stub_webservice
+    reason: "WEBSERVICE makes an HTTP request; Formulon does no network I/O and stubs to #VALUE!. Oracle parity requires an HTTP client."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: external_stub_copilot
+    reason: "COPILOT dispatches to an LLM backend; Formulon does not embed one and stubs to #NAME!. Oracle parity requires the Microsoft 365 Copilot service."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: external_stub_detectlanguage
+    reason: "DETECTLANGUAGE calls a translation cloud; Formulon does no network I/O and stubs to #NAME!."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: external_stub_translate
+    reason: "TRANSLATE calls a translation cloud; Formulon does no network I/O and stubs to #NAME!."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: external_stub_arraytotext
+    reason: "ARRAYTOTEXT impl exists but full Excel-format parity (escape rules, locale separators) is unverified; closure deferred to a dedicated suite."
+    prefer: mac-excel-365
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: external_stub_filterxml
+    reason: "FILTERXML uses pugixml's XPath 1.0; Excel's XPath dialect has minor quirks that may diverge. Closure deferred to a dedicated XPath suite."
+    prefer: mac-excel-365
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: external_stub_info
+    reason: "INFO returns environment-specific values (locale, version, paths); answers vary by host and are not portable across the oracle harness."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: external_stub_cubekpimember
+    reason: "CUBEKPIMEMBER requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: external_stub_cubemember
+    reason: "CUBEMEMBER requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: external_stub_cubememberproperty
+    reason: "CUBEMEMBERPROPERTY requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: external_stub_cuberankedmember
+    reason: "CUBERANKEDMEMBER requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: external_stub_cubeset
+    reason: "CUBESET requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: external_stub_cubesetcount
+    reason: "CUBESETCOUNT requires a live cube set; Formulon has no OLAP layer and stubs to #NAME!."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: external_stub_cubevalue
+    reason: "CUBEVALUE requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: external_stub_getpivotdata
+    reason: "GETPIVOTDATA requires a pivot anchor; Formulon has no pivot-table runtime and stubs to #REF!."
+    prefer: formulon
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: external_stub_phonetic
+    reason: "PHONETIC reads OOXML rPh annotations; Formulon's OOXML reader does not surface rPh into Value, so unannotated text passes through. Mac without rPh annotations behaves the same on text-cell input but diverges on annotated cells."
+    prefer: mac-excel-365
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a
