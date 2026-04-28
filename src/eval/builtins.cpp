@@ -33,6 +33,7 @@
 #include "eval/builtins/stats.h"
 #include "eval/builtins/subtotal.h"
 #include "eval/builtins/text.h"
+#include "eval/builtins/text_bahttext.h"
 #include "eval/builtins/text_format.h"
 #include "eval/builtins/text_width.h"
 #include "eval/builtins/web.h"
@@ -51,6 +52,7 @@ void register_builtins(FunctionRegistry& registry) {
   register_stats_builtins(registry);
   register_subtotal_builtins(registry);
   register_text_builtins(registry);
+  register_bahttext_builtin(registry);
   register_text_format_builtins(registry);
   register_text_width_builtins(registry);
   register_info_builtins(registry);

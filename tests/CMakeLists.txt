@@ -43,6 +43,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_math4_test.cpp
   unit/eval/builtins_text_test.cpp
   unit/eval/builtins_text2_test.cpp
+  unit/eval/builtins_bahttext_test.cpp
   unit/eval/builtins_textb_test.cpp
   unit/eval/builtins_text3_test.cpp
   unit/eval/builtins_width_test.cpp
