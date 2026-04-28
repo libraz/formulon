@@ -74,6 +74,18 @@ families:
     min_perspectives_per_member: 7
     cluster_reason: "Shared DCC basis matrix (0..4); 1-ULP tolerance perspectives co-evolve."
 
+  # -- FORECAST.ETS -----------------------------------------------------------
+  # All four functions share the Holt-Winters additive triple-exponential
+  # smoothing core (preprocessing, Nelder-Mead fit, ACF seasonality
+  # detection). They co-evolve on optimizer-drift tolerance and timeline
+  # / values shape rejection (#N/A), so closure perspectives are best
+  # exercised against the same input fixtures.
+  - name: forecast_ets
+    members: [FORECAST.ETS, FORECAST.ETS.CONFINT, FORECAST.ETS.SEASONALITY, FORECAST.ETS.STAT]
+    category_file: tests/oracle/cases/forecast_ets.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Shared Holt-Winters core; Nelder-Mead drift tolerance and timeline-shape errors co-evolve."
+
   # -- Volatile / non-deterministic -----------------------------------------
   - name: volatile
     members: [NOW, TODAY, RAND, RANDBETWEEN, RANDARRAY]

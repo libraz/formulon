@@ -1166,7 +1166,11 @@ Value eval_forecast_ets_confint_lazy(const parser::AstNode& call, Arena& arena, 
       return err;
     }
   }
-  if (!std::isfinite(confidence) || confidence <= 0.0 || confidence >= 1.0) {
+  // Mac Excel 365 accepts confidence == 0 (degenerate CI, returns 0 since
+  // z = InverseStandardNormal(0.5) = 0). The lower-bound rejection is
+  // strict (< 0); upper bound stays inclusive on 1 because z diverges to
+  // +infinity there.
+  if (!std::isfinite(confidence) || confidence < 0.0 || confidence >= 1.0) {
     return Value::error(ErrorCode::Num);
   }
 
@@ -1200,13 +1204,13 @@ Value eval_forecast_ets_confint_lazy(const parser::AstNode& call, Arena& arena, 
 
   const std::int64_t n = static_cast<std::int64_t>(pre.resampled.y.size());
   const std::int64_t target_idx = target_step_index(target_date, pre.t0, pre.step);
-  std::int64_t h = target_idx - (n - 1);
-  // Half-width grows with sqrt(h); for h <= 0 (target inside the
-  // training window) clamp the horizon to 1 so the half-width stays
-  // strictly positive. ORACLE-PENDING: Excel may return 0 or RMSE
-  // here; calibrate against the oracle.
-  if (h < 1)
-    h = 1;
+  const std::int64_t h = target_idx - (n - 1);
+  // Mac Excel 365 rejects target_date inside the training window with
+  // #NUM!. The half-width formula z * RMSE * sqrt(h) is only meaningful
+  // for strictly positive horizons.
+  if (h < 1) {
+    return Value::error(ErrorCode::Num);
+  }
 
   // Simplified normal-approximation half-width:
   //     hw = z * RMSE * sqrt(h)
@@ -1247,7 +1251,10 @@ Value eval_forecast_ets_seasonality_lazy(const parser::AstNode& call, Arena& are
                   aggregation, &pre, &err)) {
     return err;
   }
-  return Value::number(static_cast<double>(pre.m));
+  // Mac Excel 365 reports 0 (not 1) when no period is detected. Internally
+  // m = 1 means non-seasonal for the Holt-Winters fit; map it to 0 at the
+  // SEASONALITY API boundary.
+  return Value::number(static_cast<double>(pre.m == 1U ? 0U : pre.m));
 }
 
 Value eval_forecast_ets_stat_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

@@ -41,3 +41,85 @@ cases:
   - id: forecast_ets_out_of_range_seasonality
     description: "seasonality=9000 exceeds documented limit (0..8760) — #NUM!"
     formula: "=FORECAST.ETS(11, {10;12;14;16;18;20;22;24;26;28}, {1;2;3;4;5;6;7;8;9;10}, 9000)"
+
+  # =========================================================================
+  # FORECAST.ETS.CONFINT — z * RMSE * sqrt(h)
+  # =========================================================================
+
+  - id: forecast_ets_confint_default_confidence
+    description: "Default confidence (0.95) — z * RMSE * sqrt(h) on linear data"
+    tolerance: { abs: 0.01, rel: 0.01 }
+    formula: "=FORECAST.ETS.CONFINT(11, {10;12;14;16;18;20;22;24;26;28}, {1;2;3;4;5;6;7;8;9;10}, 0.95)"
+
+  - id: forecast_ets_confint_higher_confidence
+    description: "Higher confidence (0.99) widens the interval"
+    tolerance: { abs: 0.01, rel: 0.01 }
+    formula: "=FORECAST.ETS.CONFINT(11, {10;12;14;16;18;20;22;24;26;28}, {1;2;3;4;5;6;7;8;9;10}, 0.99)"
+
+  - id: forecast_ets_confint_target_inside_window
+    description: "target_date=5 inside training window (h<=0); horizon clamped to 1"
+    tolerance: { abs: 0.01, rel: 0.01 }
+    formula: "=FORECAST.ETS.CONFINT(5, {10;12;14;16;18;20;22;24;26;28}, {1;2;3;4;5;6;7;8;9;10})"
+
+  - id: forecast_ets_confint_confidence_zero
+    description: "confidence=0 — outside (0,1) -> #NUM!"
+    formula: "=FORECAST.ETS.CONFINT(11, {1;2;3;4;5}, {1;2;3;4;5}, 0)"
+
+  - id: forecast_ets_confint_confidence_one
+    description: "confidence=1 — outside (0,1) -> #NUM!"
+    formula: "=FORECAST.ETS.CONFINT(11, {1;2;3;4;5}, {1;2;3;4;5}, 1)"
+
+  # =========================================================================
+  # FORECAST.ETS.SEASONALITY — auto-detected period via ACF
+  # =========================================================================
+
+  - id: forecast_ets_seasonality_period_4
+    description: "Period-4 cyclic series — auto-detect returns 4"
+    formula: "=FORECAST.ETS.SEASONALITY({10;12;14;11;12;14;16;13;14;16;18;15;16;18;20;17}, {1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16})"
+
+  - id: forecast_ets_seasonality_period_3
+    description: "Period-3 cyclic series — auto-detect returns 3"
+    formula: "=FORECAST.ETS.SEASONALITY({10;15;20;12;17;22;14;19;24;16;21;26}, {1;2;3;4;5;6;7;8;9;10;11;12})"
+
+  - id: forecast_ets_seasonality_linear_no_period
+    description: "Linear trend — no period detected, returns 1"
+    formula: "=FORECAST.ETS.SEASONALITY({10;12;14;16;18;20;22;24;26;28}, {1;2;3;4;5;6;7;8;9;10})"
+
+  - id: forecast_ets_seasonality_too_short
+    description: "n=3 — too short to detect (n<4), returns 1"
+    formula: "=FORECAST.ETS.SEASONALITY({1;2;3}, {1;2;3})"
+
+  - id: forecast_ets_seasonality_length_mismatch
+    description: "values 5 / timeline 4 — #N/A"
+    formula: "=FORECAST.ETS.SEASONALITY({1;2;3;4;5}, {1;2;3;4})"
+
+  # =========================================================================
+  # FORECAST.ETS.STAT — diagnostic statistic selector (1..8)
+  # =========================================================================
+
+  - id: forecast_ets_stat_alpha
+    description: "stat=1 (alpha — level smoothing parameter)"
+    tolerance: { abs: 0.05, rel: 0.05 }
+    formula: "=FORECAST.ETS.STAT({10;12;14;11;12;14;16;13;14;16;18;15;16;18;20;17}, {1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16}, 1)"
+
+  - id: forecast_ets_stat_rmse
+    description: "stat=7 (RMSE of in-sample fit)"
+    tolerance: { abs: 0.05, rel: 0.05 }
+    formula: "=FORECAST.ETS.STAT({10;12;14;11;12;14;16;13;14;16;18;15;16;18;20;17}, {1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16}, 7)"
+
+  - id: forecast_ets_stat_step_size
+    description: "stat=8 (step_size — median delta-t, deterministic)"
+    formula: "=FORECAST.ETS.STAT({10;12;14;11;12;14;16;13;14;16;18;15;16;18;20;17}, {1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16}, 8)"
+
+  - id: forecast_ets_stat_mase
+    description: "stat=4 (MASE — mean absolute scaled error)"
+    tolerance: { abs: 0.05, rel: 0.05 }
+    formula: "=FORECAST.ETS.STAT({10;12;14;11;12;14;16;13;14;16;18;15;16;18;20;17}, {1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16}, 4)"
+
+  - id: forecast_ets_stat_zero
+    description: "stat=0 — out-of-range -> #NUM!"
+    formula: "=FORECAST.ETS.STAT({1;2;3;4;5}, {1;2;3;4;5}, 0)"
+
+  - id: forecast_ets_stat_nine
+    description: "stat=9 — out-of-range -> #NUM!"
+    formula: "=FORECAST.ETS.STAT({1;2;3;4;5}, {1;2;3;4;5}, 9)"

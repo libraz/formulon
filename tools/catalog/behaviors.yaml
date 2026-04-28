@@ -495,6 +495,78 @@ groups:
         expected: impl
 
   # -------------------------------------------------------------------------
+  # FORECAST.ETS.CONFINT — normal-approximation half-width hw = z*RMSE*sqrt(h).
+  # Confidence outside (0,1) -> #NUM!; other errors match FORECAST.ETS.
+  # -------------------------------------------------------------------------
+  - function: "FORECAST.ETS.CONFINT"
+    aspect: "confidence-interval half-width"
+    behaviors:
+      - name: "default confidence (0.95)"
+        probe_regex: 'FORECAST\.ETS\.CONFINT\(\d+,.*,\s*0\.95\)'
+        expected: diverged
+      - name: "higher confidence (0.99)"
+        probe_regex: 'FORECAST\.ETS\.CONFINT\(\d+,.*,\s*0\.99\)'
+        expected: diverged
+      - name: "target inside training window"
+        probe_regex: 'FORECAST\.ETS\.CONFINT\(5,'
+        expected: impl
+      - name: "confidence boundary 0 (#NUM!)"
+        probe_regex: 'FORECAST\.ETS\.CONFINT\([^,]+,[^,]+,[^,]+,\s*0\)'
+        expected: impl
+      - name: "confidence boundary 1 (#NUM!)"
+        probe_regex: 'FORECAST\.ETS\.CONFINT\([^,]+,[^,]+,[^,]+,\s*1\)'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # FORECAST.ETS.SEASONALITY — ACF-based period detection (lags 2..min(n/2,52)).
+  # Threshold |ACF| >= 0.3; otherwise returns 1 (no seasonality).
+  # -------------------------------------------------------------------------
+  - function: "FORECAST.ETS.SEASONALITY"
+    aspect: "auto-detected period"
+    behaviors:
+      - name: "period-4 cyclic series"
+        probe: "{10;12;14;11;12;14;16;13;14;16;18;15;16;18;20;17}"
+        expected: impl
+      - name: "period-3 cyclic series"
+        probe: "{10;15;20;12;17;22;14;19;24;16;21;26}"
+        expected: impl
+      - name: "linear trend (no period detected)"
+        probe_regex: 'FORECAST\.ETS\.SEASONALITY\(\{10;12;14;16;18;20;22;24;26;28\}'
+        expected: diverged
+      - name: "too short (n=3) returns 1"
+        probe_regex: 'FORECAST\.ETS\.SEASONALITY\(\{1;2;3\}'
+        expected: impl
+      - name: "length mismatch (#N/A)"
+        probe_regex: 'FORECAST\.ETS\.SEASONALITY\(\{1;2;3;4;5\},\s*\{1;2;3;4\}'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # FORECAST.ETS.STAT — diagnostic statistic selector (1..8).
+  # 1=alpha, 2=beta, 3=gamma, 4=MASE, 5=SMAPE, 6=MAE, 7=RMSE, 8=step_size.
+  # -------------------------------------------------------------------------
+  - function: "FORECAST.ETS.STAT"
+    aspect: "diagnostic statistic"
+    behaviors:
+      - name: "stat=1 (alpha smoothing)"
+        probe_regex: 'FORECAST\.ETS\.STAT\([^,]+,[^,]+,\s*1\)'
+        expected: diverged
+      - name: "stat=7 (RMSE)"
+        probe_regex: 'FORECAST\.ETS\.STAT\([^,]+,[^,]+,\s*7\)'
+        expected: diverged
+      - name: "stat=8 (step_size, deterministic)"
+        probe_regex: 'FORECAST\.ETS\.STAT\([^,]+,[^,]+,\s*8\)'
+        expected: impl
+      - name: "stat=4 (MASE)"
+        probe_regex: 'FORECAST\.ETS\.STAT\([^,]+,[^,]+,\s*4\)'
+        expected: diverged
+      - name: "stat=0 out-of-range (#NUM!)"
+        probe_regex: 'FORECAST\.ETS\.STAT\([^,]+,[^,]+,\s*0\)'
+        expected: impl
+      - name: "stat=9 out-of-range (#NUM!)"
+        probe_regex: 'FORECAST\.ETS\.STAT\([^,]+,[^,]+,\s*9\)'
+        expected: impl
+
+  # -------------------------------------------------------------------------
   # Shape of function arguments. Scalars, cell references, ranges, and
   # array literals all feed the same dispatcher, but the coercion path
   # differs — this group exists to make sure each shape has at least one

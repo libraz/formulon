@@ -287,9 +287,20 @@ TEST(ForecastEtsConfint, DefaultConfidenceIsPositive) {
   EXPECT_GE(v.as_number(), 0.0);
 }
 
-TEST(ForecastEtsConfint, ConfidenceZeroIsNum) {
+TEST(ForecastEtsConfint, ConfidenceZeroIsZero) {
+  // Mac Excel 365 accepts confidence == 0 as a degenerate CI: z =
+  // InverseStandardNormal(0.5) = 0, so the half-width = 0 * RMSE * sqrt(h) = 0.
   const Workbook wb = MakeLinearWorkbook();
   const Value v = EvalSourceIn("=FORECAST.ETS.CONFINT(11, B1:B10, A1:A10, 0)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+}
+
+TEST(ForecastEtsConfint, TargetInsideTrainingWindowIsNum) {
+  // h < 1 (target inside or before the last training point) -> #NUM! per
+  // Mac Excel 365.
+  const Workbook wb = MakeLinearWorkbook();
+  const Value v = EvalSourceIn("=FORECAST.ETS.CONFINT(5, B1:B10, A1:A10, 0.95)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
@@ -364,7 +375,9 @@ TEST(ForecastEtsSeasonality, QuarterlyPatternReturnsFour) {
   EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
 }
 
-TEST(ForecastEtsSeasonality, FlatLineReturnsOne) {
+TEST(ForecastEtsSeasonality, FlatLineReturnsZero) {
+  // Constant series: ACF on a flat line is 0 (zero variance), so no
+  // period is detected -> Mac Excel 365 returns 0.
   Workbook wb = Workbook::create();
   Sheet& s = wb.sheet(0);
   for (int i = 0; i < 10; ++i) {
@@ -373,11 +386,12 @@ TEST(ForecastEtsSeasonality, FlatLineReturnsOne) {
   }
   const Value v = EvalSourceIn("=FORECAST.ETS.SEASONALITY(B1:B10, A1:A10)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
 }
 
-TEST(ForecastEtsSeasonality, ShortSeriesReturnsOne) {
-  // n = 3 -> below the n >= 4 threshold; detector returns 1.
+TEST(ForecastEtsSeasonality, ShortSeriesReturnsZero) {
+  // n = 3 -> below the n >= 4 threshold; detector reports "no period"
+  // which Mac Excel 365 surfaces as 0.
   Workbook wb = Workbook::create();
   Sheet& s = wb.sheet(0);
   s.set_cell_value(0, 0, Value::number(1.0));
@@ -388,7 +402,7 @@ TEST(ForecastEtsSeasonality, ShortSeriesReturnsOne) {
   s.set_cell_value(2, 1, Value::number(30.0));
   const Value v = EvalSourceIn("=FORECAST.ETS.SEASONALITY(B1:B3, A1:A3)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
 }
 
 TEST(ForecastEtsSeasonality, ErrorPropagates) {

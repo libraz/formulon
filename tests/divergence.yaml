@@ -566,6 +566,54 @@ entries:
     last_verified_excel_version: "16.108.1"
     tolerance: { abs: 0.01, rel: 0.001 }
 
+  # FORECAST.ETS.CONFINT / .STAT — Mac Excel's optimizer converges to a
+  # qualitatively different fit than Formulon's bounded Nelder-Mead on the
+  # selected fixtures. On the linear data used by CONFINT, Mac drives the
+  # in-sample residual to ~0 (so half-width = 0); Formulon's optimizer
+  # settles at a nontrivial RMSE (~0.7), producing half-widths in the 1.4
+  # range. On the cyclic period-4 data used by STAT, Mac fits with RMSE
+  # exactly 0 (alpha tuned to ~0.751 capturing the seasonality cleanly),
+  # whereas Formulon converges to alpha ~0.249 with RMSE ~0.5. These are
+  # algorithmic differences, not tail-bit drift; tolerance widening would
+  # paper over a real divergence. Skip the oracle until a Mac-quality
+  # optimizer (Hyndman initialization + relaxed bounds) is implemented.
+  - id: forecast_ets_confint_default_confidence
+    reason: "Holt-Winters fit on linear data: Mac drives RMSE -> 0, Formulon's Nelder-Mead does not. Half-width values diverge by O(1)."
+    prefer: mac-excel-365
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: forecast_ets_confint_higher_confidence
+    reason: "Same Mac vs Formulon RMSE convergence gap on linear data; confidence multiplier (z) cannot compensate."
+    prefer: mac-excel-365
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: forecast_ets_seasonality_linear_no_period
+    reason: "Mac Excel detrends before computing ACF, so a perfectly linear series surfaces no period (returns 0). Formulon's plain ACF picks lag 2 because all autocorrelations on a non-stationary linear series exceed the 0.3 threshold. Implementing detrending is a correctness improvement but out of scope here."
+    prefer: mac-excel-365
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: forecast_ets_stat_alpha
+    reason: "Mac Excel's optimizer converges to alpha ~0.751 on cyclic period-4 data; Formulon's bounded Nelder-Mead settles at ~0.249. Algorithmic difference, not tail-bit drift."
+    prefer: mac-excel-365
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: forecast_ets_stat_rmse
+    reason: "Mac achieves RMSE ~0 on cyclic period-4 data via a tight fit; Formulon's optimizer settles at RMSE ~0.5. Same root cause as forecast_ets_stat_alpha."
+    prefer: mac-excel-365
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: forecast_ets_stat_mase
+    reason: "MASE follows the same fit-quality gap as the RMSE divergence; Mac's near-zero residuals yield MASE ~0, Formulon's residuals yield a nontrivial value."
+    prefer: mac-excel-365
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

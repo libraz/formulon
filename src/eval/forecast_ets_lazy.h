@@ -63,8 +63,10 @@ Value eval_forecast_ets_lazy(const parser::AstNode& call, Arena& arena, const Fu
 /// stats_detail::InverseStandardNormal((1 + confidence) / 2)`, RMSE is
 /// the in-sample residual standard error from the fit, and `h` is the
 /// integer step count between the last training timeline entry and
-/// `target_date`. Confidence outside `(0, 1)` -> `#NUM!`. All other
-/// errors match `FORECAST.ETS`.
+/// `target_date`. `confidence` outside `[0, 1)` -> `#NUM!` (0 is
+/// degenerate but accepted, returning 0). `target_date` inside or before
+/// the training window (`h < 1`) -> `#NUM!`. All other errors match
+/// `FORECAST.ETS`.
 Value eval_forecast_ets_confint_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                                      const EvalContext& ctx);
 
@@ -73,9 +75,10 @@ Value eval_forecast_ets_confint_lazy(const parser::AstNode& call, Arena& arena, 
 ///
 /// Auto-detects the dominant period using the autocorrelation function
 /// over lags `2..min(n/2, 52)`. Returns the lag with the largest
-/// `|ACF|` if its magnitude is at least 0.3; otherwise returns 1
-/// (interpreted as "no seasonality"). Series too short to detect a
-/// period (`n < 4`) returns 1. Other errors match `FORECAST.ETS`.
+/// `|ACF|` if its magnitude is at least 0.3; otherwise returns 0
+/// (Mac Excel 365 convention for "no period detected"). Series too
+/// short to detect a period (`n < 4`) returns 0. Other errors match
+/// `FORECAST.ETS`.
 Value eval_forecast_ets_seasonality_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                                          const EvalContext& ctx);
 

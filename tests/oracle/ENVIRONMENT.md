@@ -8,4 +8,4 @@ file on oracle-gen PRs to catch version-driven divergences early.
 - **Excel locale**: `ja-JP`
 - **date1904**: `False`
 - **iterative**: `False`
-- **generated_at**: `2026-04-28T08:35:47Z`
+- **generated_at**: `2026-04-28T08:58:46Z`
