@@ -22,6 +22,7 @@
 #include "eval/eval_context.h"
 #include "eval/financial_lazy.h"
 #include "eval/function_registry.h"
+#include "eval/groupby_pivotby_lazy.h"
 #include "eval/hypothesis_lazy.h"
 #include "eval/info_lazy.h"
 #include "eval/lambda_helpers_lazy.h"
@@ -182,6 +183,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"FREQUENCY", &eval_frequency_lazy},
     // FTEST is the pre-2010 legacy spelling of F.TEST; same impl.
     {"FTEST", &eval_f_test_lazy},
+    {"GROUPBY", &eval_groupby_lazy},
     {"GROWTH", &eval_growth_lazy},
     {"HLOOKUP", &eval_hlookup_lazy},
     {"HSTACK", &eval_hstack_lazy},

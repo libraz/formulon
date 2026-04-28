@@ -78,6 +78,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/jis0208_table_test.cpp
   unit/eval/builtins_countif_test.cpp
   unit/eval/builtins_database_test.cpp
+  unit/eval/builtins_groupby_test.cpp
   unit/eval/builtins_ifs_test.cpp
   unit/eval/builtins_lookup_test.cpp
   unit/eval/builtins_implicit_intersection_test.cpp

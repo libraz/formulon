@@ -151,6 +151,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/conditional_aggregates.cpp
   src/eval/database_lazy.cpp
   src/eval/dynamic_array_lazy.cpp
+  src/eval/groupby_pivotby_lazy.cpp
   src/eval/lambda_helpers_lazy.cpp
   src/eval/matrix_ops_lazy.cpp
   src/eval/shape_ops_lazy.cpp
