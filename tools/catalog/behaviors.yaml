@@ -1109,3 +1109,32 @@ groups:
       - name: "error propagation (subset wins)"
         probe: '=PERCENTOF(#N/A, 10)'
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # MODE.MULT — vertical-array spill of every value tied for max frequency.
+  # Returns #N/A if no value repeats (or input is empty). Five perspectives
+  # cover two-way tie, single-mode 1x1 spill, all-unique #N/A, singleton
+  # #N/A, and error propagation. The two spill perspectives match the
+  # MUNIT / TEXTSPLIT skip-oracle pattern (oracle compare_value can't
+  # navigate ArrayValue); the three scalar #N/A / error perspectives are
+  # live.
+  # -------------------------------------------------------------------------
+
+  - function: "MODE.MULT"
+    aspect: "vertical-array mode spill"
+    behaviors:
+      - name: "two-way tie -> 2x1 spill"
+        probe: '=MODE.MULT(1,2,1,2,3)'
+        expected: diverged
+      - name: "single mode -> 1x1 spill"
+        probe: '=MODE.MULT({1,2,1})'
+        expected: diverged
+      - name: "all unique -> #N/A"
+        probe: '=MODE.MULT(1,2,3,4)'
+        expected: impl
+      - name: "singleton -> #N/A"
+        probe: '=MODE.MULT(5)'
+        expected: impl
+      - name: "error propagation in input"
+        probe: '=MODE.MULT(1, #DIV/0!, 2)'
+        expected: impl

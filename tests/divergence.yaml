@@ -724,6 +724,24 @@ entries:
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
 
+  # MODE.MULT spill cases. The function returns a vertical (column) array
+  # of every value tied for max frequency. Same ArrayValue / oracle
+  # compare_value mismatch as MUNIT and TEXTSPLIT — INDEX wrappers blocked
+  # by resolve_range_arg. Unit tests in
+  # tests/unit/eval/builtins/stats_test.cpp validate spill content.
+  - id: mode_mult_two_way_tie
+    reason: "MODE.MULT returns a 2x1 ArrayValue; oracle compare_value only handles scalars, INDEX wrappers blocked by resolve_range_arg. Unit tests validate vertical-spill content directly."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: mode_mult_single_mode_1x1
+    reason: "MODE.MULT with a single mode returns a 1x1 ArrayValue (still vertical-array shape); oracle compare_value only handles scalars. Unit tests validate the boundary."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+
   # CELL stub-key divergences. Formulon has no style subsystem yet so
   # CELL("filename") and CELL("prefix", ...) return empty text rather
   # than blank. Mac surfaces blank, but the top-level evaluator's

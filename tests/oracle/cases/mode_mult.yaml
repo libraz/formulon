@@ -1,0 +1,38 @@
+suite: mode_mult
+description: MODE.MULT vertical-array mode spill — five perspectives spanning two-way tie (2x1 spill), single-mode 1x1 spill, all-unique input -> #N/A, singleton input -> #N/A, and error propagation.
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # =========================================================================
+  # Spill cases — oracle compare_value cannot navigate ArrayValue, so each
+  # is registered skip-oracle in tests/divergence.yaml. Unit tests cover
+  # spill correctness directly.
+  # =========================================================================
+
+  - id: mode_mult_two_way_tie
+    description: 'MODE.MULT(1,2,1,2,3) -> 2x1 spill {1;2} (anchor=1)'
+    formula: '=MODE.MULT(1,2,1,2,3)'
+
+  - id: mode_mult_single_mode_1x1
+    description: 'MODE.MULT({1,2,1}) -> 1x1 spill {1} (anchor=1)'
+    formula: '=MODE.MULT({1,2,1})'
+
+  # =========================================================================
+  # #N/A scalar: no repeats or input is too short.
+  # =========================================================================
+
+  - id: mode_mult_all_unique_na
+    description: 'MODE.MULT(1,2,3,4) -> #N/A (no value repeats)'
+    formula: '=MODE.MULT(1,2,3,4)'
+
+  - id: mode_mult_singleton_na
+    description: 'MODE.MULT(5) -> #N/A (one value cannot tie itself)'
+    formula: '=MODE.MULT(5)'
+
+  # =========================================================================
+  # Error propagation: any error in the input surfaces as that error.
+  # =========================================================================
+
+  - id: mode_mult_error_propagates
+    description: 'MODE.MULT(1, #DIV/0!, 2) -> #DIV/0! (error in input wins)'
+    formula: '=MODE.MULT(1, #DIV/0!, 2)'
