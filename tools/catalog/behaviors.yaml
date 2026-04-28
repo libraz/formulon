@@ -567,6 +567,39 @@ groups:
         expected: impl
 
   # -------------------------------------------------------------------------
+  # AGGREGATE — multi-mode aggregator (function_num 1..19, options 0..7).
+  # Lazy-dispatch path because codes 14..19 use the trailing positional
+  # argument as a per-mode k / probability / quart parameter.
+  # -------------------------------------------------------------------------
+  - function: "AGGREGATE"
+    aspect: "function_num x options matrix"
+    behaviors:
+      - name: "fn=9 SUM, options=0 (basic)"
+        probe_regex: 'AGGREGATE\(9,\s*0,'
+        expected: impl
+      - name: "fn=1 AVERAGE, options=2 (ignore errors)"
+        probe_regex: 'AGGREGATE\(1,\s*2,'
+        expected: impl
+      - name: "fn=1 AVERAGE, options=0 (error propagates)"
+        probe_regex: 'AGGREGATE\(1,\s*0,'
+        expected: impl
+      - name: "fn=14 LARGE with trailing k"
+        probe_regex: 'AGGREGATE\(14,'
+        expected: impl
+      - name: "fn=16 PERCENTILE.INC with trailing p"
+        probe_regex: 'AGGREGATE\(16,'
+        expected: impl
+      - name: "fn=17 QUARTILE.INC with trailing quart"
+        probe_regex: 'AGGREGATE\(17,'
+        expected: impl
+      - name: "function_num out of range (20) -> #VALUE!"
+        probe_regex: 'AGGREGATE\(20,'
+        expected: impl
+      - name: "options out of range (8) -> #VALUE!"
+        probe_regex: 'AGGREGATE\(9,\s*8,'
+        expected: impl
+
+  # -------------------------------------------------------------------------
   # Shape of function arguments. Scalars, cell references, ranges, and
   # array literals all feed the same dispatcher, but the coercion path
   # differs — this group exists to make sure each shape has at least one

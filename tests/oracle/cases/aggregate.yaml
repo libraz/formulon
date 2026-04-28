@@ -121,3 +121,47 @@ cases:
   - id: product_range_skips_text
     setup: { A1: 2, A2: "text", A3: 4 }
     formula: "=PRODUCT(A1:A3)"
+
+  # =========================================================================
+  # AGGREGATE — multi-mode aggregator with configurable error / nested filter
+  # =========================================================================
+
+  - id: aggregate_sum_no_errors
+    description: "fn=9 SUM, options=0; basic happy path"
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40 }
+    formula: "=AGGREGATE(9, 0, A1:A4)"
+
+  - id: aggregate_average_with_error_ignore
+    description: "fn=1 AVERAGE, options=2 (ignore errors); range contains #DIV/0!"
+    setup: { A1: 10, A2: 20, A3: "=1/0", A4: 40 }
+    formula: "=AGGREGATE(1, 2, A1:A4)"
+
+  - id: aggregate_average_with_error_propagate
+    description: "fn=1 AVERAGE, options=0; first range error short-circuits"
+    setup: { A1: 10, A2: 20, A3: "=1/0", A4: 40 }
+    formula: "=AGGREGATE(1, 0, A1:A4)"
+
+  - id: aggregate_large_with_k
+    description: "fn=14 LARGE, k=2 — trailing-arg dispatch"
+    setup: { A1: 10, A2: 50, A3: 30, A4: 40, A5: 20 }
+    formula: "=AGGREGATE(14, 0, A1:A5, 2)"
+
+  - id: aggregate_percentile_inc
+    description: "fn=16 PERCENTILE.INC, p=0.5 (median equivalent)"
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, A5: 50 }
+    formula: "=AGGREGATE(16, 0, A1:A5, 0.5)"
+
+  - id: aggregate_quartile_inc_q2
+    description: "fn=17 QUARTILE.INC, quart=2 (median)"
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, A5: 50 }
+    formula: "=AGGREGATE(17, 0, A1:A5, 2)"
+
+  - id: aggregate_function_num_out_of_range
+    description: "fn=20 — outside [1,19] -> #VALUE!"
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=AGGREGATE(20, 0, A1:A3)"
+
+  - id: aggregate_options_out_of_range
+    description: "options=8 — outside [0,7] -> #VALUE!"
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=AGGREGATE(9, 8, A1:A3)"
