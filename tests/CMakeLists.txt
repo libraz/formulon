@@ -61,6 +61,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/eval_context_spill_read_test.cpp
   unit/eval/builtins_stats_test.cpp
   unit/eval/builtins_subtotal_test.cpp
+  unit/eval/builtins_aggregate_fn_test.cpp
   unit/eval/builtins_stats_exc_test.cpp
   unit/eval/builtins_stats_a_test.cpp
   unit/eval/builtins_descriptive_stats_test.cpp

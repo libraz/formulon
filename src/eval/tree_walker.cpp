@@ -11,6 +11,7 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/aggregate_lazy.h"
 #include "eval/areas_lazy.h"
 #include "eval/builtins/aggregate.h"
 #include "eval/cell_lazy.h"
@@ -112,6 +113,7 @@ namespace {
 //   PERCENTRANK / PERCENTRANK.INC /
 //   PERCENTRANK.EXC                            -> src/eval/rank_lazy.cpp
 //   PERCENTOF                                  -> src/eval/builtins/aggregate.cpp
+//   AGGREGATE                                  -> src/eval/aggregate_lazy.cpp
 // Each family publishes its externs via its own header
 // (`eval/special_forms_lazy.h`, `eval/conditional_aggregates.h`,
 // `eval/lookups/classic.h`, `eval/lookups/xlookup.h`,
@@ -126,6 +128,7 @@ struct LazyEntry {
 };
 
 constexpr LazyEntry kLazyDispatch[] = {
+    {"AGGREGATE", &eval_aggregate_lazy},
     {"AREAS", &eval_areas_lazy},
     {"AVERAGEIF", &eval_averageif_lazy},
     {"AVERAGEIFS", &eval_averageifs_lazy},
