@@ -184,7 +184,7 @@ groups:
         # Word boundary keeps `UNICODE("あ` from matching — `UNICODE` ends
         # in `CODE` and would otherwise collide with the `CODE("あ` probe.
         probe_regex: '(?<![A-Z])CODE\("あ'
-        expected: diverged
+        expected: impl
       - name: "DBCS lead byte (0x81..0x9F / 0xE0..0xFC)"
         # Lead-byte numeric ranges: 129..159 and 224..252. Half-width
         # katakana (160..223) is deliberately excluded.
@@ -248,6 +248,190 @@ groups:
         expected: impl
       - name: "custom group separator (3-arg)"
         probe_regex: 'NUMBERVALUE\("[^"]+",\s*"[^"]+",\s*"'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # LAMBDA family. Higher-order functions covering LAMBDA itself plus the
+  # six dispatchers (BYROW, BYCOL, MAP, REDUCE, SCAN, MAKEARRAY) and the
+  # introspection primitive ISOMITTED. Cases live in
+  # `tests/oracle/cases/lambda.yaml`. Probes use plain substrings to
+  # match the canonical idioms; multi-line LAMBDA formulas are rare in
+  # the corpus so these are robust enough.
+  # -------------------------------------------------------------------------
+  - function: "LAMBDA"
+    aspect: "lambda core"
+    behaviors:
+      - name: "IIFE single-param"
+        probe: "LAMBDA(x"
+        expected: impl
+      - name: "IIFE multi-param"
+        probe_regex: 'LAMBDA\([a-z]+,\s*[a-z]+,'
+        expected: impl
+      - name: "LET-bound LAMBDA dispatch"
+        probe_regex: 'LET\([a-z]+,\s*LAMBDA'
+        expected: impl
+      - name: "closure capture of LET binding"
+        probe_regex: 'LET\([a-z]+,\s*\d+,\s*LET\([a-z]+,\s*LAMBDA'
+        expected: impl
+      - name: "nested LAMBDA currying"
+        probe_regex: 'LAMBDA\([a-z]+,\s*LAMBDA'
+        expected: impl
+      - name: "argument error propagation"
+        probe_regex: 'LAMBDA\([^)]*\)\(1/0\)'
+        expected: impl
+
+  - function: "ISOMITTED"
+    aspect: "lambda introspection"
+    behaviors:
+      - name: "argument present"
+        probe_regex: 'ISOMITTED\([a-z]+\)'
+        expected: impl
+      - name: "argument omitted via [optional]"
+        probe: "[y]"
+        expected: impl
+      - name: "ISOMITTED outside LAMBDA"
+        probe_regex: '=\s*ISOMITTED\('
+        expected: impl
+      - name: "ISOMITTED with default fallback idiom"
+        probe: "IF(ISOMITTED("
+        expected: impl
+      - name: "ISOMITTED with error argument"
+        probe_regex: 'ISOMITTED\(.*1/0'
+        expected: impl
+      - name: "ISOMITTED in nested LAMBDA"
+        probe_regex: 'LAMBDA\([^,]+,\s*\[[a-z]+\],\s*IF\(ISOMITTED'
+        expected: impl
+
+  - function: "BYROW"
+    aspect: "lambda dispatcher"
+    behaviors:
+      - name: "row-wise SUM over 2D array"
+        probe: "BYROW({"
+        expected: impl
+      - name: "BYROW over cell range"
+        probe_regex: 'BYROW\(A\d+:[A-Z]\d+'
+        expected: impl
+      - name: "BYROW with single-row input"
+        probe: "BYROW({1,2,3}"
+        expected: impl
+      - name: "BYROW with single-column input"
+        probe: "BYROW({1;2;3}"
+        expected: impl
+      - name: "BYROW lambda arity mismatch"
+        probe_regex: 'BYROW\([^,]+,\s*LAMBDA\([a-z]+,\s*[a-z]+'
+        expected: impl
+      - name: "BYROW lambda returns multi-cell array"
+        probe: "BYROW("
+        expected: impl
+
+  - function: "BYCOL"
+    aspect: "lambda dispatcher"
+    behaviors:
+      - name: "column-wise SUM over 2D array"
+        probe: "BYCOL({"
+        expected: impl
+      - name: "BYCOL over cell range"
+        probe_regex: 'BYCOL\(A\d+:[A-Z]\d+'
+        expected: impl
+      - name: "BYCOL with single-row input"
+        probe: "BYCOL({1,2,3}"
+        expected: impl
+      - name: "BYCOL with single-column input"
+        probe: "BYCOL({1;2;3}"
+        expected: impl
+      - name: "BYCOL lambda arity mismatch"
+        probe_regex: 'BYCOL\(.+,\s*LAMBDA\([a-z]+,\s*[a-z]+,'
+        expected: impl
+      - name: "BYCOL with error in column"
+        probe_regex: 'BYCOL\([^)]*1/0'
+        expected: impl
+
+  - function: "MAP"
+    aspect: "lambda dispatcher"
+    behaviors:
+      - name: "single-array element-wise transform"
+        probe_regex: 'MAP\(\{[^}]+\},\s*LAMBDA\([a-z]+,'
+        expected: impl
+      - name: "two-array element-wise sum"
+        probe_regex: 'MAP\(\{[^}]+\},\s*\{[^}]+\},\s*LAMBDA'
+        expected: impl
+      - name: "three-array element-wise"
+        probe_regex: 'MAP\(\{[^}]+\},\s*\{[^}]+\},\s*\{[^}]+\}'
+        expected: impl
+      - name: "MAP shape mismatch yields #N/A"
+        probe: "MAP("
+        expected: impl
+      - name: "MAP lambda arity mismatch"
+        probe_regex: 'MAP\(\{[^}]+\},\s*LAMBDA\([a-z]+,\s*[a-z]+'
+        expected: impl
+      - name: "MAP error propagation"
+        probe_regex: 'MAP\([^)]*1/0'
+        expected: impl
+
+  - function: "REDUCE"
+    aspect: "lambda dispatcher"
+    behaviors:
+      - name: "REDUCE sum from initial"
+        probe: "REDUCE(0,"
+        expected: impl
+      - name: "REDUCE over cell range"
+        probe_regex: 'REDUCE\([^,]+,\s*A\d+:A\d+'
+        expected: impl
+      - name: "REDUCE type-changing accumulator (text concat)"
+        probe: 'REDUCE("",'
+        expected: impl
+      - name: "REDUCE accumulator-error propagation"
+        probe_regex: 'REDUCE\(.*1/0'
+        expected: impl
+      - name: "REDUCE over single-element array"
+        probe: "REDUCE("
+        expected: impl
+      - name: "REDUCE lambda arity mismatch"
+        probe_regex: 'REDUCE\([^,]+,\s*[^,]+,\s*LAMBDA\([a-z]+\s*[,)]'
+        expected: impl
+
+  - function: "SCAN"
+    aspect: "lambda dispatcher"
+    behaviors:
+      - name: "SCAN prefix sum"
+        probe: "SCAN(0,"
+        expected: impl
+      - name: "SCAN text concat accumulator"
+        probe: 'SCAN("",'
+        expected: impl
+      - name: "SCAN over cell range"
+        probe_regex: 'SCAN\([^,]+,\s*A\d+:A\d+'
+        expected: impl
+      - name: "SCAN error in element propagates"
+        probe_regex: 'SCAN\(.*1/0'
+        expected: impl
+      - name: "SCAN over single-element"
+        probe: "SCAN("
+        expected: impl
+      - name: "SCAN over 2D source"
+        probe_regex: 'SCAN\([^,]+,\s*\{[^}]+;'
+        expected: impl
+
+  - function: "MAKEARRAY"
+    aspect: "lambda dispatcher"
+    behaviors:
+      - name: "MAKEARRAY 3x3 from row*col"
+        probe: "MAKEARRAY(3,3"
+        expected: impl
+      - name: "MAKEARRAY single row"
+        probe: "MAKEARRAY(1,"
+        expected: impl
+      - name: "MAKEARRAY single column"
+        probe_regex: 'MAKEARRAY\(\d+,\s*1,'
+        expected: impl
+      - name: "MAKEARRAY constant element"
+        probe_regex: 'MAKEARRAY\(\d+,\s*\d+,\s*LAMBDA\([a-z]+,\s*[a-z]+,\s*\d'
+        expected: impl
+      - name: "MAKEARRAY 1x1 boundary"
+        probe: "MAKEARRAY(1,1"
+        expected: impl
+      - name: "MAKEARRAY lambda returns error"
+        probe_regex: 'MAKEARRAY\([^)]*1/0'
         expected: impl
 
   # -------------------------------------------------------------------------

@@ -1,0 +1,208 @@
+suite: lambda
+description: LAMBDA + ISOMITTED + BYROW / BYCOL / MAP / REDUCE / SCAN / MAKEARRAY — higher-order family closure against Mac Excel 365 (ja-JP).
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # -- LAMBDA core ---------------------------------------------------------
+  - id: lambda_iife_single_param
+    description: "Single-parameter immediately-invoked LAMBDA"
+    formula: "=LAMBDA(x, x+1)(5)"
+
+  - id: lambda_iife_multi_param
+    description: "Multi-parameter IIFE — sum of two args"
+    formula: "=LAMBDA(x, y, x+y)(3, 4)"
+
+  - id: lambda_let_bound_dispatch
+    description: "LAMBDA bound to a LET name and called by name"
+    formula: "=LET(f, LAMBDA(x, x*2), f(5))"
+
+  - id: lambda_closure_captures_let
+    description: "Inner LAMBDA closes over outer LET binding"
+    formula: "=LET(a, 10, LET(f, LAMBDA(x, x+a), f(5)))"
+
+  - id: lambda_nested_currying
+    description: "Nested LAMBDA: outer returns inner, immediately applied"
+    formula: "=LAMBDA(x, LAMBDA(y, x+y))(3)(4)"
+
+  - id: lambda_argument_error_propagates
+    description: "Error in argument propagates through LAMBDA call"
+    formula: "=LAMBDA(x, x+1)(1/0)"
+
+  # -- ISOMITTED -----------------------------------------------------------
+  - id: isomitted_argument_present
+    description: "ISOMITTED(present_arg) inside LAMBDA returns FALSE"
+    formula: "=LET(f, LAMBDA(x, ISOMITTED(x)), f(5))"
+
+  - id: isomitted_argument_omitted
+    description: "ISOMITTED detects optional [y] omitted at call site"
+    formula: "=LAMBDA(x, [y], IF(ISOMITTED(y), x, x+y))(5)"
+
+  - id: isomitted_outside_lambda
+    description: "ISOMITTED outside LAMBDA — argument always considered present"
+    formula: "=ISOMITTED(5)"
+
+  - id: isomitted_default_fallback_idiom
+    description: "ISOMITTED + IF idiom with fallback — present case"
+    formula: "=IF(ISOMITTED(5), 99, 42)"
+
+  - id: isomitted_with_error_argument
+    description: "ISOMITTED accepts error argument without short-circuiting"
+    formula: "=ISOMITTED(1/0)"
+
+  - id: isomitted_in_nested_lambda
+    description: "Nested LAMBDA with optional [y] supplied"
+    formula: "=LAMBDA(x, [y], IF(ISOMITTED(y), x, x+y))(5,10)"
+
+  # -- BYROW ----------------------------------------------------------------
+  - id: byrow_sum_each_row
+    description: "Row-wise SUM over 2x3 array literal"
+    formula: "=BYROW({1,2,3;4,5,6}, LAMBDA(row, SUM(row)))"
+
+  - id: byrow_over_cell_range
+    description: "BYROW over cell range A1:C2"
+    setup: { A1: 1, B1: 2, C1: 3, A2: 4, B2: 5, C2: 6 }
+    formula: "=BYROW(A1:C2, LAMBDA(row, SUM(row)))"
+
+  - id: byrow_single_row_input
+    description: "BYROW with single-row input — single result"
+    formula: "=BYROW({1,2,3}, LAMBDA(row, SUM(row)))"
+
+  - id: byrow_single_column_input
+    description: "BYROW over single-column input — each row is a scalar"
+    formula: "=BYROW({1;2;3}, LAMBDA(row, row*10))"
+
+  - id: byrow_lambda_arity_mismatch
+    description: "BYROW with two-arg LAMBDA — should be #VALUE!"
+    formula: "=BYROW({1,2,3;4,5,6}, LAMBDA(a, b, a+b))"
+
+  - id: byrow_lambda_returns_multi_cell
+    description: "BYROW where LAMBDA returns array per row — Excel: #CALC!"
+    formula: "=BYROW({1,2,3;4,5,6}, LAMBDA(row, row*2))"
+
+  # -- BYCOL ----------------------------------------------------------------
+  - id: bycol_sum_each_column
+    description: "Column-wise SUM over 2x3 array literal"
+    formula: "=BYCOL({1,2,3;4,5,6}, LAMBDA(col, SUM(col)))"
+
+  - id: bycol_over_cell_range
+    description: "BYCOL over cell range A1:C2"
+    setup: { A1: 1, B1: 2, C1: 3, A2: 4, B2: 5, C2: 6 }
+    formula: "=BYCOL(A1:C2, LAMBDA(col, SUM(col)))"
+
+  - id: bycol_single_row_input
+    description: "BYCOL with single-row input — each column is a scalar"
+    formula: "=BYCOL({1,2,3}, LAMBDA(col, col*10))"
+
+  - id: bycol_single_column_input
+    description: "BYCOL with single-column input — single result"
+    formula: "=BYCOL({1;2;3}, LAMBDA(col, SUM(col)))"
+
+  - id: bycol_lambda_arity_mismatch
+    description: "BYCOL with two-arg LAMBDA — should be #VALUE!"
+    formula: "=BYCOL({1,2,3;4,5,6}, LAMBDA(a, b, a+b))"
+
+  - id: bycol_error_in_column
+    description: "Error in one column should propagate per-column"
+    formula: "=BYCOL({1,2;1/0,3}, LAMBDA(col, SUM(col)))"
+
+  # -- MAP ------------------------------------------------------------------
+  - id: map_single_array_doubles
+    description: "MAP single-array element-wise doubling"
+    formula: "=MAP({1,2,3}, LAMBDA(x, x*2))"
+
+  - id: map_two_array_sum
+    description: "MAP two-array element-wise sum"
+    formula: "=MAP({1,2,3}, {10,20,30}, LAMBDA(a, b, a+b))"
+
+  - id: map_three_array_sum
+    description: "MAP three-array element-wise sum"
+    formula: "=MAP({1,2,3}, {10,20,30}, {100,200,300}, LAMBDA(a, b, c, a+b+c))"
+
+  - id: map_shape_mismatch
+    description: "MAP with mismatched array shapes — should be #N/A"
+    formula: "=MAP({1,2,3}, {10,20}, LAMBDA(a, b, a+b))"
+
+  - id: map_lambda_arity_mismatch
+    description: "MAP single array but two-arg LAMBDA — #VALUE!"
+    formula: "=MAP({1,2,3}, LAMBDA(a, b, a+b))"
+
+  - id: map_error_propagation
+    description: "Error in element propagates per-element"
+    formula: "=MAP({1,1/0,3}, LAMBDA(x, x*2))"
+
+  # -- REDUCE ---------------------------------------------------------------
+  - id: reduce_sum_from_initial
+    description: "REDUCE summing array starting at 0"
+    formula: "=REDUCE(0, {1,2,3}, LAMBDA(a, v, a+v))"
+
+  - id: reduce_over_cell_range
+    description: "REDUCE summing a cell range"
+    setup: { A1: 1, A2: 2, A3: 3 }
+    formula: "=REDUCE(0, A1:A3, LAMBDA(a, v, a+v))"
+
+  - id: reduce_text_concat
+    description: "REDUCE with text-concat accumulator (type-changing)"
+    formula: "=REDUCE(\"\", {\"a\",\"b\",\"c\"}, LAMBDA(a, v, a&v))"
+
+  - id: reduce_accumulator_error
+    description: "Error in initial value propagates through REDUCE"
+    formula: "=REDUCE(1/0, {1,2,3}, LAMBDA(a, v, a+v))"
+
+  - id: reduce_single_element
+    description: "REDUCE over single-element array"
+    formula: "=REDUCE(10, {5}, LAMBDA(a, v, a+v))"
+
+  - id: reduce_lambda_arity_mismatch
+    description: "REDUCE with single-arg LAMBDA — #VALUE!"
+    formula: "=REDUCE(0, {1,2,3}, LAMBDA(a, a))"
+
+  # -- SCAN -----------------------------------------------------------------
+  - id: scan_prefix_sum
+    description: "SCAN prefix-sum from initial 0"
+    formula: "=SCAN(0, {1,2,3}, LAMBDA(a, v, a+v))"
+
+  - id: scan_text_concat
+    description: "SCAN text-concat accumulator"
+    formula: "=SCAN(\"\", {\"a\",\"b\",\"c\"}, LAMBDA(a, v, a&v))"
+
+  - id: scan_over_cell_range
+    description: "SCAN over cell range"
+    setup: { A1: 1, A2: 2, A3: 3 }
+    formula: "=SCAN(0, A1:A3, LAMBDA(a, v, a+v))"
+
+  - id: scan_error_in_element
+    description: "Error in mid-element propagates downstream"
+    formula: "=SCAN(0, {1,1/0,3}, LAMBDA(a, v, a+v))"
+
+  - id: scan_single_element
+    description: "SCAN over single-element array"
+    formula: "=SCAN(0, {5}, LAMBDA(a, v, a+v))"
+
+  - id: scan_2d_source
+    description: "SCAN over 2D source — row-major traversal"
+    formula: "=SCAN(0, {1,2;3,4}, LAMBDA(a, v, a+v))"
+
+  # -- MAKEARRAY ------------------------------------------------------------
+  - id: makearray_3x3_row_col_product
+    description: "MAKEARRAY 3x3 from row*col"
+    formula: "=MAKEARRAY(3,3,LAMBDA(r, c, r*c))"
+
+  - id: makearray_single_row
+    description: "MAKEARRAY 1x5 — column index varies"
+    formula: "=MAKEARRAY(1,5,LAMBDA(r, c, c))"
+
+  - id: makearray_single_column
+    description: "MAKEARRAY 5x1 — row index varies"
+    formula: "=MAKEARRAY(5,1,LAMBDA(r, c, r))"
+
+  - id: makearray_constant_element
+    description: "MAKEARRAY 2x2 with constant element"
+    formula: "=MAKEARRAY(2,2,LAMBDA(r, c, 7))"
+
+  - id: makearray_1x1_boundary
+    description: "MAKEARRAY 1x1 boundary case — single cell"
+    formula: "=MAKEARRAY(1,1,LAMBDA(r, c, r+c))"
+
+  - id: makearray_lambda_returns_error
+    description: "MAKEARRAY where LAMBDA body returns error"
+    formula: "=MAKEARRAY(2,2,LAMBDA(r, c, 1/0))"

@@ -1,0 +1,89 @@
+# Oracle closure families.
+#
+# Sparse declaration: only functions that must be closed together as a
+# cluster appear here. Functions not listed are treated as a singleton
+# family by `tools/oracle/closure_check.py` (1 function = 1 closure unit).
+#
+# Used by:
+#   - tools/oracle/closure_check.py            (closure-unit resolution)
+#   - .claude/commands/oracle-close.md          (`/oracle-close family=NAME`)
+#
+# Schema:
+#
+#   families:
+#     - name: <lowercase identifier, used as family= argument>
+#       members: [FN1, FN2, ...]                 # function names (uppercase)
+#       category_file: tests/oracle/cases/<file>.yaml
+#       min_perspectives_per_member: <int>       # behaviors.yaml threshold
+#       cluster_reason: "<why these must close together>"
+#
+# `min_perspectives_per_member` is the minimum number of behaviors.yaml
+# entries each member function must accumulate before closure_check
+# considers the function "perspective-complete". Defaults to 5 when
+# omitted. Higher for functions with rich edge-case surface (regression,
+# format codes); lower for trivial wrappers.
+#
+# A function may belong to at most one family. Functions not in any
+# family are singletons (members=[FN], file derived from function name,
+# threshold=5).
+
+families:
+  # -- Lambda family ---------------------------------------------------------
+  # All lambda-helper functions take a LAMBDA as their callback argument,
+  # so observable test cases require LAMBDA infrastructure to exist. They
+  # share a closure unit: ISOMITTED in particular cannot be exercised
+  # without a LAMBDA call site.
+  - name: lambda
+    members: [LAMBDA, ISOMITTED, BYROW, BYCOL, MAP, REDUCE, SCAN, MAKEARRAY]
+    category_file: tests/oracle/cases/lambda.yaml
+    min_perspectives_per_member: 6
+    cluster_reason: "Helpers cannot be tested without LAMBDA; ISOMITTED requires LAMBDA argument-omission as trigger."
+
+  # -- Dynamic-array reshape -------------------------------------------------
+  - name: dynamic_array_reshape
+    members: [TAKE, DROP, EXPAND, TOCOL, TOROW, WRAPCOLS, WRAPROWS, HSTACK, VSTACK, CHOOSECOLS, CHOOSEROWS, TRIMRANGE]
+    category_file: tests/oracle/cases/dynamic_array_reshape.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Shared input-array fixtures and reshape-edge perspectives (orientation, padding, error propagation)."
+
+  # -- Sort / Filter / Unique ------------------------------------------------
+  - name: sort_filter
+    members: [SORT, SORTBY, UNIQUE, FILTER]
+    category_file: tests/oracle/cases/sort_filter.yaml
+    min_perspectives_per_member: 6
+    cluster_reason: "Shared input fixtures; cross-function ordering / stability semantics."
+
+  # -- Matrix ----------------------------------------------------------------
+  - name: matrix
+    members: [MMULT, MDETERM, MINVERSE]
+    category_file: tests/oracle/cases/matrix.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Shared matrix fixtures; numerical-stability perspectives (ill-conditioned, singular, near-singular)."
+
+  # -- Regression / Frequency ------------------------------------------------
+  - name: regression
+    members: [LINEST, LOGEST, TREND, GROWTH, FREQUENCY]
+    category_file: tests/oracle/cases/regression_advanced.yaml
+    min_perspectives_per_member: 7
+    cluster_reason: "Shared regression-statistics; covariant on intercept/slope/R^2 reporting."
+
+  # -- Financial DCC ---------------------------------------------------------
+  - name: financial_dcc
+    members: [PRICE, YIELD, ODDFPRICE, ODDFYIELD, ODDLPRICE, ODDLYIELD, DURATION, MDURATION]
+    category_file: tests/oracle/cases/financial_dcc.yaml
+    min_perspectives_per_member: 7
+    cluster_reason: "Shared DCC basis matrix (0..4); 1-ULP tolerance perspectives co-evolve."
+
+  # -- Volatile / non-deterministic -----------------------------------------
+  - name: volatile
+    members: [NOW, TODAY, RAND, RANDBETWEEN, RANDARRAY]
+    category_file: tests/oracle/cases/volatile.yaml
+    min_perspectives_per_member: 1
+    cluster_reason: "Non-deterministic; closure is a divergence-only declaration."
+
+  # -- External / stub-only --------------------------------------------------
+  - name: external_stubs
+    members: [IMAGE, PY, RTD, STOCKHISTORY, WEBSERVICE, COPILOT, DETECTLANGUAGE, TRANSLATE, ARRAYTOTEXT, FILTERXML, INFO, CUBEKPIMEMBER, CUBEMEMBER, CUBEMEMBERPROPERTY, CUBERANKEDMEMBER, CUBESET, CUBESETCOUNT, CUBEVALUE, GETPIVOTDATA, PHONETIC]
+    category_file: tests/oracle/cases/external_stubs.yaml
+    min_perspectives_per_member: 1
+    cluster_reason: "Stubs by design; closure is a divergence-only declaration."
