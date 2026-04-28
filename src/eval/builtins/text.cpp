@@ -59,32 +59,47 @@ Value Lower(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return Value::text(arena.intern(to_lower_ascii(text.value())));
 }
 
-// TRIM(text) - removes leading and trailing ASCII spaces (0x20) and
-// collapses runs of internal ASCII spaces to a single space. Other
-// whitespace-like bytes (tabs, newlines, Unicode whitespace) are preserved
-// verbatim - this matches Excel exactly.
+// TRIM(text) - removes leading and trailing ASCII spaces (0x20) plus the
+// ideographic space U+3000 (encoded UTF-8 as `E3 80 80`), and collapses runs
+// of those same characters to a single ASCII space internally. Mac Excel
+// 365 ja-JP treats U+3000 as a trimmable space; other whitespace-like bytes
+// (tabs, newlines, NBSP U+00A0, etc.) are preserved verbatim.
 Value Trim(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   auto text = coerce_to_text(args[0]);
   if (!text) {
     return Value::error(text.error());
   }
   const std::string& src = text.value();
+  // Detects U+3000 (UTF-8: 0xE3 0x80 0x80) starting at byte index `i` in src.
+  auto is_ideographic_space_at = [&src](std::size_t i) -> bool {
+    return i + 2 < src.size() && static_cast<unsigned char>(src[i]) == 0xE3u &&
+           static_cast<unsigned char>(src[i + 1]) == 0x80u && static_cast<unsigned char>(src[i + 2]) == 0x80u;
+  };
   std::string out;
   out.reserve(src.size());
   bool pending_space = false;
   bool seen_non_space = false;
-  for (char c : src) {
-    if (c == ' ') {
+  for (std::size_t i = 0; i < src.size();) {
+    if (src[i] == ' ') {
       if (seen_non_space) {
         pending_space = true;
       }
+      ++i;
+      continue;
+    }
+    if (is_ideographic_space_at(i)) {
+      if (seen_non_space) {
+        pending_space = true;
+      }
+      i += 3;
       continue;
     }
     if (pending_space) {
       out.push_back(' ');
       pending_space = false;
     }
-    out.push_back(c);
+    out.push_back(src[i]);
+    ++i;
     seen_non_space = true;
   }
   return Value::text(arena.intern(out));
