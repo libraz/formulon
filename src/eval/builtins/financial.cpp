@@ -27,6 +27,8 @@
 #include "eval/builtins/financial_bond_simple.h"
 #include "eval/builtins/financial_duration.h"
 #include "eval/builtins/financial_helpers.h"
+#include "eval/builtins/financial_oddfprice.h"
+#include "eval/builtins/financial_oddfyield.h"
 #include "eval/builtins/financial_oddlprice.h"
 #include "eval/builtins/financial_oddlyield.h"
 #include "eval/builtins/financial_price.h"
@@ -820,6 +822,26 @@ void register_financial_builtins(FunctionRegistry& registry) {
   }
   {
     FunctionDef def{"ODDLYIELD", 7u, 8u, &financial_detail::OddlYield};
+    def.propagate_errors = true;
+    registry.register_function(def);
+  }
+
+  // Irregular-first-period bond pricing. Signature is (settlement,
+  // maturity, issue, first_coupon, rate, yld_or_pr, redemption,
+  // frequency, [basis=0]) -- 8 required + optional basis (min 8, max 9).
+  // ODDFPRICE and ODDFYIELD share a per-quasi-period schedule walker
+  // in `financial_oddf_helpers.h`; unlike ODDLYIELD, ODDFYIELD must
+  // use Newton-Raphson because the price kernel is a polynomial in
+  // `v = 1/(1+yld/freq)` of degree (nc + n_regular) with no
+  // closed-form algebraic inverse. Implementations live in
+  // `financial_oddfprice.cpp` / `financial_oddfyield.cpp`.
+  {
+    FunctionDef def{"ODDFPRICE", 8u, 9u, &financial_detail::OddfPrice};
+    def.propagate_errors = true;
+    registry.register_function(def);
+  }
+  {
+    FunctionDef def{"ODDFYIELD", 8u, 9u, &financial_detail::OddfYield};
     def.propagate_errors = true;
     registry.register_function(def);
   }
