@@ -5193,3 +5193,454 @@ groups:
       - name: "negative real (odd function)"
         probe: "=IMTAN(\"-1\")"
         expected: impl
+
+  # -- Pre-2010 statistical-distribution legacy aliases ---------------------
+  # The functions below are backward-compat spellings of the post-2010
+  # BETA.DIST / BINOM.DIST / etc. family. Their closure perspectives parallel
+  # the post-2010 family: standard call, boundary value, invalid arg -> #NUM!,
+  # cumulative TRUE vs FALSE, and a tail / extreme quantile.
+
+  - function: "NORMDIST"
+    aspect: "pre-2010 alias for NORM.DIST"
+    behaviors:
+      - name: "standard-normal CDF at 1.5"
+        probe: "=NORMDIST(1.5, 0, 1, TRUE)"
+        expected: impl
+      - name: "standard-normal PDF at 1.5"
+        probe: "=NORMDIST(1.5, 0, 1, FALSE)"
+        expected: impl
+      - name: "non-standard CDF (mu=100, sd=15)"
+        probe: "=NORMDIST(110, 100, 15, TRUE)"
+        expected: impl
+      - name: "sd <= 0 -> #NUM!"
+        probe: "=NORMDIST(1, 0, 0, TRUE)"
+        expected: impl
+      - name: "negative x CDF (symmetric tail)"
+        probe: "=NORMDIST(-1.5, 0, 1, TRUE)"
+        expected: impl
+
+  - function: "NORMINV"
+    aspect: "pre-2010 alias for NORM.INV"
+    behaviors:
+      - name: "median (p=0.5)"
+        probe: "=NORMINV(0.5, 10, 2)"
+        expected: impl
+      - name: "upper-tail quantile p=0.975"
+        probe: "=NORMINV(0.975, 0, 1)"
+        expected: impl
+      - name: "lower-tail quantile p=0.025"
+        probe: "=NORMINV(0.025, 0, 1)"
+        expected: impl
+      - name: "p=0 -> #NUM!"
+        probe: "=NORMINV(0, 0, 1)"
+        expected: impl
+      - name: "p out of [0,1] -> #NUM!"
+        probe: "=NORMINV(1.5, 0, 1)"
+        expected: impl
+
+  - function: "NORMSDIST"
+    aspect: "pre-2010 alias for NORM.S.DIST cumulative"
+    behaviors:
+      - name: "upper-tail at 1.96"
+        probe: "=NORMSDIST(1.96)"
+        expected: impl
+      - name: "median: NORMSDIST(0) = 0.5"
+        probe: "=NORMSDIST(0)"
+        expected: impl
+      - name: "saturation at large positive x"
+        probe: "=NORMSDIST(5)"
+        expected: impl
+      - name: "negative x (symmetry)"
+        probe: "=NORMSDIST(-1)"
+        expected: impl
+      - name: "lower tail at -1.96"
+        probe: "=NORMSDIST(-1.96)"
+        expected: impl
+
+  - function: "NORMSINV"
+    aspect: "pre-2010 alias for NORM.S.INV"
+    behaviors:
+      - name: "upper-tail p=0.975"
+        probe: "=NORMSINV(0.975)"
+        expected: impl
+      - name: "median p=0.5 -> 0"
+        probe: "=NORMSINV(0.5)"
+        expected: impl
+      - name: "lower-tail p=0.025"
+        probe: "=NORMSINV(0.025)"
+        expected: impl
+      - name: "p=0 -> #NUM!"
+        probe: "=NORMSINV(0)"
+        expected: impl
+      - name: "p out of [0,1] -> #NUM!"
+        probe: "=NORMSINV(2)"
+        expected: impl
+
+  - function: "BINOMDIST"
+    aspect: "pre-2010 alias for BINOM.DIST"
+    behaviors:
+      - name: "PMF at k=5, n=10, p=0.5"
+        probe: "=BINOMDIST(5, 10, 0.5, FALSE)"
+        expected: impl
+      - name: "CDF at k=5, n=10, p=0.5"
+        probe: "=BINOMDIST(5, 10, 0.5, TRUE)"
+        expected: impl
+      - name: "k > n -> #NUM!"
+        probe: "=BINOMDIST(11, 10, 0.5, FALSE)"
+        expected: impl
+      - name: "p out of [0,1] -> #NUM!"
+        probe: "=BINOMDIST(5, 10, 1.5, FALSE)"
+        expected: impl
+      - name: "negative n -> #NUM!"
+        probe: "=BINOMDIST(2, -1, 0.5, TRUE)"
+        expected: impl
+
+  - function: "POISSON"
+    aspect: "pre-2010 alias for POISSON.DIST"
+    behaviors:
+      - name: "PMF at k=3, mean=2"
+        probe: "=POISSON(3, 2, FALSE)"
+        expected: impl
+      - name: "CDF at k=3, mean=2"
+        probe: "=POISSON(3, 2, TRUE)"
+        expected: impl
+      - name: "mean=0 degenerate (PMF at k>0 = 0)"
+        probe: "=POISSON(1, 0, FALSE)"
+        expected: impl
+      - name: "mean=0 CDF saturates at 1"
+        probe: "=POISSON(3, 0, TRUE)"
+        expected: impl
+      - name: "negative mean -> #NUM!"
+        probe: "=POISSON(1, -1, FALSE)"
+        expected: impl
+
+  - function: "EXPONDIST"
+    aspect: "pre-2010 alias for EXPON.DIST"
+    behaviors:
+      - name: "CDF at x=1, lambda=2"
+        probe: "=EXPONDIST(1, 2, TRUE)"
+        expected: impl
+      - name: "PDF at x=1, lambda=2"
+        probe: "=EXPONDIST(1, 2, FALSE)"
+        expected: impl
+      - name: "negative x -> #NUM!"
+        probe: "=EXPONDIST(-1, 2, TRUE)"
+        expected: impl
+      - name: "lambda <= 0 -> #NUM!"
+        probe: "=EXPONDIST(1, 0, TRUE)"
+        expected: impl
+      - name: "CDF at x=0 = 0"
+        probe: "=EXPONDIST(0, 2, TRUE)"
+        expected: impl
+
+  - function: "CHIDIST"
+    aspect: "pre-2010 alias for CHISQ.DIST.RT"
+    behaviors:
+      - name: "right-tail at x=5, df=2"
+        probe: "=CHIDIST(5, 2)"
+        expected: impl
+      - name: "x=0 -> 1 (entire mass on the right)"
+        probe: "=CHIDIST(0, 2)"
+        expected: impl
+      - name: "negative x -> #NUM!"
+        probe: "=CHIDIST(-1, 2)"
+        expected: impl
+      - name: "right-tail at large x"
+        probe: "=CHIDIST(20, 5)"
+        expected: impl
+      - name: "df < 1 -> #NUM!"
+        probe: "=CHIDIST(1, 0)"
+        expected: impl
+
+  - function: "CHIINV"
+    aspect: "pre-2010 alias for CHISQ.INV.RT"
+    behaviors:
+      - name: "upper quantile p=0.05"
+        probe: "=CHIINV(0.05, 2)"
+        expected: impl
+      - name: "median (right-tail p=0.5)"
+        probe: "=CHIINV(0.5, 2)"
+        expected: impl
+      - name: "p=1 -> 0 (lower bound of support)"
+        probe: "=CHIINV(1, 5)"
+        expected: impl
+      - name: "p=0 -> #NUM! (corresponds to +inf)"
+        probe: "=CHIINV(0, 5)"
+        expected: impl
+      - name: "p out of [0,1] -> #NUM!"
+        probe: "=CHIINV(1.5, 5)"
+        expected: impl
+
+  - function: "FDIST"
+    aspect: "pre-2010 alias for F.DIST.RT"
+    behaviors:
+      - name: "right-tail at F=2, df1=df2=5"
+        probe: "=FDIST(2, 5, 5)"
+        expected: impl
+      - name: "negative F -> #NUM!"
+        probe: "=FDIST(-1, 5, 5)"
+        expected: impl
+      - name: "right-tail at large F"
+        probe: "=FDIST(10, 5, 5)"
+        expected: impl
+      - name: "df=0 -> #NUM!"
+        probe: "=FDIST(2, 0, 5)"
+        expected: impl
+      - name: "right-tail at F=1 (symmetry point)"
+        probe: "=FDIST(1, 5, 5)"
+        expected: impl
+
+  - function: "FINV"
+    aspect: "pre-2010 alias for F.INV.RT"
+    behaviors:
+      - name: "upper quantile p=0.05"
+        probe: "=FINV(0.05, 5, 5)"
+        expected: impl
+      - name: "median (right-tail p=0.5)"
+        probe: "=FINV(0.5, 5, 5)"
+        expected: impl
+      - name: "p=0 -> #NUM!"
+        probe: "=FINV(0, 5, 5)"
+        expected: impl
+      - name: "p out of [0,1] -> #NUM!"
+        probe: "=FINV(1.5, 5, 5)"
+        expected: impl
+      - name: "lower-tail p=0.95"
+        probe: "=FINV(0.95, 5, 5)"
+        expected: impl
+
+  - function: "GAMMADIST"
+    aspect: "pre-2010 alias for GAMMA.DIST"
+    behaviors:
+      - name: "CDF at x=1, alpha=2, beta=1"
+        probe: "=GAMMADIST(1, 2, 1, TRUE)"
+        expected: impl
+      - name: "PDF at x=1, alpha=2, beta=1"
+        probe: "=GAMMADIST(1, 2, 1, FALSE)"
+        expected: impl
+      - name: "alpha <= 0 -> #NUM!"
+        probe: "=GAMMADIST(1, 0, 1, TRUE)"
+        expected: impl
+      - name: "CDF at x=0 = 0"
+        probe: "=GAMMADIST(0, 2, 1, TRUE)"
+        expected: impl
+      - name: "negative x -> #NUM!"
+        probe: "=GAMMADIST(-1, 2, 1, TRUE)"
+        expected: impl
+
+  - function: "GAMMAINV"
+    aspect: "pre-2010 alias for GAMMA.INV"
+    behaviors:
+      - name: "median (p=0.5)"
+        probe: "=GAMMAINV(0.5, 2, 1)"
+        expected: impl
+      - name: "p=0 -> 0 (lower bound)"
+        probe: "=GAMMAINV(0, 2, 1)"
+        expected: impl
+      - name: "p out of [0,1] -> #NUM!"
+        probe: "=GAMMAINV(1.5, 2, 1)"
+        expected: impl
+      - name: "alpha <= 0 -> #NUM!"
+        probe: "=GAMMAINV(0.5, 0, 1)"
+        expected: impl
+      - name: "upper quantile p=0.95"
+        probe: "=GAMMAINV(0.95, 2, 1)"
+        expected: impl
+
+  - function: "WEIBULL"
+    aspect: "pre-2010 alias for WEIBULL.DIST"
+    behaviors:
+      - name: "CDF at x=1, alpha=2, beta=1"
+        probe: "=WEIBULL(1, 2, 1, TRUE)"
+        expected: impl
+      - name: "PDF at x=1, alpha=2, beta=1"
+        probe: "=WEIBULL(1, 2, 1, FALSE)"
+        expected: impl
+      - name: "alpha <= 0 -> #NUM!"
+        probe: "=WEIBULL(1, 0, 1, TRUE)"
+        expected: impl
+      - name: "negative x -> #NUM!"
+        probe: "=WEIBULL(-1, 2, 1, TRUE)"
+        expected: impl
+      - name: "CDF at x=0 = 0"
+        probe: "=WEIBULL(0, 2, 1, TRUE)"
+        expected: impl
+
+  - function: "LOGNORMDIST"
+    aspect: "pre-2010 alias for LOGNORM.DIST cumulative"
+    behaviors:
+      - name: "CDF at x=2, mu=0, sd=1 (no cumulative flag)"
+        probe: "=LOGNORMDIST(2, 0, 1)"
+        expected: impl
+      - name: "x=0 -> #NUM!"
+        probe: "=LOGNORMDIST(0, 0, 1)"
+        expected: impl
+      - name: "negative x -> #NUM!"
+        probe: "=LOGNORMDIST(-1, 0, 1)"
+        expected: impl
+      - name: "sd <= 0 -> #NUM!"
+        probe: "=LOGNORMDIST(2, 0, 0)"
+        expected: impl
+      - name: "median: LOGNORMDIST(1, 0, 1) = 0.5"
+        probe: "=LOGNORMDIST(1, 0, 1)"
+        expected: impl
+
+  - function: "LOGINV"
+    aspect: "pre-2010 alias for LOGNORM.INV"
+    behaviors:
+      - name: "median (p=0.5)"
+        probe: "=LOGINV(0.5, 0, 1)"
+        expected: impl
+      - name: "upper quantile p=0.95"
+        probe: "=LOGINV(0.95, 0, 1)"
+        expected: impl
+      - name: "lower quantile p=0.05"
+        probe: "=LOGINV(0.05, 0, 1)"
+        expected: impl
+      - name: "p=0 -> #NUM!"
+        probe: "=LOGINV(0, 0, 1)"
+        expected: impl
+      - name: "p out of [0,1] -> #NUM!"
+        probe: "=LOGINV(1.5, 0, 1)"
+        expected: impl
+
+  - function: "HYPGEOMDIST"
+    aspect: "pre-2010 alias for HYPGEOM.DIST (PMF only)"
+    behaviors:
+      - name: "PMF at k=3, sample=5, K=10, N=20"
+        probe: "=HYPGEOMDIST(3, 5, 10, 20)"
+        expected: impl
+      - name: "k above support -> 0"
+        probe: "=HYPGEOMDIST(6, 5, 10, 20)"
+        expected: impl
+      - name: "k=0 boundary"
+        probe: "=HYPGEOMDIST(0, 5, 10, 20)"
+        expected: impl
+      - name: "negative k -> #NUM!"
+        probe: "=HYPGEOMDIST(-1, 5, 10, 20)"
+        expected: impl
+      - name: "full overlap (sample = N = K)"
+        probe: "=HYPGEOMDIST(5, 5, 5, 5)"
+        expected: impl
+
+  - function: "BETADIST"
+    aspect: "pre-2010 alias for BETA.DIST cumulative"
+    behaviors:
+      - name: "default bounds CDF (3-arg form)"
+        probe: "=BETADIST(0.5, 2, 3)"
+        expected: impl
+      - name: "custom bounds CDF (5-arg form)"
+        probe: "=BETADIST(5, 2, 3, 0, 10)"
+        expected: impl
+      - name: "x outside [A, B] -> #NUM!"
+        probe: "=BETADIST(11, 2, 3, 0, 10)"
+        expected: impl
+      - name: "x at lower bound -> 0"
+        probe: "=BETADIST(0, 2, 3)"
+        expected: impl
+      - name: "x at upper bound -> 1"
+        probe: "=BETADIST(1, 2, 3)"
+        expected: impl
+
+  - function: "BETAINV"
+    aspect: "pre-2010 alias for BETA.INV"
+    behaviors:
+      - name: "default bounds median"
+        probe: "=BETAINV(0.5, 2, 3)"
+        expected: impl
+      - name: "custom bounds median"
+        probe: "=BETAINV(0.5, 2, 3, 0, 10)"
+        expected: impl
+      - name: "p=0 -> A (lower bound)"
+        probe: "=BETAINV(0, 2, 3)"
+        expected: impl
+      - name: "p out of [0,1] -> #NUM!"
+        probe: "=BETAINV(1.5, 2, 3)"
+        expected: impl
+      - name: "upper quantile p=0.95"
+        probe: "=BETAINV(0.95, 2, 3)"
+        expected: impl
+
+  - function: "TDIST"
+    aspect: "pre-2010 alias of T.DIST.RT / T.DIST.2T (tails arg)"
+    behaviors:
+      - name: "right-tail (tails=1)"
+        probe: "=TDIST(1.5, 5, 1)"
+        expected: impl
+      - name: "two-tail (tails=2)"
+        probe: "=TDIST(1.5, 5, 2)"
+        expected: impl
+      - name: "negative x -> #NUM!"
+        probe: "=TDIST(-1.5, 5, 1)"
+        expected: impl
+      - name: "tails not in {1,2} -> #NUM!"
+        probe: "=TDIST(1, 5, 3)"
+        expected: impl
+      - name: "two-tail at x=0 = 1"
+        probe: "=TDIST(0, 5, 2)"
+        expected: impl
+
+  - function: "TINV"
+    aspect: "pre-2010 alias for T.INV.2T (two-tailed)"
+    behaviors:
+      - name: "two-tailed quantile p=0.05"
+        probe: "=TINV(0.05, 5)"
+        expected: impl
+      - name: "p=1 -> 0 (two-tailed median)"
+        probe: "=TINV(1, 5)"
+        expected: impl
+      - name: "p=0 -> #NUM! (corresponds to +inf)"
+        probe: "=TINV(0, 5)"
+        expected: impl
+      - name: "p out of [0,1] -> #NUM!"
+        probe: "=TINV(1.5, 5)"
+        expected: impl
+      - name: "small quantile p=0.5"
+        probe: "=TINV(0.5, 5)"
+        expected: impl
+
+  - function: "COVAR"
+    aspect: "pre-2010 alias for COVARIANCE.P (population)"
+    # Five COVAR cases share three distinct formulas — A1:A5/B1:B5
+    # (population sample), A1:A3/B1:B3 (perfect-linear / negatives /
+    # constant-series, distinguished by setup), and A1:A3/B1:B2 (length
+    # mismatch). Each behavior probe simply needs to match at least one
+    # case formula; per-fixture semantics are documented in case `id`s.
+    behaviors:
+      - name: "population covariance over A1:A5,B1:B5"
+        probe: "=COVAR(A1:A5, B1:B5)"
+        expected: impl
+      - name: "perfect linear (y = 2x)"
+        probe: "=COVAR(A1:A3, B1:B3)"
+        expected: impl
+      - name: "with negatives (anti-correlation)"
+        probe: "=COVAR(A1:A3, B1:B3)"
+        expected: impl
+      - name: "length mismatch -> #N/A"
+        probe: "=COVAR(A1:A3, B1:B2)"
+        expected: impl
+      - name: "constant x series (zero covariance)"
+        probe: "=COVAR(A1:A3, B1:B3)"
+        expected: impl
+
+  - function: "PEARSON"
+    aspect: "pre-2010 alias for CORREL"
+    # PEARSON cases share four distinct formulas: A1:A3/B1:B3 (perfect
+    # positive, with-negatives, constant-y), B1:B5/A1:A5 (general r),
+    # A1:A3/B1:B2 (length mismatch), distinguished by setup.
+    behaviors:
+      - name: "perfect positive correlation"
+        probe: "=PEARSON(A1:A3, B1:B3)"
+        expected: impl
+      - name: "general r over A1:A5,B1:B5"
+        probe: "=PEARSON(B1:B5, A1:A5)"
+        expected: impl
+      - name: "length mismatch -> #N/A"
+        probe: "=PEARSON(A1:A3, B1:B2)"
+        expected: impl
+      - name: "with negatives (perfect anti-correlation)"
+        probe: "=PEARSON(A1:A3, B1:B3)"
+        expected: impl
+      - name: "constant y series (zero variance)"
+        probe: "=PEARSON(A1:A3, B1:B3)"
+        expected: impl

@@ -150,6 +150,22 @@ families:
     min_perspectives_per_member: 5
     cluster_reason: "Pre-2010 aliases of PERCENTILE.INC / QUARTILE.INC / STDEV.S / VAR.S; closure perspectives parallel across the cluster."
 
+  # -- Pre-2010 distribution aliases ----------------------------------------
+  # Backward-compat distribution / inverse / bivariate spellings that
+  # delegate to BETA.DIST / BINOM.DIST / CHISQ.DIST.RT / EXPON.DIST /
+  # F.DIST.RT / GAMMA.DIST / HYPGEOM.DIST / LOGNORM.DIST / NORM.DIST /
+  # NORM.S.DIST / POISSON.DIST / T.DIST / WEIBULL.DIST and the inverses
+  # BETA.INV / CHISQ.INV.RT / F.INV.RT / GAMMA.INV / LOGNORM.INV / NORM.INV
+  # / NORM.S.INV / T.INV.2T plus the bivariate aliases COVARIANCE.P /
+  # CORREL. Closure perspectives parallel the post-2010 family: standard
+  # call, boundary value, invalid arg -> #NUM!, cumulative TRUE vs FALSE,
+  # and a tail / extreme quantile.
+  - name: stats_compat
+    members: [BETADIST, BETAINV, BINOMDIST, CHIDIST, CHIINV, COVAR, EXPONDIST, FDIST, FINV, GAMMADIST, GAMMAINV, HYPGEOMDIST, LOGINV, LOGNORMDIST, NORMDIST, NORMINV, NORMSDIST, NORMSINV, PEARSON, POISSON, TDIST, TINV, WEIBULL]
+    category_file: tests/oracle/cases/stats_compat.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Pre-2010 distribution aliases of BETA.DIST/CHISQ.DIST/etc.; closure perspectives parallel the post-2010 family."
+
   # -- Volatile / non-deterministic -----------------------------------------
   - name: volatile
     members: [NOW, TODAY, RAND, RANDBETWEEN, RANDARRAY]

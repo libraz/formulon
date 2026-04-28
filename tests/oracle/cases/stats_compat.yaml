@@ -199,3 +199,258 @@ cases:
   - id: pearson_general
     setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 2, B2: 4, B3: 5, B4: 4, B5: 5 }
     formula: "=PEARSON(B1:B5, A1:A5)"
+
+  # -- Additional NORMDIST / NORMINV / NORMSDIST / NORMSINV perspectives ---
+  - id: normdist_negative_x_cdf
+    description: "Standard-normal CDF at x=-1.5 (symmetric tail)"
+    formula: "=NORMDIST(-1.5, 0, 1, TRUE)"
+
+  - id: norminv_lower_tail
+    description: "Lower 2.5% quantile = -1.96"
+    formula: "=NORMINV(0.025, 0, 1)"
+
+  - id: norminv_p_zero_is_num
+    description: "p=0 is unbounded; Excel surfaces #NUM!"
+    formula: "=NORMINV(0, 0, 1)"
+
+  - id: norminv_p_out_of_range_is_num
+    formula: "=NORMINV(1.5, 0, 1)"
+
+  - id: normsdist_large_positive
+    description: "CDF saturates near 1 for large x"
+    formula: "=NORMSDIST(5)"
+
+  - id: normsdist_negative
+    description: "Symmetry: NORMSDIST(-1) = 1 - NORMSDIST(1)"
+    formula: "=NORMSDIST(-1)"
+
+  - id: normsinv_median
+    description: "p=0.5 -> 0 (standard-normal median)"
+    formula: "=NORMSINV(0.5)"
+
+  - id: normsinv_lower_tail
+    formula: "=NORMSINV(0.025)"
+
+  - id: normsinv_p_zero_is_num
+    formula: "=NORMSINV(0)"
+
+  - id: normsinv_p_out_of_range_is_num
+    formula: "=NORMSINV(2)"
+
+  # -- Additional BINOMDIST perspectives ----------------------------------
+  - id: binomdist_p_out_of_range_is_num
+    description: "p > 1 -> #NUM!"
+    formula: "=BINOMDIST(5, 10, 1.5, FALSE)"
+
+  - id: binomdist_negative_n_is_num
+    formula: "=BINOMDIST(2, -1, 0.5, TRUE)"
+
+  # -- Additional POISSON perspectives ------------------------------------
+  - id: poisson_negative_k_is_num
+    description: "k < 0 -> #NUM!"
+    formula: "=POISSON(-1, 2, FALSE)"
+
+  # -- Additional EXPONDIST perspectives ----------------------------------
+  - id: expondist_lambda_zero_is_num
+    description: "lambda <= 0 -> #NUM!"
+    formula: "=EXPONDIST(1, 0, TRUE)"
+
+  - id: expondist_at_zero_cdf
+    description: "EXPONDIST(0, lambda, TRUE) = 0"
+    formula: "=EXPONDIST(0, 2, TRUE)"
+
+  # -- Additional CHIDIST / CHIINV perspectives ---------------------------
+  - id: chidist_large_x
+    description: "Right tail at x large -> near 0"
+    formula: "=CHIDIST(20, 5)"
+
+  - id: chidist_df_zero_is_num
+    description: "df < 1 -> #NUM!"
+    formula: "=CHIDIST(1, 0)"
+
+  - id: chiinv_p_one_is_num
+    description: "Right-tail prob p=1 corresponds to x=0; Excel allows it"
+    formula: "=CHIINV(1, 5)"
+
+  - id: chiinv_p_zero_is_num
+    description: "p=0 corresponds to +infty -> #NUM!"
+    formula: "=CHIINV(0, 5)"
+
+  - id: chiinv_p_out_of_range_is_num
+    formula: "=CHIINV(1.5, 5)"
+
+  # -- Additional FDIST / FINV perspectives -------------------------------
+  - id: fdist_large_x
+    description: "Right tail at large F -> near 0"
+    formula: "=FDIST(10, 5, 5)"
+
+  - id: fdist_df_zero_is_num
+    formula: "=FDIST(2, 0, 5)"
+
+  - id: finv_median
+    description: "FINV(0.5, df1, df2) = upper 50% quantile of right tail"
+    formula: "=FINV(0.5, 5, 5)"
+
+  - id: finv_p_zero_is_num
+    formula: "=FINV(0, 5, 5)"
+
+  - id: finv_p_out_of_range_is_num
+    formula: "=FINV(1.5, 5, 5)"
+
+  - id: finv_lower_tail
+    formula: "=FINV(0.95, 5, 5)"
+
+  # -- Additional GAMMADIST / GAMMAINV perspectives -----------------------
+  - id: gammadist_alpha_zero_is_num
+    description: "alpha <= 0 -> #NUM!"
+    formula: "=GAMMADIST(1, 0, 1, TRUE)"
+
+  - id: gammadist_at_zero_cdf
+    description: "CDF at x=0 with alpha>0 = 0"
+    formula: "=GAMMADIST(0, 2, 1, TRUE)"
+
+  - id: gammadist_negative_x_is_num
+    formula: "=GAMMADIST(-1, 2, 1, TRUE)"
+
+  - id: gammainv_p_zero
+    description: "p=0 -> 0 (lower bound of support)"
+    formula: "=GAMMAINV(0, 2, 1)"
+
+  - id: gammainv_p_out_of_range_is_num
+    formula: "=GAMMAINV(1.5, 2, 1)"
+
+  - id: gammainv_alpha_zero_is_num
+    formula: "=GAMMAINV(0.5, 0, 1)"
+
+  - id: gammainv_upper_quantile
+    formula: "=GAMMAINV(0.95, 2, 1)"
+
+  # -- Additional WEIBULL perspectives ------------------------------------
+  - id: weibull_alpha_zero_is_num
+    description: "alpha <= 0 -> #NUM!"
+    formula: "=WEIBULL(1, 0, 1, TRUE)"
+
+  - id: weibull_negative_x_is_num
+    formula: "=WEIBULL(-1, 2, 1, TRUE)"
+
+  - id: weibull_at_zero_cdf
+    description: "CDF at x=0 = 0"
+    formula: "=WEIBULL(0, 2, 1, TRUE)"
+
+  # -- Additional LOGNORMDIST / LOGINV perspectives -----------------------
+  - id: lognormdist_negative_x_is_num
+    formula: "=LOGNORMDIST(-1, 0, 1)"
+
+  - id: lognormdist_sd_zero_is_num
+    description: "sd <= 0 -> #NUM!"
+    formula: "=LOGNORMDIST(2, 0, 0)"
+
+  - id: loginv_upper_quantile
+    formula: "=LOGINV(0.95, 0, 1)"
+
+  - id: loginv_lower_quantile
+    formula: "=LOGINV(0.05, 0, 1)"
+
+  - id: loginv_p_zero_is_num
+    formula: "=LOGINV(0, 0, 1)"
+
+  - id: loginv_p_out_of_range_is_num
+    formula: "=LOGINV(1.5, 0, 1)"
+
+  # -- Additional HYPGEOMDIST perspectives --------------------------------
+  - id: hypgeomdist_k_zero
+    description: "k=0 boundary (still on support)"
+    formula: "=HYPGEOMDIST(0, 5, 10, 20)"
+
+  - id: hypgeomdist_negative_k_is_num
+    formula: "=HYPGEOMDIST(-1, 5, 10, 20)"
+
+  - id: hypgeomdist_full_overlap
+    description: "When sample = population, PMF concentrates on K successes"
+    formula: "=HYPGEOMDIST(5, 5, 5, 5)"
+
+  # -- Additional BETADIST / BETAINV perspectives -------------------------
+  - id: betadist_x_at_lower_bound
+    description: "BETADIST at x=A returns 0 (CDF lower bound)"
+    formula: "=BETADIST(0, 2, 3)"
+
+  - id: betadist_x_at_upper_bound
+    description: "BETADIST at x=B returns 1"
+    formula: "=BETADIST(1, 2, 3)"
+
+  - id: betainv_p_zero
+    description: "p=0 -> A (lower bound)"
+    formula: "=BETAINV(0, 2, 3)"
+
+  - id: betainv_p_out_of_range_is_num
+    formula: "=BETAINV(1.5, 2, 3)"
+
+  # -- Additional TDIST / TINV perspectives -------------------------------
+  - id: tdist_at_zero_two_tail
+    description: "Two-tailed T at x=0 = 1 (entire mass)"
+    formula: "=TDIST(0, 5, 2)"
+
+  - id: tdist_df_zero_is_num
+    description: "df < 1 -> #NUM!"
+    formula: "=TDIST(1, 0, 1)"
+
+  - id: tinv_median_legacy
+    description: "p=1 (TINV is two-tailed) -> 0"
+    formula: "=TINV(1, 5)"
+
+  - id: tinv_p_zero_is_num
+    description: "p=0 (two-tailed) corresponds to +infty -> #NUM!"
+    formula: "=TINV(0, 5)"
+
+  - id: tinv_p_out_of_range_is_num
+    formula: "=TINV(1.5, 5)"
+
+  - id: tinv_small_quantile
+    formula: "=TINV(0.5, 5)"
+
+  # -- Additional COVAR / PEARSON perspectives ----------------------------
+  - id: covar_perfect_linear
+    description: "COVAR for y = 2x; cov = var(x) * 2 = 2*2/3 (population n=3)"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 2, B2: 4, B3: 6 }
+    formula: "=COVAR(A1:A3, B1:B3)"
+
+  - id: covar_with_negatives
+    setup: { A1: -1, A2: 0, A3: 1, B1: 1, B2: 0, B3: -1 }
+    formula: "=COVAR(A1:A3, B1:B3)"
+
+  - id: covar_length_mismatch_is_na
+    setup: { A1: 1, A2: 2, A3: 3, B1: 2, B2: 4 }
+    formula: "=COVAR(A1:A3, B1:B2)"
+
+  - id: covar_uncorrelated
+    description: "COVAR of an oscillating pair vs constant trend"
+    setup: { A1: 1, A2: 1, A3: 1, B1: 1, B2: 2, B3: 3 }
+    formula: "=COVAR(A1:A3, B1:B3)"
+
+  - id: pearson_with_negatives
+    setup: { A1: -1, A2: 0, A3: 1, B1: 1, B2: 0, B3: -1 }
+    formula: "=PEARSON(A1:A3, B1:B3)"
+
+  - id: pearson_length_mismatch_is_na
+    setup: { A1: 1, A2: 2, A3: 3, B1: 2, B2: 4 }
+    formula: "=PEARSON(A1:A3, B1:B2)"
+
+  - id: pearson_uncorrelated_constant
+    description: "All-y-constant series -> #DIV/0! (zero variance)"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 5, B2: 5, B3: 5 }
+    formula: "=PEARSON(A1:A3, B1:B3)"
+
+  - id: betainv_upper_quantile
+    formula: "=BETAINV(0.95, 2, 3)"
+
+  - id: fdist_at_one
+    description: "FDIST(1, df1, df2) is the right-tail at the symmetry point"
+    formula: "=FDIST(1, 5, 5)"
+
+  - id: lognormdist_at_one
+    description: "LOGNORMDIST(1, 0, 1) -> CDF at the median = 0.5"
+    formula: "=LOGNORMDIST(1, 0, 1)"
+
+  - id: normsdist_lower_tail
+    description: "Standard-normal CDF at -1.96 = 0.025"
+    formula: "=NORMSDIST(-1.96)"
