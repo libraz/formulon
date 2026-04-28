@@ -679,6 +679,51 @@ entries:
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
 
+  # TEXTSPLIT array-producing cases. The oracle harness only compares
+  # scalar Values; TEXTSPLIT spills a 1xN row, MxN grid, or column vector,
+  # which surfaces as an ArrayValue at evaluate() time. The same
+  # resolve_range_arg limitation that gates MUNIT closure also blocks
+  # INDEX(TEXTSPLIT(...), r, c) wrappers. Unit tests in
+  # tests/unit/eval/textsplit_eval_test.cpp validate split / pad / ignore_empty
+  # semantics directly. Skip-oracle entries close once the contributor's
+  # range_args.cpp ArrayValue navigation lands.
+  - id: textsplit_col_delim_basic
+    reason: "Spill-producing TEXTSPLIT returns ArrayValue; oracle compare_value only handles scalars, INDEX wrappers blocked by resolve_range_arg. Unit test BuiltinsTextSplit.ScalarColDelimSplitsIntoRow covers semantics."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: textsplit_col_delim_no_match
+    reason: "Spill-producing TEXTSPLIT returns 1x1 ArrayValue when no delimiter matches; oracle compare_value only handles scalars. Unit test BuiltinsTextSplit.NoMatchYieldsSingleCellArray covers semantics."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: textsplit_both_delim_2x2
+    reason: "Spill-producing TEXTSPLIT returns 2x2 ArrayValue; oracle compare_value only handles scalars, INDEX wrappers blocked by resolve_range_arg. Unit test BuiltinsTextSplit.BothDelimitersYield2DGrid covers semantics."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: textsplit_ignore_empty_collapse
+    reason: "Spill-producing TEXTSPLIT with ignore_empty=TRUE returns ArrayValue; oracle compare_value only handles scalars. Unit test BuiltinsTextSplit.IgnoreEmptyDropsEmptyTokens covers semantics."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: textsplit_delim_array_union
+    reason: "Spill-producing TEXTSPLIT with delimiter array returns ArrayValue; oracle compare_value only handles scalars. Unit test BuiltinsTextSplit.ArrayOfColDelimitersSplitsOnAny covers semantics including longest-match precedence."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: textsplit_ragged_pad_na
+    reason: "Spill-producing TEXTSPLIT pads ragged rows in ArrayValue; oracle compare_value only handles scalars. Unit test BuiltinsTextSplit.RaggedRowsPaddedWithNaByDefault covers #N/A pad semantics."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+
   # CELL stub-key divergences. Formulon has no style subsystem yet so
   # CELL("filename") and CELL("prefix", ...) return empty text rather
   # than blank. Mac surfaces blank, but the top-level evaluator's

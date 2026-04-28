@@ -1046,3 +1046,34 @@ groups:
       - name: "text passthrough (no rPh)"
         probe_regex: 'PHONETIC\("'
         expected: diverged
+
+  # -------------------------------------------------------------------------
+  # TEXTSPLIT — modern text family rectangle-shaping splitter. Splits a text
+  # scalar by `col_delimiter` (mandatory) and optional `row_delimiter`,
+  # padding ragged rows with `pad_with` (default `#N/A`). Six perspectives
+  # cover the dispatch surface: 1D row split, 2D grid split, ignore_empty
+  # collapse, delimiter-array union (longest match wins), pad-on-ragged,
+  # match_mode out-of-range error.
+  # -------------------------------------------------------------------------
+
+  - function: "TEXTSPLIT"
+    aspect: "rectangle-shaping text splitter"
+    behaviors:
+      - name: "scalar col delimiter -> 1xN row"
+        probe: '=TEXTSPLIT("a,b,c", ",")'
+        expected: diverged
+      - name: "both delimiters -> MxN grid"
+        probe: '=TEXTSPLIT("a,b;c,d", ",", ";")'
+        expected: diverged
+      - name: "ignore_empty drops empty tokens"
+        probe: '=TEXTSPLIT("a,,b", ",", , TRUE)'
+        expected: diverged
+      - name: "delimiter array splits on any entry"
+        probe: '=TEXTSPLIT("a,b;c", {",",";"})'
+        expected: diverged
+      - name: "ragged rows padded with #N/A"
+        probe: '=TEXTSPLIT("a,b;c", ",", ";")'
+        expected: diverged
+      - name: "match_mode out of {0,1} -> #VALUE!"
+        probe: '=TEXTSPLIT("a,b", ",", , , 2)'
+        expected: impl

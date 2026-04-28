@@ -1,0 +1,56 @@
+suite: textsplit
+description: TEXTSPLIT rectangle-shaping splitter — six perspectives spanning 1D row split, 2D grid split, ignore_empty collapse, delimiter-array union (longest match wins), ragged-row padding, and match_mode out-of-range error.
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # =========================================================================
+  # 1D split: scalar col_delimiter only -> 1xN row.
+  # =========================================================================
+
+  - id: textsplit_col_delim_basic
+    description: 'TEXTSPLIT("a,b,c", ",") -> {"a","b","c"} (1x3 row)'
+    formula: '=TEXTSPLIT("a,b,c", ",")'
+
+  - id: textsplit_col_delim_no_match
+    description: 'TEXTSPLIT("abc", ",") -> {"abc"} (1x1 when delimiter absent)'
+    formula: '=TEXTSPLIT("abc", ",")'
+
+  # =========================================================================
+  # 2D split: col_delimiter + row_delimiter -> MxN grid.
+  # =========================================================================
+
+  - id: textsplit_both_delim_2x2
+    description: 'TEXTSPLIT("a,b;c,d", ",", ";") -> 2x2 grid'
+    formula: '=TEXTSPLIT("a,b;c,d", ",", ";")'
+
+  # =========================================================================
+  # ignore_empty=TRUE drops empty tokens before padding.
+  # =========================================================================
+
+  - id: textsplit_ignore_empty_collapse
+    description: 'TEXTSPLIT("a,,b", ",", , TRUE) drops the middle empty -> {"a","b"}'
+    formula: '=TEXTSPLIT("a,,b", ",", , TRUE)'
+
+  # =========================================================================
+  # Delimiter array: any entry separates; longest match takes precedence.
+  # =========================================================================
+
+  - id: textsplit_delim_array_union
+    description: 'TEXTSPLIT("a,b;c", {",",";"}) splits on either delimiter -> 1x3 row'
+    formula: '=TEXTSPLIT("a,b;c", {",",";"})'
+
+  # =========================================================================
+  # Ragged rows: short rows padded with #N/A by default.
+  # =========================================================================
+
+  - id: textsplit_ragged_pad_na
+    description: 'TEXTSPLIT("a,b;c", ",", ";") -> 2x2 with #N/A pad on row 2 col 2'
+    formula: '=TEXTSPLIT("a,b;c", ",", ";")'
+
+  # =========================================================================
+  # match_mode validation: must be 0 or 1; anything else -> #VALUE!.
+  # =========================================================================
+
+  - id: textsplit_match_mode_invalid
+    description: 'TEXTSPLIT("a,b", ",", , , 2) -> #VALUE! (match_mode out of {0,1})'
+    formula: '=TEXTSPLIT("a,b", ",", , , 2)'
