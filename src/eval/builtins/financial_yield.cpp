@@ -191,15 +191,18 @@ Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity
 
   // --- n == 1: closed-form analytic inversion of the simple-interest
   // discount branch. See the file-level comment for the derivation.
+  // We use `bond_dsc` (not the raw `days_nc`) because for bases 2 / 3
+  // the bond formula needs `days_bs + DSC == period_days`; see
+  // `coupon_schedule.h` for the rationale.
   if (n == 1) {
     const double denom = pr_v + ai;
     if (denom == 0.0) {
       return ErrorCode::Num;
     }
-    if (cd.days_nc <= 0.0) {
+    if (cd.bond_dsc <= 0.0) {
       return ErrorCode::Num;
     }
-    const double yld = ((red + cf - pr_v - ai) / denom) * (cd.period_days / cd.days_nc) * freq_d;
+    const double yld = ((red + cf - pr_v - ai) / denom) * (cd.period_days / cd.bond_dsc) * freq_d;
     if (std::isnan(yld) || std::isinf(yld)) {
       return ErrorCode::Num;
     }

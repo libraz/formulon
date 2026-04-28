@@ -1558,3 +1558,261 @@ groups:
       - name: "bins_array error cell -> silently skipped (becomes spill)"
         probe: '=FREQUENCY({1;2;3}, {2;#N/A})'
         expected: diverged
+
+  # =========================================================================
+  # financial_dcc family — bond pricing / yield / duration with shared
+  # day-count basis matrix (0..4). Eight members each carry seven
+  # perspectives covering all 5 DCC bases plus two error paths.
+  # =========================================================================
+
+  # -------------------------------------------------------------------------
+  # PRICE — bond price per 100 par, given coupon rate and yield. Microsoft
+  # docs canonical example: PRICE(2008-02-15, 2017-11-15, 5.75%, 6.5%, 100,
+  # 2, 0) -> ~94.6346. Seven perspectives: 5 DCC bases + maturity-boundary
+  # error + invalid-basis error.
+  # -------------------------------------------------------------------------
+
+  - function: "PRICE"
+    aspect: "bond price DCC"
+    behaviors:
+      - name: "docs canonical example basis 0 -> ~94.6346"
+        probe: '=PRICE(DATE(2008,2,15),DATE(2017,11,15),0.0575,0.065,100,2,0)'
+        expected: impl
+      - name: "basis 1 (actual/actual) -> distinct from basis 0"
+        probe: '=PRICE(DATE(2008,2,15),DATE(2017,11,15),0.0575,0.065,100,2,1)'
+        expected: impl
+      - name: "basis 2 (actual/360)"
+        probe: '=PRICE(DATE(2008,2,15),DATE(2017,11,15),0.0575,0.065,100,2,2)'
+        expected: impl
+      - name: "basis 3 (actual/365)"
+        probe: '=PRICE(DATE(2008,2,15),DATE(2017,11,15),0.0575,0.065,100,2,3)'
+        expected: impl
+      - name: "basis 4 (European 30/360)"
+        probe: '=PRICE(DATE(2008,2,15),DATE(2017,11,15),0.0575,0.065,100,2,4)'
+        expected: impl
+      - name: "settlement >= maturity -> #NUM!"
+        probe: '=PRICE(DATE(2024,6,1),DATE(2024,6,1),0.05,0.06,100,2,0)'
+        expected: impl
+      - name: "invalid basis 5 -> #NUM!"
+        probe: '=PRICE(DATE(2020,1,1),DATE(2030,1,1),0.05,0.06,100,2,5)'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # YIELD — bond yield given price. Microsoft docs canonical: YIELD(
+  # 2008-02-15, 2016-11-15, 5.75%, 95.04287, 100, 2, 0) -> ~6.5%. Seven
+  # perspectives: 5 DCC bases + maturity-boundary error + invalid-basis.
+  # -------------------------------------------------------------------------
+
+  - function: "YIELD"
+    aspect: "bond yield DCC"
+    behaviors:
+      - name: "docs canonical example basis 0 -> ~0.065"
+        probe: '=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,95.04287,100,2,0)'
+        expected: impl
+      - name: "basis 1 (actual/actual) -> distinct from basis 0"
+        probe: '=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,95.04287,100,2,1)'
+        expected: impl
+      - name: "basis 2 (actual/360)"
+        probe: '=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,95.04287,100,2,2)'
+        expected: impl
+      - name: "basis 3 (actual/365)"
+        probe: '=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,95.04287,100,2,3)'
+        expected: impl
+      - name: "basis 4 (European 30/360)"
+        probe: '=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,95.04287,100,2,4)'
+        expected: impl
+      - name: "settlement >= maturity -> #NUM!"
+        probe: '=YIELD(DATE(2024,6,1),DATE(2024,6,1),0.05,100,100,2,0)'
+        expected: impl
+      - name: "invalid basis 5 -> #NUM!"
+        probe: '=YIELD(DATE(2020,1,1),DATE(2030,1,1),0.05,95,100,2,5)'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # ODDFPRICE — odd-first-period bond price. Microsoft docs canonical:
+  # ODDFPRICE(2008-01-11, 2021-03-01, 2007-10-15, 2008-03-01, 7.85%, 6.25%,
+  # 100, 2, 1) -> ~113.5977. Seven perspectives: 5 DCC bases + settlement-
+  # before-issue error + invalid-basis.
+  # -------------------------------------------------------------------------
+
+  - function: "ODDFPRICE"
+    aspect: "odd first period bond price DCC"
+    behaviors:
+      - name: "docs canonical example basis 1 -> ~113.5977"
+        probe: '=ODDFPRICE(DATE(2008,1,11),DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,1)'
+        expected: impl
+      - name: "basis 0 (US 30/360)"
+        probe: '=ODDFPRICE(DATE(2008,1,11),DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,0)'
+        expected: impl
+      - name: "basis 2 (actual/360)"
+        probe: '=ODDFPRICE(DATE(2008,1,11),DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,2)'
+        expected: impl
+      - name: "basis 3 (actual/365)"
+        probe: '=ODDFPRICE(DATE(2008,1,11),DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,3)'
+        expected: impl
+      - name: "basis 4 (European 30/360)"
+        probe: '=ODDFPRICE(DATE(2008,1,11),DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,4)'
+        expected: impl
+      - name: "settlement before issue -> #NUM!"
+        probe: '=ODDFPRICE(DATE(2007,10,1),DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,1)'
+        expected: impl
+      - name: "invalid basis 5 -> #NUM!"
+        probe: '=ODDFPRICE(DATE(2008,1,11),DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,5)'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # ODDFYIELD — odd-first-period bond yield. Microsoft docs canonical:
+  # ODDFYIELD(2008-11-11, 2021-03-01, 2008-10-15, 2009-03-01, 5.75%, 84.50,
+  # 100, 2, 0) -> ~7.88%. Seven perspectives: 5 DCC bases + settlement-
+  # before-issue error + invalid-basis.
+  # -------------------------------------------------------------------------
+
+  - function: "ODDFYIELD"
+    aspect: "odd first period bond yield DCC"
+    behaviors:
+      - name: "docs canonical example basis 0 -> ~0.0788"
+        probe: '=ODDFYIELD(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,0)'
+        expected: impl
+      - name: "basis 1 (actual/actual)"
+        probe: '=ODDFYIELD(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,1)'
+        expected: impl
+      - name: "basis 2 (actual/360)"
+        probe: '=ODDFYIELD(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,2)'
+        expected: impl
+      - name: "basis 3 (actual/365)"
+        probe: '=ODDFYIELD(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,3)'
+        expected: impl
+      - name: "basis 4 (European 30/360)"
+        probe: '=ODDFYIELD(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,4)'
+        expected: impl
+      - name: "settlement before issue -> #NUM!"
+        probe: '=ODDFYIELD(DATE(2008,10,1),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,0)'
+        expected: impl
+      - name: "invalid basis 5 -> #NUM!"
+        probe: '=ODDFYIELD(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,5)'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # ODDLPRICE — odd-last-period bond price. Microsoft docs canonical:
+  # ODDLPRICE(2008-02-07, 2008-06-15, 2007-10-15, 3.75%, 4.05%, 100, 2, 0)
+  # -> ~99.8786. Seven perspectives: 5 DCC bases + settlement-before-
+  # last_interest error + invalid-basis.
+  # -------------------------------------------------------------------------
+
+  - function: "ODDLPRICE"
+    aspect: "odd last period bond price DCC"
+    behaviors:
+      - name: "docs canonical example basis 0 -> ~99.8786"
+        probe: '=ODDLPRICE(DATE(2008,2,7),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,0)'
+        expected: impl
+      - name: "basis 1 (actual/actual)"
+        probe: '=ODDLPRICE(DATE(2008,2,7),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,1)'
+        expected: impl
+      - name: "basis 2 (actual/360)"
+        probe: '=ODDLPRICE(DATE(2008,2,7),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,2)'
+        expected: impl
+      - name: "basis 3 (actual/365)"
+        probe: '=ODDLPRICE(DATE(2008,2,7),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,3)'
+        expected: impl
+      - name: "basis 4 (European 30/360)"
+        probe: '=ODDLPRICE(DATE(2008,2,7),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,4)'
+        expected: impl
+      - name: "settlement before last_interest -> #NUM!"
+        probe: '=ODDLPRICE(DATE(2007,9,1),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,0)'
+        expected: impl
+      - name: "invalid basis 5 -> #NUM!"
+        probe: '=ODDLPRICE(DATE(2008,2,7),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,5)'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # ODDLYIELD — odd-last-period bond yield. Microsoft docs canonical:
+  # ODDLYIELD(2008-04-20, 2008-06-15, 2007-12-24, 3.75%, 99.875, 100, 2, 0)
+  # -> ~4.34%. Seven perspectives: 5 DCC bases + settlement-before-
+  # last_interest error + invalid-basis.
+  # -------------------------------------------------------------------------
+
+  - function: "ODDLYIELD"
+    aspect: "odd last period bond yield DCC"
+    behaviors:
+      - name: "docs canonical example basis 0 -> ~0.04342"
+        probe: '=ODDLYIELD(DATE(2008,4,20),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,0)'
+        expected: impl
+      - name: "basis 1 (actual/actual)"
+        probe: '=ODDLYIELD(DATE(2008,4,20),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,1)'
+        expected: impl
+      - name: "basis 2 (actual/360)"
+        probe: '=ODDLYIELD(DATE(2008,4,20),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,2)'
+        expected: impl
+      - name: "basis 3 (actual/365)"
+        probe: '=ODDLYIELD(DATE(2008,4,20),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,3)'
+        expected: impl
+      - name: "basis 4 (European 30/360)"
+        probe: '=ODDLYIELD(DATE(2008,4,20),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,4)'
+        expected: impl
+      - name: "settlement before last_interest -> #NUM!"
+        probe: '=ODDLYIELD(DATE(2007,11,1),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,0)'
+        expected: impl
+      - name: "invalid basis 5 -> #NUM!"
+        probe: '=ODDLYIELD(DATE(2008,4,20),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,5)'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # DURATION — Macaulay duration. Microsoft docs canonical: DURATION(
+  # 2008-01-01, 2016-01-01, 8%, 9%, 2, 1) -> ~5.9938. Seven perspectives:
+  # 5 DCC bases + maturity-boundary error + invalid-basis.
+  # -------------------------------------------------------------------------
+
+  - function: "DURATION"
+    aspect: "Macaulay duration DCC"
+    behaviors:
+      - name: "docs canonical example basis 1 -> ~5.9938"
+        probe: '=DURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,1)'
+        expected: impl
+      - name: "basis 0 (US 30/360)"
+        probe: '=DURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,0)'
+        expected: impl
+      - name: "basis 2 (actual/360)"
+        probe: '=DURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,2)'
+        expected: impl
+      - name: "basis 3 (actual/365)"
+        probe: '=DURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,3)'
+        expected: impl
+      - name: "basis 4 (European 30/360)"
+        probe: '=DURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,4)'
+        expected: impl
+      - name: "settlement >= maturity -> #NUM!"
+        probe: '=DURATION(DATE(2024,6,1),DATE(2024,6,1),0.05,0.06,2,0)'
+        expected: impl
+      - name: "invalid basis 5 -> #NUM!"
+        probe: '=DURATION(DATE(2020,1,1),DATE(2030,1,1),0.05,0.06,2,5)'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # MDURATION — modified duration = Macaulay / (1 + yld/frequency). Mirrors
+  # DURATION's seven perspectives.
+  # -------------------------------------------------------------------------
+
+  - function: "MDURATION"
+    aspect: "modified duration DCC"
+    behaviors:
+      - name: "docs canonical example basis 1 -> ~5.7355"
+        probe: '=MDURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,1)'
+        expected: impl
+      - name: "basis 0 (US 30/360)"
+        probe: '=MDURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,0)'
+        expected: impl
+      - name: "basis 2 (actual/360)"
+        probe: '=MDURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,2)'
+        expected: impl
+      - name: "basis 3 (actual/365)"
+        probe: '=MDURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,3)'
+        expected: impl
+      - name: "basis 4 (European 30/360)"
+        probe: '=MDURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,4)'
+        expected: impl
+      - name: "settlement >= maturity -> #NUM!"
+        probe: '=MDURATION(DATE(2024,6,1),DATE(2024,6,1),0.05,0.06,2,0)'
+        expected: impl
+      - name: "invalid basis 5 -> #NUM!"
+        probe: '=MDURATION(DATE(2020,1,1),DATE(2030,1,1),0.05,0.06,2,5)'
+        expected: impl

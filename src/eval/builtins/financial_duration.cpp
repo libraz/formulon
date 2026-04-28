@@ -121,7 +121,9 @@ Expected<double, ErrorCode> compute_macaulay(const Value* args, std::uint32_t ar
 
   const double freq_d = static_cast<double>(frequency);
   const double v = 1.0 / (1.0 + yld.value() / freq_d);
-  const double t1 = cd.days_nc / cd.period_days;
+  // `bond_dsc` (not the raw `days_nc`) keeps `A/E + DSC/E == 1` on
+  // bases 2 / 3; see `coupon_schedule.h` for the rationale.
+  const double t1 = cd.bond_dsc / cd.period_days;
   const double cf_coupon = coupon.value() / freq_d;
   const std::int32_t n = cd.coupons_remaining;
 

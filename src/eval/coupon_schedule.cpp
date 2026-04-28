@@ -162,6 +162,15 @@ bool compute_coupon_dates(double settlement, double maturity, int frequency, int
   out->days_nc = std::round(days_nc_raw);
   out->period_days = period_days;
   out->coupons_remaining = coupons;
+  // `bond_dsc` is the effective DSC for bond pricing. For bases 0/1/4
+  // the raw `days_nc` already satisfies `days_bs + days_nc ==
+  // period_days`, so `bond_dsc == days_nc`. For bases 2 / 3 the raw
+  // counts use actual days but `period_days` uses the nominal
+  // `360/freq` or `365/freq`, so the identity breaks; we re-derive
+  // `bond_dsc = period_days - days_bs` to restore `A/E + DSC/E == 1`,
+  // matching Mac Excel 365's PRICE / YIELD / DURATION / MDURATION
+  // output for those bases.
+  out->bond_dsc = (basis == 2 || basis == 3) ? (period_days - out->days_bs) : out->days_nc;
   return true;
 }
 

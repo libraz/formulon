@@ -31,11 +31,23 @@ namespace eval {
 /// Coupon-schedule context for a single (settlement, maturity,
 /// frequency, basis) tuple. All day counts are Excel-compatible
 /// doubles; `pcd` / `ncd` are Excel serial numbers (integer-valued).
+///
+/// `days_nc` is the *raw* basis-adjusted gap from settlement to NCD —
+/// this is what COUPDAYSNC must report, and for bases 0 / 1 / 4 it
+/// satisfies `days_bs + days_nc == period_days`. Bases 2 / 3
+/// (actual/360, actual/365) deliberately *break* that identity in
+/// Excel: COUPDAYBS / COUPDAYSNC return raw actual day counts, while
+/// COUPDAYS returns the nominal `360/freq` or `365/freq`. The bond
+/// pricing formulas (PRICE / YIELD / DURATION / MDURATION), however,
+/// require `A/E + DSC/E == 1` to keep the period-unit time grid
+/// well-formed, so they must use a re-derived effective DSC. That
+/// quantity is exposed as `bond_dsc` below.
 struct CouponDates {
   double pcd;                      ///< Previous coupon date on or before settlement.
   double ncd;                      ///< Next coupon date strictly after settlement.
   double days_bs;                  ///< Basis-adjusted days from PCD to settlement.
-  double days_nc;                  ///< Basis-adjusted days from settlement to NCD.
+  double days_nc;                  ///< Basis-adjusted days from settlement to NCD (raw — for COUPDAYSNC).
+  double bond_dsc;                 ///< Effective DSC for bond pricing (= period_days - days_bs).
   double period_days;              ///< Basis-adjusted total days in the coupon period.
   std::int32_t coupons_remaining;  ///< Coupons strictly after settlement and <= maturity.
 };

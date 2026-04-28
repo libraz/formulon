@@ -1,0 +1,204 @@
+suite: financial_dcc
+description: financial_dcc family — bond pricing/yield/duration with shared day-count basis matrix (0..4). 8 members (PRICE, YIELD, ODDFPRICE, ODDFYIELD, ODDLPRICE, ODDLYIELD, DURATION, MDURATION) × 7 perspectives = 56 cases. Each member exercises all 5 DCC bases plus two error paths (boundary date and invalid basis 5). Tolerance 1e-8 covers Mac Excel's bond-math ULP drift.
+tolerance: { abs: 1.0e-8, rel: 1.0e-8 }
+locale: ja-JP
+cases:
+  # =========================================================================
+  # PRICE
+  # =========================================================================
+  - id: price_canonical_basis_0
+    description: "PRICE docs canonical (basis 0 US 30/360) -> ~94.6346"
+    formula: '=PRICE(DATE(2008,2,15),DATE(2017,11,15),0.0575,0.065,100,2,0)'
+  - id: price_basis_1_actual_actual
+    description: "PRICE basis 1 (actual/actual) on docs example"
+    formula: '=PRICE(DATE(2008,2,15),DATE(2017,11,15),0.0575,0.065,100,2,1)'
+  - id: price_basis_2_actual_360
+    description: "PRICE basis 2 (actual/360)"
+    formula: '=PRICE(DATE(2008,2,15),DATE(2017,11,15),0.0575,0.065,100,2,2)'
+  - id: price_basis_3_actual_365
+    description: "PRICE basis 3 (actual/365)"
+    formula: '=PRICE(DATE(2008,2,15),DATE(2017,11,15),0.0575,0.065,100,2,3)'
+  - id: price_basis_4_european_30_360
+    description: "PRICE basis 4 (European 30/360)"
+    formula: '=PRICE(DATE(2008,2,15),DATE(2017,11,15),0.0575,0.065,100,2,4)'
+  - id: price_settlement_eq_maturity_error
+    description: "PRICE settlement >= maturity -> #NUM!"
+    formula: '=PRICE(DATE(2024,6,1),DATE(2024,6,1),0.05,0.06,100,2,0)'
+  - id: price_invalid_basis_error
+    description: "PRICE invalid basis 5 -> #NUM!"
+    formula: '=PRICE(DATE(2020,1,1),DATE(2030,1,1),0.05,0.06,100,2,5)'
+
+  # =========================================================================
+  # YIELD
+  # =========================================================================
+  - id: yield_canonical_basis_0
+    description: "YIELD docs canonical (basis 0) -> ~0.065"
+    formula: '=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,95.04287,100,2,0)'
+  - id: yield_basis_1_actual_actual
+    description: "YIELD basis 1 (actual/actual) on docs example"
+    formula: '=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,95.04287,100,2,1)'
+  - id: yield_basis_2_actual_360
+    description: "YIELD basis 2 (actual/360)"
+    formula: '=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,95.04287,100,2,2)'
+  - id: yield_basis_3_actual_365
+    description: "YIELD basis 3 (actual/365)"
+    formula: '=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,95.04287,100,2,3)'
+  - id: yield_basis_4_european_30_360
+    description: "YIELD basis 4 (European 30/360)"
+    formula: '=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,95.04287,100,2,4)'
+  - id: yield_settlement_eq_maturity_error
+    description: "YIELD settlement >= maturity -> #NUM!"
+    formula: '=YIELD(DATE(2024,6,1),DATE(2024,6,1),0.05,100,100,2,0)'
+  - id: yield_invalid_basis_error
+    description: "YIELD invalid basis 5 -> #NUM!"
+    formula: '=YIELD(DATE(2020,1,1),DATE(2030,1,1),0.05,95,100,2,5)'
+
+  # =========================================================================
+  # ODDFPRICE
+  # =========================================================================
+  - id: oddfprice_canonical_basis_1
+    description: "ODDFPRICE docs canonical (basis 1) -> ~113.5977"
+    formula: '=ODDFPRICE(DATE(2008,1,11),DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,1)'
+  - id: oddfprice_basis_0_us_30_360
+    description: "ODDFPRICE basis 0 (US 30/360)"
+    formula: '=ODDFPRICE(DATE(2008,1,11),DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,0)'
+  - id: oddfprice_basis_2_actual_360
+    description: "ODDFPRICE basis 2 (actual/360)"
+    formula: '=ODDFPRICE(DATE(2008,1,11),DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,2)'
+  - id: oddfprice_basis_3_actual_365
+    description: "ODDFPRICE basis 3 (actual/365)"
+    formula: '=ODDFPRICE(DATE(2008,1,11),DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,3)'
+  - id: oddfprice_basis_4_european_30_360
+    description: "ODDFPRICE basis 4 (European 30/360)"
+    formula: '=ODDFPRICE(DATE(2008,1,11),DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,4)'
+  - id: oddfprice_settlement_before_issue_error
+    description: "ODDFPRICE settlement before issue -> #NUM!"
+    formula: '=ODDFPRICE(DATE(2007,10,1),DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,1)'
+  - id: oddfprice_invalid_basis_error
+    description: "ODDFPRICE invalid basis 5 -> #NUM!"
+    formula: '=ODDFPRICE(DATE(2008,1,11),DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,5)'
+
+  # =========================================================================
+  # ODDFYIELD
+  # =========================================================================
+  - id: oddfyield_canonical_basis_0
+    description: "ODDFYIELD docs canonical (basis 0) -> ~0.0788"
+    formula: '=ODDFYIELD(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,0)'
+  - id: oddfyield_basis_1_actual_actual
+    description: "ODDFYIELD basis 1 (actual/actual)"
+    formula: '=ODDFYIELD(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,1)'
+  - id: oddfyield_basis_2_actual_360
+    description: "ODDFYIELD basis 2 (actual/360)"
+    formula: '=ODDFYIELD(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,2)'
+  - id: oddfyield_basis_3_actual_365
+    description: "ODDFYIELD basis 3 (actual/365)"
+    formula: '=ODDFYIELD(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,3)'
+  - id: oddfyield_basis_4_european_30_360
+    description: "ODDFYIELD basis 4 (European 30/360)"
+    formula: '=ODDFYIELD(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,4)'
+  - id: oddfyield_settlement_before_issue_error
+    description: "ODDFYIELD settlement before issue -> #NUM!"
+    formula: '=ODDFYIELD(DATE(2008,10,1),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,0)'
+  - id: oddfyield_invalid_basis_error
+    description: "ODDFYIELD invalid basis 5 -> #NUM!"
+    formula: '=ODDFYIELD(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,5)'
+
+  # =========================================================================
+  # ODDLPRICE
+  # =========================================================================
+  - id: oddlprice_canonical_basis_0
+    description: "ODDLPRICE docs canonical (basis 0) -> ~99.8786"
+    formula: '=ODDLPRICE(DATE(2008,2,7),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,0)'
+  - id: oddlprice_basis_1_actual_actual
+    description: "ODDLPRICE basis 1 (actual/actual)"
+    formula: '=ODDLPRICE(DATE(2008,2,7),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,1)'
+  - id: oddlprice_basis_2_actual_360
+    description: "ODDLPRICE basis 2 (actual/360)"
+    formula: '=ODDLPRICE(DATE(2008,2,7),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,2)'
+  - id: oddlprice_basis_3_actual_365
+    description: "ODDLPRICE basis 3 (actual/365)"
+    formula: '=ODDLPRICE(DATE(2008,2,7),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,3)'
+  - id: oddlprice_basis_4_european_30_360
+    description: "ODDLPRICE basis 4 (European 30/360)"
+    formula: '=ODDLPRICE(DATE(2008,2,7),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,4)'
+  - id: oddlprice_settlement_before_last_interest_error
+    description: "ODDLPRICE settlement before last_interest -> #NUM!"
+    formula: '=ODDLPRICE(DATE(2007,9,1),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,0)'
+  - id: oddlprice_invalid_basis_error
+    description: "ODDLPRICE invalid basis 5 -> #NUM!"
+    formula: '=ODDLPRICE(DATE(2008,2,7),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,5)'
+
+  # =========================================================================
+  # ODDLYIELD
+  # =========================================================================
+  - id: oddlyield_canonical_basis_0
+    description: "ODDLYIELD docs canonical (basis 0) -> ~0.04342"
+    formula: '=ODDLYIELD(DATE(2008,4,20),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,0)'
+  - id: oddlyield_basis_1_actual_actual
+    description: "ODDLYIELD basis 1 (actual/actual)"
+    formula: '=ODDLYIELD(DATE(2008,4,20),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,1)'
+  - id: oddlyield_basis_2_actual_360
+    description: "ODDLYIELD basis 2 (actual/360)"
+    formula: '=ODDLYIELD(DATE(2008,4,20),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,2)'
+  - id: oddlyield_basis_3_actual_365
+    description: "ODDLYIELD basis 3 (actual/365)"
+    formula: '=ODDLYIELD(DATE(2008,4,20),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,3)'
+  - id: oddlyield_basis_4_european_30_360
+    description: "ODDLYIELD basis 4 (European 30/360)"
+    formula: '=ODDLYIELD(DATE(2008,4,20),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,4)'
+  - id: oddlyield_settlement_before_last_interest_error
+    description: "ODDLYIELD settlement before last_interest -> #NUM!"
+    formula: '=ODDLYIELD(DATE(2007,11,1),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,0)'
+  - id: oddlyield_invalid_basis_error
+    description: "ODDLYIELD invalid basis 5 -> #NUM!"
+    formula: '=ODDLYIELD(DATE(2008,4,20),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,5)'
+
+  # =========================================================================
+  # DURATION
+  # =========================================================================
+  - id: duration_canonical_basis_1
+    description: "DURATION docs canonical (basis 1) -> ~5.9938"
+    formula: '=DURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,1)'
+  - id: duration_basis_0_us_30_360
+    description: "DURATION basis 0 (US 30/360)"
+    formula: '=DURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,0)'
+  - id: duration_basis_2_actual_360
+    description: "DURATION basis 2 (actual/360)"
+    formula: '=DURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,2)'
+  - id: duration_basis_3_actual_365
+    description: "DURATION basis 3 (actual/365)"
+    formula: '=DURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,3)'
+  - id: duration_basis_4_european_30_360
+    description: "DURATION basis 4 (European 30/360)"
+    formula: '=DURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,4)'
+  - id: duration_settlement_eq_maturity_error
+    description: "DURATION settlement >= maturity -> #NUM!"
+    formula: '=DURATION(DATE(2024,6,1),DATE(2024,6,1),0.05,0.06,2,0)'
+  - id: duration_invalid_basis_error
+    description: "DURATION invalid basis 5 -> #NUM!"
+    formula: '=DURATION(DATE(2020,1,1),DATE(2030,1,1),0.05,0.06,2,5)'
+
+  # =========================================================================
+  # MDURATION
+  # =========================================================================
+  - id: mduration_canonical_basis_1
+    description: "MDURATION docs canonical (basis 1) -> ~5.7355"
+    formula: '=MDURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,1)'
+  - id: mduration_basis_0_us_30_360
+    description: "MDURATION basis 0 (US 30/360)"
+    formula: '=MDURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,0)'
+  - id: mduration_basis_2_actual_360
+    description: "MDURATION basis 2 (actual/360)"
+    formula: '=MDURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,2)'
+  - id: mduration_basis_3_actual_365
+    description: "MDURATION basis 3 (actual/365)"
+    formula: '=MDURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,3)'
+  - id: mduration_basis_4_european_30_360
+    description: "MDURATION basis 4 (European 30/360)"
+    formula: '=MDURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,4)'
+  - id: mduration_settlement_eq_maturity_error
+    description: "MDURATION settlement >= maturity -> #NUM!"
+    formula: '=MDURATION(DATE(2024,6,1),DATE(2024,6,1),0.05,0.06,2,0)'
+  - id: mduration_invalid_basis_error
+    description: "MDURATION invalid basis 5 -> #NUM!"
+    formula: '=MDURATION(DATE(2020,1,1),DATE(2030,1,1),0.05,0.06,2,5)'

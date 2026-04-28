@@ -137,7 +137,11 @@ Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t
   }
 
   const double freq_d = static_cast<double>(frequency);
-  const double t1 = cd.days_nc / cd.period_days;
+  // `bond_dsc` (not the raw `days_nc`) is the DSC the bond formula
+  // needs: it satisfies `days_bs + bond_dsc == period_days` for all
+  // bases, including bases 2 / 3 where the raw COUPDAYSNC value would
+  // break the identity. See `coupon_schedule.h` for the rationale.
+  const double t1 = cd.bond_dsc / cd.period_days;
   const double cf = 100.0 * rate.value() / freq_d;
   const double ai = 100.0 * rate.value() * cd.days_bs / (cd.period_days * freq_d);
   const std::int32_t n = cd.coupons_remaining;

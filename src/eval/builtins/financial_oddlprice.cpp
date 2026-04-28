@@ -122,19 +122,30 @@ double basis_days_between(double a, double b, int basis) noexcept {
   return b - a;
 }
 
-// Period length E for the basis. Bases 0/2/4 use 360/freq; basis 3 uses
-// 365/freq; basis 1 uses the actual length of the first quasi-period
-// (last_interest -> first forward step). The basis-1 fallback matches
-// what COUP* uses for `period_days`.
+// Period length E for the basis.
+//   * Bases 0 / 4 (30/360 family): 360/freq — the formula's DC / A /
+//     DSC ratios already use 30/360 day counts that sum to E, so the
+//     nominal coupon length is consistent.
+//   * Bases 1 / 2 / 3 (actual day-count family): the actual length of
+//     the first regular quasi-period from `last_interest` forward by
+//     `12/freq` months. Mac Excel 365 uses the same actual span on
+//     all three of bases 1, 2, 3 inside ODDLPRICE / ODDLYIELD even
+//     though their COUPDAYS values diverge — the function family
+//     ignores the basis-specific year length here so that the DC / A
+//     / DSC ratios stay coherent with the actual spans the schedule
+//     walker produced. (Without this fall-through, basis 2 reuses
+//     360/freq and basis 3 reuses 365/freq, and the `DC/E` ratio
+//     becomes inconsistent with the actual day counts, producing
+//     observable price drift versus Mac Excel for any coupon period
+//     whose actual length is not exactly 360/freq or 365/freq.)
 double normal_period_days(int basis, int frequency, double last_interest) noexcept {
   switch (basis) {
     case 0:
-    case 2:
     case 4:
       return 360.0 / static_cast<double>(frequency);
-    case 3:
-      return 365.0 / static_cast<double>(frequency);
-    case 1: {
+    case 1:
+    case 2:
+    case 3: {
       // Actual length of the first quasi-period from `last_interest`
       // forward by `12/freq` months.
       const date_time::YMD li = date_time::ymd_from_serial(last_interest);
