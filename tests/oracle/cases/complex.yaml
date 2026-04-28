@@ -244,3 +244,274 @@ cases:
     description: "Blank real coerces to 0"
     setup: {}
     formula: "=COMPLEX(A1,4)"
+
+  # =========================================================================
+  # Closure expansion: per-function perspective coverage to satisfy the
+  # 5-behaviors-per-member threshold for the `complex` closure family.
+  # Each block below adds the minimum number of cases needed to make the
+  # member declare 5 distinct probes in tools/catalog/behaviors.yaml.
+  # =========================================================================
+
+  # -- IMABS extra perspective --------------------------------------------
+  - id: imabs_pure_real
+    description: "|3+0i| = 3 — pure real magnitude"
+    formula: "=IMABS(\"3\")"
+
+  # -- IMAGINARY perspectives ---------------------------------------------
+  - id: imaginary_pure_real
+    description: "Imaginary(3+0i) = 0"
+    formula: "=IMAGINARY(\"3\")"
+
+  - id: imaginary_pure_imag
+    description: "Imaginary(5i) = 5"
+    formula: "=IMAGINARY(\"5i\")"
+
+  - id: imaginary_negative_imag
+    description: "Imaginary(2-3i) = -3"
+    formula: "=IMAGINARY(\"2-3i\")"
+
+  - id: imaginary_j_suffix
+    description: "Imaginary(3+4j) — j-suffix form"
+    formula: "=IMAGINARY(\"3+4j\")"
+
+  # -- IMCONJUGATE perspectives ------------------------------------------
+  - id: imconjugate_pure_real
+    description: "conj(3) = 3 — real has no flip"
+    formula: "=IMCONJUGATE(\"3\")"
+
+  - id: imconjugate_pure_imag
+    description: "conj(5i) = -5i"
+    formula: "=IMCONJUGATE(\"5i\")"
+
+  - id: imconjugate_negative_imag
+    description: "conj(3-4i) = 3+4i"
+    formula: "=IMCONJUGATE(\"3-4i\")"
+
+  - id: imconjugate_double_is_identity
+    description: "conj(conj(z)) = z"
+    formula: "=IMCONJUGATE(IMCONJUGATE(\"3+4i\"))"
+
+  # -- IMCOS perspectives -------------------------------------------------
+  - id: imcos_zero
+    description: "cos(0) = 1+0i"
+    formula: "=IMCOS(\"0\")"
+
+  - id: imcos_pure_real
+    description: "cos(1) — pure real input matches scalar cos"
+    formula: "=IMCOS(\"1\")"
+
+  - id: imcos_pure_imag
+    description: "cos(i) = cosh(1)+0i"
+    formula: "=IMCOS(\"i\")"
+
+  - id: imcos_negative_real
+    description: "cos(-1) = cos(1) — even function"
+    formula: "=IMCOS(\"-1\")"
+
+  # -- IMCOSH perspectives ------------------------------------------------
+  - id: imcosh_zero
+    description: "cosh(0) = 1+0i"
+    formula: "=IMCOSH(\"0\")"
+
+  - id: imcosh_pure_real
+    description: "cosh(1) — matches scalar cosh"
+    formula: "=IMCOSH(\"1\")"
+
+  - id: imcosh_pure_imag
+    description: "cosh(i) = cos(1)+0i"
+    formula: "=IMCOSH(\"i\")"
+
+  - id: imcosh_negative_real
+    description: "cosh(-1) = cosh(1) — even function"
+    formula: "=IMCOSH(\"-1\")"
+
+  # -- IMCSC perspectives -------------------------------------------------
+  - id: imcsc_pure_real
+    description: "csc(1) = 1/sin(1) — real input"
+    formula: "=IMCSC(\"1\")"
+
+  - id: imcsc_pure_imag
+    description: "csc(i) = -i/sinh(1)"
+    formula: "=IMCSC(\"i\")"
+
+  - id: imcsc_negative_real
+    description: "csc(-1) = -csc(1) — odd function"
+    formula: "=IMCSC(\"-1\")"
+
+  - id: imcsc_zero_is_num
+    description: "csc(0) is undefined — Excel: #NUM!"
+    formula: "=IMCSC(\"0\")"
+
+  # -- IMDIV perspectives -------------------------------------------------
+  - id: imdiv_by_real
+    description: "(3+4i)/2 = 1.5+2i"
+    formula: "=IMDIV(\"3+4i\",\"2\")"
+
+  - id: imdiv_by_pure_imag
+    description: "(3+4i)/i = 4-3i"
+    formula: "=IMDIV(\"3+4i\",\"i\")"
+
+  - id: imdiv_self_is_one
+    description: "z/z = 1+0i (real)"
+    formula: "=IMDIV(\"3+4i\",\"3+4i\")"
+
+  # -- IMEXP perspectives -------------------------------------------------
+  - id: imexp_pure_real
+    description: "exp(1) = e+0i — matches scalar exp"
+    formula: "=IMEXP(\"1\")"
+
+  - id: imexp_negative_real
+    description: "exp(-1) = 1/e+0i"
+    formula: "=IMEXP(\"-1\")"
+
+  # -- IMLN perspectives --------------------------------------------------
+  - id: imln_one
+    description: "ln(1) = 0+0i — unit"
+    formula: "=IMLN(\"1\")"
+
+  - id: imln_pure_imag
+    description: "ln(i) = (pi/2)i"
+    formula: "=IMLN(\"i\")"
+
+  # -- IMLOG10 perspectives -----------------------------------------------
+  - id: imlog10_one
+    description: "log10(1) = 0+0i"
+    formula: "=IMLOG10(\"1\")"
+
+  - id: imlog10_pure_real
+    description: "log10(10) = 1+0i — matches scalar log10"
+    formula: "=IMLOG10(\"10\")"
+
+  - id: imlog10_pure_imag
+    description: "log10(i) = (pi/(2*ln(10)))i"
+    formula: "=IMLOG10(\"i\")"
+
+  - id: imlog10_negative_real
+    description: "log10(-1) = (pi/ln(10))i — branch cut"
+    formula: "=IMLOG10(\"-1\")"
+
+  # -- IMLOG2 perspectives ------------------------------------------------
+  - id: imlog2_one
+    description: "log2(1) = 0+0i"
+    formula: "=IMLOG2(\"1\")"
+
+  - id: imlog2_pure_real
+    description: "log2(2) = 1+0i — matches scalar log2"
+    formula: "=IMLOG2(\"2\")"
+
+  - id: imlog2_pure_imag
+    description: "log2(i) = (pi/(2*ln(2)))i"
+    formula: "=IMLOG2(\"i\")"
+
+  - id: imlog2_negative_real
+    description: "log2(-1) = (pi/ln(2))i — branch cut"
+    formula: "=IMLOG2(\"-1\")"
+
+  # -- IMPRODUCT extra perspective ----------------------------------------
+  - id: improduct_i_times_i
+    description: "i*i = -1+0i — imaginary unit identity"
+    formula: "=IMPRODUCT(\"i\",\"i\")"
+
+  # -- IMREAL perspectives ------------------------------------------------
+  - id: imreal_pure_imag
+    description: "Real(5i) = 0"
+    formula: "=IMREAL(\"5i\")"
+
+  - id: imreal_pure_real
+    description: "Real(7) = 7"
+    formula: "=IMREAL(\"7\")"
+
+  - id: imreal_negative_real_part
+    description: "Real(-3+4i) = -3"
+    formula: "=IMREAL(\"-3+4i\")"
+
+  # -- IMSEC perspectives -------------------------------------------------
+  - id: imsec_zero
+    description: "sec(0) = 1+0i"
+    formula: "=IMSEC(\"0\")"
+
+  - id: imsec_pure_real
+    description: "sec(1) = 1/cos(1)"
+    formula: "=IMSEC(\"1\")"
+
+  - id: imsec_pure_imag
+    description: "sec(i) = 1/cosh(1)+0i"
+    formula: "=IMSEC(\"i\")"
+
+  - id: imsec_negative_real
+    description: "sec(-1) = sec(1) — even function"
+    formula: "=IMSEC(\"-1\")"
+
+  # -- IMSIN perspectives -------------------------------------------------
+  - id: imsin_zero
+    description: "sin(0) = 0+0i"
+    formula: "=IMSIN(\"0\")"
+
+  - id: imsin_pure_real
+    description: "sin(1) — matches scalar sin"
+    formula: "=IMSIN(\"1\")"
+
+  - id: imsin_pure_imag
+    description: "sin(i) = sinh(1)i"
+    formula: "=IMSIN(\"i\")"
+
+  - id: imsin_negative_real
+    description: "sin(-1) = -sin(1) — odd function"
+    formula: "=IMSIN(\"-1\")"
+
+  # -- IMSINH perspectives ------------------------------------------------
+  - id: imsinh_zero
+    description: "sinh(0) = 0+0i"
+    formula: "=IMSINH(\"0\")"
+
+  - id: imsinh_pure_real
+    description: "sinh(1) — matches scalar sinh"
+    formula: "=IMSINH(\"1\")"
+
+  - id: imsinh_pure_imag
+    description: "sinh(i) = sin(1)i"
+    formula: "=IMSINH(\"i\")"
+
+  - id: imsinh_negative_real
+    description: "sinh(-1) = -sinh(1) — odd function"
+    formula: "=IMSINH(\"-1\")"
+
+  # -- IMSQRT extra perspective -------------------------------------------
+  - id: imsqrt_pure_real
+    description: "sqrt(4) = 2+0i — matches scalar sqrt"
+    formula: "=IMSQRT(\"4\")"
+
+  # -- IMSUB perspectives -------------------------------------------------
+  - id: imsub_pure_real
+    description: "(5)-(2) = 3+0i"
+    formula: "=IMSUB(\"5\",\"2\")"
+
+  - id: imsub_pure_imag
+    description: "(5i)-(2i) = 3i"
+    formula: "=IMSUB(\"5i\",\"2i\")"
+
+  - id: imsub_negative_result
+    description: "(1+i)-(3+4i) = -2-3i"
+    formula: "=IMSUB(\"1+i\",\"3+4i\")"
+
+  # -- IMSUM extra perspective --------------------------------------------
+  - id: imsum_pure_imag_pair
+    description: "(2i)+(3i) = 5i — pure imaginary sum"
+    formula: "=IMSUM(\"2i\",\"3i\")"
+
+  # -- IMTAN perspectives -------------------------------------------------
+  - id: imtan_zero
+    description: "tan(0) = 0+0i"
+    formula: "=IMTAN(\"0\")"
+
+  - id: imtan_pure_real
+    description: "tan(1) — matches scalar tan"
+    formula: "=IMTAN(\"1\")"
+
+  - id: imtan_pure_imag
+    description: "tan(i) = tanh(1)i"
+    formula: "=IMTAN(\"i\")"
+
+  - id: imtan_negative_real
+    description: "tan(-1) = -tan(1) — odd function"
+    formula: "=IMTAN(\"-1\")"

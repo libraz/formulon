@@ -163,3 +163,16 @@ families:
     category_file: tests/oracle/cases/external_stubs.yaml
     min_perspectives_per_member: 1
     cluster_reason: "Stubs by design; closure is a divergence-only declaration."
+
+  # -- Complex-number engineering family -----------------------------------
+  # COMPLEX plus the IM* arithmetic / trig / log / root / inspector
+  # functions share the COMPLEX( real, imag, suffix ) input fixtures and
+  # the 'i'/'j' suffix dispatch. They co-evolve on suffix-mismatch error
+  # propagation, branch-cut placement (IMLN, IMSQRT), and 1-ULP drift on
+  # transcendentals (IMSIN/IMCOS/IMEXP) so closure perspectives are best
+  # exercised against the same complex.yaml suite.
+  - name: complex
+    members: [COMPLEX, IMABS, IMAGINARY, IMARGUMENT, IMCONJUGATE, IMCOS, IMCOSH, IMCSC, IMDIV, IMEXP, IMLN, IMLOG10, IMLOG2, IMPOWER, IMPRODUCT, IMREAL, IMSEC, IMSIN, IMSINH, IMSQRT, IMSUB, IMSUM, IMTAN]
+    category_file: tests/oracle/cases/complex.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Complex-number engineering family shares COMPLEX( real, imag, suffix ) input fixtures and 'i'/'j' suffix dispatch."

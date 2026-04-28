@@ -4749,3 +4749,447 @@ groups:
       - name: "minimal n=3 sample"
         probe: "=STEYX({2;3;5},{1;2;3})"
         expected: impl
+
+  # =========================================================================
+  # Complex-number engineering family. Cases live in
+  # tests/oracle/cases/complex.yaml; backing impls under
+  # src/eval/builtins/complex_num.cpp. Probes are substrings of the case
+  # formula and must remain in sync with that file.
+  # =========================================================================
+
+  - function: "COMPLEX"
+    aspect: "real / imag / suffix construction"
+    behaviors:
+      - name: "default i suffix"
+        probe: "=COMPLEX(3,4)"
+        expected: impl
+      - name: "explicit j suffix"
+        probe: "=COMPLEX(3,4,\"j\")"
+        expected: impl
+      - name: "pure imag +1 collapses to 'i'"
+        probe: "=COMPLEX(0,1)"
+        expected: impl
+      - name: "pure real (imag=0)"
+        probe: "=COMPLEX(3,0)"
+        expected: impl
+      - name: "invalid suffix -> #VALUE!"
+        probe: "=COMPLEX(3,4,\"x\")"
+        expected: impl
+
+  - function: "IMABS"
+    aspect: "complex magnitude"
+    behaviors:
+      - name: "3-4-5 triangle"
+        probe: "=IMABS(\"3+4i\")"
+        expected: impl
+      - name: "zero magnitude"
+        probe: "=IMABS(\"0\")"
+        expected: impl
+      - name: "pure imaginary magnitude"
+        probe: "=IMABS(\"5i\")"
+        expected: impl
+      - name: "negative components"
+        probe: "=IMABS(\"-3-4i\")"
+        expected: impl
+      - name: "pure real magnitude"
+        probe: "=IMABS(\"3\")"
+        expected: impl
+
+  - function: "IMAGINARY"
+    aspect: "imaginary-part inspector"
+    behaviors:
+      - name: "mixed positive imag"
+        probe: "=IMAGINARY(\"3+4i\")"
+        expected: impl
+      - name: "pure real -> 0"
+        probe: "=IMAGINARY(\"3\")"
+        expected: impl
+      - name: "pure imaginary"
+        probe: "=IMAGINARY(\"5i\")"
+        expected: impl
+      - name: "negative imag"
+        probe: "=IMAGINARY(\"2-3i\")"
+        expected: impl
+      - name: "j-suffix form"
+        probe: "=IMAGINARY(\"3+4j\")"
+        expected: impl
+
+  - function: "IMARGUMENT"
+    aspect: "complex argument (theta)"
+    behaviors:
+      - name: "first quadrant arg"
+        probe: "=IMARGUMENT(\"3+4i\")"
+        expected: impl
+      - name: "zero -> #DIV/0!"
+        probe: "=IMARGUMENT(\"0\")"
+        expected: impl
+      - name: "negative real -> pi"
+        probe: "=IMARGUMENT(\"-1\")"
+        expected: impl
+      - name: "negative imag -> -pi/2"
+        probe: "=IMARGUMENT(\"-i\")"
+        expected: impl
+      - name: "third quadrant -> -3pi/4"
+        probe: "=IMARGUMENT(\"-1-i\")"
+        expected: impl
+
+  - function: "IMCONJUGATE"
+    aspect: "complex conjugation (negate imag)"
+    behaviors:
+      - name: "mixed positive imag flip"
+        probe: "=IMCONJUGATE(\"3+4i\")"
+        expected: impl
+      - name: "pure real unchanged"
+        probe: "=IMCONJUGATE(\"3\")"
+        expected: impl
+      - name: "pure imaginary flip"
+        probe: "=IMCONJUGATE(\"5i\")"
+        expected: impl
+      - name: "negative imag flip"
+        probe: "=IMCONJUGATE(\"3-4i\")"
+        expected: impl
+      - name: "double conjugate identity"
+        probe: "=IMCONJUGATE(IMCONJUGATE(\"3+4i\"))"
+        expected: impl
+
+  - function: "IMCOS"
+    aspect: "complex cosine"
+    behaviors:
+      - name: "mixed input"
+        probe: "=IMCOS(\"1+i\")"
+        expected: impl
+      - name: "zero -> 1"
+        probe: "=IMCOS(\"0\")"
+        expected: impl
+      - name: "pure real matches scalar cos"
+        probe: "=IMCOS(\"1\")"
+        expected: impl
+      - name: "pure imaginary -> cosh"
+        probe: "=IMCOS(\"i\")"
+        expected: impl
+      - name: "negative real (even function)"
+        probe: "=IMCOS(\"-1\")"
+        expected: impl
+
+  - function: "IMCOSH"
+    aspect: "complex hyperbolic cosine"
+    behaviors:
+      - name: "mixed input"
+        probe: "=IMCOSH(\"1+i\")"
+        expected: impl
+      - name: "zero -> 1"
+        probe: "=IMCOSH(\"0\")"
+        expected: impl
+      - name: "pure real matches scalar cosh"
+        probe: "=IMCOSH(\"1\")"
+        expected: impl
+      - name: "pure imaginary -> cos"
+        probe: "=IMCOSH(\"i\")"
+        expected: impl
+      - name: "negative real (even function)"
+        probe: "=IMCOSH(\"-1\")"
+        expected: impl
+
+  - function: "IMCSC"
+    aspect: "complex cosecant"
+    behaviors:
+      - name: "mixed input"
+        probe: "=IMCSC(\"1+i\")"
+        expected: impl
+      - name: "pure real csc(1)"
+        probe: "=IMCSC(\"1\")"
+        expected: impl
+      - name: "pure imaginary"
+        probe: "=IMCSC(\"i\")"
+        expected: impl
+      - name: "negative real (odd function)"
+        probe: "=IMCSC(\"-1\")"
+        expected: impl
+      - name: "csc(0) -> #NUM!"
+        probe: "=IMCSC(\"0\")"
+        expected: impl
+
+  - function: "IMDIV"
+    aspect: "complex division"
+    behaviors:
+      - name: "(1+i)/(1-i) = i"
+        probe: "=IMDIV(\"1+i\",\"1-i\")"
+        expected: impl
+      - name: "divide by zero -> #NUM!"
+        probe: "=IMDIV(\"1+i\",\"0\")"
+        expected: impl
+      - name: "divide by real"
+        probe: "=IMDIV(\"3+4i\",\"2\")"
+        expected: impl
+      - name: "divide by pure imaginary"
+        probe: "=IMDIV(\"3+4i\",\"i\")"
+        expected: impl
+      - name: "z/z = 1+0i"
+        probe: "=IMDIV(\"3+4i\",\"3+4i\")"
+        expected: impl
+
+  - function: "IMEXP"
+    aspect: "complex exponential"
+    behaviors:
+      - name: "exp(0) = 1"
+        probe: "=IMEXP(\"0\")"
+        expected: impl
+      - name: "Euler identity exp(pi*i)"
+        probe: "=IMEXP(COMPLEX(0, PI()))"
+        expected: impl
+      - name: "exp(1+i)"
+        probe: "=IMEXP(\"1+i\")"
+        expected: impl
+      - name: "pure real exp(1)"
+        probe: "=IMEXP(\"1\")"
+        expected: impl
+      - name: "negative real exp(-1)"
+        probe: "=IMEXP(\"-1\")"
+        expected: impl
+
+  - function: "IMLN"
+    aspect: "complex natural logarithm"
+    behaviors:
+      - name: "ln(1+i) — mixed"
+        probe: "=IMLN(\"1+i\")"
+        expected: impl
+      - name: "ln(-1) — branch cut"
+        probe: "=IMLN(\"-1\")"
+        expected: impl
+      - name: "ln(0) -> #NUM!"
+        probe: "=IMLN(\"0\")"
+        expected: impl
+      - name: "ln(1) = 0"
+        probe: "=IMLN(\"1\")"
+        expected: impl
+      - name: "ln(i) = pi/2 * i"
+        probe: "=IMLN(\"i\")"
+        expected: impl
+
+  - function: "IMLOG10"
+    aspect: "complex base-10 logarithm"
+    behaviors:
+      - name: "log10(2+i) — mixed"
+        probe: "=IMLOG10(\"2+i\")"
+        expected: impl
+      - name: "log10(1) = 0"
+        probe: "=IMLOG10(\"1\")"
+        expected: impl
+      - name: "log10(10) = 1"
+        probe: "=IMLOG10(\"10\")"
+        expected: impl
+      - name: "log10(i) — pure imaginary"
+        probe: "=IMLOG10(\"i\")"
+        expected: impl
+      - name: "log10(-1) — branch cut"
+        probe: "=IMLOG10(\"-1\")"
+        expected: impl
+
+  - function: "IMLOG2"
+    aspect: "complex base-2 logarithm"
+    behaviors:
+      - name: "log2(2+i) — mixed"
+        probe: "=IMLOG2(\"2+i\")"
+        expected: impl
+      - name: "log2(1) = 0"
+        probe: "=IMLOG2(\"1\")"
+        expected: impl
+      - name: "log2(2) = 1"
+        probe: "=IMLOG2(\"2\")"
+        expected: impl
+      - name: "log2(i) — pure imaginary"
+        probe: "=IMLOG2(\"i\")"
+        expected: impl
+      - name: "log2(-1) — branch cut"
+        probe: "=IMLOG2(\"-1\")"
+        expected: impl
+
+  - function: "IMPOWER"
+    aspect: "complex power"
+    behaviors:
+      - name: "(1+i)^2 = 2i"
+        probe: "=IMPOWER(\"1+i\",2)"
+        expected: impl
+      - name: "any^0 = 1"
+        probe: "=IMPOWER(\"3+4i\",0)"
+        expected: impl
+      - name: "(1+i)^-1"
+        probe: "=IMPOWER(\"1+i\",-1)"
+        expected: impl
+      - name: "(1+i)^0.5 = sqrt"
+        probe: "=IMPOWER(\"1+i\",0.5)"
+        expected: impl
+      - name: "0^negative -> #NUM!"
+        probe: "=IMPOWER(\"0\",-2)"
+        expected: impl
+
+  - function: "IMPRODUCT"
+    aspect: "complex multi-factor product"
+    behaviors:
+      - name: "(2+i)(3+4i) two-arg"
+        probe: "=IMPRODUCT(\"2+i\",\"3+4i\")"
+        expected: impl
+      - name: "three-arg product"
+        probe: "=IMPRODUCT(\"1+i\",\"1+i\",\"1+i\")"
+        expected: impl
+      - name: "zero factor collapses"
+        probe: "=IMPRODUCT(\"3+4i\",\"0\")"
+        expected: impl
+      - name: "single-arg product"
+        probe: "=IMPRODUCT(\"3+4i\")"
+        expected: impl
+      - name: "i*i = -1"
+        probe: "=IMPRODUCT(\"i\",\"i\")"
+        expected: impl
+
+  - function: "IMREAL"
+    aspect: "real-part inspector"
+    behaviors:
+      - name: "mixed positive"
+        probe: "=IMREAL(\"3+4i\")"
+        expected: impl
+      - name: "invalid string -> #NUM!"
+        probe: "=IMREAL(\"abc\")"
+        expected: impl
+      - name: "pure imaginary -> 0"
+        probe: "=IMREAL(\"5i\")"
+        expected: impl
+      - name: "pure real"
+        probe: "=IMREAL(\"7\")"
+        expected: impl
+      - name: "negative real part"
+        probe: "=IMREAL(\"-3+4i\")"
+        expected: impl
+
+  - function: "IMSEC"
+    aspect: "complex secant"
+    behaviors:
+      - name: "mixed input"
+        probe: "=IMSEC(\"1+i\")"
+        expected: impl
+      - name: "sec(0) = 1"
+        probe: "=IMSEC(\"0\")"
+        expected: impl
+      - name: "pure real sec(1)"
+        probe: "=IMSEC(\"1\")"
+        expected: impl
+      - name: "pure imaginary"
+        probe: "=IMSEC(\"i\")"
+        expected: impl
+      - name: "negative real (even function)"
+        probe: "=IMSEC(\"-1\")"
+        expected: impl
+
+  - function: "IMSIN"
+    aspect: "complex sine"
+    behaviors:
+      - name: "mixed input"
+        probe: "=IMSIN(\"1+i\")"
+        expected: impl
+      - name: "sin(0) = 0"
+        probe: "=IMSIN(\"0\")"
+        expected: impl
+      - name: "pure real sin(1)"
+        probe: "=IMSIN(\"1\")"
+        expected: impl
+      - name: "pure imaginary -> sinh"
+        probe: "=IMSIN(\"i\")"
+        expected: impl
+      - name: "negative real (odd function)"
+        probe: "=IMSIN(\"-1\")"
+        expected: impl
+
+  - function: "IMSINH"
+    aspect: "complex hyperbolic sine"
+    behaviors:
+      - name: "mixed input"
+        probe: "=IMSINH(\"1+i\")"
+        expected: impl
+      - name: "sinh(0) = 0"
+        probe: "=IMSINH(\"0\")"
+        expected: impl
+      - name: "pure real sinh(1)"
+        probe: "=IMSINH(\"1\")"
+        expected: impl
+      - name: "pure imaginary -> sin"
+        probe: "=IMSINH(\"i\")"
+        expected: impl
+      - name: "negative real (odd function)"
+        probe: "=IMSINH(\"-1\")"
+        expected: impl
+
+  - function: "IMSQRT"
+    aspect: "complex principal square root"
+    behaviors:
+      - name: "sqrt(i)"
+        probe: "=IMSQRT(\"i\")"
+        expected: impl
+      - name: "sqrt(-1) = i (principal)"
+        probe: "=IMSQRT(\"-1\")"
+        expected: impl
+      - name: "sqrt(-4) = 2i"
+        probe: "=IMSQRT(\"-4\")"
+        expected: impl
+      - name: "sqrt(0) = 0"
+        probe: "=IMSQRT(\"0\")"
+        expected: impl
+      - name: "sqrt(4) = 2"
+        probe: "=IMSQRT(\"4\")"
+        expected: impl
+
+  - function: "IMSUB"
+    aspect: "complex subtraction"
+    behaviors:
+      - name: "(5+3i)-(2+i) basic"
+        probe: "=IMSUB(\"5+3i\",\"2+i\")"
+        expected: impl
+      - name: "z-z = 0"
+        probe: "=IMSUB(\"3+4i\",\"3+4i\")"
+        expected: impl
+      - name: "pure real subtraction"
+        probe: "=IMSUB(\"5\",\"2\")"
+        expected: impl
+      - name: "pure imaginary subtraction"
+        probe: "=IMSUB(\"5i\",\"2i\")"
+        expected: impl
+      - name: "negative result"
+        probe: "=IMSUB(\"1+i\",\"3+4i\")"
+        expected: impl
+
+  - function: "IMSUM"
+    aspect: "complex multi-arg sum"
+    behaviors:
+      - name: "two-arg sum"
+        probe: "=IMSUM(\"1+i\",\"2+3i\")"
+        expected: impl
+      - name: "mixed-suffix -> #VALUE!"
+        probe: "=IMSUM(\"1+i\",\"2+3j\")"
+        expected: impl
+      - name: "three-arg sum"
+        probe: "=IMSUM(\"1+i\",\"2+2i\",\"3+3i\")"
+        expected: impl
+      - name: "error arg propagates"
+        probe: "=IMSUM(\"1+i\", #REF!)"
+        expected: impl
+      - name: "pure imaginary pair"
+        probe: "=IMSUM(\"2i\",\"3i\")"
+        expected: impl
+
+  - function: "IMTAN"
+    aspect: "complex tangent"
+    behaviors:
+      - name: "mixed input"
+        probe: "=IMTAN(\"1+i\")"
+        expected: impl
+      - name: "tan(0) = 0"
+        probe: "=IMTAN(\"0\")"
+        expected: impl
+      - name: "pure real tan(1)"
+        probe: "=IMTAN(\"1\")"
+        expected: impl
+      - name: "pure imaginary -> tanh"
+        probe: "=IMTAN(\"i\")"
+        expected: impl
+      - name: "negative real (odd function)"
+        probe: "=IMTAN(\"-1\")"
+        expected: impl
