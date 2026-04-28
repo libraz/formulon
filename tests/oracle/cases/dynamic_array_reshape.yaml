@@ -1,0 +1,279 @@
+suite: dynamic_array_reshape
+description: dynamic_array_reshape family — TAKE, DROP, EXPAND, TOCOL, TOROW, WRAPCOLS, WRAPROWS, HSTACK, VSTACK, CHOOSECOLS, CHOOSEROWS. 11 members × 7 perspectives = 77 cases. Spill outputs flow through skip-oracle (compare_value cannot navigate ArrayValue); live cases focus on scalar errors and 1×1 spills. TRIMRANGE deferred.
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # =========================================================================
+  # TAKE
+  # =========================================================================
+  - id: take_head_rows_positive
+    description: "TAKE head rows positive count -> 2x3 spill"
+    formula: '=TAKE({1,2,3;4,5,6;7,8,9}, 2)'
+  - id: take_tail_rows_negative
+    description: "TAKE tail rows negative count -> 1x3 spill"
+    formula: '=TAKE({1,2,3;4,5,6;7,8,9}, -1)'
+  - id: take_head_cols_positive
+    description: "TAKE head cols positive cols arg -> 2x2 spill"
+    formula: '=TAKE({1,2,3;4,5,6}, 2, 2)'
+  - id: take_tail_cols_negative
+    description: "TAKE tail cols negative cols arg -> 2x2 spill"
+    formula: '=TAKE({1,2,3;4,5,6}, 2, -2)'
+  - id: take_count_exceeds_dimension
+    description: "TAKE count exceeds row dimension clips to full array -> 3x1 spill"
+    formula: '=TAKE({10;20;30}, 99)'
+  - id: take_single_cell_result
+    description: "TAKE 1x1 input count=1 -> scalar 42 (1x1 spill)"
+    formula: '=TAKE({42}, 1)'
+  - id: take_rows_zero_with_cols
+    description: "TAKE rows=0 with cols arg keeps full row count -> 2x2 spill"
+    formula: '=TAKE({1,2,3;4,5,6}, 0, 2)'
+
+  # =========================================================================
+  # DROP
+  # =========================================================================
+  - id: drop_head_rows_positive
+    description: "DROP head rows positive count -> 2x2 spill"
+    formula: '=DROP({1,2;3,4;5,6}, 1)'
+  - id: drop_tail_rows_negative
+    description: "DROP tail rows negative count -> 2x2 spill"
+    formula: '=DROP({1,2;3,4;5,6}, -1)'
+  - id: drop_head_cols_positive
+    description: "DROP head cols positive cols arg -> 2x2 spill"
+    formula: '=DROP({1,2,3;4,5,6}, 0, 1)'
+  - id: drop_count_eq_row_count_error
+    description: "DROP count equal to row count -> #CALC!"
+    formula: '=DROP({1;2;3}, 3)'
+  - id: drop_count_exceeds_row_count_error
+    description: "DROP count exceeds row count -> #CALC!"
+    formula: '=DROP({1;2}, 5)'
+  - id: drop_zero_identity
+    description: "DROP 0 rows identity pass-through -> 2x2 spill"
+    formula: '=DROP({1,2;3,4}, 0)'
+  - id: drop_negative_cols_all_error
+    description: "DROP negative cols removing all columns -> #CALC!"
+    formula: '=DROP({1,2;3,4}, 0, -2)'
+
+  # =========================================================================
+  # EXPAND
+  # =========================================================================
+  - id: expand_explicit_pad_with
+    description: "EXPAND rows and cols with explicit pad_with=0 -> 3x3 spill"
+    formula: '=EXPAND({1,2;3,4}, 3, 3, 0)'
+  - id: expand_default_pad_na
+    description: "EXPAND without pad_with uses #N/A fill -> 3x3 spill"
+    formula: '=EXPAND({1,2;3,4}, 3, 3)'
+  - id: expand_target_rows_smaller_error
+    description: "EXPAND target rows smaller than source -> #VALUE!"
+    formula: '=EXPAND({1,2;3,4;5,6}, 2, 4)'
+  - id: expand_target_cols_smaller_error
+    description: "EXPAND target cols smaller than source -> #VALUE!"
+    formula: '=EXPAND({1,2,3;4,5,6}, 3, 2)'
+  - id: expand_scalar_to_2x2
+    description: "EXPAND 1x1 scalar to 2x2 with pad -> 2x2 spill"
+    formula: '=EXPAND({7}, 2, 2, 0)'
+  - id: expand_col_vector_to_matrix
+    description: "EXPAND col-vector to matrix with pad=99 -> 3x3 spill"
+    formula: '=EXPAND({1;2;3}, 3, 3, 99)'
+  - id: expand_identity_pass_through
+    description: "EXPAND target equals source dimensions -> identity 2x2 spill"
+    formula: '=EXPAND({1,2;3,4}, 2, 2, 0)'
+
+  # =========================================================================
+  # TOCOL
+  # =========================================================================
+  - id: tocol_row_major_default
+    description: "TOCOL row-major flatten default -> 4x1 spill"
+    formula: '=TOCOL({1,2;3,4})'
+  - id: tocol_column_major
+    description: "TOCOL column-major flatten -> 4x1 spill"
+    formula: '=TOCOL({1,2;3,4}, 0, TRUE)'
+  - id: tocol_ignore_blanks
+    description: "TOCOL ignore=1 skips blanks -> shorter spill column"
+    formula: '=TOCOL({1,"",2;"",3,""}, 1)'
+  - id: tocol_ignore_errors
+    description: "TOCOL ignore=2 skips errors -> shorter spill column"
+    formula: '=TOCOL({1,#N/A;2,3}, 2)'
+  - id: tocol_ignore_both
+    description: "TOCOL ignore=3 skips blanks and errors -> shortest spill column"
+    formula: '=TOCOL({1,#N/A;"",3}, 3)'
+  - id: tocol_all_blank_ignore_one_error
+    description: "TOCOL all cells blank with ignore=1 -> #CALC!"
+    formula: '=TOCOL({"",""}, 1)'
+  - id: tocol_single_row_to_column
+    description: "TOCOL single-row vector row-major -> 3x1 spill"
+    formula: '=TOCOL({10,20,30})'
+
+  # =========================================================================
+  # TOROW
+  # =========================================================================
+  - id: torow_row_major_default
+    description: "TOROW row-major flatten default -> 1x4 spill"
+    formula: '=TOROW({1,2;3,4})'
+  - id: torow_column_major
+    description: "TOROW column-major flatten -> 1x4 spill"
+    formula: '=TOROW({1,2;3,4}, 0, TRUE)'
+  - id: torow_ignore_blanks
+    description: "TOROW ignore=1 skips blanks -> shorter spill row"
+    formula: '=TOROW({"",1,"",2}, 1)'
+  - id: torow_ignore_errors
+    description: "TOROW ignore=2 skips errors -> shorter spill row"
+    formula: '=TOROW({#VALUE!,1,#N/A,2}, 2)'
+  - id: torow_ignore_both
+    description: "TOROW ignore=3 skips blanks and errors -> shortest spill row"
+    formula: '=TOROW({"",#N/A,1,#VALUE!,2}, 3)'
+  - id: torow_all_errors_ignore_two_error
+    description: "TOROW all cells errors with ignore=2 -> #CALC!"
+    formula: '=TOROW({#N/A,#VALUE!}, 2)'
+  - id: torow_single_column_to_row
+    description: "TOROW single-column vector -> 1x3 spill"
+    formula: '=TOROW({10;20;30})'
+
+  # =========================================================================
+  # WRAPCOLS
+  # =========================================================================
+  - id: wrapcols_even_no_padding
+    description: "WRAPCOLS even-length wrap no padding -> 3x2 spill"
+    formula: '=WRAPCOLS({1,2,3,4,5,6}, 3)'
+  - id: wrapcols_odd_default_pad_na
+    description: "WRAPCOLS odd-length wrap default pad #N/A -> spill with #N/A"
+    formula: '=WRAPCOLS({1,2,3,4,5}, 2)'
+  - id: wrapcols_explicit_pad_with
+    description: "WRAPCOLS explicit pad_with=0 fills remainder -> 2x3 spill"
+    formula: '=WRAPCOLS({1,2,3,4,5}, 2, 0)'
+  - id: wrapcols_zero_count_error
+    description: "WRAPCOLS wrap_count=0 -> #VALUE!"
+    formula: '=WRAPCOLS({1,2,3}, 0)'
+  - id: wrapcols_count_exceeds_length
+    description: "WRAPCOLS wrap_count exceeds length -> single-column spill"
+    formula: '=WRAPCOLS({1,2,3}, 10)'
+  - id: wrapcols_column_input
+    description: "WRAPCOLS column-vector input treated as flat sequence -> spill"
+    formula: '=WRAPCOLS({1;2;3;4}, 2)'
+  - id: wrapcols_count_one
+    description: "WRAPCOLS wrap_count=1 each element in own column -> 1x3 spill"
+    formula: '=WRAPCOLS({10,20,30}, 1)'
+
+  # =========================================================================
+  # WRAPROWS
+  # =========================================================================
+  - id: wraprows_even_no_padding
+    description: "WRAPROWS even-length wrap no padding -> 2x3 spill"
+    formula: '=WRAPROWS({1,2,3,4,5,6}, 3)'
+  - id: wraprows_odd_default_pad_na
+    description: "WRAPROWS odd-length wrap default pad #N/A -> spill with #N/A"
+    formula: '=WRAPROWS({1,2,3,4,5}, 3)'
+  - id: wraprows_explicit_pad_with
+    description: "WRAPROWS explicit pad_with=-1 fills remainder -> 2x3 spill"
+    formula: '=WRAPROWS({1,2,3,4,5}, 3, -1)'
+  - id: wraprows_zero_count_error
+    description: "WRAPROWS wrap_count=0 -> #VALUE!"
+    formula: '=WRAPROWS({1,2,3}, 0)'
+  - id: wraprows_count_exceeds_length
+    description: "WRAPROWS wrap_count exceeds length -> single-row spill"
+    formula: '=WRAPROWS({1,2,3}, 10)'
+  - id: wraprows_column_input
+    description: "WRAPROWS column-vector input treated as flat sequence -> spill"
+    formula: '=WRAPROWS({1;2;3;4}, 2)'
+  - id: wraprows_count_one
+    description: "WRAPROWS wrap_count=1 each element in own row -> 3x1 spill"
+    formula: '=WRAPROWS({10,20,30}, 1)'
+
+  # =========================================================================
+  # HSTACK
+  # =========================================================================
+  - id: hstack_same_height
+    description: "HSTACK same-height arrays -> 3x2 concatenated spill"
+    formula: '=HSTACK({1;2;3}, {4;5;6})'
+  - id: hstack_ragged_padded
+    description: "HSTACK ragged-row inputs shorter array padded with #N/A -> 3x2 spill"
+    formula: '=HSTACK({1;2;3}, {4;5})'
+  - id: hstack_three_args
+    description: "HSTACK three-argument horizontal concatenation -> 1x6 spill"
+    formula: '=HSTACK({1,2}, {3,4}, {5,6})'
+  - id: hstack_single_row
+    description: "HSTACK single-row vectors -> 1x6 spill"
+    formula: '=HSTACK({1,2,3}, {4,5,6})'
+  - id: hstack_error_cell_propagates
+    description: "HSTACK error cell in one array propagates into result position -> spill"
+    formula: '=HSTACK({1;#N/A;3}, {4;5;6})'
+  - id: hstack_scalars
+    description: "HSTACK single-element scalars -> 1x2 spill"
+    formula: '=HSTACK({1}, {2})'
+  - id: hstack_2d_ragged_row_mismatch
+    description: "HSTACK 2D ragged arrays row-count mismatch padded with #N/A -> 3x3 spill"
+    formula: '=HSTACK({1,2;3,4}, {5;6;7})'
+
+  # =========================================================================
+  # VSTACK
+  # =========================================================================
+  - id: vstack_same_width
+    description: "VSTACK same-width arrays -> 2x3 concatenated spill"
+    formula: '=VSTACK({1,2,3}, {4,5,6})'
+  - id: vstack_ragged_padded
+    description: "VSTACK ragged-col inputs shorter array padded with #N/A -> 2x3 spill"
+    formula: '=VSTACK({1,2,3}, {4,5})'
+  - id: vstack_three_args
+    description: "VSTACK three-argument vertical stacking -> 6x1 spill"
+    formula: '=VSTACK({1;2}, {3;4}, {5;6})'
+  - id: vstack_single_col
+    description: "VSTACK single-col vectors -> 6x1 spill"
+    formula: '=VSTACK({1;2;3}, {4;5;6})'
+  - id: vstack_error_cell_propagates
+    description: "VSTACK error cell propagates into result position -> spill"
+    formula: '=VSTACK({1,2,3}, {#VALUE!,5,6})'
+  - id: vstack_scalars
+    description: "VSTACK single-element scalars -> 2x1 spill"
+    formula: '=VSTACK({1}, {2})'
+  - id: vstack_2d_ragged_col_mismatch
+    description: "VSTACK 2D ragged arrays col-count mismatch padded with #N/A -> 3x3 spill"
+    formula: '=VSTACK({1,2;3,4}, {5,6,7})'
+
+  # =========================================================================
+  # CHOOSECOLS
+  # =========================================================================
+  - id: choosecols_single_positive
+    description: "CHOOSECOLS single positive index -> 2x1 spill"
+    formula: '=CHOOSECOLS({1,2,3;4,5,6}, 2)'
+  - id: choosecols_multiple_positive
+    description: "CHOOSECOLS multiple positive indices -> 2x2 spill"
+    formula: '=CHOOSECOLS({1,2,3;4,5,6}, 1, 3)'
+  - id: choosecols_negative_index
+    description: "CHOOSECOLS negative index from-end -> 2x1 spill"
+    formula: '=CHOOSECOLS({1,2,3;4,5,6}, -1)'
+  - id: choosecols_repeated_index
+    description: "CHOOSECOLS repeated index duplicates column -> 2x2 spill"
+    formula: '=CHOOSECOLS({1,2,3;4,5,6}, 2, 2)'
+  - id: choosecols_out_of_range_positive_error
+    description: "CHOOSECOLS out-of-range positive index -> #VALUE!"
+    formula: '=CHOOSECOLS({1,2,3}, 5)'
+  - id: choosecols_out_of_range_negative_error
+    description: "CHOOSECOLS out-of-range negative index -> #VALUE!"
+    formula: '=CHOOSECOLS({1,2,3}, -5)'
+  - id: choosecols_index_zero_error
+    description: "CHOOSECOLS index=0 invalid 1-based -> #VALUE!"
+    formula: '=CHOOSECOLS({1,2,3}, 0)'
+
+  # =========================================================================
+  # CHOOSEROWS
+  # =========================================================================
+  - id: chooserows_single_positive
+    description: "CHOOSEROWS single positive index -> 1x3 spill"
+    formula: '=CHOOSEROWS({1,2,3;4,5,6;7,8,9}, 2)'
+  - id: chooserows_multiple_positive
+    description: "CHOOSEROWS multiple positive indices -> 2x3 spill"
+    formula: '=CHOOSEROWS({1,2,3;4,5,6;7,8,9}, 1, 3)'
+  - id: chooserows_negative_index
+    description: "CHOOSEROWS negative index from-end -> 1x3 spill"
+    formula: '=CHOOSEROWS({1,2,3;4,5,6;7,8,9}, -1)'
+  - id: chooserows_repeated_index
+    description: "CHOOSEROWS repeated index duplicates row -> 2x3 spill"
+    formula: '=CHOOSEROWS({1,2,3;4,5,6}, 1, 1)'
+  - id: chooserows_out_of_range_positive_error
+    description: "CHOOSEROWS out-of-range positive index -> #VALUE!"
+    formula: '=CHOOSEROWS({1,2;3,4}, 5)'
+  - id: chooserows_out_of_range_negative_error
+    description: "CHOOSEROWS out-of-range negative index -> #VALUE!"
+    formula: '=CHOOSEROWS({1,2;3,4}, -5)'
+  - id: chooserows_index_zero_error
+    description: "CHOOSEROWS index=0 invalid 1-based -> #VALUE!"
+    formula: '=CHOOSEROWS({1,2;3,4}, 0)'
