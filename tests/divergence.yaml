@@ -797,10 +797,9 @@ entries:
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
 
-  # PIVOTBY spill outputs and the parallel filter-empty bug-class
-  # divergence. The pivot result is a 2D ArrayValue; oracle compare_value
-  # only handles scalars. Same read_array_arg path as GROUPBY -- the
-  # closure is contributor-safe.
+  # PIVOTBY spill outputs. The pivot result is a 2D ArrayValue; oracle
+  # compare_value only handles scalars. Same read_array_arg path as
+  # GROUPBY.
   - id: pivotby_bare_sum
     reason: "PIVOTBY returns a 2D ArrayValue; oracle compare_value only handles scalars. Unit test PivotBy.BareSumName covers bare-name aggregator dispatch."
     prefer: mac-excel-365
