@@ -63,6 +63,23 @@ families:
     min_perspectives_per_member: 5
     cluster_reason: "Boolean primitives plus conditional dispatchers; share the same logical.yaml fixtures and bool-coercion edges."
 
+  # -- Date / time core ------------------------------------------------------
+  # Non-volatile date/time functions share serial-date arithmetic (1900
+  # leap-year quirk, EOMONTH boundaries, weekend-mask interpretation) and
+  # ja-JP locale fixtures. They co-evolve on calendar-edge perspectives, so
+  # the closure threshold is anchored against the same datetime.yaml suite.
+  #
+  # DATEVALUE / TIMEVALUE / N are intentionally NOT family members: they
+  # live in their own dedicated cases file (datevalue_timevalue.yaml or
+  # info.yaml) and must remain singletons so closure_check uses the
+  # all-files fallback to find their cases. NOW / TODAY / RAND* are
+  # covered by the `volatile` family.
+  - name: datetime
+    members: [YEAR, MONTH, DAY, HOUR, MINUTE, SECOND, DATE, TIME, WEEKDAY, WEEKNUM, ISOWEEKNUM, EOMONTH, EDATE, DAYS, DAYS360, NETWORKDAYS, "NETWORKDAYS.INTL", WORKDAY, "WORKDAY.INTL", DATEDIF, YEARFRAC]
+    category_file: tests/oracle/cases/datetime.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Date/time functions share serial-date arithmetic (1900-leap quirk, EOMONTH boundaries) and locale-bound parsing fixtures."
+
   # -- Matrix ----------------------------------------------------------------
   - name: matrix
     members: [MMULT, MDETERM, MINVERSE]

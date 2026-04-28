@@ -276,3 +276,219 @@ cases:
   - id: workday_intl_string_mask
     description: "String mask equivalent to selector 1"
     formula: "=WORKDAY.INTL(DATE(2024,1,1),5,\"0000011\")"
+
+  # =========================================================================
+  # Closure-fill perspectives (date/time family). Each function needs >=5
+  # distinct semantic perspectives covered by oracle cases. The blocks
+  # below add the missing edges (leap days, month/year extremes, weekend
+  # masks, locale-bound parsing) so closure_check sees a probe match per
+  # declared behavior in tools/catalog/behaviors.yaml.
+  # =========================================================================
+
+  # -- YEAR perspectives ---------------------------------------------------
+  - id: year_leap_feb_29
+    description: "YEAR of leap-day Feb 29 2024 -> 2024"
+    formula: "=YEAR(DATE(2024,2,29))"
+
+  - id: year_serial_zero
+    description: "YEAR of serial 0 -> 1900 (Excel's 1900-01-00 origin)"
+    formula: "=YEAR(0)"
+
+  - id: year_text_date_string
+    description: "YEAR coerces a text date through the locale parser"
+    formula: "=YEAR(\"2024-12-31\")"
+
+  - id: year_large_serial
+    description: "YEAR of serial 50000 -> 2036 (Nov 21)"
+    formula: "=YEAR(50000)"
+
+  # -- MONTH perspectives --------------------------------------------------
+  - id: month_leap_feb_29
+    description: "MONTH of Feb 29 2024 -> 2"
+    formula: "=MONTH(DATE(2024,2,29))"
+
+  - id: month_serial_zero
+    description: "MONTH of serial 0 -> 1 (1900-01-00 quirk)"
+    formula: "=MONTH(0)"
+
+  - id: month_year_end
+    description: "MONTH of Dec 31 -> 12"
+    formula: "=MONTH(DATE(2024,12,31))"
+
+  - id: month_text_date_string
+    description: "MONTH coerces text date through the locale parser"
+    formula: "=MONTH(\"2024-07-04\")"
+
+  # -- DAY perspectives ----------------------------------------------------
+  - id: day_leap_feb_29
+    description: "DAY of Feb 29 2024 -> 29"
+    formula: "=DAY(DATE(2024,2,29))"
+
+  - id: day_month_end_31
+    description: "DAY of Dec 31 -> 31"
+    formula: "=DAY(DATE(2024,12,31))"
+
+  - id: day_serial_zero
+    description: "DAY of serial 0 -> 0 (1900-01-00 quirk)"
+    formula: "=DAY(0)"
+
+  - id: day_text_date_string
+    description: "DAY coerces text date through the locale parser"
+    formula: "=DAY(\"2024-07-04\")"
+
+  # -- HOUR perspectives ---------------------------------------------------
+  - id: hour_midnight
+    description: "HOUR of 0.0 -> 0"
+    formula: "=HOUR(0)"
+
+  - id: hour_noon
+    description: "HOUR of 0.5 -> 12"
+    formula: "=HOUR(0.5)"
+
+  - id: hour_end_of_day
+    description: "HOUR just before midnight -> 23"
+    formula: "=HOUR(0.99999)"
+
+  - id: hour_with_date_serial
+    description: "HOUR ignores the integer date part and reads the fraction"
+    formula: "=HOUR(DATE(2024,4,22)+0.75)"
+
+  # -- MINUTE perspectives -------------------------------------------------
+  - id: minute_midnight
+    description: "MINUTE of 0.0 -> 0"
+    formula: "=MINUTE(0)"
+
+  - id: minute_noon
+    description: "MINUTE of 0.5 -> 0"
+    formula: "=MINUTE(0.5)"
+
+  - id: minute_quarter_hour
+    description: "MINUTE of 13:15 -> 15"
+    formula: "=MINUTE(TIME(13,15,0))"
+
+  - id: minute_with_date_serial
+    description: "MINUTE ignores integer date part"
+    formula: "=MINUTE(DATE(2024,4,22)+TIME(0,45,0))"
+
+  # -- SECOND perspectives -------------------------------------------------
+  - id: second_midnight
+    description: "SECOND of 0.0 -> 0"
+    formula: "=SECOND(0)"
+
+  - id: second_end_of_day
+    description: "SECOND just before midnight -> 59"
+    formula: "=SECOND(TIME(23,59,59))"
+
+  - id: second_zero_of_round_minute
+    description: "SECOND of 13:30:00 -> 0"
+    formula: "=SECOND(TIME(13,30,0))"
+
+  - id: second_with_date_serial
+    description: "SECOND ignores integer date part"
+    formula: "=SECOND(DATE(2024,4,22)+TIME(0,0,30))"
+
+  # -- TIME perspective ---------------------------------------------------
+  - id: time_seconds_only
+    description: "TIME(0,0,30) -> 30/86400"
+    formula: "=TIME(0,0,30)"
+
+  # -- WEEKDAY perspectives ------------------------------------------------
+  - id: weekday_type_11_monday_first
+    description: "return_type=11 (Mon=1) of Monday -> 1"
+    formula: "=WEEKDAY(DATE(2024,4,22),11)"
+
+  - id: weekday_type_17_saturday_first
+    description: "return_type=17 (Sat=1) of Monday -> 3"
+    formula: "=WEEKDAY(DATE(2024,4,22),17)"
+
+  # -- EDATE perspectives --------------------------------------------------
+  - id: edate_negative_months
+    description: "EDATE(2024-04-22, -3) -> 2024-01-22"
+    formula: "=EDATE(DATE(2024,4,22),-3)"
+
+  - id: edate_zero_months
+    description: "EDATE(start, 0) returns start unchanged"
+    formula: "=EDATE(DATE(2024,4,22),0)"
+
+  - id: edate_end_of_month_rolls
+    description: "EDATE from Jan 31 + 1 month -> Feb 28 (or Feb 29 in leap year)"
+    formula: "=EDATE(DATE(2023,1,31),1)"
+
+  - id: edate_two_year_jump
+    description: "EDATE +24 months crosses year boundaries"
+    formula: "=EDATE(DATE(2024,4,22),24)"
+
+  # -- EOMONTH perspectives -----------------------------------------------
+  - id: eomonth_negative_offset
+    description: "EOMONTH(start, -1) -> last day of previous month"
+    formula: "=EOMONTH(DATE(2024,4,15),-1)"
+
+  - id: eomonth_leap_february
+    description: "EOMONTH +1 from Jan 15 2024 -> Feb 29 2024 (leap year)"
+    formula: "=EOMONTH(DATE(2024,1,15),1)"
+
+  - id: eomonth_non_leap_february
+    description: "EOMONTH +1 from Jan 15 2023 -> Feb 28 2023 (non-leap)"
+    formula: "=EOMONTH(DATE(2023,1,15),1)"
+
+  # -- DAYS perspectives ---------------------------------------------------
+  - id: days_same_date
+    description: "DAYS between identical dates -> 0"
+    formula: "=DAYS(DATE(2024,4,22),DATE(2024,4,22))"
+
+  - id: days_text_date_strings
+    description: "DAYS accepts ISO date strings on both sides"
+    formula: "=DAYS(\"2024-05-01\",\"2024-04-22\")"
+
+  - id: days_year_span
+    description: "DAYS over a leap year -> 366"
+    formula: "=DAYS(DATE(2025,1,1),DATE(2024,1,1))"
+
+  # -- DAYS360 perspectives -----------------------------------------------
+  - id: days360_reverse_order
+    description: "DAYS360 with end < start -> negative"
+    formula: "=DAYS360(DATE(2024,3,31),DATE(2024,2,15))"
+
+  # -- WEEKNUM perspectives -----------------------------------------------
+  # (existing 6 cases already exercise default / Mon / ISO / boundary / invalid)
+
+  # -- ISOWEEKNUM perspectives --------------------------------------------
+  - id: isoweeknum_jan_4_is_week_1
+    description: "ISO: Jan 4 always falls in week 1"
+    formula: "=ISOWEEKNUM(DATE(2024,1,4))"
+
+  - id: isoweeknum_dec_28_late_year
+    description: "ISO: Dec 28 always falls in the final week of its ISO year"
+    formula: "=ISOWEEKNUM(DATE(2024,12,28))"
+
+  # -- DATEDIF perspectives ---------------------------------------------
+  # (existing 8 cases cover Y / M / D / YM / YD / MD / errors — already >= 5)
+
+  # -- YEARFRAC perspectives ---------------------------------------------
+  # (existing 8 cases cover all 5 bases plus boundaries — already >= 5)
+
+  # -- NETWORKDAYS perspectives -----------------------------------------
+  # (existing 6 cases cover one-week / two-week / single / weekend / holidays / reversed)
+
+  # -- NETWORKDAYS.INTL perspectives -------------------------------------
+  - id: networkdays_intl_sun_mon_weekend
+    description: "Selector 2 = Sun+Mon weekend"
+    formula: "=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,14),2)"
+
+  - id: networkdays_intl_with_holidays
+    description: "Holidays array subtracts matching weekdays"
+    formula: "=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,12),1,{45292,45293})"
+
+  # -- WORKDAY perspectives ----------------------------------------------
+  - id: workday_large_offset
+    description: "+50 business days crosses ~10 weeks"
+    formula: "=WORKDAY(DATE(2024,1,1),50)"
+
+  # -- WORKDAY.INTL perspectives ----------------------------------------
+  - id: workday_intl_sun_mon_weekend
+    description: "Selector 2 = Sun+Mon weekend"
+    formula: "=WORKDAY.INTL(DATE(2024,1,1),5,2)"
+
+  - id: workday_intl_with_holidays
+    description: "Holidays array extends the run forward under default weekend"
+    formula: "=WORKDAY.INTL(DATE(2024,1,1),5,1,{45293,45294})"

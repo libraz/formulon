@@ -3529,3 +3529,474 @@ groups:
       - name: "kanji needle returns DBCS byte position"
         probe: '=SEARCHB("漢", "ABC漢", 1)'
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # Date / time core (non-volatile). Cases live in
+  # tests/oracle/cases/datetime.yaml. Volatile family (NOW / TODAY / RAND*)
+  # is declared earlier under its own groups; DATEVALUE / TIMEVALUE live in
+  # tests/oracle/cases/datevalue_timevalue.yaml and have their own groups.
+  # -------------------------------------------------------------------------
+
+  - function: "YEAR"
+    aspect: "year extraction from serial dates"
+    behaviors:
+      - name: "year of explicit DATE(2024,4,22) -> 2024"
+        probe: "=YEAR(DATE(2024,4,22))"
+        expected: impl
+      - name: "leap-year Feb 29 -> 2024"
+        probe: "=YEAR(DATE(2024,2,29))"
+        expected: impl
+      - name: "serial 0 -> 1900 (1900-01-00 origin)"
+        probe: "=YEAR(0)"
+        expected: impl
+      - name: "text date string coerces through locale parser"
+        probe: '=YEAR("2024-12-31")'
+        expected: impl
+      - name: "large serial 50000 -> 2036"
+        probe: "=YEAR(50000)"
+        expected: impl
+
+  - function: "MONTH"
+    aspect: "month extraction from serial dates"
+    behaviors:
+      - name: "month of mid-year date -> 4"
+        probe: "=MONTH(DATE(2024,4,22))"
+        expected: impl
+      - name: "leap-day Feb -> 2"
+        probe: "=MONTH(DATE(2024,2,29))"
+        expected: impl
+      - name: "serial 0 -> 1 (1900-01-00 quirk)"
+        probe: "=MONTH(0)"
+        expected: impl
+      - name: "year-end Dec -> 12"
+        probe: "=MONTH(DATE(2024,12,31))"
+        expected: impl
+      - name: "text date string coerces through locale parser"
+        probe: '=MONTH("2024-07-04")'
+        expected: impl
+
+  - function: "DAY"
+    aspect: "day-of-month extraction"
+    behaviors:
+      - name: "day of explicit DATE -> 22"
+        probe: "=DAY(DATE(2024,4,22))"
+        expected: impl
+      - name: "leap-day Feb 29 -> 29"
+        probe: "=DAY(DATE(2024,2,29))"
+        expected: impl
+      - name: "month-end day 31 -> 31"
+        probe: "=DAY(DATE(2024,12,31))"
+        expected: impl
+      - name: "serial 0 -> 0 (1900-01-00 quirk)"
+        probe: "=DAY(0)"
+        expected: impl
+      - name: "text date string coerces through locale parser"
+        probe: '=DAY("2024-07-04")'
+        expected: impl
+
+  - function: "HOUR"
+    aspect: "hour extraction from time fractions"
+    behaviors:
+      - name: "midnight serial 0 -> 0"
+        probe: "=HOUR(0)"
+        expected: impl
+      - name: "noon serial 0.5 -> 12"
+        probe: "=HOUR(0.5)"
+        expected: impl
+      - name: "near-midnight serial 0.99999 -> 23"
+        probe: "=HOUR(0.99999)"
+        expected: impl
+      - name: "TIME-built fractional hour read"
+        probe: "=HOUR(TIME(13,45,30))"
+        expected: impl
+      - name: "ignores integer date part"
+        probe: "=HOUR(DATE(2024,4,22)+0.75)"
+        expected: impl
+
+  - function: "MINUTE"
+    aspect: "minute extraction from time fractions"
+    behaviors:
+      - name: "midnight serial 0 -> 0"
+        probe: "=MINUTE(0)"
+        expected: impl
+      - name: "noon serial 0.5 -> 0"
+        probe: "=MINUTE(0.5)"
+        expected: impl
+      - name: "TIME-built minute read"
+        probe: "=MINUTE(TIME(13,45,30))"
+        expected: impl
+      - name: "quarter-hour boundary -> 15"
+        probe: "=MINUTE(TIME(13,15,0))"
+        expected: impl
+      - name: "ignores integer date part"
+        probe: "=MINUTE(DATE(2024,4,22)+TIME(0,45,0))"
+        expected: impl
+
+  - function: "SECOND"
+    aspect: "second extraction from time fractions"
+    behaviors:
+      - name: "midnight serial 0 -> 0"
+        probe: "=SECOND(0)"
+        expected: impl
+      - name: "TIME-built seconds read -> 30"
+        probe: "=SECOND(TIME(13,45,30))"
+        expected: impl
+      - name: "round minute -> 0"
+        probe: "=SECOND(TIME(13,30,0))"
+        expected: impl
+      - name: "end-of-day 23:59:59 -> 59"
+        probe: "=SECOND(TIME(23,59,59))"
+        expected: impl
+      - name: "ignores integer date part"
+        probe: "=SECOND(DATE(2024,4,22)+TIME(0,0,30))"
+        expected: impl
+
+  - function: "DATE"
+    aspect: "serial-date construction"
+    behaviors:
+      - name: "standard year/month/day -> 45404"
+        probe: "=DATE(2024,4,22)"
+        expected: impl
+      - name: "two-digit year is biased by +1900"
+        probe: "=DATE(26,4,23)"
+        expected: impl
+      - name: "month=0 rolls back to previous December"
+        probe: "=DATE(2026,0,15)"
+        expected: impl
+      - name: "day overflow rolls into the next month"
+        probe: "=DATE(2024,1,32)"
+        expected: impl
+      - name: "1900 leap-bug ghost serial 60"
+        probe: "=N(DATE(1900,2,29))"
+        expected: impl
+
+  - function: "TIME"
+    aspect: "fractional-day time construction"
+    behaviors:
+      - name: "noon -> 0.5"
+        probe: "=TIME(12,0,0)"
+        expected: impl
+      - name: "TIME(25,0,0) wraps via mod-1"
+        probe: "=TIME(25,0,0)"
+        expected: impl
+      - name: "seconds-only construction"
+        probe: "=TIME(0,0,30)"
+        expected: impl
+      - name: "wired into HOUR for round-trip"
+        probe: "HOUR(TIME(13,45,30))"
+        expected: impl
+      - name: "wired into MINUTE for round-trip"
+        probe: "MINUTE(TIME(13,45,30))"
+        expected: impl
+
+  - function: "WEEKDAY"
+    aspect: "weekday return-type variants"
+    behaviors:
+      - name: "default Sun=1 (return_type omitted)"
+        probe: "=WEEKDAY(DATE(2024,4,22))"
+        expected: impl
+      - name: "return_type=2 (Mon=1)"
+        probe: "=WEEKDAY(DATE(2024,4,22),2)"
+        expected: impl
+      - name: "return_type=3 (Mon=0)"
+        probe: "=WEEKDAY(DATE(2024,4,22),3)"
+        expected: impl
+      - name: "return_type=11 (Mon=1, Excel 2010+)"
+        probe: "=WEEKDAY(DATE(2024,4,22),11)"
+        expected: impl
+      - name: "return_type=17 (Sat=1, Excel 2010+)"
+        probe: "=WEEKDAY(DATE(2024,4,22),17)"
+        expected: impl
+
+  - function: "WEEKNUM"
+    aspect: "calendar-week numbering and ISO variant"
+    behaviors:
+      - name: "default return_type=1 mid-year"
+        probe: "=WEEKNUM(DATE(2024,7,4))"
+        expected: impl
+      - name: "Jan 1 always in week 1 under non-ISO types"
+        probe: "=WEEKNUM(DATE(2024,1,1))"
+        expected: impl
+      - name: "return_type=2 (Mon-start)"
+        probe: "=WEEKNUM(DATE(2024,1,1),2)"
+        expected: impl
+      - name: "return_type=21 (ISO 8601)"
+        probe: "=WEEKNUM(DATE(2024,1,1),21)"
+        expected: impl
+      - name: "ISO Jan 1 2023 -> week 52 of 2022"
+        probe: "=WEEKNUM(DATE(2023,1,1),21)"
+        expected: impl
+      - name: "unsupported return_type -> #NUM!"
+        probe: "=WEEKNUM(DATE(2024,1,1),99)"
+        expected: impl
+
+  - function: "ISOWEEKNUM"
+    aspect: "ISO 8601 week numbering"
+    behaviors:
+      - name: "mid-year date"
+        probe: "=ISOWEEKNUM(DATE(2024,7,4))"
+        expected: impl
+      - name: "Jan 1 2023 belongs to ISO week 52 of 2022"
+        probe: "=ISOWEEKNUM(DATE(2023,1,1))"
+        expected: impl
+      - name: "Dec 31 2024 belongs to ISO week 1 of 2025"
+        probe: "=ISOWEEKNUM(DATE(2024,12,31))"
+        expected: impl
+      - name: "Jan 4 always in week 1"
+        probe: "=ISOWEEKNUM(DATE(2024,1,4))"
+        expected: impl
+      - name: "Dec 28 always in final week of its ISO year"
+        probe: "=ISOWEEKNUM(DATE(2024,12,28))"
+        expected: impl
+
+  - function: "EOMONTH"
+    aspect: "end-of-month with integer offset"
+    behaviors:
+      - name: "zero offset -> last day of current month"
+        probe: "=EOMONTH(DATE(2024,4,15),0)"
+        expected: impl
+      - name: "positive offset crosses two months"
+        probe: "=EOMONTH(DATE(2024,4,15),2)"
+        expected: impl
+      - name: "negative offset rolls to previous month"
+        probe: "=EOMONTH(DATE(2024,4,15),-1)"
+        expected: impl
+      - name: "leap February returns Feb 29"
+        probe: "=EOMONTH(DATE(2024,1,15),1)"
+        expected: impl
+      - name: "non-leap February returns Feb 28"
+        probe: "=EOMONTH(DATE(2023,1,15),1)"
+        expected: impl
+
+  - function: "EDATE"
+    aspect: "month-arithmetic on serial dates"
+    behaviors:
+      - name: "positive offset (+3 months)"
+        probe: "=EDATE(DATE(2024,4,22),3)"
+        expected: impl
+      - name: "negative offset (-3 months)"
+        probe: "=EDATE(DATE(2024,4,22),-3)"
+        expected: impl
+      - name: "zero offset returns start unchanged"
+        probe: "=EDATE(DATE(2024,4,22),0)"
+        expected: impl
+      - name: "Jan 31 + 1mo rolls to last day of February"
+        probe: "=EDATE(DATE(2023,1,31),1)"
+        expected: impl
+      - name: "+24 months crosses year boundaries"
+        probe: "=EDATE(DATE(2024,4,22),24)"
+        expected: impl
+
+  - function: "DAYS"
+    aspect: "day-difference between two dates"
+    behaviors:
+      - name: "later minus earlier -> positive"
+        probe: "=DAYS(DATE(2024,5,1),DATE(2024,4,22))"
+        expected: impl
+      - name: "earlier minus later -> negative"
+        probe: "=DAYS(DATE(2024,4,22),DATE(2024,5,1))"
+        expected: impl
+      - name: "same date -> 0"
+        probe: "=DAYS(DATE(2024,4,22),DATE(2024,4,22))"
+        expected: impl
+      - name: "ISO date strings on both sides"
+        probe: '=DAYS("2024-05-01","2024-04-22")'
+        expected: impl
+      - name: "year span over leap year -> 366"
+        probe: "=DAYS(DATE(2025,1,1),DATE(2024,1,1))"
+        expected: impl
+
+  - function: "DAYS360"
+    aspect: "360-day calendar arithmetic (US / European methods)"
+    behaviors:
+      - name: "US/NASD method (default)"
+        probe: "=DAYS360(DATE(2024,2,15),DATE(2024,3,31))"
+        expected: impl
+      - name: "European method (boolean TRUE)"
+        probe: "=DAYS360(DATE(2024,1,31),DATE(2024,3,31),TRUE)"
+        expected: impl
+      - name: "US explicit FALSE: end=31 with start<30 rolls"
+        probe: "=DAYS360(DATE(2024,2,15),DATE(2024,3,31),FALSE)"
+        expected: impl
+      - name: "full year is exactly 360 days"
+        probe: "=DAYS360(DATE(2024,1,1),DATE(2025,1,1))"
+        expected: impl
+      - name: "reverse order yields negative"
+        probe: "=DAYS360(DATE(2024,3,31),DATE(2024,2,15))"
+        expected: impl
+
+  - function: "DATEDIF"
+    aspect: "interval unit codes Y/M/D/YM/YD/MD"
+    behaviors:
+      - name: "Y unit returns whole years"
+        probe: '=DATEDIF(DATE(2020,3,15),DATE(2024,7,1),"Y")'
+        expected: impl
+      - name: "M unit returns whole months"
+        probe: '=DATEDIF(DATE(2024,1,15),DATE(2024,7,1),"M")'
+        expected: impl
+      - name: "D unit returns whole days"
+        probe: '=DATEDIF(DATE(2024,1,1),DATE(2024,1,15),"D")'
+        expected: impl
+      - name: "YM unit ignores years"
+        probe: '=DATEDIF(DATE(2020,3,15),DATE(2024,7,1),"YM")'
+        expected: impl
+      - name: "MD unit ignores years and months"
+        probe: '=DATEDIF(DATE(2024,1,15),DATE(2024,7,15),"MD")'
+        expected: impl
+      - name: "end before start -> #NUM!"
+        probe: '=DATEDIF(DATE(2024,7,1),DATE(2020,3,15),"Y")'
+        expected: impl
+      - name: "unknown unit -> #NUM!"
+        probe: '=DATEDIF(DATE(2024,1,1),DATE(2024,12,31),"X")'
+        expected: impl
+
+  - function: "YEARFRAC"
+    aspect: "day-count basis 0..4 plus error path"
+    behaviors:
+      - name: "basis 0 (US 30/360) half year"
+        probe: "=YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),0)"
+        expected: impl
+      - name: "basis 1 (Actual/Actual) half leap year"
+        probe: "=YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),1)"
+        expected: impl
+      - name: "basis 2 (Actual/360)"
+        probe: "=YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),2)"
+        expected: impl
+      - name: "basis 3 (Actual/365)"
+        probe: "=YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),3)"
+        expected: impl
+      - name: "basis 4 (European 30/360)"
+        probe: "=YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),4)"
+        expected: impl
+      - name: "invalid basis -> #NUM!"
+        probe: "=YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),5)"
+        expected: impl
+
+  - function: "NETWORKDAYS"
+    aspect: "Mon-Fri business-day counting"
+    behaviors:
+      - name: "one-week range -> 5"
+        probe: "=NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,5))"
+        expected: impl
+      - name: "two-week range -> 10"
+        probe: "=NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,12))"
+        expected: impl
+      - name: "single weekday -> 1"
+        probe: "=NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,1))"
+        expected: impl
+      - name: "single weekend -> 0"
+        probe: "=NETWORKDAYS(DATE(2024,1,6),DATE(2024,1,6))"
+        expected: impl
+      - name: "array-literal holidays subtract matching weekdays"
+        probe: "=NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,5),{45292,45293})"
+        expected: impl
+      - name: "reversed range -> negated count"
+        probe: "=NETWORKDAYS(DATE(2024,1,5),DATE(2024,1,1))"
+        expected: impl
+
+  - function: "NETWORKDAYS.INTL"
+    aspect: "configurable weekend mask + holidays"
+    behaviors:
+      - name: "default weekend (Sat+Sun) matches NETWORKDAYS"
+        probe: "=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,12))"
+        expected: impl
+      - name: "selector 1 explicit Sat+Sun"
+        probe: "=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,14),1)"
+        expected: impl
+      - name: "selector 2 (Sun+Mon)"
+        probe: "=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,14),2)"
+        expected: impl
+      - name: "selector 11 (Sunday-only weekend)"
+        probe: "=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,7),11)"
+        expected: impl
+      - name: "string mask 0000011 (Sat+Sun)"
+        probe: '=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,14),"0000011")'
+        expected: impl
+      - name: "holidays array subtracts matching weekdays"
+        probe: "=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,12),1,{45292,45293})"
+        expected: impl
+
+  - function: "WORKDAY"
+    aspect: "skip-weekends business-day offset"
+    behaviors:
+      - name: "+5 business days from a Monday"
+        probe: "=WORKDAY(DATE(2024,1,1),5)"
+        expected: impl
+      - name: "-5 business days backward"
+        probe: "=WORKDAY(DATE(2024,1,15),-5)"
+        expected: impl
+      - name: "zero offset returns start unchanged"
+        probe: "=WORKDAY(DATE(2024,1,3),0)"
+        expected: impl
+      - name: "holidays array extends the run forward"
+        probe: "=WORKDAY(DATE(2024,1,1),5,{45293,45294})"
+        expected: impl
+      - name: "+50 business days crosses ~10 weeks"
+        probe: "=WORKDAY(DATE(2024,1,1),50)"
+        expected: impl
+
+  - function: "WORKDAY.INTL"
+    aspect: "configurable weekend mask + holidays"
+    behaviors:
+      - name: "default weekend (Sat+Sun)"
+        probe: "=WORKDAY.INTL(DATE(2024,1,1),5)"
+        expected: impl
+      - name: "selector 11 (Sunday-only)"
+        probe: "=WORKDAY.INTL(DATE(2024,1,1),5,11)"
+        expected: impl
+      - name: "selector 2 (Sun+Mon)"
+        probe: "=WORKDAY.INTL(DATE(2024,1,1),5,2)"
+        expected: impl
+      - name: "string mask 0000011 (Sat+Sun)"
+        probe: '=WORKDAY.INTL(DATE(2024,1,1),5,"0000011")'
+        expected: impl
+      - name: "holidays array under default weekend"
+        probe: "=WORKDAY.INTL(DATE(2024,1,1),5,1,{45293,45294})"
+        expected: impl
+
+  - function: "TIMEVALUE"
+    aspect: "text-to-time-fraction parsing"
+    behaviors:
+      - name: "HH:MM basic form -> 0.5625"
+        probe: '=TIMEVALUE("13:30")'
+        expected: impl
+      - name: "HH:MM:SS with seconds"
+        probe: '=TIMEVALUE("13:30:45")'
+        expected: impl
+      - name: "AM/PM 12-hour suffix"
+        probe: '=TIMEVALUE("1:30 PM")'
+        expected: impl
+      - name: "hours above 24 wrap via mod-1"
+        probe: '=TIMEVALUE("25:00")'
+        expected: impl
+      - name: "ja-JP 午前 morning prefix"
+        probe: '=TIMEVALUE("午前8:30")'
+        expected: impl
+      - name: "kanji 時/分 unit form"
+        probe: "=TIMEVALUE(\"8時30分\")"
+        expected: impl
+      - name: "malformed input -> #VALUE!"
+        probe: '=TIMEVALUE("not a time")'
+        expected: impl
+      - name: "embedded date+time discards date part"
+        probe: '=TIMEVALUE("2024-03-15 13:30")'
+        expected: impl
+
+  - function: "N"
+    aspect: "numeric coercion gateway"
+    behaviors:
+      - name: "number passes through unchanged"
+        probe: "=N(42)"
+        expected: impl
+      - name: "TRUE coerces to 1"
+        probe: "=N(TRUE)"
+        expected: impl
+      - name: "FALSE coerces to 0"
+        probe: "=N(FALSE)"
+        expected: impl
+      - name: "non-numeric text -> 0"
+        probe: '=N("hello")'
+        expected: impl
+      - name: "wired through DATE for serial inspection"
+        probe: "=N(DATE(1900,2,28))"
+        expected: impl
