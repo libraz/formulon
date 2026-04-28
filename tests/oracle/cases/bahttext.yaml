@@ -1,0 +1,55 @@
+suite: bahttext
+description: BAHTTEXT — Thai-baht spell-out closure against Mac Excel 365 (ja-JP).
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # -- zero baht -----------------------------------------------------------
+  - id: bahttext_zero
+    description: "Zero argument — empty integer + zero satang path"
+    formula: "=BAHTTEXT(0)"
+
+  # -- single-digit integer ------------------------------------------------
+  - id: bahttext_single_digit_one
+    description: "Standalone 1 reading (no chunk context)"
+    formula: "=BAHTTEXT(1)"
+
+  - id: bahttext_single_digit_seven
+    description: "Single-digit non-1 reading"
+    formula: "=BAHTTEXT(7)"
+
+  # -- tens special readings ----------------------------------------------
+  - id: bahttext_tens_eleven
+    description: "11 — sip + et (ones-1 becomes et when chunk has higher digit)"
+    formula: "=BAHTTEXT(11)"
+
+  - id: bahttext_tens_twenty
+    description: "20 — yi-sip (tens-2 becomes yi)"
+    formula: "=BAHTTEXT(20)"
+
+  - id: bahttext_tens_twenty_one
+    description: "21 — yi-sip-et (combined yi + et rules)"
+    formula: "=BAHTTEXT(21)"
+
+  # -- fractional satang ---------------------------------------------------
+  - id: bahttext_fractional_satang
+    description: "Fractional value — integer-baht + satang spell-out"
+    formula: "=BAHTTEXT(1.25)"
+
+  # -- negative sign prefix ------------------------------------------------
+  - id: bahttext_negative_one
+    description: "Negative integer — lop prefix on integer baht"
+    formula: "=BAHTTEXT(-1)"
+
+  - id: bahttext_negative_with_satang
+    description: "Negative fractional — lop prefix + satang clause"
+    formula: "=BAHTTEXT(-100.5)"
+
+  # -- million boundary ---------------------------------------------------
+  - id: bahttext_million_boundary
+    description: "1,000,001 — laan separator + subordinate ones-et"
+    formula: "=BAHTTEXT(1000001)"
+
+  # -- exponent-notation large input (chained laan) -----------------------
+  - id: bahttext_overflow_1e15
+    description: "1e15 — chained laan (1000 x million x million baht)"
+    formula: "=BAHTTEXT(1E15)"

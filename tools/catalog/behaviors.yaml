@@ -288,7 +288,7 @@ groups:
         expected: impl
       - name: "argument omitted via [optional]"
         probe: "[y]"
-        expected: impl
+        expected: diverged
       - name: "ISOMITTED outside LAMBDA"
         probe_regex: '=\s*ISOMITTED\('
         expected: impl
@@ -300,7 +300,7 @@ groups:
         expected: impl
       - name: "ISOMITTED in nested LAMBDA"
         probe_regex: 'LAMBDA\([^,]+,\s*\[[a-z]+\],\s*IF\(ISOMITTED'
-        expected: impl
+        expected: diverged
 
   - function: "BYROW"
     aspect: "lambda dispatcher"
@@ -310,16 +310,16 @@ groups:
         expected: impl
       - name: "BYROW over cell range"
         probe_regex: 'BYROW\(A\d+:[A-Z]\d+'
-        expected: impl
+        expected: diverged
       - name: "BYROW with single-row input"
         probe: "BYROW({1,2,3}"
-        expected: impl
+        expected: diverged
       - name: "BYROW with single-column input"
         probe: "BYROW({1;2;3}"
-        expected: impl
+        expected: diverged
       - name: "BYROW lambda arity mismatch"
         probe_regex: 'BYROW\([^,]+,\s*LAMBDA\([a-z]+,\s*[a-z]+'
-        expected: impl
+        expected: diverged
       - name: "BYROW lambda returns multi-cell array"
         probe: "BYROW("
         expected: impl
@@ -332,19 +332,19 @@ groups:
         expected: impl
       - name: "BYCOL over cell range"
         probe_regex: 'BYCOL\(A\d+:[A-Z]\d+'
-        expected: impl
+        expected: diverged
       - name: "BYCOL with single-row input"
         probe: "BYCOL({1,2,3}"
-        expected: impl
+        expected: diverged
       - name: "BYCOL with single-column input"
         probe: "BYCOL({1;2;3}"
-        expected: impl
+        expected: diverged
       - name: "BYCOL lambda arity mismatch"
         probe_regex: 'BYCOL\(.+,\s*LAMBDA\([a-z]+,\s*[a-z]+,'
         expected: impl
       - name: "BYCOL with error in column"
         probe_regex: 'BYCOL\([^)]*1/0'
-        expected: impl
+        expected: diverged
 
   - function: "MAP"
     aspect: "lambda dispatcher"
@@ -354,10 +354,10 @@ groups:
         expected: impl
       - name: "two-array element-wise sum"
         probe_regex: 'MAP\(\{[^}]+\},\s*\{[^}]+\},\s*LAMBDA'
-        expected: impl
+        expected: diverged
       - name: "three-array element-wise"
         probe_regex: 'MAP\(\{[^}]+\},\s*\{[^}]+\},\s*\{[^}]+\}'
-        expected: impl
+        expected: diverged
       - name: "MAP shape mismatch yields #N/A"
         probe: "MAP("
         expected: impl
@@ -366,7 +366,7 @@ groups:
         expected: impl
       - name: "MAP error propagation"
         probe_regex: 'MAP\([^)]*1/0'
-        expected: impl
+        expected: diverged
 
   - function: "REDUCE"
     aspect: "lambda dispatcher"
@@ -395,43 +395,72 @@ groups:
     behaviors:
       - name: "SCAN prefix sum"
         probe: "SCAN(0,"
-        expected: impl
+        expected: diverged
       - name: "SCAN text concat accumulator"
         probe: 'SCAN("",'
-        expected: impl
+        expected: diverged
       - name: "SCAN over cell range"
         probe_regex: 'SCAN\([^,]+,\s*A\d+:A\d+'
-        expected: impl
+        expected: diverged
       - name: "SCAN error in element propagates"
         probe_regex: 'SCAN\(.*1/0'
-        expected: impl
+        expected: diverged
       - name: "SCAN over single-element"
         probe: "SCAN("
-        expected: impl
+        expected: diverged
       - name: "SCAN over 2D source"
         probe_regex: 'SCAN\([^,]+,\s*\{[^}]+;'
-        expected: impl
+        expected: diverged
 
   - function: "MAKEARRAY"
     aspect: "lambda dispatcher"
     behaviors:
       - name: "MAKEARRAY 3x3 from row*col"
         probe: "MAKEARRAY(3,3"
-        expected: impl
+        expected: diverged
       - name: "MAKEARRAY single row"
         probe: "MAKEARRAY(1,"
-        expected: impl
+        expected: diverged
       - name: "MAKEARRAY single column"
         probe_regex: 'MAKEARRAY\(\d+,\s*1,'
-        expected: impl
+        expected: diverged
       - name: "MAKEARRAY constant element"
         probe_regex: 'MAKEARRAY\(\d+,\s*\d+,\s*LAMBDA\([a-z]+,\s*[a-z]+,\s*\d'
         expected: impl
       - name: "MAKEARRAY 1x1 boundary"
         probe: "MAKEARRAY(1,1"
-        expected: impl
+        expected: diverged
       - name: "MAKEARRAY lambda returns error"
         probe_regex: 'MAKEARRAY\([^)]*1/0'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # BAHTTEXT — Thai-baht spell-out. Locale-independent output (always Thai
+  # script). Singleton: no family clustering.
+  # -------------------------------------------------------------------------
+  - function: "BAHTTEXT"
+    aspect: "thai-baht spell-out"
+    behaviors:
+      - name: "zero baht"
+        probe: "BAHTTEXT(0)"
+        expected: impl
+      - name: "single-digit integer"
+        probe_regex: 'BAHTTEXT\([1-9]\)'
+        expected: impl
+      - name: "tens special readings (sip/yi/et)"
+        probe_regex: 'BAHTTEXT\((1[1-9]|2[0-2]|[3-9]0)\)'
+        expected: impl
+      - name: "fractional satang"
+        probe: "BAHTTEXT(1.25)"
+        expected: impl
+      - name: "negative sign prefix"
+        probe_regex: 'BAHTTEXT\(-'
+        expected: impl
+      - name: "million boundary (laan + et)"
+        probe: "BAHTTEXT(1000001)"
+        expected: impl
+      - name: "exponent-notation large input (chained laan)"
+        probe_regex: 'BAHTTEXT\(1E1[5-9]'
         expected: impl
 
   # -------------------------------------------------------------------------

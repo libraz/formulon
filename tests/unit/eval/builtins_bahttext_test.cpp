@@ -4,10 +4,10 @@
 // text. Covers each of the special Thai reading rules (the `เอ็ด` ones digit
 // after a non-zero higher digit, the `ยี่` two-digit, the `สิบ` collapse for
 // the tens digit `1`), the chunked `ล้าน` reading at and beyond the million
-// boundary including the chained `ล้านล้าน` for `1e12`, the documented
-// rejection at `|n| >= 1e15`, the rounding-half-away-from-zero of the satang
-// component, and the standard argument coercions (Bool / Text / Blank /
-// Error / Array first-cell).
+// boundary including the chained `ล้านล้าน` for `1e12`, the (lifted) ceiling
+// at `|n| >= 1e17`, the rounding-half-away-from-zero of the satang component,
+// and the standard argument coercions (Bool / Text / Blank / Error / Array
+// first-cell).
 
 #include <string_view>
 
@@ -270,17 +270,27 @@ TEST(Bahttext, OneMillionAndOne) {
 }
 
 // ---------------------------------------------------------------------------
-// Beyond the documented ceiling.
+// Beyond the (lifted) ceiling.
 // ---------------------------------------------------------------------------
 
-TEST(Bahttext, AtLimitReturnsValueError) {
+TEST(Bahttext, LargeExponentReadsAsChainedLaan) {
+  // 1e15 = 1,000,000,000,000,000 -> the high 6-digit chunk is `1000`
+  // (`หนึ่งพัน`); the two zero chunks below it each contribute one chained
+  // `ล้าน`. Mac Excel 365 (16.108.1) returns this spell-out, not `#VALUE!`.
   const Value v = EvalSource("=BAHTTEXT(1E15)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), std::string(kOne) + kPan + kLaan + kLaan + kBaht + kThuan);
+}
+
+TEST(Bahttext, AtCeilingReturnsValueError) {
+  // The new ceiling is `|n| >= 1e17`.
+  const Value v = EvalSource("=BAHTTEXT(1E17)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(Bahttext, BeyondLimitReturnsValueError) {
-  const Value v = EvalSource("=BAHTTEXT(1E16)");
+TEST(Bahttext, BeyondCeilingReturnsValueError) {
+  const Value v = EvalSource("=BAHTTEXT(1E18)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }

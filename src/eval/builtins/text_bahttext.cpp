@@ -10,8 +10,12 @@
 // prefixed with `ลบ`.
 //
 // The number is rounded to two decimal places (away from zero) before
-// processing; absolute values that reach `1e15` or beyond surface `#VALUE!`,
-// matching Excel's documented limit.
+// processing; absolute values that reach `1e17` or beyond surface `#VALUE!`.
+// Older Microsoft documentation specified a `1e15` ceiling, but Mac Excel 365
+// (16.108.1) accepts inputs up through the chained-`ล้าน` range — e.g.
+// `=BAHTTEXT(1E15)` evaluates to `หนึ่งพันล้านล้านบาทถ้วน` rather than
+// `#VALUE!`. The `1e17` cutoff stays safely below the u64 overflow boundary
+// in the satang scaling step.
 //
 // Reading rules (all rendered into UTF-8 byte sequences below):
 //   * The integer part is read in chunks of 6 digits separated by `ล้าน`
@@ -153,9 +157,10 @@ std::string spell_integer(std::uint64_t value) {
     return kThaiDigit[0];  // ศูนย์
   }
 
-  // Split into 6-digit chunks, least-significant first.
-  std::uint32_t
-      chunks[3];  // NOLINT(modernize-avoid-c-arrays)  // up to ~10^18 / 10^6 fits in 3 chunks for the < 1e15 ceiling.
+  // Split into 6-digit chunks, least-significant first. The caller's `< 1e17`
+  // input ceiling means the satang-scaled integer is `< 1e19`, which fits in
+  // 3 chunks of up to 999,999 each.
+  std::uint32_t chunks[3];  // NOLINT(modernize-avoid-c-arrays)
   std::uint32_t chunk_count = 0;
   std::uint64_t remaining = value;
   while (remaining > 0 && chunk_count < 3) {
@@ -211,7 +216,7 @@ std::string spell_integer(std::uint64_t value) {
 }
 
 // Top-level formatter. `n` is finite and unrestricted in sign; the absolute
-// value must already be < 1e15 (the caller enforces this).
+// value must already be < 1e17 (the caller enforces this).
 std::string format_bahttext(double n) {
   // Round to 2 decimals away from zero, then split into integer-baht and
   // satang components.
@@ -242,8 +247,12 @@ std::string format_bahttext(double n) {
   return out;
 }
 
-// Excel's documented ceiling for BAHTTEXT: |n| must be strictly below 1e15.
-constexpr double kBahttextLimit = 1e15;
+// Mac Excel 365 (16.108.1) accepts BAHTTEXT inputs that older Microsoft docs
+// flagged as out-of-range: `=BAHTTEXT(1E15)` returns the chained-`ล้าน`
+// spell-out (`หนึ่งพันล้านล้านบาทถ้วน`), not `#VALUE!`. The `1e17` cutoff is
+// chosen to stay safely below the u64 overflow boundary of the
+// `floor(|n|*100 + 0.5)` satang scaling step.
+constexpr double kBahttextLimit = 1e17;
 
 Value Bahttext(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   auto coerced = coerce_to_number(args[0]);
