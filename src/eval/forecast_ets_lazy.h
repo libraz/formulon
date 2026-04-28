@@ -47,11 +47,11 @@ class FunctionRegistry;
 ///
 /// Returns a Number on success. `target_date` must lie at or after the
 /// first timeline entry; `target_date < t_0` -> `#NUM!`. `values` and
-/// `timeline` must have equal length (`#N/A` otherwise) and contain at
-/// least 2 numeric points after preprocessing (`#N/A` otherwise). With
-/// a seasonal model, fewer than `2 * m` post-preprocessing points
-/// surfaces `#N/A`. Errors in either array propagate left-to-right
-/// (timeline cells scanned first).
+/// `timeline` must have equal length (`#N/A` otherwise). A single-point
+/// series surfaces `#DIV/0!` (matches Mac Excel 365). With a seasonal
+/// model, fewer than `2 * m` post-preprocessing points surfaces `#N/A`.
+/// Errors in either array propagate left-to-right (timeline cells
+/// scanned first).
 Value eval_forecast_ets_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                              const EvalContext& ctx);
 

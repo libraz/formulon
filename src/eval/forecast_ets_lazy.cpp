@@ -880,8 +880,15 @@ bool preprocess(const parser::AstNode& values_node, const parser::AstNode& timel
     *out_err = Value::error(ErrorCode::NA);
     return false;
   }
-  if (n_t < 2U) {
+  if (n_t == 0U) {
     *out_err = Value::error(ErrorCode::NA);
+    return false;
+  }
+  if (n_t < 2U) {
+    // Single-point series: Mac Excel 365 surfaces #DIV/0! here (verified
+    // against the oracle for `=FORECAST.ETS(2, {10}, {1}, 0)`), distinct
+    // from the #N/A reserved for length-mismatch.
+    *out_err = Value::error(ErrorCode::Div0);
     return false;
   }
 

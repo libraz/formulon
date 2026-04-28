@@ -1,0 +1,88 @@
+{
+  "suite": "forecast_ets",
+  "description": "FORECAST.ETS — exponential triple smoothing closure against Mac Excel 365 (ja-JP).",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-28T08:35:47Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "forecast_ets_linear_no_seasonality",
+      "formula": "=FORECAST.ETS(11, {10;12;14;16;18;20;22;24;26;28}, {1;2;3;4;5;6;7;8;9;10}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "forecast_ets_manual_seasonality_4",
+      "formula": "=FORECAST.ETS(17, {10;12;14;11;12;14;16;13;14;16;18;15;16;18;20;17}, {1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16}, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 18.0
+      },
+      "tolerance": {
+        "abs": 0.01,
+        "rel": 0.001
+      }
+    },
+    {
+      "id": "forecast_ets_auto_detect_seasonality",
+      "formula": "=FORECAST.ETS(17, {10;12;14;11;12;14;16;13;14;16;18;15;16;18;20;17}, {1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 18.0
+      },
+      "tolerance": {
+        "abs": 0.01,
+        "rel": 0.001
+      }
+    },
+    {
+      "id": "forecast_ets_target_before_timeline",
+      "formula": "=FORECAST.ETS(0, {1;2;3;4;5}, {1;2;3;4;5}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "forecast_ets_length_mismatch",
+      "formula": "=FORECAST.ETS(6, {1;2;3;4;5}, {1;2;3;4}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "forecast_ets_single_point",
+      "formula": "=FORECAST.ETS(2, {10}, {1}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "forecast_ets_out_of_range_seasonality",
+      "formula": "=FORECAST.ETS(11, {10;12;14;16;18;20;22;24;26;28}, {1;2;3;4;5;6;7;8;9;10}, 9000)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    }
+  ]
+}

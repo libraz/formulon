@@ -191,13 +191,13 @@ TEST(ForecastEts, LengthMismatchIsNA) {
   EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
-TEST(ForecastEts, SinglePointSeriesIsNA) {
+TEST(ForecastEts, SinglePointSeriesIsDiv0) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
   wb.sheet(0).set_cell_value(0, 1, Value::number(10.0));
   const Value v = EvalSourceIn("=FORECAST.ETS(2, B1:B1, A1:A1, 0)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
 TEST(ForecastEts, ErrorInValuesPropagates) {

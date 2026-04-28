@@ -547,6 +547,25 @@ entries:
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"
 
+  # FORECAST.ETS Holt-Winters fit is non-convex; Mac Excel converges to
+  # (alpha,beta,gamma) close to (1,1,1) on perfectly-periodic data and
+  # snaps the forecast to an exact integer (18.0). Formulon's bounded
+  # Nelder-Mead settles at a nearby local optimum (~4.3e-4 relative
+  # offset). Tightening convergence risks regressing other ETS cases;
+  # widen tolerance per case instead.
+  - id: forecast_ets_manual_seasonality_4
+    reason: "Holt-Winters Nelder-Mead converges to a different local optimum than Mac Excel on perfectly-periodic data; ~4.3e-4 relative drift on the point forecast."
+    prefer: mac-excel-365
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    tolerance: { abs: 0.01, rel: 0.001 }
+  - id: forecast_ets_auto_detect_seasonality
+    reason: "Same Holt-Winters convergence drift as forecast_ets_manual_seasonality_4 but with auto-detected period (ACF picks the same period 4)."
+    prefer: mac-excel-365
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    tolerance: { abs: 0.01, rel: 0.001 }
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

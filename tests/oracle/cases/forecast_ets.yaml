@@ -1,0 +1,43 @@
+suite: forecast_ets
+description: FORECAST.ETS — exponential triple smoothing closure against Mac Excel 365 (ja-JP).
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # -- linear trend (no seasonality) --------------------------------------
+  - id: forecast_ets_linear_no_seasonality
+    description: "Linear trend, manual seasonality=0 — point forecast at t=11"
+    formula: "=FORECAST.ETS(11, {10;12;14;16;18;20;22;24;26;28}, {1;2;3;4;5;6;7;8;9;10}, 0)"
+
+  # -- manual seasonality (period=4) --------------------------------------
+  # Holt-Winters Nelder-Mead drifts ~4.3e-4 from Mac on perfectly-periodic
+  # data; widen tolerance per divergence.yaml.
+  - id: forecast_ets_manual_seasonality_4
+    description: "Period-4 cyclic data with explicit seasonality=4"
+    tolerance: { abs: 0.01, rel: 0.001 }
+    formula: "=FORECAST.ETS(17, {10;12;14;11;12;14;16;13;14;16;18;15;16;18;20;17}, {1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16}, 4)"
+
+  # -- auto-detected seasonality ------------------------------------------
+  - id: forecast_ets_auto_detect_seasonality
+    description: "Period-4 cyclic data, seasonality omitted — auto-detect via ACF"
+    tolerance: { abs: 0.01, rel: 0.001 }
+    formula: "=FORECAST.ETS(17, {10;12;14;11;12;14;16;13;14;16;18;15;16;18;20;17}, {1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16})"
+
+  # -- target before timeline (#NUM!) ------------------------------------
+  - id: forecast_ets_target_before_timeline
+    description: "target_date < t_0 — Excel returns #NUM!"
+    formula: "=FORECAST.ETS(0, {1;2;3;4;5}, {1;2;3;4;5}, 0)"
+
+  # -- length mismatch (#N/A) --------------------------------------------
+  - id: forecast_ets_length_mismatch
+    description: "values has 5 elements, timeline has 4 — #N/A"
+    formula: "=FORECAST.ETS(6, {1;2;3;4;5}, {1;2;3;4}, 0)"
+
+  # -- single-point series (#N/A) ----------------------------------------
+  - id: forecast_ets_single_point
+    description: "1-element series — fewer than 2 points → #N/A"
+    formula: "=FORECAST.ETS(2, {10}, {1}, 0)"
+
+  # -- out-of-range seasonality (#NUM!) ----------------------------------
+  - id: forecast_ets_out_of_range_seasonality
+    description: "seasonality=9000 exceeds documented limit (0..8760) — #NUM!"
+    formula: "=FORECAST.ETS(11, {10;12;14;16;18;20;22;24;26;28}, {1;2;3;4;5;6;7;8;9;10}, 9000)"

@@ -464,6 +464,37 @@ groups:
         expected: impl
 
   # -------------------------------------------------------------------------
+  # FORECAST.ETS — Holt-Winters additive triple-exponential smoothing.
+  # Optimization-based fit (Nelder-Mead over alpha/beta/gamma) means
+  # numeric perspectives may carry tail-bit divergences vs Mac Excel's
+  # convergence. Error perspectives are deterministic.
+  # -------------------------------------------------------------------------
+  - function: "FORECAST.ETS"
+    aspect: "exponential triple smoothing"
+    behaviors:
+      - name: "linear trend (no seasonality)"
+        probe_regex: 'FORECAST\.ETS\(11,.*,\s*0\)'
+        expected: impl
+      - name: "manual seasonality (period=4)"
+        probe_regex: 'FORECAST\.ETS\(\d+,\s*\{[\d;]+\},\s*\{[\d;]+\},\s*4\)'
+        expected: impl
+      - name: "auto-detected seasonality"
+        probe_regex: 'FORECAST\.ETS\(\d+,\s*\{[\d;]+\},\s*\{[\d;]+\}\)'
+        expected: impl
+      - name: "target before timeline (#NUM!)"
+        probe_regex: 'FORECAST\.ETS\(0,'
+        expected: impl
+      - name: "length mismatch (#N/A)"
+        probe: "{1;2;3;4;5}, {1;2;3;4}"
+        expected: impl
+      - name: "single-point series (#N/A)"
+        probe: "(2, {10}, {1}, 0)"
+        expected: impl
+      - name: "out-of-range seasonality (#NUM!)"
+        probe_regex: ',\s*9000\)'
+        expected: impl
+
+  # -------------------------------------------------------------------------
   # Shape of function arguments. Scalars, cell references, ranges, and
   # array literals all feed the same dispatcher, but the coercion path
   # differs — this group exists to make sure each shape has at least one
