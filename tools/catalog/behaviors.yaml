@@ -1217,3 +1217,34 @@ groups:
       - name: "error cell propagates"
         probe: '=MINVERSE({1,#N/A;3,4})'
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # GROUPBY — Excel 365 dynamic-array group-and-aggregate. Returns a 2D
+  # spill of (key columns | aggregated values). Six perspectives cover
+  # bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch
+  # (spill), unknown name -> #NAME?, field_headers out of range -> #VALUE!,
+  # filter_array length mismatch -> #VALUE!, and filter_array empty
+  # selection -> #CALC!.
+  # -------------------------------------------------------------------------
+
+  - function: "GROUPBY"
+    aspect: "dynamic-array group-aggregate"
+    behaviors:
+      - name: "bare SUM aggregator -> 2D spill"
+        probe: '=GROUPBY({"A";"B";"A"}, {10;20;30}, SUM, 0, 0, 0)'
+        expected: diverged
+      - name: "LAMBDA aggregator -> 2D spill"
+        probe: '=GROUPBY({"A";"B";"A";"C"}, {10;20;30;40}, LAMBDA(v, SUM(v)), 0, 0, 0)'
+        expected: diverged
+      - name: "unknown bare aggregator name -> #NAME?"
+        probe: '=GROUPBY({"A";"B"}, {1;2}, NOPE_THIS_IS_NOT_A_FUNCTION, 0, 0, 0)'
+        expected: impl
+      - name: "field_headers out of range -> #VALUE!"
+        probe: '=GROUPBY({"A";"B"}, {1;2}, SUM, 5, 0, 0)'
+        expected: impl
+      - name: "filter_array length mismatch -> #VALUE!"
+        probe: '=GROUPBY({"A";"B";"A"}, {1;2;3}, SUM, 0, 0, 0, {TRUE;FALSE;TRUE;TRUE})'
+        expected: impl
+      - name: "filter_array excludes all -> error (Mac #VALUE!, Formulon #CALC!)"
+        probe: '=GROUPBY({"A";"B"}, {1;2}, SUM, 0, 0, 0, {FALSE;FALSE})'
+        expected: diverged

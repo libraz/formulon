@@ -777,6 +777,32 @@ entries:
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
 
+  # GROUPBY spill outputs. The grouped-aggregate result is always a 2D
+  # ArrayValue; oracle compare_value only handles scalars. GROUPBY's own
+  # `read_array_arg` helper is independent of resolve_range_arg, so these
+  # divergences will close once the oracle compare_value gains
+  # ArrayValue-anchor handling (or a per-cell projection contract). Unit
+  # tests in tests/unit/eval/builtins_groupby_test.cpp validate spill
+  # content for both bare-name and LAMBDA aggregator forms.
+  - id: groupby_bare_sum
+    reason: "GROUPBY returns a 2D ArrayValue; oracle compare_value only handles scalars. Unit test GroupBy.BareSumName covers bare-name aggregator dispatch and grouping order."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: groupby_lambda_sum
+    reason: "GROUPBY with a LAMBDA aggregator returns a 2D ArrayValue; oracle compare_value only handles scalars. Unit test GroupBy.SingleKeyLambdaAggregatorSum covers inline-LAMBDA dispatch."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: groupby_filter_array_excludes_all
+    reason: "Bug-class divergence: Formulon returns #CALC! when filter_array eliminates every row; Mac Excel 365 surfaces #VALUE!. The unit test GroupBy.FilterArrayAllExcludedYieldsCalcError encodes the wrong expectation; a follow-up fix should change the literal at groupby_pivotby_lazy.cpp:632 (and the matching PIVOTBY path at line 1027) from ErrorCode::Calc to ErrorCode::Value, then update the unit test."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+
   # CELL stub-key divergences. Formulon has no style subsystem yet so
   # CELL("filename") and CELL("prefix", ...) return empty text rather
   # than blank. Mac surfaces blank, but the top-level evaluator's
