@@ -2124,3 +2124,506 @@ groups:
       - name: "all-blank input -> #REF!"
         probe: '=TRIMRANGE(A1:A3)'
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # Core arithmetic / numeric scalar functions covered by
+  # `tests/oracle/cases/math.yaml`. All entries below pass oracle today
+  # (`expected: impl`); they record the perspectives we exercise so that
+  # `closure_check` can credit each function with at least 5 declared
+  # behaviors. Probes are substrings of existing case formulas — adding or
+  # renaming a case requires updating this block.
+  # -------------------------------------------------------------------------
+
+  - function: "ABS"
+    aspect: "absolute value across signs and types"
+    behaviors:
+      - name: "positive integer passthrough -> 5"
+        probe: '=ABS(5)'
+        expected: impl
+      - name: "negative integer flips sign -> 5"
+        probe: '=ABS(-5)'
+        expected: impl
+      - name: "zero is its own absolute value -> 0"
+        probe: '=ABS(0)'
+        expected: impl
+      - name: "negative fractional value -> 3.14"
+        probe: '=ABS(-3.14)'
+        expected: impl
+      - name: "empty-string argument coerces to #VALUE!"
+        probe: '=ABS("")'
+        expected: impl
+
+  - function: "SIGN"
+    aspect: "sign extraction (-1 / 0 / +1)"
+    behaviors:
+      - name: "positive number -> 1"
+        probe: '=SIGN(42)'
+        expected: impl
+      - name: "negative number -> -1"
+        probe: '=SIGN(-42)'
+        expected: impl
+      - name: "zero -> 0"
+        probe: '=SIGN(0)'
+        expected: impl
+      - name: "empty-string argument -> #VALUE!"
+        probe: '=SIGN("")'
+        expected: impl
+      - name: "boolean TRUE coerces to 1 -> SIGN(TRUE) = 1"
+        probe: '=SIGN(TRUE)'
+        expected: impl
+
+  - function: "INT"
+    aspect: "floor toward -infinity"
+    behaviors:
+      - name: "positive fractional truncates downward -> 3"
+        probe: '=INT(3.7)'
+        expected: impl
+      - name: "negative fractional rounds toward -inf -> -4"
+        probe: '=INT(-3.7)'
+        expected: impl
+      - name: "already-integer passthrough -> 5"
+        probe: '=INT(5)'
+        expected: impl
+      - name: "empty-string argument -> #VALUE!"
+        probe: '=INT("")'
+        expected: impl
+      - name: "negative integer is its own INT (passthrough on negatives)"
+        probe: '=INT(-5)'
+        expected: impl
+
+  - function: "TRUNC"
+    aspect: "truncate toward zero"
+    behaviors:
+      - name: "positive fractional drops decimal part -> 3"
+        probe: '=TRUNC(3.7)'
+        expected: impl
+      - name: "negative fractional truncates toward 0 -> -3"
+        probe: '=TRUNC(-3.7)'
+        expected: impl
+      - name: "explicit digits argument keeps two decimals -> 3.14"
+        probe: '=TRUNC(3.14159,2)'
+        expected: impl
+      - name: "negative digits truncates to tens place -> 1200"
+        probe: '=TRUNC(1234,-2)'
+        expected: impl
+      - name: "single-arg TRUNC defaults to digits=0 -> 5"
+        probe: '=TRUNC(5.99)'
+        expected: impl
+
+  - function: "MOD"
+    aspect: "modulo with Excel sign-of-divisor convention"
+    behaviors:
+      - name: "positive dividend / positive divisor -> 1"
+        probe: '=MOD(10,3)'
+        expected: impl
+      - name: "exact division yields zero remainder"
+        probe: '=MOD(10,5)'
+        expected: impl
+      - name: "negative dividend follows divisor sign -> 2"
+        probe: '=MOD(-10,3)'
+        expected: impl
+      - name: "zero divisor surfaces #DIV/0!"
+        probe: '=MOD(5,0)'
+        expected: impl
+      - name: "negative divisor: MOD(10,-3) = -2 (sign matches divisor)"
+        probe: '=MOD(10,-3)'
+        expected: impl
+
+  - function: "ROUND"
+    aspect: "rounding modes and tie-breaking"
+    behaviors:
+      - name: "positive .5 rounds away from zero (no banker's rounding) -> 3"
+        probe: '=ROUND(2.5,0)'
+        expected: impl
+      - name: "negative .5 rounds away from zero -> -3"
+        probe: '=ROUND(-2.5,0)'
+        expected: impl
+      - name: "round to two decimals -> 3.14"
+        probe: '=ROUND(3.14159,2)'
+        expected: impl
+      - name: "negative digits round to hundreds -> 1200"
+        probe: '=ROUND(1234.5,-2)'
+        expected: impl
+      - name: "below-half digit rounds toward zero -> 2.49 -> 2"
+        probe: '=ROUND(2.49,0)'
+        expected: impl
+
+  - function: "ROUNDUP"
+    aspect: "round away from zero"
+    behaviors:
+      - name: "positive value rounds away from zero -> 3.2"
+        probe: '=ROUNDUP(3.14,1)'
+        expected: impl
+      - name: "negative value rounds away from zero -> -3.2"
+        probe: '=ROUNDUP(-3.14,1)'
+        expected: impl
+      - name: "zero digits rounds up to next integer -> ROUNDUP(2.1,0) = 3"
+        probe: '=ROUNDUP(2.1,0)'
+        expected: impl
+      - name: "negative digits rounds up to next ten -> ROUNDUP(123,-1) = 130"
+        probe: '=ROUNDUP(123,-1)'
+        expected: impl
+      - name: "zero input is its own ceiling regardless of digits"
+        probe: '=ROUNDUP(0,2)'
+        expected: impl
+
+  - function: "ROUNDDOWN"
+    aspect: "round toward zero (truncation toward zero)"
+    behaviors:
+      - name: "positive value rounds toward zero -> 3.1"
+        probe: '=ROUNDDOWN(3.19,1)'
+        expected: impl
+      - name: "negative value rounds toward zero -> -3.1"
+        probe: '=ROUNDDOWN(-3.19,1)'
+        expected: impl
+      - name: "zero digits truncates toward zero -> ROUNDDOWN(2.9,0) = 2"
+        probe: '=ROUNDDOWN(2.9,0)'
+        expected: impl
+      - name: "negative digits truncates at the tens place -> ROUNDDOWN(178,-1) = 170"
+        probe: '=ROUNDDOWN(178,-1)'
+        expected: impl
+      - name: "zero input rounds down to zero regardless of digits"
+        probe: '=ROUNDDOWN(0,2)'
+        expected: impl
+
+  - function: "POWER"
+    aspect: "exponentiation including edge cases"
+    behaviors:
+      - name: "integer square -> 25"
+        probe: '=POWER(5,2)'
+        expected: impl
+      - name: "fractional exponent computes square root -> 1.4142..."
+        probe: '=POWER(2,0.5)'
+        expected: impl
+      - name: "negative base with integer exponent -> -8"
+        probe: '=POWER(-2,3)'
+        expected: impl
+      - name: "0^0 returns 1 (IEEE pow convention)"
+        probe: '=POWER(0,0)'
+        expected: impl
+      - name: "negative base with fractional exponent surfaces #NUM!"
+        probe: '=POWER(-4,0.5)'
+        expected: impl
+
+  - function: "SQRT"
+    aspect: "principal square root domain"
+    behaviors:
+      - name: "perfect square -> 3"
+        probe: '=SQRT(9)'
+        expected: impl
+      - name: "zero -> 0"
+        probe: '=SQRT(0)'
+        expected: impl
+      - name: "negative argument surfaces #NUM!"
+        probe: '=SQRT(-1)'
+        expected: impl
+      - name: "empty-string argument -> #VALUE!"
+        probe: '=SQRT("")'
+        expected: impl
+      - name: "irrational result -> SQRT(2) ~= 1.4142135623730951"
+        probe: '=SQRT(2)'
+        expected: impl
+
+  - function: "EXP"
+    aspect: "natural exponential"
+    behaviors:
+      - name: "EXP(0) is identity -> 1"
+        probe: '=EXP(0)'
+        expected: impl
+      - name: "EXP(1) is Euler's number"
+        probe: '=EXP(1)'
+        expected: impl
+      - name: "empty-string argument -> #VALUE!"
+        probe: '=EXP("")'
+        expected: impl
+      - name: "EXP(-1) = 1/e (negative exponent reciprocates)"
+        probe: '=EXP(-1)'
+        expected: impl
+      - name: "EXP(2) = e^2 ~= 7.389056 (non-trivial exponent magnitude)"
+        probe: '=EXP(2)'
+        expected: impl
+
+  - function: "LN"
+    aspect: "natural logarithm domain"
+    behaviors:
+      - name: "LN(1) -> 0"
+        probe: '=LN(1)'
+        expected: impl
+      - name: "LN(EXP(1)) round-trips to 1"
+        probe: '=LN(EXP(1))'
+        expected: impl
+      - name: "LN(0) surfaces #NUM!"
+        probe: '=LN(0)'
+        expected: impl
+      - name: "LN of a negative real is undefined -> #NUM!"
+        probe: '=LN(-1)'
+        expected: impl
+      - name: "fractional input: LN(0.5) = -ln(2) ~= -0.6931"
+        probe: '=LN(0.5)'
+        expected: impl
+
+  - function: "LOG"
+    aspect: "logarithm with optional base"
+    behaviors:
+      - name: "single-argument call defaults to base 10 -> 3"
+        probe: '=LOG(1000)'
+        expected: impl
+      - name: "explicit base 2 -> 3"
+        probe: '=LOG(8,2)'
+        expected: impl
+      - name: "LOG(1) = 0 for any base"
+        probe: '=LOG(1)'
+        expected: impl
+      - name: "LOG(0) is undefined -> #NUM!"
+        probe: '=LOG(0)'
+        expected: impl
+      - name: "base=1 makes ln(base)=0 -> #DIV/0!"
+        probe: '=LOG(10,1)'
+        expected: impl
+
+  - function: "LOG10"
+    aspect: "common (base-10) logarithm"
+    behaviors:
+      - name: "LOG10(100) -> 2"
+        probe: '=LOG10(100)'
+        expected: impl
+      - name: "LOG10(1) -> 0"
+        probe: '=LOG10(1)'
+        expected: impl
+      - name: "LOG10(0) is undefined -> #NUM!"
+        probe: '=LOG10(0)'
+        expected: impl
+      - name: "LOG10 of a negative real -> #NUM!"
+        probe: '=LOG10(-1)'
+        expected: impl
+      - name: "fractional argument: LOG10(0.1) = -1"
+        probe: '=LOG10(0.1)'
+        expected: impl
+
+  - function: "PI"
+    aspect: "mathematical constant pi"
+    behaviors:
+      - name: "PI() returns mathematical constant"
+        probe: '=PI()'
+        expected: impl
+      - name: "PI() participates in arithmetic expressions -> 2pi"
+        probe: '=PI()*2'
+        expected: impl
+      - name: "PI()/2 ~= 1.5708 (quarter-turn radians)"
+        probe: '=PI()/2'
+        expected: impl
+      - name: "PI()^2 ~= 9.8696 (squared constant)"
+        probe: '=PI()^2'
+        expected: impl
+      - name: "PI() composes inside ROUND -> ROUND(PI(),5) = 3.14159"
+        probe: '=ROUND(PI(),5)'
+        expected: impl
+
+  - function: "VALUE"
+    aspect: "text-to-number coercion"
+    behaviors:
+      - name: "integer-shaped string -> 42"
+        probe: '=VALUE("42")'
+        expected: impl
+      - name: "float-shaped string -> 3.14"
+        probe: '=VALUE("3.14")'
+        expected: impl
+      - name: "non-numeric text surfaces #VALUE!"
+        probe: '=VALUE("hello")'
+        expected: impl
+      - name: "percent suffix is recognised -> VALUE(\"50%\") = 0.5"
+        probe: '=VALUE("50%")'
+        expected: impl
+      - name: "leading minus sign parsed -> VALUE(\"-3.14\") = -3.14"
+        probe: '=VALUE("-3.14")'
+        expected: impl
+
+  - function: "CEILING"
+    aspect: "legacy CEILING (round toward +infinity)"
+    behaviors:
+      - name: "positive value with positive significance -> 5"
+        probe: '=CEILING(4.3,1)'
+        expected: impl
+      - name: "negative value with matching negative significance -> -5"
+        probe: '=CEILING(-4.3,-1)'
+        expected: impl
+      - name: "sign mismatch rounds toward +inf in Excel 365 Mac"
+        probe: '=CEILING(-4.3,1)'
+        expected: impl
+      - name: "significance=0 short-circuits to 0"
+        probe: '=CEILING(4.3,0)'
+        expected: impl
+      - name: "significance > 1 rounds to next multiple of 2 -> CEILING(4.3,2) = 6"
+        probe: '=CEILING(4.3,2)'
+        expected: impl
+
+  - function: "FLOOR"
+    aspect: "legacy FLOOR (round toward -infinity)"
+    behaviors:
+      - name: "positive value with positive significance -> 4"
+        probe: '=FLOOR(4.7,1)'
+        expected: impl
+      - name: "negative value with matching negative significance -> -4"
+        probe: '=FLOOR(-4.3,-1)'
+        expected: impl
+      - name: "sign mismatch rounds toward -inf in Excel 365 Mac"
+        probe: '=FLOOR(-4.3,1)'
+        expected: impl
+      - name: "significance=0 surfaces #DIV/0! (legacy quirk)"
+        probe: '=FLOOR(4.3,0)'
+        expected: impl
+      - name: "significance > 1 rounds down to previous multiple of 2 -> FLOOR(4.7,2) = 4"
+        probe: '=FLOOR(4.7,2)'
+        expected: impl
+
+  - function: "MROUND"
+    aspect: "round to nearest multiple"
+    behaviors:
+      - name: "basic positive multiple -> 9"
+        probe: '=MROUND(10,3)'
+        expected: impl
+      - name: "tie rounds away from zero -> 9"
+        probe: '=MROUND(7.5,3)'
+        expected: impl
+      - name: "negative number with negative multiple -> -9"
+        probe: '=MROUND(-10,-3)'
+        expected: impl
+      - name: "sign mismatch surfaces #NUM!"
+        probe: '=MROUND(10,-3)'
+        expected: impl
+      - name: "multiple=0 returns 0 (no #DIV/0!)"
+        probe: '=MROUND(5,0)'
+        expected: impl
+
+  - function: "CEILING.MATH"
+    aspect: "modern ceiling with mode flag"
+    behaviors:
+      - name: "default significance=1 -> 5"
+        probe: '=CEILING.MATH(4.3)'
+        expected: impl
+      - name: "default mode=0 rounds negative toward +inf -> -4"
+        probe: '=CEILING.MATH(-4.3)'
+        expected: impl
+      - name: "mode!=0 rounds negatives away from zero -> -5"
+        probe: '=CEILING.MATH(-4.3,1,1)'
+        expected: impl
+      - name: "negative significance uses absolute value"
+        probe: '=CEILING.MATH(4.3,-2)'
+        expected: impl
+      - name: "explicit positive significance=2 -> CEILING.MATH(4.3,2) = 6"
+        probe: '=CEILING.MATH(4.3,2)'
+        expected: impl
+
+  - function: "FLOOR.MATH"
+    aspect: "modern floor with mode flag"
+    behaviors:
+      - name: "default significance=1 -> 4"
+        probe: '=FLOOR.MATH(4.7)'
+        expected: impl
+      - name: "default mode=0 rounds negative toward -inf -> -5"
+        probe: '=FLOOR.MATH(-4.3)'
+        expected: impl
+      - name: "mode!=0 rounds negatives toward zero -> -4"
+        probe: '=FLOOR.MATH(-4.3,1,1)'
+        expected: impl
+      - name: "explicit positive significance=2 -> FLOOR.MATH(4.7,2) = 4"
+        probe: '=FLOOR.MATH(4.7,2)'
+        expected: impl
+      - name: "negative significance uses |sig| (FLOOR.MATH(4.7,-2) = 4)"
+        probe: '=FLOOR.MATH(4.7,-2)'
+        expected: impl
+
+  - function: "SUMSQ"
+    aspect: "sum of squares with range / scalar coercion"
+    behaviors:
+      - name: "scalar arguments -> 3^2 + 4^2 = 25"
+        probe: '=SUMSQ(3, 4)'
+        expected: impl
+      - name: "range argument iterates and squares each cell"
+        probe: '=SUMSQ(A1:A3)'
+        expected: impl
+      - name: "text cells inside a range are silently skipped"
+        probe: 'SUMSQ(A1:A3)'
+        expected: impl
+      - name: "direct text scalar argument surfaces #VALUE!"
+        probe: '=SUMSQ(3, "abc")'
+        expected: impl
+      - name: "single zero argument yields 0 (degenerate scalar case)"
+        probe: '=SUMSQ(0)'
+        expected: impl
+
+  - function: "SUMX2PY2"
+    aspect: "sum of x^2 + y^2 across paired arrays"
+    behaviors:
+      - name: "matched 3-element arrays -> 91"
+        probe: '=SUMX2PY2({1;2;3}, {4;5;6})'
+        expected: impl
+      - name: "shape mismatch returns #N/A"
+        probe: '=SUMX2PY2({1;2;3}, {4;5})'
+        expected: impl
+      - name: "single-element arrays: 3^2 + 4^2 = 25"
+        probe: '=SUMX2PY2({3}, {4})'
+        expected: impl
+      - name: "all-zero arrays yield 0"
+        probe: '=SUMX2PY2({0;0;0}, {0;0;0})'
+        expected: impl
+      - name: "negative inputs squared: (-1)^2 + (-3)^2 + 2^2 + 4^2 = 30"
+        probe: '=SUMX2PY2({-1;-3}, {2;4})'
+        expected: impl
+
+  - function: "SUMX2MY2"
+    aspect: "sum of x^2 - y^2 across paired arrays"
+    behaviors:
+      - name: "matched 3-element arrays -> -63"
+        probe: '=SUMX2MY2({1;2;3}, {4;5;6})'
+        expected: impl
+      - name: "single-element arrays compute 2^2 - 5^2 = -21"
+        probe: '=SUMX2MY2({2}, {5})'
+        expected: impl
+      - name: "shape mismatch returns #N/A"
+        probe: '=SUMX2MY2({1;2;3}, {4;5})'
+        expected: impl
+      - name: "identical arrays cancel termwise -> 0"
+        probe: '=SUMX2MY2({1;2;3}, {1;2;3})'
+        expected: impl
+      - name: "swapping argument order negates result -> 63"
+        probe: '=SUMX2MY2({4;5;6}, {1;2;3})'
+        expected: impl
+
+  - function: "SUMXMY2"
+    aspect: "sum of (x - y)^2 across paired arrays"
+    behaviors:
+      - name: "matched 3-element arrays -> 27"
+        probe: '=SUMXMY2({1;2;3}, {4;5;6})'
+        expected: impl
+      - name: "single-element arrays: (5-3)^2 = 4"
+        probe: '=SUMXMY2({5}, {3})'
+        expected: impl
+      - name: "shape mismatch returns #N/A"
+        probe: '=SUMXMY2({1;2}, {3})'
+        expected: impl
+      - name: "all-zero arrays yield 0"
+        probe: '=SUMXMY2({0;0}, {0;0})'
+        expected: impl
+      - name: "negatives: ((-1)-1)^2 + ((-2)-2)^2 = 4 + 16 = 20"
+        probe: '=SUMXMY2({-1;-2}, {1;2})'
+        expected: impl
+
+  - function: "SERIESSUM"
+    aspect: "polynomial series evaluation"
+    behaviors:
+      - name: "binary polynomial sum_{i=0..3} x^i with x=2 -> 15"
+        probe: '=SERIESSUM(2, 0, 1, {1;1;1;1})'
+        expected: impl
+      - name: "step argument >1 skips intermediate powers -> 20"
+        probe: '=SERIESSUM(2, 2, 2, {1;1})'
+        expected: impl
+      - name: "x=1 reduces sum to coefficient sum"
+        probe: '=SERIESSUM(1, 0, 1, {5;5;5})'
+        expected: impl
+      - name: "x=-1 with unit coefficients alternates sign -> 0"
+        probe: '=SERIESSUM(-1, 0, 1, {1;1;1;1})'
+        expected: impl
+      - name: "initial power n>0: SERIESSUM(3,2,1,{1;1}) = 9 + 27 = 36"
+        probe: '=SERIESSUM(3, 2, 1, {1;1})'
+        expected: impl

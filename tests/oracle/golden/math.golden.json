@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-24T18:52:54Z"
+    "generated_at": "2026-04-28T20:20:29Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -77,6 +77,15 @@
       }
     },
     {
+      "id": "sign_of_bool_true",
+      "formula": "=SIGN(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
       "id": "int_positive_fraction",
       "formula": "=INT(3.7)",
       "setup": {},
@@ -104,6 +113,15 @@
       }
     },
     {
+      "id": "int_negative_already_integer",
+      "formula": "=INT(-5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
       "id": "trunc_positive_fraction",
       "formula": "=TRUNC(3.7)",
       "setup": {},
@@ -128,6 +146,24 @@
       "expect": {
         "kind": "number",
         "value": 3.14
+      }
+    },
+    {
+      "id": "trunc_negative_digits",
+      "formula": "=TRUNC(1234,-2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1200.0
+      }
+    },
+    {
+      "id": "trunc_default_digits_zero",
+      "formula": "=TRUNC(5.99)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
       }
     },
     {
@@ -167,6 +203,15 @@
       }
     },
     {
+      "id": "mod_negative_divisor",
+      "formula": "=MOD(10,-3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
       "id": "round_half_up",
       "formula": "=ROUND(2.5,0)",
       "setup": {},
@@ -203,6 +248,15 @@
       }
     },
     {
+      "id": "round_zero_digits_default",
+      "formula": "=ROUND(2.49,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
       "id": "roundup_positive",
       "formula": "=ROUNDUP(3.14,1)",
       "setup": {},
@@ -221,6 +275,33 @@
       }
     },
     {
+      "id": "roundup_zero_digits",
+      "formula": "=ROUNDUP(2.1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "roundup_negative_digits",
+      "formula": "=ROUNDUP(123,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 130.0
+      }
+    },
+    {
+      "id": "roundup_zero_input",
+      "formula": "=ROUNDUP(0,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
       "id": "rounddown_positive",
       "formula": "=ROUNDDOWN(3.19,1)",
       "setup": {},
@@ -236,6 +317,33 @@
       "expect": {
         "kind": "number",
         "value": -3.1
+      }
+    },
+    {
+      "id": "rounddown_zero_digits",
+      "formula": "=ROUNDDOWN(2.9,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "rounddown_negative_digits",
+      "formula": "=ROUNDDOWN(178,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 170.0
+      }
+    },
+    {
+      "id": "rounddown_zero_input",
+      "formula": "=ROUNDDOWN(0,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
       }
     },
     {
@@ -275,6 +383,15 @@
       }
     },
     {
+      "id": "power_negative_base_fractional_exp_is_num",
+      "formula": "=POWER(-4,0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
       "id": "sqrt_of_nine",
       "formula": "=SQRT(9)",
       "setup": {},
@@ -302,6 +419,15 @@
       }
     },
     {
+      "id": "sqrt_fractional_input",
+      "formula": "=SQRT(2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.4142135623730951
+      }
+    },
+    {
       "id": "exp_of_zero",
       "formula": "=EXP(0)",
       "setup": {},
@@ -317,6 +443,24 @@
       "expect": {
         "kind": "number",
         "value": 2.718281828459045
+      }
+    },
+    {
+      "id": "exp_of_negative_one",
+      "formula": "=EXP(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.36787944117144233
+      }
+    },
+    {
+      "id": "exp_of_two",
+      "formula": "=EXP(2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.38905609893065
       }
     },
     {
@@ -347,6 +491,24 @@
       }
     },
     {
+      "id": "ln_of_negative_is_num",
+      "formula": "=LN(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "ln_fractional_input",
+      "formula": "=LN(0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.6931471805599453
+      }
+    },
+    {
       "id": "log_default_base_10",
       "formula": "=LOG(1000)",
       "setup": {},
@@ -365,12 +527,75 @@
       }
     },
     {
+      "id": "log_of_one_is_zero",
+      "formula": "=LOG(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "log_of_zero_is_num",
+      "formula": "=LOG(0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "log_base_one_is_div0",
+      "formula": "=LOG(10,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
       "id": "log10_of_100",
       "formula": "=LOG10(100)",
       "setup": {},
       "expect": {
         "kind": "number",
         "value": 2.0
+      }
+    },
+    {
+      "id": "log10_of_one",
+      "formula": "=LOG10(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "log10_of_zero_is_num",
+      "formula": "=LOG10(0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "log10_of_negative_is_num",
+      "formula": "=LOG10(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "log10_fractional_input",
+      "formula": "=LOG10(0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
       }
     },
     {
@@ -437,6 +662,42 @@
       }
     },
     {
+      "id": "pi_divided_by_two",
+      "formula": "=PI()/2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "pi_squared",
+      "formula": "=PI()^2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.869604401089358
+      }
+    },
+    {
+      "id": "pi_in_round",
+      "formula": "=ROUND(PI(),5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.14159
+      }
+    },
+    {
+      "id": "pi_arithmetic_subtract",
+      "formula": "=PI()-3",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.14159265358979312
+      }
+    },
+    {
       "id": "value_of_numeric_string",
       "formula": "=VALUE(\"42\")",
       "setup": {},
@@ -461,6 +722,24 @@
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_of_percent_string",
+      "formula": "=VALUE(\"50%\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "value_of_negative_string",
+      "formula": "=VALUE(\"-3.14\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.14
       }
     },
     {
@@ -500,6 +779,15 @@
       }
     },
     {
+      "id": "ceiling_sig_two",
+      "formula": "=CEILING(4.3,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
       "id": "floor_pos",
       "formula": "=FLOOR(4.7,1)",
       "setup": {},
@@ -533,6 +821,15 @@
       "expect": {
         "kind": "error",
         "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "floor_sig_two",
+      "formula": "=FLOOR(4.7,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
       }
     },
     {
@@ -617,6 +914,15 @@
       }
     },
     {
+      "id": "ceiling_math_positive_explicit_sig",
+      "formula": "=CEILING.MATH(4.3,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
       "id": "floor_math_default_sig",
       "formula": "=FLOOR.MATH(4.7)",
       "setup": {},
@@ -641,6 +947,24 @@
       "expect": {
         "kind": "number",
         "value": -4.0
+      }
+    },
+    {
+      "id": "floor_math_positive_explicit_sig",
+      "formula": "=FLOOR.MATH(4.7,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "floor_math_sig_neg_uses_abs",
+      "formula": "=FLOOR.MATH(4.7,-2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
       }
     },
     {
@@ -706,6 +1030,15 @@
       }
     },
     {
+      "id": "sumsq_single_zero",
+      "formula": "=SUMSQ(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
       "id": "sumx2py2_basic",
       "formula": "=SUMX2PY2({1;2;3}, {4;5;6})",
       "setup": {},
@@ -742,12 +1075,102 @@
       }
     },
     {
+      "id": "sumx2py2_single_point",
+      "formula": "=SUMX2PY2({3}, {4})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 25.0
+      }
+    },
+    {
+      "id": "sumx2py2_zero_arrays",
+      "formula": "=SUMX2PY2({0;0;0}, {0;0;0})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sumx2py2_negatives",
+      "formula": "=SUMX2PY2({-1;-3}, {2;4})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
       "id": "sumx2my2_single_point",
       "formula": "=SUMX2MY2({2}, {5})",
       "setup": {},
       "expect": {
         "kind": "number",
         "value": -21.0
+      }
+    },
+    {
+      "id": "sumx2my2_shape_mismatch_is_na",
+      "formula": "=SUMX2MY2({1;2;3}, {4;5})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumx2my2_equal_arrays_zero",
+      "formula": "=SUMX2MY2({1;2;3}, {1;2;3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sumx2my2_swap_negates",
+      "formula": "=SUMX2MY2({4;5;6}, {1;2;3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 63.0
+      }
+    },
+    {
+      "id": "sumxmy2_single_point",
+      "formula": "=SUMXMY2({5}, {3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "sumxmy2_shape_mismatch_is_na",
+      "formula": "=SUMXMY2({1;2}, {3})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumxmy2_zero_arrays",
+      "formula": "=SUMXMY2({0;0}, {0;0})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sumxmy2_negatives",
+      "formula": "=SUMXMY2({-1;-2}, {1;2})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 20.0
       }
     },
     {
@@ -775,6 +1198,24 @@
       "expect": {
         "kind": "number",
         "value": 15.0
+      }
+    },
+    {
+      "id": "seriessum_negative_x",
+      "formula": "=SERIESSUM(-1, 0, 1, {1;1;1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "seriessum_offset_initial_power",
+      "formula": "=SERIESSUM(3, 2, 1, {1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 36.0
       }
     }
   ]

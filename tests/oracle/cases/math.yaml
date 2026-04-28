@@ -26,6 +26,10 @@ cases:
   - id: sign_zero
     formula: "=SIGN(0)"
 
+  - id: sign_of_bool_true
+    description: "TRUE coerces to 1, so SIGN(TRUE) = 1"
+    formula: "=SIGN(TRUE)"
+
   # -- INT (floor toward -inf) --------------------------------------------
   - id: int_positive_fraction
     formula: "=INT(3.7)"
@@ -37,6 +41,10 @@ cases:
   - id: int_already_integer
     formula: "=INT(5)"
 
+  - id: int_negative_already_integer
+    description: "INT of a negative integer is itself"
+    formula: "=INT(-5)"
+
   # -- TRUNC (truncate toward zero) ---------------------------------------
   - id: trunc_positive_fraction
     formula: "=TRUNC(3.7)"
@@ -47,6 +55,14 @@ cases:
 
   - id: trunc_with_digits
     formula: "=TRUNC(3.14159,2)"
+
+  - id: trunc_negative_digits
+    description: "Negative second arg truncates to tens place: TRUNC(1234,-2) = 1200"
+    formula: "=TRUNC(1234,-2)"
+
+  - id: trunc_default_digits_zero
+    description: "Single-arg TRUNC behaves like digits=0"
+    formula: "=TRUNC(5.99)"
 
   # -- MOD -----------------------------------------------------------------
   - id: mod_positive
@@ -61,6 +77,10 @@ cases:
 
   - id: mod_zero_divisor_is_div0
     formula: "=MOD(5,0)"
+
+  - id: mod_negative_divisor
+    description: "Excel MOD result has same sign as divisor: MOD(10,-3) = -2"
+    formula: "=MOD(10,-3)"
 
   # -- ROUND / ROUNDUP / ROUNDDOWN ----------------------------------------
   - id: round_half_up
@@ -77,6 +97,10 @@ cases:
     description: "Negative digits round to tens/hundreds"
     formula: "=ROUND(1234.5,-2)"
 
+  - id: round_zero_digits_default
+    description: "Zero digits rounds to nearest integer (away from zero on tie)"
+    formula: "=ROUND(2.49,0)"
+
   - id: roundup_positive
     description: "ROUNDUP rounds away from zero"
     formula: "=ROUNDUP(3.14,1)"
@@ -84,11 +108,35 @@ cases:
   - id: roundup_negative
     formula: "=ROUNDUP(-3.14,1)"
 
+  - id: roundup_zero_digits
+    description: "Zero digits rounds away from zero to integer: 2.1 -> 3"
+    formula: "=ROUNDUP(2.1,0)"
+
+  - id: roundup_negative_digits
+    description: "Negative digits rounds up to next ten: 123 -> 130"
+    formula: "=ROUNDUP(123,-1)"
+
+  - id: roundup_zero_input
+    description: "Zero is its own ceiling regardless of digits"
+    formula: "=ROUNDUP(0,2)"
+
   - id: rounddown_positive
     formula: "=ROUNDDOWN(3.19,1)"
 
   - id: rounddown_negative
     formula: "=ROUNDDOWN(-3.19,1)"
+
+  - id: rounddown_zero_digits
+    description: "Zero digits truncates toward zero to integer: 2.9 -> 2"
+    formula: "=ROUNDDOWN(2.9,0)"
+
+  - id: rounddown_negative_digits
+    description: "Negative digits truncates toward zero at the tens place"
+    formula: "=ROUNDDOWN(178,-1)"
+
+  - id: rounddown_zero_input
+    description: "Zero rounds down to zero regardless of digits"
+    formula: "=ROUNDDOWN(0,2)"
 
   # -- POWER / SQRT -------------------------------------------------------
   - id: power_square
@@ -104,6 +152,10 @@ cases:
     description: "Excel returns 1 for POWER(0,0) (IEEE pow convention)"
     formula: "=POWER(0,0)"
 
+  - id: power_negative_base_fractional_exp_is_num
+    description: "Real-valued root of a negative base is undefined -> #NUM!"
+    formula: "=POWER(-4,0.5)"
+
   - id: sqrt_of_nine
     formula: "=SQRT(9)"
 
@@ -113,12 +165,24 @@ cases:
   - id: sqrt_of_negative_is_num
     formula: "=SQRT(-1)"
 
+  - id: sqrt_fractional_input
+    description: "SQRT(2) is the canonical irrational example"
+    formula: "=SQRT(2)"
+
   # -- EXP / LN / LOG / LOG10 ---------------------------------------------
   - id: exp_of_zero
     formula: "=EXP(0)"
 
   - id: exp_of_one
     formula: "=EXP(1)"
+
+  - id: exp_of_negative_one
+    description: "EXP(-1) = 1/e ~= 0.3678794411714423"
+    formula: "=EXP(-1)"
+
+  - id: exp_of_two
+    description: "EXP(2) = e^2 ~= 7.38905609893065"
+    formula: "=EXP(2)"
 
   - id: ln_of_one
     formula: "=LN(1)"
@@ -129,6 +193,14 @@ cases:
   - id: ln_of_zero_is_num
     formula: "=LN(0)"
 
+  - id: ln_of_negative_is_num
+    description: "Logarithm of a negative real is undefined -> #NUM!"
+    formula: "=LN(-1)"
+
+  - id: ln_fractional_input
+    description: "LN of 0.5 is -ln(2) ~= -0.6931471805599453"
+    formula: "=LN(0.5)"
+
   - id: log_default_base_10
     description: "LOG(n) with no base defaults to base 10"
     formula: "=LOG(1000)"
@@ -136,8 +208,36 @@ cases:
   - id: log_explicit_base_2
     formula: "=LOG(8,2)"
 
+  - id: log_of_one_is_zero
+    description: "log_b(1) = 0 for any base"
+    formula: "=LOG(1)"
+
+  - id: log_of_zero_is_num
+    description: "LOG(0) is undefined -> #NUM!"
+    formula: "=LOG(0)"
+
+  - id: log_base_one_is_div0
+    description: "Logarithm with base 1 divides by ln(1)=0 -> #DIV/0!"
+    formula: "=LOG(10,1)"
+
   - id: log10_of_100
     formula: "=LOG10(100)"
+
+  - id: log10_of_one
+    description: "LOG10(1) = 0"
+    formula: "=LOG10(1)"
+
+  - id: log10_of_zero_is_num
+    description: "LOG10(0) is undefined -> #NUM!"
+    formula: "=LOG10(0)"
+
+  - id: log10_of_negative_is_num
+    description: "LOG10(-1) is undefined for real numbers -> #NUM!"
+    formula: "=LOG10(-1)"
+
+  - id: log10_fractional_input
+    description: "LOG10(0.1) = -1"
+    formula: "=LOG10(0.1)"
 
   # -- Empty-string function-arg coercion ---------------------------------
   # Probe whether Excel rejects "" in numeric function contexts. Used to
@@ -166,6 +266,22 @@ cases:
   - id: pi_times_two
     formula: "=PI()*2"
 
+  - id: pi_divided_by_two
+    description: "PI()/2 ~= 1.5707963267948966 (quarter-turn radians)"
+    formula: "=PI()/2"
+
+  - id: pi_squared
+    description: "PI()^2 ~= 9.869604401089358"
+    formula: "=PI()^2"
+
+  - id: pi_in_round
+    description: "ROUND of PI to 5 digits exercises PI() inside another call"
+    formula: "=ROUND(PI(),5)"
+
+  - id: pi_arithmetic_subtract
+    description: "PI()-3 ~= 0.14159265358979 (irrational tail probe)"
+    formula: "=PI()-3"
+
   # -- VALUE ---------------------------------------------------------------
   - id: value_of_numeric_string
     formula: "=VALUE(\"42\")"
@@ -175,6 +291,14 @@ cases:
 
   - id: value_of_non_numeric_text
     formula: "=VALUE(\"hello\")"
+
+  - id: value_of_percent_string
+    description: "Percent suffix is recognised: VALUE(\"50%\") = 0.5"
+    formula: "=VALUE(\"50%\")"
+
+  - id: value_of_negative_string
+    description: "Negative-number string: VALUE(\"-3.14\") = -3.14"
+    formula: "=VALUE(\"-3.14\")"
 
   # -- CEILING / FLOOR / MROUND / *.MATH ----------------------------------
   - id: ceiling_pos
@@ -194,6 +318,10 @@ cases:
     description: "Legacy CEILING: significance=0 short-circuits to 0"
     formula: "=CEILING(4.3,0)"
 
+  - id: ceiling_sig_two
+    description: "Significance > 1 rounds to next multiple of 2"
+    formula: "=CEILING(4.3,2)"
+
   - id: floor_pos
     formula: "=FLOOR(4.7,1)"
 
@@ -209,6 +337,10 @@ cases:
   - id: floor_sig_zero_is_div0
     description: "Legacy FLOOR quirk: significance=0 -> #DIV/0!, not 0"
     formula: "=FLOOR(4.3,0)"
+
+  - id: floor_sig_two
+    description: "Significance > 1 rounds down to previous multiple of 2"
+    formula: "=FLOOR(4.7,2)"
 
   - id: mround_basic
     formula: "=MROUND(10,3)"
@@ -242,6 +374,10 @@ cases:
     description: "Negative significance is allowed in *.MATH; uses |sig|"
     formula: "=CEILING.MATH(4.3,-2)"
 
+  - id: ceiling_math_positive_explicit_sig
+    description: "Positive value with explicit significance=2 -> 6"
+    formula: "=CEILING.MATH(4.3,2)"
+
   - id: floor_math_default_sig
     formula: "=FLOOR.MATH(4.7)"
 
@@ -252,6 +388,14 @@ cases:
   - id: floor_math_neg_mode_toward_zero
     description: "mode != 0 rounds negatives toward zero (toward +inf)"
     formula: "=FLOOR.MATH(-4.3,1,1)"
+
+  - id: floor_math_positive_explicit_sig
+    description: "Positive value with explicit significance=2 -> 4"
+    formula: "=FLOOR.MATH(4.7,2)"
+
+  - id: floor_math_sig_neg_uses_abs
+    description: "Negative significance uses |sig| in *.MATH variant"
+    formula: "=FLOOR.MATH(4.7,-2)"
 
   # -- SUMSQ / SUMX2PY2 / SUMX2MY2 / SUMXMY2 / SERIESSUM --------------------
   - id: sumsq_basic
@@ -270,6 +414,10 @@ cases:
     description: "A non-numeric direct text argument surfaces #VALUE!"
     formula: "=SUMSQ(3, \"abc\")"
 
+  - id: sumsq_single_zero
+    description: "Sum of squares of a single zero is zero"
+    formula: "=SUMSQ(0)"
+
   - id: sumx2py2_basic
     description: "Σ (x² + y²) over {1,2,3} and {4,5,6} = 91"
     formula: "=SUMX2PY2({1;2;3}, {4;5;6})"
@@ -286,9 +434,49 @@ cases:
     description: "Mismatched rectangles return #N/A"
     formula: "=SUMX2PY2({1;2;3}, {4;5})"
 
+  - id: sumx2py2_single_point
+    description: "Single-element arrays: 3^2 + 4^2 = 25"
+    formula: "=SUMX2PY2({3}, {4})"
+
+  - id: sumx2py2_zero_arrays
+    description: "All zeros yields zero"
+    formula: "=SUMX2PY2({0;0;0}, {0;0;0})"
+
+  - id: sumx2py2_negatives
+    description: "Squaring eliminates sign: (-1)^2 + 2^2 + (-3)^2 + 4^2 = 30"
+    formula: "=SUMX2PY2({-1;-3}, {2;4})"
+
   - id: sumx2my2_single_point
     description: "Single-element arrays: 2² - 5² = -21"
     formula: "=SUMX2MY2({2}, {5})"
+
+  - id: sumx2my2_shape_mismatch_is_na
+    description: "Mismatched rectangles return #N/A"
+    formula: "=SUMX2MY2({1;2;3}, {4;5})"
+
+  - id: sumx2my2_equal_arrays_zero
+    description: "Identical arrays cancel: each x^2 - y^2 term is 0"
+    formula: "=SUMX2MY2({1;2;3}, {1;2;3})"
+
+  - id: sumx2my2_swap_negates
+    description: "Swapping arguments negates the result: 63 (vs basic -63)"
+    formula: "=SUMX2MY2({4;5;6}, {1;2;3})"
+
+  - id: sumxmy2_single_point
+    description: "Single-element arrays: (5-3)^2 = 4"
+    formula: "=SUMXMY2({5}, {3})"
+
+  - id: sumxmy2_shape_mismatch_is_na
+    description: "Mismatched rectangles return #N/A"
+    formula: "=SUMXMY2({1;2}, {3})"
+
+  - id: sumxmy2_zero_arrays
+    description: "All zeros yields zero"
+    formula: "=SUMXMY2({0;0}, {0;0})"
+
+  - id: sumxmy2_negatives
+    description: "Squared diff is sign-insensitive: ((-1)-1)^2 + ((-2)-2)^2 = 4 + 16 = 20"
+    formula: "=SUMXMY2({-1;-2}, {1;2})"
 
   - id: seriessum_binary_polynomial
     description: "Σ xⁱ for i=0..3 with x=2 and unit coefficients -> 15"
@@ -301,3 +489,11 @@ cases:
   - id: seriessum_x_equals_one
     description: "x=1 makes every power one: sum is just Σ coefficients"
     formula: "=SERIESSUM(1, 0, 1, {5;5;5})"
+
+  - id: seriessum_negative_x
+    description: "x=-1 with unit coefficients alternates: 1 + (-1) + 1 + (-1) = 0"
+    formula: "=SERIESSUM(-1, 0, 1, {1;1;1;1})"
+
+  - id: seriessum_offset_initial_power
+    description: "Initial power n=2 with x=3: 1*3^2 + 1*3^3 = 9 + 27 = 36"
+    formula: "=SERIESSUM(3, 2, 1, {1;1})"
