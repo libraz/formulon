@@ -1,0 +1,54 @@
+suite: percentof
+description: PERCENTOF ratio aggregator (Excel 365, Sep 2024 GA) — six perspectives spanning scalar ratio, array-literal subset/all, denominator-zero, the range-filter quirk that drops text inside an array literal, direct-scalar bool coercion, and left-to-right error propagation.
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # =========================================================================
+  # Scalar ratio: full coerce_to_number applies to direct scalars.
+  # =========================================================================
+
+  - id: percentof_scalar_basic
+    description: 'PERCENTOF(2, 10) -> 0.2 (scalar ratio)'
+    formula: '=PERCENTOF(2, 10)'
+
+  # =========================================================================
+  # Array literal: range-style filter drops Bool / Text / Blank silently.
+  # =========================================================================
+
+  - id: percentof_array_subset_all
+    description: 'PERCENTOF({2,3}, {2,3,5,10}) -> 5/20 = 0.25'
+    formula: '=PERCENTOF({2,3}, {2,3,5,10})'
+
+  # =========================================================================
+  # Denominator zero -> #DIV/0!.
+  # =========================================================================
+
+  - id: percentof_denominator_zero
+    description: 'PERCENTOF(50, 0) -> #DIV/0! (sum of data_all is 0)'
+    formula: '=PERCENTOF(50, 0)'
+
+  # =========================================================================
+  # Range-filter quirk: text inside array literal silently drops to 0,
+  # collapsing denominator to 0 -> #DIV/0!.
+  # =========================================================================
+
+  - id: percentof_array_text_filtered_div0
+    description: 'PERCENTOF({1,2}, {"a","b"}) -> #DIV/0! (text dropped, sum=0)'
+    formula: '=PERCENTOF({1,2}, {"a","b"})'
+
+  # =========================================================================
+  # Direct scalar bool coerces (TRUE -> 1) — this is the per-arg dispatch
+  # rule; bools inside an array literal would silently drop instead.
+  # =========================================================================
+
+  - id: percentof_scalar_bool_coerces
+    description: 'PERCENTOF(2, TRUE) -> 2 (direct scalar TRUE coerces to 1)'
+    formula: '=PERCENTOF(2, TRUE)'
+
+  # =========================================================================
+  # Error precedence: leftmost arg wins.
+  # =========================================================================
+
+  - id: percentof_error_propagates_subset
+    description: 'PERCENTOF(#N/A, 10) -> #N/A (subset error wins; data_all skipped)'
+    formula: '=PERCENTOF(#N/A, 10)'

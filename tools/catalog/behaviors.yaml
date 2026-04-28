@@ -1077,3 +1077,35 @@ groups:
       - name: "match_mode out of {0,1} -> #VALUE!"
         probe: '=TEXTSPLIT("a,b", ",", , , 2)'
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # PERCENTOF — Excel 365 (Sep 2024 GA) ratio aggregator. Returns
+  # `SUM(data_subset) / SUM(data_all)` with SUM-style coercion: range /
+  # array-literal cells silently drop Bool / Text / Blank, while direct
+  # scalar args go through full coerce_to_number rules. Six perspectives
+  # exercise scalar ratio, array-literal ratio, denominator-zero, the
+  # range-filter quirk (text inside arrays drops to 0), direct-scalar
+  # bool coercion, and left-to-right error propagation.
+  # -------------------------------------------------------------------------
+
+  - function: "PERCENTOF"
+    aspect: "ratio aggregator with SUM-style coercion"
+    behaviors:
+      - name: "scalar basic ratio"
+        probe: '=PERCENTOF(2, 10)'
+        expected: impl
+      - name: "array literal subset over all"
+        probe: '=PERCENTOF({2,3}, {2,3,5,10})'
+        expected: impl
+      - name: "denominator zero -> #DIV/0!"
+        probe: '=PERCENTOF(50, 0)'
+        expected: impl
+      - name: "range-filter drops text in denominator -> #DIV/0!"
+        probe: '=PERCENTOF({1,2}, {"a","b"})'
+        expected: impl
+      - name: "direct scalar bool coerces to 1"
+        probe: '=PERCENTOF(2, TRUE)'
+        expected: impl
+      - name: "error propagation (subset wins)"
+        probe: '=PERCENTOF(#N/A, 10)'
+        expected: impl
