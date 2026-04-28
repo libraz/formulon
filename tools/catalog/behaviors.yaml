@@ -1279,3 +1279,121 @@ groups:
       - name: "filter_array excludes all -> error (Mac #VALUE!, Formulon #CALC!)"
         probe: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, SUM, 0, 0, 0, 0, 0, {FALSE;FALSE})'
         expected: diverged
+
+  # -------------------------------------------------------------------------
+  # FILTER — dynamic-array row / column filter. Six perspectives covering
+  # row-axis spill (column-vector mask), col-axis spill (row-vector mask),
+  # if_empty scalar return, empty-without-if_empty -> #CALC!, mask shape
+  # mismatch -> #VALUE!, and error-cell propagation from the mask.
+  # -------------------------------------------------------------------------
+
+  - function: "FILTER"
+    aspect: "dynamic-array row / column filter"
+    behaviors:
+      - name: "row-axis filter (column-vector mask) -> spill"
+        probe: '=FILTER({1;2;3}, {TRUE;FALSE;TRUE})'
+        expected: diverged
+      - name: "col-axis filter (row-vector mask) -> spill"
+        probe: '=FILTER({1,2,3}, {TRUE,FALSE,TRUE})'
+        expected: diverged
+      - name: "empty result with if_empty -> scalar fallback (NOT spilled)"
+        probe: '=FILTER({1;2;3}, {FALSE;FALSE;FALSE}, "none")'
+        expected: impl
+      - name: "empty result without if_empty -> #CALC!"
+        probe: '=FILTER({1;2;3}, {FALSE;FALSE;FALSE})'
+        expected: impl
+      - name: "include shape mismatch -> #VALUE!"
+        probe: '=FILTER({1;2;3}, {TRUE;FALSE})'
+        expected: impl
+      - name: "include error cell -> propagates"
+        probe: '=FILTER({1;2;3}, {TRUE;#N/A;TRUE})'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # UNIQUE — distinct rows / columns in first-occurrence order. Six
+  # perspectives covering row-axis dedup (default), col-axis dedup
+  # (by_col=TRUE), exactly_once filter, exactly_once-empty -> #CALC!,
+  # case-insensitive text dedup, and pass-through (all-distinct) spill.
+  # -------------------------------------------------------------------------
+
+  - function: "UNIQUE"
+    aspect: "dynamic-array distinct-row / column"
+    behaviors:
+      - name: "row-axis dedup (default) -> spill"
+        probe: '=UNIQUE({"A";"B";"A";"C"})'
+        expected: diverged
+      - name: "col-axis dedup (by_col=TRUE) -> spill"
+        probe: '=UNIQUE({1,2,1,3}, TRUE)'
+        expected: diverged
+      - name: "exactly_once=TRUE keeps singletons -> spill"
+        probe: '=UNIQUE({1;2;1;3}, FALSE, TRUE)'
+        expected: diverged
+      - name: "exactly_once=TRUE with no singletons -> #CALC!"
+        probe: '=UNIQUE({1;1;2;2}, FALSE, TRUE)'
+        expected: impl
+      - name: "case-insensitive text dedup -> spill"
+        probe: '=UNIQUE({"a";"A";"b"})'
+        expected: diverged
+      - name: "pass-through (all rows distinct) -> spill identity"
+        probe: '=UNIQUE({"X";"Y";"Z"})'
+        expected: diverged
+
+  # -------------------------------------------------------------------------
+  # SORT — reorders rows (default) or columns (by_col=TRUE) by a key
+  # column / row. Six perspectives spanning row-axis ascending, col-axis
+  # via by_col, descending order, sort_index out of range -> #VALUE!,
+  # invalid sort_order -> #VALUE!, and mixed-kind cell ordering
+  # (Number < Text < Bool FALSE < Bool TRUE < Error < Blank).
+  # -------------------------------------------------------------------------
+
+  - function: "SORT"
+    aspect: "dynamic-array sort"
+    behaviors:
+      - name: "row-axis ascending (default) -> spill"
+        probe: '=SORT({3;1;2})'
+        expected: diverged
+      - name: "col-axis via by_col=TRUE -> spill"
+        probe: '=SORT({3,1,2}, 1, 1, TRUE)'
+        expected: diverged
+      - name: "sort_order=-1 descending -> spill"
+        probe: '=SORT({1;2;3}, 1, -1)'
+        expected: diverged
+      - name: "sort_index out of range -> #VALUE!"
+        probe: '=SORT({1,2;3,4}, 5)'
+        expected: impl
+      - name: "invalid sort_order -> #VALUE!"
+        probe: '=SORT({1;2;3}, 1, 99)'
+        expected: impl
+      - name: "mixed-kind cells (Number < Text < Bool < Error < Blank) -> spill"
+        probe: '=SORT({TRUE;"x";1;#N/A})'
+        expected: diverged
+
+  # -------------------------------------------------------------------------
+  # SORTBY — sorts an array by one or more out-of-band parallel key
+  # vectors. Six perspectives covering single ascending key, single
+  # descending key, two-key composite sort, axis inference (row-vector
+  # key sorts cols), by_array shape mismatch -> #VALUE!, and invalid order
+  # value (must be +/-1) -> #VALUE!.
+  # -------------------------------------------------------------------------
+
+  - function: "SORTBY"
+    aspect: "dynamic-array sort by parallel keys"
+    behaviors:
+      - name: "single ascending key -> spill"
+        probe: '=SORTBY({"A";"B";"C"}, {3;1;2})'
+        expected: diverged
+      - name: "single descending key -> spill"
+        probe: '=SORTBY({"A";"B";"C"}, {1;2;3}, -1)'
+        expected: diverged
+      - name: "two-key composite sort -> spill"
+        probe: '=SORTBY({"A";"B";"C";"D"}, {1;1;2;2}, 1, {2;1;2;1}, 1)'
+        expected: diverged
+      - name: "row-vector key sorts cols -> spill"
+        probe: '=SORTBY({"A","B","C"}, {3,1,2})'
+        expected: diverged
+      - name: "by_array shape mismatch -> #VALUE!"
+        probe: '=SORTBY({"A";"B";"C"}, {1;2})'
+        expected: impl
+      - name: "invalid order (not +/-1) -> #VALUE!"
+        probe: '=SORTBY({"A";"B"}, {1;2}, 99)'
+        expected: impl

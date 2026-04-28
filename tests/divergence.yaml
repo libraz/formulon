@@ -826,6 +826,102 @@ entries:
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
 
+  # FILTER / UNIQUE / SORT / SORTBY (sort_filter family) — spill-output
+  # cases. Each function evaluates its inputs via eval_node_as_array and
+  # returns a 2D ArrayValue. Oracle compare_value only handles scalar
+  # Values; Unit tests under tests/unit/eval/{filter,unique,sort,sortby}
+  # _eval_test.cpp exercise the spill content directly.
+  - id: filter_row_axis_basic
+    reason: "FILTER row-axis result is a 2D spill (2x1 array); oracle compare_value only handles scalars. Unit tests in filter_eval_test.cpp cover the column-vector mask path."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: filter_col_axis_basic
+    reason: "FILTER col-axis result is a 1x2 spill; oracle compare_value only handles scalars. Unit tests in filter_eval_test.cpp cover the row-vector mask path."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: unique_row_axis_dedup
+    reason: "UNIQUE row-axis result is a 3x1 spill; oracle compare_value only handles scalars. Unit tests in unique_eval_test.cpp cover row-axis dedup ordering."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: unique_col_axis_dedup
+    reason: "UNIQUE by_col=TRUE result is a 1x3 spill; oracle compare_value only handles scalars. Unit tests in unique_eval_test.cpp cover col-axis dedup."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: unique_exactly_once_keeps_singletons
+    reason: "UNIQUE exactly_once=TRUE result is a 2x1 spill of the rows that occur once; oracle compare_value only handles scalars. Unit tests in unique_eval_test.cpp cover this path."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: unique_case_insensitive_text
+    reason: "UNIQUE case-insensitive ASCII text dedup yields a 2x1 spill; oracle compare_value only handles scalars. Unit tests in unique_eval_test.cpp cover the case-insensitive equality semantics."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: unique_pass_through_all_distinct
+    reason: "UNIQUE pass-through (all rows distinct) returns a 3x1 spill; oracle compare_value only handles scalars. Unit tests in unique_eval_test.cpp cover identity preservation."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: sort_row_ascending_default
+    reason: "SORT default row-axis ascending yields a 3x1 spill; oracle compare_value only handles scalars. Unit tests in sort_eval_test.cpp cover the default ordering."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: sort_col_axis_by_col
+    reason: "SORT by_col=TRUE yields a 1x3 spill; oracle compare_value only handles scalars. Unit tests in sort_eval_test.cpp cover the column-axis path."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: sort_descending_order
+    reason: "SORT sort_order=-1 yields a 3x1 descending spill; oracle compare_value only handles scalars. Unit tests in sort_eval_test.cpp cover descending sort."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: sort_mixed_kind_ordering
+    reason: "SORT mixed-kind ordering (Number < Text < Bool < Error < Blank) yields a 4x1 spill; oracle compare_value only handles scalars. Unit tests in sort_eval_test.cpp cover the canonical kind-rank."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: sortby_single_key_ascending
+    reason: "SORTBY single-key ascending result is a 3x1 spill; oracle compare_value only handles scalars. Unit tests in sortby_eval_test.cpp cover the single-key path."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: sortby_single_key_descending
+    reason: "SORTBY single-key descending result is a 3x1 spill; oracle compare_value only handles scalars. Unit tests in sortby_eval_test.cpp cover order=-1."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: sortby_two_key_composite
+    reason: "SORTBY two-key composite sort result is a 4x1 spill; oracle compare_value only handles scalars. Unit tests in sortby_eval_test.cpp cover multi-key composition."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: sortby_row_vector_sorts_cols
+    reason: "SORTBY row-vector key sorts cols, yielding a 1x3 spill; oracle compare_value only handles scalars. Unit tests in sortby_eval_test.cpp cover axis inference."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+
   # CELL stub-key divergences. Formulon has no style subsystem yet so
   # CELL("filename") and CELL("prefix", ...) return empty text rather
   # than blank. Mac surfaces blank, but the top-level evaluator's

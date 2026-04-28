@@ -1,0 +1,116 @@
+suite: sort_filter
+description: "Dynamic-array filter / dedupe / sort family — FILTER, UNIQUE, SORT, SORTBY (Excel 365). 24 perspectives (6 per function); spill outputs flow through the same skip-oracle path as MUNIT and TEXTSPLIT (oracle compare_value cannot navigate ArrayValue). Live cases cover scalar fallback and error returns — FILTER if_empty scalar, FILTER no-match #CALC!, FILTER mask shape #VALUE!, FILTER include error propagation, UNIQUE exactly_once-empty #CALC!, SORT sort_index out-of-range #VALUE!, SORT invalid sort_order #VALUE!, SORTBY shape mismatch #VALUE!, SORTBY invalid order #VALUE!."
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # =========================================================================
+  # FILTER — 2 spill (skip-oracle), 4 live.
+  # =========================================================================
+
+  - id: filter_row_axis_basic
+    description: 'FILTER({1;2;3}, {TRUE;FALSE;TRUE}) -> {1;3} (2x1 spill, anchor=1)'
+    formula: '=FILTER({1;2;3}, {TRUE;FALSE;TRUE})'
+
+  - id: filter_col_axis_basic
+    description: 'FILTER({1,2,3}, {TRUE,FALSE,TRUE}) -> {1,3} (1x2 spill, anchor=1)'
+    formula: '=FILTER({1,2,3}, {TRUE,FALSE,TRUE})'
+
+  - id: filter_empty_with_if_empty
+    description: 'FILTER({1;2;3}, {FALSE;FALSE;FALSE}, "none") -> "none" (scalar fallback, NOT spilled)'
+    formula: '=FILTER({1;2;3}, {FALSE;FALSE;FALSE}, "none")'
+
+  - id: filter_empty_without_if_empty_calc
+    description: 'FILTER({1;2;3}, {FALSE;FALSE;FALSE}) -> #CALC! (no rows kept, no fallback)'
+    formula: '=FILTER({1;2;3}, {FALSE;FALSE;FALSE})'
+
+  - id: filter_shape_mismatch_value
+    description: 'FILTER({1;2;3}, {TRUE;FALSE}) -> #VALUE! (mask length 2 vs array rows 3)'
+    formula: '=FILTER({1;2;3}, {TRUE;FALSE})'
+
+  - id: filter_include_error_propagates
+    description: 'FILTER({1;2;3}, {TRUE;#N/A;TRUE}) -> #N/A (error in include short-circuits)'
+    formula: '=FILTER({1;2;3}, {TRUE;#N/A;TRUE})'
+
+  # =========================================================================
+  # UNIQUE — 5 spill (skip-oracle), 1 live.
+  # =========================================================================
+
+  - id: unique_row_axis_dedup
+    description: 'UNIQUE({"A";"B";"A";"C"}) -> {"A";"B";"C"} (3x1 spill, anchor="A")'
+    formula: '=UNIQUE({"A";"B";"A";"C"})'
+
+  - id: unique_col_axis_dedup
+    description: 'UNIQUE({1,2,1,3}, TRUE) -> {1,2,3} (1x3 spill, anchor=1)'
+    formula: '=UNIQUE({1,2,1,3}, TRUE)'
+
+  - id: unique_exactly_once_keeps_singletons
+    description: 'UNIQUE({1;2;1;3}, FALSE, TRUE) -> {2;3} (2x1 spill, anchor=2)'
+    formula: '=UNIQUE({1;2;1;3}, FALSE, TRUE)'
+
+  - id: unique_exactly_once_empty_calc
+    description: 'UNIQUE({1;1;2;2}, FALSE, TRUE) -> #CALC! (no row occurs exactly once)'
+    formula: '=UNIQUE({1;1;2;2}, FALSE, TRUE)'
+
+  - id: unique_case_insensitive_text
+    description: 'UNIQUE({"a";"A";"b"}) -> {"a";"b"} (case-insensitive ASCII dedup, 2x1 spill, anchor="a")'
+    formula: '=UNIQUE({"a";"A";"b"})'
+
+  - id: unique_pass_through_all_distinct
+    description: 'UNIQUE({"X";"Y";"Z"}) -> {"X";"Y";"Z"} (no dups, 3x1 spill identity, anchor="X")'
+    formula: '=UNIQUE({"X";"Y";"Z"})'
+
+  # =========================================================================
+  # SORT — 4 spill (skip-oracle), 2 live.
+  # =========================================================================
+
+  - id: sort_row_ascending_default
+    description: 'SORT({3;1;2}) -> {1;2;3} (3x1 spill, anchor=1, default ascending row sort)'
+    formula: '=SORT({3;1;2})'
+
+  - id: sort_col_axis_by_col
+    description: 'SORT({3,1,2}, 1, 1, TRUE) -> {1,2,3} (1x3 spill, anchor=1)'
+    formula: '=SORT({3,1,2}, 1, 1, TRUE)'
+
+  - id: sort_descending_order
+    description: 'SORT({1;2;3}, 1, -1) -> {3;2;1} (3x1 spill descending, anchor=3)'
+    formula: '=SORT({1;2;3}, 1, -1)'
+
+  - id: sort_index_out_of_range_value
+    description: 'SORT({1,2;3,4}, 5) -> #VALUE! (sort_index 5 outside [1,2])'
+    formula: '=SORT({1,2;3,4}, 5)'
+
+  - id: sort_invalid_order_value
+    description: 'SORT({1;2;3}, 1, 99) -> #VALUE! (sort_order must be +1 or -1)'
+    formula: '=SORT({1;2;3}, 1, 99)'
+
+  - id: sort_mixed_kind_ordering
+    description: 'SORT({TRUE;"x";1;#N/A}) -> {1;"x";TRUE;#N/A} (Number < Text < Bool < Error, 4x1 spill, anchor=1)'
+    formula: '=SORT({TRUE;"x";1;#N/A})'
+
+  # =========================================================================
+  # SORTBY — 4 spill (skip-oracle), 2 live.
+  # =========================================================================
+
+  - id: sortby_single_key_ascending
+    description: 'SORTBY({"A";"B";"C"}, {3;1;2}) -> {"B";"C";"A"} (3x1 spill, anchor="B")'
+    formula: '=SORTBY({"A";"B";"C"}, {3;1;2})'
+
+  - id: sortby_single_key_descending
+    description: 'SORTBY({"A";"B";"C"}, {1;2;3}, -1) -> {"C";"B";"A"} (3x1 spill, anchor="C")'
+    formula: '=SORTBY({"A";"B";"C"}, {1;2;3}, -1)'
+
+  - id: sortby_two_key_composite
+    description: 'SORTBY({"A";"B";"C";"D"}, {1;1;2;2}, 1, {2;1;2;1}, 1) -> {"B";"A";"D";"C"} (4x1 spill, anchor="B")'
+    formula: '=SORTBY({"A";"B";"C";"D"}, {1;1;2;2}, 1, {2;1;2;1}, 1)'
+
+  - id: sortby_row_vector_sorts_cols
+    description: 'SORTBY({"A","B","C"}, {3,1,2}) -> {"B","C","A"} (1x3 spill, anchor="B")'
+    formula: '=SORTBY({"A","B","C"}, {3,1,2})'
+
+  - id: sortby_shape_mismatch_value
+    description: 'SORTBY({"A";"B";"C"}, {1;2}) -> #VALUE! (key length 2 vs array rows 3)'
+    formula: '=SORTBY({"A";"B";"C"}, {1;2})'
+
+  - id: sortby_invalid_order_value
+    description: 'SORTBY({"A";"B"}, {1;2}, 99) -> #VALUE! (order must be +1 or -1)'
+    formula: '=SORTBY({"A";"B"}, {1;2}, 99)'
