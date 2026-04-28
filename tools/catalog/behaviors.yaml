@@ -2099,3 +2099,28 @@ groups:
       - name: "index=0 invalid 1-based -> #VALUE!"
         probe: '=CHOOSEROWS({1,2;3,4}, 0)'
         expected: impl
+
+  - function: "TRIMRANGE"
+    aspect: "trim leading/trailing blank rows and columns"
+    behaviors:
+      - name: "default trims leading and trailing blank edges -> spill"
+        probe: '=TRIMRANGE(A1:D5)'
+        expected: diverged
+      - name: "trim_rows=0 keeps every blank row -> spill"
+        probe: '=TRIMRANGE(A1:D5, 0)'
+        expected: diverged
+      - name: "trim_rows=1 trims leading blank rows only -> spill"
+        probe: '=TRIMRANGE(A1:D5, 1)'
+        expected: diverged
+      - name: "trim_rows=2 trims trailing blank rows only -> spill"
+        probe: '=TRIMRANGE(A1:D5, 2)'
+        expected: diverged
+      - name: "trim mode outside {0,1,2,3} -> #VALUE!"
+        probe: '=TRIMRANGE(A1:A3, 4)'
+        expected: impl
+      - name: "scalar error in range argument propagates verbatim"
+        probe: '=TRIMRANGE(1/0)'
+        expected: impl
+      - name: "all-blank input -> #REF!"
+        probe: '=TRIMRANGE(A1:A3)'
+        expected: impl

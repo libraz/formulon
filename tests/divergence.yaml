@@ -1104,6 +1104,31 @@ entries:
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
+  # -- TRIMRANGE --
+  - id: trimrange_default_trim_both_edges
+    reason: "TRIMRANGE returns a dynamic-array spill (default trim both edges); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/trimrange_eval_test.cpp cover spill content."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: trimrange_trim_rows_zero_keeps_all
+    reason: "TRIMRANGE returns a dynamic-array spill (trim_rows=0 keeps every row); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/trimrange_eval_test.cpp cover spill content."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: trimrange_trim_rows_leading_only
+    reason: "TRIMRANGE returns a dynamic-array spill (trim_rows=1 leading only); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/trimrange_eval_test.cpp cover spill content."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: trimrange_trim_rows_trailing_only
+    reason: "TRIMRANGE returns a dynamic-array spill (trim_rows=2 trailing only); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/trimrange_eval_test.cpp cover spill content."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
   # -- DROP --
   - id: drop_head_cols_positive
     reason: "DROP returns a dynamic-array spill (head cols positive); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."

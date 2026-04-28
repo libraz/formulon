@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-28T19:39:47Z"
+    "generated_at": "2026-04-28T19:54:50Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -515,6 +515,138 @@
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "trimrange_default_trim_both_edges",
+      "formula": "=TRIMRANGE(A1:D5)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "skipped": "TRIMRANGE returns a dynamic-array spill (default trim both edges); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/trimrange_eval_test.cpp cover spill content."
+    },
+    {
+      "id": "trimrange_trim_rows_zero_keeps_all",
+      "formula": "=TRIMRANGE(A1:D5, 0)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "skipped": "TRIMRANGE returns a dynamic-array spill (trim_rows=0 keeps every row); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/trimrange_eval_test.cpp cover spill content."
+    },
+    {
+      "id": "trimrange_trim_rows_leading_only",
+      "formula": "=TRIMRANGE(A1:D5, 1)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "skipped": "TRIMRANGE returns a dynamic-array spill (trim_rows=1 leading only); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/trimrange_eval_test.cpp cover spill content."
+    },
+    {
+      "id": "trimrange_trim_rows_trailing_only",
+      "formula": "=TRIMRANGE(A1:D5, 2)",
+      "setup": {
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "skipped": "TRIMRANGE returns a dynamic-array spill (trim_rows=2 trailing only); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/trimrange_eval_test.cpp cover spill content."
+    },
+    {
+      "id": "trimrange_invalid_mode_value_error",
+      "formula": "=TRIMRANGE(A1:A3, 4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "trimrange_scalar_error_propagates",
+      "formula": "=TRIMRANGE(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "trimrange_all_blank_ref_error",
+      "formula": "=TRIMRANGE(A1:A3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
       }
     }
   ]

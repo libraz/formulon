@@ -277,3 +277,54 @@ cases:
   - id: chooserows_index_zero_error
     description: "CHOOSEROWS index=0 invalid 1-based -> #VALUE!"
     formula: '=CHOOSEROWS({1,2;3,4}, 0)'
+
+  # =========================================================================
+  # TRIMRANGE — uses cell-range setups so blank cells are real Blank values
+  # (array literals cannot express the Blank variant). 4 spill cases route
+  # through skip-oracle; 3 live cases cover scalar errors.
+  # =========================================================================
+  - id: trimrange_default_trim_both_edges
+    description: "TRIMRANGE A1:D5 default mode trims leading row 1, trailing rows 4-5, leading col A, trailing col D -> 2x2 spill {1,2;3,4}"
+    setup:
+      B2: 1
+      C2: 2
+      B3: 3
+      C3: 4
+    formula: '=TRIMRANGE(A1:D5)'
+  - id: trimrange_trim_rows_zero_keeps_all
+    description: "TRIMRANGE A1:D5 trim_rows=0 keeps every row, default trims cols -> 5x2 spill"
+    setup:
+      B2: 1
+      C2: 2
+      B3: 3
+      C3: 4
+    formula: '=TRIMRANGE(A1:D5, 0)'
+  - id: trimrange_trim_rows_leading_only
+    description: "TRIMRANGE A1:D5 trim_rows=1 trims only leading blank row 1, default cols -> 4x2 spill"
+    setup:
+      B2: 1
+      C2: 2
+      B3: 3
+      C3: 4
+    formula: '=TRIMRANGE(A1:D5, 1)'
+  - id: trimrange_trim_rows_trailing_only
+    description: "TRIMRANGE A1:D5 trim_rows=2 trims only trailing rows 4-5, default cols -> 3x2 spill"
+    setup:
+      B2: 1
+      C2: 2
+      B3: 3
+      C3: 4
+    formula: '=TRIMRANGE(A1:D5, 2)'
+  - id: trimrange_invalid_mode_value_error
+    description: "TRIMRANGE A1:A3 with trim_rows=4 (out of {0,1,2,3}) -> #VALUE!"
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+    formula: '=TRIMRANGE(A1:A3, 4)'
+  - id: trimrange_scalar_error_propagates
+    description: "TRIMRANGE(1/0) -> #DIV/0! (scalar error in source propagates verbatim)"
+    formula: '=TRIMRANGE(1/0)'
+  - id: trimrange_all_blank_ref_error
+    description: "TRIMRANGE A1:A3 with all cells blank -> #REF! (Mac rejects empty spill with #REF!)"
+    formula: '=TRIMRANGE(A1:A3)'
