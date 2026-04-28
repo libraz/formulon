@@ -3,12 +3,19 @@
 // Evaluator tests for the `LAMBDA` form (`parser::NodeKind::Lambda`) and
 // immediately-invoked lambda call (`parser::NodeKind::LambdaCall`).
 //
-// The Pratt parser does not yet recognise the `LAMBDA(...)` keyword form,
-// so these tests build the AST directly via the `make_lambda` /
-// `make_lambda_call` factories. That exercises exactly the evaluator
-// surface the brief targets.
+// Two layers of coverage:
 //
-// Coverage:
+//   * AST-driven (lower layer): tests that build the AST directly via the
+//     `make_lambda` / `make_lambda_call` factories. These pin down the
+//     evaluator surface independently of the parser front-end.
+//
+//   * Parser-driven (upper layer): tests that go through `Parser::Parse` so
+//     that end-user formula source like `=LAMBDA(x, x*2)(5)` exercises the
+//     full pipeline. These also cover the name-bound dispatch path where a
+//     `LET`-bound LAMBDA is invoked through an ordinary `f(x)` Call AST
+//     node (no `LambdaCall` node ever materialises).
+//
+// Coverage (AST layer):
 //   * IIFE (immediately-invoked function expression).
 //   * Multi-param IIFE.
 //   * Zero-param IIFE.
@@ -20,6 +27,14 @@
 //   * Non-lambda callee -> #VALUE!.
 //   * Top-level `Lambda` value surface contract: `evaluate()` projects it
 //     onto `#CALC!` to match Mac Excel 365's cell renderer.
+//
+// Coverage (parser layer):
+//   * IIFE / multi-param / zero-param / LET-dispatch / closure capture /
+//     currying — all expressed as formula source.
+//   * Arity-mismatch and argument-error paths.
+//   * Parser-level rejection of empty LAMBDA, cell-ref-shaped param,
+//     duplicate param names.
+//   * Calling a non-lambda LET binding via `name(args)` -> #VALUE!.
 
 #include <string>
 #include <string_view>
@@ -31,6 +46,7 @@
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
+#include "parser/parser.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -244,6 +260,162 @@ TEST(EvalLambda, DebugStringShowsParamCount) {
   lv->captured_env = nullptr;
   const Value v = Value::lambda(lv);
   EXPECT_EQ(v.debug_to_string(), "Lambda(3 params)");
+}
+
+// ---------------------------------------------------------------------------
+// Parser-driven tests
+// ---------------------------------------------------------------------------
+//
+// These build the AST through `Parser::Parse` so that end-user formula
+// source exercises the full LAMBDA / IIFE pipeline (parameter parsing,
+// postfix `(` for IIFE / curry, name-bound dispatch via NameEnv).
+
+// Owns the parse and eval arenas plus the parser so caller assertions can
+// inspect the produced diagnostics. Re-creating the parser per test is
+// cheap and keeps each case fully isolated.
+struct ParseAndEval {
+  Arena parse_arena;
+  Arena eval_arena;
+  parser::Parser p;
+  parser::AstNode* root = nullptr;
+
+  explicit ParseAndEval(std::string_view src) : p(src, parse_arena) { root = p.parse(); }
+
+  Value run() {
+    if (root == nullptr) {
+      return Value::error(ErrorCode::Name);
+    }
+    return evaluate(*root, eval_arena, default_registry(), EvalContext{});
+  }
+};
+
+// Convenience wrapper for the common "parse, expect no errors, evaluate"
+// flow. Tests that assert parse diagnostics use `ParseAndEval` directly.
+Value EvalSource(std::string_view src) {
+  ParseAndEval pe(src);
+  EXPECT_TRUE(pe.p.errors().empty()) << "unexpected parse errors for: " << src;
+  return pe.run();
+}
+
+TEST(EvalLambda, ParserSingleParamIIFE) {
+  // =LAMBDA(x, x*2)(5) -> 10.
+  const Value v = EvalSource("=LAMBDA(x, x*2)(5)");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 10.0);
+}
+
+TEST(EvalLambda, ParserMultiParamIIFE) {
+  // =LAMBDA(x, y, x+y)(3, 4) -> 7.
+  const Value v = EvalSource("=LAMBDA(x, y, x+y)(3, 4)");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 7.0);
+}
+
+TEST(EvalLambda, ParserZeroParamIIFE) {
+  // =LAMBDA(42)() -> 42 (single slot is body; zero parameters).
+  const Value v = EvalSource("=LAMBDA(42)()");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 42.0);
+}
+
+TEST(EvalLambda, ParserLetBoundLambdaDispatch) {
+  // =LET(f, LAMBDA(x, x*2), f(5)+f(10)) -> 30.
+  // The parser produces a `Call` node for `f(...)`; the evaluator's
+  // name-bound dispatch path resolves `f` to the Lambda value and
+  // invokes it as if the user had written an explicit IIFE.
+  const Value v = EvalSource("=LET(f, LAMBDA(x, x*2), f(5)+f(10))");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 30.0);
+}
+
+TEST(EvalLambda, ParserClosureCapturesLetBinding) {
+  // =LET(y, 100, LAMBDA(x, x+y)(5)) -> 105. The inner LAMBDA closes over
+  // the LET-bound `y`; the IIFE applies it at the body site.
+  const Value v = EvalSource("=LET(y, 100, LAMBDA(x, x+y)(5))");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 105.0);
+}
+
+TEST(EvalLambda, ParserNestedLambdaCurryingFromSource) {
+  // =LAMBDA(x, LAMBDA(y, x+y))(3)(4) -> 7. The postfix `(` rule chains
+  // the second IIFE onto the first invocation's result.
+  const Value v = EvalSource("=LAMBDA(x, LAMBDA(y, x+y))(3)(4)");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 7.0);
+}
+
+TEST(EvalLambda, ParserArityMismatchSurfacesValueError) {
+  // =LAMBDA(x, y, x+y)(1) -> #VALUE!.
+  const Value v = EvalSource("=LAMBDA(x, y, x+y)(1)");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(EvalLambda, ParserEmptyLambdaIsParseError) {
+  // =LAMBDA() -> the parser must surface the dedicated `LambdaEmpty`
+  // diagnostic; the evaluator surfaces `#NAME?` from the
+  // `ErrorPlaceholder` left in the AST. The diagnostic is the
+  // load-bearing assertion here.
+  ParseAndEval pe("=LAMBDA()");
+  ASSERT_FALSE(pe.p.errors().empty());
+  bool saw = false;
+  for (const auto& e : pe.p.errors()) {
+    if (e.code == parser::ParseErrorCode::LambdaEmpty) {
+      saw = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(saw) << "expected LambdaEmpty diagnostic";
+}
+
+TEST(EvalLambda, ParserCellRefShapedParamIsParseError) {
+  // =LAMBDA(A1, x) -> the param slot `A1` is forbidden because it
+  // collides with the A1 cell reference. The tokenizer routes the
+  // shape into `CellRef` which `parse_lambda_call` recognises and
+  // diagnoses with `LambdaInvalidParam`.
+  ParseAndEval pe("=LAMBDA(A1, x)");
+  ASSERT_FALSE(pe.p.errors().empty());
+  bool saw = false;
+  for (const auto& e : pe.p.errors()) {
+    if (e.code == parser::ParseErrorCode::LambdaInvalidParam) {
+      saw = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(saw) << "expected LambdaInvalidParam diagnostic";
+}
+
+TEST(EvalLambda, ParserDuplicateParamIsParseError) {
+  // =LAMBDA(x, x, body) -> the second `x` shadows the first; the
+  // parser rejects with `LambdaDuplicateParam`.
+  ParseAndEval pe("=LAMBDA(x, x, body)");
+  ASSERT_FALSE(pe.p.errors().empty());
+  bool saw = false;
+  for (const auto& e : pe.p.errors()) {
+    if (e.code == parser::ParseErrorCode::LambdaDuplicateParam) {
+      saw = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(saw) << "expected LambdaDuplicateParam diagnostic";
+}
+
+TEST(EvalLambda, ParserArgErrorPropagatesThroughNameDispatch) {
+  // =LET(f, LAMBDA(x, x+1), f(1/0)) -> #DIV/0!. Argument-evaluation
+  // errors must propagate through the name-bound dispatch path, the
+  // same way they do through an explicit IIFE.
+  const Value v = EvalSource("=LET(f, LAMBDA(x, x+1), f(1/0))");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+TEST(EvalLambda, ParserCallingNonLambdaBindingIsValueError) {
+  // =LET(n, 5, n(1)) -> #VALUE!. The bound value is a number; calling
+  // a non-callable resolves to #VALUE! at the dispatch site (matches
+  // Excel's behaviour for the analogous `(1)(2)` IIFE shape).
+  const Value v = EvalSource("=LET(n, 5, n(1))");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 }  // namespace

@@ -153,6 +153,14 @@ class Parser {
   // On any validation failure the helper records a diagnostic and returns an
   // `ErrorPlaceholder` so siblings keep parsing.
   AstNode* parse_let_call(const Token& name_tok);
+  // Parses a `LAMBDA(p1, p2, ..., pn, body)` invocation. Same calling
+  // convention as `parse_let_call`: the caller has identified the "LAMBDA"
+  // ident and verified `(` follows, but neither token is consumed yet. All
+  // non-final slots are bare identifier parameter names; the final slot is
+  // the body expression. A zero-parameter lambda is valid: `LAMBDA(42)`
+  // matches Mac Excel by parsing as the body-only form. On any validation
+  // failure the helper records a diagnostic and returns an `ErrorPlaceholder`.
+  AstNode* parse_lambda_call(const Token& name_tok);
   // Parses a bare identifier in a LET binding-name slot. Enforces Excel's
   // name-shape rules (leading letter/underscore, subsequent letters/digits/
   // underscore/period/question-mark, length <= 255) and forbids names that

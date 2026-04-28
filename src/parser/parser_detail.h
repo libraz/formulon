@@ -18,6 +18,14 @@ namespace detail {
 // Binding-power constants. See parser.cpp header comment for the precedence
 // table.
 //
+// Postfix `(` (immediately-invoked LAMBDA / curried call) sits above the
+// spilled-range operator so `LAMBDA(x, x+1)(5)` and `LAMBDA(x, LAMBDA(y, x+y))
+// (3)(4)` left-associate naturally without having to special-case the LHS
+// shape. The Pratt loop already consumes a normal `Ident(args)` call site
+// inside the atom dispatcher, so this rule only fires when the most recent
+// LHS is an already-parsed expression (a Lambda atom, a parenthesised
+// expression, or a previous LambdaCall).
+inline constexpr int kBpPostfixCall = 95;
 // Postfix `#` (spilled-range operator) sits above `:` so that `=A1:B2#`
 // parses as `RangeOp(A1, SpillRef(B2))`; the `:` RHS shape check then
 // rejects the SpillRef since spill anchors are single cells, never range

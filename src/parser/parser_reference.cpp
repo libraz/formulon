@@ -10,6 +10,7 @@
 #include "parser/parser_detail.h"
 #include "parser/reference.h"
 #include "parser/token.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace parser {
@@ -41,8 +42,7 @@ bool IsLetNameShape(std::string_view name) noexcept {
   for (std::size_t i = 1; i < name.size(); ++i) {
     const auto byte = static_cast<unsigned char>(name[i]);
     const char c = static_cast<char>(byte);
-    const bool ok =
-        IsAsciiLetter(c) || IsAsciiDigit(c) || c == '_' || c == '.' || c == '?' || byte >= 0x80;
+    const bool ok = IsAsciiLetter(c) || IsAsciiDigit(c) || c == '_' || c == '.' || c == '?' || byte >= 0x80;
     if (!ok) {
       return false;
     }
@@ -339,6 +339,143 @@ AstNode* Parser::parse_let_call(const Token& name_tok) {
   }
 
   AstNode* n = make_let_binding(arena_, names.data(), exprs.data(), static_cast<std::uint32_t>(names.size()), body);
+  if (n == nullptr) {
+    return nullptr;
+  }
+  n->set_range(SpanRange(call_start, end_range));
+  return n;
+}
+
+// ---------------------------------------------------------------------------
+// LAMBDA parameters
+// ---------------------------------------------------------------------------
+
+AstNode* Parser::parse_lambda_call(const Token& name_tok) {
+  const TextRange call_start = name_tok.range;
+  advance();  // LAMBDA Ident
+  advance();  // LParen
+
+  // Collect parameter names then the body. Slot classification: each
+  // non-final slot must be a bare Ident shape that passes the same
+  // identifier rules used for LET binding names; the final slot is the
+  // body. Excel's grammar requires at least one slot total — `LAMBDA()` is
+  // an error. A single-slot form `LAMBDA(expr)` matches Mac Excel by
+  // treating `expr` as the body of a zero-parameter lambda.
+  std::vector<std::string_view> params;
+  AstNode* body = nullptr;
+
+  // Empty arg list: LAMBDA requires the body slot.
+  if (peek_kind() == TokenKind::RParen) {
+    record_error_with_token(ParseErrorCode::LambdaEmpty, name_tok.range, name_tok.lexeme);
+    const Token& rparen_empty = advance();
+    AstNode* placeholder = make_error_placeholder(arena_);
+    if (placeholder != nullptr) {
+      placeholder->set_range(SpanRange(call_start, rparen_empty.range));
+    }
+    return placeholder;
+  }
+
+  // Slot-walk loop. Each iteration starts at the first token of the next
+  // slot. A slot is a parameter name iff it is a well-shaped Ident followed
+  // by a comma; otherwise it is the body. This matches the LET disambiguation
+  // pattern: the body is always the final slot (never followed by a comma).
+  while (true) {
+    if (bailed_) {
+      break;
+    }
+    // CellRef-shaped tokens (e.g. `A1`, `AA10`) sitting in a parameter slot
+    // collide with the A1 cell they spell; emit the dedicated diagnostic so
+    // siblings keep parsing.
+    if (peek_kind() == TokenKind::CellRef && peek_kind_at(1) == TokenKind::Comma) {
+      const Token& bad = peek();
+      record_error_with_token(ParseErrorCode::LambdaInvalidParam, bad.range, bad.lexeme);
+      advance();  // consume the cell-ref
+      if (peek_kind() == TokenKind::Comma) {
+        advance();
+      }
+      continue;
+    }
+    const bool is_param_slot = (peek_kind() == TokenKind::Ident) && IsLetNameShape(peek().lexeme) &&
+                               !LooksLikeCellRef(peek().lexeme) && peek_kind_at(1) == TokenKind::Comma;
+    if (is_param_slot) {
+      const Token& tok = peek();
+      const std::string_view pname = tok.lexeme;
+      // Reject duplicates within a single LAMBDA: the second occurrence
+      // would shadow the first at runtime, which is almost certainly a bug
+      // and which Excel itself rejects.
+      bool duplicate = false;
+      for (const auto& existing : params) {
+        if (strings::case_insensitive_eq(existing, pname)) {
+          duplicate = true;
+          break;
+        }
+      }
+      if (duplicate) {
+        record_error_with_token(ParseErrorCode::LambdaDuplicateParam, tok.range, tok.lexeme);
+        advance();  // consume the offending name
+        if (peek_kind() == TokenKind::Comma) {
+          advance();
+        }
+        continue;
+      }
+      params.push_back(pname);
+      advance();  // Ident
+      advance();  // Comma
+      continue;
+    }
+    // Non-param-slot: this is either the body (final slot, followed by `)`)
+    // or a malformed param slot (not an Ident, but followed by a comma).
+    // Detect the malformed case by looking ahead: if the slot is *not* the
+    // final one (i.e. there will be a comma after the expression) and the
+    // current token is not a valid bare-Ident param shape, surface the
+    // dedicated diagnostic before parsing the slot's expression.
+    //
+    // This catches `LAMBDA(x, x+1, y)`: the middle slot is `x+1` which is
+    // not a bare Ident-Comma shape but is followed by a comma after the
+    // expression closes.
+    //
+    // We cannot know the "followed by comma after expression" answer
+    // without parsing first, so the strategy is: tentatively parse the
+    // slot as an expression; if a comma follows, we wrongly admitted a
+    // non-Ident param slot — emit the diagnostic and discard the
+    // expression. If `)` follows, the expression is the body.
+    AstNode* slot = parse_expression(0, SyncContext::CallArg);
+    if (slot == nullptr) {
+      return nullptr;  // hard arena failure
+    }
+    if (peek_kind() == TokenKind::Comma) {
+      // The slot we just parsed was not the final one, but it was not a
+      // bare-Ident param shape either: the user wrote something like
+      // `LAMBDA(x, x+1, y)` where `x+1` is illegal as a parameter name.
+      record_error_with_token(ParseErrorCode::LambdaInvalidParam, slot->range(), std::string_view{});
+      advance();  // consume the comma so the next iteration starts cleanly
+      continue;
+    }
+    // Final slot: this is the body.
+    body = slot;
+    break;
+  }
+
+  // Expect `)`; emit a diagnostic and recover otherwise.
+  TextRange end_range = call_start;
+  if (peek_kind() == TokenKind::RParen) {
+    const Token& rparen = advance();
+    end_range = rparen.range;
+  } else {
+    record_error_with_token(ParseErrorCode::ExpectedCloseParen, call_start, name_tok.lexeme);
+  }
+
+  if (body == nullptr) {
+    record_error_with_token(ParseErrorCode::LambdaEmpty, call_start, name_tok.lexeme);
+    AstNode* placeholder = make_error_placeholder(arena_);
+    if (placeholder != nullptr) {
+      placeholder->set_range(SpanRange(call_start, end_range));
+    }
+    return placeholder;
+  }
+
+  AstNode* n =
+      make_lambda(arena_, params.empty() ? nullptr : params.data(), static_cast<std::uint32_t>(params.size()), body);
   if (n == nullptr) {
     return nullptr;
   }

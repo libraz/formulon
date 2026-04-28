@@ -442,6 +442,12 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
     if (strings::case_insensitive_eq(ident.lexeme, std::string_view("LET"))) {
       return parse_let_call(ident);
     }
+    // LAMBDA is a special form: each non-final slot is a bare parameter name
+    // (NOT a name=value pair), and the final slot is the body. Detect it
+    // here so the parameter slots go through a dedicated parse path.
+    if (strings::case_insensitive_eq(ident.lexeme, std::string_view("LAMBDA"))) {
+      return parse_lambda_call(ident);
+    }
     const std::string_view fn_name = ident.lexeme;
     const TextRange call_start = ident.range;
     advance();  // Ident

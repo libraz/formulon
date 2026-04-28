@@ -55,6 +55,7 @@ using detail::kBpComparison;
 using detail::kBpConcat;
 using detail::kBpIntersect;
 using detail::kBpMulDiv;
+using detail::kBpPostfixCall;
 using detail::kBpPostfixHash;
 using detail::kBpPostfixPercent;
 using detail::kBpPow;
@@ -214,6 +215,12 @@ const char* default_message(ParseErrorCode code) noexcept {
       return "invalid LET binding name";
     case ParseErrorCode::LetWrongArity:
       return "LET requires an odd number of arguments (name, expr, [name, expr, ...], body)";
+    case ParseErrorCode::LambdaInvalidParam:
+      return "invalid LAMBDA parameter name";
+    case ParseErrorCode::LambdaEmpty:
+      return "LAMBDA requires at least a body expression";
+    case ParseErrorCode::LambdaDuplicateParam:
+      return "LAMBDA parameter names must be unique";
   }
   return "parse error";
 }
@@ -373,8 +380,7 @@ AstNode* Parser::parse() {
   // bracket (which terminates a structured reference). The Pratt parser
   // ultimately decides whether the AST shape allows the intersection.
   auto is_ref_candidate = [](TokenKind k) noexcept {
-    return k == TokenKind::CellRef || k == TokenKind::Ident || k == TokenKind::RParen ||
-           k == TokenKind::RBracket;
+    return k == TokenKind::CellRef || k == TokenKind::Ident || k == TokenKind::RParen || k == TokenKind::RBracket;
   };
   // Walk `raw` with a sliding window over the most recent non-whitespace
   // token and the next non-whitespace token after each whitespace run. If
@@ -525,6 +531,102 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       continue;
     }
 
+    // Postfix `(`: immediately-invoked function expression. Wraps the most
+    // recent LHS in a `LambdaCall` node with the parsed argument list.
+    // Covers `LAMBDA(x, x+1)(5)`, currying like
+    // `LAMBDA(x, LAMBDA(y, x+y))(3)(4)`, and `(some_expr)(args)` where the
+    // parenthesised expression evaluates to a Lambda. The normal
+    // `Ident(args)` function-call path is unaffected because
+    // `parse_ident_or_call_or_full_col` consumes the Ident and the matching
+    // `(` together before this loop ever sees them; only an `(` that
+    // appears AFTER a fully-parsed subtree falls into this rule.
+    if (kind == TokenKind::LParen) {
+      // Gate by LHS shape so we do not turn `=TRUE(1)` (Bool literal then
+      // `(`) and similar non-callable forms into LambdaCall nodes the user
+      // did not write. Only `Lambda` (an immediate IIFE) and `LambdaCall`
+      // (chained curry) participate. Parenthesised lambda expressions like
+      // `(LAMBDA(x, x))(5)` still work because `parse_paren_atom` unwraps a
+      // single inner expression to its own kind; the outer Lambda kind is
+      // preserved across the paren wrapper. The normal `Ident(args)`
+      // function-call path is unaffected: `parse_ident_or_call_or_full_col`
+      // consumes the Ident and the matching `(` together before this loop
+      // ever sees them.
+      const NodeKind lk = lhs->kind();
+      if (lk != NodeKind::Lambda && lk != NodeKind::LambdaCall) {
+        --depth_;
+        return lhs;
+      }
+      if (kBpPostfixCall < min_bp) {
+        --depth_;
+        return lhs;
+      }
+      const Token& lparen = advance();
+      std::vector<const AstNode*> args;
+      if (peek_kind() != TokenKind::RParen) {
+        while (true) {
+          if (bailed_) {
+            break;
+          }
+          AstNode* arg = nullptr;
+          const TokenKind here = peek_kind();
+          if (here == TokenKind::Comma || here == TokenKind::RParen) {
+            // Empty arg slot: treat as a Blank, mirroring the regular
+            // function-call argument loop in
+            // `parse_ident_or_call_or_full_col`.
+            arg = make_literal(arena_, Value::blank());
+            if (arg != nullptr) {
+              arg->set_range(peek().range);
+            }
+          } else {
+            arg = parse_expression(0, SyncContext::CallArg);
+          }
+          if (arg == nullptr) {
+            bailed_ = true;
+            --depth_;
+            return lhs;
+          }
+          args.push_back(arg);
+          if (peek_kind() == TokenKind::Comma) {
+            advance();
+            continue;
+          }
+          if (peek_kind() == TokenKind::RParen) {
+            break;
+          }
+          if (peek_kind() == TokenKind::Eof) {
+            record_error_with_token(ParseErrorCode::ExpectedCloseParen, lparen.range, lparen.lexeme);
+            break;
+          }
+          record_error_with_token(ParseErrorCode::ExpectedComma, peek().range, peek().lexeme);
+          skip_to_sync(SyncContext::CallArg);
+          if (peek_kind() == TokenKind::Comma) {
+            advance();
+            continue;
+          }
+          if (peek_kind() == TokenKind::RParen || peek_kind() == TokenKind::Eof) {
+            break;
+          }
+        }
+      }
+      TextRange end_range = lparen.range;
+      if (peek_kind() == TokenKind::RParen) {
+        const Token& rparen = advance();
+        end_range = rparen.range;
+      } else if (peek_kind() != TokenKind::Eof) {
+        record_error_with_token(ParseErrorCode::ExpectedCloseParen, lparen.range, lparen.lexeme);
+      }
+      AstNode* node =
+          make_lambda_call(arena_, lhs, args.empty() ? nullptr : args.data(), static_cast<std::uint32_t>(args.size()));
+      if (node == nullptr) {
+        bailed_ = true;
+        --depth_;
+        return lhs;
+      }
+      node->set_range(SpanRange(lhs->range(), end_range));
+      lhs = node;
+      continue;
+    }
+
     // Postfix `#`: spilled-range operator (e.g. `=A1#`). Only valid on a
     // single-cell `Ref` atom; reject anything else (range, full-column /
     // full-row, function call, arithmetic) with a diagnostic and consume
@@ -583,10 +685,9 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
     // must still parse as two separate atoms with the whitespace dropped.
     if (kind == TokenKind::Whitespace) {
       const NodeKind lk = lhs->kind();
-      const bool lhs_ref_shaped =
-          lk == NodeKind::Ref || lk == NodeKind::RangeOp || lk == NodeKind::ExternalRef ||
-          lk == NodeKind::NameRef || lk == NodeKind::StructuredRef || lk == NodeKind::Call ||
-          lk == NodeKind::IntersectOp;
+      const bool lhs_ref_shaped = lk == NodeKind::Ref || lk == NodeKind::RangeOp || lk == NodeKind::ExternalRef ||
+                                  lk == NodeKind::NameRef || lk == NodeKind::StructuredRef || lk == NodeKind::Call ||
+                                  lk == NodeKind::IntersectOp;
       if (!lhs_ref_shaped) {
         // Treat the retained whitespace as layout: drop it and continue.
         advance();

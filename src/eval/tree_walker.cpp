@@ -294,6 +294,37 @@ std::string_view strip_future_prefix(std::string_view name) noexcept {
   return name;
 }
 
+// Invokes a runtime LambdaValue with the given argument-AST accessor and
+// arity. Shared between the `LambdaCall` AST case (a parser-emitted IIFE or
+// curried call) and the name-bound dispatch path in `dispatch_call` (where
+// the user wrote `f(x)` and `f` resolves through `NameEnv` to a Lambda).
+//
+// Strict arity match: Excel surfaces `#VALUE!` when the call arity differs
+// from the declared parameter count (no defaulting, no variadics). Argument
+// evaluation is eager and left-to-right in the *caller's* scope; the first
+// error short-circuits. Bindings extend a fresh `NameEnv` rooted at the
+// lambda's captured environment, so closure capture continues to work
+// across both invocation paths.
+Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::AstNode* const* call_args, Arena& arena,
+                    const FunctionRegistry& registry, const EvalContext& ctx) {
+  if (arity != lv->param_count) {
+    return Value::error(ErrorCode::Value);
+  }
+  NameEnv env;
+  if (lv->captured_env != nullptr) {
+    env = *lv->captured_env;
+  }
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    const Value arg = eval_node(*call_args[i], arena, registry, ctx);
+    if (arg.is_error()) {
+      return arg;
+    }
+    env = env.extend(lv->params[i], arg, arena);
+  }
+  const EvalContext body_ctx = ctx.with_name_env(&env);
+  return eval_node(*lv->body, arena, registry, body_ctx);
+}
+
 // Special-cased function-call dispatch.
 //
 // Lazy entries (`IF`, `IFERROR`, `IFNA`, the `*IF`/`*IFS` aggregators) are
@@ -310,6 +341,32 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
                     const EvalContext& ctx) {
   const std::string_view name = strip_future_prefix(node.as_call_name());
   const std::uint32_t arity = node.as_call_arity();
+
+  // Name-bound lambda dispatch: when the formula text reads `f(x)` and `f`
+  // resolves to a runtime `LambdaValue` via the lexical name environment
+  // (LET-bound or LAMBDA-parameter), invoke it as if the user had written
+  // an explicit IIFE. The lookup runs *before* the registry / lazy table so
+  // a LET binding can shadow a built-in name (matching Excel's semantics).
+  // A bound non-Lambda value is `#VALUE!` (calling a non-callable); a
+  // bound error propagates verbatim. Unbound names fall through to the
+  // existing registry path.
+  if (const NameEnv* env = ctx.name_env(); env != nullptr) {
+    if (const Value* bound = env->lookup(name); bound != nullptr) {
+      if (bound->is_lambda()) {
+        // Build a flat argv pointer array from the call's child slots.
+        std::vector<const parser::AstNode*> argv;
+        argv.reserve(arity);
+        for (std::uint32_t i = 0; i < arity; ++i) {
+          argv.push_back(&node.as_call_arg(i));
+        }
+        return invoke_lambda(bound->as_lambda(), arity, argv.empty() ? nullptr : argv.data(), arena, registry, ctx);
+      }
+      if (bound->is_error()) {
+        return *bound;
+      }
+      return Value::error(ErrorCode::Value);
+    }
+  }
 
   if (const LazyEntry* lazy = find_lazy(name); lazy != nullptr) {
     return lazy->impl(node, arena, registry, ctx);
@@ -1394,7 +1451,22 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       lv->params = params;
       lv->param_count = n;
       lv->body = &node.as_lambda_body();
-      lv->captured_env = ctx.name_env();
+      // Copy the caller's NameEnv into the arena: the live `NameEnv` value at
+      // `ctx.name_env()` typically lives on a parent eval_node frame that
+      // disappears once that frame returns, but every `Binding*` it points
+      // at is arena-allocated and survives. Cloning the small wrapper struct
+      // into the arena keeps the closure's reach into the binding chain
+      // valid for the lifetime of the LambdaValue.
+      if (const NameEnv* parent = ctx.name_env(); parent != nullptr) {
+        auto* env_copy = arena.create<NameEnv>();
+        if (env_copy == nullptr) {
+          return Value::error(ErrorCode::Num);
+        }
+        *env_copy = *parent;
+        lv->captured_env = env_copy;
+      } else {
+        lv->captured_env = nullptr;
+      }
       return Value::lambda(lv);
     }
 
@@ -1408,38 +1480,19 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       if (!callee.is_lambda()) {
         return Value::error(ErrorCode::Value);
       }
-      const LambdaValue* lv = callee.as_lambda();
-
-      // Strict arity match: Excel surfaces #VALUE! when call arity differs
-      // from the declared param count (no defaulting, no variadics).
+      // Hand off to the shared invoker. Argument-AST accessors differ
+      // between the `LambdaCall` case (here) and the name-bound dispatch
+      // path in `dispatch_call`, so we materialise a flat pointer array
+      // before invoking. ISOMITTED would change the eager-evaluation
+      // contract once it lands (currently a service stub), but every
+      // non-omitted argument case matches Excel.
       const std::uint32_t arity = node.as_lambda_call_arity();
-      if (arity != lv->param_count) {
-        return Value::error(ErrorCode::Value);
-      }
-
-      // Eager argument evaluation in the *caller's* scope, then bind each
-      // result to the parameter name in a new env layer rooted at the
-      // lambda's captured env. NameEnv frames are arena-allocated and
-      // singly-linked; we extend in declaration order so a later parameter
-      // shadows an earlier one with the same name.
-      NameEnv env;
-      if (lv->captured_env != nullptr) {
-        env = *lv->captured_env;
-      }
+      std::vector<const parser::AstNode*> argv;
+      argv.reserve(arity);
       for (std::uint32_t i = 0; i < arity; ++i) {
-        const Value arg = eval_node(node.as_lambda_call_arg(i), arena, registry, ctx);
-        // Errors in argument evaluation propagate immediately. ISOMITTED
-        // would change this once it lands (currently a service stub), but
-        // the eager-evaluation contract here matches Excel for every
-        // non-omitted argument case.
-        if (arg.is_error()) {
-          return arg;
-        }
-        env = env.extend(lv->params[i], arg, arena);
+        argv.push_back(&node.as_lambda_call_arg(i));
       }
-
-      const EvalContext body_ctx = ctx.with_name_env(&env);
-      return eval_node(*lv->body, arena, registry, body_ctx);
+      return invoke_lambda(callee.as_lambda(), arity, argv.empty() ? nullptr : argv.data(), arena, registry, ctx);
     }
 
     case parser::NodeKind::IntersectOp: {

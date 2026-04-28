@@ -61,6 +61,10 @@ enum class ParseErrorCode : std::uint16_t {
   // Parser-level: LET-specific validation.
   LetInvalidName,  // LET binding name is empty, clashes with an A1 cell ref, or fails the identifier syntax
   LetWrongArity,   // LET argument count is even, or less than the required body-plus-one-binding minimum
+  // Parser-level: LAMBDA-specific validation.
+  LambdaInvalidParam,    // LAMBDA parameter slot is not a bare identifier, or has a cell-ref shape
+  LambdaEmpty,           // LAMBDA was invoked with an empty argument list (the body is mandatory)
+  LambdaDuplicateParam,  // Two LAMBDA parameters share the same name
 };
 
 /// Diagnostic severity. The parser currently emits only `Error`; `Warning`
