@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-23T11:29:13Z"
+    "generated_at": "2026-04-28T23:32:48Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -780,6 +780,309 @@
       "expect": {
         "kind": "error",
         "code": "#N/A"
+      }
+    },
+    {
+      "id": "isblank_of_zero",
+      "formula": "=ISBLANK(A1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "isblank_of_error_cell",
+      "formula": "=ISBLANK(A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "iserror_of_value",
+      "formula": "=ISERROR(#VALUE!)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "iserror_of_text",
+      "formula": "=ISERROR(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "iserr_of_value",
+      "formula": "=ISERR(#VALUE!)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "iserr_of_number",
+      "formula": "=ISERR(42)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "iserr_of_text",
+      "formula": "=ISERR(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "isna_of_value",
+      "formula": "=ISNA(#VALUE!)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "isna_of_text",
+      "formula": "=ISNA(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "istext_of_error",
+      "formula": "=ISTEXT(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "islogical_of_error",
+      "formula": "=ISLOGICAL(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "isodd_of_zero",
+      "formula": "=ISODD(0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "t_of_error",
+      "formula": "=T(NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "na_via_iferror",
+      "formula": "=IFERROR(NA(), 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "indirect_a1_value",
+      "formula": "=INDIRECT(\"A1\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "indirect_invalid_text_is_ref",
+      "formula": "=INDIRECT(\"not a ref\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "indirect_built_address",
+      "formula": "=INDIRECT(ADDRESS(1,1,4))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "sheets_of_error_arg",
+      "formula": "=SHEETS(#REF!)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "sheets_of_text_is_na",
+      "formula": "=SHEETS(\"A1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sheet_of_empty_string_is_na",
+      "formula": "=SHEET(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sheet_of_na_propagates",
+      "formula": "=SHEET(NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sheet_of_ref_error_propagates",
+      "formula": "=SHEET(#REF!)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "sheet_of_number_is_na",
+      "formula": "=SHEET(123)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "offset_zero_identity",
+      "formula": "=OFFSET(A1, 0, 0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "offset_positive_row",
+      "formula": "=OFFSET(A1, 1, 0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "offset_with_height_width",
+      "formula": "=SUM(OFFSET(A1, 0, 0, 2, 2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 33.0
+      }
+    },
+    {
+      "id": "offset_out_of_bounds_is_ref",
+      "formula": "=OFFSET(A1, -5, 0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
       }
     }
   ]

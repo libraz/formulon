@@ -5644,3 +5644,390 @@ groups:
       - name: "constant y series (zero variance)"
         probe: "=PEARSON(A1:A3, B1:B3)"
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # Information / type-introspection / reference family. All members share
+  # the closure category file `tests/oracle/cases/info.yaml`. Probes hit
+  # observable Excel-365 behavior; per-fixture semantics are documented on
+  # the case `id`s.
+  # -------------------------------------------------------------------------
+
+  - function: "ISBLANK"
+    aspect: "blank-cell predicate"
+    behaviors:
+      - name: "truly blank cell -> TRUE"
+        probe: "=ISBLANK(A1)"
+        expected: impl
+      - name: "non-blank number -> FALSE"
+        probe: "=ISBLANK(A1)"
+        expected: impl
+      - name: "empty string is not blank -> FALSE"
+        probe: "=ISBLANK(A1)"
+        expected: impl
+      - name: "numeric zero is not blank -> FALSE"
+        probe: "=ISBLANK(A1)"
+        expected: impl
+      - name: "error-valued cell is not blank -> FALSE"
+        probe: "=ISBLANK(A1)"
+        expected: impl
+
+  - function: "ISNUMBER"
+    aspect: "number-kind predicate"
+    behaviors:
+      - name: "integer literal -> TRUE"
+        probe: "=ISNUMBER(42)"
+        expected: impl
+      - name: "float literal -> TRUE"
+        probe: "=ISNUMBER(3.14)"
+        expected: impl
+      - name: "numeric-looking text -> FALSE"
+        probe: "=ISNUMBER(\"42\")"
+        expected: impl
+      - name: "bool is not number -> FALSE"
+        probe: "=ISNUMBER(TRUE)"
+        expected: impl
+      - name: "error is not number -> FALSE"
+        probe: "=ISNUMBER(1/0)"
+        expected: impl
+
+  - function: "ISTEXT"
+    aspect: "text-kind predicate"
+    behaviors:
+      - name: "string literal -> TRUE"
+        probe: "=ISTEXT(\"hello\")"
+        expected: impl
+      - name: "empty string is text -> TRUE"
+        probe: "=ISTEXT(\"\")"
+        expected: impl
+      - name: "number is not text -> FALSE"
+        probe: "=ISTEXT(42)"
+        expected: impl
+      - name: "blank cell is not text -> FALSE"
+        probe: "=ISTEXT(A1)"
+        expected: impl
+      - name: "error is inspected, not propagated -> FALSE"
+        probe: "=ISTEXT(1/0)"
+        expected: impl
+
+  - function: "ISLOGICAL"
+    aspect: "bool-kind predicate"
+    behaviors:
+      - name: "TRUE -> TRUE"
+        probe: "=ISLOGICAL(TRUE)"
+        expected: impl
+      - name: "FALSE -> TRUE"
+        probe: "=ISLOGICAL(FALSE)"
+        expected: impl
+      - name: "number 1 is not bool -> FALSE"
+        probe: "=ISLOGICAL(1)"
+        expected: impl
+      - name: "text 'TRUE' is not bool -> FALSE"
+        probe: "=ISLOGICAL(\"TRUE\")"
+        expected: impl
+      - name: "error is inspected, not propagated -> FALSE"
+        probe: "=ISLOGICAL(1/0)"
+        expected: impl
+
+  - function: "ISERROR"
+    aspect: "any-error predicate (includes #N/A)"
+    behaviors:
+      - name: "#DIV/0! -> TRUE"
+        probe: "=ISERROR(1/0)"
+        expected: impl
+      - name: "#N/A is included -> TRUE"
+        probe: "=ISERROR(NA())"
+        expected: impl
+      - name: "#VALUE! -> TRUE"
+        probe: "=ISERROR(#VALUE!)"
+        expected: impl
+      - name: "plain number -> FALSE"
+        probe: "=ISERROR(42)"
+        expected: impl
+      - name: "plain text -> FALSE"
+        probe: "=ISERROR(\"hello\")"
+        expected: impl
+
+  - function: "ISERR"
+    aspect: "any-error-except-#N/A predicate"
+    behaviors:
+      - name: "#DIV/0! -> TRUE"
+        probe: "=ISERR(1/0)"
+        expected: impl
+      - name: "#N/A is excluded -> FALSE"
+        probe: "=ISERR(NA())"
+        expected: impl
+      - name: "#VALUE! -> TRUE"
+        probe: "=ISERR(#VALUE!)"
+        expected: impl
+      - name: "plain number -> FALSE"
+        probe: "=ISERR(42)"
+        expected: impl
+      - name: "plain text -> FALSE"
+        probe: "=ISERR(\"hello\")"
+        expected: impl
+
+  - function: "ISNA"
+    aspect: "#N/A-only predicate"
+    behaviors:
+      - name: "NA() literal -> TRUE"
+        probe: "=ISNA(NA())"
+        expected: impl
+      - name: "#DIV/0! is not #N/A -> FALSE"
+        probe: "=ISNA(1/0)"
+        expected: impl
+      - name: "plain number -> FALSE"
+        probe: "=ISNA(42)"
+        expected: impl
+      - name: "#VALUE! is not #N/A -> FALSE"
+        probe: "=ISNA(#VALUE!)"
+        expected: impl
+      - name: "plain text -> FALSE"
+        probe: "=ISNA(\"hello\")"
+        expected: impl
+
+  - function: "ISEVEN"
+    aspect: "truncate-then-test parity (even)"
+    behaviors:
+      - name: "positive even integer -> TRUE"
+        probe: "=ISEVEN(4)"
+        expected: impl
+      - name: "positive odd integer -> FALSE"
+        probe: "=ISEVEN(3)"
+        expected: impl
+      - name: "zero is even -> TRUE"
+        probe: "=ISEVEN(0)"
+        expected: impl
+      - name: "negative fraction truncates toward zero"
+        probe: "=ISEVEN(-2.9)"
+        expected: impl
+      - name: "bool coerces to 0/1"
+        probe: "=ISEVEN(TRUE)"
+        expected: impl
+
+  - function: "ISODD"
+    aspect: "truncate-then-test parity (odd)"
+    behaviors:
+      - name: "positive odd integer -> TRUE"
+        probe: "=ISODD(3)"
+        expected: impl
+      - name: "positive even integer -> FALSE"
+        probe: "=ISODD(4)"
+        expected: impl
+      - name: "negative fraction truncates toward zero"
+        probe: "=ISODD(-3.9)"
+        expected: impl
+      - name: "bool TRUE coerces to 1 -> odd"
+        probe: "=ISODD(TRUE)"
+        expected: impl
+      - name: "zero is even -> FALSE"
+        probe: "=ISODD(0)"
+        expected: impl
+
+  - function: "ISNONTEXT"
+    aspect: "inverse of ISTEXT"
+    behaviors:
+      - name: "string literal -> FALSE"
+        probe: "=ISNONTEXT(\"hello\")"
+        expected: impl
+      - name: "empty string is text -> FALSE"
+        probe: "=ISNONTEXT(\"\")"
+        expected: impl
+      - name: "number -> TRUE"
+        probe: "=ISNONTEXT(42)"
+        expected: impl
+      - name: "bool -> TRUE"
+        probe: "=ISNONTEXT(TRUE)"
+        expected: impl
+      - name: "error inspected, not propagated -> TRUE"
+        probe: "=ISNONTEXT(1/0)"
+        expected: impl
+
+  - function: "ERROR.TYPE"
+    aspect: "error-code -> integer map"
+    behaviors:
+      - name: "#DIV/0! -> 2"
+        probe: "=ERROR.TYPE(1/0)"
+        expected: impl
+      - name: "#VALUE! -> 3"
+        probe: "=ERROR.TYPE(#VALUE!)"
+        expected: impl
+      - name: "#REF! -> 4"
+        probe: "=ERROR.TYPE(#REF!)"
+        expected: impl
+      - name: "#NUM! -> 6"
+        probe: "=ERROR.TYPE(#NUM!)"
+        expected: impl
+      - name: "#N/A -> 7"
+        probe: "=ERROR.TYPE(NA())"
+        expected: impl
+
+  - function: "TYPE"
+    aspect: "kind -> integer map"
+    behaviors:
+      - name: "number -> 1"
+        probe: "=TYPE(42)"
+        expected: impl
+      - name: "text -> 2"
+        probe: "=TYPE(\"hello\")"
+        expected: impl
+      - name: "bool -> 4"
+        probe: "=TYPE(TRUE)"
+        expected: impl
+      - name: "error -> 16 (propagate_errors=false wiring)"
+        probe: "=TYPE(1/0)"
+        expected: impl
+      - name: "empty cell coerces to number -> 1"
+        probe: "=TYPE(A1)"
+        expected: impl
+
+  - function: "ISFORMULA"
+    aspect: "context-aware formula-cell predicate"
+    behaviors:
+      - name: "formula cell -> TRUE"
+        probe: "=ISFORMULA(A1)"
+        expected: impl
+      - name: "literal cell -> FALSE"
+        probe: "=ISFORMULA(A1)"
+        expected: impl
+      - name: "empty cell -> FALSE"
+        probe: "=ISFORMULA(A1)"
+        expected: impl
+      - name: "non-reference number -> #VALUE!"
+        probe: "=ISFORMULA(42)"
+        expected: diverged
+      - name: "non-reference text -> #VALUE!"
+        probe: "=ISFORMULA(\"A1\")"
+        expected: diverged
+
+  - function: "ISREF"
+    aspect: "AST-shape introspection"
+    behaviors:
+      - name: "single cell ref -> TRUE"
+        probe: "=ISREF(A1)"
+        expected: impl
+      - name: "range ref -> TRUE"
+        probe: "=ISREF(A1:A2)"
+        expected: impl
+      - name: "number literal -> FALSE"
+        probe: "=ISREF(42)"
+        expected: impl
+      - name: "arithmetic expression -> FALSE"
+        probe: "=ISREF(1+2)"
+        expected: impl
+      - name: "INDIRECT that surfaces #REF! -> FALSE"
+        probe: "=ISREF(INDIRECT(\"not a ref\"))"
+        expected: impl
+
+  - function: "T"
+    aspect: "text-or-blank coercion"
+    behaviors:
+      - name: "text passthrough"
+        probe: "=T(\"hello\")"
+        expected: impl
+      - name: "number returns blank"
+        probe: "=T(42)"
+        expected: diverged
+      - name: "bool returns blank"
+        probe: "=T(TRUE)"
+        expected: diverged
+      - name: "blank cell returns blank"
+        probe: "=T(A1)"
+        expected: diverged
+      - name: "error propagates"
+        probe: "=T(NA())"
+        expected: impl
+
+  - function: "NA"
+    aspect: "#N/A literal injector"
+    behaviors:
+      - name: "NA() returns #N/A; ISNA detects it"
+        probe: "=ISNA(NA())"
+        expected: impl
+      - name: "NA() routed through ISERROR -> TRUE"
+        probe: "=ISERROR(NA())"
+        expected: impl
+      - name: "NA() excluded from ISERR -> FALSE"
+        probe: "=ISERR(NA())"
+        expected: impl
+      - name: "NA() reported by ERROR.TYPE -> 7"
+        probe: "=ERROR.TYPE(NA())"
+        expected: impl
+      - name: "IFERROR catches NA() -> fallback"
+        probe: "=IFERROR(NA(), 0)"
+        expected: impl
+
+  - function: "INDIRECT"
+    aspect: "string-to-reference resolution"
+    behaviors:
+      - name: "valid A1 string resolves to value"
+        probe: "=INDIRECT(\"A1\")"
+        expected: impl
+      - name: "invalid address surfaces #REF!"
+        probe: "=INDIRECT(\"not a ref\")"
+        expected: impl
+      - name: "ADDRESS-built A1 string composes"
+        probe: "=INDIRECT(ADDRESS(1,1,4))"
+        expected: impl
+      - name: "ISREF(INDIRECT(valid)) -> TRUE"
+        probe: "=ISREF(INDIRECT(\"A1\"))"
+        expected: impl
+      - name: "ISREF(INDIRECT(invalid)) -> FALSE"
+        probe: "=ISREF(INDIRECT(\"not a ref\"))"
+        expected: impl
+
+  - function: "OFFSET"
+    aspect: "ref-shifted-by-rows-cols"
+    behaviors:
+      - name: "zero offset is identity"
+        probe: "=OFFSET(A1, 0, 0)"
+        expected: impl
+      - name: "positive row offset shifts down"
+        probe: "=OFFSET(A1, 1, 0)"
+        expected: impl
+      - name: "explicit height/width returns rectangle"
+        probe: "=SUM(OFFSET(A1, 0, 0, 2, 2))"
+        expected: impl
+      - name: "out-of-bounds negative offset -> #REF!"
+        probe: "=OFFSET(A1, -5, 0)"
+        expected: impl
+      - name: "OFFSET nested in ISREF -> TRUE"
+        probe: "=ISREF(OFFSET(A1, 0, 0))"
+        expected: impl
+
+  - function: "SHEET"
+    aspect: "sheet-number lookup"
+    behaviors:
+      - name: "unknown sheet name -> #N/A"
+        probe: "=SHEET(\"NoSuchSheet\")"
+        expected: impl
+      - name: "empty string is not a sheet name -> #N/A"
+        probe: "=SHEET(\"\")"
+        expected: impl
+      - name: "error argument propagates as #N/A"
+        probe: "=SHEET(NA())"
+        expected: impl
+      - name: "#REF! literal propagates"
+        probe: "=SHEET(#REF!)"
+        expected: impl
+      - name: "number is not a sheet name -> #N/A"
+        probe: "=SHEET(123)"
+        expected: impl
+
+  - function: "SHEETS"
+    aspect: "sheet-count over a reference"
+    behaviors:
+      - name: "single-cell ref spans one sheet"
+        probe: "=SHEETS(A1)"
+        expected: impl
+      - name: "range ref spans one sheet"
+        probe: "=SHEETS(A1:A2)"
+        expected: impl
+      - name: "non-reference scalar -> #N/A"
+        probe: "=SHEETS(42)"
+        expected: impl
+      - name: "literal #REF! propagates"
+        probe: "=SHEETS(#REF!)"
+        expected: impl
+      - name: "text scalar -> #N/A"
+        probe: "=SHEETS(\"A1\")"
+        expected: impl

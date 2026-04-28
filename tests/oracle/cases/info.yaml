@@ -309,3 +309,136 @@ cases:
   - id: sheets_of_non_reference_is_na
     description: "Mac: SHEETS(non-ref) -> #N/A, not #VALUE!"
     formula: "=SHEETS(42)"
+
+  # -- Additional ISBLANK perspectives ------------------------------------
+  - id: isblank_of_zero
+    description: "Zero is a number, not blank -> FALSE"
+    setup: { A1: 0 }
+    formula: "=ISBLANK(A1)"
+
+  - id: isblank_of_error_cell
+    description: "Error value is not blank -> FALSE"
+    setup: { A1: "=1/0" }
+    formula: "=ISBLANK(A1)"
+
+  # -- Additional ISERROR perspectives ------------------------------------
+  - id: iserror_of_value
+    description: "#VALUE! is an error -> TRUE"
+    formula: "=ISERROR(#VALUE!)"
+
+  - id: iserror_of_text
+    description: "Plain text is not an error -> FALSE"
+    formula: "=ISERROR(\"hello\")"
+
+  # -- Additional ISERR perspectives --------------------------------------
+  - id: iserr_of_value
+    description: "ISERR catches #VALUE! -> TRUE"
+    formula: "=ISERR(#VALUE!)"
+
+  - id: iserr_of_number
+    description: "Plain number is not an error -> FALSE"
+    formula: "=ISERR(42)"
+
+  - id: iserr_of_text
+    description: "Plain text is not an error -> FALSE"
+    formula: "=ISERR(\"hello\")"
+
+  # -- Additional ISNA perspectives ---------------------------------------
+  - id: isna_of_value
+    description: "#VALUE! is not #N/A -> FALSE"
+    formula: "=ISNA(#VALUE!)"
+
+  - id: isna_of_text
+    description: "Plain text is not #N/A -> FALSE"
+    formula: "=ISNA(\"hello\")"
+
+  # -- Additional ISTEXT perspective --------------------------------------
+  - id: istext_of_error
+    description: "Error argument is inspected, not propagated -> FALSE"
+    formula: "=ISTEXT(1/0)"
+
+  # -- Additional ISLOGICAL perspective -----------------------------------
+  - id: islogical_of_error
+    description: "Error argument is inspected, not propagated -> FALSE"
+    formula: "=ISLOGICAL(1/0)"
+
+  # -- Additional ISODD perspective ---------------------------------------
+  - id: isodd_of_zero
+    description: "Zero is even -> FALSE"
+    formula: "=ISODD(0)"
+
+  # -- Additional T perspective -------------------------------------------
+  - id: t_of_error
+    description: "T propagates errors (does not return blank text)"
+    formula: "=T(NA())"
+
+  # -- Additional NA perspective ------------------------------------------
+  - id: na_via_iferror
+    description: "IFERROR catches NA() -> 0"
+    formula: "=IFERROR(NA(), 0)"
+
+  # -- Additional INDIRECT perspectives -----------------------------------
+  - id: indirect_a1_value
+    description: "INDIRECT('A1') resolves to A1's value"
+    setup: { A1: 42 }
+    formula: "=INDIRECT(\"A1\")"
+
+  - id: indirect_invalid_text_is_ref
+    description: "Non-address text -> #REF!"
+    formula: "=INDIRECT(\"not a ref\")"
+
+  - id: indirect_built_address
+    description: "ADDRESS-built A1 string resolves correctly"
+    setup: { A1: 7 }
+    formula: "=INDIRECT(ADDRESS(1,1,4))"
+
+  # -- Additional SHEETS perspectives -------------------------------------
+  - id: sheets_of_error_arg
+    description: "SHEETS propagates a literal error argument"
+    formula: "=SHEETS(#REF!)"
+
+  - id: sheets_of_text_is_na
+    description: "SHEETS(text) -> #N/A like other non-ref scalars"
+    formula: "=SHEETS(\"A1\")"
+
+  # -- Additional SHEET perspectives --------------------------------------
+  #
+  # Layout-independent shapes only: the oracle harness writes each case
+  # to a per-id sheet, so any test that depends on the active sheet's
+  # index or the workbook's sheet count would diverge.
+  - id: sheet_of_empty_string_is_na
+    description: "Empty string is not a sheet name -> #N/A"
+    formula: "=SHEET(\"\")"
+
+  - id: sheet_of_na_propagates
+    description: "Error argument -> #N/A (matches ERROR.TYPE map)"
+    formula: "=SHEET(NA())"
+
+  - id: sheet_of_ref_error_propagates
+    description: "#REF! literal propagates"
+    formula: "=SHEET(#REF!)"
+
+  - id: sheet_of_number_is_na
+    description: "Number is not a sheet name -> #N/A"
+    formula: "=SHEET(123)"
+
+  # -- Additional OFFSET perspectives -------------------------------------
+  - id: offset_zero_identity
+    description: "OFFSET(A1, 0, 0) returns A1's value"
+    setup: { A1: 42 }
+    formula: "=OFFSET(A1, 0, 0)"
+
+  - id: offset_positive_row
+    description: "OFFSET(A1, 1, 0) shifts down by one row"
+    setup: { A1: 1, A2: 2, A3: 3 }
+    formula: "=OFFSET(A1, 1, 0)"
+
+  - id: offset_with_height_width
+    description: "OFFSET with height/width produces a rectangle; SUM aggregates"
+    setup: { A1: 1, A2: 2, B1: 10, B2: 20 }
+    formula: "=SUM(OFFSET(A1, 0, 0, 2, 2))"
+
+  - id: offset_out_of_bounds_is_ref
+    description: "Negative row offset above row 1 -> #REF!"
+    setup: { A1: 42 }
+    formula: "=OFFSET(A1, -5, 0)"
