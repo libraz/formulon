@@ -1048,18 +1048,6 @@ entries:
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
-  - id: linest_singular_collinear_num
-    reason: "Bug-class divergence: Mac LINEST on rank-deficient X (perfectly collinear predictors {1,2;1,2;1,2;1,2}) returns a spill anchored at 0 (a partial least-squares fit), while Formulon's gauss_jordan kernel at linest_lazy.cpp:240 fails on zero-pivot and returns #NUM!. Mac's behaviour is consistent with using SVD or pseudo-inverse fallback. The follow-up fix would either (a) replace gauss_jordan with an SVD path that handles rank deficiency or (b) collapse collinear columns and report partial coefficients; either way the documented 'singular -> #NUM!' policy in linest_lazy.h:62-64 needs revision."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: trend_singular_collinear_num
-    reason: "Bug-class divergence parallel to linest_singular_collinear_num: Mac TREND on rank-deficient X returns a spill anchored at 2.5 (mean-y fit), Formulon returns #NUM! from the same gauss_jordan failure path. The fix that closes LINEST also closes TREND."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
 
   # CELL stub-key divergences. Formulon has no style subsystem yet so
   # CELL("filename") and CELL("prefix", ...) return empty text rather

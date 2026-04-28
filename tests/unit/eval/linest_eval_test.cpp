@@ -397,17 +397,12 @@ TEST(BuiltinsLinest, ShapeMismatchReturnsRef) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
-TEST(BuiltinsLinest, CollinearXReturnsNum) {
+TEST(BuiltinsLinest, CollinearXReturnsPartialFit) {
   // All x equal to the intercept column (`{1,1,1,1}`) -> X^T X is exactly
-  // singular and the Gauss-Jordan pivot collapses to zero. Mac Excel
-  // surfaces this as `#NUM!`.
-  //
-  // Note: a floating-point-near-singular case like `{5,5,5,5}` produces
-  // exact-zero pivots only after exact-divisible normalisation. With a
-  // non-power-of-2 scale factor, the (4 - 20*0.2) cancellation leaves a
-  // ~1e-16 residue and Gauss-Jordan keeps going. Catching that would
-  // require a relative-magnitude tolerance check — orthogonal to this
-  // contract test.
+  // singular. The rank-aware Gauss-Jordan kernel drops the redundant
+  // predictor column and lets the intercept absorb mean(y) = 2.5,
+  // matching Mac Excel 365: output is the 1x2 spill `[0, 2.5]` (slope
+  // dropped, intercept = mean of y).
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
@@ -415,8 +410,12 @@ TEST(BuiltinsLinest, CollinearXReturnsNum) {
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=LINEST({1,2,3,4}, {1,1,1,1})", &parse_arena, &eval_arena, ctx);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 1U);
+  ASSERT_EQ(v.as_array_cols(), 2U);
+  const Value* c = v.as_array_cells();
+  EXPECT_NEAR(c[0].as_number(), 0.0, kEps);
+  EXPECT_NEAR(c[1].as_number(), 2.5, kEps);
 }
 
 TEST(BuiltinsLinest, UnderdeterminedSystemReturnsNum) {

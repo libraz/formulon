@@ -132,14 +132,40 @@ bool eval_bool_arg(const parser::AstNode& arg, Arena& arena, const FunctionRegis
   return false;
 }
 
-/// Solves `A * X = B` in-place via Gauss-Jordan with partial pivoting.
-/// `aug` is a row-major `n x w` buffer with `w = n + extra` and the
-/// augmented columns laid out to the right of `A`. On return, the left
-/// `n` columns are the identity and the right `extra` columns hold the
-/// solution. Returns `false` on numeric singularity (zero pivot); on
-/// failure `aug` is left in an indeterminate state and the caller
-/// should treat the system as singular.
+/// Solves `A * X = B` in-place via rank-aware Gauss-Jordan with partial
+/// pivoting. `aug` is a row-major `n x w` buffer with `w = n + extra`
+/// and the augmented columns laid out to the right of `A`. On return,
+/// the non-redundant pivot rows are normalised and back-eliminated; rows
+/// corresponding to redundant (rank-deficient) columns are zeroed.
+///
+/// Rank-deficiency policy: at step `k`, partial pivoting picks the
+/// largest |entry| in column `k` from rows `k..n-1`. If that magnitude
+/// is below `kPivotEpsilon = 1e-12 * max|A_initial|`, column `k` is
+/// declared redundant — row `k` is zeroed (so its b-slot becomes 0 and
+/// its inverse-slot row becomes 0), no swap / divide / elimination is
+/// performed for that step, and the loop continues. The non-zero
+/// off-diagonal entries that remain in earlier rows do not affect the
+/// solution because the corresponding `x_k` is forced to 0.
+///
+/// Always returns `true`; callers do not need to handle a failure path.
+/// Mirrors Mac Excel 365's behaviour of returning a partial fit on
+/// rank-deficient systems rather than `#NUM!`.
 bool gauss_jordan(std::vector<double>& aug, std::uint32_t n, std::uint32_t w) {
+  // Establish the rank-deficiency tolerance from the initial scale of A
+  // (the left n columns of aug). A relative tolerance keeps the test
+  // sensible across very different problem magnitudes; an absolute
+  // 1e-12 floor avoids treating a genuinely zero matrix as non-trivial.
+  double max_abs = 0.0;
+  for (std::uint32_t r = 0; r < n; ++r) {
+    for (std::uint32_t c = 0; c < n; ++c) {
+      const double v = std::fabs(aug[static_cast<std::size_t>(r) * w + c]);
+      if (v > max_abs) {
+        max_abs = v;
+      }
+    }
+  }
+  const double kPivotEpsilon = 1e-12 * (max_abs > 0.0 ? max_abs : 1.0);
+
   for (std::uint32_t k = 0; k < n; ++k) {
     std::uint32_t pivot = k;
     double pivot_abs = std::fabs(aug[static_cast<std::size_t>(k) * w + k]);
@@ -150,8 +176,14 @@ bool gauss_jordan(std::vector<double>& aug, std::uint32_t n, std::uint32_t w) {
         pivot = r;
       }
     }
-    if (pivot_abs == 0.0) {
-      return false;
+    if (pivot_abs < kPivotEpsilon) {
+      // Column k is redundant. Zero out row k entirely so the b-slot
+      // becomes 0 (coefficient = 0 in the unpacked solution) and the
+      // inverse-slot row becomes 0 (SE = 0 for that coefficient).
+      for (std::uint32_t c = 0; c < w; ++c) {
+        aug[static_cast<std::size_t>(k) * w + c] = 0.0;
+      }
+      continue;
     }
     if (pivot != k) {
       for (std::uint32_t c = 0; c < w; ++c) {
@@ -212,18 +244,56 @@ void normal_equations(const DesignMatrix& dm, std::vector<double>& a, std::vecto
 }
 
 /// End-to-end coefficient solve. Forms the normal equations
-/// `A * beta = b`, then runs Gauss-Jordan on `[A | b | I]` (when
-/// `want_inv=true`) or `[A | b]` (otherwise). Returns `true` and
-/// writes `*coeffs` (length `p`) and — when requested —
-/// `*inv_a` (`p x p` row-major). Returns `false` if the matrix is
-/// numerically singular; the output buffers are then in an
-/// indeterminate state and should not be read.
+/// `A * beta = b`, then runs the rank-aware Gauss-Jordan kernel on
+/// `[A | b | I]` (when `want_inv=true`) or `[A | b]` (otherwise).
+/// Writes `*coeffs` (length `p`) and — when requested — `*inv_a`
+/// (`p x p` row-major).
+///
+/// Intercept-first permutation: when `dm.with_const` is true the
+/// design-matrix layout puts the intercept column at index `k` (last).
+/// To make the rank-aware kernel's left-to-right "first surviving
+/// column wins" rule match Mac Excel 365's behaviour on rank-deficient
+/// X — where the intercept absorbs `mean(y)` and collinear predictors
+/// drop to 0 — we swap row/column 0 with row/column k of A (and entry
+/// 0 with entry k of b) before solving, then reverse the swap on
+/// `coeffs` and on the rows + columns of `inv_a` afterwards. For
+/// non-singular systems the permutation is a no-op (matrix swaps are
+/// invertible), so this only changes behaviour at the rank-deficient
+/// boundary.
+///
+/// Always returns `true` — `gauss_jordan` is rank-aware and never
+/// fails. The bool return is preserved for call-site stability.
 bool solve_normal_equations(const DesignMatrix& dm, bool want_inv, std::vector<double>* coeffs,
                             std::vector<double>* inv_a) {
   const std::uint32_t p = dm.k + (dm.with_const ? 1U : 0U);
   std::vector<double> a;
   std::vector<double> b;
   normal_equations(dm, a, b);
+
+  // Intercept-first permutation: swap rows 0 and k of A (symmetric, so
+  // swap matching columns too) and entries 0 and k of b. Only meaningful
+  // when an intercept is present and there is at least one predictor.
+  const bool permute = dm.with_const && dm.k >= 1U;
+  const std::uint32_t k_idx = dm.k;  // intercept column index in design.
+  if (permute) {
+    for (std::uint32_t c = 0; c < p; ++c) {
+      const std::size_t i0 = static_cast<std::size_t>(0) * p + c;
+      const std::size_t ik = static_cast<std::size_t>(k_idx) * p + c;
+      const double tmp = a[i0];
+      a[i0] = a[ik];
+      a[ik] = tmp;
+    }
+    for (std::uint32_t r = 0; r < p; ++r) {
+      const std::size_t i0 = static_cast<std::size_t>(r) * p + 0U;
+      const std::size_t ik = static_cast<std::size_t>(r) * p + k_idx;
+      const double tmp = a[i0];
+      a[i0] = a[ik];
+      a[ik] = tmp;
+    }
+    const double tmp_b = b[0];
+    b[0] = b[k_idx];
+    b[k_idx] = tmp_b;
+  }
 
   const std::uint32_t w = p + 1U + (want_inv ? p : 0U);
   std::vector<double> aug(static_cast<std::size_t>(p) * w, 0.0);
@@ -237,9 +307,7 @@ bool solve_normal_equations(const DesignMatrix& dm, bool want_inv, std::vector<d
     }
   }
 
-  if (!gauss_jordan(aug, p, w)) {
-    return false;
-  }
+  (void)gauss_jordan(aug, p, w);
 
   coeffs->assign(p, 0.0);
   for (std::uint32_t r = 0; r < p; ++r) {
@@ -250,6 +318,31 @@ bool solve_normal_equations(const DesignMatrix& dm, bool want_inv, std::vector<d
     for (std::uint32_t r = 0; r < p; ++r) {
       for (std::uint32_t c = 0; c < p; ++c) {
         (*inv_a)[static_cast<std::size_t>(r) * p + c] = aug[static_cast<std::size_t>(r) * w + (p + 1U + c)];
+      }
+    }
+  }
+
+  // Unpermute: undo the (0 <-> k_idx) swap on coeffs and on rows + cols
+  // of inv_a so the caller sees them in the original predictor-first
+  // layout.
+  if (permute) {
+    const double tmp_c = (*coeffs)[0];
+    (*coeffs)[0] = (*coeffs)[k_idx];
+    (*coeffs)[k_idx] = tmp_c;
+    if (want_inv) {
+      for (std::uint32_t c = 0; c < p; ++c) {
+        const std::size_t i0 = static_cast<std::size_t>(0) * p + c;
+        const std::size_t ik = static_cast<std::size_t>(k_idx) * p + c;
+        const double tmp = (*inv_a)[i0];
+        (*inv_a)[i0] = (*inv_a)[ik];
+        (*inv_a)[ik] = tmp;
+      }
+      for (std::uint32_t r = 0; r < p; ++r) {
+        const std::size_t i0 = static_cast<std::size_t>(r) * p + 0U;
+        const std::size_t ik = static_cast<std::size_t>(r) * p + k_idx;
+        const double tmp = (*inv_a)[i0];
+        (*inv_a)[i0] = (*inv_a)[ik];
+        (*inv_a)[ik] = tmp;
       }
     }
   }

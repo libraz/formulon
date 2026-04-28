@@ -1423,9 +1423,9 @@ groups:
       - name: "shape mismatch (known_x rows differ) -> error"
         probe: '=LINEST({1;2;3}, {1;2})'
         expected: impl
-      - name: "singular X^T X (collinear x) -> spill (Mac) / #NUM! (Formulon)"
+      - name: "singular X^T X (collinear x) -> partial fit spill"
         probe: '=LINEST({1;2;3;4}, {1,2;1,2;1,2;1,2})'
-        expected: diverged
+        expected: impl
       - name: "non-numeric cell in known_y -> #VALUE!"
         probe: '=LINEST({1;"x";3}, {1;2;3})'
         expected: impl
@@ -1454,9 +1454,9 @@ groups:
       - name: "shape mismatch -> error"
         probe: '=TREND({1;2;3}, {1;2})'
         expected: impl
-      - name: "singular system (collinear x) -> spill (Mac) / #NUM! (Formulon)"
+      - name: "singular system (collinear x) -> partial fit spill"
         probe: '=TREND({1;2;3;4}, {1,2;1,2;1,2;1,2})'
-        expected: diverged
+        expected: impl
       - name: "non-numeric cell in known_y -> #VALUE!"
         probe: '=TREND({1;"x";3}, {1;2;3})'
         expected: impl

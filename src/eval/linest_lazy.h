@@ -53,14 +53,21 @@ class FunctionRegistry;
 /// when `stats=FALSE`, or a 5 x (k+1) statistics matrix when
 /// `stats=TRUE`. See the file-level comment for the full output layout.
 ///
+/// Rank-deficient `X` (perfectly collinear predictors) yields a
+/// partial fit rather than `#NUM!`: coefficients on redundant columns
+/// are 0, the standard-error and inverse-A slots for those columns
+/// are 0, and surviving columns absorb the fit. When `const=TRUE`,
+/// the intercept is processed first so it absorbs `mean(y)` when all
+/// predictors are collinear with the constant column — matching Mac
+/// Excel 365's behaviour on `LINEST({1;2;3;4}, {1,2;1,2;1,2;1,2})`
+/// (`-> [0, 0, 2.5]`).
+///
 /// Errors:
 ///   - any non-numeric (Text / Blank) cell in `known_y` or `known_x`
 ///     surfaces as `#VALUE!` (matrix-strict coercion, matches MMULT);
 ///   - error cells propagate verbatim in left-to-right scan order
 ///     (`known_y` first);
 ///   - shape mismatch between `known_y` and `known_x` -> `#REF!`;
-///   - singular `X^T X` (collinear predictors or insufficient data)
-///     -> `#NUM!`;
 ///   - `const=TRUE` and `m <= k` (or `const=FALSE` and `m < k`) ->
 ///     `#NUM!` because the residual degrees of freedom would be
 ///     non-positive.
@@ -83,8 +90,10 @@ Value eval_linest_lazy(const parser::AstNode& call, Arena& arena, const Function
 ///
 /// Error semantics match LINEST: matrix-strict numeric coercion,
 /// left-to-right error propagation (`known_y` -> `known_x` ->
-/// `new_x`), `#REF!` on shape mismatch, `#NUM!` on singular system /
-/// under-determined data.
+/// `new_x`), `#REF!` on shape mismatch, `#NUM!` on under-determined
+/// data. Rank-deficient `X` produces fitted values consistent with
+/// the partial-fit recipe documented for LINEST (the prediction
+/// `y_hat` collapses to `mean(y)` along the suppressed directions).
 Value eval_trend_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx);
 

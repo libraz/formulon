@@ -319,8 +319,11 @@ TEST(BuiltinsTrend, NonNumericYReturnsValue) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(BuiltinsTrend, CollinearXReturnsNum) {
-  // x is constant (collinear with intercept) -> X^T X singular -> #NUM!.
+TEST(BuiltinsTrend, CollinearXReturnsMeanYFit) {
+  // x is constant (collinear with intercept) -> X^T X singular. The
+  // rank-aware Gauss-Jordan kernel drops the predictor and lets the
+  // intercept absorb mean(y) = 2.5. TREND's fitted values therefore
+  // collapse to mean(y) at every known_x, matching Mac Excel 365.
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
@@ -328,8 +331,13 @@ TEST(BuiltinsTrend, CollinearXReturnsNum) {
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=TREND({1,2,3,4}, {1,1,1,1})", &parse_arena, &eval_arena, ctx);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 1U);
+  ASSERT_EQ(v.as_array_cols(), 4U);
+  const Value* c = v.as_array_cells();
+  for (std::uint32_t i = 0; i < 4U; ++i) {
+    EXPECT_NEAR(c[i].as_number(), 2.5, 1e-9) << "i=" << i;
+  }
 }
 
 }  // namespace

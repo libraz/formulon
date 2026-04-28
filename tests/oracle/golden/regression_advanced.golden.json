@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-28T18:11:50Z"
+    "generated_at": "2026-04-28T18:47:21Z"
   },
   "tolerance": {
     "abs": 1e-10,
@@ -50,7 +50,7 @@
       "id": "linest_singular_collinear_num",
       "formula": "=LINEST({1;2;3;4}, {1,2;1,2;1,2;1,2})",
       "setup": {},
-      "skipped": "Bug-class divergence: Mac LINEST on rank-deficient X (perfectly collinear predictors {1,2;1,2;1,2;1,2}) returns a spill anchored at 0 (a partial least-squares fit), while Formulon's gauss_jordan kernel at linest_lazy.cpp:240 fails on zero-pivot and returns #NUM!. Mac's behaviour is consistent with using SVD or pseudo-inverse fallback. The follow-up fix would either (a) replace gauss_jordan with an SVD path that handles rank deficiency or (b) collapse collinear columns and report partial coefficients; either way the documented 'singular -> #NUM!' policy in linest_lazy.h:62-64 needs revision."
+      "skipped": "LINEST on rank-deficient X returns a 1x(k+1) partial-fit spill (predictors zeroed, intercept absorbs mean(y)); the macOS xlwings driver only reads the spill anchor, so oracle-gen captures kind=number(0.0) which cannot be compared against Formulon's ArrayValue. Manual write: when the C++ verifier learns to compare arrays, replace this skip with the full {kind: array, shape:[1,3], value:[0,0,2.5]} record. Unit test BuiltinsLinest.CollinearXReturnsPartialFit covers the rank-aware Gauss-Jordan recipe."
     },
     {
       "id": "linest_non_numeric_value",
@@ -98,7 +98,7 @@
       "id": "trend_singular_collinear_num",
       "formula": "=TREND({1;2;3;4}, {1,2;1,2;1,2;1,2})",
       "setup": {},
-      "skipped": "Bug-class divergence parallel to linest_singular_collinear_num: Mac TREND on rank-deficient X returns a spill anchored at 2.5 (mean-y fit), Formulon returns #NUM! from the same gauss_jordan failure path. The fix that closes LINEST also closes TREND."
+      "skipped": "TREND on rank-deficient X returns a 4x1 spill of mean(y) at every known_x (predictors zeroed, intercept absorbs mean(y)=2.5); the macOS xlwings driver only reads the spill anchor, so oracle-gen captures kind=number(2.5) which cannot be compared against Formulon's ArrayValue. Manual write: when the C++ verifier learns to compare arrays, replace this skip with the full {kind: array, shape:[4,1], value:[2.5,2.5,2.5,2.5]} record. Unit test BuiltinsTrend.CollinearXReturnsMeanYFit covers the partial-fit prediction."
     },
     {
       "id": "trend_non_numeric_value",
