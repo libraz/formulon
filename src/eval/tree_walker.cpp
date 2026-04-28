@@ -21,6 +21,7 @@
 #include "eval/dynamic_array_lazy.h"
 #include "eval/eval_context.h"
 #include "eval/financial_lazy.h"
+#include "eval/forecast_ets_lazy.h"
 #include "eval/function_registry.h"
 #include "eval/groupby_pivotby_lazy.h"
 #include "eval/hypothesis_lazy.h"
@@ -174,6 +175,13 @@ constexpr LazyEntry kLazyDispatch[] = {
     // FORECAST is the legacy spelling kept by Excel for back-compat;
     // its impl and arity are identical to FORECAST.LINEAR.
     {"FORECAST", &eval_forecast_linear_lazy},
+    // The FORECAST.ETS family rides the lazy seam because both the
+    // values and timeline arguments may be Range refs that must reach
+    // the impl with their (rows, cols) shape preserved for pairing.
+    {"FORECAST.ETS", &eval_forecast_ets_lazy},
+    {"FORECAST.ETS.CONFINT", &eval_forecast_ets_confint_lazy},
+    {"FORECAST.ETS.SEASONALITY", &eval_forecast_ets_seasonality_lazy},
+    {"FORECAST.ETS.STAT", &eval_forecast_ets_stat_lazy},
     {"FORECAST.LINEAR", &eval_forecast_linear_lazy},
     // FORMULATEXT returns the source text of the referenced cell's formula,
     // so it must inspect the un-evaluated Ref AST and the bound Sheet's

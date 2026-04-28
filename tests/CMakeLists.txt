@@ -100,6 +100,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_financial_oddl_test.cpp
   unit/eval/builtins_financial_price_test.cpp
   unit/eval/builtins_financial_yield_test.cpp
+  unit/eval/builtins_forecast_ets_test.cpp
   unit/eval/builtins_regression_test.cpp
   unit/eval/builtins_hypothesis_test.cpp
   unit/eval/builtins_sumsq_test.cpp
