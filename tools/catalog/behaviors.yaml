@@ -4000,3 +4000,752 @@ groups:
       - name: "wired through DATE for serial inspection"
         probe: "=N(DATE(1900,2,28))"
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # Modern statistics family. Cases live in `tests/oracle/cases/stats.yaml`.
+  # Sample-vs-population pairs (STDEV.S/STDEV.P, VAR.S/VAR.P, *A variants,
+  # legacy STDEVP/VARP), rank/percentile/quartile (.INC / .EXC / legacy),
+  # order statistics (LARGE/SMALL), mode (MODE / MODE.SNGL), descriptive
+  # tendency (GEOMEAN/HARMEAN/AVEDEV/DEVSQ/MEDIAN/TRIMMEAN), shape
+  # (SKEW/SKEW.P/KURT), standardisation (STANDARDIZE) and regression
+  # (STEYX). The `*A` variants (AVERAGEA / MAXA / MINA / VARA / VARPA /
+  # STDEVA / STDEVPA) coerce text->0 and Bool->{0,1} at range scope; the
+  # non-A variants ignore them.
+  # -------------------------------------------------------------------------
+
+  - function: "STDEV.S"
+    aspect: "sample standard deviation (n-1 divisor)"
+    behaviors:
+      - name: "scalar args sample sd"
+        probe: "=STDEV.S(1,2,3,4,5)"
+        expected: impl
+      - name: "two-value sample sd"
+        probe: "=STDEV.S(1,3)"
+        expected: impl
+      - name: "negative inputs"
+        probe: "=STDEV.S(-1,-2,-3,-4,-5)"
+        expected: impl
+      - name: "single value -> #DIV/0! (n-1=0 divisor)"
+        probe: "=STDEV.S(5)"
+        expected: impl
+      - name: "literal-array sample sd"
+        probe: "=STDEV.S({2;4;4;4;5;5;7;9})"
+        expected: impl
+
+  - function: "STDEV.P"
+    aspect: "population standard deviation (n divisor)"
+    behaviors:
+      - name: "scalar args population sd"
+        probe: "=STDEV.P(1,2,3,4,5)"
+        expected: impl
+      - name: "two-value population sd"
+        probe: "=STDEV.P(1,3)"
+        expected: impl
+      - name: "negative inputs"
+        probe: "=STDEV.P(-1,-2,-3,-4,-5)"
+        expected: impl
+      - name: "single value -> 0 (population sd of singleton)"
+        probe: "=STDEV.P(5)"
+        expected: impl
+      - name: "literal-array population sd"
+        probe: "=STDEV.P({2;4;4;4;5;5;7;9})"
+        expected: impl
+
+  - function: "VAR.S"
+    aspect: "sample variance (n-1 divisor)"
+    behaviors:
+      - name: "scalar args sample variance"
+        probe: "=VAR.S(1,2,3,4,5)"
+        expected: impl
+      - name: "two-value sample variance"
+        probe: "=VAR.S(1,3)"
+        expected: impl
+      - name: "negative inputs"
+        probe: "=VAR.S(-1,-2,-3,-4,-5)"
+        expected: impl
+      - name: "single value -> #DIV/0!"
+        probe: "=VAR.S(5)"
+        expected: impl
+      - name: "literal-array sample variance"
+        probe: "=VAR.S({2;4;4;4;5;5;7;9})"
+        expected: impl
+
+  - function: "VAR.P"
+    aspect: "population variance (n divisor)"
+    behaviors:
+      - name: "scalar args population variance"
+        probe: "=VAR.P(1,2,3,4,5)"
+        expected: impl
+      - name: "two-value population variance"
+        probe: "=VAR.P(1,3)"
+        expected: impl
+      - name: "negative inputs"
+        probe: "=VAR.P(-1,-2,-3,-4,-5)"
+        expected: impl
+      - name: "single value -> 0"
+        probe: "=VAR.P(5)"
+        expected: impl
+      - name: "literal-array population variance"
+        probe: "=VAR.P({2;4;4;4;5;5;7;9})"
+        expected: impl
+
+  - function: "VARP"
+    aspect: "legacy alias for VAR.P"
+    behaviors:
+      - name: "scalar args"
+        probe: "=VARP(1,2,3,4,5)"
+        expected: impl
+      - name: "two-value"
+        probe: "=VARP(1,3)"
+        expected: impl
+      - name: "literal-array"
+        probe: "=VARP({2;4;4;4;5;5;7;9})"
+        expected: impl
+      - name: "single value -> 0"
+        probe: "=VARP(5)"
+        expected: impl
+      - name: "negative inputs"
+        probe: "=VARP(-1,-2,-3)"
+        expected: impl
+
+  - function: "STDEVP"
+    aspect: "legacy alias for STDEV.P"
+    behaviors:
+      - name: "scalar args"
+        probe: "=STDEVP(1,2,3,4,5)"
+        expected: impl
+      - name: "two-value"
+        probe: "=STDEVP(1,3)"
+        expected: impl
+      - name: "literal-array"
+        probe: "=STDEVP({2;4;4;4;5;5;7;9})"
+        expected: impl
+      - name: "single value -> 0"
+        probe: "=STDEVP(5)"
+        expected: impl
+      - name: "negative inputs"
+        probe: "=STDEVP(-1,-2,-3)"
+        expected: impl
+
+  - function: "STDEVA"
+    aspect: "sample sd treating text as 0 and Bool as {0,1}"
+    behaviors:
+      - name: "numeric-only matches STDEV.S"
+        probe: "=STDEVA(1,2,3,4,5)"
+        expected: impl
+      - name: "range with TRUE / text mixed in"
+        probe: "=STDEVA(A1:A4)"
+        expected: impl
+      - name: "two-value"
+        probe: "=STDEVA(1,3)"
+        expected: impl
+      - name: "negative inputs"
+        probe: "=STDEVA(-1,-2,-3,-4,-5)"
+        expected: impl
+      - name: "single value -> #DIV/0!"
+        probe: "=STDEVA(5)"
+        expected: impl
+
+  - function: "STDEVPA"
+    aspect: "population sd treating text as 0 and Bool as {0,1}"
+    behaviors:
+      - name: "range with TRUE / text mixed in"
+        probe: "=STDEVPA(A1:A4)"
+        expected: impl
+      - name: "numeric-only matches STDEV.P"
+        probe: "=STDEVPA(1,2,3,4,5)"
+        expected: impl
+      - name: "two-value"
+        probe: "=STDEVPA(1,3)"
+        expected: impl
+      - name: "single value -> 0"
+        probe: "=STDEVPA(5)"
+        expected: impl
+      - name: "negative inputs"
+        probe: "=STDEVPA(-1,-2,-3)"
+        expected: impl
+
+  - function: "VARA"
+    aspect: "sample variance treating text as 0 and Bool as {0,1}"
+    behaviors:
+      - name: "range with TRUE / text mixed in"
+        probe: "=VARA(A1:A4)"
+        expected: impl
+      - name: "numeric-only matches VAR.S"
+        probe: "=VARA(1,2,3,4,5)"
+        expected: impl
+      - name: "two-value"
+        probe: "=VARA(1,3)"
+        expected: impl
+      - name: "negative inputs"
+        probe: "=VARA(-1,-2,-3,-4,-5)"
+        expected: impl
+      - name: "single value -> #DIV/0!"
+        probe: "=VARA(5)"
+        expected: impl
+
+  - function: "VARPA"
+    aspect: "population variance treating text as 0 and Bool as {0,1}"
+    behaviors:
+      - name: "range with TRUE / text mixed in"
+        probe: "=VARPA(A1:A4)"
+        expected: impl
+      - name: "numeric-only matches VAR.P"
+        probe: "=VARPA(1,2,3,4,5)"
+        expected: impl
+      - name: "two-value"
+        probe: "=VARPA(1,3)"
+        expected: impl
+      - name: "single value -> 0"
+        probe: "=VARPA(5)"
+        expected: impl
+      - name: "negative inputs"
+        probe: "=VARPA(-1,-2,-3)"
+        expected: impl
+
+  - function: "AVERAGEA"
+    aspect: "arithmetic mean treating text as 0 and Bool as {0,1}"
+    behaviors:
+      - name: "numeric-only matches AVERAGE"
+        probe: "=AVERAGEA(1,2,3,4,5)"
+        expected: impl
+      - name: "direct TRUE coerces to 1"
+        probe: "=AVERAGEA(1, TRUE, 3)"
+        expected: impl
+      - name: "range with text / Bool / blank"
+        probe: "=AVERAGEA(A1:A3)"
+        expected: impl
+      - name: "two-value scalar"
+        probe: "=AVERAGEA(1,3)"
+        expected: impl
+      - name: "negative inputs"
+        probe: "=AVERAGEA(-1,-2,-3)"
+        expected: impl
+
+  - function: "MAXA"
+    aspect: "max treating text as 0 and Bool as {0,1}"
+    behaviors:
+      - name: "range with text -> text counts as 0"
+        probe: "=MAXA(A1:A3)"
+        expected: impl
+      - name: "TRUE coerces to 1 in range"
+        probe: "=MAXA(A1:A2)"
+        expected: impl
+      - name: "numeric-only matches MAX"
+        probe: "=MAXA(1,2,3,4,5)"
+        expected: impl
+      - name: "all-negative range"
+        probe_regex: 'MAXA\(A1:A3\)'
+        expected: impl
+      - name: "blank cells are skipped"
+        probe_regex: 'MAXA\(A1:A3\)'
+        expected: impl
+
+  - function: "MINA"
+    aspect: "min treating text as 0 and Bool as {0,1}"
+    behaviors:
+      - name: "range with text -> text counts as 0"
+        probe: "=MINA(A1:A3)"
+        expected: impl
+      - name: "FALSE coerces to 0 in range"
+        probe: "=MINA(A1:A2)"
+        expected: impl
+      - name: "numeric-only matches MIN"
+        probe: "=MINA(1,2,3,4,5)"
+        expected: impl
+      - name: "TRUE coerces to 1 in range"
+        probe_regex: 'MINA\(A1:A2\)'
+        expected: impl
+      - name: "blank cells are skipped"
+        probe_regex: 'MINA\(A1:A3\)'
+        expected: impl
+
+  - function: "MEDIAN"
+    aspect: "middle value with even/odd handling"
+    behaviors:
+      - name: "odd count -> middle element"
+        probe: "=MEDIAN(1,2,3,4,5)"
+        expected: impl
+      - name: "even count -> mean of middle pair"
+        probe: "=MEDIAN(1,2,3,4)"
+        expected: impl
+      - name: "skips text in range"
+        probe: "=MEDIAN(A1:A4)"
+        expected: impl
+      - name: "single value"
+        probe: "=MEDIAN(42)"
+        expected: impl
+      - name: "negative values"
+        probe: "=MEDIAN(-3,-1,-2,-5)"
+        expected: impl
+
+  - function: "MODE"
+    aspect: "most-frequent value (lowest mode on tie)"
+    behaviors:
+      - name: "no duplicate -> #N/A"
+        probe: "=MODE(1,2,3)"
+        expected: impl
+      - name: "lowest mode on tie"
+        probe: "=MODE(1,2,2,3,3)"
+        expected: impl
+      - name: "negative values"
+        probe: "=MODE(-1,-1,-2,-3)"
+        expected: impl
+      - name: "decimal values"
+        probe: "=MODE(1.5,2.5,2.5,3.5)"
+        expected: impl
+      - name: "single duplicate pair"
+        probe: "=MODE(1,1,2)"
+        expected: impl
+
+  - function: "MODE.SNGL"
+    aspect: "single-mode (lowest on tie)"
+    behaviors:
+      - name: "basic lowest-mode-on-tie"
+        probe: "=MODE.SNGL(1,2,2,3,3,3)"
+        expected: impl
+      - name: "no duplicate -> #N/A"
+        probe: "=MODE.SNGL(1,2,3)"
+        expected: impl
+      - name: "tie returns lowest"
+        probe: "=MODE.SNGL(1,1,2,2,3)"
+        expected: impl
+      - name: "negative values"
+        probe: "=MODE.SNGL(-1,-1,-2,-3)"
+        expected: impl
+      - name: "decimal values"
+        probe: "=MODE.SNGL(1.5,2.5,2.5,3.5)"
+        expected: impl
+
+  - function: "LARGE"
+    aspect: "k-th largest with rank-tie semantics"
+    behaviors:
+      - name: "k=2 of 4-element array"
+        probe: "=LARGE({10;5;30;20},2)"
+        expected: impl
+      - name: "k=1 returns max"
+        probe: "=LARGE({3;1;4;1;5;9;2;6}, 1)"
+        expected: impl
+      - name: "k=n returns min"
+        probe: "=LARGE({10;5;30;20}, 4)"
+        expected: impl
+      - name: "k=0 -> #NUM!"
+        probe: "=LARGE({10;5;30;20}, 0)"
+        expected: impl
+      - name: "k > n -> #NUM!"
+        probe: "=LARGE({10;5;30;20}, 5)"
+        expected: impl
+      - name: "ties duplicate the value across k"
+        probe: "=LARGE({1;1;2;3}, 3)"
+        expected: impl
+
+  - function: "SMALL"
+    aspect: "k-th smallest with rank-tie semantics"
+    behaviors:
+      - name: "k=1 of 4-element array"
+        probe: "=SMALL({10;5;30;20},1)"
+        expected: impl
+      - name: "k=1 returns min"
+        probe: "=SMALL({3;1;4;1;5;9;2;6}, 1)"
+        expected: impl
+      - name: "k=n returns max"
+        probe: "=SMALL({10;5;30;20}, 4)"
+        expected: impl
+      - name: "k=0 -> #NUM!"
+        probe: "=SMALL({10;5;30;20}, 0)"
+        expected: impl
+      - name: "k > n -> #NUM!"
+        probe: "=SMALL({10;5;30;20}, 5)"
+        expected: impl
+      - name: "ties duplicate the value across k"
+        probe: "=SMALL({1;1;2;3}, 2)"
+        expected: impl
+
+  - function: "PERCENTILE.INC"
+    aspect: "inclusive percentile (k in [0,1])"
+    behaviors:
+      - name: "median (k=0.5)"
+        probe: "=PERCENTILE.INC({1;2;3;4;5},0.5)"
+        expected: impl
+      - name: "lower-boundary k=0"
+        probe: "=PERCENTILE.INC({10;20;30},0)"
+        expected: impl
+      - name: "upper-boundary k=1"
+        probe: "=PERCENTILE.INC({10;20;30}, 1)"
+        expected: impl
+      - name: "linear interpolation"
+        probe: "=PERCENTILE.INC({1;2;3;4}, 0.25)"
+        expected: impl
+      - name: "k > 1 -> #NUM!"
+        probe: "=PERCENTILE.INC({10;20;30}, 1.5)"
+        expected: impl
+      - name: "k < 0 -> #NUM!"
+        probe: "=PERCENTILE.INC({10;20;30}, -0.1)"
+        expected: impl
+
+  - function: "PERCENTILE.EXC"
+    aspect: "exclusive percentile (k in (0,1) with bandwidth limits)"
+    behaviors:
+      - name: "Q1 in 10-element sample"
+        probe: "=PERCENTILE.EXC({1;2;3;4;5;6;7;8;9;10}, 0.25)"
+        expected: impl
+      - name: "median (k=0.5)"
+        probe: "=PERCENTILE.EXC({1;2;3;4;5;6;7;8;9;10}, 0.5)"
+        expected: impl
+      - name: "Q3 in 10-element sample"
+        probe: "=PERCENTILE.EXC({1;2;3;4;5;6;7;8;9;10}, 0.75)"
+        expected: impl
+      - name: "k below 1/(n+1) -> #NUM!"
+        probe: "=PERCENTILE.EXC({10;20;30}, 0.24)"
+        expected: impl
+      - name: "k above n/(n+1) -> #NUM!"
+        probe: "=PERCENTILE.EXC({10;20;30}, 0.76)"
+        expected: impl
+
+  - function: "QUARTILE.INC"
+    aspect: "inclusive quartile (quart in {0,1,2,3,4})"
+    behaviors:
+      - name: "Q1 of 9-element sample"
+        probe: "=QUARTILE.INC({1;2;3;4;5;6;7;8;9},1)"
+        expected: impl
+      - name: "Q0 = min"
+        probe: "=QUARTILE.INC({1;2;3;4;5}, 0)"
+        expected: impl
+      - name: "Q2 = median"
+        probe: "=QUARTILE.INC({1;2;3;4;5}, 2)"
+        expected: impl
+      - name: "Q4 = max"
+        probe: "=QUARTILE.INC({1;2;3;4;5}, 4)"
+        expected: impl
+      - name: "quart > 4 -> #NUM!"
+        probe: "=QUARTILE.INC({1;2;3;4;5}, 5)"
+        expected: impl
+
+  - function: "QUARTILE.EXC"
+    aspect: "exclusive quartile (quart in {1,2,3} only)"
+    behaviors:
+      - name: "Q1"
+        probe: "=QUARTILE.EXC({1;2;3;4;5;6;7;8;9;10}, 1)"
+        expected: impl
+      - name: "Q2 (median)"
+        probe: "=QUARTILE.EXC({1;2;3;4;5;6;7;8;9;10}, 2)"
+        expected: impl
+      - name: "Q3"
+        probe: "=QUARTILE.EXC({1;2;3;4;5;6;7;8;9;10}, 3)"
+        expected: impl
+      - name: "Q0 rejected -> #NUM!"
+        probe: "=QUARTILE.EXC({1;2;3;4;5}, 0)"
+        expected: impl
+      - name: "Q4 rejected -> #NUM!"
+        probe: "=QUARTILE.EXC({1;2;3;4;5}, 4)"
+        expected: impl
+      - name: "fractional quart rejected -> #NUM!"
+        probe: "=QUARTILE.EXC({1;2;3;4;5}, 1.5)"
+        expected: impl
+
+  - function: "PERCENTRANK"
+    aspect: "legacy alias of PERCENTRANK.INC"
+    behaviors:
+      - name: "midpoint matches PERCENTRANK.INC"
+        probe: "=PERCENTRANK({1;2;3;4;5}, 3)"
+        expected: impl
+      - name: "x at min"
+        probe: "=PERCENTRANK({10;20;30}, 10)"
+        expected: impl
+      - name: "x at max"
+        probe: "=PERCENTRANK({10;20;30}, 30)"
+        expected: impl
+      - name: "interpolation between samples"
+        probe: "=PERCENTRANK({1;2;4}, 3)"
+        expected: impl
+      - name: "x out of range -> #N/A"
+        probe: "=PERCENTRANK({1;2;3}, 4)"
+        expected: impl
+
+  - function: "PERCENTRANK.INC"
+    aspect: "inclusive rank as percent of array"
+    behaviors:
+      - name: "midpoint of {1..5}"
+        probe: "=PERCENTRANK.INC({1;2;3;4;5}, 3)"
+        expected: impl
+      - name: "x at min -> 0"
+        probe: "=PERCENTRANK.INC({10;20;30}, 10)"
+        expected: impl
+      - name: "x at max -> 1"
+        probe: "=PERCENTRANK.INC({10;20;30}, 30)"
+        expected: impl
+      - name: "interpolation truncated at 3 digits"
+        probe: "=PERCENTRANK.INC({1;2;4}, 3)"
+        expected: impl
+      - name: "significance argument"
+        probe: "=PERCENTRANK.INC({1;2;3;4;5}, 2.5, 2)"
+        expected: impl
+      - name: "x out of range -> #N/A"
+        probe: "=PERCENTRANK.INC({1;2;3}, 4)"
+        expected: impl
+
+  - function: "PERCENTRANK.EXC"
+    aspect: "exclusive rank as percent of array"
+    behaviors:
+      - name: "midpoint -> 0.5"
+        probe: "=PERCENTRANK.EXC({1;2;3;4;5}, 3)"
+        expected: impl
+      - name: "x at min sample"
+        probe: "=PERCENTRANK.EXC({1;2;3;4;5}, 1)"
+        expected: impl
+      - name: "x at max sample"
+        probe: "=PERCENTRANK.EXC({1;2;3;4;5}, 5)"
+        expected: impl
+      - name: "x out of range -> #N/A"
+        probe: "=PERCENTRANK.EXC({1;2;3;4;5}, 6)"
+        expected: impl
+      - name: "significance argument"
+        probe: "=PERCENTRANK.EXC({1;2;3;4;5}, 3, 2)"
+        expected: impl
+
+  - function: "RANK"
+    aspect: "rank within array (legacy spelling)"
+    behaviors:
+      - name: "descending (order=0)"
+        probe: "=RANK(20, A1:A3, 0)"
+        expected: impl
+      - name: "ascending (order=1)"
+        probe: "=RANK(20, A1:A3, 1)"
+        expected: impl
+      - name: "tied values share highest rank"
+        probe: "=RANK(20, A1:A4, 0)"
+        expected: impl
+      - name: "value not in array -> #N/A"
+        probe: "=RANK(15, A1:A3, 0)"
+        expected: impl
+      - name: "single-element array"
+        probe: "=RANK(42, A1:A1, 0)"
+        expected: impl
+
+  - function: "RANK.EQ"
+    aspect: "rank within array (lowest rank on tie)"
+    behaviors:
+      - name: "tied values share highest"
+        probe: "=RANK.EQ(20, A1:A4, 0)"
+        expected: impl
+      - name: "descending (order=0)"
+        probe: "=RANK.EQ(20, A1:A3, 0)"
+        expected: impl
+      - name: "ascending (order=1)"
+        probe: "=RANK.EQ(20, A1:A3, 1)"
+        expected: impl
+      - name: "value not in array -> #N/A"
+        probe: "=RANK.EQ(15, A1:A3, 0)"
+        expected: impl
+      - name: "many tied values"
+        probe: "=RANK.EQ(20, A1:A5, 0)"
+        expected: impl
+
+  - function: "RANK.AVG"
+    aspect: "rank within array (average rank on tie)"
+    behaviors:
+      - name: "tied values get averaged rank"
+        probe: "=RANK.AVG(20, A1:A4, 0)"
+        expected: impl
+      - name: "no ties matches RANK.EQ (descending)"
+        probe: "=RANK.AVG(20, A1:A3, 0)"
+        expected: impl
+      - name: "ascending order=1"
+        probe: "=RANK.AVG(20, A1:A3, 1)"
+        expected: impl
+      - name: "value not in array -> #N/A"
+        probe: "=RANK.AVG(15, A1:A3, 0)"
+        expected: impl
+      - name: "single-cell-tie averaged form"
+        probe: "RANK.AVG(20, A1:A4, 0)"
+        expected: impl
+
+  - function: "GEOMEAN"
+    aspect: "geometric mean (positive inputs only)"
+    behaviors:
+      - name: "two-value basic"
+        probe: "=GEOMEAN(2,8)"
+        expected: impl
+      - name: "range argument"
+        probe: "=GEOMEAN(A1:A3)"
+        expected: impl
+      - name: "zero input -> #NUM!"
+        probe: "=GEOMEAN(1,0,3)"
+        expected: impl
+      - name: "negative input -> #NUM!"
+        probe: "=GEOMEAN(1,-2,3)"
+        expected: impl
+      - name: "single value"
+        probe: "=GEOMEAN(7)"
+        expected: impl
+
+  - function: "HARMEAN"
+    aspect: "harmonic mean (positive inputs only)"
+    behaviors:
+      - name: "two-value basic"
+        probe: "=HARMEAN(2,4)"
+        expected: impl
+      - name: "range argument"
+        probe: "=HARMEAN(A1:A3)"
+        expected: impl
+      - name: "negative input -> #NUM!"
+        probe: "=HARMEAN(1,-2,3)"
+        expected: impl
+      - name: "single value"
+        probe: "=HARMEAN(7)"
+        expected: impl
+      - name: "zero input -> #NUM!"
+        probe: "=HARMEAN(1,0,3)"
+        expected: impl
+
+  - function: "AVEDEV"
+    aspect: "mean absolute deviation"
+    behaviors:
+      - name: "scalar args basic"
+        probe: "=AVEDEV(4,5,6,7,8)"
+        expected: impl
+      - name: "range argument"
+        probe: "=AVEDEV(A1:A3)"
+        expected: impl
+      - name: "single value -> 0"
+        probe: "=AVEDEV(42)"
+        expected: impl
+      - name: "negative inputs"
+        probe: "=AVEDEV(-2,-1,0,1,2)"
+        expected: impl
+      - name: "two-value"
+        probe: "=AVEDEV(1,3)"
+        expected: impl
+
+  - function: "DEVSQ"
+    aspect: "sum of squared deviations from mean"
+    behaviors:
+      - name: "scalar args basic"
+        probe: "=DEVSQ(2,4,6)"
+        expected: impl
+      - name: "single value -> 0"
+        probe: "=DEVSQ(42)"
+        expected: impl
+      - name: "two-value"
+        probe: "=DEVSQ(1,3)"
+        expected: impl
+      - name: "negative inputs"
+        probe: "=DEVSQ(-2,-1,0,1,2)"
+        expected: impl
+      - name: "range argument"
+        probe: "=DEVSQ(A1:A3)"
+        expected: impl
+
+  - function: "TRIMMEAN"
+    aspect: "trimmed mean (drop fraction*n/2 from each tail)"
+    behaviors:
+      - name: "10-element 20% trim"
+        probe: "=TRIMMEAN({1;2;3;4;5;6;7;8;9;10}, 0.2)"
+        expected: impl
+      - name: "0% trim matches AVERAGE"
+        probe: "=TRIMMEAN({1;2;3;4;5}, 0)"
+        expected: impl
+      - name: "percent=1 -> #NUM!"
+        probe: "=TRIMMEAN({1;2;3;4;5}, 1)"
+        expected: impl
+      - name: "negative percent -> #NUM!"
+        probe: "=TRIMMEAN({1;2;3;4;5}, -0.1)"
+        expected: impl
+      - name: "small percent rounds-down to no trim"
+        probe: "=TRIMMEAN({1;2;3;4;5;6;7;8;9;10}, 0.05)"
+        expected: impl
+
+  - function: "SKEW"
+    aspect: "sample skewness (n>=3 required)"
+    behaviors:
+      - name: "symmetric -> 0"
+        probe: "=SKEW(1,2,3,4,5)"
+        expected: impl
+      - name: "positive skew"
+        probe: "=SKEW(1,1,1,2,10)"
+        expected: impl
+      - name: "n<3 -> #DIV/0!"
+        probe: "=SKEW(1,2)"
+        expected: impl
+      - name: "negative skew"
+        probe: "=SKEW(1,9,9,9,10)"
+        expected: impl
+      - name: "constant -> #DIV/0!"
+        probe: "=SKEW(3,3,3,3)"
+        expected: impl
+
+  - function: "SKEW.P"
+    aspect: "population skewness"
+    behaviors:
+      - name: "symmetric"
+        probe: "=SKEW.P(1,2,3,4,5)"
+        expected: impl
+      - name: "constant -> #DIV/0!"
+        probe: "=SKEW.P(3,3,3)"
+        expected: impl
+      - name: "positive skew"
+        probe: "=SKEW.P(1,1,1,2,10)"
+        expected: impl
+      - name: "negative skew"
+        probe: "=SKEW.P(1,9,9,9,10)"
+        expected: impl
+      - name: "n<3 -> #DIV/0!"
+        probe: "=SKEW.P(1,2)"
+        expected: impl
+
+  - function: "KURT"
+    aspect: "excess kurtosis (n>=4 required)"
+    behaviors:
+      - name: "five-value basic"
+        probe: "=KURT(1,2,3,4,5)"
+        expected: impl
+      - name: "n<4 -> #DIV/0!"
+        probe: "=KURT(1,2,3)"
+        expected: impl
+      - name: "constant -> #DIV/0!"
+        probe: "=KURT(3,3,3,3)"
+        expected: impl
+      - name: "six-value"
+        probe: "=KURT(1,2,3,4,5,6)"
+        expected: impl
+      - name: "negative inputs"
+        probe: "=KURT(-2,-1,0,1,2)"
+        expected: impl
+
+  - function: "STANDARDIZE"
+    aspect: "z-score (value - mean) / sd"
+    behaviors:
+      - name: "positive z"
+        probe: "=STANDARDIZE(42, 40, 1.5)"
+        expected: impl
+      - name: "negative z (value below mean)"
+        probe: "=STANDARDIZE(38, 40, 1.5)"
+        expected: impl
+      - name: "value == mean -> z=0"
+        probe: "=STANDARDIZE(40, 40, 1.5)"
+        expected: impl
+      - name: "sd=0 -> #NUM!"
+        probe: "=STANDARDIZE(42, 40, 0)"
+        expected: impl
+      - name: "sd<0 -> #NUM!"
+        probe: "=STANDARDIZE(42, 40, -1)"
+        expected: impl
+
+  - function: "STEYX"
+    aspect: "standard error of regression y on x"
+    behaviors:
+      - name: "perfect linear fit -> 0"
+        probe: "=STEYX({2;4;6;8;10},{1;2;3;4;5})"
+        expected: impl
+      - name: "noisy data > 0"
+        probe: "=STEYX({2;4;5;8;10},{1;2;3;4;5})"
+        expected: impl
+      - name: "n<3 -> #DIV/0!"
+        probe: "=STEYX({1;2},{3;4})"
+        expected: impl
+      - name: "shape mismatch -> #N/A"
+        probe: "=STEYX({1;2;3},{1;2})"
+        expected: impl
+      - name: "minimal n=3 sample"
+        probe: "=STEYX({2;3;5},{1;2;3})"
+        expected: impl

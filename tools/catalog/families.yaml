@@ -123,6 +123,20 @@ families:
     min_perspectives_per_member: 5
     cluster_reason: "Shared PCRE2 backend; case-sensitivity / pattern-syntax / resource-limit perspectives co-evolve."
 
+  # -- Sample-vs-population statistics --------------------------------------
+  # Modern stats functions (post-2010 spellings + descriptive / shape /
+  # rank / percentile / order-statistic builtins). They share dataset
+  # fixtures, divisor-edge perspectives (n vs n-1) and rank-tie
+  # semantics, so the closure threshold is anchored against the same
+  # stats.yaml suite. Pre-2010 aliases (PERCENTILE / QUARTILE / STDEV /
+  # VAR) are intentionally NOT included; they are covered by the
+  # `stat_legacy` family below.
+  - name: stats
+    members: [AVEDEV, AVERAGEA, DEVSQ, GEOMEAN, HARMEAN, KURT, LARGE, MAXA, MEDIAN, MINA, MODE, "MODE.SNGL", "PERCENTILE.EXC", "PERCENTILE.INC", PERCENTRANK, "PERCENTRANK.EXC", "PERCENTRANK.INC", "QUARTILE.EXC", "QUARTILE.INC", RANK, "RANK.AVG", "RANK.EQ", SKEW, "SKEW.P", SMALL, STANDARDIZE, "STDEV.P", "STDEV.S", STDEVA, STDEVP, STDEVPA, STEYX, TRIMMEAN, "VAR.P", "VAR.S", VARA, VARP, VARPA]
+    category_file: tests/oracle/cases/stats.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Sample-vs-population statistics share dataset fixtures, divisor-edge perspectives (n vs n-1), and rank-tie semantics."
+
   # -- Pre-2010 stat aliases ------------------------------------------------
   # Backward-compat spellings that delegate to PERCENTILE.INC / QUARTILE.INC /
   # STDEV.S / VAR.S (already covered by stats.yaml). They share the legacy-

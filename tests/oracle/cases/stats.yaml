@@ -234,27 +234,34 @@ cases:
 
   # -- RANK / RANK.EQ / RANK.AVG ---------------------------------------------
   - id: rank_descending_basic
-    formula: "=RANK(20, {30;20;10}, 0)"
+    setup: { A1: 30, A2: 20, A3: 10 }
+    formula: "=RANK(20, A1:A3, 0)"
 
   - id: rank_ascending_basic
-    formula: "=RANK(20, {30;20;10}, 1)"
+    setup: { A1: 30, A2: 20, A3: 10 }
+    formula: "=RANK(20, A1:A3, 1)"
 
   - id: rank_ties_share_highest
     description: "With ties, RANK returns the highest (lowest-number) rank"
-    formula: "=RANK(20, {30;20;20;10}, 0)"
+    setup: { A1: 30, A2: 20, A3: 20, A4: 10 }
+    formula: "=RANK(20, A1:A4, 0)"
 
   - id: rank_not_present_is_na
-    formula: "=RANK(15, {30;20;10}, 0)"
+    setup: { A1: 30, A2: 20, A3: 10 }
+    formula: "=RANK(15, A1:A3, 0)"
 
   - id: rank_eq_equivalent
-    formula: "=RANK.EQ(20, {30;20;20;10}, 0)"
+    setup: { A1: 30, A2: 20, A3: 20, A4: 10 }
+    formula: "=RANK.EQ(20, A1:A4, 0)"
 
   - id: rank_avg_ties_averaged
     description: "Tied at positions 2 and 3 -> average 2.5"
-    formula: "=RANK.AVG(20, {30;20;20;10}, 0)"
+    setup: { A1: 30, A2: 20, A3: 20, A4: 10 }
+    formula: "=RANK.AVG(20, A1:A4, 0)"
 
   - id: rank_avg_no_ties_matches_eq
-    formula: "=RANK.AVG(20, {30;20;10}, 0)"
+    setup: { A1: 30, A2: 20, A3: 10 }
+    formula: "=RANK.AVG(20, A1:A3, 0)"
 
   # -- PERCENTRANK / .INC / .EXC ---------------------------------------------
   - id: percentrank_inc_midpoint
@@ -290,6 +297,14 @@ cases:
 
   - id: percentrank_exc_out_of_range_is_na
     formula: "=PERCENTRANK.EXC({1;2;3;4;5}, 6)"
+
+  - id: percentrank_exc_at_max
+    description: "Raw 5/6 truncated to 3 digits -> 0.833"
+    formula: "=PERCENTRANK.EXC({1;2;3;4;5}, 5)"
+
+  - id: percentrank_exc_significance_two
+    description: "Significance=2 truncates 0.5 to 0.5"
+    formula: "=PERCENTRANK.EXC({1;2;3;4;5}, 3, 2)"
 
   # -- PERCENTILE.EXC / QUARTILE.EXC -----------------------------------------
   - id: percentile_exc_q1
@@ -330,4 +345,407 @@ cases:
     formula: "=QUARTILE.EXC({1;2;3;4;5}, 4)"
 
   - id: quartile_exc_q_fractional_is_num
+    description: "Excel truncates a fractional quart toward zero; quart=1.5 -> Q1"
     formula: "=QUARTILE.EXC({1;2;3;4;5}, 1.5)"
+
+  # =========================================================================
+  # Closure expansion: sample-vs-population family, rank/percentile, order
+  # statistics, mode, central-tendency, shape, *A variants, regression,
+  # standardisation. Each function gets >=5 perspectives covering the
+  # documented edge cases (single-element divisor, ties, k=0/k=1 boundary,
+  # interpolation, error returns, negative/zero inputs, ULP edges).
+  # =========================================================================
+
+  # -- STDEV.S (sample standard deviation) ----------------------------------
+  - id: stdev_s_two_value
+    formula: "=STDEV.S(1,3)"
+
+  - id: stdev_s_negatives
+    formula: "=STDEV.S(-1,-2,-3,-4,-5)"
+
+  - id: stdev_s_single_value_is_div0
+    description: "Sample sd with n=1 -> #DIV/0! (n-1=0 divisor)"
+    formula: "=STDEV.S(5)"
+
+  - id: stdev_s_literal_array
+    formula: "=STDEV.S({2;4;4;4;5;5;7;9})"
+
+  # -- STDEV.P (population standard deviation) ------------------------------
+  - id: stdev_p_two_value
+    formula: "=STDEV.P(1,3)"
+
+  - id: stdev_p_negatives
+    formula: "=STDEV.P(-1,-2,-3,-4,-5)"
+
+  - id: stdev_p_single_value_is_zero
+    description: "Population sd with n=1 -> 0 (no spread)"
+    formula: "=STDEV.P(5)"
+
+  - id: stdev_p_literal_array
+    formula: "=STDEV.P({2;4;4;4;5;5;7;9})"
+
+  # -- VAR.S (sample variance) ----------------------------------------------
+  - id: var_s_two_value
+    formula: "=VAR.S(1,3)"
+
+  - id: var_s_negatives
+    formula: "=VAR.S(-1,-2,-3,-4,-5)"
+
+  - id: var_s_single_value_is_div0
+    formula: "=VAR.S(5)"
+
+  - id: var_s_literal_array
+    formula: "=VAR.S({2;4;4;4;5;5;7;9})"
+
+  # -- VAR.P (population variance) ------------------------------------------
+  - id: var_p_two_value
+    formula: "=VAR.P(1,3)"
+
+  - id: var_p_negatives
+    formula: "=VAR.P(-1,-2,-3,-4,-5)"
+
+  - id: var_p_single_value_is_zero
+    formula: "=VAR.P(5)"
+
+  - id: var_p_literal_array
+    formula: "=VAR.P({2;4;4;4;5;5;7;9})"
+
+  # -- VARP (legacy alias of VAR.P) -----------------------------------------
+  - id: varp_two_value
+    formula: "=VARP(1,3)"
+
+  - id: varp_literal_array
+    formula: "=VARP({2;4;4;4;5;5;7;9})"
+
+  - id: varp_single_value_is_zero
+    formula: "=VARP(5)"
+
+  - id: varp_negatives
+    formula: "=VARP(-1,-2,-3)"
+
+  # -- STDEVP (legacy alias of STDEV.P) -------------------------------------
+  - id: stdevp_two_value
+    formula: "=STDEVP(1,3)"
+
+  - id: stdevp_literal_array
+    formula: "=STDEVP({2;4;4;4;5;5;7;9})"
+
+  - id: stdevp_single_value_is_zero
+    formula: "=STDEVP(5)"
+
+  - id: stdevp_negatives
+    formula: "=STDEVP(-1,-2,-3)"
+
+  # -- STDEVA (sample sd, *A coercion) --------------------------------------
+  - id: stdeva_negatives
+    formula: "=STDEVA(-1,-2,-3,-4,-5)"
+
+  - id: stdeva_two_numeric
+    formula: "=STDEVA(1,3)"
+
+  - id: stdeva_single_value_is_div0
+    formula: "=STDEVA(5)"
+
+  # -- STDEVPA (population sd, *A coercion) ---------------------------------
+  - id: stdevpa_numeric_only_matches_stdev_p
+    formula: "=STDEVPA(1,2,3,4,5)"
+
+  - id: stdevpa_two_numeric
+    formula: "=STDEVPA(1,3)"
+
+  - id: stdevpa_single_value_is_zero
+    formula: "=STDEVPA(5)"
+
+  - id: stdevpa_negatives
+    formula: "=STDEVPA(-1,-2,-3)"
+
+  # -- VARA (sample variance, *A coercion) ----------------------------------
+  - id: vara_negatives
+    formula: "=VARA(-1,-2,-3,-4,-5)"
+
+  - id: vara_two_numeric
+    formula: "=VARA(1,3)"
+
+  - id: vara_single_value_is_div0
+    formula: "=VARA(5)"
+
+  # -- VARPA (population variance, *A coercion) -----------------------------
+  - id: varpa_numeric_only_matches_var_p
+    formula: "=VARPA(1,2,3,4,5)"
+
+  - id: varpa_two_numeric
+    formula: "=VARPA(1,3)"
+
+  - id: varpa_single_value_is_zero
+    formula: "=VARPA(5)"
+
+  - id: varpa_negatives
+    formula: "=VARPA(-1,-2,-3)"
+
+  # -- AVERAGEA (-> 0 for text, 1 for TRUE, blank skipped) ------------------
+  - id: averagea_two_numeric
+    formula: "=AVERAGEA(1,3)"
+
+  - id: averagea_negatives
+    formula: "=AVERAGEA(-1,-2,-3)"
+
+  # -- MAXA -----------------------------------------------------------------
+  - id: maxa_numeric_only_matches_max
+    formula: "=MAXA(1,2,3,4,5)"
+
+  - id: maxa_negatives_only
+    description: "All-negative range; MAXA returns the largest negative"
+    setup: { A1: -5, A2: -3, A3: -8 }
+    formula: "=MAXA(A1:A3)"
+
+  - id: maxa_false_counts_as_zero
+    description: "FALSE -> 0; 0 beats negative numbers"
+    setup: { A1: -2, A2: false, A3: -3 }
+    formula: "=MAXA(A1:A3)"
+
+  - id: maxa_blank_is_skipped
+    setup: { A1: 1, A3: 5 }
+    formula: "=MAXA(A1:A3)"
+
+  # -- MINA -----------------------------------------------------------------
+  - id: mina_numeric_only_matches_min
+    formula: "=MINA(1,2,3,4,5)"
+
+  - id: mina_positives_only
+    setup: { A1: 5, A2: 3, A3: 8 }
+    formula: "=MINA(A1:A3)"
+
+  - id: mina_true_counts_as_one
+    description: "TRUE -> 1; 1 still > 0.5"
+    setup: { A1: 0.5, A2: true }
+    formula: "=MINA(A1:A2)"
+
+  - id: mina_blank_is_skipped
+    setup: { A1: 1, A3: 5 }
+    formula: "=MINA(A1:A3)"
+
+  # -- MEDIAN ---------------------------------------------------------------
+  - id: median_single_value
+    formula: "=MEDIAN(42)"
+
+  - id: median_negatives
+    formula: "=MEDIAN(-3,-1,-2,-5)"
+
+  # -- MODE / MODE.SNGL -----------------------------------------------------
+  - id: mode_basic
+    description: "MODE returns the lowest mode when ties exist (here 2 and 3 both repeat; 2 wins)"
+    formula: "=MODE(1,2,2,3,3)"
+
+  - id: mode_with_negatives
+    formula: "=MODE(-1,-1,-2,-3)"
+
+  - id: mode_decimals
+    formula: "=MODE(1.5,2.5,2.5,3.5)"
+
+  - id: mode_single_pair
+    formula: "=MODE(1,1,2)"
+
+  - id: mode_sngl_no_duplicate_is_na
+    formula: "=MODE.SNGL(1,2,3)"
+
+  - id: mode_sngl_lowest_when_tied
+    description: "MODE.SNGL returns the lowest value when multiple modes tie"
+    formula: "=MODE.SNGL(1,1,2,2,3)"
+
+  - id: mode_sngl_with_negatives
+    formula: "=MODE.SNGL(-1,-1,-2,-3)"
+
+  - id: mode_sngl_decimals
+    formula: "=MODE.SNGL(1.5,2.5,2.5,3.5)"
+
+  # -- LARGE ----------------------------------------------------------------
+  - id: large_k1_is_max
+    formula: "=LARGE({3;1;4;1;5;9;2;6}, 1)"
+
+  - id: large_k_n_is_min
+    formula: "=LARGE({10;5;30;20}, 4)"
+
+  - id: large_k_zero_is_num
+    formula: "=LARGE({10;5;30;20}, 0)"
+
+  - id: large_k_too_big_is_num
+    formula: "=LARGE({10;5;30;20}, 5)"
+
+  - id: large_with_ties
+    description: "Both k=2 and k=3 of {1;1;2;3} return 1 (ties)"
+    formula: "=LARGE({1;1;2;3}, 3)"
+
+  # -- SMALL ----------------------------------------------------------------
+  - id: small_k1_is_min
+    formula: "=SMALL({3;1;4;1;5;9;2;6}, 1)"
+
+  - id: small_k_n_is_max
+    formula: "=SMALL({10;5;30;20}, 4)"
+
+  - id: small_k_zero_is_num
+    formula: "=SMALL({10;5;30;20}, 0)"
+
+  - id: small_k_too_big_is_num
+    formula: "=SMALL({10;5;30;20}, 5)"
+
+  - id: small_with_ties
+    description: "k=2 with ties: {1;1;2;3} returns 1"
+    formula: "=SMALL({1;1;2;3}, 2)"
+
+  # -- PERCENTILE.INC -------------------------------------------------------
+  - id: percentile_inc_one_is_max
+    formula: "=PERCENTILE.INC({10;20;30}, 1)"
+
+  - id: percentile_inc_interpolated_quarter
+    description: "k=0.25 in {1;2;3;4} -> position 1.75 -> 1.75"
+    formula: "=PERCENTILE.INC({1;2;3;4}, 0.25)"
+
+  - id: percentile_inc_out_of_range_high_is_num
+    formula: "=PERCENTILE.INC({10;20;30}, 1.5)"
+
+  - id: percentile_inc_out_of_range_low_is_num
+    formula: "=PERCENTILE.INC({10;20;30}, -0.1)"
+
+  # -- QUARTILE.INC ---------------------------------------------------------
+  - id: quartile_inc_q0_is_min
+    formula: "=QUARTILE.INC({1;2;3;4;5}, 0)"
+
+  - id: quartile_inc_q2_is_median
+    formula: "=QUARTILE.INC({1;2;3;4;5}, 2)"
+
+  - id: quartile_inc_q4_is_max
+    formula: "=QUARTILE.INC({1;2;3;4;5}, 4)"
+
+  - id: quartile_inc_q_out_of_range_is_num
+    formula: "=QUARTILE.INC({1;2;3;4;5}, 5)"
+
+  # -- PERCENTRANK (legacy) -------------------------------------------------
+  - id: percentrank_at_min
+    formula: "=PERCENTRANK({10;20;30}, 10)"
+
+  - id: percentrank_at_max
+    formula: "=PERCENTRANK({10;20;30}, 30)"
+
+  - id: percentrank_interpolated
+    formula: "=PERCENTRANK({1;2;4}, 3)"
+
+  - id: percentrank_out_of_range_is_na
+    formula: "=PERCENTRANK({1;2;3}, 4)"
+
+  # -- RANK -----------------------------------------------------------------
+  - id: rank_single_element_array
+    setup: { A1: 42 }
+    formula: "=RANK(42, A1:A1, 0)"
+
+  # -- RANK.EQ --------------------------------------------------------------
+  - id: rank_eq_descending_basic
+    setup: { A1: 30, A2: 20, A3: 10 }
+    formula: "=RANK.EQ(20, A1:A3, 0)"
+
+  - id: rank_eq_ascending_basic
+    setup: { A1: 30, A2: 20, A3: 10 }
+    formula: "=RANK.EQ(20, A1:A3, 1)"
+
+  - id: rank_eq_not_present_is_na
+    setup: { A1: 30, A2: 20, A3: 10 }
+    formula: "=RANK.EQ(15, A1:A3, 0)"
+
+  - id: rank_eq_ties_share_highest
+    setup: { A1: 30, A2: 20, A3: 20, A4: 20, A5: 10 }
+    formula: "=RANK.EQ(20, A1:A5, 0)"
+
+  # -- RANK.AVG -------------------------------------------------------------
+  - id: rank_avg_descending_basic
+    setup: { A1: 30, A2: 20, A3: 10 }
+    formula: "=RANK.AVG(20, A1:A3, 0)"
+
+  - id: rank_avg_ascending_basic
+    setup: { A1: 30, A2: 20, A3: 10 }
+    formula: "=RANK.AVG(20, A1:A3, 1)"
+
+  - id: rank_avg_not_present_is_na
+    setup: { A1: 30, A2: 20, A3: 10 }
+    formula: "=RANK.AVG(15, A1:A3, 0)"
+
+  # -- GEOMEAN --------------------------------------------------------------
+  - id: geomean_single_value
+    formula: "=GEOMEAN(7)"
+
+  # -- HARMEAN --------------------------------------------------------------
+  - id: harmean_single_value
+    formula: "=HARMEAN(7)"
+
+  - id: harmean_zero_is_num
+    formula: "=HARMEAN(1,0,3)"
+
+  # -- AVEDEV ---------------------------------------------------------------
+  - id: avedev_single_value_is_zero
+    formula: "=AVEDEV(42)"
+
+  - id: avedev_negatives
+    formula: "=AVEDEV(-2,-1,0,1,2)"
+
+  - id: avedev_two_value
+    formula: "=AVEDEV(1,3)"
+
+  # -- DEVSQ ----------------------------------------------------------------
+  - id: devsq_two_value
+    description: "{1, 3}: mean=2, SS = 1 + 1 = 2"
+    formula: "=DEVSQ(1,3)"
+
+  - id: devsq_negatives
+    description: "{-2,-1,0,1,2}: mean=0, SS = 4+1+0+1+4 = 10"
+    formula: "=DEVSQ(-2,-1,0,1,2)"
+
+  - id: devsq_range
+    setup: { A1: 2, A2: 4, A3: 6 }
+    formula: "=DEVSQ(A1:A3)"
+
+  # -- TRIMMEAN -------------------------------------------------------------
+  - id: trimmean_small_percent_no_trim
+    description: "n=10, percent=0.05 -> 0 trim each side -> mean of all 10 = 5.5"
+    formula: "=TRIMMEAN({1;2;3;4;5;6;7;8;9;10}, 0.05)"
+
+  # -- SKEW -----------------------------------------------------------------
+  - id: skew_negative_skew
+    description: "Left-skewed data yields negative SKEW"
+    formula: "=SKEW(1,9,9,9,10)"
+
+  - id: skew_constant_is_div0
+    description: "Zero spread: variance is 0 so SKEW is undefined -> #DIV/0!"
+    formula: "=SKEW(3,3,3,3)"
+
+  # -- SKEW.P ---------------------------------------------------------------
+  - id: skewp_positive_skew
+    formula: "=SKEW.P(1,1,1,2,10)"
+
+  - id: skewp_negative_skew
+    formula: "=SKEW.P(1,9,9,9,10)"
+
+  - id: skewp_too_few_is_div0
+    description: "SKEW.P requires n>=3"
+    formula: "=SKEW.P(1,2)"
+
+  # -- KURT -----------------------------------------------------------------
+  - id: kurt_constant_is_div0
+    formula: "=KURT(3,3,3,3)"
+
+  - id: kurt_six_values
+    formula: "=KURT(1,2,3,4,5,6)"
+
+  - id: kurt_negatives
+    formula: "=KURT(-2,-1,0,1,2)"
+
+  # -- STANDARDIZE ----------------------------------------------------------
+  - id: standardize_negative_z
+    description: "z = (38 - 40) / 1.5 -> -1.333..."
+    formula: "=STANDARDIZE(38, 40, 1.5)"
+
+  - id: standardize_zero_z
+    description: "value == mean -> z=0"
+    formula: "=STANDARDIZE(40, 40, 1.5)"
+
+  # -- STEYX ----------------------------------------------------------------
+  - id: steyx_three_points
+    description: "Minimal n=3 sample; non-zero residual"
+    formula: "=STEYX({2;3;5},{1;2;3})"
