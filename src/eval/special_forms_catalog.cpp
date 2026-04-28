@@ -10,12 +10,11 @@ namespace eval {
 
 const char* const* parser_special_form_names() {
   // Nullptr-terminated so callers can walk the array without a separate
-  // length accessor. `LET` is intercepted by `parser::Parser` and lowered
-  // to `NodeKind::Let`; it never reaches the `FunctionRegistry` or the
-  // tree walker's `kLazyDispatch` table. Add future parser-only forms
-  // (e.g. `LAMBDA`) here so the drift-detection pipeline picks them up
-  // automatically.
-  static constexpr const char* kNames[] = {"LET", nullptr};
+  // length accessor. `LET` and `LAMBDA` are both lowered by the parser to
+  // dedicated AST shapes (`NodeKind::LetBinding` and `NodeKind::Lambda` /
+  // `NodeKind::LambdaCall`); neither name reaches the `FunctionRegistry`
+  // or the tree walker's `kLazyDispatch` table.
+  static constexpr const char* kNames[] = {"LET", "LAMBDA", nullptr};
   return kNames;
 }
 

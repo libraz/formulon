@@ -24,6 +24,7 @@
 #include "eval/function_registry.h"
 #include "eval/hypothesis_lazy.h"
 #include "eval/info_lazy.h"
+#include "eval/lambda_value.h"
 #include "eval/lazy_impls.h"
 #include "eval/linest_lazy.h"
 #include "eval/lookups/classic.h"
@@ -1362,14 +1363,84 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       return eval_node(node.as_let_body(), arena, registry, body_ctx);
     }
 
-    // -- Unsupported: closures / external names ---------------------------
+    // -- Unsupported: external names --------------------------------------
     case parser::NodeKind::ExternalRef:
     case parser::NodeKind::StructuredRef:
-    case parser::NodeKind::LambdaCall:
-    case parser::NodeKind::Lambda:
-      // LAMBDA requires closure capture which is not yet modelled by the
-      // scalar `Value` variant; defer to follow-up work.
       return Value::error(ErrorCode::Name);
+
+    case parser::NodeKind::Lambda: {
+      // Build a runtime closure capturing the current name environment so a
+      // body using outer LET-bound names (e.g. `LET(y, 100, LAMBDA(x, x+y))`)
+      // sees `y` at call time even though the LET frame has gone out of
+      // lexical scope. Param string_views are re-copied into the eval arena
+      // even though the parser-arena view they reference also outlives the
+      // value: the copy keeps the lifetime story uniform with the rest of
+      // the LambdaValue payload.
+      auto* lv = arena.create<LambdaValue>();
+      if (lv == nullptr) {
+        return Value::error(ErrorCode::Num);
+      }
+      const std::uint32_t n = node.as_lambda_param_count();
+      std::string_view* params = nullptr;
+      if (n > 0) {
+        params = arena.create_array<std::string_view>(n);
+        if (params == nullptr) {
+          return Value::error(ErrorCode::Num);
+        }
+        for (std::uint32_t i = 0; i < n; ++i) {
+          params[i] = node.as_lambda_param(i);
+        }
+      }
+      lv->params = params;
+      lv->param_count = n;
+      lv->body = &node.as_lambda_body();
+      lv->captured_env = ctx.name_env();
+      return Value::lambda(lv);
+    }
+
+    case parser::NodeKind::LambdaCall: {
+      // Evaluate the callee expression. Excel rejects calling a non-lambda
+      // with #VALUE! (e.g. `(1+2)(3)` — when the parser admits the form).
+      const Value callee = eval_node(node.as_lambda_call_callee(), arena, registry, ctx);
+      if (callee.is_error()) {
+        return callee;
+      }
+      if (!callee.is_lambda()) {
+        return Value::error(ErrorCode::Value);
+      }
+      const LambdaValue* lv = callee.as_lambda();
+
+      // Strict arity match: Excel surfaces #VALUE! when call arity differs
+      // from the declared param count (no defaulting, no variadics).
+      const std::uint32_t arity = node.as_lambda_call_arity();
+      if (arity != lv->param_count) {
+        return Value::error(ErrorCode::Value);
+      }
+
+      // Eager argument evaluation in the *caller's* scope, then bind each
+      // result to the parameter name in a new env layer rooted at the
+      // lambda's captured env. NameEnv frames are arena-allocated and
+      // singly-linked; we extend in declaration order so a later parameter
+      // shadows an earlier one with the same name.
+      NameEnv env;
+      if (lv->captured_env != nullptr) {
+        env = *lv->captured_env;
+      }
+      for (std::uint32_t i = 0; i < arity; ++i) {
+        const Value arg = eval_node(node.as_lambda_call_arg(i), arena, registry, ctx);
+        // Errors in argument evaluation propagate immediately. ISOMITTED
+        // would change this once it lands (currently a service stub), but
+        // the eager-evaluation contract here matches Excel for every
+        // non-omitted argument case.
+        if (arg.is_error()) {
+          return arg;
+        }
+        env = env.extend(lv->params[i], arg, arena);
+      }
+
+      const EvalContext body_ctx = ctx.with_name_env(&env);
+      return eval_node(*lv->body, arena, registry, body_ctx);
+    }
 
     case parser::NodeKind::IntersectOp: {
       // Excel's space-as-intersection operator: `A1:C3 B2:D4` -> the
@@ -1436,6 +1507,17 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
 
 Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
   Value v = eval_node(node, arena, registry, ctx);
+  // Excel surfaces a non-IIFE LAMBDA expression sitting at the top of a cell
+  // formula as `#CALC!`: `=LAMBDA(x, x+1)` is a closure value with no
+  // application site, so the cell renderer cannot project it onto a scalar.
+  // The internal evaluator still produces (and consumes) Lambda values
+  // happily — IIFE and LET-bound dispatch both rely on them — so we only
+  // gate this surface contract at the top-level `evaluate()` boundary.
+  // Sub-expression Lambdas (a callee subtree, a LET initialiser) do not
+  // pass through here.
+  if (v.is_lambda()) {
+    return Value::error(ErrorCode::Calc);
+  }
   // Mac Excel 365 displays a blank-cell-resolved formula result as 0 in
   // numeric column rendering, and the oracle pipeline reads it back as
   // number(0.0). We mirror that here so plain `=A1` (A1 blank) and other

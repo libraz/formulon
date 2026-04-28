@@ -5,13 +5,13 @@
 // backup/plans/02-calc-engine.md §2.1 for the authoritative specification.
 //
 // The current scope of this header covers the scalar variants `Blank`,
-// `Number`, `Bool`, `Error`, and `Text`, plus `Array`, which is implemented
-// as a non-owning pointer to an arena-backed `ArrayValue` (same lifetime
-// contract as the `Text` `string_view`: callers must keep the arena alive
-// for as long as any `Value::Array` references it). The `Ref` and `Lambda`
-// variants still reserve slots in `ValueKind` but do not yet have factories
-// or accessors: those will follow once their backing types exist (cell
-// reference representation, LAMBDA closures).
+// `Number`, `Bool`, `Error`, and `Text`, plus `Array` (non-owning pointer
+// to an arena-backed `ArrayValue`) and `Lambda` (non-owning pointer to an
+// arena-backed `eval::LambdaValue`). All pointer-shaped variants share the
+// `Text` lifetime contract: callers must keep the arena alive for as long
+// as any `Value` references it. The `Ref` variant still reserves a slot in
+// `ValueKind` but has no factory yet — that follows once the cell reference
+// representation lands.
 //
 // `Value` is intentionally trivially copyable so it can be passed freely
 // through the evaluator's value stack without heap allocation. The `Array`
@@ -27,6 +27,10 @@
 #include <type_traits>
 
 namespace formulon {
+
+namespace eval {
+struct LambdaValue;
+}  // namespace eval
 
 struct ArrayValue;
 
@@ -181,19 +185,21 @@ constexpr const char* display_name(ErrorCode e) noexcept {
 /// Scalar `Value` atom of the Formulon calc engine.
 ///
 /// The scalar variants (`Blank`, `Number`, `Bool`, `Error`, `Text`) carry
-/// factories, as does `Array` (whose payload is a non-owning pointer to an
-/// arena-backed `ArrayValue`). The kind queries for `Ref`/`Lambda` exist but
-/// always return false until those variants are implemented. All factories
-/// are `noexcept` and never allocate. The `Text` and `Array` payloads are
-/// non-owning views into arena storage: the caller is responsible for
-/// keeping the underlying storage alive for at least the lifetime of the
-/// `Value`.
+/// factories, as do `Array` (payload: non-owning pointer to an arena-backed
+/// `ArrayValue`) and `Lambda` (payload: non-owning pointer to an
+/// arena-backed `eval::LambdaValue`). The kind query for `Ref` exists but
+/// always returns false until that variant is implemented. All factories
+/// are `noexcept` and never allocate. The `Text`, `Array`, and `Lambda`
+/// payloads are non-owning views into arena storage: the caller is
+/// responsible for keeping the underlying storage alive for at least the
+/// lifetime of the `Value`.
 ///
 /// Accessors (`as_number()`, `as_boolean()`, `as_error()`, `as_text()`,
 /// `as_array()` / `as_array_rows()` / `as_array_cols()` /
-/// `as_array_cells()`) are precondition-checked: invoking one on a
-/// mismatched kind aborts the process via `FM_CHECK`. Callers must gate
-/// access with the corresponding `is_*()` query, or branch on `kind()`.
+/// `as_array_cells()`, `as_lambda()`) are precondition-checked: invoking
+/// one on a mismatched kind aborts the process via `FM_CHECK`. Callers
+/// must gate access with the corresponding `is_*()` query, or branch on
+/// `kind()`.
 class Value {
  public:
   /// Builds a `Blank` value. This is the zero-state used by empty cells.
@@ -248,6 +254,18 @@ class Value {
     return out;
   }
 
+  /// Builds a `Lambda` value referencing the closure `lv`. The caller owns
+  /// the arena-backed `LambdaValue` (which itself transitively borrows the
+  /// parameter array, the body AST, and the captured environment) and must
+  /// keep it alive for the lifetime of the returned value, matching the
+  /// `Text` / `Array` lifetime contract.
+  static Value lambda(const eval::LambdaValue* lv) noexcept {
+    Value out;
+    out.kind_ = ValueKind::Lambda;
+    out.data_.lambda = lv;
+    return out;
+  }
+
   /// Returns the discriminator tag for this value.
   ValueKind kind() const noexcept { return kind_; }
 
@@ -289,6 +307,10 @@ class Value {
   /// `kind() != Array`. Indexing: cell `(r, c)` is `cells[r * cols + c]`.
   const Value* as_array_cells() const;
 
+  /// Returns the (non-owning) lambda payload pointer. Aborts if
+  /// `kind() != Lambda`.
+  const eval::LambdaValue* as_lambda() const;
+
   /// Debug-formatting helper, not an Excel display string.
   ///
   /// Examples: `"Blank"`, `"Number(42)"`, `"Bool(true)"`,
@@ -322,6 +344,10 @@ class Value {
     /// Non-owning pointer into arena-allocated `ArrayValue` storage; same
     /// lifetime contract as `text`.
     const ArrayValue* array;
+    /// Non-owning pointer into arena-allocated `eval::LambdaValue` storage;
+    /// same lifetime contract as `text` / `array`. Holds parameter list,
+    /// body AST, and captured `NameEnv` chain for an Excel `LAMBDA` form.
+    const eval::LambdaValue* lambda;
     Payload() noexcept : number(0.0) {}
   };
 
@@ -346,15 +372,16 @@ static_assert(std::is_trivially_destructible_v<ArrayValue>,
 
 // Keeping `Value` trivially copyable means the evaluator can pass values by
 // value through the VM stack and arg packs without moves or allocations.
-// Every variant payload (including the `Array` 8-byte pointer) preserves
-// this property. This invariant must be revisited when `Ref`/`Lambda` land.
+// Every variant payload (including the `Array` and `Lambda` 8-byte pointers)
+// preserves this property. This invariant must be revisited when `Ref`
+// lands.
 static_assert(std::is_trivially_copyable_v<Value>, "Value must be trivially copyable");
 
 // The payload union is driven by the 16-byte `string_view` text member
 // (and will later be driven by a 16-byte `Reference` payload, see
-// backup/plans/02-calc-engine.md §2.1). The `Array` payload is an 8-byte
-// pointer that fits inside the existing budget. With a 1-byte tag and
-// alignment padding the struct lands at 24 bytes on every platform
+// backup/plans/02-calc-engine.md §2.1). The `Array` and `Lambda` payloads
+// are 8-byte pointers that fit inside the existing budget. With a 1-byte
+// tag and alignment padding the struct lands at 24 bytes on every platform
 // Formulon targets.
 static_assert(sizeof(Value) <= 24, "Value must fit within 24 bytes");
 

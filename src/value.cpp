@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include "eval/lambda_value.h"
 #include "utils/expected.h"
 
 namespace formulon {
@@ -49,6 +50,11 @@ std::uint32_t Value::as_array_cols() const {
 const Value* Value::as_array_cells() const {
   FM_CHECK(kind_ == ValueKind::Array, "Value::as_array_cells() on non-Array");
   return data_.array->cells;
+}
+
+const eval::LambdaValue* Value::as_lambda() const {
+  FM_CHECK(kind_ == ValueKind::Lambda, "Value::as_lambda() on non-Lambda");
+  return data_.lambda;
 }
 
 std::string Value::debug_to_string() const {
@@ -95,8 +101,19 @@ std::string Value::debug_to_string() const {
     }
     case ValueKind::Ref:
       return "Ref(<unimplemented>)";
-    case ValueKind::Lambda:
-      return "Lambda(<unimplemented>)";
+    case ValueKind::Lambda: {
+      // Show only the parameter count: the body is an arbitrary AST
+      // sub-tree and the captured environment is unbounded in size, so
+      // neither belongs in a debug-string. The arity is the load-bearing
+      // identifier for closure-shape bugs (arity-mismatch failures, the
+      // capture-vs-call boundary, etc.).
+      std::string out;
+      out.reserve(20);
+      out.append("Lambda(");
+      out.append(std::to_string(data_.lambda != nullptr ? data_.lambda->param_count : 0));
+      out.append(" params)");
+      return out;
+    }
   }
   return "Value(<invalid kind>)";
 }
@@ -139,11 +156,19 @@ bool operator==(const Value& a, const Value& b) noexcept {
       }
       return true;
     }
-    case ValueKind::Ref:
     case ValueKind::Lambda:
-      // Not yet reachable: these kinds have no factory yet, so no
-      // `Value` ever carries them. Treat as equal (same unimplemented
-      // state) to keep `operator==` total.
+      // Lambda equality is identity-only: closures with identical AST,
+      // params, and captured env may still represent distinct expression
+      // sites and Excel's surface contract does not give a meaningful
+      // value-level equality on closures. Pointer equality is total,
+      // cheap, and matches how `==` is consumed today (cache reuse,
+      // memo-table hits) where two values reach the comparator only when
+      // they came from the same allocation site.
+      return a.data_.lambda == b.data_.lambda;
+    case ValueKind::Ref:
+      // Not yet reachable: this kind has no factory yet, so no `Value`
+      // ever carries it. Treat as equal (same unimplemented state) to
+      // keep `operator==` total.
       return true;
   }
   return false;

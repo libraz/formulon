@@ -6,7 +6,7 @@
 // recognises during parsing (the parser carves it out of the ordinary
 // `Call` node path and lowers it to a dedicated AST shape) and therefore
 // never reaches the `FunctionRegistry` or the tree walker's `kLazyDispatch`
-// table. Today that is just `LET`; once `LAMBDA` lands it joins the list.
+// table. The list currently contains `LET` and `LAMBDA`.
 //
 // The drift-detection machinery (`tests/unit/registry_catalog_test.cpp`
 // and `tools/catalog/status.py`) enumerates these names alongside the
@@ -21,8 +21,8 @@ namespace eval {
 
 /// Returns a nullptr-terminated static array of canonical UPPERCASE names
 /// for forms that are recognised by the parser but NOT registered via
-/// `FunctionRegistry` and NOT routed through `kLazyDispatch`. Today: `LET`.
-/// Future: `LAMBDA`.
+/// `FunctionRegistry` and NOT routed through `kLazyDispatch`: `LET` and
+/// `LAMBDA`.
 ///
 /// The returned array has program lifetime and must not be freed.
 const char* const* parser_special_form_names();
