@@ -2627,3 +2627,218 @@ groups:
       - name: "initial power n>0: SERIESSUM(3,2,1,{1;1}) = 9 + 27 = 36"
         probe: '=SERIESSUM(3, 2, 1, {1;1})'
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # Logical / control-flow family. Cases live in
+  # `tests/oracle/cases/logical.yaml`; semantics are realised by
+  # `src/eval/special_forms_lazy.cpp`, `src/eval/builtins/logical.cpp`,
+  # and the operator evaluator in `src/eval/tree_walker.cpp`.
+  # -------------------------------------------------------------------------
+  - function: "TRUE"
+    aspect: "boolean literal callable and coercion contexts"
+    behaviors:
+      - name: "standalone literal call evaluates to bool TRUE"
+        probe: '=TRUE()'
+        expected: impl
+      - name: "arithmetic coercion: TRUE() + 0 -> 1"
+        probe: '=TRUE()+0'
+        expected: impl
+      - name: "drives IF condition to true-branch"
+        probe: '=IF(TRUE(),1,0)'
+        expected: impl
+      - name: "equality vs. number 1: bool != number even when coerced"
+        probe: '=TRUE()=1'
+        expected: impl
+      - name: "multiplicative coercion: TRUE() * 5 -> 5"
+        probe: '=TRUE()*5'
+        expected: impl
+
+  - function: "FALSE"
+    aspect: "boolean literal callable and coercion contexts"
+    behaviors:
+      - name: "standalone literal call evaluates to bool FALSE"
+        probe: '=FALSE()'
+        expected: impl
+      - name: "arithmetic coercion: FALSE() + 1 -> 1"
+        probe: '=FALSE()+1'
+        expected: impl
+      - name: "drives IF condition to false-branch"
+        probe: '=IF(FALSE(),1,0)'
+        expected: impl
+      - name: "equality vs. number 0: bool != number even when coerced"
+        probe: '=FALSE()=0'
+        expected: impl
+      - name: "multiplicative coercion: FALSE() * 5 -> 0"
+        probe: '=FALSE()*5'
+        expected: impl
+
+  - function: "NOT"
+    aspect: "logical negation with numeric coercion and error propagation"
+    behaviors:
+      - name: "negates bool TRUE -> FALSE"
+        probe: '=NOT(TRUE)'
+        expected: impl
+      - name: "negates bool FALSE -> TRUE"
+        probe: '=NOT(FALSE)'
+        expected: impl
+      - name: "non-zero number coerces to TRUE: NOT(1) -> FALSE"
+        probe: '=NOT(1)'
+        expected: impl
+      - name: "zero coerces to FALSE: NOT(0) -> TRUE"
+        probe: '=NOT(0)'
+        expected: impl
+      - name: "error in argument propagates through NOT"
+        probe: '=NOT(1/0)'
+        expected: impl
+
+  - function: "AND"
+    aspect: "logical conjunction over scalars and ranges"
+    behaviors:
+      - name: "all-true scalar args -> TRUE"
+        probe: '=AND(TRUE,TRUE,TRUE)'
+        expected: impl
+      - name: "any FALSE arg -> FALSE"
+        probe: '=AND(TRUE,FALSE,TRUE)'
+        expected: impl
+      - name: "non-zero numbers coerce to TRUE: AND(1,2,3) -> TRUE"
+        probe: '=AND(1,2,3)'
+        expected: impl
+      - name: "zero number coerces to FALSE inside AND"
+        probe: '=AND(1,0,1)'
+        expected: impl
+      - name: "range source: AND skips text cells without #VALUE!"
+        probe: '=AND(A1:A3)'
+        expected: impl
+
+  - function: "OR"
+    aspect: "logical disjunction over scalars and ranges"
+    behaviors:
+      - name: "all-false scalar args -> FALSE"
+        probe: '=OR(FALSE,FALSE,FALSE)'
+        expected: impl
+      - name: "any TRUE arg -> TRUE"
+        probe: '=OR(FALSE,TRUE,FALSE)'
+        expected: impl
+      - name: "any non-zero number coerces to TRUE"
+        probe: '=OR(0,0,1)'
+        expected: impl
+      - name: "all-zero numbers -> FALSE"
+        probe: '=OR(0,0,0)'
+        expected: impl
+      - name: "range source delivers element-wise OR"
+        probe: '=OR(A1:A3)'
+        expected: impl
+
+  - function: "XOR"
+    aspect: "parity (odd-count-of-TRUE) over bool / number args"
+    behaviors:
+      - name: "two TRUEs (even count) -> FALSE"
+        probe: '=XOR(TRUE,TRUE)'
+        expected: impl
+      - name: "two FALSEs -> FALSE"
+        probe: '=XOR(FALSE,FALSE)'
+        expected: impl
+      - name: "three TRUEs (odd count) -> TRUE"
+        probe: '=XOR(TRUE,TRUE,TRUE)'
+        expected: impl
+      - name: "numeric coercion: XOR(1,0) -> TRUE"
+        probe: '=XOR(1,0)'
+        expected: impl
+      - name: "single TRUE argument -> TRUE"
+        probe: '=XOR(TRUE)'
+        expected: impl
+
+  - function: "IF"
+    aspect: "conditional with lazy branch evaluation"
+    behaviors:
+      - name: "scalar TRUE selects value_if_true"
+        probe: '=IF(TRUE,"yes","no")'
+        expected: impl
+      - name: "non-zero number coerces condition to TRUE"
+        probe: '=IF(5,"yes","no")'
+        expected: impl
+      - name: "nested IF as value_if_false branch"
+        probe: '=IF(A1>10,"big",IF(A1>5,"mid","small"))'
+        expected: impl
+      - name: "lazy: untaken false-branch error is suppressed"
+        probe: '=IF(TRUE,1,1/0)'
+        expected: impl
+      - name: "omitted value_if_false defaults to bool FALSE"
+        probe: '=IF(FALSE,"yes")'
+        expected: impl
+
+  - function: "IFERROR"
+    aspect: "catch-any-error wrapper with passthrough on success"
+    behaviors:
+      - name: "non-error value passes through unchanged"
+        probe: '=IFERROR(10,"fallback")'
+        expected: impl
+      - name: "catches #DIV/0! and returns fallback"
+        probe: '=IFERROR(1/0,"fallback")'
+        expected: impl
+      - name: "catches #N/A and returns fallback"
+        probe: '=IFERROR(NA(),"fallback")'
+        expected: impl
+      - name: "catches #VALUE! from text+number coercion"
+        probe: '=IFERROR("x"+1,"fallback")'
+        expected: impl
+      - name: "plain text value passes through unchanged"
+        probe: '=IFERROR("plain","fallback")'
+        expected: impl
+
+  - function: "IFNA"
+    aspect: "selective #N/A catcher; other errors propagate"
+    behaviors:
+      - name: "non-error value passes through unchanged"
+        probe: '=IFNA(10,"fallback")'
+        expected: impl
+      - name: "catches #N/A and returns fallback"
+        probe: '=IFNA(NA(),"fallback")'
+        expected: impl
+      - name: "does NOT catch #DIV/0!: error propagates"
+        probe: '=IFNA(1/0,"fallback")'
+        expected: impl
+      - name: "plain text value passes through unchanged"
+        probe: '=IFNA("plain","fallback")'
+        expected: impl
+      - name: "catches the #N/A produced by a missing VLOOKUP key"
+        probe: '=IFNA(VLOOKUP("z",A1:B2,2,FALSE),"missing")'
+        expected: impl
+
+  - function: "IFS"
+    aspect: "first-true-wins multi-branch with no default"
+    behaviors:
+      - name: "first TRUE condition wins"
+        probe: '=IFS(TRUE,1,TRUE,2)'
+        expected: impl
+      - name: "skips earlier FALSE conditions"
+        probe: '=IFS(FALSE,1,TRUE,2)'
+        expected: impl
+      - name: "no TRUE condition -> #N/A"
+        probe: '=IFS(FALSE,1,FALSE,2)'
+        expected: impl
+      - name: "error in evaluated condition short-circuits to error"
+        probe: '=IFS(1/0,"div",TRUE,"ok")'
+        expected: impl
+      - name: "untaken value subtree is not evaluated (lazy)"
+        probe: '=IFS(TRUE,"ok",FALSE,1/0)'
+        expected: impl
+
+  - function: "SWITCH"
+    aspect: "expression-vs-cases dispatch with optional default"
+    behaviors:
+      - name: "first matching case wins"
+        probe: '=SWITCH(1,1,"one",2,"two")'
+        expected: impl
+      - name: "second case match returns its result"
+        probe: '=SWITCH(2,1,"one",2,"two")'
+        expected: impl
+      - name: "no match without default returns #N/A"
+        probe: '=SWITCH(3,1,"one",2,"two")'
+        expected: impl
+      - name: "trailing unpaired argument acts as default"
+        probe: '=SWITCH(3,1,"one",2,"two","other")'
+        expected: impl
+      - name: "text expression with case-insensitive comparison"
+        probe: '=SWITCH("A","a","hit","miss")'
+        expected: impl

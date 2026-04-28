@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-23T02:59:59Z"
+    "generated_at": "2026-04-28T20:39:01Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -23,12 +23,84 @@
       }
     },
     {
+      "id": "true_in_arithmetic",
+      "formula": "=TRUE()+0",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "true_in_if_condition",
+      "formula": "=IF(TRUE(),1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "true_compares_to_one",
+      "formula": "=TRUE()=1",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "true_multiplied_by_five",
+      "formula": "=TRUE()*5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
       "id": "false_literal",
       "formula": "=FALSE()",
       "setup": {},
       "expect": {
         "kind": "bool",
         "value": false
+      }
+    },
+    {
+      "id": "false_in_arithmetic",
+      "formula": "=FALSE()+1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "false_in_if_condition",
+      "formula": "=IF(FALSE(),1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "false_compares_to_zero",
+      "formula": "=FALSE()=0",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "false_multiplied_by_five",
+      "formula": "=FALSE()*5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
       }
     },
     {
@@ -65,6 +137,15 @@
       "expect": {
         "kind": "bool",
         "value": true
+      }
+    },
+    {
+      "id": "not_propagates_error",
+      "formula": "=NOT(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
       }
     },
     {
@@ -237,6 +318,51 @@
       }
     },
     {
+      "id": "xor_two_true_is_false",
+      "formula": "=XOR(TRUE,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "xor_two_false_is_false",
+      "formula": "=XOR(FALSE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "xor_three_true_is_true",
+      "formula": "=XOR(TRUE,TRUE,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "xor_numeric_coerce",
+      "formula": "=XOR(1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "xor_single_true_arg",
+      "formula": "=XOR(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
       "id": "if_true_branch",
       "formula": "=IF(TRUE,\"yes\",\"no\")",
       "setup": {},
@@ -364,6 +490,15 @@
       }
     },
     {
+      "id": "iferror_passes_through_text",
+      "formula": "=IFERROR(\"plain\",\"fallback\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "plain"
+      }
+    },
+    {
       "id": "ifna_passes_through",
       "formula": "=IFNA(10,\"fallback\")",
       "setup": {},
@@ -388,6 +523,41 @@
       "expect": {
         "kind": "error",
         "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ifna_passes_through_text",
+      "formula": "=IFNA(\"plain\",\"fallback\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "plain"
+      }
+    },
+    {
+      "id": "ifna_catches_vlookup_na",
+      "formula": "=IFNA(VLOOKUP(\"z\",A1:B2,2,FALSE),\"missing\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "missing"
       }
     },
     {

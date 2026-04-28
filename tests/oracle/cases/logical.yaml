@@ -7,8 +7,40 @@ cases:
   - id: true_literal
     formula: "=TRUE()"
 
+  - id: true_in_arithmetic
+    description: "TRUE() coerces to 1 in arithmetic context"
+    formula: "=TRUE()+0"
+
+  - id: true_in_if_condition
+    description: "TRUE() drives IF to the true-branch"
+    formula: "=IF(TRUE(),1,0)"
+
+  - id: true_compares_to_one
+    description: "TRUE() = 1 returns FALSE in Excel: bool != number even when coerced"
+    formula: "=TRUE()=1"
+
+  - id: true_multiplied_by_five
+    description: "TRUE coerces to 1 in multiplication -> 5"
+    formula: "=TRUE()*5"
+
   - id: false_literal
     formula: "=FALSE()"
+
+  - id: false_in_arithmetic
+    description: "FALSE() coerces to 0 in arithmetic context"
+    formula: "=FALSE()+1"
+
+  - id: false_in_if_condition
+    description: "FALSE() drives IF to the false-branch"
+    formula: "=IF(FALSE(),1,0)"
+
+  - id: false_compares_to_zero
+    description: "FALSE() = 0 returns FALSE: bool != number even when coerced"
+    formula: "=FALSE()=0"
+
+  - id: false_multiplied_by_five
+    description: "FALSE coerces to 0 in multiplication -> 0"
+    formula: "=FALSE()*5"
 
   # -- NOT -----------------------------------------------------------------
   - id: not_of_true
@@ -23,6 +55,10 @@ cases:
 
   - id: not_of_zero_is_true
     formula: "=NOT(0)"
+
+  - id: not_propagates_error
+    description: "Error propagates through NOT (no special catch)"
+    formula: "=NOT(1/0)"
 
   # -- AND -----------------------------------------------------------------
   - id: and_all_true
@@ -87,6 +123,10 @@ cases:
     description: "Numbers coerce to bool: 1 TRUE, 0 FALSE -> XOR(TRUE,FALSE)"
     formula: "=XOR(1,0)"
 
+  - id: xor_single_true_arg
+    description: "Single TRUE argument -> TRUE (parity of 1 is odd)"
+    formula: "=XOR(TRUE)"
+
   # -- IF ------------------------------------------------------------------
   - id: if_true_branch
     formula: "=IF(TRUE,\"yes\",\"no\")"
@@ -133,6 +173,10 @@ cases:
   - id: iferror_catches_value
     formula: "=IFERROR(\"x\"+1,\"fallback\")"
 
+  - id: iferror_passes_through_text
+    description: "Plain text passes through IFERROR unchanged"
+    formula: "=IFERROR(\"plain\",\"fallback\")"
+
   # -- IFNA ----------------------------------------------------------------
   - id: ifna_passes_through
     formula: "=IFNA(10,\"fallback\")"
@@ -143,6 +187,15 @@ cases:
   - id: ifna_does_not_catch_div0
     description: "IFNA only catches #N/A, not other errors"
     formula: "=IFNA(1/0,\"fallback\")"
+
+  - id: ifna_passes_through_text
+    description: "Plain text passes through IFNA unchanged"
+    formula: "=IFNA(\"plain\",\"fallback\")"
+
+  - id: ifna_catches_vlookup_na
+    description: "IFNA catches the #N/A produced by a missing VLOOKUP key"
+    setup: { A1: "x", B1: 1, A2: "y", B2: 2 }
+    formula: "=IFNA(VLOOKUP(\"z\",A1:B2,2,FALSE),\"missing\")"
 
   # -- IFS -----------------------------------------------------------------
   - id: ifs_first_true_wins

@@ -53,6 +53,16 @@ families:
     min_perspectives_per_member: 6
     cluster_reason: "Shared input fixtures; cross-function ordering / stability semantics."
 
+  # -- Logical control flow --------------------------------------------------
+  # All eleven members live in tests/oracle/cases/logical.yaml; the explicit
+  # family entry routes IFS through logical.yaml instead of the unrelated
+  # ifs.yaml suite (which holds COUNTIFS / SUMIFS probes).
+  - name: logical
+    members: [TRUE, FALSE, AND, OR, NOT, XOR, IF, IFS, IFERROR, IFNA, SWITCH]
+    category_file: tests/oracle/cases/logical.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Boolean primitives plus conditional dispatchers; share the same logical.yaml fixtures and bool-coercion edges."
+
   # -- Matrix ----------------------------------------------------------------
   - name: matrix
     members: [MMULT, MDETERM, MINVERSE]
