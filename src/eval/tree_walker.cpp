@@ -38,6 +38,7 @@
 #include "eval/range_args.h"
 #include "eval/rank_lazy.h"
 #include "eval/reference_lazy.h"
+#include "eval/regex_lazy.h"
 #include "eval/regression_lazy.h"
 #include "eval/scalar_ops.h"
 #include "eval/series_sum_lazy.h"
@@ -118,6 +119,7 @@ namespace {
 //   PERCENTRANK.EXC                            -> src/eval/rank_lazy.cpp
 //   PERCENTOF                                  -> src/eval/builtins/aggregate.cpp
 //   AGGREGATE                                  -> src/eval/aggregate_lazy.cpp
+//   REGEXTEST / REGEXEXTRACT / REGEXREPLACE    -> src/eval/regex_lazy.cpp
 // Each family publishes its externs via its own header
 // (`eval/special_forms_lazy.h`, `eval/conditional_aggregates.h`,
 // `eval/lookups/classic.h`, `eval/lookups/xlookup.h`,
@@ -236,6 +238,9 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"RANK.AVG", &eval_rank_avg_lazy},
     {"RANK.EQ", &eval_rank_eq_lazy},
     {"REDUCE", &eval_reduce_lazy},
+    {"REGEXEXTRACT", &eval_regexextract_lazy},
+    {"REGEXREPLACE", &eval_regexreplace_lazy},
+    {"REGEXTEST", &eval_regextest_lazy},
     {"ROW", &eval_row_lazy},
     {"ROWS", &eval_rows_lazy},
     {"RSQ", &eval_rsq_lazy},

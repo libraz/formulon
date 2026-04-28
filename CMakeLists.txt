@@ -41,20 +41,36 @@ include(FormulonWarnings)
 # Third-party dependencies (see backup/plans/06-build-packaging.md)
 # ---------------------------------------------------------------------------
 # miniz and pugixml are engine dependencies required by OOXML/XLSB I/O.
+# pcre2 backs the REGEX* function family.
 # When FM_USE_SYSTEM_DEPS=ON we expect system packages; otherwise we vendor
 # via FetchContent (default).
 if(FM_USE_SYSTEM_DEPS)
   find_package(miniz   CONFIG REQUIRED)
   find_package(pugixml CONFIG REQUIRED)
+  find_package(pcre2   CONFIG REQUIRED COMPONENTS 8BIT)
   if(NOT TARGET formulon::miniz AND TARGET miniz::miniz)
     add_library(formulon::miniz ALIAS miniz::miniz)
   endif()
   if(NOT TARGET formulon::pugixml AND TARGET pugixml::pugixml)
     add_library(formulon::pugixml ALIAS pugixml::pugixml)
   endif()
+  # PCRE2 system package exports `PCRE2::8BIT` (preferred) or the legacy
+  # lowercase `pcre2-8` target name; alias whichever is present.
+  if(NOT TARGET formulon::pcre2)
+    if(TARGET PCRE2::8BIT)
+      add_library(formulon::pcre2 ALIAS PCRE2::8BIT)
+    elseif(TARGET pcre2-8-static)
+      add_library(formulon::pcre2 ALIAS pcre2-8-static)
+    elseif(TARGET pcre2-8)
+      add_library(formulon::pcre2 ALIAS pcre2-8)
+    else()
+      message(FATAL_ERROR "FM_USE_SYSTEM_DEPS: pcre2 8-bit target not found")
+    endif()
+  endif()
 else()
   include(cmake/FetchMiniz.cmake)
   include(cmake/FetchPugixml.cmake)
+  include(cmake/FetchPcre2.cmake)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -165,6 +181,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/regression_lazy.cpp
   src/eval/series_sum_lazy.cpp
   src/eval/rank_lazy.cpp
+  src/eval/regex_lazy.cpp
   src/eval/hypothesis_lazy.cpp
   src/eval/info_lazy.cpp
   src/eval/lookups/classic.cpp
@@ -178,13 +195,15 @@ target_include_directories(formulon_core
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
 )
 
-# Engine core depends on miniz (zip/deflate) and pugixml (XML). Link PUBLIC
-# so downstream targets (formulon_static, tests, CLI) inherit include dirs
-# and transitive link requirements.
+# Engine core depends on miniz (zip/deflate), pugixml (XML), and pcre2
+# (REGEX* function family). Link PUBLIC so downstream targets
+# (formulon_static, tests, CLI) inherit include dirs and transitive link
+# requirements.
 target_link_libraries(formulon_core
   PUBLIC
     formulon::miniz
     formulon::pugixml
+    formulon::pcre2
 )
 
 formulon_apply_warnings(formulon_core)
@@ -205,6 +224,7 @@ target_link_libraries(formulon_static
   PUBLIC
     formulon::miniz
     formulon::pugixml
+    formulon::pcre2
 )
 
 # No per-target warning flags: formulon_static only aggregates objects.

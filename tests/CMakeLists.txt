@@ -108,6 +108,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_sumx_test.cpp
   unit/eval/builtins_series_sum_test.cpp
   unit/eval/builtins_rank_test.cpp
+  unit/eval/builtins_regex_test.cpp
   unit/eval/builtins_distributions_ext2_test.cpp
   unit/eval/builtins_math5_test.cpp
   unit/eval/text_ops_test.cpp
