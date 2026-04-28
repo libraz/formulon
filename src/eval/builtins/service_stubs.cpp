@@ -1,6 +1,10 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// Implementation of Formulon's host-service built-in stubs:
+// Implementation of Formulon's host-service and no-infrastructure built-in
+// stubs. Two groups live together because both classes return a deterministic
+// Excel-visible surface in lieu of a feature the engine does not yet provide:
+//
+// Host-service stubs (require an external runtime Formulon does not embed):
 //
 //   * IMAGE           -> fixed #VALUE! (inline image embedding requires a
 //                        rendering host; Formulon is a calc engine).
@@ -17,12 +21,38 @@
 //                        external API; #NAME? matches the offline-service
 //                        surface).
 //
-// All five stubs ride the eager dispatch path (`accepts_ranges = false`,
-// default `propagate_errors = true`) so an error argument short-circuits
-// before the fixed return fires -- this matches the WEBSERVICE / PY
-// stubs in `src/eval/builtins/web.cpp` and keeps the surface consistent
-// with real functions for formulas that propagate errors through
-// service calls.
+// No-infrastructure stubs (the supporting Formulon subsystem isn't built
+// out yet, so any answer the function might give is structurally absent):
+//
+//   * PHONETIC        -> input text passthrough / #N/A on non-text.
+//                        Mac Excel reads the IME-typed kana from the
+//                        OOXML <rPh> annotation block and falls back to
+//                        the surface text when no annotation is present.
+//                        Formulon does not yet parse <rPh> nor surface
+//                        phonetic metadata through `Value`, so every
+//                        cell is "unannotated" by construction and we
+//                        always return the input text. Non-text inputs
+//                        return #N/A to match Mac's strict-text rule.
+//   * GETPIVOTDATA    -> fixed #REF!   (no pivot tables yet, so no
+//                        field/item lookup can ever resolve; #REF!
+//                        matches Mac when the lookup target is invalid).
+//   * ISOMITTED       -> fixed FALSE   (LAMBDA isn't implemented yet, so
+//                        no argument can ever be "the omitted slot of a
+//                        lambda call"; outside a lambda Mac returns
+//                        FALSE because the argument is, by definition,
+//                        present). Registered with
+//                        `propagate_errors = false` so even an error
+//                        argument is reported as "present, not omitted".
+//
+// All host-service stubs and PHONETIC / GETPIVOTDATA ride the eager dispatch
+// path (`accepts_ranges = false`, default `propagate_errors = true`) so an
+// error argument short-circuits before the fixed return fires -- this matches
+// the WEBSERVICE / PY stubs in `src/eval/builtins/web.cpp` and keeps the
+// surface consistent with real functions for formulas that propagate errors
+// through service calls. ISOMITTED is the deliberate exception:
+// `propagate_errors = false`, because its job is to detect the absence of a
+// value and so it must accept any value (including errors) without
+// short-circuiting.
 
 #include "eval/builtins/service_stubs.h"
 
@@ -72,6 +102,54 @@ Value Copilot(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) 
   return Value::error(ErrorCode::Name);
 }
 
+// PHONETIC reads the IME-typed kana from the OOXML <rPh> annotation
+// block on the cell's rich text. Formulon's OOXML reader does not yet
+// surface <rPh> annotations into the `Value` model, so every cell is
+// effectively unannotated. Mac Excel returns the surface text unchanged
+// for unannotated text cells, returns #N/A for non-text references
+// (numbers, bools, dates), and returns the empty string for blanks.
+// We match that surface today; once <rPh> is parsed and threaded
+// through the value model, this stub gets replaced with a real lookup
+// against the annotation table.
+Value Phonetic(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  const Value& v = args[0];
+  if (v.is_text()) {
+    return v;
+  }
+  if (v.is_blank()) {
+    return Value::text(arena.intern(""));
+  }
+  // Number / Bool / Date / Array / Ref / Lambda all surface #N/A on
+  // Mac, matching the strict-text rule. Errors are short-circuited by
+  // the dispatcher (`propagate_errors = true`) and never reach here.
+  return Value::error(ErrorCode::NA);
+}
+
+// GETPIVOTDATA looks up a measure value inside a pivot table by
+// field/item key. Formulon does not yet implement pivot tables, so no
+// lookup can ever resolve, and #REF! is the surface Mac Excel returns
+// when the field/item path doesn't address a valid pivot cell. The
+// dispatcher's eager error propagation means an error in any argument
+// (data field, pivot anchor, field/item slots) short-circuits before
+// this body runs.
+Value GetPivotData(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  return Value::error(ErrorCode::Ref);
+}
+
+// ISOMITTED returns TRUE only when its argument is the omitted slot of
+// a LAMBDA invocation -- the `IF(ISOMITTED(x), default, x)` idiom used
+// inside user-defined LAMBDAs. Formulon does not yet implement LAMBDA,
+// so every ISOMITTED call is, by construction, made outside a lambda
+// and the argument is always present. Mac Excel returns FALSE for the
+// outside-a-lambda case, so we always return FALSE. Critically, this
+// function is registered with `propagate_errors = false`: the whole
+// point of ISOMITTED is to detect the absence of a value, so it must
+// accept any argument shape (including errors) and report "present"
+// (FALSE) rather than short-circuiting on an error input.
+Value IsOmitted(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  return Value::boolean(false);
+}
+
 }  // namespace
 
 void register_service_stub_builtins(FunctionRegistry& registry) {
@@ -87,6 +165,19 @@ void register_service_stub_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"DETECTLANGUAGE", 1u, 1u, &DetectLanguage});
   // COPILOT(prompt, [context...]) -- variadic context cells.
   registry.register_function(FunctionDef{"COPILOT", 1u, 255u, &Copilot});
+  // PHONETIC(reference) -- exact arity 1. Default `propagate_errors = true`
+  // so an error argument short-circuits before the text/non-text branch.
+  registry.register_function(FunctionDef{"PHONETIC", 1u, 1u, &Phonetic});
+  // GETPIVOTDATA(data_field, pivot_table, [field1, item1, ...]) -- min 2
+  // (data_field + pivot anchor required), max kVariadic (field/item pairs
+  // are optional and arbitrary in count). Default `propagate_errors = true`
+  // so an error in any argument surfaces instead of the fixed #REF!.
+  registry.register_function(FunctionDef{"GETPIVOTDATA", 2u, kVariadic, &GetPivotData});
+  // ISOMITTED(argument) -- exact arity 1. Explicitly disable error
+  // propagation so the function can inspect (and report "present" for) any
+  // argument shape, including errors. This mirrors the IS* type-predicate
+  // family in `src/eval/builtins/info.cpp`.
+  registry.register_function(FunctionDef{"ISOMITTED", 1u, 1u, &IsOmitted, /*propagate_errors=*/false});
 }
 
 }  // namespace eval

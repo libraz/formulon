@@ -1,14 +1,19 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// Tests for the service-stub family: IMAGE, RTD, TRANSLATE,
-// DETECTLANGUAGE, COPILOT. Each returns a deterministic Excel-visible
-// error (see `src/eval/builtins/service_stubs.cpp` for the rationale);
-// all five ride the eager dispatch path so an argument error short-
-// circuits before the fixed return fires. The tests here pin:
+// Tests for the service-stub and no-infrastructure stub family:
+// IMAGE, RTD, TRANSLATE, DETECTLANGUAGE, COPILOT, PHONETIC,
+// GETPIVOTDATA, ISOMITTED. Each returns a deterministic Excel-visible
+// surface (see `src/eval/builtins/service_stubs.cpp` for the rationale);
+// all except ISOMITTED ride the eager dispatch path so an argument
+// error short-circuits before the fixed return fires. ISOMITTED is
+// registered with `propagate_errors = false` so it can inspect any
+// argument shape (including errors) and report "present". The tests
+// here pin:
 //
 //   * the nominal registry entries exist (registry look-up succeeds);
-//   * each stub returns its documented fixed error on valid inputs;
-//   * an error argument propagates instead of the stub's nominal error.
+//   * each stub returns its documented fixed surface on valid inputs;
+//   * an error argument propagates instead of the stub's nominal
+//     surface (except for ISOMITTED, where errors must NOT propagate).
 
 #include <string_view>
 
@@ -40,6 +45,21 @@ Value EvalSource(std::string_view src) {
   return evaluate(*root, eval_arena);
 }
 
+// Invokes a registered function impl directly with a single argument.
+// Used for cases that cannot be expressed in formula syntax (notably the
+// Blank scalar, which has no literal form). Mirrors the helper in
+// `tests/unit/eval/builtins_info_test.cpp`.
+Value CallSingle(std::string_view name, const Value& arg) {
+  static thread_local Arena arena;
+  arena.reset();
+  const FunctionDef* def = default_registry().lookup(name);
+  EXPECT_NE(def, nullptr) << "function not registered: " << name;
+  if (def == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return def->impl(&arg, 1u, arena);
+}
+
 // ---------------------------------------------------------------------------
 // Registry pin
 // ---------------------------------------------------------------------------
@@ -51,6 +71,9 @@ TEST(BuiltinsServiceStubRegistry, NamesRegistered) {
   EXPECT_NE(reg.lookup("TRANSLATE"), nullptr);
   EXPECT_NE(reg.lookup("DETECTLANGUAGE"), nullptr);
   EXPECT_NE(reg.lookup("COPILOT"), nullptr);
+  EXPECT_NE(reg.lookup("PHONETIC"), nullptr);
+  EXPECT_NE(reg.lookup("GETPIVOTDATA"), nullptr);
+  EXPECT_NE(reg.lookup("ISOMITTED"), nullptr);
 }
 
 // ---------------------------------------------------------------------------
@@ -141,6 +164,137 @@ TEST(BuiltinsServiceStubCopilot, ArgumentErrorPropagates) {
   const Value v = EvalSource("=COPILOT(\"summarize\", 1/0)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+// ---------------------------------------------------------------------------
+// PHONETIC - input text passthrough / #N/A on non-text
+// ---------------------------------------------------------------------------
+//
+// Mac Excel reads the IME-typed kana from the OOXML <rPh> annotation and
+// falls back to the surface text when no annotation is present. Formulon
+// does not yet parse <rPh>, so every cell is unannotated and we always
+// return the surface text (or #N/A for non-text shapes that Mac rejects).
+
+TEST(BuiltinsServiceStubPhonetic, TextInputReturnsSameText) {
+  const Value v = EvalSource("=PHONETIC(\"hello\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "hello");
+}
+
+TEST(BuiltinsServiceStubPhonetic, EmptyTextInputReturnsEmpty) {
+  const Value v = EvalSource("=PHONETIC(\"\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "");
+}
+
+TEST(BuiltinsServiceStubPhonetic, NumberInputReturnsNA) {
+  const Value v = EvalSource("=PHONETIC(42)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsServiceStubPhonetic, BoolInputReturnsNA) {
+  const Value v = EvalSource("=PHONETIC(TRUE)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsServiceStubPhonetic, BlankInputReturnsEmpty) {
+  // The formula grammar has no Blank literal (and IF(FALSE, "x") yields
+  // boolean FALSE rather than Blank), so invoke the impl directly to
+  // exercise the Blank branch.
+  const Value v = CallSingle("PHONETIC", Value::blank());
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "");
+}
+
+TEST(BuiltinsServiceStubPhonetic, ArgumentErrorPropagates) {
+  const Value v = EvalSource("=PHONETIC(1/0)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+// ---------------------------------------------------------------------------
+// GETPIVOTDATA - #REF!
+// ---------------------------------------------------------------------------
+//
+// Pivot tables aren't implemented yet, so every field/item lookup is
+// unresolvable; #REF! matches Mac's surface for an invalid pivot
+// reference. Errors in any argument propagate.
+
+TEST(BuiltinsServiceStubGetPivotData, TwoArgFormReturnsRef) {
+  const Value v = EvalSource("=GETPIVOTDATA(\"Sales\", \"PivotTable1\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+TEST(BuiltinsServiceStubGetPivotData, FourArgFormReturnsRef) {
+  // One field/item pair after the two required slots.
+  const Value v = EvalSource("=GETPIVOTDATA(\"Sales\", \"PivotTable1\", \"Region\", \"East\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+TEST(BuiltinsServiceStubGetPivotData, FirstArgErrorPropagates) {
+  const Value v = EvalSource("=GETPIVOTDATA(1/0, \"PivotTable1\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+TEST(BuiltinsServiceStubGetPivotData, SecondArgErrorPropagates) {
+  const Value v = EvalSource("=GETPIVOTDATA(\"Sales\", 1/0)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+TEST(BuiltinsServiceStubGetPivotData, FieldItemArgErrorPropagates) {
+  const Value v = EvalSource("=GETPIVOTDATA(\"Sales\", \"PivotTable1\", \"Region\", 1/0)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+// ---------------------------------------------------------------------------
+// ISOMITTED - always FALSE (LAMBDA not yet implemented)
+// ---------------------------------------------------------------------------
+//
+// Without LAMBDA infrastructure, every ISOMITTED call is by construction
+// outside a lambda, so the argument is always "present". Critically, the
+// function is registered with `propagate_errors = false`, so even an
+// error argument must surface as FALSE rather than the propagated error.
+
+TEST(BuiltinsServiceStubIsOmitted, NumberInputReturnsFalse) {
+  const Value v = EvalSource("=ISOMITTED(42)");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_FALSE(v.as_boolean());
+}
+
+TEST(BuiltinsServiceStubIsOmitted, TextInputReturnsFalse) {
+  const Value v = EvalSource("=ISOMITTED(\"hello\")");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_FALSE(v.as_boolean());
+}
+
+TEST(BuiltinsServiceStubIsOmitted, BoolInputReturnsFalse) {
+  const Value v = EvalSource("=ISOMITTED(TRUE)");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_FALSE(v.as_boolean());
+}
+
+TEST(BuiltinsServiceStubIsOmitted, BlankInputReturnsFalse) {
+  // The grammar has no Blank literal, so invoke the impl directly. Even a
+  // Blank argument is "present" from ISOMITTED's perspective outside a
+  // LAMBDA call.
+  const Value v = CallSingle("ISOMITTED", Value::blank());
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_FALSE(v.as_boolean());
+}
+
+TEST(BuiltinsServiceStubIsOmitted, ErrorInputDoesNotPropagate) {
+  // This is the load-bearing test: `propagate_errors = false` must be
+  // honoured. =ISOMITTED(1/0) must return FALSE, NOT #DIV/0!.
+  const Value v = EvalSource("=ISOMITTED(1/0)");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_FALSE(v.as_boolean());
 }
 
 }  // namespace

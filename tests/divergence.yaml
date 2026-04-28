@@ -312,6 +312,32 @@ entries:
     first_noted: 2026-04-26
     last_verified_excel_version: "16.108.1"
 
+  # -- No-infrastructure stubs --------------------------------------------
+  # These functions return a deterministic Excel-visible surface in lieu
+  # of a Formulon subsystem that is not yet built out. The stubs live in
+  # `src/eval/builtins/service_stubs.cpp` next to the host-service stubs
+  # (IMAGE / RTD / TRANSLATE / DETECTLANGUAGE / COPILOT). When the
+  # underlying subsystem lands, the corresponding stub is replaced with
+  # a real implementation and the entry below is removed.
+  - id: phonetic_returns_input_text
+    mode: skip-oracle
+    reason: "PHONETIC currently returns the input text instead of the IME-typed kana because OOXML <rPh> annotations are not yet read into Formulon's Value model; phonetic metadata not yet modelled."
+    prefer: mac-excel-365
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+  - id: getpivotdata_always_ref
+    mode: skip-oracle
+    reason: "GETPIVOTDATA always returns #REF! because pivot tables are not yet implemented; pivot tables not yet implemented."
+    prefer: mac-excel-365
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+  - id: isomitted_always_false
+    mode: skip-oracle
+    reason: "ISOMITTED always returns FALSE because LAMBDA is not yet implemented, so no argument can ever be reported as omitted; LAMBDA infrastructure not yet implemented."
+    prefer: mac-excel-365
+    first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a
