@@ -101,6 +101,8 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins/financial_depreciation.cpp
   src/eval/builtins/financial_duration.cpp
   src/eval/builtins/financial_misc.cpp
+  src/eval/builtins/financial_oddlprice.cpp
+  src/eval/builtins/financial_oddlyield.cpp
   src/eval/builtins/financial_price.cpp
   src/eval/builtins/financial_rates.cpp
   src/eval/builtins/financial_yield.cpp

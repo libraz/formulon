@@ -27,6 +27,8 @@
 #include "eval/builtins/financial_bond_simple.h"
 #include "eval/builtins/financial_duration.h"
 #include "eval/builtins/financial_helpers.h"
+#include "eval/builtins/financial_oddlprice.h"
+#include "eval/builtins/financial_oddlyield.h"
 #include "eval/builtins/financial_price.h"
 #include "eval/builtins/financial_yield.h"
 #include "eval/coerce.h"
@@ -799,6 +801,25 @@ void register_financial_builtins(FunctionRegistry& registry) {
   }
   {
     FunctionDef def{"YIELD", 6u, 7u, &financial_detail::Yield};
+    def.propagate_errors = true;
+    registry.register_function(def);
+  }
+
+  // Irregular-last-period bond pricing. Signature is (settlement,
+  // maturity, last_interest, rate, yld_or_pr, redemption, frequency,
+  // [basis=0]) -- 7 required + optional basis (min 7, max 8). ODDLPRICE
+  // and ODDLYIELD share a closed-form schedule helper in
+  // `financial_oddl_helpers.h`; ODDLYIELD inverts ODDLPRICE in closed
+  // form (no Newton iteration needed because the residual period uses
+  // simple-interest discounting). Implementations live in
+  // `financial_oddlprice.cpp` / `financial_oddlyield.cpp`.
+  {
+    FunctionDef def{"ODDLPRICE", 7u, 8u, &financial_detail::OddlPrice};
+    def.propagate_errors = true;
+    registry.register_function(def);
+  }
+  {
+    FunctionDef def{"ODDLYIELD", 7u, 8u, &financial_detail::OddlYield};
     def.propagate_errors = true;
     registry.register_function(def);
   }
