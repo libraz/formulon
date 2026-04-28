@@ -2842,3 +2842,690 @@ groups:
       - name: "text expression with case-insensitive comparison"
         probe: '=SWITCH("A","a","hit","miss")'
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # Text family. Cases live in `tests/oracle/cases/text.yaml`; semantics are
+  # realised by `src/eval/builtins/text.cpp`, `src/eval/text_ops.cpp`, and
+  # the byte-mode helpers in `src/eval/utf8_length.cpp` (LENB / MIDB / etc.).
+  # -------------------------------------------------------------------------
+  - function: "CONCATENATE"
+    aspect: "string concatenation with type coercion"
+    behaviors:
+      - name: "two literal text args"
+        probe: '=CONCATENATE("x","y")'
+        expected: impl
+      - name: "single-arg passthrough"
+        probe: '=CONCATENATE("hello")'
+        expected: impl
+      - name: "numeric arg coerces via shortest-text default"
+        probe: '=CONCATENATE("x",1,"y")'
+        expected: impl
+      - name: "boolean arg coerces to TRUE/FALSE text"
+        probe: '=CONCATENATE("x",TRUE)'
+        expected: impl
+      - name: "all-empty-string args"
+        probe: '=CONCATENATE("","","")'
+        expected: diverged
+
+  - function: "CONCAT"
+    aspect: "modern concatenation accepting ranges and arrays"
+    behaviors:
+      - name: "two scalar text args"
+        probe: '=CONCAT("a","b")'
+        expected: impl
+      - name: "mixed scalar text + number + bool"
+        probe: '=CONCAT("a",1,TRUE)'
+        expected: impl
+      - name: "joins all cells in a single range"
+        probe: '=CONCAT(A1:A3)'
+        expected: impl
+      - name: "empty-string args contribute nothing"
+        probe: '=CONCAT("","x","")'
+        expected: impl
+      - name: "error in any arg propagates"
+        probe: '=CONCAT("a",1/0,"c")'
+        expected: impl
+
+  - function: "UPPER"
+    aspect: "ASCII uppercase conversion"
+    behaviors:
+      - name: "lowercase ASCII -> uppercase"
+        probe: '=UPPER("hello")'
+        expected: impl
+      - name: "empty string passthrough"
+        probe: '=UPPER("")'
+        expected: diverged
+      - name: "already-uppercase identity"
+        probe: '=UPPER("HELLO")'
+        expected: impl
+      - name: "digits unchanged within string"
+        probe: '=UPPER("abc123")'
+        expected: impl
+      - name: "hiragana characters pass through unchanged"
+        probe: '=UPPER("あいう")'
+        expected: impl
+
+  - function: "LOWER"
+    aspect: "ASCII lowercase conversion"
+    behaviors:
+      - name: "uppercase ASCII -> lowercase"
+        probe: '=LOWER("HELLO")'
+        expected: impl
+      - name: "empty string passthrough"
+        probe: '=LOWER("")'
+        expected: diverged
+      - name: "already-lowercase identity"
+        probe: '=LOWER("hello")'
+        expected: impl
+      - name: "digits unchanged within string"
+        probe: '=LOWER("ABC123")'
+        expected: impl
+      - name: "mixed-case ASCII fully lowered"
+        probe: '=LOWER("HeLLo WoRLd")'
+        expected: impl
+
+  - function: "PROPER"
+    aspect: "title-case capitalisation at word boundaries"
+    behaviors:
+      - name: "two-word title-case"
+        probe: '=PROPER("hello world")'
+        expected: impl
+      - name: "empty string passthrough"
+        probe: '=PROPER("")'
+        expected: diverged
+      - name: "single-word capitalisation"
+        probe: '=PROPER("hello")'
+        expected: impl
+      - name: "letter after digit is capitalised"
+        probe: '=PROPER("abc123def")'
+        expected: impl
+      - name: "letter after apostrophe is capitalised"
+        probe: "=PROPER(\"o'brien\")"
+        expected: impl
+
+  - function: "TRIM"
+    aspect: "whitespace stripping with internal-collapse and Excel-ja edges"
+    behaviors:
+      - name: "leading/trailing spaces stripped"
+        probe: '=TRIM("  hello   world  ")'
+        expected: impl
+      - name: "repeated internal spaces collapsed to single"
+        probe: '=TRIM("a    b    c")'
+        expected: impl
+      - name: "no-op on already-clean string"
+        probe: '=TRIM("hello world")'
+        expected: impl
+      - name: "only-spaces input returns empty"
+        probe: '=TRIM("     ")'
+        expected: diverged
+      - name: "ideographic full-width space U+3000 stripped (ja-JP)"
+        probe: '=TRIM("　a　")'
+        expected: impl
+
+  - function: "CLEAN"
+    aspect: "non-printable control-char removal (chars < 32)"
+    behaviors:
+      - name: "tab and other ctrl chars stripped from inline string"
+        probe: '=CLEAN("ab	cd")'
+        expected: impl
+      - name: "CHAR(7) bell stripped"
+        probe: '=CLEAN("a" & CHAR(7) & "b")'
+        expected: impl
+      - name: "no-op on plain printable ASCII"
+        probe: '=CLEAN("hello")'
+        expected: impl
+      - name: "consecutive control chars all stripped"
+        probe: '=CLEAN(CHAR(1) & CHAR(2) & "x" & CHAR(3))'
+        expected: impl
+      - name: "tab and high-range ctrl (CHAR 31) both stripped"
+        probe: '=CLEAN(CHAR(9) & "abc" & CHAR(31))'
+        expected: impl
+
+  - function: "RIGHT"
+    aspect: "rightmost-N character extraction with default and edge counts"
+    behaviors:
+      - name: "rightmost N characters"
+        probe: '=RIGHT("abcdef",3)'
+        expected: impl
+      - name: "omitted count defaults to 1"
+        probe: '=RIGHT("abcdef")'
+        expected: impl
+      - name: "zero count returns empty string"
+        probe: '=RIGHT("abcdef",0)'
+        expected: diverged
+      - name: "count exceeds length returns full string"
+        probe: '=RIGHT("ab",10)'
+        expected: impl
+      - name: "negative count -> #VALUE!"
+        probe: '=RIGHT("abcdef",-1)'
+        expected: impl
+
+  - function: "MID"
+    aspect: "substring extraction with 1-based start and edge counts"
+    behaviors:
+      - name: "middle window extraction"
+        probe: '=MID("abcdef",2,3)'
+        expected: impl
+      - name: "start beyond length yields empty"
+        probe: '=MID("ab",10,3)'
+        expected: diverged
+      - name: "zero-length window -> empty"
+        probe: '=MID("abcdef",2,0)'
+        expected: diverged
+      - name: "start_num=0 -> #VALUE! (1-based)"
+        probe: '=MID("abcdef",0,3)'
+        expected: impl
+      - name: "negative num_chars -> #VALUE!"
+        probe: '=MID("abcdef",2,-1)'
+        expected: impl
+
+  - function: "EXACT"
+    aspect: "case-sensitive string equality with whitespace-significance"
+    behaviors:
+      - name: "identical strings -> TRUE"
+        probe: '=EXACT("abc","abc")'
+        expected: impl
+      - name: "differing case -> FALSE"
+        probe: '=EXACT("ABC","abc")'
+        expected: impl
+      - name: "number vs text-of-number coerces and equals"
+        probe: '=EXACT(1,"1")'
+        expected: impl
+      - name: "trailing whitespace is significant"
+        probe: '=EXACT("abc","abc ")'
+        expected: impl
+      - name: "two empty strings compare equal"
+        probe: '=EXACT("","")'
+        expected: impl
+
+  - function: "FIND"
+    aspect: "case-sensitive substring search with start_num"
+    behaviors:
+      - name: "basic substring locates first match"
+        probe: '=FIND("c","abcdef")'
+        expected: impl
+      - name: "needle absent -> #VALUE!"
+        probe: '=FIND("z","abcdef")'
+        expected: impl
+      - name: "case-sensitive miss -> #VALUE!"
+        probe: '=FIND("A","abc")'
+        expected: impl
+      - name: "start_num skips earlier match"
+        probe: '=FIND("a","abcabc",2)'
+        expected: impl
+      - name: "start_num beyond length -> #VALUE!"
+        probe: '=FIND("a","abc",10)'
+        expected: impl
+
+  - function: "SEARCH"
+    aspect: "case-insensitive search with wildcards (?, *)"
+    behaviors:
+      - name: "case-insensitive substring match"
+        probe: '=SEARCH("C","abcdef")'
+        expected: impl
+      - name: "? wildcard matches a single char"
+        probe: '=SEARCH("a?c","zabcabc")'
+        expected: impl
+      - name: "* wildcard matches arbitrary span"
+        probe: '=SEARCH("a*c","zabbbbc")'
+        expected: impl
+      - name: "needle absent -> #VALUE!"
+        probe: '=SEARCH("z","abcdef")'
+        expected: impl
+      - name: "start_num skips earlier match"
+        probe: '=SEARCH("a","abcabc",2)'
+        expected: impl
+
+  - function: "SUBSTITUTE"
+    aspect: "literal-substring replacement with optional instance_num"
+    behaviors:
+      - name: "all occurrences replaced when instance_num omitted"
+        probe: '=SUBSTITUTE("banana","a","o")'
+        expected: impl
+      - name: "instance_num=2 replaces only the n-th occurrence"
+        probe: '=SUBSTITUTE("banana","a","o",2)'
+        expected: impl
+      - name: "no match passes through unchanged"
+        probe: '=SUBSTITUTE("banana","x","o")'
+        expected: impl
+      - name: "empty replacement deletes occurrences"
+        probe: '=SUBSTITUTE("banana","a","")'
+        expected: impl
+      - name: "instance_num=0 -> #VALUE!"
+        probe: '=SUBSTITUTE("banana","a","o",0)'
+        expected: impl
+
+  - function: "REPT"
+    aspect: "string repetition with non-integer / zero / negative counts"
+    behaviors:
+      - name: "positive integer count repeats the string"
+        probe: '=REPT("ab",3)'
+        expected: impl
+      - name: "zero count -> empty string"
+        probe: '=REPT("ab",0)'
+        expected: diverged
+      - name: "negative count -> #VALUE!"
+        probe: '=REPT("ab",-1)'
+        expected: impl
+      - name: "non-integer count truncates"
+        probe: '=REPT("ab",3.9)'
+        expected: impl
+      - name: "empty source string regardless of count"
+        probe: '=REPT("",5)'
+        expected: diverged
+
+  - function: "TEXTJOIN"
+    aspect: "delimited join with ignore_empty flag and range source"
+    behaviors:
+      - name: "scalar args joined with comma"
+        probe: '=TEXTJOIN(",",TRUE,"a","b","c")'
+        expected: impl
+      - name: "ignore_empty=TRUE skips empty strings"
+        probe: '=TEXTJOIN(",",TRUE,"a","","c")'
+        expected: impl
+      - name: "ignore_empty=FALSE keeps empty positions"
+        probe: '=TEXTJOIN(",",FALSE,"a","","c")'
+        expected: impl
+      - name: "range source delivers cell-wise join"
+        probe: '=TEXTJOIN(",",TRUE,A1:A3)'
+        expected: impl
+      - name: "multi-character delimiter"
+        probe: '=TEXTJOIN(" -- ",TRUE,"a","b","c")'
+        expected: impl
+
+  - function: "UNICHAR"
+    aspect: "code-point to character conversion (full Unicode)"
+    behaviors:
+      - name: "ASCII letter A from 65"
+        probe: '=UNICHAR(65)'
+        expected: impl
+      - name: "BMP hiragana from U+3042"
+        probe: '=UNICHAR(12354)'
+        expected: impl
+      - name: "code-point 0 -> #VALUE!"
+        probe: '=UNICHAR(0)'
+        expected: impl
+      - name: "kanji 漢 from U+6F22"
+        probe: '=UNICHAR(28450)'
+        expected: impl
+      - name: "negative code-point -> #VALUE!"
+        probe: '=UNICHAR(-1)'
+        expected: impl
+
+  - function: "UNICODE"
+    aspect: "first-character-to-code-point (Excel: full Unicode, not CP932)"
+    behaviors:
+      - name: "ASCII letter -> 65"
+        probe: '=UNICODE("A")'
+        expected: impl
+      - name: "BMP hiragana -> code-point"
+        probe: '=UNICODE("あ")'
+        expected: impl
+      - name: "multi-character input takes first char only"
+        probe: '=UNICODE("Apple")'
+        expected: impl
+      - name: "leading kanji of multi-kanji input"
+        probe: '=UNICODE("漢字")'
+        expected: impl
+      - name: "empty string -> #VALUE!"
+        probe: '=UNICODE("")'
+        expected: impl
+
+  - function: "CODE"
+    aspect: "first-character ASCII / locale code (ja-JP: CP932 over 0x80)"
+    behaviors:
+      - name: "ASCII A -> 65"
+        probe: '=CODE("A")'
+        expected: impl
+      - name: "empty string -> #VALUE!"
+        probe: '=CODE("")'
+        expected: impl
+      - name: "multi-char input takes first char"
+        probe: '=CODE("Apple")'
+        expected: impl
+      - name: "first hiragana under ja-JP CP932"
+        probe: '=CODE("あいう")'
+        expected: impl
+      - name: "ASCII space -> 32"
+        probe: '=CODE(" ")'
+        expected: impl
+
+  - function: "REPLACE"
+    aspect: "positional UTF-16 substring replacement"
+    behaviors:
+      - name: "middle window replacement"
+        probe: '=REPLACE("abcdef", 2, 3, "XYZ")'
+        expected: impl
+      - name: "start_num past end appends new_text"
+        probe: '=REPLACE("abc", 5, 2, "XYZ")'
+        expected: impl
+      - name: "empty new_text deletes window"
+        probe: '=REPLACE("abcdef", 2, 3, "")'
+        expected: impl
+      - name: "num_chars=0 inserts without removing"
+        probe: '=REPLACE("abcdef", 4, 0, "XYZ")'
+        expected: impl
+      - name: "start_num<1 -> #VALUE!"
+        probe: '=REPLACE("abcdef", 0, 3, "XYZ")'
+        expected: impl
+
+  - function: "REPLACEB"
+    aspect: "byte-mode positional replacement with DBCS pad-edges"
+    behaviors:
+      - name: "clean-boundary replacement of one DBCS char"
+        probe: '=REPLACEB("あいう", 3, 2, "X")'
+        expected: impl
+      - name: "start_byte splits DBCS char -> head pad space"
+        probe: '=REPLACEB("あい", 2, 2, "X")'
+        expected: impl
+      - name: "deletion ends inside DBCS -> trailing pad space"
+        probe: '=REPLACEB("あいう", 1, 3, "X")'
+        expected: impl
+      - name: "num_bytes=0 inserts without removing"
+        probe: '=REPLACEB("hello", 3, 0, "X")'
+        expected: impl
+      - name: "ASCII-only input behaves like REPLACE"
+        probe: '=REPLACEB("abcdef", 2, 3, "YYY")'
+        expected: impl
+
+  - function: "TEXTAFTER"
+    aspect: "split-after delimiter with instance / match_end / fallback"
+    behaviors:
+      - name: "first occurrence: text after first delimiter"
+        probe: '=TEXTAFTER("abc-def-ghi", "-")'
+        expected: impl
+      - name: "negative instance_num counts from end"
+        probe: '=TEXTAFTER("abc-def-ghi", "-", -1)'
+        expected: impl
+      - name: "match_end=1 + instance=-1 hits end-of-text sentinel"
+        probe: '=TEXTAFTER("abc", "-", -1, 0, 1)'
+        expected: impl
+      - name: "second instance returns text after 2nd delimiter"
+        probe: '=TEXTAFTER("abc-def-ghi", "-", 2)'
+        expected: impl
+      - name: "no match without if_not_found -> #N/A"
+        probe: '=TEXTAFTER("abc", "-")'
+        expected: impl
+
+  - function: "FIXED"
+    aspect: "decimal-formatted text with thousand separator and rounding"
+    behaviors:
+      - name: "positive number with explicit decimals"
+        probe: '=FIXED(1234567.891, 2)'
+        expected: impl
+      - name: "default decimals=2"
+        probe: '=FIXED(1234.5678)'
+        expected: impl
+      - name: "negative decimals rounds left of decimal point"
+        probe: '=FIXED(1234.56, -2)'
+        expected: impl
+      - name: "no_commas=TRUE suppresses thousand separator"
+        probe: '=FIXED(1234567.891, -3, TRUE)'
+        expected: impl
+      - name: "decimals=0 produces integer text"
+        probe: '=FIXED(1234.5678, 0)'
+        expected: impl
+
+  - function: "DOLLAR"
+    aspect: "ja-JP yen-prefixed currency text"
+    behaviors:
+      - name: "positive number rounds to default decimals (ja-JP=0)"
+        probe: '=DOLLAR(1234.5)'
+        expected: impl
+      - name: "negative number renders with literal minus"
+        probe: '=DOLLAR(-1234.5)'
+        expected: impl
+      - name: "zero with default decimals"
+        probe: '=DOLLAR(0)'
+        expected: impl
+      - name: "negative decimals rounds to hundreds first"
+        probe: '=DOLLAR(1234.5, -2)'
+        expected: impl
+      - name: "explicit decimals=2 keeps fractional digits"
+        probe: '=DOLLAR(1234.5, 2)'
+        expected: impl
+
+  - function: "HYPERLINK"
+    aspect: "link/friendly-name text rendering (formula returns display text)"
+    behaviors:
+      - name: "single-arg returns link_location as text"
+        probe: '=HYPERLINK("http://example.com")'
+        expected: impl
+      - name: "two-arg returns friendly_name text"
+        probe: '=HYPERLINK("http://example.com", "Click here")'
+        expected: impl
+      - name: "numeric friendly_name coerces to shortest text"
+        probe: '=HYPERLINK("x", 42)'
+        expected: impl
+      - name: "numeric link_location with no friendly_name"
+        probe: '=HYPERLINK(123)'
+        expected: impl
+      - name: "empty friendly_name -> empty display text"
+        probe: '=HYPERLINK("http://example.com", "")'
+        expected: diverged
+
+  - function: "LEN"
+    aspect: "UTF-16 unit count with type coercion"
+    behaviors:
+      - name: "ASCII length"
+        probe: '=LEN("hello")'
+        expected: impl
+      - name: "empty string -> 0"
+        probe: '=LEN("")'
+        expected: impl
+      - name: "BMP hiragana counts 1 unit each"
+        probe: '=LEN("あいう")'
+        expected: impl
+      - name: "mixed ASCII + hiragana"
+        probe: '=LEN("abcあいう")'
+        expected: impl
+      - name: "number coerced to shortest-text first"
+        probe: '=LEN(123)'
+        expected: impl
+      - name: "boolean coerced to TRUE/FALSE text"
+        probe: '=LEN(TRUE)'
+        expected: impl
+
+  - function: "LEFT"
+    aspect: "leftmost-N character extraction with default and edge counts"
+    behaviors:
+      - name: "leftmost N characters"
+        probe: '=LEFT("abcdef",3)'
+        expected: impl
+      - name: "omitted count defaults to 1"
+        probe: '=LEFT("abcdef")'
+        expected: impl
+      - name: "count exceeds length returns full string"
+        probe: '=LEFT("ab",10)'
+        expected: impl
+      - name: "zero count -> empty string (xlwings divergence)"
+        probe: '=LEFT("abcdef",0)'
+        expected: diverged
+      - name: "negative count -> #VALUE!"
+        probe: '=LEFT("abcdef",-1)'
+        expected: impl
+
+  - function: "CHAR"
+    aspect: "byte/code-unit to character conversion (ja-JP CP932 over 0x80)"
+    behaviors:
+      - name: "ASCII A from 65"
+        probe: '=CHAR(65)'
+        expected: impl
+      - name: "ASCII space from 32"
+        probe: '=CHAR(32)'
+        expected: impl
+      - name: "high-byte 0x80..0xFF range under ja-JP CP932"
+        probe: '=CHAR(169)'
+        expected: impl
+      - name: "code 0 -> #VALUE!"
+        probe: '=CHAR(0)'
+        expected: impl
+      - name: "code 256 -> #VALUE!"
+        probe: '=CHAR(256)'
+        expected: impl
+
+  - function: "TEXTBEFORE"
+    aspect: "split-before delimiter with instance / fallback"
+    behaviors:
+      - name: "first occurrence: text before first delimiter"
+        probe: '=TEXTBEFORE("abc-def-ghi", "-")'
+        expected: impl
+      - name: "second instance returns text before 2nd delimiter"
+        probe: '=TEXTBEFORE("abc-def-ghi", "-", 2)'
+        expected: impl
+      - name: "negative instance_num counts from end"
+        probe: '=TEXTBEFORE("abc-def-ghi", "-", -1)'
+        expected: impl
+      - name: "no match without if_not_found -> #N/A"
+        probe: '=TEXTBEFORE("abc", "-")'
+        expected: impl
+      - name: "if_not_found custom literal returned on miss"
+        probe: '=TEXTBEFORE("abc", "-", 1, 0, 0, "NA")'
+        expected: impl
+
+  - function: "LENB"
+    aspect: "ja-JP DBCS byte count (1 byte ASCII / 2 bytes BMP non-ASCII)"
+    behaviors:
+      - name: "ASCII byte count"
+        probe: '=LENB("hello")'
+        expected: impl
+      - name: "empty string -> 0"
+        probe: '=LENB("")'
+        expected: impl
+      - name: "hiragana = 2 bytes per char"
+        probe: '=LENB("あいう")'
+        expected: impl
+      - name: "half-width katakana = 1 byte per char"
+        probe: '=LENB("ｱｲｳ")'
+        expected: impl
+      - name: "supplementary-plane emoji byte count"
+        probe: '=LENB("😀")'
+        expected: impl
+      - name: "ideographic full-width space = 2 bytes"
+        probe: '=LENB("　")'
+        expected: impl
+      - name: "number coerces to text first"
+        probe: '=LENB(123)'
+        expected: impl
+      - name: "boolean coerces to text first"
+        probe: '=LENB(TRUE)'
+        expected: impl
+
+  - function: "LEFTB"
+    aspect: "byte-mode leftmost extraction with DBCS pad-edges"
+    behaviors:
+      - name: "ASCII byte budget"
+        probe: '=LEFTB("hello", 3)'
+        expected: impl
+      - name: "omitted count defaults to 1 byte"
+        probe: '=LEFTB("hello")'
+        expected: impl
+      - name: "clean DBCS boundary (budget 4 = 2 hiragana)"
+        probe: '=LEFTB("あいう", 4)'
+        expected: impl
+      - name: "budget splits DBCS char -> trailing pad space"
+        probe: '=LEFTB("あいう", 3)'
+        expected: impl
+      - name: "negative budget -> #VALUE!"
+        probe: '=LEFTB("hello", -1)'
+        expected: impl
+      - name: "budget 1 splits 2-byte kanji"
+        probe: '=LEFTB("漢字", 1)'
+        expected: impl
+      - name: "budget exceeds source returns full string"
+        probe: '=LEFTB("hello", 100)'
+        expected: impl
+
+  - function: "RIGHTB"
+    aspect: "byte-mode rightmost extraction with DBCS pad-edges"
+    behaviors:
+      - name: "ASCII byte budget"
+        probe: '=RIGHTB("hello", 3)'
+        expected: impl
+      - name: "clean DBCS boundary from right"
+        probe: '=RIGHTB("あいう", 4)'
+        expected: impl
+      - name: "budget splits DBCS char from right -> head pad space"
+        probe: '=RIGHTB("あいう", 3)'
+        expected: impl
+      - name: "budget 1 splits rightmost 2-byte kanji"
+        probe: '=RIGHTB("漢字", 1)'
+        expected: impl
+      - name: "mixed ASCII + kanji boundary"
+        probe: '=RIGHTB("ABC漢", 3)'
+        expected: impl
+      - name: "budget exceeds source returns full string"
+        probe: '=RIGHTB("hello", 100)'
+        expected: impl
+
+  - function: "MIDB"
+    aspect: "byte-mode substring extraction with DBCS pad-edges"
+    behaviors:
+      - name: "ASCII byte window"
+        probe: '=MIDB("hello", 2, 3)'
+        expected: impl
+      - name: "clean hiragana boundary window"
+        probe: '=MIDB("あいうえお", 3, 4)'
+        expected: impl
+      - name: "start byte mid-DBCS char -> head pad space"
+        probe: '=MIDB("あいうえお", 2, 4)'
+        expected: impl
+      - name: "start byte beyond length -> empty (xlwings divergence)"
+        probe: '=MIDB("abc", 10, 3)'
+        expected: diverged
+      - name: "start byte 0 -> #VALUE!"
+        probe: '=MIDB("abc", 0, 3)'
+        expected: impl
+      - name: "start byte negative -> #VALUE!"
+        probe: '=MIDB("hello", -1, 3)'
+        expected: impl
+      - name: "start byte mid-kanji -> head pad space"
+        probe: '=MIDB("ABC漢XY", 5, 1)'
+        expected: impl
+      - name: "window much larger than source returns full string"
+        probe: '=MIDB("漢字", 1, 100)'
+        expected: impl
+
+  - function: "FINDB"
+    aspect: "byte-mode case-sensitive substring search"
+    behaviors:
+      - name: "find DBCS char yields byte position"
+        probe: '=FINDB("う", "あいう")'
+        expected: impl
+      - name: "needle absent -> #VALUE!"
+        probe: '=FINDB("z", "abcdef")'
+        expected: impl
+      - name: "empty needle returns start_num"
+        probe: '=FINDB("", "abc", 2)'
+        expected: impl
+      - name: "first occurrence among repeats"
+        probe: '=FINDB("字", "漢字漢字")'
+        expected: impl
+      - name: "start_num skips earlier match"
+        probe: '=FINDB("字", "漢字漢字", 4)'
+        expected: impl
+      - name: "ASCII needle absent in DBCS source -> #VALUE!"
+        probe: '=FINDB("a", "漢字", 1)'
+        expected: impl
+      - name: "empty needle with default start -> 1"
+        probe: '=FINDB("", "abc")'
+        expected: impl
+
+  - function: "SEARCHB"
+    aspect: "byte-mode case-insensitive search with wildcards"
+    behaviors:
+      - name: "wildcard '*' against DBCS source"
+        probe: '=SEARCHB("い*", "あいう")'
+        expected: impl
+      - name: "case-insensitive ASCII substring match"
+        probe: '=SEARCHB("B", "abc")'
+        expected: impl
+      - name: "single-char '?' wildcard returns byte 1"
+        probe: '=SEARCHB("?", "漢ABC")'
+        expected: impl
+      - name: "leading '*' wildcard matches empty prefix at byte 1"
+        probe: '=SEARCHB("*", "あいう")'
+        expected: impl
+      - name: "kanji needle returns DBCS byte position"
+        probe: '=SEARCHB("漢", "ABC漢", 1)'
+        expected: impl

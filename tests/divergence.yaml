@@ -123,6 +123,54 @@ entries:
     reason: "xlwings writes \"\" as a blank cell, so Excel's COUNTIF(range, \"<>\") over a range with a literal-\"\" cell sees one fewer populated cell than Formulon's in-memory model. Formulon returns 3, Mac records 2 due to the xlwings round-trip gap."
     prefer: formulon
     first_noted: 2026-04-25
+  - id: right_zero_count
+    reason: "RIGHT() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: concatenate_empty_strings
+    reason: "CONCATENATE() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: upper_empty
+    reason: "UPPER() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: lower_empty
+    reason: "LOWER() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: proper_empty
+    reason: "PROPER() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: trim_only_spaces
+    reason: "TRIM() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: rept_empty_string
+    reason: "REPT() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: hyperlink_empty_friendly
+    reason: "HYPERLINK() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
 
   # -- ISFORMULA of non-reference literals ---------------------------------
   # Mac Excel 365 returns `#VALUE!` for ISFORMULA(42) and

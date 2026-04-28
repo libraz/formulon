@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T11:45:09Z"
+    "generated_at": "2026-04-28T21:35:59Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -128,6 +128,30 @@
       }
     },
     {
+      "id": "right_zero_count",
+      "formula": "=RIGHT(\"abcdef\",0)",
+      "setup": {},
+      "skipped": "RIGHT() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    },
+    {
+      "id": "right_more_than_length",
+      "formula": "=RIGHT(\"ab\",10)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ab"
+      }
+    },
+    {
+      "id": "right_negative_is_value",
+      "formula": "=RIGHT(\"abcdef\",-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
       "id": "mid_middle",
       "formula": "=MID(\"abcdef\",2,3)",
       "setup": {},
@@ -151,6 +175,15 @@
     {
       "id": "mid_start_zero_is_value",
       "formula": "=MID(\"abcdef\",0,3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mid_negative_count_is_value",
+      "formula": "=MID(\"abcdef\",2,-1)",
       "setup": {},
       "expect": {
         "kind": "error",
@@ -185,6 +218,79 @@
       }
     },
     {
+      "id": "concat_range",
+      "formula": "=CONCAT(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "c"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "abc"
+      }
+    },
+    {
+      "id": "concat_empty_args",
+      "formula": "=CONCAT(\"\",\"x\",\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x"
+      }
+    },
+    {
+      "id": "concat_error_propagates",
+      "formula": "=CONCAT(\"a\",1/0,\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "concatenate_with_number",
+      "formula": "=CONCATENATE(\"x\",1,\"y\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x1y"
+      }
+    },
+    {
+      "id": "concatenate_with_bool",
+      "formula": "=CONCATENATE(\"x\",TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "xTRUE"
+      }
+    },
+    {
+      "id": "concatenate_single_arg",
+      "formula": "=CONCATENATE(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hello"
+      }
+    },
+    {
+      "id": "concatenate_empty_strings",
+      "formula": "=CONCATENATE(\"\",\"\",\"\")",
+      "setup": {},
+      "skipped": "CONCATENATE() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    },
+    {
       "id": "exact_same",
       "formula": "=EXACT(\"abc\",\"abc\")",
       "setup": {},
@@ -205,6 +311,24 @@
     {
       "id": "exact_number_vs_text_number",
       "formula": "=EXACT(1,\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "exact_trailing_space_differs",
+      "formula": "=EXACT(\"abc\",\"abc \")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "exact_both_empty",
+      "formula": "=EXACT(\"\",\"\")",
       "setup": {},
       "expect": {
         "kind": "bool",
@@ -275,6 +399,33 @@
       }
     },
     {
+      "id": "find_start_beyond_length_is_value",
+      "formula": "=FIND(\"a\",\"abc\",10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "search_not_found_is_value",
+      "formula": "=SEARCH(\"z\",\"abcdef\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "search_with_start",
+      "formula": "=SEARCH(\"a\",\"abcabc\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
       "id": "upper_ascii",
       "formula": "=UPPER(\"hello\")",
       "setup": {},
@@ -320,6 +471,174 @@
       }
     },
     {
+      "id": "upper_empty",
+      "formula": "=UPPER(\"\")",
+      "setup": {},
+      "skipped": "UPPER() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    },
+    {
+      "id": "upper_already_upper",
+      "formula": "=UPPER(\"HELLO\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "HELLO"
+      }
+    },
+    {
+      "id": "upper_digits_unchanged",
+      "formula": "=UPPER(\"abc123\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ABC123"
+      }
+    },
+    {
+      "id": "upper_hiragana_passthrough",
+      "formula": "=UPPER(\"あいう\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "あいう"
+      }
+    },
+    {
+      "id": "lower_empty",
+      "formula": "=LOWER(\"\")",
+      "setup": {},
+      "skipped": "LOWER() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    },
+    {
+      "id": "lower_already_lower",
+      "formula": "=LOWER(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hello"
+      }
+    },
+    {
+      "id": "lower_digits_unchanged",
+      "formula": "=LOWER(\"ABC123\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abc123"
+      }
+    },
+    {
+      "id": "lower_mixed_case",
+      "formula": "=LOWER(\"HeLLo WoRLd\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hello world"
+      }
+    },
+    {
+      "id": "proper_empty",
+      "formula": "=PROPER(\"\")",
+      "setup": {},
+      "skipped": "PROPER() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    },
+    {
+      "id": "proper_single_word",
+      "formula": "=PROPER(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Hello"
+      }
+    },
+    {
+      "id": "proper_after_digit",
+      "formula": "=PROPER(\"abc123def\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Abc123Def"
+      }
+    },
+    {
+      "id": "proper_apostrophe",
+      "formula": "=PROPER(\"o'brien\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "O'Brien"
+      }
+    },
+    {
+      "id": "trim_internal_spaces_collapsed",
+      "formula": "=TRIM(\"a    b    c\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a b c"
+      }
+    },
+    {
+      "id": "trim_no_change",
+      "formula": "=TRIM(\"hello world\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hello world"
+      }
+    },
+    {
+      "id": "trim_only_spaces",
+      "formula": "=TRIM(\"     \")",
+      "setup": {},
+      "skipped": "TRIM() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    },
+    {
+      "id": "trim_strips_fullwidth_space",
+      "formula": "=TRIM(\"　a　\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a"
+      }
+    },
+    {
+      "id": "clean_strips_chr7",
+      "formula": "=CLEAN(\"a\" & CHAR(7) & \"b\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ab"
+      }
+    },
+    {
+      "id": "clean_no_op_on_plain",
+      "formula": "=CLEAN(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hello"
+      }
+    },
+    {
+      "id": "clean_strips_consecutive_ctrl",
+      "formula": "=CLEAN(CHAR(1) & CHAR(2) & \"x\" & CHAR(3))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x"
+      }
+    },
+    {
+      "id": "clean_keeps_tab_strips_others",
+      "formula": "=CLEAN(CHAR(9) & \"abc\" & CHAR(31))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abc"
+      }
+    },
+    {
       "id": "substitute_all",
       "formula": "=SUBSTITUTE(\"banana\",\"a\",\"o\")",
       "setup": {},
@@ -347,6 +666,24 @@
       }
     },
     {
+      "id": "substitute_empty_replacement",
+      "formula": "=SUBSTITUTE(\"banana\",\"a\",\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "bnn"
+      }
+    },
+    {
+      "id": "substitute_instance_zero_is_value",
+      "formula": "=SUBSTITUTE(\"banana\",\"a\",\"o\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
       "id": "rept_three_times",
       "formula": "=REPT(\"ab\",3)",
       "setup": {},
@@ -369,6 +706,21 @@
         "kind": "error",
         "code": "#VALUE!"
       }
+    },
+    {
+      "id": "rept_truncates_count",
+      "formula": "=REPT(\"ab\",3.9)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ababab"
+      }
+    },
+    {
+      "id": "rept_empty_string",
+      "formula": "=REPT(\"\",5)",
+      "setup": {},
+      "skipped": "REPT() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
     },
     {
       "id": "textjoin_simple",
@@ -420,6 +772,15 @@
       }
     },
     {
+      "id": "textjoin_multichar_delimiter",
+      "formula": "=TEXTJOIN(\" -- \",TRUE,\"a\",\"b\",\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a -- b -- c"
+      }
+    },
+    {
       "id": "unichar_ascii_a",
       "formula": "=UNICHAR(65)",
       "setup": {},
@@ -462,6 +823,51 @@
       "expect": {
         "kind": "number",
         "value": 12354.0
+      }
+    },
+    {
+      "id": "unichar_kanji_kan",
+      "formula": "=UNICHAR(28450)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "漢"
+      }
+    },
+    {
+      "id": "unichar_negative_is_value",
+      "formula": "=UNICHAR(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "unicode_multichar_first_only",
+      "formula": "=UNICODE(\"Apple\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 65.0
+      }
+    },
+    {
+      "id": "unicode_kanji_first",
+      "formula": "=UNICODE(\"漢字\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 28450.0
+      }
+    },
+    {
+      "id": "unicode_empty_is_value",
+      "formula": "=UNICODE(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
       }
     },
     {
@@ -939,7 +1345,19 @@
       "id": "code_hiragana_first",
       "formula": "=CODE(\"あいう\")",
       "setup": {},
-      "skipped": "Mac Excel ja-JP CODE returns JIS X 0208 row-cell (9250 for \"あ\"); Formulon returns the Unicode codepoint (12354) pending a CP932 table."
+      "expect": {
+        "kind": "number",
+        "value": 9250.0
+      }
+    },
+    {
+      "id": "code_space_char",
+      "formula": "=CODE(\" \")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 32.0
+      }
     },
     {
       "id": "replace_middle",
@@ -969,6 +1387,24 @@
       }
     },
     {
+      "id": "replace_zero_length_inserts",
+      "formula": "=REPLACE(\"abcdef\", 4, 0, \"XYZ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abcXYZdef"
+      }
+    },
+    {
+      "id": "replace_start_zero_is_value",
+      "formula": "=REPLACE(\"abcdef\", 0, 3, \"XYZ\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
       "id": "replaceb_hiragana_middle",
       "formula": "=REPLACEB(\"あいう\", 3, 2, \"X\")",
       "setup": {},
@@ -993,6 +1429,24 @@
       "expect": {
         "kind": "text",
         "value": "X う"
+      }
+    },
+    {
+      "id": "replaceb_ascii_zero_length",
+      "formula": "=REPLACEB(\"hello\", 3, 0, \"X\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "heXllo"
+      }
+    },
+    {
+      "id": "replaceb_ascii_full_swap",
+      "formula": "=REPLACEB(\"abcdef\", 2, 3, \"YYY\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aYYYef"
       }
     },
     {
@@ -1140,6 +1594,15 @@
       }
     },
     {
+      "id": "fixed_zero_decimals",
+      "formula": "=FIXED(1234.5678, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1,235"
+      }
+    },
+    {
       "id": "dollar_positive",
       "formula": "=DOLLAR(1234.5)",
       "setup": {},
@@ -1173,6 +1636,15 @@
       "expect": {
         "kind": "text",
         "value": "¥1,200"
+      }
+    },
+    {
+      "id": "dollar_explicit_two_decimals",
+      "formula": "=DOLLAR(1234.5, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "¥1,234.50"
       }
     },
     {
@@ -1248,6 +1720,24 @@
       }
     },
     {
+      "id": "textafter_second_instance",
+      "formula": "=TEXTAFTER(\"abc-def-ghi\", \"-\", 2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ghi"
+      }
+    },
+    {
+      "id": "textafter_not_found_is_na",
+      "formula": "=TEXTAFTER(\"abc\", \"-\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
       "id": "hyperlink_link_only",
       "formula": "=HYPERLINK(\"http://example.com\")",
       "setup": {},
@@ -1282,6 +1772,12 @@
         "kind": "text",
         "value": "123"
       }
+    },
+    {
+      "id": "hyperlink_empty_friendly",
+      "formula": "=HYPERLINK(\"http://example.com\", \"\")",
+      "setup": {},
+      "skipped": "HYPERLINK() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
     }
   ]
 }
