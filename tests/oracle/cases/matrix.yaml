@@ -1,0 +1,76 @@
+suite: matrix
+description: Matrix-algebra family — MMULT, MDETERM, MINVERSE. Fifteen perspectives across the cluster (5 per function) covering shape products, identity neutrality, singularity, non-square errors, and non-numeric / error-cell propagation. Spill outputs from MMULT and MINVERSE flow through the same skip-oracle path as MUNIT and TEXTSPLIT (oracle compare_value cannot navigate ArrayValue).
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # =========================================================================
+  # MMULT — matrix product. Spill cases skip-oracle; error cases live.
+  # =========================================================================
+
+  - id: mmult_basic_2x3_3x2
+    description: 'MMULT({1,2,3;4,5,6}, {7,8;9,10;11,12}) -> {58,64;139,154} (2x2 spill, anchor=58)'
+    formula: '=MMULT({1,2,3;4,5,6}, {7,8;9,10;11,12})'
+
+  - id: mmult_identity_right_neutral
+    description: 'MMULT({7,8;9,10}, {1,0;0,1}) -> {7,8;9,10} (identity preserves matrix, 2x2 spill, anchor=7)'
+    formula: '=MMULT({7,8;9,10}, {1,0;0,1})'
+
+  - id: mmult_inner_dim_mismatch_value
+    description: 'MMULT({1,2;3,4}, {1,2,3;4,5,6;7,8,9}) -> #VALUE! (cols(A)=2, rows(B)=3 mismatch)'
+    formula: '=MMULT({1,2;3,4}, {1,2,3;4,5,6;7,8,9})'
+
+  - id: mmult_non_numeric_cell_value
+    description: 'MMULT({1,"a";3,4}, {1,2;3,4}) -> #VALUE! (text in matrix arg)'
+    formula: '=MMULT({1,"a";3,4}, {1,2;3,4})'
+
+  - id: mmult_error_cell_propagates
+    description: 'MMULT({1,#N/A;3,4}, {1,2;3,4}) -> #N/A (error cell propagates)'
+    formula: '=MMULT({1,#N/A;3,4}, {1,2;3,4})'
+
+  # =========================================================================
+  # MDETERM — determinant scalar. All five cases live.
+  # =========================================================================
+
+  - id: mdeterm_2x2
+    description: 'MDETERM({1,2;3,4}) -> -2 (1*4 - 2*3)'
+    formula: '=MDETERM({1,2;3,4})'
+
+  - id: mdeterm_3x3
+    description: 'MDETERM({1,2,3;4,5,6;7,8,10}) -> -3 (cofactor expansion)'
+    formula: '=MDETERM({1,2,3;4,5,6;7,8,10})'
+
+  - id: mdeterm_identity
+    description: 'MDETERM({1,0;0,1}) -> 1 (identity has determinant 1)'
+    formula: '=MDETERM({1,0;0,1})'
+
+  - id: mdeterm_singular_zero
+    description: 'MDETERM({1,2;2,4}) -> 0 (rank-1 singular matrix)'
+    formula: '=MDETERM({1,2;2,4})'
+
+  - id: mdeterm_non_square_value
+    description: 'MDETERM({1,2,3;4,5,6}) -> #VALUE! (non-square, 2x3)'
+    formula: '=MDETERM({1,2,3;4,5,6})'
+
+  # =========================================================================
+  # MINVERSE — matrix inverse. Spill cases skip-oracle; error cases live.
+  # =========================================================================
+
+  - id: minverse_identity
+    description: 'MINVERSE({1,0;0,1}) -> {1,0;0,1} (identity is its own inverse, 2x2 spill, anchor=1)'
+    formula: '=MINVERSE({1,0;0,1})'
+
+  - id: minverse_2x2_basic
+    description: 'MINVERSE({4,3;6,3}) -> {-0.5,0.5;1,-2/3} (2x2 spill, anchor=-0.5)'
+    formula: '=MINVERSE({4,3;6,3})'
+
+  - id: minverse_singular_num
+    description: 'MINVERSE({1,2;2,4}) -> #NUM! (singular matrix has no inverse)'
+    formula: '=MINVERSE({1,2;2,4})'
+
+  - id: minverse_non_square_value
+    description: 'MINVERSE({1,2,3;4,5,6}) -> #VALUE! (non-square)'
+    formula: '=MINVERSE({1,2,3;4,5,6})'
+
+  - id: minverse_error_cell_propagates
+    description: 'MINVERSE({1,#N/A;3,4}) -> #N/A (error cell propagates)'
+    formula: '=MINVERSE({1,#N/A;3,4})'

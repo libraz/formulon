@@ -742,6 +742,41 @@ entries:
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
 
+  # MMULT spill cases. Matrix product returns a 2D ArrayValue when shapes
+  # are compatible. Same oracle / compare_value mismatch as MUNIT,
+  # TEXTSPLIT, and MODE.MULT — INDEX wrappers blocked by resolve_range_arg.
+  # Unit tests in tests/unit/eval/matrix_ops_eval_test.cpp validate
+  # product values directly.
+  - id: mmult_basic_2x3_3x2
+    reason: "MMULT returns a 2x2 ArrayValue; oracle compare_value only handles scalars, INDEX wrappers blocked by resolve_range_arg. Unit test BuiltinsMmult.BasicProductFromSheetRanges covers the canonical 2x3 * 3x2 product."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: mmult_identity_right_neutral
+    reason: "MMULT returns a 2x2 ArrayValue; oracle compare_value only handles scalars. Unit test BuiltinsMmult.IdentityIsLeftAndRightNeutral covers identity neutrality."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+
+  # MINVERSE spill cases. Inverse matrix returns a square ArrayValue when
+  # the input is non-singular and square. Same skip-oracle precedent as
+  # MMULT. Singular / non-square / error-cell cases stay live (scalar
+  # error outputs).
+  - id: minverse_identity
+    reason: "MINVERSE returns a 2x2 ArrayValue; oracle compare_value only handles scalars. Unit test BuiltinsMinverse.IdentityIsItsOwnInverse covers the boundary."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: minverse_2x2_basic
+    reason: "MINVERSE returns a 2x2 ArrayValue; oracle compare_value only handles scalars. Unit test BuiltinsMinverse.TwoByTwoInverse covers a non-trivial inverse."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+
   # CELL stub-key divergences. Formulon has no style subsystem yet so
   # CELL("filename") and CELL("prefix", ...) return empty text rather
   # than blank. Mac surfaces blank, but the top-level evaluator's

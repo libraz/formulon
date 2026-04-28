@@ -1138,3 +1138,82 @@ groups:
       - name: "error propagation in input"
         probe: '=MODE.MULT(1, #DIV/0!, 2)'
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # MMULT — matrix product. Returns a 2D spill array of dimensions
+  # (rows_A x cols_B) when shapes are compatible; #VALUE! otherwise. Five
+  # perspectives: 2x3 * 3x2 product (spill), identity-right-neutral
+  # (spill), inner-dimension mismatch, non-numeric cell, error cell
+  # propagation.
+  # -------------------------------------------------------------------------
+
+  - function: "MMULT"
+    aspect: "matrix product spill"
+    behaviors:
+      - name: "basic 2x3 * 3x2 product -> 2x2 spill"
+        probe: '=MMULT({1,2,3;4,5,6}, {7,8;9,10;11,12})'
+        expected: diverged
+      - name: "identity right-neutral preserves matrix"
+        probe: '=MMULT({7,8;9,10}, {1,0;0,1})'
+        expected: diverged
+      - name: "inner-dimension mismatch -> #VALUE!"
+        probe: '=MMULT({1,2;3,4}, {1,2,3;4,5,6;7,8,9})'
+        expected: impl
+      - name: "non-numeric cell -> #VALUE!"
+        probe: '=MMULT({1,"a";3,4}, {1,2;3,4})'
+        expected: impl
+      - name: "error cell propagates"
+        probe: '=MMULT({1,#N/A;3,4}, {1,2;3,4})'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # MDETERM — matrix determinant. Returns a scalar number for every square
+  # input; non-square -> #VALUE!. All five perspectives are live (scalar
+  # outputs). Includes a singular case (det = 0) and a non-square error.
+  # -------------------------------------------------------------------------
+
+  - function: "MDETERM"
+    aspect: "determinant scalar"
+    behaviors:
+      - name: "2x2 determinant"
+        probe: '=MDETERM({1,2;3,4})'
+        expected: impl
+      - name: "3x3 determinant"
+        probe: '=MDETERM({1,2,3;4,5,6;7,8,10})'
+        expected: impl
+      - name: "identity determinant is 1"
+        probe: '=MDETERM({1,0;0,1})'
+        expected: impl
+      - name: "singular matrix determinant is 0"
+        probe: '=MDETERM({1,2;2,4})'
+        expected: impl
+      - name: "non-square -> #VALUE!"
+        probe: '=MDETERM({1,2,3;4,5,6})'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # MINVERSE — matrix inverse. Returns a square spill array for an
+  # invertible square input; #NUM! for singular; #VALUE! for non-square or
+  # non-numeric. Five perspectives: identity-its-own-inverse (spill),
+  # 2x2 inverse (spill), singular -> #NUM!, non-square -> #VALUE!, error
+  # propagation.
+  # -------------------------------------------------------------------------
+
+  - function: "MINVERSE"
+    aspect: "matrix inverse spill"
+    behaviors:
+      - name: "identity is its own inverse"
+        probe: '=MINVERSE({1,0;0,1})'
+        expected: diverged
+      - name: "2x2 inverse"
+        probe: '=MINVERSE({4,3;6,3})'
+        expected: diverged
+      - name: "singular matrix -> #NUM!"
+        probe: '=MINVERSE({1,2;2,4})'
+        expected: impl
+      - name: "non-square -> #VALUE!"
+        probe: '=MINVERSE({1,2,3;4,5,6})'
+        expected: impl
+      - name: "error cell propagates"
+        probe: '=MINVERSE({1,#N/A;3,4})'
+        expected: impl
