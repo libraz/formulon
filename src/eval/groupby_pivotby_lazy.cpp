@@ -813,5 +813,509 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   return Value::array(arr);
 }
 
+// ---------------------------------------------------------------------------
+// PIVOTBY entry point
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Maps a single row's group key to its group index, appending a new group on
+// first occurrence. `keys` is the source key array (row_fields or
+// col_fields); `row` is the absolute row index. Returns the group index.
+//
+// A composite copy of `representative_rows` is kept so callers can later
+// pull the canonical key cells via `keys.cells[representative_rows[g] *
+// keys.cols + c]`. Mirrors the inline group-build loop in
+// `eval_groupby_lazy`; factored here so both the row and column axes share
+// the same first-occurrence semantics.
+std::size_t find_or_add_group(const ArrayValue& keys, std::uint32_t row,
+                              std::vector<std::uint32_t>* representative_rows,
+                              std::vector<std::vector<std::uint32_t>>* member_rows, std::vector<bool>* is_error_group) {
+  for (std::size_t g = 0; g < representative_rows->size(); ++g) {
+    if (group_key_equal(keys, row, (*representative_rows)[g])) {
+      (*member_rows)[g].push_back(row);
+      return g;
+    }
+  }
+  representative_rows->push_back(row);
+  member_rows->push_back(std::vector<std::uint32_t>{row});
+  is_error_group->push_back(row_key_is_error(keys, row));
+  return representative_rows->size() - 1U;
+}
+
+}  // namespace
+
+Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 4U || arity > 10U) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  Value err = Value::blank();
+
+  // -- arg 0: row_fields ----------------------------------------------------
+  const ArrayValue* row_fields = read_array_arg(call.as_call_arg(0), arena, registry, ctx, &err);
+  if (row_fields == nullptr) {
+    return err;
+  }
+
+  // -- arg 1: col_fields ----------------------------------------------------
+  const ArrayValue* col_fields = read_array_arg(call.as_call_arg(1), arena, registry, ctx, &err);
+  if (col_fields == nullptr) {
+    return err;
+  }
+
+  // -- arg 2: values --------------------------------------------------------
+  const ArrayValue* values = read_array_arg(call.as_call_arg(2), arena, registry, ctx, &err);
+  if (values == nullptr) {
+    return err;
+  }
+
+  // Row-count consistency across all three rectangles. Mac Excel surfaces
+  // `#VALUE!` when any pair has different row counts.
+  if (row_fields->rows != values->rows || col_fields->rows != values->rows) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (row_fields->rows == 0U || row_fields->cols == 0U || col_fields->cols == 0U || values->cols == 0U) {
+    return Value::error(ErrorCode::Calc);
+  }
+
+  // First-commit scope: single-column row_fields / col_fields / values.
+  // Multi-column shapes are deferred (the cross-product output layout needs
+  // an oracle pass to confirm header / total placement). They surface
+  // `#VALUE!` here. TODO(pivotby-multi-col): lift this restriction once the
+  // oracle has captured Mac Excel's surface for the multi-column variants.
+  if (row_fields->cols != 1U || col_fields->cols != 1U || values->cols != 1U) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  // -- arg 3: aggregator ----------------------------------------------------
+  AggregatorRef agg;
+  if (!resolve_aggregator(call.as_call_arg(3), arena, registry, ctx, &agg, &err)) {
+    return err;
+  }
+
+  // -- arg 4: field_headers ∈ {0,1,2,3}, default 3 -------------------------
+  // PIVOTBY's default differs from GROUPBY's (0): pivot output typically
+  // wants both the input row to be treated as a header AND a header to be
+  // emitted on the output's left/top edges.
+  int field_headers = 3;
+  if (arity >= 5U) {
+    static constexpr int kAllowed[] = {0, 1, 2, 3};
+    if (!read_int_in_set(call.as_call_arg(4), arena, registry, ctx, kAllowed, sizeof(kAllowed) / sizeof(kAllowed[0]),
+                         &field_headers, &err)) {
+      return err;
+    }
+  }
+
+  // -- arg 5: row_total_depth ∈ {-2,-1,0,1,2}, default -1 ------------------
+  // The grand-total row (showing column totals) defaults to the TOP of the
+  // result. ±2 (subtotal rows) is deferred and silently degrades to ±1 in
+  // the single-column row_fields scope of this commit.
+  int row_total_depth = -1;
+  if (arity >= 6U) {
+    static constexpr int kAllowed[] = {-2, -1, 0, 1, 2};
+    if (!read_int_in_set(call.as_call_arg(5), arena, registry, ctx, kAllowed, sizeof(kAllowed) / sizeof(kAllowed[0]),
+                         &row_total_depth, &err)) {
+      return err;
+    }
+  }
+
+  // -- arg 6: row_sort_order, default 0 ------------------------------------
+  // Sort the row groups by their row totals (`SUM`-like aggregation over
+  // every (row_group, col_group) cell of the row). 0 preserves first-
+  // occurrence order; positive means ascending; negative descending.
+  int row_sort_order = 0;
+  if (arity >= 7U) {
+    if (!read_int(call.as_call_arg(6), arena, registry, ctx, &row_sort_order, &err)) {
+      return err;
+    }
+  }
+
+  // -- arg 7: col_total_depth ∈ {-2,-1,0,1,2}, default 1 -------------------
+  // The grand-total column (showing row totals) defaults to the RIGHT of
+  // the result. ±2 silently degrades to ±1 in the single-column col_fields
+  // scope of this commit.
+  int col_total_depth = 1;
+  if (arity >= 8U) {
+    static constexpr int kAllowed[] = {-2, -1, 0, 1, 2};
+    if (!read_int_in_set(call.as_call_arg(7), arena, registry, ctx, kAllowed, sizeof(kAllowed) / sizeof(kAllowed[0]),
+                         &col_total_depth, &err)) {
+      return err;
+    }
+  }
+
+  // -- arg 8: col_sort_order, default 0 ------------------------------------
+  int col_sort_order = 0;
+  if (arity >= 9U) {
+    if (!read_int(call.as_call_arg(8), arena, registry, ctx, &col_sort_order, &err)) {
+      return err;
+    }
+  }
+
+  // Determine header row layout. Same as GROUPBY but the header / output
+  // emission flags drive both the row-axis labels (left edge) and the
+  // col-axis labels (top edge).
+  const bool inputs_have_header = (field_headers == 1 || field_headers == 3);
+  const bool output_emits_header = (field_headers == 1 || field_headers == 2 || field_headers == 3);
+
+  if (inputs_have_header && row_fields->rows < 1U) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  const std::uint32_t data_start_row = inputs_have_header ? 1U : 0U;
+  if (row_fields->rows < data_start_row) {
+    return Value::error(ErrorCode::Calc);
+  }
+  const std::uint32_t data_row_count = row_fields->rows - data_start_row;
+
+  // -- arg 9: filter_array --------------------------------------------------
+  std::vector<bool> include_row(data_row_count, true);
+  if (arity == 10U) {
+    const ArrayValue* mask = read_array_arg(call.as_call_arg(9), arena, registry, ctx, &err);
+    if (mask == nullptr) {
+      return err;
+    }
+    const std::uint32_t mask_n = (mask->rows >= mask->cols) ? mask->rows : mask->cols;
+    if (mask->rows != 1U && mask->cols != 1U) {
+      return Value::error(ErrorCode::Value);
+    }
+    if (mask_n != data_row_count) {
+      return Value::error(ErrorCode::Value);
+    }
+    for (std::uint32_t i = 0; i < data_row_count; ++i) {
+      const Value& cell = mask->cells[i];
+      if (cell.is_error()) {
+        return cell;
+      }
+      auto coerced = coerce_to_bool(cell);
+      if (!coerced) {
+        return Value::error(coerced.error());
+      }
+      include_row[i] = coerced.value();
+    }
+  }
+
+  // -- Build row and column groups ----------------------------------------
+  // For each filtered data row: assign the row to one row-group (by
+  // row_fields key) and one col-group (by col_fields key). The (row_group,
+  // col_group) pair is later used to aggregate the values column. We also
+  // keep per-group full row-index lists for row totals and col totals.
+  std::vector<std::uint32_t> row_repr;
+  std::vector<std::vector<std::uint32_t>> row_members;  // rows in each row-group
+  std::vector<bool> row_is_error;
+  std::vector<std::uint32_t> col_repr;
+  std::vector<std::vector<std::uint32_t>> col_members;  // rows in each col-group
+  std::vector<bool> col_is_error;
+
+  // Per-row tags so we can later compute (row_g, col_g) intersections by
+  // walking the data rows once.
+  std::vector<std::size_t> row_tag(data_row_count, 0);
+  std::vector<std::size_t> col_tag(data_row_count, 0);
+
+  for (std::uint32_t i = 0; i < data_row_count; ++i) {
+    if (!include_row[i]) {
+      continue;
+    }
+    const std::uint32_t row = data_start_row + i;
+    row_tag[i] = find_or_add_group(*row_fields, row, &row_repr, &row_members, &row_is_error);
+    col_tag[i] = find_or_add_group(*col_fields, row, &col_repr, &col_members, &col_is_error);
+  }
+
+  if (row_repr.empty() || col_repr.empty()) {
+    return Value::error(ErrorCode::Calc);
+  }
+
+  const std::size_t n_rows = row_repr.size();
+  const std::size_t n_cols = col_repr.size();
+
+  // -- Aggregate per (row_group, col_group) -------------------------------
+  // For each (rg, cg) pair, build the intersection row list and invoke the
+  // aggregator. Per-cell error isolation: an aggregator failure for one
+  // pair lands in that cell; the rest of the body is still computed.
+  std::vector<std::vector<Value>> body(n_rows, std::vector<Value>(n_cols, Value::blank()));
+  for (std::size_t rg = 0; rg < n_rows; ++rg) {
+    for (std::size_t cg = 0; cg < n_cols; ++cg) {
+      std::vector<std::uint32_t> intersection;
+      // The intersection is small for typical workbooks; a linear walk is
+      // simpler than building an index. (For large pivots this is the hot
+      // loop and should be revisited with a hash bucket.)
+      for (std::uint32_t i = 0; i < data_row_count; ++i) {
+        if (!include_row[i]) {
+          continue;
+        }
+        if (row_tag[i] == rg && col_tag[i] == cg) {
+          intersection.push_back(data_start_row + i);
+        }
+      }
+      if (intersection.empty()) {
+        // No data points at this intersection. Mac Excel surfaces an empty
+        // (Blank) cell here — the aggregator is not called for empty
+        // groups in the pivot body.
+        body[rg][cg] = Value::blank();
+        continue;
+      }
+      const ArrayValue* slice = build_group_slice(*values, /*value_col=*/0U, intersection, arena);
+      if (slice == nullptr) {
+        body[rg][cg] = Value::error(ErrorCode::Num);
+        continue;
+      }
+      body[rg][cg] = invoke_aggregator_for_group(agg, slice, arena, registry, ctx);
+    }
+  }
+
+  // -- Compute row totals (one per row group) -----------------------------
+  // A "row total" is the aggregate over an entire row group regardless of
+  // col group — it lives in the GRAND-TOTAL COLUMN, whose presence is
+  // governed by `col_total_depth` (the col-axis total knob).
+  const bool emit_row_totals_col = (col_total_depth != 0);
+  std::vector<Value> row_totals(n_rows, Value::blank());
+  if (emit_row_totals_col) {
+    for (std::size_t rg = 0; rg < n_rows; ++rg) {
+      const ArrayValue* slice = build_group_slice(*values, /*value_col=*/0U, row_members[rg], arena);
+      if (slice == nullptr) {
+        row_totals[rg] = Value::error(ErrorCode::Num);
+        continue;
+      }
+      row_totals[rg] = invoke_aggregator_for_group(agg, slice, arena, registry, ctx);
+    }
+  }
+
+  // -- Compute column totals (one per col group) --------------------------
+  // A "column total" is the aggregate over an entire col group regardless
+  // of row group — it lives in the GRAND-TOTAL ROW, whose presence is
+  // governed by `row_total_depth` (the row-axis total knob).
+  const bool emit_col_totals_row = (row_total_depth != 0);
+  std::vector<Value> col_totals(n_cols, Value::blank());
+  if (emit_col_totals_row) {
+    for (std::size_t cg = 0; cg < n_cols; ++cg) {
+      const ArrayValue* slice = build_group_slice(*values, /*value_col=*/0U, col_members[cg], arena);
+      if (slice == nullptr) {
+        col_totals[cg] = Value::error(ErrorCode::Num);
+        continue;
+      }
+      col_totals[cg] = invoke_aggregator_for_group(agg, slice, arena, registry, ctx);
+    }
+  }
+
+  // -- Compute grand total ------------------------------------------------
+  // The grand total cell exists only when both axes emit totals.
+  Value grand_total = Value::blank();
+  if (emit_row_totals_col && emit_col_totals_row) {
+    std::vector<std::uint32_t> all_rows;
+    all_rows.reserve(data_row_count);
+    for (std::uint32_t i = 0; i < data_row_count; ++i) {
+      if (include_row[i]) {
+        all_rows.push_back(data_start_row + i);
+      }
+    }
+    if (all_rows.empty()) {
+      grand_total = Value::error(ErrorCode::Calc);
+    } else {
+      const ArrayValue* slice = build_group_slice(*values, /*value_col=*/0U, all_rows, arena);
+      if (slice == nullptr) {
+        grand_total = Value::error(ErrorCode::Num);
+      } else {
+        grand_total = invoke_aggregator_for_group(agg, slice, arena, registry, ctx);
+      }
+    }
+  }
+
+  // -- Sort row groups ----------------------------------------------------
+  // Sort by row-total (the "first/only value column" reduces to the row
+  // total in single-column-values scope). Error-keyed groups sink to the
+  // bottom; sort_order=0 preserves first-occurrence order modulo that
+  // sink.
+  std::vector<std::size_t> row_order(n_rows);
+  for (std::size_t i = 0; i < n_rows; ++i) {
+    row_order[i] = i;
+  }
+  if (row_sort_order != 0) {
+    if (row_sort_order != 1 && row_sort_order != -1) {
+      // First-commit scope: only ±1 / 0 are supported. Multi-column values
+      // would let |sort_order| index a value column; that ships when we
+      // lift the multi-column restriction above.
+      return Value::error(ErrorCode::Value);
+    }
+    const bool descending = (row_sort_order < 0);
+    std::stable_sort(row_order.begin(), row_order.end(), [&](std::size_t a, std::size_t b) {
+      if (row_is_error[a] != row_is_error[b]) {
+        return !row_is_error[a];
+      }
+      // Compute on the fly if row totals weren't emitted (col_total_depth
+      // == 0): aggregate just for the sort. This is rare; keep it simple.
+      Value va = row_totals[a];
+      Value vb = row_totals[b];
+      if (!emit_row_totals_col) {
+        const ArrayValue* sa = build_group_slice(*values, 0U, row_members[a], arena);
+        const ArrayValue* sb = build_group_slice(*values, 0U, row_members[b], arena);
+        va =
+            (sa != nullptr) ? invoke_aggregator_for_group(agg, sa, arena, registry, ctx) : Value::error(ErrorCode::Num);
+        vb =
+            (sb != nullptr) ? invoke_aggregator_for_group(agg, sb, arena, registry, ctx) : Value::error(ErrorCode::Num);
+      }
+      const int c = cmp_value_asc(va, vb);
+      if (c != 0) {
+        return descending ? (c > 0) : (c < 0);
+      }
+      return cmp_keys_asc(*row_fields, row_repr[a], row_repr[b]) < 0;
+    });
+  } else {
+    std::stable_sort(row_order.begin(), row_order.end(), [&](std::size_t a, std::size_t b) {
+      if (row_is_error[a] != row_is_error[b]) {
+        return !row_is_error[a];
+      }
+      return false;
+    });
+  }
+
+  // -- Sort col groups ----------------------------------------------------
+  std::vector<std::size_t> col_order(n_cols);
+  for (std::size_t i = 0; i < n_cols; ++i) {
+    col_order[i] = i;
+  }
+  if (col_sort_order != 0) {
+    if (col_sort_order != 1 && col_sort_order != -1) {
+      return Value::error(ErrorCode::Value);
+    }
+    const bool descending = (col_sort_order < 0);
+    std::stable_sort(col_order.begin(), col_order.end(), [&](std::size_t a, std::size_t b) {
+      if (col_is_error[a] != col_is_error[b]) {
+        return !col_is_error[a];
+      }
+      Value va = col_totals[a];
+      Value vb = col_totals[b];
+      if (!emit_col_totals_row) {
+        const ArrayValue* sa = build_group_slice(*values, 0U, col_members[a], arena);
+        const ArrayValue* sb = build_group_slice(*values, 0U, col_members[b], arena);
+        va =
+            (sa != nullptr) ? invoke_aggregator_for_group(agg, sa, arena, registry, ctx) : Value::error(ErrorCode::Num);
+        vb =
+            (sb != nullptr) ? invoke_aggregator_for_group(agg, sb, arena, registry, ctx) : Value::error(ErrorCode::Num);
+      }
+      const int c = cmp_value_asc(va, vb);
+      if (c != 0) {
+        return descending ? (c > 0) : (c < 0);
+      }
+      return cmp_keys_asc(*col_fields, col_repr[a], col_repr[b]) < 0;
+    });
+  } else {
+    std::stable_sort(col_order.begin(), col_order.end(), [&](std::size_t a, std::size_t b) {
+      if (col_is_error[a] != col_is_error[b]) {
+        return !col_is_error[a];
+      }
+      return false;
+    });
+  }
+
+  // -- Assemble output ----------------------------------------------------
+  // Layout:
+  //   [optional header row]        : row_label_header | col_keys... | optional "Grand Total"
+  //   [optional top totals row]    : "Grand Total"     | col_totals  | grand_total           (when row_total_depth < 0)
+  //   per-row-group rows           : row_key           | body cells  | optional row_total
+  //   [optional bottom totals row] : "Grand Total"     | col_totals  | grand_total           (when row_total_depth > 0)
+  //
+  // The position of the row_total ("Grand Total") column is governed by
+  // col_total_depth: negative → leftmost data column (immediately after
+  // the row-key column), positive → rightmost column.
+  const bool grand_total_left = emit_row_totals_col && (col_total_depth < 0);
+  const std::uint32_t out_cols =
+      1U /*row label*/ + static_cast<std::uint32_t>(n_cols) + (emit_row_totals_col ? 1U : 0U);
+
+  // Helper: render one body row (not header / total) into a vector.
+  auto render_body_row = [&](std::size_t rg) {
+    std::vector<Value> row(out_cols, Value::blank());
+    // Row key cell (col 0).
+    row[0] = row_fields->cells[static_cast<std::size_t>(row_repr[rg]) * row_fields->cols];
+    // Body cells in sorted col order.
+    for (std::size_t ci = 0; ci < n_cols; ++ci) {
+      const std::size_t cg = col_order[ci];
+      const std::uint32_t out_col_idx = (grand_total_left ? 2U : 1U) + static_cast<std::uint32_t>(ci);
+      row[out_col_idx] = body[rg][cg];
+    }
+    if (emit_row_totals_col) {
+      row[grand_total_left ? 1U : (out_cols - 1U)] = row_totals[rg];
+    }
+    return row;
+  };
+
+  // Helper: render the totals row (column totals + grand total).
+  auto render_totals_row = [&]() {
+    std::vector<Value> row(out_cols, Value::blank());
+    row[0] = Value::text(arena.intern("Grand Total"));
+    for (std::size_t ci = 0; ci < n_cols; ++ci) {
+      const std::size_t cg = col_order[ci];
+      const std::uint32_t out_col_idx = (grand_total_left ? 2U : 1U) + static_cast<std::uint32_t>(ci);
+      row[out_col_idx] = col_totals[cg];
+    }
+    if (emit_row_totals_col) {
+      row[grand_total_left ? 1U : (out_cols - 1U)] = grand_total;
+    }
+    return row;
+  };
+
+  // Helper: render the header row.
+  auto render_header_row = [&]() {
+    std::vector<Value> row(out_cols, Value::blank());
+    if (field_headers == 1 || field_headers == 3) {
+      // Inputs had a header row. Top-left = row_fields header label.
+      row[0] = row_fields->cells[0];
+    } else {
+      // field_headers == 2: synthesise.
+      row[0] = Value::text(arena.intern("Field 1"));
+    }
+    for (std::size_t ci = 0; ci < n_cols; ++ci) {
+      const std::size_t cg = col_order[ci];
+      // The col-key labels come from col_fields' representative data row.
+      const std::uint32_t out_col_idx = (grand_total_left ? 2U : 1U) + static_cast<std::uint32_t>(ci);
+      row[out_col_idx] = col_fields->cells[static_cast<std::size_t>(col_repr[cg]) * col_fields->cols];
+    }
+    if (emit_row_totals_col) {
+      row[grand_total_left ? 1U : (out_cols - 1U)] = Value::text(arena.intern("Grand Total"));
+    }
+    return row;
+  };
+
+  std::vector<std::vector<Value>> out_rows;
+  out_rows.reserve(n_rows + 3U);
+  if (output_emits_header) {
+    out_rows.push_back(render_header_row());
+  }
+  if (emit_col_totals_row && row_total_depth < 0) {
+    out_rows.push_back(render_totals_row());
+  }
+  for (std::size_t ri = 0; ri < n_rows; ++ri) {
+    out_rows.push_back(render_body_row(row_order[ri]));
+  }
+  if (emit_col_totals_row && row_total_depth > 0) {
+    out_rows.push_back(render_totals_row());
+  }
+
+  if (out_rows.empty()) {
+    return Value::error(ErrorCode::Calc);
+  }
+
+  const std::uint32_t out_rows_n = static_cast<std::uint32_t>(out_rows.size());
+  const std::size_t total_cells = static_cast<std::size_t>(out_rows_n) * static_cast<std::size_t>(out_cols);
+  Value* buffer = arena.create_array<Value>(total_cells);
+  if (buffer == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  for (std::uint32_t r = 0; r < out_rows_n; ++r) {
+    for (std::uint32_t c = 0; c < out_cols; ++c) {
+      buffer[static_cast<std::size_t>(r) * out_cols + c] = out_rows[r][c];
+    }
+  }
+  ArrayValue* arr = arena.create<ArrayValue>();
+  if (arr == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  arr->rows = out_rows_n;
+  arr->cols = out_cols;
+  arr->cells = buffer;
+  return Value::array(arr);
+}
+
 }  // namespace eval
 }  // namespace formulon

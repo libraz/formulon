@@ -222,6 +222,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"PERCENTRANK", &eval_percentrank_inc_lazy},
     {"PERCENTRANK.EXC", &eval_percentrank_exc_lazy},
     {"PERCENTRANK.INC", &eval_percentrank_inc_lazy},
+    {"PIVOTBY", &eval_pivotby_lazy},
     {"PROB", &eval_prob_lazy},
     {"RANK", &eval_rank_eq_lazy},
     {"RANK.AVG", &eval_rank_avg_lazy},
