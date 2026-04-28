@@ -120,9 +120,9 @@ Value eval_trimrange_lazy(const parser::AstNode& call, Arena& arena, const Funct
   const std::uint32_t cols_in = in->cols;
 
   // Defensive: a 0-row or 0-col input cannot be trimmed any further, and an
-  // empty array would surface #CALC! anyway.
+  // empty array surfaces #REF! to match Mac Excel 365 (ja-JP).
   if (rows_in == 0U || cols_in == 0U) {
-    return Value::error(ErrorCode::Calc);
+    return Value::error(ErrorCode::Ref);
   }
 
   std::uint32_t row_start = 0;
@@ -152,7 +152,7 @@ Value eval_trimrange_lazy(const parser::AstNode& call, Arena& arena, const Funct
   }
 
   if (row_end <= row_start || col_end <= col_start) {
-    return Value::error(ErrorCode::Calc);
+    return Value::error(ErrorCode::Ref);
   }
 
   const std::uint32_t kept_rows = row_end - row_start;

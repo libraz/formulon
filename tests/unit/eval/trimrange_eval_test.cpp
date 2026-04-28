@@ -277,15 +277,15 @@ TEST(BuiltinsTrimRange, ScalarInputYields1x1) {
 }
 
 // ---------------------------------------------------------------------------
-// All-blank input -> #CALC!
+// All-blank input -> #REF!
 // ---------------------------------------------------------------------------
 
-TEST(BuiltinsTrimRange, AllBlankInputYieldsCalc) {
+TEST(BuiltinsTrimRange, AllBlankInputYieldsRef) {
   Workbook wb = Workbook::create();
   // A1:B2 all blank.
   const Value v = EvalIn("=TRIMRANGE(A1:B2)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Calc);
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
 // ---------------------------------------------------------------------------

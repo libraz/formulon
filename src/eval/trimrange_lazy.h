@@ -26,7 +26,7 @@
 //
 // Output shape: always an `ArrayValue`. A single-cell scalar input degenerates
 // to a 1x1 array pass-through. If trimming would consume every row or every
-// column the call surfaces `#CALC!` (Mac Excel: an empty spill is rejected).
+// column the call surfaces `#REF!`.
 
 #ifndef FORMULON_EVAL_TRIMRANGE_LAZY_H_
 #define FORMULON_EVAL_TRIMRANGE_LAZY_H_
@@ -64,7 +64,7 @@ class FunctionRegistry;
 ///   * any argument evaluates to an error -> propagate verbatim;
 ///   * `trim_rows` / `trim_cols` not coercible to a number -> `#VALUE!`;
 ///   * trim-mode integer outside `{0, 1, 2, 3}` -> `#VALUE!`;
-///   * trimming would leave zero rows or zero columns -> `#CALC!`.
+///   * trimming would leave zero rows or zero columns -> `#REF!`.
 Value eval_trimrange_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                           const EvalContext& ctx);
 
