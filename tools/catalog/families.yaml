@@ -260,3 +260,16 @@ families:
     category_file: tests/oracle/cases/distributions_ext.yaml
     min_perspectives_per_member: 5
     cluster_reason: "Post-2010 beta/gamma/lognormal/Weibull family; share special-function backends and tail-bit edges."
+
+  # -- Financial TVM and depreciation family -------------------------------
+  # Time-value-of-money primitives (PV/FV/PMT/RATE/NPER/NPV/IRR), loan
+  # amortization split (CUMIPMT/CUMPRINC/IPMT/PPMT) and book-depreciation
+  # methods (DB/DDB/SLN/SYD). They share rate/period sign-convention edges
+  # (loan vs. annuity, type=0 vs type=1) and Newton-Raphson tail-bit drift
+  # on the iterative solvers (RATE/IRR/NPER), so closure perspectives are
+  # best exercised against the same financial.yaml suite.
+  - name: financial
+    members: [CUMIPMT, CUMPRINC, DB, DDB, FV, IPMT, IRR, NPER, NPV, PMT, PPMT, PV, RATE, SLN, SYD]
+    category_file: tests/oracle/cases/financial.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "TVM and depreciation family; share rate/period sign-convention edges (loan vs. annuity, type=0 vs type=1) and Newton-Raphson tail-bit drift."

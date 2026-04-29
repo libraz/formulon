@@ -7272,3 +7272,296 @@ groups:
       - name: "fractional arguments truncate"
         probe: "=PERMUTATIONA(3.9, 2.5)"
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # Financial TVM and depreciation family. Covered by the financial closure
+  # unit (PV/FV/PMT/RATE/NPER/NPV/IRR loan amortization split CUMIPMT/
+  # CUMPRINC/IPMT/PPMT and depreciation DB/DDB/SLN/SYD) and exercised under
+  # `tests/oracle/cases/financial.yaml`. Probes are anchored on direct
+  # calls so identity-style cross-function cases (e.g. IPMT+PPMT-PMT) do
+  # not double-count perspectives across functions.
+  # -------------------------------------------------------------------------
+  - function: "PV"
+    aspect: "present value of annuity"
+    behaviors:
+      - name: "standard 5-year car loan PV"
+        probe: "=PV(0.05/12, 60, -500)"
+        expected: impl
+      - name: "rate=0 reduces PV to -(pmt*nper + fv)"
+        probe: "=PV(0, 60, -500)"
+        expected: impl
+      - name: "non-zero terminal future value"
+        probe: "=PV(0.05/12, 60, -500, -10000)"
+        expected: impl
+      - name: "annuity-due (type=1) shifts cash flows forward"
+        probe: "=PV(0.05/12, 60, -500, 0, 1)"
+        expected: impl
+      - name: "high discount rate compresses PV magnitude"
+        probe: "=PV(0.5, 10, -500)"
+        expected: impl
+
+  - function: "FV"
+    aspect: "future value of annuity"
+    behaviors:
+      - name: "standard 10-year monthly deposit"
+        probe: "=FV(0.08/12, 120, -200)"
+        expected: impl
+      - name: "rate=0 reduces FV to -(pv + pmt*nper)"
+        probe: "=FV(0, 60, -500)"
+        expected: impl
+      - name: "non-zero present value combines loan and deposit"
+        probe: "=FV(0.05/12, 60, -500, -10000)"
+        expected: impl
+      - name: "annuity-due (type=1) accrues one extra period"
+        probe: "=FV(0.08/12, 120, -200, 0, 1)"
+        expected: impl
+      - name: "high rate compounds dramatically"
+        probe: "=FV(0.1, 20, -100)"
+        expected: impl
+
+  - function: "PMT"
+    aspect: "periodic payment"
+    behaviors:
+      - name: "standard car loan payment (negative outflow)"
+        probe: "=PMT(0.05/12, 60, 25000)"
+        expected: impl
+      - name: "rate=0 reduces PMT to -(pv+fv)/nper"
+        probe: "=PMT(0, 60, 25000)"
+        expected: impl
+      - name: "annuity-due payment (smaller magnitude)"
+        probe: "=PMT(0.05/12, 60, 25000, 0, 1)"
+        expected: impl
+      - name: "scaled by nper for total payments identity"
+        probe: "PMT(0.05/12, 60, 25000)*60"
+        expected: impl
+      - name: "appears in IPMT+PPMT-PMT zero-sum identity"
+        probe: " - PMT(0.05/12, 60, 25000)"
+        expected: impl
+
+  - function: "NPER"
+    aspect: "number of periods"
+    behaviors:
+      - name: "solve duration for car loan"
+        probe: "=NPER(0.05/12, -500, 25000)"
+        expected: impl
+      - name: "rate=0 reduces NPER to -(pv+fv)/pmt"
+        probe: "=NPER(0, -500, 25000)"
+        expected: impl
+      - name: "sign mismatch yields negative NPER (not #NUM!)"
+        probe: "=NPER(0.05/12, 500, 25000)"
+        expected: impl
+      - name: "annuity-due (type=1) shortens duration"
+        probe: "=NPER(0.05/12, -500, 25000, 0, 1)"
+        expected: impl
+      - name: "non-zero terminal balance changes duration"
+        probe: "=NPER(0.05/12, -500, 25000, -5000)"
+        expected: impl
+
+  - function: "NPV"
+    aspect: "net present value"
+    behaviors:
+      - name: "flat scalar cash-flow series"
+        probe: "=NPV(0.1, 100, 200, 300)"
+        expected: impl
+      - name: "range argument flattened row-major"
+        probe: "=NPV(0.1, A1:A3)"
+        expected: impl
+      - name: "mixed scalar and range concatenated"
+        probe: "=NPV(0.1, 50, A1:A2, 300)"
+        expected: impl
+      - name: "rate=0 reduces NPV to the sum"
+        probe: "=NPV(0, 100, 200, 300)"
+        expected: impl
+      - name: "high rate collapses NPV toward first cash flow"
+        probe: "=NPV(1.0, 100, 200, 300)"
+        expected: impl
+
+  - function: "IRR"
+    aspect: "internal rate of return"
+    behaviors:
+      - name: "classic single-sign-change IRR"
+        probe: "=IRR(A1:A4)"
+        expected: impl
+      - name: "with explicit starting guess"
+        probe: "=IRR(A1:A4, 0.1)"
+        expected: impl
+      - name: "all-positive cash flows -> #NUM!"
+        probe: "=IRR(A1:A3)"
+        expected: impl
+      - name: "inline array literal as cash-flow source"
+        probe: "=IRR({-1000,300,400,500})"
+        expected: impl
+      - name: "range-bound cash-flow source"
+        probe: "IRR(A1:A"
+        expected: impl
+
+  - function: "RATE"
+    aspect: "interest rate solver"
+    behaviors:
+      - name: "solve rate from pmt and pv"
+        probe: "=RATE(60, -500, 25000)"
+        expected: impl
+      - name: "symmetric setup yields rate=0 exactly"
+        probe: "=RATE(10, -100, 1000)"
+        expected: impl
+      - name: "non-zero future value changes convergence"
+        probe: "=RATE(60, -500, 25000, -5000)"
+        expected: impl
+      - name: "annuity-due (type=1) yields different rate"
+        probe: "=RATE(60, -500, 25000, 0, 1)"
+        expected: impl
+      - name: "explicit starting guess"
+        probe: "=RATE(60, -500, 25000, 0, 0, 0.05)"
+        expected: impl
+
+  - function: "IPMT"
+    aspect: "interest portion of payment"
+    behaviors:
+      - name: "first-period interest dominates"
+        probe: "=IPMT(0.05/12, 1, 60, 25000)"
+        expected: impl
+      - name: "final-period interest is small"
+        probe: "=IPMT(0.05/12, 60, 60, 25000)"
+        expected: impl
+      - name: "per > nper -> #NUM!"
+        probe: "=IPMT(0.05/12, 61, 60, 25000)"
+        expected: impl
+      - name: "annuity-due first-period interest is exactly 0"
+        probe: "=IPMT(0.05/12, 1, 60, 25000, 0, 1)"
+        expected: impl
+      - name: "rate=0 -> IPMT=0 for any period"
+        probe: "=IPMT(0, 5, 60, 25000)"
+        expected: impl
+
+  - function: "PPMT"
+    aspect: "principal portion of payment"
+    behaviors:
+      - name: "first-period principal is small"
+        probe: "=PPMT(0.05/12, 1, 60, 25000)"
+        expected: impl
+      - name: "final-period principal is nearly the full payment"
+        probe: "=PPMT(0.05/12, 60, 60, 25000)"
+        expected: impl
+      - name: "appears in IPMT+PPMT-PMT zero-sum identity"
+        probe: "PPMT(0.05/12,5,60,25000)"
+        expected: impl
+      - name: "rate=0 -> PPMT = -pv/nper"
+        probe: "=PPMT(0, 5, 60, 25000)"
+        expected: impl
+      - name: "annuity-due first-period PPMT equals full PMT"
+        probe: "=PPMT(0.05/12, 1, 60, 25000, 0, 1)"
+        expected: impl
+
+  - function: "CUMIPMT"
+    aspect: "cumulative interest paid"
+    behaviors:
+      - name: "total interest over full term"
+        probe: "=CUMIPMT(0.05/12, 60, 25000, 1, 60, 0)"
+        expected: impl
+      - name: "interest paid during first 12 periods"
+        probe: "=CUMIPMT(0.05/12, 60, 25000, 1, 12, 0)"
+        expected: impl
+      - name: "start_period < 1 -> #NUM!"
+        probe: "=CUMIPMT(0.05/12, 60, 25000, 0, 12, 0)"
+        expected: impl
+      - name: "start > end -> #NUM!"
+        probe: "=CUMIPMT(0.05/12, 60, 25000, 24, 12, 0)"
+        expected: impl
+      - name: "appears in CUMPRINC+CUMIPMT total-payments identity"
+        probe: "+ CUMIPMT(0.05/12, 60, 25000, 1, 60, 0)"
+        expected: impl
+
+  - function: "CUMPRINC"
+    aspect: "cumulative principal paid"
+    behaviors:
+      - name: "total principal paid equals -pv"
+        probe: "=CUMPRINC(0.05/12, 60, 25000, 1, 60, 0)"
+        expected: impl
+      - name: "principal paid during first 12 periods"
+        probe: "=CUMPRINC(0.05/12, 60, 25000, 1, 12, 0)"
+        expected: impl
+      - name: "annuity-due (type=1) variant"
+        probe: "=CUMPRINC(0.05/12, 60, 25000, 1, 12, 1)"
+        expected: impl
+      - name: "start > end -> #NUM!"
+        probe: "=CUMPRINC(0.05/12, 60, 25000, 24, 12, 0)"
+        expected: impl
+      - name: "appears in CUMPRINC+CUMIPMT total-payments identity"
+        probe: " + CUMIPMT(0.05/12, 60, 25000, 1, 60, 0)"
+        expected: impl
+
+  - function: "SLN"
+    aspect: "straight-line depreciation"
+    behaviors:
+      - name: "standard (cost-salvage)/life"
+        probe: "=SLN(10000, 1000, 5)"
+        expected: impl
+      - name: "zero salvage charges full cost"
+        probe: "=SLN(10000, 0, 10)"
+        expected: impl
+      - name: "life=0 -> #DIV/0!"
+        probe: "=SLN(10000, 1000, 0)"
+        expected: impl
+      - name: "negative life returns negative depreciation (not #NUM!)"
+        probe: "=SLN(10000, 1000, -5)"
+        expected: impl
+      - name: "life=1 charges full base in one period"
+        probe: "=SLN(10000, 1000, 1)"
+        expected: impl
+
+  - function: "SYD"
+    aspect: "sum-of-years-digits depreciation"
+    behaviors:
+      - name: "first period (highest charge)"
+        probe: "=SYD(10000, 1000, 5, 1)"
+        expected: impl
+      - name: "last period (smallest charge)"
+        probe: "=SYD(10000, 1000, 5, 5)"
+        expected: impl
+      - name: "sum across all periods equals depreciable base"
+        probe: "=SYD(10000,1000,5,1)+SYD(10000,1000,5,2)"
+        expected: impl
+      - name: "period > life -> #NUM!"
+        probe: "=SYD(10000, 1000, 5, 6)"
+        expected: impl
+      - name: "life=1 collapses to full depreciable base"
+        probe: "=SYD(10000, 1000, 1, 1)"
+        expected: impl
+
+  - function: "DDB"
+    aspect: "double-declining-balance depreciation"
+    behaviors:
+      - name: "first period at default factor=2"
+        probe: "=DDB(10000, 1000, 5, 1)"
+        expected: impl
+      - name: "second period uses remaining book value"
+        probe: "=DDB(10000, 1000, 5, 2)"
+        expected: impl
+      - name: "salvage floor caps last-period charge"
+        probe: "=DDB(10000, 1000, 5, 5)"
+        expected: impl
+      - name: "custom factor=3 triples the rate"
+        probe: "=DDB(10000, 1000, 5, 1, 3)"
+        expected: impl
+      - name: "period > life -> #NUM!"
+        probe: "=DDB(10000, 1000, 5, 6)"
+        expected: impl
+
+  - function: "DB"
+    aspect: "fixed-rate declining-balance depreciation"
+    behaviors:
+      - name: "full-year first period (default month=12)"
+        probe: "=DB(10000, 1000, 5, 1)"
+        expected: impl
+      - name: "full-year last period (residual charge)"
+        probe: "=DB(10000, 1000, 5, 5)"
+        expected: impl
+      - name: "partial first year (month=6) prorates"
+        probe: "=DB(10000, 1000, 5, 1, 6)"
+        expected: impl
+      - name: "partial last year at period life+1"
+        probe: "=DB(10000, 1000, 5, 6, 6)"
+        expected: impl
+      - name: "month > 12 -> #NUM!"
+        probe: "=DB(10000, 1000, 5, 1, 13)"
+        expected: impl

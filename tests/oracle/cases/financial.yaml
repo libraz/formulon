@@ -26,6 +26,10 @@ cases:
     description: "Annuity-due: type=1 shifts cash flows forward one period"
     formula: "=PV(0.05/12, 60, -500, 0, 1)"
 
+  - id: pv_high_rate
+    description: "High discount rate (50% annual) heavily reduces PV magnitude"
+    formula: "=PV(0.5, 10, -500)"
+
   # -- FV ------------------------------------------------------------------
   - id: fv_basic
     description: "10-year monthly deposit at 8%"
@@ -38,6 +42,14 @@ cases:
   - id: fv_with_pv
     description: "FV with non-zero present value (combining loan and monthly deposit)"
     formula: "=FV(0.05/12, 60, -500, -10000)"
+
+  - id: fv_type_1
+    description: "Annuity-due FV (type=1) accrues one extra period of interest"
+    formula: "=FV(0.08/12, 120, -200, 0, 1)"
+
+  - id: fv_high_rate
+    description: "High rate (10% per period over 20 periods) compounds dramatically"
+    formula: "=FV(0.1, 20, -100)"
 
   # -- PMT -----------------------------------------------------------------
   - id: pmt_basic
@@ -67,6 +79,14 @@ cases:
       answer (a negative NPER), not #NUM! as older references suggest.
     formula: "=NPER(0.05/12, 500, 25000)"
 
+  - id: nper_type_1
+    description: "Annuity-due NPER (type=1) takes slightly fewer periods than ordinary"
+    formula: "=NPER(0.05/12, -500, 25000, 0, 1)"
+
+  - id: nper_with_fv
+    description: "NPER with non-zero terminal balance (loan to a residual)"
+    formula: "=NPER(0.05/12, -500, 25000, -5000)"
+
   # -- NPV -----------------------------------------------------------------
   - id: npv_basic_scalars
     description: "NPV across flat scalar args"
@@ -85,6 +105,10 @@ cases:
   - id: npv_zero_rate
     description: "rate=0 reduces NPV to the sum"
     formula: "=NPV(0, 100, 200, 300)"
+
+  - id: npv_high_rate
+    description: "High discount rate (100%) collapses NPV toward the first cash flow / 2"
+    formula: "=NPV(1.0, 100, 200, 300)"
 
   # -- IRR -----------------------------------------------------------------
   - id: irr_basic
@@ -175,6 +199,16 @@ cases:
       Authored as an algebraic difference so the oracle is verifying zero.
     formula: "=IPMT(0.05/12,5,60,25000) + PPMT(0.05/12,5,60,25000) - PMT(0.05/12,60,25000)"
 
+  - id: ppmt_zero_rate
+    description: "rate=0 -> PPMT = -pv/nper for every period (whole payment is principal)"
+    formula: "=PPMT(0, 5, 60, 25000)"
+
+  - id: ppmt_type_1_first_period
+    description: |
+      Annuity-due first-period PPMT equals the full PMT (since the
+      first-period interest under type=1 is exactly zero).
+    formula: "=PPMT(0.05/12, 1, 60, 25000, 0, 1)"
+
   # -- CUMIPMT -------------------------------------------------------------
   - id: cumipmt_full_range
     description: "Total interest over 5 years on a 25k loan at 5%/12"
@@ -203,6 +237,18 @@ cases:
       Authored as an algebraic difference so the oracle verifies zero.
     formula: "=CUMPRINC(0.05/12, 60, 25000, 1, 60, 0) + CUMIPMT(0.05/12, 60, 25000, 1, 60, 0) - PMT(0.05/12, 60, 25000)*60"
 
+  - id: cumprinc_first_year
+    description: "Principal paid during the first 12 periods of a 5-year loan"
+    formula: "=CUMPRINC(0.05/12, 60, 25000, 1, 12, 0)"
+
+  - id: cumprinc_type_1
+    description: "Annuity-due CUMPRINC (type=1) has slightly smaller magnitude than type=0"
+    formula: "=CUMPRINC(0.05/12, 60, 25000, 1, 12, 1)"
+
+  - id: cumprinc_reversed_range_is_num
+    description: "start > end -> #NUM!"
+    formula: "=CUMPRINC(0.05/12, 60, 25000, 24, 12, 0)"
+
   # -- SLN -----------------------------------------------------------------
   - id: sln_basic
     description: "Straight-line: (10000-1000)/5 = 1800 per period"
@@ -221,6 +267,10 @@ cases:
       Oracle-verified: Excel 365 Mac returns the raw algebraic answer
       (-1800 here), not #NUM!. Case id retained for history.
     formula: "=SLN(10000, 1000, -5)"
+
+  - id: sln_life_one
+    description: "life=1: full depreciable base (cost-salvage) charged in a single period"
+    formula: "=SLN(10000, 1000, 1)"
 
   # -- SYD -----------------------------------------------------------------
   - id: syd_first_period
@@ -241,6 +291,10 @@ cases:
   - id: syd_period_out_of_range_is_num
     description: "period > life -> #NUM!"
     formula: "=SYD(10000, 1000, 5, 6)"
+
+  - id: syd_life_one
+    description: "life=1, period=1: SYD reduces to (cost-salvage) charged in a single period"
+    formula: "=SYD(10000, 1000, 1, 1)"
 
   # -- DDB -----------------------------------------------------------------
   - id: ddb_first_period

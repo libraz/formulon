@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-23T04:40:04Z"
+    "generated_at": "2026-04-29T00:58:21Z"
   },
   "tolerance": {
     "abs": 0.001,
@@ -50,6 +50,15 @@
       }
     },
     {
+      "id": "pv_high_rate",
+      "formula": "=PV(0.5, 10, -500)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 982.6585
+      }
+    },
+    {
       "id": "fv_basic",
       "formula": "=FV(0.08/12, 120, -200)",
       "setup": {},
@@ -74,6 +83,24 @@
       "expect": {
         "kind": "number",
         "value": 46836.6282
+      }
+    },
+    {
+      "id": "fv_type_1",
+      "formula": "=FV(0.08/12, 120, -200, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 36833.1351
+      }
+    },
+    {
+      "id": "fv_high_rate",
+      "formula": "=FV(0.1, 20, -100)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5727.4999
       }
     },
     {
@@ -128,6 +155,24 @@
       "expect": {
         "kind": "number",
         "value": -45.51263534057219
+      }
+    },
+    {
+      "id": "nper_type_1",
+      "formula": "=NPER(0.05/12, -500, 25000, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 55.9218224897202
+      }
+    },
+    {
+      "id": "nper_with_fv",
+      "formula": "=NPER(0.05/12, -500, 25000, -5000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45.94871824064973
       }
     },
     {
@@ -186,6 +231,15 @@
       "expect": {
         "kind": "number",
         "value": 600.0
+      }
+    },
+    {
+      "id": "npv_high_rate",
+      "formula": "=NPV(1.0, 100, 200, 300)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 137.5
       }
     },
     {
@@ -420,6 +474,24 @@
       }
     },
     {
+      "id": "ppmt_zero_rate",
+      "formula": "=PPMT(0, 5, 60, 25000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -416.6667
+      }
+    },
+    {
+      "id": "ppmt_type_1_first_period",
+      "formula": "=PPMT(0.05/12, 1, 60, 25000, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -469.8232
+      }
+    },
+    {
       "id": "cumipmt_full_range",
       "formula": "=CUMIPMT(0.05/12, 60, 25000, 1, 60, 0)",
       "setup": {},
@@ -474,6 +546,33 @@
       }
     },
     {
+      "id": "cumprinc_first_year",
+      "formula": "=CUMPRINC(0.05/12, 60, 25000, 1, 12, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4513.8813245399615
+      }
+    },
+    {
+      "id": "cumprinc_type_1",
+      "formula": "=CUMPRINC(0.05/12, 60, 25000, 1, 12, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4598.88596634685
+      }
+    },
+    {
+      "id": "cumprinc_reversed_range_is_num",
+      "formula": "=CUMPRINC(0.05/12, 60, 25000, 24, 12, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
       "id": "sln_basic",
       "formula": "=SLN(10000, 1000, 5)",
       "setup": {},
@@ -510,6 +609,15 @@
       }
     },
     {
+      "id": "sln_life_one",
+      "formula": "=SLN(10000, 1000, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9000.0
+      }
+    },
+    {
       "id": "syd_first_period",
       "formula": "=SYD(10000, 1000, 5, 1)",
       "setup": {},
@@ -543,6 +651,15 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      }
+    },
+    {
+      "id": "syd_life_one",
+      "formula": "=SYD(10000, 1000, 1, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9000.0
       }
     },
     {
