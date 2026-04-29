@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-28T08:58:46Z"
+    "generated_at": "2026-04-29T09:04:06Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -88,13 +88,27 @@
       "id": "forecast_ets_confint_default_confidence",
       "formula": "=FORECAST.ETS.CONFINT(11, {10;12;14;16;18;20;22;24;26;28}, {1;2;3;4;5;6;7;8;9;10}, 0.95)",
       "setup": {},
-      "skipped": "Holt-Winters fit on linear data: Mac drives RMSE -> 0, Formulon's Nelder-Mead does not. Half-width values diverge by O(1)."
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.01,
+        "rel": 0.01
+      }
     },
     {
       "id": "forecast_ets_confint_higher_confidence",
       "formula": "=FORECAST.ETS.CONFINT(11, {10;12;14;16;18;20;22;24;26;28}, {1;2;3;4;5;6;7;8;9;10}, 0.99)",
       "setup": {},
-      "skipped": "Same Mac vs Formulon RMSE convergence gap on linear data; confidence multiplier (z) cannot compensate."
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.01,
+        "rel": 0.01
+      }
     },
     {
       "id": "forecast_ets_confint_target_inside_window",
@@ -173,13 +187,20 @@
       "id": "forecast_ets_stat_alpha",
       "formula": "=FORECAST.ETS.STAT({10;12;14;11;12;14;16;13;14;16;18;15;16;18;20;17}, {1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16}, 1)",
       "setup": {},
-      "skipped": "Mac Excel's optimizer converges to alpha ~0.751 on cyclic period-4 data; Formulon's bounded Nelder-Mead settles at ~0.249. Algorithmic difference, not tail-bit drift."
+      "skipped": "On cyclic period-4 data where joint optimisation drives RMSE -> 0, the alpha value is non-unique: any (alpha, beta, gamma, initial-state) combination with the same forecast manifold yields the same SSE. Mac selects alpha ~0.751 via its bias / regularisation; Formulon's bounded Nelder-Mead reaches RMSE = 0 at alpha ~0.09. The fit quality (RMSE / MASE) matches Mac; the smoothing weight is a non-identifiable parameter on this fixture."
     },
     {
       "id": "forecast_ets_stat_rmse",
       "formula": "=FORECAST.ETS.STAT({10;12;14;11;12;14;16;13;14;16;18;15;16;18;20;17}, {1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16}, 7)",
       "setup": {},
-      "skipped": "Mac achieves RMSE ~0 on cyclic period-4 data via a tight fit; Formulon's optimizer settles at RMSE ~0.5. Same root cause as forecast_ets_stat_alpha."
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.05,
+        "rel": 0.05
+      }
     },
     {
       "id": "forecast_ets_stat_step_size",
@@ -194,7 +215,14 @@
       "id": "forecast_ets_stat_mase",
       "formula": "=FORECAST.ETS.STAT({10;12;14;11;12;14;16;13;14;16;18;15;16;18;20;17}, {1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16}, 4)",
       "setup": {},
-      "skipped": "MASE follows the same fit-quality gap as the RMSE divergence; Mac's near-zero residuals yield MASE ~0, Formulon's residuals yield a nontrivial value."
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.05,
+        "rel": 0.05
+      }
     },
     {
       "id": "forecast_ets_stat_zero",
