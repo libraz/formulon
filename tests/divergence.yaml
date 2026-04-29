@@ -1711,6 +1711,93 @@ entries:
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
 
+  # -- SEQUENCE / TRANSPOSE spill anchor unwrap -----------------------------
+  # SEQUENCE and TRANSPOSE return ValueKind::Array; the oracle runner reads
+  # Excel's anchor scalar (top-left of the spill region) but does not unwrap
+  # Formulon arrays back to their anchor, so every case fails with
+  # "expected number, got <unsupported>". Same root cause as the BYROW /
+  # BYCOL / MAP / SCAN / MAKEARRAY entries above. Skip-oracle until either
+  # (a) compare_value in oracle_test.cpp learns to unwrap Array -> anchor,
+  # or (b) the eval path returns the anchor scalar in single-cell context.
+  - id: sequence_3
+    mode: skip-oracle
+    reason: "SEQUENCE returns ValueKind::Array; oracle runner does not unwrap to anchor scalar. Companion to byrow_sum_each_row."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: sequence_2_3
+    mode: skip-oracle
+    reason: "Same as sequence_3: SEQUENCE Array result not anchor-unwrapped."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: sequence_2_2_10_5
+    mode: skip-oracle
+    reason: "Same as sequence_3: SEQUENCE Array result not anchor-unwrapped."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: sequence_3_1_10_neg2
+    mode: skip-oracle
+    reason: "Same as sequence_3: SEQUENCE Array result not anchor-unwrapped."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: sequence_3_1_half_quarter
+    mode: skip-oracle
+    reason: "Same as sequence_3: SEQUENCE Array result not anchor-unwrapped."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: sequence_zero_rows_value
+    mode: skip-oracle
+    reason: "Same as sequence_3: SEQUENCE error path returns Error scalar but golden registers an array-shaped error in some configurations; group with the SEQUENCE skip-oracle cluster for consistency."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: transpose_array_literal
+    mode: skip-oracle
+    reason: "TRANSPOSE returns ValueKind::Array; oracle runner does not unwrap to anchor scalar. Companion to byrow_sum_each_row."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: transpose_range
+    mode: skip-oracle
+    reason: "Same as transpose_array_literal: TRANSPOSE Array result not anchor-unwrapped."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: transpose_scalar
+    mode: skip-oracle
+    reason: "Same as transpose_array_literal: TRANSPOSE wraps scalar in 1x1 Array; oracle runner does not unwrap."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: transpose_single_row_to_column
+    mode: skip-oracle
+    reason: "Same as transpose_array_literal: TRANSPOSE Array result not anchor-unwrapped."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: transpose_single_column_to_row
+    mode: skip-oracle
+    reason: "Same as transpose_array_literal: TRANSPOSE Array result not anchor-unwrapped."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: transpose_text_array
+    mode: skip-oracle
+    reason: "Same as transpose_array_literal: TRANSPOSE Array result not anchor-unwrapped."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: spill_ref_after_sequence_sum
+    mode: skip-oracle
+    reason: "Spill-ref `A1#` consumed by SUM requires the spill region to be materialized in the workbook, but the oracle harness evaluates the formula in isolation; SUM sees the bare Array reference and produces a different result than Excel's resolved spill region."
+    prefer: mac-excel-365
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

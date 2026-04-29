@@ -444,3 +444,114 @@ families:
     category_file: tests/oracle/cases/engineering_special.yaml
     min_perspectives_per_member: 5
     cluster_reason: "Bessel-function and error-function family; share infinite-series convergence edges and 1-bit numerical drift on transcendentals."
+
+  # -- Snedecor's F distribution family ------------------------------------
+  # F.DIST / F.DIST.RT / F.INV / F.INV.RT share the two-degree-of-freedom
+  # parameter validity edges (df1 / df2 must be >= 1) and the tail-direction
+  # dichotomy (left vs. right tail). Closure perspectives parallel across the
+  # cluster: standard call, boundary x=0 or p=0/1, large-df normal-like
+  # convergence, df<1 -> #NUM!, and cumulative TRUE vs FALSE for the .DIST
+  # forms.
+  - name: f_dist
+    members: ["F.DIST", "F.DIST.RT", "F.INV", "F.INV.RT"]
+    category_file: tests/oracle/cases/f_dist.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "F-distribution family; share two-degree-of-freedom validity edges and tail-direction dichotomy."
+
+  # -- Chi-square distribution family --------------------------------------
+  # CHISQ.DIST / CHISQ.DIST.RT / CHISQ.INV / CHISQ.INV.RT share the df
+  # parameter validity edges (df >= 1, fractional df truncates) and the
+  # one-tail dichotomy (left vs. right). Closure perspectives parallel
+  # across the cluster.
+  - name: chisq
+    members: ["CHISQ.DIST", "CHISQ.DIST.RT", "CHISQ.INV", "CHISQ.INV.RT"]
+    category_file: tests/oracle/cases/chisq.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Chi-square distribution family; share df parameter validity edges and one-tail dichotomy."
+
+  # -- Counting predicates -------------------------------------------------
+  # COUNT / COUNTA / COUNTBLANK share blank/text/error inclusion semantics
+  # over the same range fixtures. They co-evolve on the bool-as-direct-arg
+  # vs. bool-in-range distinction, the empty-string-formula counts-as-blank
+  # quirk, and the error-cell-skipped-vs-propagates dichotomy.
+  - name: count
+    members: [COUNT, COUNTA, COUNTBLANK]
+    category_file: tests/oracle/cases/count.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Counting predicates; share blank/text/error inclusion semantics."
+
+  # -- Halfwidth / fullwidth conversion family -----------------------------
+  # ASC (full -> half), DBCS / JIS (half -> full) share Unicode block
+  # transformations and ja-JP locale-bound semantics. JIS and DBCS resolve
+  # to the same internal implementation (see src/eval/builtins/text_width.cpp).
+  - name: width
+    members: [ASC, DBCS, JIS]
+    category_file: tests/oracle/cases/width.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "ja-JP halfwidth/fullwidth conversion; share Unicode block transformations and locale-bound semantics."
+
+  # -- Accrued-interest and depreciation family ---------------------------
+  # ACCRINT / ACCRINTM (accrued interest), AMORDEGRC / AMORLINC (French
+  # amortization), VDB (variable declining balance) share the day-count
+  # convention basis matrix (0..4) and the issue-vs-settlement ordering
+  # convention. AMOR* are coupled by their period-1 special cases and
+  # shared first-period proration.
+  - name: financial_accrual
+    members: [ACCRINT, ACCRINTM, AMORDEGRC, AMORLINC, VDB]
+    category_file: tests/oracle/cases/financial_accrual.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Accrued-interest and depreciation family; share DCC basis and AMOR amortization semantics."
+
+  # -- Date-aware IRR / NPV family ----------------------------------------
+  # XIRR / XNPV operate over irregular date schedules, sharing the
+  # date-vs-cashflow length-mismatch surface, the sorted-vs-unsorted dates
+  # convention, and Newton-Raphson convergence on the IRR side.
+  - name: xirr_xnpv
+    members: [XIRR, XNPV]
+    category_file: tests/oracle/cases/xirr_xnpv.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Date-aware IRR/NPV; share Newton-Raphson on irregular date schedules."
+
+  # -- Multi-criteria conditional aggregators ------------------------------
+  # AVERAGEIFS / COUNTIFS share the (criteria_range, criterion) pair-arg
+  # dispatch, the all-must-match AND semantics, and the criteria-range
+  # length-mismatch -> #VALUE! surface. SUMIFS / MAXIFS / MINIFS belong to
+  # the countif_edges family; this `ifs` family covers the two whose
+  # behaviors haven't been declared elsewhere.
+  - name: countifs_averageifs
+    members: [AVERAGEIFS, COUNTIFS]
+    category_file: tests/oracle/cases/ifs.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Multi-criteria conditional aggregators; share criterion-pair dispatch and length-mismatch perspectives."
+
+  # -- Simple numeric aggregates ------------------------------------------
+  # AVERAGE / MAX / MIN / PRODUCT share the text/blank/error skip semantics
+  # over a range, the bool-as-direct-arg-but-skipped-in-range dichotomy,
+  # and the empty-range identity (AVERAGE -> #DIV/0!, MIN/MAX -> 0,
+  # PRODUCT -> 0). SUM is intentionally not included; its closure unit is
+  # `shape` (because SUM appears in dynamic-array shape fixtures).
+  - name: aggregate_simple
+    members: [AVERAGE, MAX, MIN, PRODUCT]
+    category_file: tests/oracle/cases/aggregate.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Simple-aggregate family (numeric); share text/blank/error skip semantics and array-spill perspectives."
+
+  # -- Dynamic-array spill primitives -------------------------------------
+  # SEQUENCE generates a 2D number range; TRANSPOSE swaps the dimensions of
+  # an arbitrary range. They share the spill-anchor read-back semantics
+  # that the xlwings driver uses (single-cell reads return the top-left of
+  # the spill region) and the shape-coercion edges (scalar -> 1x1).
+  - name: dynamic_array_core
+    members: [SEQUENCE, TRANSPOSE]
+    category_file: tests/oracle/cases/dynamic_array.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Dynamic-array spill primitives; share spill-anchor semantics and shape-coercion edges."
+
+  # -- ADDRESS singleton (cases live in references.yaml) ------------------
+  # Routed explicitly so closure_check uses the references.yaml category
+  # instead of the singleton fallback (`address.yaml`, which doesn't exist).
+  - name: address
+    members: [ADDRESS]
+    category_file: tests/oracle/cases/references.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Pure scalar text builder; cases live with INDIRECT/OFFSET in references.yaml since they share the reference-manipulation surface."

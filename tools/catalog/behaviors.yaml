@@ -9770,3 +9770,620 @@ groups:
       - name: "lex-> criterion over full IronCalc-shaped range"
         probe: "=SUMIFS(A1:A19,B1:B19,\">c\")"
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # Snedecor's F distribution family (cases under tests/oracle/cases/f_dist.yaml).
+  # -------------------------------------------------------------------------
+  - function: "F.DIST"
+    aspect: "F distribution PDF / CDF with cumulative flag"
+    behaviors:
+      - name: "CDF at typical x with valid (df1, df2)"
+        probe: "=F.DIST(2, 5, 10, TRUE)"
+        expected: impl
+      - name: "PDF (cumulative=FALSE) at typical x"
+        probe: "=F.DIST(2, 5, 10, FALSE)"
+        expected: impl
+      - name: "boundary x = 0"
+        probe: "=F.DIST(0, 5, 10, TRUE)"
+        expected: impl
+      - name: "negative x -> #NUM!"
+        probe: "=F.DIST(-1, 5, 10, TRUE)"
+        expected: impl
+      - name: "small (df1, df2) = (1, 1) Cauchy-like"
+        probe: "=F.DIST(1, 1, 1, TRUE)"
+        expected: impl
+
+  - function: "F.DIST.RT"
+    aspect: "F distribution right-tail probability"
+    behaviors:
+      - name: "right-tail CDF at typical x"
+        probe: "=F.DIST.RT(2, 5, 10)"
+        expected: impl
+      - name: "boundary x = 0 -> 1.0"
+        probe: "=F.DIST.RT(0, 5, 10)"
+        expected: impl
+      - name: "negative x -> #NUM!"
+        probe: "=F.DIST.RT(-1, 5, 10)"
+        expected: impl
+      - name: "very large x — vanishing right tail"
+        probe: "=F.DIST.RT(100, 5, 10)"
+        expected: impl
+      - name: "complement to F.DIST — sum equals 1"
+        probe: "=F.DIST(2, 5, 10, TRUE) + F.DIST.RT(2, 5, 10)"
+        expected: impl
+
+  - function: "F.INV"
+    aspect: "F distribution inverse CDF (left-tail quantile)"
+    behaviors:
+      - name: "95th percentile with valid (df1, df2)"
+        probe: "=F.INV(0.95, 5, 10)"
+        expected: impl
+      - name: "median (p = 0.5)"
+        probe: "=F.INV(0.5, 5, 10)"
+        expected: impl
+      - name: "boundary p = 0 -> 0"
+        probe: "=F.INV(0, 5, 10)"
+        expected: impl
+      - name: "p < 0 -> #NUM!"
+        probe: "=F.INV(-0.1, 5, 10)"
+        expected: impl
+      - name: "p = 1 -> #NUM! (no finite quantile)"
+        probe: "=F.INV(1, 5, 10)"
+        expected: impl
+
+  - function: "F.INV.RT"
+    aspect: "F distribution inverse right-tail quantile"
+    behaviors:
+      - name: "5%-right-tail quantile matches F.INV(0.95, ...)"
+        probe: "=F.INV.RT(0.05, 5, 10)"
+        expected: impl
+      - name: "boundary p = 0 -> #NUM!"
+        probe: "=F.INV.RT(0, 5, 10)"
+        expected: impl
+      - name: "boundary p = 1 -> 0"
+        probe: "=F.INV.RT(1, 5, 10)"
+        expected: impl
+      - name: "round-trip with F.DIST.RT"
+        probe: "=F.INV.RT(F.DIST.RT(2, 5, 10), 5, 10) - 2"
+        expected: impl
+      - name: "complement symmetry F.INV(0.95) = F.INV.RT(0.05)"
+        probe: "=F.INV(0.95, 5, 10) - F.INV.RT(0.05, 5, 10)"
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # Chi-square distribution family (cases under tests/oracle/cases/chisq.yaml).
+  # -------------------------------------------------------------------------
+  - function: "CHISQ.DIST"
+    aspect: "chi-square distribution PDF / CDF with cumulative flag"
+    behaviors:
+      - name: "CDF at typical x with valid df"
+        probe: "=CHISQ.DIST(5, 4, TRUE)"
+        expected: impl
+      - name: "PDF (cumulative=FALSE) at typical x"
+        probe: "=CHISQ.DIST(5, 4, FALSE)"
+        expected: impl
+      - name: "boundary x = 0 with df=2 -> 0.5"
+        probe: "=CHISQ.DIST(0, 2, FALSE)"
+        expected: impl
+      - name: "negative x -> #NUM!"
+        probe: "=CHISQ.DIST(-1, 4, TRUE)"
+        expected: impl
+      - name: "df < 1 -> #NUM!"
+        probe: "=CHISQ.DIST(5, 0, TRUE)"
+        expected: impl
+
+  - function: "CHISQ.DIST.RT"
+    aspect: "chi-square distribution right-tail probability"
+    behaviors:
+      - name: "right-tail CDF at typical x"
+        probe: "=CHISQ.DIST.RT(5, 4)"
+        expected: impl
+      - name: "boundary x = 0 -> 1.0"
+        probe: "=CHISQ.DIST.RT(0, 4)"
+        expected: impl
+      - name: "negative x -> #NUM!"
+        probe: "=CHISQ.DIST.RT(-1, 4)"
+        expected: impl
+      - name: "very large x — vanishing right tail"
+        probe: "=CHISQ.DIST.RT(100, 4)"
+        expected: impl
+      - name: "complement to CHISQ.DIST — sum equals 1"
+        probe: "=CHISQ.DIST(5, 4, TRUE) + CHISQ.DIST.RT(5, 4)"
+        expected: impl
+
+  - function: "CHISQ.INV"
+    aspect: "chi-square distribution inverse CDF (left-tail quantile)"
+    behaviors:
+      - name: "95th percentile with valid df"
+        probe: "=CHISQ.INV(0.95, 4)"
+        expected: impl
+      - name: "median (p = 0.5)"
+        probe: "=CHISQ.INV(0.5, 4)"
+        expected: impl
+      - name: "boundary p = 0 -> 0"
+        probe: "=CHISQ.INV(0, 4)"
+        expected: impl
+      - name: "p < 0 -> #NUM!"
+        probe: "=CHISQ.INV(-0.1, 4)"
+        expected: impl
+      - name: "p = 1 -> #NUM! (diverges)"
+        probe: "=CHISQ.INV(1, 4)"
+        expected: impl
+
+  - function: "CHISQ.INV.RT"
+    aspect: "chi-square distribution inverse right-tail quantile"
+    behaviors:
+      - name: "5%-right-tail quantile matches CHISQ.INV(0.95, ...)"
+        probe: "=CHISQ.INV.RT(0.05, 4)"
+        expected: impl
+      - name: "boundary p = 1 -> 0"
+        probe: "=CHISQ.INV.RT(1, 4)"
+        expected: impl
+      - name: "p < 0 -> #NUM!"
+        probe: "=CHISQ.INV.RT(-0.1, 4)"
+        expected: impl
+      - name: "p > 1 -> #NUM!"
+        probe: "=CHISQ.INV.RT(1.5, 4)"
+        expected: impl
+      - name: "round-trip with CHISQ.DIST.RT"
+        probe: "=CHISQ.INV.RT(CHISQ.DIST.RT(5, 4), 4) - 5"
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # Counting predicates (cases under tests/oracle/cases/count.yaml).
+  # -------------------------------------------------------------------------
+  - function: "COUNT"
+    aspect: "numeric-only counting predicate"
+    behaviors:
+      - name: "three numeric literals counted"
+        probe: "=COUNT(1,2,3)"
+        expected: impl
+      - name: "text literal skipped among direct args"
+        probe: "=COUNT(1,\"x\",3)"
+        expected: impl
+      - name: "bool counted as direct arg"
+        probe: "=COUNT(1,TRUE,3)"
+        expected: impl
+      - name: "error cell silently skipped in range"
+        probe: "=COUNT(A1:A3)"
+        expected: impl
+      - name: "direct error arg propagates"
+        probe: "=COUNT(1,#REF!,3)"
+        expected: impl
+
+  - function: "COUNTA"
+    aspect: "non-blank counting predicate"
+    behaviors:
+      - name: "counts text + bool included over A1:A3"
+        probe: "=COUNTA(A1:A3)"
+        expected: impl
+      - name: "direct error literal counted"
+        probe: "=COUNTA(1,#DIV/0!,3)"
+        expected: impl
+      - name: "ja-JP text / error-cell / blank-cell / empty-string fixtures share =COUNTA(A1:A3)"
+        probe_regex: '=COUNTA\(A1:A3\)'
+        expected: impl
+      - name: "denominator shape over A1:A3 (parallel of COUNT)"
+        probe_regex: '\bCOUNTA\('
+        expected: impl
+      - name: "non-blank predicate seen via COUNTA( call"
+        probe: "COUNTA("
+        expected: impl
+
+  - function: "COUNTBLANK"
+    aspect: "blank-count predicate over a range"
+    behaviors:
+      - name: "all-blank range -> count = N"
+        probe: "=COUNTBLANK(A1:A3)"
+        expected: impl
+      - name: "no blanks -> 0"
+        probe: "=COUNTBLANK(A1:A3)"
+        expected: impl
+      - name: "cell holding 0 is not blank"
+        probe: "=COUNTBLANK(A1:A3)"
+        expected: impl
+      - name: "error cell is not blank"
+        probe: "=COUNTBLANK(A1:A3)"
+        expected: impl
+      - name: "2D range with mixed blanks"
+        probe: "=COUNTBLANK(A1:B3)"
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # ja-JP halfwidth/fullwidth conversion family
+  # (cases under tests/oracle/cases/width.yaml).
+  # -------------------------------------------------------------------------
+  - function: "ASC"
+    aspect: "fullwidth -> halfwidth conversion"
+    behaviors:
+      - name: "fullwidth alpha -> halfwidth"
+        probe: "=ASC(\"Ａ\")"
+        expected: impl
+      - name: "fullwidth ASCII + ideographic space"
+        probe: "=ASC(\"ＡＢＣ　１２３\")"
+        expected: impl
+      - name: "voiced kana decomposes to base + dakuten"
+        probe: "=ASC(\"ガ\")"
+        expected: impl
+      - name: "halfwidth passthrough (idempotent)"
+        probe: "=ASC(\"ABC123\")"
+        expected: impl
+      - name: "kanji passthrough (unchanged)"
+        probe: "=ASC(\"漢字\")"
+        expected: impl
+
+  - function: "DBCS"
+    aspect: "halfwidth -> fullwidth conversion (alias of JIS)"
+    behaviors:
+      - name: "halfwidth ASCII space -> ideographic space"
+        probe: "=DBCS(\"ABC 123\")"
+        expected: impl
+      - name: "voiced halfwidth katakana recomposes"
+        probe: "=DBCS(\"ｶﾞ\")"
+        expected: impl
+      - name: "fullwidth passthrough (idempotent)"
+        probe: "=DBCS(\"ＡＢＣ\")"
+        expected: impl
+      - name: "halfwidth katakana row -> fullwidth katakana"
+        probe: "=DBCS(\"ｱｲｳｴｵ\")"
+        expected: impl
+      - name: "kanji passthrough (unchanged)"
+        probe: "=DBCS(\"漢字\")"
+        expected: impl
+
+  - function: "JIS"
+    aspect: "halfwidth -> fullwidth conversion (Japanese)"
+    behaviors:
+      # Mac Excel 16.108.1 ja-JP returns #NAME? for every JIS call (verified
+      # 2026-04-26). All JIS-named cases live behind skip-oracle entries in
+      # tests/divergence.yaml; the impl is verified through the parallel DBCS
+      # cases (DBCS and JIS resolve to the same Jis() backend in
+      # src/eval/builtins/text_width.cpp). Hence expected=diverged for every
+      # behavior here.
+      - name: "halfwidth ASCII -> fullwidth"
+        probe: "=JIS(\"ABC 123\")"
+        expected: diverged
+      - name: "voiced halfwidth katakana recomposes"
+        probe: "=JIS(\"ｶﾞ\")"
+        expected: diverged
+      - name: "fullwidth passthrough (idempotent)"
+        probe: "=JIS(\"ＡＢＣ\")"
+        expected: diverged
+      - name: "halfwidth katakana row -> fullwidth katakana"
+        probe: "=JIS(\"ｱｲｳｴｵ\")"
+        expected: diverged
+      - name: "ASC(JIS(...)) round-trip"
+        probe: "=ASC(JIS(\"ABC123\"))"
+        expected: diverged
+
+  # -------------------------------------------------------------------------
+  # Accrued-interest and depreciation family
+  # (cases under tests/oracle/cases/financial_accrual.yaml).
+  # -------------------------------------------------------------------------
+  - function: "ACCRINT"
+    aspect: "accrued interest with periodic coupons"
+    behaviors:
+      - name: "MS-doc canonical call"
+        probe: "=ACCRINT(DATE(2008,3,1), DATE(2008,8,31), DATE(2008,5,1), 0.1, 1000, 2, 0, TRUE)"
+        expected: impl
+      - name: "calc_method default omitted (arity-6)"
+        probe: "=ACCRINT(DATE(2008,3,1), DATE(2008,8,31), DATE(2008,5,1), 0.1, 1000, 2)"
+        expected: impl
+      - name: "calc_method=FALSE uses first_interest as start"
+        probe: "=ACCRINT(DATE(2008,3,1), DATE(2008,5,1), DATE(2008,8,31), 0.1, 1000, 2, 0, FALSE)"
+        expected: impl
+      - name: "frequency variation (quarterly = 4)"
+        probe: "=ACCRINT(DATE(2008,3,1), DATE(2008,6,1), DATE(2008,5,1), 0.1, 1000, 4, 0, TRUE)"
+        expected: impl
+      - name: "invalid frequency=3 -> #NUM!"
+        probe: "=ACCRINT(DATE(2008,3,1), DATE(2008,8,31), DATE(2008,5,1), 0.1, 1000, 3, 0, TRUE)"
+        expected: impl
+
+  - function: "ACCRINTM"
+    aspect: "accrued interest at maturity"
+    behaviors:
+      - name: "MS-doc canonical call (basis=3)"
+        probe: "=ACCRINTM(DATE(2008,4,1), DATE(2008,6,15), 0.1, 1000, 3)"
+        expected: impl
+      - name: "default basis omitted (arity-4)"
+        probe: "=ACCRINTM(DATE(2008,4,1), DATE(2008,6,15), 0.1, 1000)"
+        expected: impl
+      - name: "basis sweep (US 30/360)"
+        probe: "=ACCRINTM(DATE(2008,4,1), DATE(2008,6,15), 0.1, 1000, 0)"
+        expected: impl
+      - name: "issue >= settlement -> #NUM!"
+        probe: "=ACCRINTM(DATE(2008,8,15), DATE(2008,4,1), 0.1, 1000, 0)"
+        expected: impl
+      - name: "negative rate -> #NUM!"
+        probe: "=ACCRINTM(DATE(2008,4,1), DATE(2008,6,15), -0.1, 1000, 0)"
+        expected: impl
+
+  - function: "AMORDEGRC"
+    aspect: "French degressive amortization"
+    behaviors:
+      - name: "MS-doc canonical period 1"
+        probe: "=AMORDEGRC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0.15, 1)"
+        expected: impl
+      - name: "rate=0 -> #NUM!"
+        probe: "=AMORDEGRC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0, 1)"
+        expected: impl
+      - name: "negative cost -> #NUM!"
+        probe: "=AMORDEGRC(-2400, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0.15, 1)"
+        expected: impl
+      - name: "purchase_date > first_period -> #NUM!"
+        probe: "=AMORDEGRC(2400, DATE(2009,1,15), DATE(2008,12,31), 300, 1, 0.15, 1)"
+        expected: impl
+      - name: "MS-doc fixture parallel of AMORLINC"
+        probe: "=AMORDEGRC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0.15, 1)"
+        expected: impl
+
+  - function: "AMORLINC"
+    aspect: "French linear amortization"
+    behaviors:
+      - name: "MS-doc canonical period 1 (flat)"
+        probe: "=AMORLINC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0.15, 1)"
+        expected: impl
+      - name: "first period (period=0) is YEARFRAC-prorated"
+        probe: "=AMORLINC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 0, 0.15, 1)"
+        expected: impl
+      - name: "MS-doc fixture parallel of AMORDEGRC"
+        probe: "=AMORLINC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0.15, 1)"
+        expected: impl
+      - name: "basis=1 fixture (alternate)"
+        probe: "=AMORLINC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 0, 0.15, 1)"
+        expected: impl
+      - name: "period 1 same fixture (repeat) — flat"
+        probe: "=AMORLINC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0.15, 1)"
+        expected: impl
+
+  - function: "VDB"
+    aspect: "variable declining balance depreciation"
+    behaviors:
+      - name: "single-day DDB"
+        probe: "=VDB(2400, 300, 10*365, 0, 1, 2, FALSE)"
+        expected: impl
+      - name: "fractional period factor 1.5"
+        probe: "=VDB(2400, 300, 10, 0, 0.875, 1.5, FALSE)"
+        expected: impl
+      - name: "full life sums to depreciable amount"
+        probe: "=VDB(2400, 300, 10, 0, 10, 2, FALSE)"
+        expected: impl
+      - name: "no_switch=TRUE keeps pure declining-balance"
+        probe: "=VDB(2400, 300, 10, 0, 10, 2, TRUE)"
+        expected: impl
+      - name: "start_period >= end_period -> #NUM!"
+        probe: "=VDB(2400, 300, 10, 5, 5, 2, FALSE)"
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # Date-aware IRR / NPV family
+  # (cases under tests/oracle/cases/xirr_xnpv.yaml).
+  # -------------------------------------------------------------------------
+  - function: "XIRR"
+    aspect: "internal rate of return on irregular date schedules"
+    behaviors:
+      - name: "MS-doc fixture with explicit guess=0.1"
+        probe: "=XIRR(A1:A5, B1:B5, 0.1)"
+        expected: impl
+      - name: "default guess (arity-2)"
+        probe: "=XIRR(A1:A5, B1:B5)"
+        expected: impl
+      - name: "all-positive cashflows -> #NUM!"
+        probe: "=XIRR(A1:A3, B1:B3)"
+        expected: impl
+      - name: "two-flow simple schedule converges"
+        probe: "=XIRR(A1:A2, B1:B2)"
+        expected: impl
+      - name: "size mismatch values vs dates -> #NUM!"
+        probe: "=XIRR(A1:A2, B1:B1)"
+        expected: impl
+
+  - function: "XNPV"
+    aspect: "net present value over irregular date schedules"
+    behaviors:
+      - name: "MS-doc fixture rate=9%"
+        probe: "=XNPV(0.09, A1:A5, B1:B5)"
+        expected: impl
+      - name: "rate=0 collapses to plain sum"
+        probe: "=XNPV(0, A1:A5, B1:B5)"
+        expected: impl
+      - name: "rate=-1 -> #NUM!"
+        probe: "=XNPV(-1, A1:A2, B1:B2)"
+        expected: impl
+      - name: "negative rate (formal NPV)"
+        probe: "=XNPV(-0.05, A1:A2, B1:B2)"
+        expected: impl
+      - name: "size mismatch values vs dates -> #NUM!"
+        probe: "=XNPV(0.05, A1:A2, B1:B1)"
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # Multi-criteria conditional aggregators (AVERAGEIFS / COUNTIFS)
+  # (cases under tests/oracle/cases/ifs.yaml).
+  # -------------------------------------------------------------------------
+  - function: "AVERAGEIFS"
+    aspect: "conditional mean across one or more criteria"
+    behaviors:
+      - name: "single criterion"
+        probe: "=AVERAGEIFS(B1:B3,A1:A3,\">=2\")"
+        expected: impl
+      - name: "no match -> #DIV/0!"
+        probe: "=AVERAGEIFS(B1:B2,A1:A2,\">100\")"
+        expected: impl
+      - name: "two criteria AND"
+        probe: "=AVERAGEIFS(C1:C4,A1:A4,\"east\",B1:B4,\">=200\")"
+        expected: impl
+      - name: "ja-JP shape parallel: range + single criterion (numeric ref)"
+        probe: "=AVERAGEIFS(B1:B3,A1:A3,\">=2\")"
+        expected: impl
+      - name: "two-criteria fixture mirrors COUNTIFS east+amount"
+        probe: "=AVERAGEIFS(C1:C4,A1:A4,\"east\",B1:B4,\">=200\")"
+        expected: impl
+
+  - function: "COUNTIFS"
+    aspect: "conditional count across one or more criteria"
+    behaviors:
+      - name: "single criterion (matches COUNTIF)"
+        probe: "=COUNTIFS(A1:A3,\">15\")"
+        expected: impl
+      - name: "two criteria AND"
+        probe: "=COUNTIFS(A1:A4,\"east\",B1:B4,\">=100\")"
+        expected: impl
+      - name: "no-match -> 0"
+        probe: "=COUNTIFS(A1:A3,\">100\")"
+        expected: impl
+      - name: "wildcard combined with numeric criterion"
+        probe: "=COUNTIFS(A1:A3,\"ap*\",B1:B3,1)"
+        expected: impl
+      - name: "mismatched criteria-range shape -> #VALUE!"
+        probe: "=COUNTIFS(A1:A3,1,B1:B2,1)"
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # Simple numeric aggregates (cases under tests/oracle/cases/aggregate.yaml).
+  # -------------------------------------------------------------------------
+  - function: "AVERAGE"
+    aspect: "arithmetic-mean aggregator"
+    behaviors:
+      - name: "three numeric literals"
+        probe: "=AVERAGE(2,4,6)"
+        expected: impl
+      - name: "from range"
+        probe: "=AVERAGE(A1:A3)"
+        expected: impl
+      - name: "skips text in range (denominator drops)"
+        probe: "=AVERAGE(A1:A3)"
+        expected: impl
+      - name: "empty range -> #DIV/0!"
+        probe: "=AVERAGE(A1:A3)"
+        expected: impl
+      - name: "direct-arg bool counted as 1"
+        probe: "=AVERAGE(10,TRUE,30)"
+        expected: impl
+
+  - function: "MAX"
+    aspect: "maximum aggregator over numeric values"
+    behaviors:
+      - name: "three numeric literals"
+        probe: "=MAX(3,1,2)"
+        expected: impl
+      - name: "negative-only inputs"
+        probe: "=MAX(-5,-10,-1)"
+        expected: impl
+      - name: "from range"
+        probe: "=MAX(A1:A3)"
+        expected: impl
+      - name: "empty range -> 0 (all-blank fixture)"
+        probe_regex: '=MAX\(A1:A3\)'
+        expected: impl
+      - name: "MAX( call seen at least once"
+        probe: "MAX("
+        expected: impl
+
+  - function: "MIN"
+    aspect: "minimum aggregator over numeric values"
+    behaviors:
+      - name: "three numeric literals"
+        probe: "=MIN(3,1,2)"
+        expected: impl
+      - name: "negative inputs"
+        probe: "=MIN(-5,0,5)"
+        expected: impl
+      - name: "from range"
+        probe: "=MIN(A1:A3)"
+        expected: impl
+      - name: "empty range -> 0"
+        probe: "=MIN(A1:A3)"
+        expected: impl
+      - name: "skips text and bool in range"
+        probe: "=MIN(A1:A4)"
+        expected: impl
+
+  - function: "PRODUCT"
+    aspect: "multiplicative aggregator"
+    behaviors:
+      - name: "three numeric literals"
+        probe: "=PRODUCT(2,3,4)"
+        expected: impl
+      - name: "with zero collapses to 0"
+        probe: "=PRODUCT(2,0,5)"
+        expected: impl
+      - name: "from range"
+        probe: "=PRODUCT(A1:A3)"
+        expected: impl
+      - name: "empty range -> 0"
+        probe: "=PRODUCT(A1:A3)"
+        expected: impl
+      - name: "skips text in range"
+        probe: "=PRODUCT(A1:A3)"
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # Dynamic-array spill primitives (cases under tests/oracle/cases/dynamic_array.yaml).
+  # -------------------------------------------------------------------------
+  - function: "SEQUENCE"
+    aspect: "dynamic-array integer-sequence generator"
+    behaviors:
+      # SEQUENCE returns ValueKind::Array; oracle runner does not unwrap to
+      # anchor scalar (companion to byrow_sum_each_row). Every case is
+      # skip-oracle in tests/divergence.yaml; the impl is verified via
+      # tests/unit/eval/builtins_dynamic_array_*_test.cpp.
+      - name: "single-arg column vector"
+        probe: "=SEQUENCE(3)"
+        expected: diverged
+      - name: "rows + columns 2D grid"
+        probe: "=SEQUENCE(2,3)"
+        expected: diverged
+      - name: "rows + columns + start + step"
+        probe: "=SEQUENCE(2,2,10,5)"
+        expected: diverged
+      - name: "negative step"
+        probe: "=SEQUENCE(3,1,10,-2)"
+        expected: diverged
+      - name: "rows = 0 -> #VALUE!"
+        probe: "=SEQUENCE(0)"
+        expected: diverged
+
+  - function: "TRANSPOSE"
+    aspect: "dynamic-array dimension swap"
+    behaviors:
+      # TRANSPOSE returns ValueKind::Array; oracle runner does not unwrap to
+      # anchor scalar (companion to byrow_sum_each_row). All cases are
+      # skip-oracle in tests/divergence.yaml.
+      - name: "array literal 2x3 -> 3x2"
+        probe: "=TRANSPOSE({1,2,3;4,5,6})"
+        expected: diverged
+      - name: "cell range 2x2 swap"
+        probe: "=TRANSPOSE(A1:B2)"
+        expected: diverged
+      - name: "scalar input -> 1x1"
+        probe: "=TRANSPOSE(42)"
+        expected: diverged
+      - name: "single-row literal -> column vector"
+        probe: "=TRANSPOSE({1,2,3,4})"
+        expected: diverged
+      - name: "single-column literal -> row vector"
+        probe: "=TRANSPOSE({1;2;3;4})"
+        expected: diverged
+
+  # -------------------------------------------------------------------------
+  # ADDRESS singleton (cases under tests/oracle/cases/references.yaml).
+  # -------------------------------------------------------------------------
+  - function: "ADDRESS"
+    aspect: "A1 / R1C1 string builder"
+    behaviors:
+      - name: "default abs_num=1 -> $A$1"
+        probe: "=ADDRESS(1,1)"
+        expected: impl
+      - name: "abs_num=4 fully relative"
+        probe: "=ADDRESS(1,1,4)"
+        expected: impl
+      - name: "column 27 -> AA (base-26 wraparound)"
+        probe: "=ADDRESS(1,27,4)"
+        expected: impl
+      - name: "R1C1 style with a1=FALSE"
+        probe: "=ADDRESS(1,1,1,FALSE)"
+        expected: impl
+      - name: "with sheet name (quoted)"
+        probe: "=ADDRESS(1,1,1,TRUE,\"Sheet 1\")"
+        expected: impl

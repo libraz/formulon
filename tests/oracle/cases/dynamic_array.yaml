@@ -54,6 +54,18 @@ cases:
     description: "TRANSPOSE(42) returns the scalar (Excel reads back the 1x1 anchor)."
     formula: "=TRANSPOSE(42)"
 
+  - id: transpose_single_row_to_column
+    description: "TRANSPOSE({1,2,3,4}) -> 4x1 column; anchor reads as 1."
+    formula: "=TRANSPOSE({1,2,3,4})"
+
+  - id: transpose_single_column_to_row
+    description: "TRANSPOSE({1;2;3;4}) -> 1x4 row; anchor reads as 1."
+    formula: "=TRANSPOSE({1;2;3;4})"
+
+  - id: transpose_text_array
+    description: "TRANSPOSE over text array literal; anchor reads as text."
+    formula: "=TRANSPOSE({\"a\",\"b\";\"c\",\"d\"})"
+
   # -- Spilled-range `#` -------------------------------------------------
   - id: spill_ref_after_sequence_sum
     description: "A1=SEQUENCE(3); A1# returns the entire spill; SUM consumes it = 6."

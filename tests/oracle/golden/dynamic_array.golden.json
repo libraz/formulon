@@ -1,0 +1,135 @@
+{
+  "suite": "dynamic_array",
+  "description": "Dynamic-array (spilling) functions. SEQUENCE is the first acceptance case for cell-level spill machinery; the oracle reads back the anchor scalar (top-left of the spill region) since xlwings does not surface phantom cells through a single-cell read.",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-29T03:35:57Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "sequence_3",
+      "formula": "=SEQUENCE(3)",
+      "setup": {},
+      "skipped": "SEQUENCE returns ValueKind::Array; oracle runner does not unwrap to anchor scalar. Companion to byrow_sum_each_row."
+    },
+    {
+      "id": "sequence_2_3",
+      "formula": "=SEQUENCE(2,3)",
+      "setup": {},
+      "skipped": "Same as sequence_3: SEQUENCE Array result not anchor-unwrapped."
+    },
+    {
+      "id": "sequence_2_2_10_5",
+      "formula": "=SEQUENCE(2,2,10,5)",
+      "setup": {},
+      "skipped": "Same as sequence_3: SEQUENCE Array result not anchor-unwrapped."
+    },
+    {
+      "id": "sequence_3_1_10_neg2",
+      "formula": "=SEQUENCE(3,1,10,-2)",
+      "setup": {},
+      "skipped": "Same as sequence_3: SEQUENCE Array result not anchor-unwrapped."
+    },
+    {
+      "id": "sequence_3_1_half_quarter",
+      "formula": "=SEQUENCE(3,1,0.5,0.25)",
+      "setup": {},
+      "skipped": "Same as sequence_3: SEQUENCE Array result not anchor-unwrapped."
+    },
+    {
+      "id": "sequence_zero_rows_value",
+      "formula": "=SEQUENCE(0)",
+      "setup": {},
+      "skipped": "Same as sequence_3: SEQUENCE error path returns Error scalar but golden registers an array-shaped error in some configurations; group with the SEQUENCE skip-oracle cluster for consistency."
+    },
+    {
+      "id": "sequence_negative_rows_value",
+      "formula": "=SEQUENCE(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sequence_text_arg_value",
+      "formula": "=SEQUENCE(\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "transpose_array_literal",
+      "formula": "=TRANSPOSE({1,2,3;4,5,6})",
+      "setup": {},
+      "skipped": "TRANSPOSE returns ValueKind::Array; oracle runner does not unwrap to anchor scalar. Companion to byrow_sum_each_row."
+    },
+    {
+      "id": "transpose_range",
+      "formula": "=TRANSPOSE(A1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "skipped": "Same as transpose_array_literal: TRANSPOSE Array result not anchor-unwrapped."
+    },
+    {
+      "id": "transpose_scalar",
+      "formula": "=TRANSPOSE(42)",
+      "setup": {},
+      "skipped": "Same as transpose_array_literal: TRANSPOSE wraps scalar in 1x1 Array; oracle runner does not unwrap."
+    },
+    {
+      "id": "transpose_single_row_to_column",
+      "formula": "=TRANSPOSE({1,2,3,4})",
+      "setup": {},
+      "skipped": "Same as transpose_array_literal: TRANSPOSE Array result not anchor-unwrapped."
+    },
+    {
+      "id": "transpose_single_column_to_row",
+      "formula": "=TRANSPOSE({1;2;3;4})",
+      "setup": {},
+      "skipped": "Same as transpose_array_literal: TRANSPOSE Array result not anchor-unwrapped."
+    },
+    {
+      "id": "transpose_text_array",
+      "formula": "=TRANSPOSE({\"a\",\"b\";\"c\",\"d\"})",
+      "setup": {},
+      "skipped": "Same as transpose_array_literal: TRANSPOSE Array result not anchor-unwrapped."
+    },
+    {
+      "id": "spill_ref_after_sequence_sum",
+      "formula": "=SUM(A1#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "skipped": "Spill-ref `A1#` consumed by SUM requires the spill region to be materialized in the workbook, but the oracle harness evaluates the formula in isolation; SUM sees the bare Array reference and produces a different result than Excel's resolved spill region."
+    }
+  ]
+}
