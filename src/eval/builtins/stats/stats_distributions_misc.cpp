@@ -116,8 +116,10 @@ Value ConfidenceT(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
 
 // BINOM.INV(trials, probability_s, alpha) - smallest integer k in [0, trials]
 // with CDF(k) >= alpha. `trials` floors toward -inf. Domain:
-// trials >= 0, prob in [0, 1], alpha in [0, 1]. Alpha == 0 short-circuits
-// to 0; alpha beyond CDF(trials) by floating-point slop returns trials.
+// trials >= 0, prob in [0, 1], alpha in (0, 1) -- Excel rejects alpha == 0
+// and alpha == 1 with #NUM!. Alpha very close to 1 may saturate the
+// cumulative sum a hair below it due to floating-point roundoff; the correct
+// answer is then trials.
 Value BinomInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto trials_arg = coerce_to_number(args[0]);
   if (!trials_arg) {
@@ -134,11 +136,8 @@ Value BinomInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const double n = std::floor(trials_arg.value());
   const double p = prob_arg.value();
   const double alpha = alpha_arg.value();
-  if (n < 0.0 || p < 0.0 || p > 1.0 || alpha < 0.0 || alpha > 1.0) {
+  if (n < 0.0 || p < 0.0 || p > 1.0 || alpha <= 0.0 || alpha >= 1.0) {
     return Value::error(ErrorCode::Num);
-  }
-  if (alpha == 0.0) {
-    return Value::number(0.0);
   }
   const auto n_int = static_cast<std::uint64_t>(n);
   double cumulative = 0.0;
@@ -234,20 +233,17 @@ Value Phi(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 
 // Log-space PMF of NegBinom(s, p) at f failures:
 //   lgamma(f + s) - lgamma(f + 1) - lgamma(s) + s*log(p) + f*log(1-p).
-// `p == 1` is handled separately (all mass at f = 0). `p == 0` must be
-// rejected by the caller because s*log(p) diverges to -inf.
+// Caller must reject p == 0 (because s*log(p) diverges to -inf) and p == 1
+// (Excel surfaces #NUM! for the degenerate distribution).
 static double NegBinomLogPmf(double f, double s, double p) noexcept {
-  if (p == 1.0) {
-    return f == 0.0 ? 0.0 : -std::numeric_limits<double>::infinity();
-  }
   return std::lgamma(f + s) - std::lgamma(f + 1.0) - std::lgamma(s) + s * std::log(p) + f * std::log1p(-p);
 }
 
 // NEGBINOM.DIST(number_f, number_s, probability_s, cumulative) - negative
-// binomial PMF or CDF. `number_f` and `number_s` floor toward -inf; the
-// domain requires f >= 0, s >= 1, and p in (0, 1] (p == 0 is rejected
-// because the log-space PMF would collapse to -inf). CDF is an O(f) partial
-// sum of PMFs from 0 to f.
+// binomial PMF or CDF. `number_f` and `number_s` floor toward -inf; Excel
+// requires f >= 0, s >= 1, and p strictly in (0, 1) -- both p == 0 and
+// p == 1 (which collapse the distribution) surface #NUM!. CDF is an O(f)
+// partial sum of PMFs from 0 to f.
 Value NegBinomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto f_arg = coerce_to_number(args[0]);
   if (!f_arg) {
@@ -268,16 +264,8 @@ Value NegBinomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/)
   const double f = std::floor(f_arg.value());
   const double s = std::floor(s_arg.value());
   const double p = prob_arg.value();
-  if (f < 0.0 || s < 1.0 || p <= 0.0 || p > 1.0) {
+  if (f < 0.0 || s < 1.0 || p <= 0.0 || p >= 1.0) {
     return Value::error(ErrorCode::Num);
-  }
-  // `p == 1` collapses the distribution to a point mass at f = 0. The CDF
-  // is 1 everywhere for f >= 0; the PMF is 1 at f = 0 and 0 elsewhere.
-  if (p == 1.0) {
-    if (cum.value()) {
-      return Value::number(1.0);
-    }
-    return Value::number(f == 0.0 ? 1.0 : 0.0);
   }
   double r;
   if (cum.value()) {

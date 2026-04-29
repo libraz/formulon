@@ -142,16 +142,18 @@ TEST(BuiltinsBinomInv, ThreeQuarterQuantile) {
   EXPECT_EQ(v.as_number(), 53.0);
 }
 
-TEST(BuiltinsBinomInv, AlphaZeroReturnsZero) {
+TEST(BuiltinsBinomInv, AlphaZeroIsNum) {
+  // Excel rejects alpha == 0 (boundary excluded).
   const Value v = EvalSource("=BINOM.INV(10, 0.3, 0)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), 0.0);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(BuiltinsBinomInv, AlphaOneReturnsTrials) {
+TEST(BuiltinsBinomInv, AlphaOneIsNum) {
+  // Excel rejects alpha == 1 (boundary excluded).
   const Value v = EvalSource("=BINOM.INV(10, 0.3, 1)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), 10.0);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(BuiltinsBinomInv, ProbOutOfRangeIsNum) {
