@@ -205,3 +205,17 @@ families:
     category_file: tests/oracle/cases/complex.yaml
     min_perspectives_per_member: 5
     cluster_reason: "Complex-number engineering family shares COMPLEX( real, imag, suffix ) input fixtures and 'i'/'j' suffix dispatch."
+
+  # -- Post-2010 distribution functions ------------------------------------
+  # Modern distribution / inverse / confidence-interval / special-function
+  # spellings that share PDF/CDF dichotomy via the cumulative flag,
+  # parameter-validity edges (negative variance, p-out-of-[0,1], n_s > n),
+  # and standard-normal helpers (GAUSS, PHI). Closure perspectives parallel
+  # the pre-2010 stats_compat family: standard call, boundary value,
+  # invalid arg -> #NUM!, cumulative TRUE vs FALSE, and a tail / extreme
+  # quantile.
+  - name: distributions
+    members: ["BINOM.DIST", "BINOM.DIST.RANGE", "BINOM.INV", CONFIDENCE, "CONFIDENCE.NORM", "CONFIDENCE.T", CRITBINOM, "EXPON.DIST", FISHER, FISHERINV, GAUSS, "NEGBINOM.DIST", NEGBINOMDIST, "NORM.DIST", "NORM.INV", "NORM.S.DIST", "NORM.S.INV", PHI, "POISSON.DIST"]
+    category_file: tests/oracle/cases/distributions.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Post-2010 distribution functions; share PDF/CDF dichotomy, parameter-validity edges (negative variance, p-out-of-range)."

@@ -6031,3 +6031,371 @@ groups:
       - name: "text scalar -> #N/A"
         probe: "=SHEETS(\"A1\")"
         expected: impl
+
+  # ---------------------------------------------------------------------------
+  # Post-2010 distribution functions (BINOM.DIST family + EXPON.DIST /
+  # POISSON.DIST / NORM.* / NEGBINOM.* / FISHER / GAUSS / PHI / CONFIDENCE.*).
+  # Routed through the `distributions` family (see tools/catalog/families.yaml)
+  # against tests/oracle/cases/distributions.yaml.
+  # ---------------------------------------------------------------------------
+
+  - function: "NORM.DIST"
+    aspect: "normal-distribution PDF / CDF"
+    behaviors:
+      - name: "PDF at mean (cumulative=FALSE)"
+        probe: "=NORM.DIST(0, 0, 1, FALSE)"
+        expected: impl
+      - name: "CDF at mean (cumulative=TRUE) -> 0.5"
+        probe: "=NORM.DIST(0, 0, 1, TRUE)"
+        expected: impl
+      - name: "CDF away from mean"
+        probe: "=NORM.DIST(1, 0, 1, TRUE)"
+        expected: impl
+      - name: "scaled N(mu, sigma) CDF"
+        probe: "=NORM.DIST(105, 100, 15, TRUE)"
+        expected: impl
+      - name: "stddev <= 0 -> #NUM!"
+        probe: "=NORM.DIST(0, 0, -1, TRUE)"
+        expected: impl
+
+  - function: "NORM.S.DIST"
+    aspect: "standard-normal PDF / CDF"
+    behaviors:
+      - name: "CDF at z=0 -> 0.5"
+        probe: "=NORM.S.DIST(0, TRUE)"
+        expected: impl
+      - name: "upper-tail CDF at z=2"
+        probe: "=NORM.S.DIST(2, TRUE)"
+        expected: impl
+      - name: "PDF at z=0 (cumulative=FALSE)"
+        probe: "=NORM.S.DIST(0, FALSE)"
+        expected: impl
+      - name: "lower-tail CDF at z=-1"
+        probe: "=NORM.S.DIST(-1, TRUE)"
+        expected: impl
+      - name: "PDF at z=2 (cumulative=FALSE)"
+        probe: "=NORM.S.DIST(2, FALSE)"
+        expected: impl
+
+  - function: "NORM.INV"
+    aspect: "normal-distribution quantile (inverse CDF)"
+    behaviors:
+      - name: "p=0.5 maps to mean"
+        probe: "=NORM.INV(0.5, 0, 1)"
+        expected: impl
+      - name: "upper-tail 95th percentile of N(0,1)"
+        probe: "=NORM.INV(0.95, 0, 1)"
+        expected: impl
+      - name: "scaled N(mu, sigma) quantile"
+        probe: "=NORM.INV(0.975, 100, 15)"
+        expected: impl
+      - name: "p=0 boundary -> #NUM!"
+        probe: "=NORM.INV(0, 0, 1)"
+        expected: impl
+      - name: "p=1 boundary -> #NUM!"
+        probe: "=NORM.INV(1, 0, 1)"
+        expected: impl
+
+  - function: "NORM.S.INV"
+    aspect: "standard-normal quantile"
+    behaviors:
+      - name: "p=0.5 -> 0 (median)"
+        probe: "=NORM.S.INV(0.5)"
+        expected: impl
+      - name: "upper-tail z_{0.95}"
+        probe: "=NORM.S.INV(0.95)"
+        expected: impl
+      - name: "lower-tail z_{0.025}"
+        probe: "=NORM.S.INV(0.025)"
+        expected: impl
+      - name: "p=0 boundary -> #NUM!"
+        probe: "=NORM.S.INV(0)"
+        expected: impl
+      - name: "p=1 boundary -> #NUM!"
+        probe: "=NORM.S.INV(1)"
+        expected: impl
+
+  - function: "BINOM.DIST"
+    aspect: "binomial PMF / CDF"
+    behaviors:
+      - name: "PMF at midpoint of fair coin"
+        probe: "=BINOM.DIST(5, 10, 0.5, FALSE)"
+        expected: impl
+      - name: "CDF at midpoint (cumulative=TRUE)"
+        probe: "=BINOM.DIST(5, 10, 0.5, TRUE)"
+        expected: impl
+      - name: "PMF at zero successes"
+        probe: "=BINOM.DIST(0, 10, 0.5, FALSE)"
+        expected: impl
+      - name: "PMF at all successes"
+        probe: "=BINOM.DIST(10, 10, 0.5, FALSE)"
+        expected: impl
+      - name: "successes > trials -> #NUM!"
+        probe: "=BINOM.DIST(11, 10, 0.5, FALSE)"
+        expected: impl
+
+  - function: "BINOM.DIST.RANGE"
+    aspect: "binomial range probability sum"
+    behaviors:
+      - name: "interval probability over BINOM(10, 0.5)"
+        probe: "=BINOM.DIST.RANGE(10, 0.5, 4, 6)"
+        expected: impl
+      - name: "3-arg form is a single-point PMF query"
+        probe: "=BINOM.DIST.RANGE(10, 0.5, 5)"
+        expected: impl
+      - name: "reversed bounds -> #NUM!"
+        probe: "=BINOM.DIST.RANGE(10, 0.5, 6, 4)"
+        expected: impl
+      - name: "full-support sum = 1"
+        probe: "=BINOM.DIST.RANGE(10, 0.5, 0, 10)"
+        expected: impl
+      - name: "p out of [0,1] -> #NUM!"
+        probe: "=BINOM.DIST.RANGE(10, 1.5, 0, 10)"
+        expected: impl
+
+  - function: "BINOM.INV"
+    aspect: "binomial quantile (smallest k with CDF >= alpha)"
+    behaviors:
+      - name: "alpha=0.5 returns the median"
+        probe: "=BINOM.INV(100, 0.5, 0.5)"
+        expected: impl
+      - name: "upper-tail alpha=0.75"
+        probe: "=BINOM.INV(100, 0.5, 0.75)"
+        expected: impl
+      - name: "alpha=0 returns 0"
+        probe: "=BINOM.INV(10, 0.3, 0)"
+        expected: impl
+      - name: "alpha=1 returns trials"
+        probe: "=BINOM.INV(10, 0.3, 1)"
+        expected: impl
+      - name: "alpha < 0 -> #NUM!"
+        probe: "=BINOM.INV(10, 0.3, -0.1)"
+        expected: impl
+
+  - function: "CRITBINOM"
+    aspect: "pre-2010 alias for BINOM.INV"
+    behaviors:
+      - name: "alpha=0.75 matches BINOM.INV"
+        probe: "=CRITBINOM(100, 0.5, 0.75)"
+        expected: impl
+      - name: "alpha=0 returns 0"
+        probe: "=CRITBINOM(10, 0.3, 0)"
+        expected: impl
+      - name: "median quantile"
+        probe: "=CRITBINOM(20, 0.4, 0.5)"
+        expected: impl
+      - name: "alpha > 1 -> #NUM!"
+        probe: "=CRITBINOM(10, 0.5, 1.5)"
+        expected: impl
+      - name: "negative trials -> #NUM!"
+        probe: "=CRITBINOM(-1, 0.5, 0.5)"
+        expected: impl
+
+  - function: "POISSON.DIST"
+    aspect: "Poisson PMF / CDF"
+    behaviors:
+      - name: "PMF at mean=3"
+        probe: "=POISSON.DIST(2, 3, FALSE)"
+        expected: impl
+      - name: "CDF at mean=3"
+        probe: "=POISSON.DIST(2, 3, TRUE)"
+        expected: impl
+      - name: "PMF at zero count"
+        probe: "=POISSON.DIST(0, 3, FALSE)"
+        expected: impl
+      - name: "negative x -> #NUM!"
+        probe: "=POISSON.DIST(-1, 3, FALSE)"
+        expected: impl
+      - name: "large mean CDF"
+        probe: "=POISSON.DIST(5, 10, TRUE)"
+        expected: impl
+
+  - function: "EXPON.DIST"
+    aspect: "exponential PDF / CDF"
+    behaviors:
+      - name: "PDF at x=0 = lambda"
+        probe: "=EXPON.DIST(0, 1, FALSE)"
+        expected: impl
+      - name: "CDF at x=0 = 0"
+        probe: "=EXPON.DIST(0, 1, TRUE)"
+        expected: impl
+      - name: "CDF at median ln(2)"
+        probe: "=EXPON.DIST(LN(2), 1, TRUE)"
+        expected: impl
+      - name: "lambda <= 0 -> #NUM!"
+        probe: "=EXPON.DIST(1, -1, TRUE)"
+        expected: impl
+      - name: "PDF with lambda=2"
+        probe: "=EXPON.DIST(1, 2, FALSE)"
+        expected: impl
+
+  - function: "CONFIDENCE"
+    aspect: "normal confidence-interval half-width"
+    behaviors:
+      - name: "basic 95% CI"
+        probe: "=CONFIDENCE(0.05, 20, 100)"
+        expected: impl
+      - name: "alpha <= 0 -> #NUM!"
+        probe: "=CONFIDENCE(0, 20, 100)"
+        expected: impl
+      - name: "alpha >= 1 -> #NUM!"
+        probe: "=CONFIDENCE(1, 20, 100)"
+        expected: impl
+      - name: "size = 1 boundary"
+        probe: "=CONFIDENCE(0.05, 20, 1)"
+        expected: impl
+      - name: "linear scaling with stddev"
+        probe: "=CONFIDENCE(0.05, 100, 100)"
+        expected: impl
+
+  - function: "CONFIDENCE.NORM"
+    aspect: "normal confidence-interval (post-2010 spelling)"
+    behaviors:
+      - name: "basic 95% CI matches CONFIDENCE"
+        probe: "=CONFIDENCE.NORM(0.05, 20, 100)"
+        expected: impl
+      - name: "alpha <= 0 -> #NUM!"
+        probe: "=CONFIDENCE.NORM(0, 20, 100)"
+        expected: impl
+      - name: "alpha >= 1 -> #NUM!"
+        probe: "=CONFIDENCE.NORM(1, 20, 100)"
+        expected: impl
+      - name: "size = 1 boundary"
+        probe: "=CONFIDENCE.NORM(0.05, 20, 1)"
+        expected: impl
+      - name: "linear scaling with stddev"
+        probe: "=CONFIDENCE.NORM(0.05, 100, 100)"
+        expected: impl
+
+  - function: "CONFIDENCE.T"
+    aspect: "Student-t confidence-interval half-width"
+    behaviors:
+      - name: "basic 95% CI with size=30"
+        probe: "=CONFIDENCE.T(0.05, 20, 30)"
+        expected: impl
+      - name: "size = 1 collapses df=0 -> #DIV/0!"
+        probe: "=CONFIDENCE.T(0.05, 20, 1)"
+        expected: impl
+      - name: "alpha <= 0 -> #NUM!"
+        probe: "=CONFIDENCE.T(0, 20, 30)"
+        expected: impl
+      - name: "alpha >= 1 -> #NUM!"
+        probe: "=CONFIDENCE.T(1, 20, 30)"
+        expected: impl
+      - name: "large sample converges toward normal-z"
+        probe: "=CONFIDENCE.T(0.05, 20, 1000)"
+        expected: impl
+
+  - function: "FISHER"
+    aspect: "Fisher z transform of correlation"
+    behaviors:
+      - name: "FISHER(0) = 0"
+        probe: "=FISHER(0)"
+        expected: impl
+      - name: "FISHER(0.5) = 0.5*ln(3)"
+        probe: "=FISHER(0.5)"
+        expected: impl
+      - name: "boundary FISHER(1) -> #NUM!"
+        probe: "=FISHER(1)"
+        expected: impl
+      - name: "FISHER is odd: FISHER(-0.5)"
+        probe: "=FISHER(-0.5)"
+        expected: impl
+      - name: "x outside (-1, 1) -> #NUM!"
+        probe: "=FISHER(2)"
+        expected: impl
+
+  - function: "FISHERINV"
+    aspect: "inverse Fisher z transform (tanh)"
+    behaviors:
+      - name: "round-trip FISHERINV(FISHER(x)) = x"
+        probe: "=FISHERINV(FISHER(0.3))"
+        expected: impl
+      - name: "FISHERINV(0) = 0"
+        probe: "=FISHERINV(0)"
+        expected: impl
+      - name: "FISHERINV(1) = tanh(1)"
+        probe: "=FISHERINV(1)"
+        expected: impl
+      - name: "FISHERINV is odd: FISHERINV(-1)"
+        probe: "=FISHERINV(-1)"
+        expected: impl
+      - name: "large y saturates near 1"
+        probe: "=FISHERINV(5)"
+        expected: impl
+
+  - function: "GAUSS"
+    aspect: "standard-normal mass between 0 and z"
+    behaviors:
+      - name: "GAUSS(0) = 0"
+        probe: "=GAUSS(0)"
+        expected: impl
+      - name: "GAUSS(1) = NORM.S.DIST(1, TRUE) - 0.5"
+        probe: "=GAUSS(1)"
+        expected: impl
+      - name: "GAUSS is odd: GAUSS(-1)"
+        probe: "=GAUSS(-1)"
+        expected: impl
+      - name: "GAUSS(2) ~ 0.4773"
+        probe: "=GAUSS(2)"
+        expected: impl
+      - name: "large z approaches 0.5"
+        probe: "=GAUSS(6)"
+        expected: impl
+
+  - function: "PHI"
+    aspect: "standard-normal PDF"
+    behaviors:
+      - name: "PHI(0) = 1/sqrt(2*pi)"
+        probe: "=PHI(0)"
+        expected: impl
+      - name: "PHI(1) = exp(-0.5)/sqrt(2*pi)"
+        probe: "=PHI(1)"
+        expected: impl
+      - name: "PHI is symmetric: PHI(-1)"
+        probe: "=PHI(-1)"
+        expected: impl
+      - name: "PHI(2) ~ 0.0540"
+        probe: "=PHI(2)"
+        expected: impl
+      - name: "PHI(6) ~ 0 (tail vanishes)"
+        probe: "=PHI(6)"
+        expected: impl
+
+  - function: "NEGBINOM.DIST"
+    aspect: "negative-binomial PMF / CDF"
+    behaviors:
+      - name: "PMF at f=10, r=5, p=0.25"
+        probe: "=NEGBINOM.DIST(10, 5, 0.25, FALSE)"
+        expected: impl
+      - name: "CDF at f=10, r=5, p=0.25"
+        probe: "=NEGBINOM.DIST(10, 5, 0.25, TRUE)"
+        expected: impl
+      - name: "p=0 -> #NUM!"
+        probe: "=NEGBINOM.DIST(10, 5, 0, FALSE)"
+        expected: impl
+      - name: "PMF at zero failures = p^r"
+        probe: "=NEGBINOM.DIST(0, 5, 0.25, FALSE)"
+        expected: impl
+      - name: "p=1 -> #NUM! (degenerate)"
+        probe: "=NEGBINOM.DIST(0, 5, 1, FALSE)"
+        expected: impl
+
+  - function: "NEGBINOMDIST"
+    aspect: "pre-2010 alias for NEGBINOM.DIST PMF (3-arg)"
+    behaviors:
+      - name: "PMF matches NEGBINOM.DIST FALSE"
+        probe: "=NEGBINOMDIST(10, 5, 0.25)"
+        expected: impl
+      - name: "PMF at zero failures = p^r"
+        probe: "=NEGBINOMDIST(0, 5, 0.25)"
+        expected: impl
+      - name: "p=0 -> #NUM!"
+        probe: "=NEGBINOMDIST(10, 5, 0)"
+        expected: impl
+      - name: "p > 1 -> #NUM!"
+        probe: "=NEGBINOMDIST(10, 5, 1.5)"
+        expected: impl
+      - name: "larger failure count produces a smaller PMF tail"
+        probe: "=NEGBINOMDIST(20, 5, 0.25)"
+        expected: impl

@@ -220,3 +220,183 @@ cases:
 
   - id: binom_dist_range_reversed_is_num
     formula: "=BINOM.DIST.RANGE(10, 0.5, 6, 4)"
+
+  - id: binom_dist_range_full_support
+    description: "Full-support sum over BINOM(10, 0.5) equals 1"
+    formula: "=BINOM.DIST.RANGE(10, 0.5, 0, 10)"
+
+  - id: binom_dist_range_p_out_of_range_is_num
+    description: "p > 1 yields #NUM!"
+    formula: "=BINOM.DIST.RANGE(10, 1.5, 0, 10)"
+
+  # -- BINOM.INV / CRITBINOM (extra perspectives) --------------------------
+  - id: binom_inv_alpha_one_boundary
+    description: "alpha=1 returns trials"
+    formula: "=BINOM.INV(10, 0.3, 1)"
+
+  - id: binom_inv_alpha_negative_is_num
+    description: "alpha < 0 yields #NUM!"
+    formula: "=BINOM.INV(10, 0.3, -0.1)"
+
+  - id: critbinom_alpha_zero
+    description: "CRITBINOM at alpha=0 returns 0"
+    formula: "=CRITBINOM(10, 0.3, 0)"
+
+  - id: critbinom_basic_median
+    description: "CRITBINOM(20, 0.4, 0.5) = 8 matches BINOM.INV"
+    formula: "=CRITBINOM(20, 0.4, 0.5)"
+
+  - id: critbinom_alpha_out_of_range_is_num
+    description: "alpha > 1 yields #NUM!"
+    formula: "=CRITBINOM(10, 0.5, 1.5)"
+
+  - id: critbinom_negative_trials_is_num
+    description: "trials < 0 yields #NUM!"
+    formula: "=CRITBINOM(-1, 0.5, 0.5)"
+
+  # -- CONFIDENCE / CONFIDENCE.NORM (extra perspectives) -------------------
+  - id: confidence_alpha_one_is_num
+    description: "alpha >= 1 yields #NUM!"
+    formula: "=CONFIDENCE(1, 20, 100)"
+
+  - id: confidence_size_one
+    description: "Single-observation sample still produces an interval"
+    formula: "=CONFIDENCE(0.05, 20, 1)"
+
+  - id: confidence_large_stddev
+    description: "Linear in stddev: doubling stddev doubles half-width"
+    formula: "=CONFIDENCE(0.05, 100, 100)"
+
+  - id: confidence_norm_alpha_zero_is_num
+    description: "CONFIDENCE.NORM with alpha <= 0 yields #NUM!"
+    formula: "=CONFIDENCE.NORM(0, 20, 100)"
+
+  - id: confidence_norm_size_one
+    description: "CONFIDENCE.NORM mirrors CONFIDENCE for n=1"
+    formula: "=CONFIDENCE.NORM(0.05, 20, 1)"
+
+  - id: confidence_norm_large_stddev
+    description: "CONFIDENCE.NORM scales linearly with stddev"
+    formula: "=CONFIDENCE.NORM(0.05, 100, 100)"
+
+  - id: confidence_norm_alpha_one_is_num
+    description: "CONFIDENCE.NORM with alpha >= 1 yields #NUM!"
+    formula: "=CONFIDENCE.NORM(1, 20, 100)"
+
+  # -- CONFIDENCE.T (extra perspectives) -----------------------------------
+  - id: confidence_t_alpha_zero_is_num
+    description: "alpha <= 0 yields #NUM!"
+    formula: "=CONFIDENCE.T(0, 20, 30)"
+
+  - id: confidence_t_alpha_one_is_num
+    description: "alpha >= 1 yields #NUM!"
+    formula: "=CONFIDENCE.T(1, 20, 30)"
+
+  - id: confidence_t_large_sample
+    description: "Large n converges toward the normal-z half-width"
+    formula: "=CONFIDENCE.T(0.05, 20, 1000)"
+
+  # -- EXPON.DIST (extra perspective) --------------------------------------
+  - id: expon_pdf_lambda_two_at_one
+    description: "Exponential(2) PDF at 1 = 2*exp(-2) ~ 0.270671"
+    formula: "=EXPON.DIST(1, 2, FALSE)"
+
+  # -- FISHER / FISHERINV (extra perspectives) -----------------------------
+  - id: fisher_negative_half
+    description: "FISHER is odd: FISHER(-0.5) = -FISHER(0.5)"
+    formula: "=FISHER(-0.5)"
+
+  - id: fisher_out_of_range_is_num
+    description: "x outside (-1, 1) yields #NUM!"
+    formula: "=FISHER(2)"
+
+  - id: fisherinv_one
+    description: "FISHERINV(1) = tanh(1) ~ 0.761594"
+    formula: "=FISHERINV(1)"
+
+  - id: fisherinv_negative
+    description: "FISHERINV is odd: FISHERINV(-1) = -tanh(1)"
+    formula: "=FISHERINV(-1)"
+
+  - id: fisherinv_large
+    description: "Large positive y saturates near 1"
+    formula: "=FISHERINV(5)"
+
+  # -- GAUSS (extra perspectives) ------------------------------------------
+  - id: gauss_negative
+    description: "GAUSS is odd: GAUSS(-1) = -GAUSS(1)"
+    formula: "=GAUSS(-1)"
+
+  - id: gauss_two
+    description: "NORM.S.DIST(2, TRUE) - 0.5 ~ 0.477250"
+    formula: "=GAUSS(2)"
+
+  - id: gauss_large
+    description: "Large z approaches 0.5 (upper tail vanishes)"
+    formula: "=GAUSS(6)"
+
+  # -- NEGBINOM.DIST (extra perspectives) ----------------------------------
+  - id: negbinom_dist_zero_failures
+    description: "PMF at f=0 = p^r"
+    formula: "=NEGBINOM.DIST(0, 5, 0.25, FALSE)"
+
+  - id: negbinom_dist_prob_one_pmf
+    description: "Excel rejects p=1 with #NUM! (degenerate distribution)"
+    formula: "=NEGBINOM.DIST(0, 5, 1, FALSE)"
+
+  # -- NEGBINOMDIST (legacy) extra perspectives ----------------------------
+  - id: negbinomdist_zero_failures
+    description: "Legacy PMF at f=0 = p^r"
+    formula: "=NEGBINOMDIST(0, 5, 0.25)"
+
+  - id: negbinomdist_prob_zero_is_num
+    description: "Legacy alias rejects p=0 with #NUM!"
+    formula: "=NEGBINOMDIST(10, 5, 0)"
+
+  - id: negbinomdist_prob_out_of_range_is_num
+    description: "Legacy alias rejects p > 1 with #NUM!"
+    formula: "=NEGBINOMDIST(10, 5, 1.5)"
+
+  - id: negbinomdist_large_count
+    description: "Larger failure count produces a smaller PMF tail"
+    formula: "=NEGBINOMDIST(20, 5, 0.25)"
+
+  # -- NORM.S.DIST (extra perspectives) ------------------------------------
+  - id: norm_s_dist_negative_cdf
+    description: "Standard-normal CDF at z=-1 ~ 0.158655"
+    formula: "=NORM.S.DIST(-1, TRUE)"
+
+  - id: norm_s_dist_z2_pdf
+    description: "Standard-normal PDF at z=2 ~ 0.053991"
+    formula: "=NORM.S.DIST(2, FALSE)"
+
+  # -- NORM.S.INV (extra perspectives) -------------------------------------
+  - id: norm_s_inv_lower_tail
+    description: "Lower-tail z_{0.025} ~ -1.959964"
+    formula: "=NORM.S.INV(0.025)"
+
+  - id: norm_s_inv_p_zero_is_num
+    description: "p <= 0 yields #NUM!"
+    formula: "=NORM.S.INV(0)"
+
+  - id: norm_s_inv_p_one_is_num
+    description: "p >= 1 yields #NUM!"
+    formula: "=NORM.S.INV(1)"
+
+  # -- PHI (extra perspectives) --------------------------------------------
+  - id: phi_negative
+    description: "PHI is symmetric: PHI(-1) = PHI(1)"
+    formula: "=PHI(-1)"
+
+  - id: phi_two
+    description: "Standard-normal PDF at 2 ~ 0.053991"
+    formula: "=PHI(2)"
+
+  - id: phi_large
+    description: "Large |x| drives the PDF to ~0"
+    formula: "=PHI(6)"
+
+  # -- POISSON.DIST (extra perspective) ------------------------------------
+  - id: poisson_dist_large_mean
+    description: "Poisson(10) CDF at 5 ~ 0.067086"
+    formula: "=POISSON.DIST(5, 10, TRUE)"
