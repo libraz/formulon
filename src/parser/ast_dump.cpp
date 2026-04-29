@@ -271,11 +271,19 @@ void DumpInto(const AstNode& node, std::string& out) {
     case NodeKind::Lambda: {
       out.append("(lambda (");
       const std::uint32_t n = node.as_lambda_param_count();
+      const std::uint32_t opt = node.as_lambda_optional_count();
+      const std::uint32_t first_optional = n - opt;
       for (std::uint32_t i = 0; i < n; ++i) {
         if (i > 0) {
           out.push_back(' ');
         }
-        out.append(node.as_lambda_param(i));
+        if (i >= first_optional) {
+          out.push_back('[');
+          out.append(node.as_lambda_param(i));
+          out.push_back(']');
+        } else {
+          out.append(node.as_lambda_param(i));
+        }
       }
       out.append(") ");
       DumpInto(node.as_lambda_body(), out);

@@ -283,12 +283,13 @@ TEST(AstNodeLambda, ParamsAndBodyRoundtrip) {
   std::string p1("y");
   std::vector<std::string_view> params{p0, p1};
   AstNode* body = make_literal(a, Value::number(0.0));
-  AstNode* n = make_lambda(a, params.data(), 2, body);
+  AstNode* n = make_lambda(a, params.data(), 2, /*optional_count=*/0, body);
   ASSERT_NE(n, nullptr);
   // Mutate caller-side names; the AST should hold its own interned copies.
   p0[0] = 'Z';
   p1.clear();
   EXPECT_EQ(n->as_lambda_param_count(), 2u);
+  EXPECT_EQ(n->as_lambda_optional_count(), 0u);
   EXPECT_EQ(n->as_lambda_param(0), "x");
   EXPECT_EQ(n->as_lambda_param(1), "y");
   EXPECT_EQ(&n->as_lambda_body(), body);
@@ -297,7 +298,7 @@ TEST(AstNodeLambda, ParamsAndBodyRoundtrip) {
 TEST(AstNodeLambda, ZeroParamsIsLegal) {
   Arena a;
   AstNode* body = make_literal(a, Value::number(7.0));
-  AstNode* n = make_lambda(a, nullptr, 0, body);
+  AstNode* n = make_lambda(a, nullptr, 0, /*optional_count=*/0, body);
   ASSERT_NE(n, nullptr);
   EXPECT_EQ(n->as_lambda_param_count(), 0u);
   EXPECT_EQ(&n->as_lambda_body(), body);

@@ -267,8 +267,10 @@ AstNode* make_array_literal(Arena& arena, std::uint32_t rows, std::uint32_t cols
   return n;
 }
 
-AstNode* make_lambda(Arena& arena, const std::string_view* params, std::uint32_t param_count, AstNode* body) {
+AstNode* make_lambda(Arena& arena, const std::string_view* params, std::uint32_t param_count,
+                     std::uint32_t optional_count, AstNode* body) {
   FM_CHECK(body != nullptr, "make_lambda: body must be non-null");
+  FM_CHECK(optional_count <= param_count, "make_lambda: optional_count must be <= param_count");
   const std::string_view* copied_params = nullptr;
   if (param_count > 0) {
     FM_CHECK(params != nullptr, "make_lambda: params must be non-null when param_count > 0");
@@ -284,6 +286,7 @@ AstNode* make_lambda(Arena& arena, const std::string_view* params, std::uint32_t
   n->kind_ = NodeKind::Lambda;
   n->data_.lambda.params = copied_params;
   n->data_.lambda.param_count = param_count;
+  n->data_.lambda.optional_count = optional_count;
   n->data_.lambda.body = body;
   return n;
 }
@@ -505,6 +508,11 @@ const AstNode& AstNode::as_array_element(std::uint32_t row, std::uint32_t col) c
 std::uint32_t AstNode::as_lambda_param_count() const {
   FM_CHECK(kind_ == NodeKind::Lambda, "AstNode::as_lambda_param_count on non-Lambda");
   return data_.lambda.param_count;
+}
+
+std::uint32_t AstNode::as_lambda_optional_count() const {
+  FM_CHECK(kind_ == NodeKind::Lambda, "AstNode::as_lambda_optional_count on non-Lambda");
+  return data_.lambda.optional_count;
 }
 
 std::string_view AstNode::as_lambda_param(std::uint32_t i) const {

@@ -48,9 +48,15 @@ struct LambdaValue {
   /// Arena-allocated array of parameter names, length `param_count`.
   /// `nullptr` is legal when `param_count == 0`.
   const std::string_view* params;
-  /// Number of declared parameters. `LambdaCall` arity must match exactly;
-  /// mismatch surfaces `#VALUE!`.
+  /// Number of declared parameters. `LambdaCall` arity must satisfy
+  /// `param_count - optional_count <= arity <= param_count`; mismatches
+  /// surface `#VALUE!`.
   std::uint32_t param_count;
+  /// Number of trailing parameters declared with `[name]` bracket syntax.
+  /// When the call site provides fewer than `param_count` arguments, the
+  /// missing trailing slots are bound to an "omitted" sentinel that
+  /// `ISOMITTED` detects.
+  std::uint32_t optional_count;
   /// AST node to evaluate when the lambda is called. Non-null. Lifetime is
   /// bounded by the parser arena that produced the surrounding formula.
   const parser::AstNode* body;

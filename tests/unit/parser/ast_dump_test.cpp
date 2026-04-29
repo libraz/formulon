@@ -377,14 +377,14 @@ TEST(AstDumpLambda, TwoParams) {
   Arena a;
   std::vector<std::string_view> params{"x", "y"};
   AstNode* body = make_name_ref(a, "x");
-  AstNode* n = make_lambda(a, params.data(), 2, body);
+  AstNode* n = make_lambda(a, params.data(), 2, /*optional_count=*/0, body);
   EXPECT_EQ(dump_sexpr(*n), "(lambda (x y) (name x))");
 }
 
 TEST(AstDumpLambda, ZeroParams) {
   Arena a;
   AstNode* body = make_literal(a, Value::number(7.0));
-  AstNode* n = make_lambda(a, nullptr, 0, body);
+  AstNode* n = make_lambda(a, nullptr, 0, /*optional_count=*/0, body);
   EXPECT_EQ(dump_sexpr(*n), "(lambda () (num 7))");
 }
 
@@ -464,7 +464,7 @@ TEST(AstDumpComposite, NestedLambdaCall) {
   Arena a;
   std::vector<std::string_view> params{"x"};
   AstNode* body = make_binary_op(a, BinOp::Add, make_name_ref(a, "x"), make_literal(a, Value::number(1.0)));
-  AstNode* lam = make_lambda(a, params.data(), 1, body);
+  AstNode* lam = make_lambda(a, params.data(), 1, /*optional_count=*/0, body);
   std::vector<const AstNode*> args;
   args.push_back(make_literal(a, Value::number(5.0)));
   AstNode* n = make_lambda_call(a, lam, args.data(), 1);

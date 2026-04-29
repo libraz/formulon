@@ -208,6 +208,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     // they cannot ride the eager path because it flattens references to
     // `Value` before the impl runs.
     {"ISFORMULA", &eval_isformula_lazy},
+    {"ISOMITTED", &eval_isomitted_lazy},
     {"ISREF", &eval_isref_lazy},
     {"IRR", &eval_irr_lazy},
     {"LINEST", &eval_linest_lazy},
@@ -322,15 +323,18 @@ std::string_view strip_future_prefix(std::string_view name) noexcept {
 // curried call) and the name-bound dispatch path in `dispatch_call` (where
 // the user wrote `f(x)` and `f` resolves through `NameEnv` to a Lambda).
 //
-// Strict arity match: Excel surfaces `#VALUE!` when the call arity differs
-// from the declared parameter count (no defaulting, no variadics). Argument
-// evaluation is eager and left-to-right in the *caller's* scope; the first
-// error short-circuits. Bindings extend a fresh `NameEnv` rooted at the
-// lambda's captured environment, so closure capture continues to work
-// across both invocation paths.
+// Arity check: required slots = `param_count - optional_count`; the call
+// must satisfy `required <= arity <= param_count`. Anything else surfaces
+// `#VALUE!`. Trailing optional slots that the caller did not supply bind
+// to an "omitted" sentinel that ISOMITTED detects via `lookup_omitted`.
+// Argument evaluation is eager and left-to-right in the *caller's* scope;
+// the first error short-circuits. Bindings extend a fresh `NameEnv` rooted
+// at the lambda's captured environment so closure capture continues to
+// work across both invocation paths.
 Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::AstNode* const* call_args, Arena& arena,
                     const FunctionRegistry& registry, const EvalContext& ctx) {
-  if (arity != lv->param_count) {
+  const std::uint32_t required = lv->param_count - lv->optional_count;
+  if (arity < required || arity > lv->param_count) {
     return Value::error(ErrorCode::Value);
   }
   NameEnv env;
@@ -343,6 +347,9 @@ Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::As
       return arg;
     }
     env = env.extend(lv->params[i], arg, arena);
+  }
+  for (std::uint32_t i = arity; i < lv->param_count; ++i) {
+    env = env.extend_omitted(lv->params[i], arena);
   }
   const EvalContext body_ctx = ctx.with_name_env(&env);
   return eval_node(*lv->body, arena, registry, body_ctx);
@@ -1473,6 +1480,7 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       }
       lv->params = params;
       lv->param_count = n;
+      lv->optional_count = node.as_lambda_optional_count();
       lv->body = &node.as_lambda_body();
       // Copy the caller's NameEnv into the arena: the live `NameEnv` value at
       // `ctx.name_env()` typically lives on a parent eval_node frame that

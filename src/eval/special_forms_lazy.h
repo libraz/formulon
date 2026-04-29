@@ -57,6 +57,14 @@ Value eval_switch_lazy(const parser::AstNode& call, Arena& arena, const Function
 Value eval_count_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx);
 
+// `ISOMITTED(arg)` — TRUE iff `arg` is a bare name reference resolving
+// to an omitted trailing-optional LAMBDA parameter. Lazy because the
+// query is about the AST shape and the binding's `is_omitted` flag, not
+// the bound value. Outside of a LAMBDA call (or for any arg that isn't
+// a NameRef into the active environment) the result is FALSE.
+Value eval_isomitted_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                          const EvalContext& ctx);
+
 }  // namespace eval
 }  // namespace formulon
 

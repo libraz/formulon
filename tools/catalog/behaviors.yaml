@@ -295,7 +295,7 @@ groups:
         expected: impl
       - name: "argument omitted via [optional]"
         probe: "[y]"
-        expected: diverged
+        expected: impl
       - name: "ISOMITTED outside LAMBDA"
         probe_regex: '=\s*ISOMITTED\('
         expected: impl
@@ -307,7 +307,7 @@ groups:
         expected: impl
       - name: "ISOMITTED in nested LAMBDA"
         probe_regex: 'LAMBDA\([^,]+,\s*\[[a-z]+\],\s*IF\(ISOMITTED'
-        expected: diverged
+        expected: impl
 
   - function: "BYROW"
     aspect: "lambda dispatcher"

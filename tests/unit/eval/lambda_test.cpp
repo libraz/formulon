@@ -76,13 +76,15 @@ struct AstBuilder {
 
   AstNode* lambda1(std::string_view p0, AstNode* body) {
     std::vector<std::string_view> params{p0};
-    return make_lambda(arena, params.data(), 1, body);
+    return make_lambda(arena, params.data(), 1, /*optional_count=*/0, body);
   }
   AstNode* lambda2(std::string_view p0, std::string_view p1, AstNode* body) {
     std::vector<std::string_view> params{p0, p1};
-    return make_lambda(arena, params.data(), 2, body);
+    return make_lambda(arena, params.data(), 2, /*optional_count=*/0, body);
   }
-  AstNode* lambda0(AstNode* body) { return make_lambda(arena, /*params=*/nullptr, 0, body); }
+  AstNode* lambda0(AstNode* body) {
+    return make_lambda(arena, /*params=*/nullptr, 0, /*optional_count=*/0, body);
+  }
 
   AstNode* call(AstNode* callee, std::vector<AstNode*> args) {
     std::vector<const AstNode*> as;
@@ -256,6 +258,7 @@ TEST(EvalLambda, DebugStringShowsParamCount) {
   ASSERT_NE(lv, nullptr);
   lv->params = nullptr;
   lv->param_count = 3;
+  lv->optional_count = 0;
   lv->body = nullptr;  // Not dereferenced by debug_to_string.
   lv->captured_env = nullptr;
   const Value v = Value::lambda(lv);
@@ -349,6 +352,46 @@ TEST(EvalLambda, ParserArityMismatchSurfacesValueError) {
   const Value v = EvalSource("=LAMBDA(x, y, x+y)(1)");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(EvalLambda, ParserOptionalParamOmittedTakesGuardedBranch) {
+  // =LAMBDA(x, [y], IF(ISOMITTED(y), x, x+y))(5) -> 5.
+  // The optional `y` is omitted; ISOMITTED detects the omitted slot and
+  // the IF picks the unguarded `x` branch.
+  const Value v = EvalSource("=LAMBDA(x, [y], IF(ISOMITTED(y), x, x+y))(5)");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 5.0);
+}
+
+TEST(EvalLambda, ParserOptionalParamSuppliedTakesPresentBranch) {
+  // =LAMBDA(x, [y], IF(ISOMITTED(y), x, x+y))(5,10) -> 15.
+  const Value v = EvalSource("=LAMBDA(x, [y], IF(ISOMITTED(y), x, x+y))(5,10)");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 15.0);
+}
+
+TEST(EvalLambda, ParserOptionalParamMinArityStillEnforced) {
+  // Required slots = `param_count - optional_count` = 1; calling with
+  // zero args still surfaces #VALUE!.
+  const Value v = EvalSource("=LAMBDA(x, [y], x)()");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(EvalLambda, ParserIsomittedOnLiteralReturnsFalse) {
+  // ISOMITTED outside any LAMBDA call (or applied to a non-name-ref
+  // arg) returns FALSE.
+  const Value v = EvalSource("=ISOMITTED(5)");
+  ASSERT_TRUE(v.is_boolean()) << v.debug_to_string();
+  EXPECT_FALSE(v.as_boolean());
+}
+
+TEST(EvalLambda, ParserIsomittedOnPresentLambdaParamReturnsFalse) {
+  // =LET(f, LAMBDA(x, ISOMITTED(x)), f(5)) -> FALSE. `x` is a regular
+  // (non-optional) param and is bound, so the omitted flag is FALSE.
+  const Value v = EvalSource("=LET(f, LAMBDA(x, ISOMITTED(x)), f(5))");
+  ASSERT_TRUE(v.is_boolean()) << v.debug_to_string();
+  EXPECT_FALSE(v.as_boolean());
 }
 
 TEST(EvalLambda, ParserEmptyLambdaIsParseError) {

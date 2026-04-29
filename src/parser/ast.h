@@ -191,6 +191,7 @@ class AstNode final {
 
   // --- Lambda --------------------------------------------------------------
   std::uint32_t as_lambda_param_count() const;
+  std::uint32_t as_lambda_optional_count() const;
   std::string_view as_lambda_param(std::uint32_t i) const;
   const AstNode& as_lambda_body() const;
 
@@ -231,7 +232,7 @@ class AstNode final {
   friend AstNode* make_implicit_intersection(Arena&, AstNode*);
   friend AstNode* make_call(Arena&, std::string_view, const AstNode* const*, std::uint32_t);
   friend AstNode* make_array_literal(Arena&, std::uint32_t, std::uint32_t, const AstNode* const*);
-  friend AstNode* make_lambda(Arena&, const std::string_view*, std::uint32_t, AstNode*);
+  friend AstNode* make_lambda(Arena&, const std::string_view*, std::uint32_t, std::uint32_t, AstNode*);
   friend AstNode* make_let_binding(Arena&, const std::string_view*, const AstNode* const*, std::uint32_t, AstNode*);
   friend AstNode* make_lambda_call(Arena&, AstNode*, const AstNode* const*, std::uint32_t);
   friend AstNode* make_error_literal(Arena&, ErrorCode);
@@ -282,6 +283,10 @@ class AstNode final {
   struct LambdaPayload {
     const std::string_view* params;
     std::uint32_t param_count;
+    /// Number of trailing parameters declared with `[name]` bracket syntax.
+    /// `param_count - optional_count` is the minimum call arity; `param_count`
+    /// is the maximum. Optional params are always trailing.
+    std::uint32_t optional_count;
     const AstNode* body;
   };
   struct LetPayload {
@@ -399,7 +404,10 @@ AstNode* make_array_literal(Arena& arena, std::uint32_t rows, std::uint32_t cols
                             const AstNode* const* elems_row_major);
 
 /// Builds a `Lambda` node. `params` may be null when `param_count == 0`.
-AstNode* make_lambda(Arena& arena, const std::string_view* params, std::uint32_t param_count, AstNode* body);
+/// `optional_count` is the count of trailing `[name]`-bracketed optional
+/// parameters; must be `<= param_count`.
+AstNode* make_lambda(Arena& arena, const std::string_view* params, std::uint32_t param_count,
+                     std::uint32_t optional_count, AstNode* body);
 
 /// Builds a `LetBinding`. Each `i < binding_count` pairs `names[i]` with
 /// `exprs[i]`. `binding_count` must be `>= 1`.

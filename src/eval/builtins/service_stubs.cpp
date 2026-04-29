@@ -136,20 +136,6 @@ Value GetPivotData(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*aren
   return Value::error(ErrorCode::Ref);
 }
 
-// ISOMITTED returns TRUE only when its argument is the omitted slot of
-// a LAMBDA invocation -- the `IF(ISOMITTED(x), default, x)` idiom used
-// inside user-defined LAMBDAs. Formulon does not yet implement LAMBDA,
-// so every ISOMITTED call is, by construction, made outside a lambda
-// and the argument is always present. Mac Excel returns FALSE for the
-// outside-a-lambda case, so we always return FALSE. Critically, this
-// function is registered with `propagate_errors = false`: the whole
-// point of ISOMITTED is to detect the absence of a value, so it must
-// accept any argument shape (including errors) and report "present"
-// (FALSE) rather than short-circuiting on an error input.
-Value IsOmitted(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return Value::boolean(false);
-}
-
 }  // namespace
 
 void register_service_stub_builtins(FunctionRegistry& registry) {
@@ -173,11 +159,10 @@ void register_service_stub_builtins(FunctionRegistry& registry) {
   // are optional and arbitrary in count). Default `propagate_errors = true`
   // so an error in any argument surfaces instead of the fixed #REF!.
   registry.register_function(FunctionDef{"GETPIVOTDATA", 2u, kVariadic, &GetPivotData});
-  // ISOMITTED(argument) -- exact arity 1. Explicitly disable error
-  // propagation so the function can inspect (and report "present" for) any
-  // argument shape, including errors. This mirrors the IS* type-predicate
-  // family in `src/eval/builtins/info.cpp`.
-  registry.register_function(FunctionDef{"ISOMITTED", 1u, 1u, &IsOmitted, /*propagate_errors=*/false});
+  // ISOMITTED(argument) is registered through the lazy dispatch table in
+  // `tree_walker.cpp` (entry: ISOMITTED -> eval_isomitted_lazy). The lazy
+  // path inspects the argument's AST shape and the active `NameEnv`'s
+  // omitted flag, which the eager registry cannot see.
 }
 
 }  // namespace eval

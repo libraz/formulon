@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-28T07:01:46Z"
+    "generated_at": "2026-04-29T08:48:03Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -80,7 +80,10 @@
       "id": "isomitted_argument_omitted",
       "formula": "=LAMBDA(x, [y], IF(ISOMITTED(y), x, x+y))(5)",
       "setup": {},
-      "skipped": "Formulon parser rejects the [optional] LAMBDA parameter syntax (=LAMBDA(x, [y], ...)). Returns #NAME?; Mac evaluates correctly. Lift skip-oracle once the parser accepts bracket-prefixed optional params."
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
     },
     {
       "id": "isomitted_outside_lambda",
@@ -113,7 +116,10 @@
       "id": "isomitted_in_nested_lambda",
       "formula": "=LAMBDA(x, [y], IF(ISOMITTED(y), x, x+y))(5,10)",
       "setup": {},
-      "skipped": "Same parser-side gap as isomitted_argument_omitted: [optional] param syntax not yet accepted."
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
     },
     {
       "id": "byrow_sum_each_row",

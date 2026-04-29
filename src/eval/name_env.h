@@ -80,6 +80,19 @@ class NameEnv {
     return nullptr;
   }
 
+  /// Returns `true` when `name` resolves to an "omitted" lambda parameter —
+  /// a bracket-prefixed `[name]` slot the caller did not supply. Returns
+  /// `false` for both regular bindings and unbound names; ISOMITTED uses
+  /// this query to distinguish the two.
+  bool lookup_omitted(std::string_view name) const noexcept {
+    for (const Binding* b = head_; b != nullptr; b = b->prev) {
+      if (strings::case_insensitive_eq(b->name, name)) {
+        return b->is_omitted;
+      }
+    }
+    return false;
+  }
+
   /// Returns a new environment with `(name, value)` pushed on top. The
   /// returned env shares its tail with `*this`; the underlying `Binding`
   /// node lives in `arena`. Returns a copy of `*this` unchanged if arena
@@ -106,6 +119,26 @@ class NameEnv {
     frame->name = arena.intern(name);
     frame->value = value;
     frame->expr = expr;
+    frame->is_omitted = false;
+    frame->prev = head_;
+    NameEnv next;
+    next.head_ = frame;
+    return next;
+  }
+
+  /// Pushes a frame marking `name` as an omitted optional LAMBDA parameter.
+  /// The bound value is `Blank` (a safe default if any consumer accidentally
+  /// reads through the omitted name); ISOMITTED detects the omitted flag via
+  /// `lookup_omitted`.
+  NameEnv extend_omitted(std::string_view name, Arena& arena) const noexcept {
+    auto* frame = arena.create<Binding>();
+    if (frame == nullptr) {
+      return *this;
+    }
+    frame->name = arena.intern(name);
+    frame->value = Value::blank();
+    frame->expr = nullptr;
+    frame->is_omitted = true;
     frame->prev = head_;
     NameEnv next;
     next.head_ = frame;
@@ -135,6 +168,10 @@ class NameEnv {
     /// alive for the duration of evaluation (the same invariant as for the
     /// AST nodes themselves).
     const parser::AstNode* expr = nullptr;
+    /// Set when the binding represents an "omitted" trailing-optional
+    /// LAMBDA parameter slot. ISOMITTED reports TRUE for these and FALSE
+    /// for everything else (regular LET / LAMBDA bindings, unbound names).
+    bool is_omitted = false;
     const Binding* prev = nullptr;
   };
 

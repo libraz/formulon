@@ -557,23 +557,10 @@ entries:
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"
 
-  # Gap 2: Formulon parser does not yet accept the `[optional_param]`
-  # bracket syntax in LAMBDA parameter lists. Cases below parse-error in
-  # Formulon (#NAME?) where Mac Excel evaluates them. Closing this gap
-  # requires a parser extension; until then the cases are kept so that
-  # the moment optional-param parsing lands the divergence flips green.
-  - id: isomitted_argument_omitted
-    mode: skip-oracle
-    reason: "Formulon parser rejects the [optional] LAMBDA parameter syntax (=LAMBDA(x, [y], ...)). Returns #NAME?; Mac evaluates correctly. Lift skip-oracle once the parser accepts bracket-prefixed optional params."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-  - id: isomitted_in_nested_lambda
-    mode: skip-oracle
-    reason: "Same parser-side gap as isomitted_argument_omitted: [optional] param syntax not yet accepted."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+  # Gap 2 (closed 2026-04-29): Formulon parser now accepts the
+  # `[optional_param]` bracket syntax in LAMBDA parameter lists. Optional
+  # trailing params bind to an "omitted" sentinel detected by ISOMITTED
+  # via the active NameEnv frame.
 
   # Gap 3: REGEX* family with catastrophic-backtracking inputs. PCRE2
   # bounds runtime via match_limit (1_000_000) and depth_limit (10_000)

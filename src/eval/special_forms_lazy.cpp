@@ -15,6 +15,7 @@
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/logical_coerce.h"
+#include "eval/name_env.h"
 #include "eval/name_env_resolve.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -292,6 +293,35 @@ Value eval_switch_lazy(const parser::AstNode& call, Arena& arena, const Function
     return eval_node(call.as_call_arg(i), arena, registry, ctx);
   }
   return Value::error(ErrorCode::NA);
+}
+
+// ISOMITTED returns TRUE only when the argument resolves to a trailing
+// optional LAMBDA parameter that the call site did not supply. The check
+// is purely structural: the arg must be a bare `NameRef`, and that name
+// must resolve in the active `NameEnv` to a binding whose `is_omitted`
+// flag is set. Anything else — a literal, arithmetic, an unrelated name,
+// or a populated optional slot — yields FALSE. Calls outside any LAMBDA
+// invocation have no `NameEnv` (or one without the queried name) and
+// therefore also yield FALSE, matching Mac Excel's "outside-lambda"
+// behaviour.
+//
+// This is intentionally lazy: the eager dispatcher would flatten the
+// argument to a Value before we could distinguish "omitted optional
+// slot" from "regular binding bound to Blank".
+Value eval_isomitted_lazy(const parser::AstNode& call, Arena& /*arena*/, const FunctionRegistry& /*registry*/,
+                          const EvalContext& ctx) {
+  if (call.as_call_arity() != 1U) {
+    return Value::error(ErrorCode::Value);
+  }
+  const parser::AstNode& arg = call.as_call_arg(0);
+  if (arg.kind() != parser::NodeKind::NameRef) {
+    return Value::boolean(false);
+  }
+  const NameEnv* env = ctx.name_env();
+  if (env == nullptr) {
+    return Value::boolean(false);
+  }
+  return Value::boolean(env->lookup_omitted(arg.as_name()));
 }
 
 }  // namespace eval

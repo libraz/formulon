@@ -361,7 +361,13 @@ AstNode* Parser::parse_lambda_call(const Token& name_tok) {
   // body. Excel's grammar requires at least one slot total — `LAMBDA()` is
   // an error. A single-slot form `LAMBDA(expr)` matches Mac Excel by
   // treating `expr` as the body of a zero-parameter lambda.
+  //
+  // Parameters introduced with bracket syntax `[name]` are optional. They
+  // must be trailing (no required parameter may follow an optional one);
+  // when omitted at the call site they bind to a sentinel that ISOMITTED
+  // detects.
   std::vector<std::string_view> params;
+  std::uint32_t optional_count = 0;
   AstNode* body = nullptr;
 
   // Empty arg list: LAMBDA requires the body slot.
@@ -395,10 +401,20 @@ AstNode* Parser::parse_lambda_call(const Token& name_tok) {
       }
       continue;
     }
+    // Bracketed optional-parameter shape: `[name]` followed by either a
+    // comma (more slots ahead) or `)` (this was actually the body slot —
+    // a `[ref]` structured reference inside the body parses there). We
+    // only treat it as a param when the closing bracket is followed by a
+    // comma; otherwise let the body branch handle it.
+    const bool is_optional_param_slot =
+        (peek_kind() == TokenKind::LBracket) && (peek_kind_at(1) == TokenKind::Ident) &&
+        IsLetNameShape(peek_at(1).lexeme) && !LooksLikeCellRef(peek_at(1).lexeme) &&
+        (peek_kind_at(2) == TokenKind::RBracket) && (peek_kind_at(3) == TokenKind::Comma);
     const bool is_param_slot = (peek_kind() == TokenKind::Ident) && IsLetNameShape(peek().lexeme) &&
                                !LooksLikeCellRef(peek().lexeme) && peek_kind_at(1) == TokenKind::Comma;
-    if (is_param_slot) {
-      const Token& tok = peek();
+    if (is_optional_param_slot || is_param_slot) {
+      const bool optional = is_optional_param_slot;
+      const Token& tok = optional ? peek_at(1) : peek();
       const std::string_view pname = tok.lexeme;
       // Reject duplicates within a single LAMBDA: the second occurrence
       // would shadow the first at runtime, which is almost certainly a bug
@@ -412,15 +428,37 @@ AstNode* Parser::parse_lambda_call(const Token& name_tok) {
       }
       if (duplicate) {
         record_error_with_token(ParseErrorCode::LambdaDuplicateParam, tok.range, tok.lexeme);
-        advance();  // consume the offending name
+        if (optional) {
+          advance();  // LBracket
+          advance();  // Ident
+          advance();  // RBracket
+        } else {
+          advance();  // Ident
+        }
         if (peek_kind() == TokenKind::Comma) {
           advance();
         }
         continue;
       }
       params.push_back(pname);
-      advance();  // Ident
-      advance();  // Comma
+      if (optional) {
+        ++optional_count;
+        advance();  // LBracket
+        advance();  // Ident
+        advance();  // RBracket
+        advance();  // Comma
+      } else {
+        // A required parameter is illegal once we've started accepting
+        // optional ones: Excel only allows trailing optionals.
+        if (optional_count > 0) {
+          record_error_with_token(ParseErrorCode::LambdaInvalidParam, tok.range, tok.lexeme);
+          // Treat as optional anyway so we don't lose the slot — but the
+          // diagnostic is what matters; the AST will still produce a name.
+          ++optional_count;
+        }
+        advance();  // Ident
+        advance();  // Comma
+      }
       continue;
     }
     // Non-param-slot: this is either the body (final slot, followed by `)`)
@@ -474,8 +512,8 @@ AstNode* Parser::parse_lambda_call(const Token& name_tok) {
     return placeholder;
   }
 
-  AstNode* n =
-      make_lambda(arena_, params.empty() ? nullptr : params.data(), static_cast<std::uint32_t>(params.size()), body);
+  AstNode* n = make_lambda(arena_, params.empty() ? nullptr : params.data(), static_cast<std::uint32_t>(params.size()),
+                           optional_count, body);
   if (n == nullptr) {
     return nullptr;
   }

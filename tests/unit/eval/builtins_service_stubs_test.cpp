@@ -73,7 +73,9 @@ TEST(BuiltinsServiceStubRegistry, NamesRegistered) {
   EXPECT_NE(reg.lookup("COPILOT"), nullptr);
   EXPECT_NE(reg.lookup("PHONETIC"), nullptr);
   EXPECT_NE(reg.lookup("GETPIVOTDATA"), nullptr);
-  EXPECT_NE(reg.lookup("ISOMITTED"), nullptr);
+  // ISOMITTED is intentionally not in the eager registry: it is a lazy
+  // form (see `eval_isomitted_lazy`) so it can inspect the argument's
+  // AST shape and the active NameEnv's omitted flag.
 }
 
 // ---------------------------------------------------------------------------
@@ -254,13 +256,15 @@ TEST(BuiltinsServiceStubGetPivotData, FieldItemArgErrorPropagates) {
 }
 
 // ---------------------------------------------------------------------------
-// ISOMITTED - always FALSE (LAMBDA not yet implemented)
+// ISOMITTED - lazy form
 // ---------------------------------------------------------------------------
 //
-// Without LAMBDA infrastructure, every ISOMITTED call is by construction
-// outside a lambda, so the argument is always "present". Critically, the
-// function is registered with `propagate_errors = false`, so even an
-// error argument must surface as FALSE rather than the propagated error.
+// ISOMITTED returns TRUE only when its argument is a bare name reference
+// resolving to an "omitted" trailing-optional LAMBDA parameter. Everything
+// else — numeric, text, or boolean literals; arithmetic; an error-producing
+// expression; a regular LET-bound name — yields FALSE. The lambda-aware
+// behaviour is exercised in `tests/unit/eval/lambda_test.cpp`; the cases
+// below pin down the outside-lambda surface.
 
 TEST(BuiltinsServiceStubIsOmitted, NumberInputReturnsFalse) {
   const Value v = EvalSource("=ISOMITTED(42)");
@@ -280,18 +284,10 @@ TEST(BuiltinsServiceStubIsOmitted, BoolInputReturnsFalse) {
   EXPECT_FALSE(v.as_boolean());
 }
 
-TEST(BuiltinsServiceStubIsOmitted, BlankInputReturnsFalse) {
-  // The grammar has no Blank literal, so invoke the impl directly. Even a
-  // Blank argument is "present" from ISOMITTED's perspective outside a
-  // LAMBDA call.
-  const Value v = CallSingle("ISOMITTED", Value::blank());
-  ASSERT_TRUE(v.is_boolean());
-  EXPECT_FALSE(v.as_boolean());
-}
-
 TEST(BuiltinsServiceStubIsOmitted, ErrorInputDoesNotPropagate) {
-  // This is the load-bearing test: `propagate_errors = false` must be
-  // honoured. =ISOMITTED(1/0) must return FALSE, NOT #DIV/0!.
+  // ISOMITTED is a lazy form: the error-producing arg is never evaluated
+  // because the impl only inspects AST shape. =ISOMITTED(1/0) yields FALSE,
+  // not #DIV/0!.
   const Value v = EvalSource("=ISOMITTED(1/0)");
   ASSERT_TRUE(v.is_boolean());
   EXPECT_FALSE(v.as_boolean());
