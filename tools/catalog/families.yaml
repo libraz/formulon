@@ -234,6 +234,20 @@ families:
     min_perspectives_per_member: 5
     cluster_reason: "Hyperbolic / reciprocal trig identities and rounding-parity helpers; share identity-edge perspectives (zero, +/- infinity, pi/2)."
 
+  # -- Combinatorial / number-base / precise-rounding family --------------
+  # Combinatorial counters (COMBIN/COMBINA/PERMUT/PERMUTATIONA/FACT/FACTDOUBLE/
+  # MULTINOMIAL), number-theory helpers (GCD/LCM/SQRTPI), Roman / Arabic
+  # numeral conversions (ROMAN/ARABIC), arbitrary-radix string conversions
+  # (BASE/DECIMAL), and the half-even / toward-+inf precise rounders
+  # (CEILING.PRECISE/FLOOR.PRECISE/ISO.CEILING). They share integer-overflow
+  # edges, locale-stable numeral conversions, and zero-significance / negative-
+  # input quirks.
+  - name: math_combinatorics
+    members: [ARABIC, BASE, "CEILING.PRECISE", COMBIN, COMBINA, DECIMAL, FACT, FACTDOUBLE, "FLOOR.PRECISE", GCD, "ISO.CEILING", LCM, MULTINOMIAL, PERMUT, PERMUTATIONA, ROMAN, SQRTPI]
+    category_file: tests/oracle/cases/math_combinatorics.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Combinatorial / base-conversion / precise-rounding family; share integer-overflow edges and locale-stable numeral conversions."
+
   # -- Post-2010 beta / gamma / lognormal / Weibull distribution family ----
   # These post-2010 spellings share special-function backends (regularized
   # incomplete beta and gamma, log-gamma) and the same tail-bit edges

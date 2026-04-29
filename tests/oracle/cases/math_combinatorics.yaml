@@ -43,6 +43,10 @@ cases:
     description: "8!! = 8 * 6 * 4 * 2 = 384."
     formula: "=FACTDOUBLE(8)"
 
+  - id: factdouble_fractional_truncates
+    description: "Fractional input truncates: FACTDOUBLE(7.9) = 105."
+    formula: "=FACTDOUBLE(7.9)"
+
   # -- COMBIN --------------------------------------------------------------
   - id: combin_five_choose_two
     formula: "=COMBIN(5, 2)"
@@ -55,6 +59,10 @@ cases:
 
   - id: combin_fractional_truncates
     formula: "=COMBIN(5.9, 2.5)"
+
+  - id: combin_k_zero_is_one
+    description: "C(n,0) = 1 for any n>=0."
+    formula: "=COMBIN(7, 0)"
 
   # -- COMBINA -------------------------------------------------------------
   - id: combina_four_three
@@ -71,6 +79,10 @@ cases:
   - id: combina_negative_is_num
     formula: "=COMBINA(-1, 2)"
 
+  - id: combina_k_zero
+    description: "Multichoose(n, 0) = 1."
+    formula: "=COMBINA(5, 0)"
+
   # -- MULTINOMIAL ---------------------------------------------------------
   - id: multinomial_single_arg
     formula: "=MULTINOMIAL(5)"
@@ -86,6 +98,10 @@ cases:
   - id: multinomial_negative_is_num
     formula: "=MULTINOMIAL(2, -1, 3)"
 
+  - id: multinomial_with_zero
+    description: "MULTINOMIAL(0, 3, 2) = 5!/(0!*3!*2!) = 10."
+    formula: "=MULTINOMIAL(0, 3, 2)"
+
   # -- GCD -----------------------------------------------------------------
   - id: gcd_two_args
     formula: "=GCD(12, 18)"
@@ -98,6 +114,10 @@ cases:
 
   - id: gcd_negative_is_num
     formula: "=GCD(12, -18)"
+
+  - id: gcd_with_zero_argument
+    description: "GCD(0, n) == n; the zero argument is the identity."
+    formula: "=GCD(0, 18)"
 
   # -- LCM -----------------------------------------------------------------
   - id: lcm_two_args
@@ -112,6 +132,10 @@ cases:
 
   - id: lcm_negative_is_num
     formula: "=LCM(4, -6)"
+
+  - id: lcm_coprime
+    description: "LCM(8, 9) = 72 when arguments are coprime."
+    formula: "=LCM(8, 9)"
 
   # -- ARABIC --------------------------------------------------------------
   - id: arabic_subtractive
@@ -229,6 +253,10 @@ cases:
   - id: ceiling_precise_sig_zero
     formula: "=CEILING.PRECISE(4.3, 0)"
 
+  - id: ceiling_precise_sig_two
+    description: "CEILING.PRECISE(7.3, 2) rounds up to next multiple of 2 = 8."
+    formula: "=CEILING.PRECISE(7.3, 2)"
+
   # -- FLOOR.PRECISE -------------------------------------------------------
   - id: floor_precise_positive_default
     formula: "=FLOOR.PRECISE(4.7)"
@@ -241,6 +269,10 @@ cases:
 
   - id: floor_precise_sig_zero
     formula: "=FLOOR.PRECISE(4.7, 0)"
+
+  - id: floor_precise_sig_two
+    description: "FLOOR.PRECISE(7.7, 2) rounds down to multiple of 2 = 6."
+    formula: "=FLOOR.PRECISE(7.7, 2)"
 
   # -- ISO.CEILING ---------------------------------------------------------
   - id: iso_ceiling_positive
@@ -255,6 +287,10 @@ cases:
 
   - id: iso_ceiling_sig_zero
     formula: "=ISO.CEILING(4.3, 0)"
+
+  - id: iso_ceiling_negative_sig
+    description: "Negative significance is treated as |sig|; matches CEILING.PRECISE."
+    formula: "=ISO.CEILING(7.3, -2)"
 
   # -- SQRTPI --------------------------------------------------------------
   - id: sqrtpi_one
@@ -271,6 +307,10 @@ cases:
   - id: sqrtpi_negative_is_num
     formula: "=SQRTPI(-1)"
 
+  - id: sqrtpi_two
+    description: "sqrt(2 * pi) ~= 2.5066282746310002."
+    formula: "=SQRTPI(2)"
+
   # -- PERMUT / PERMUTATIONA -----------------------------------------------
   - id: permut_basic
     description: "5 * 4 = 20"
@@ -283,9 +323,29 @@ cases:
   - id: permut_k_gt_n_is_num
     formula: "=PERMUT(3, 5)"
 
+  - id: permut_k_equals_n
+    description: "PERMUT(n, n) = n!; PERMUT(5, 5) = 120."
+    formula: "=PERMUT(5, 5)"
+
+  - id: permut_fractional_truncates
+    description: "Both arguments truncate toward zero before computation."
+    formula: "=PERMUT(5.9, 2.5)"
+
   - id: permutationa_basic
     description: "3^2 = 9"
     formula: "=PERMUTATIONA(3, 2)"
 
   - id: permutationa_zero_zero_is_one
     formula: "=PERMUTATIONA(0, 0)"
+
+  - id: permutationa_k_gt_n_allowed
+    description: "With repetition k may exceed n: PERMUTATIONA(3, 5) = 3^5 = 243."
+    formula: "=PERMUTATIONA(3, 5)"
+
+  - id: permutationa_n_zero_k_positive
+    description: "PERMUTATIONA(0, k>0) = 0^k = 0; Excel emits #NUM!."
+    formula: "=PERMUTATIONA(0, 3)"
+
+  - id: permutationa_fractional_truncates
+    description: "Both arguments truncate toward zero before computation."
+    formula: "=PERMUTATIONA(3.9, 2.5)"

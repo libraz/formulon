@@ -6944,3 +6944,331 @@ groups:
       - name: "zero denominator -> #DIV/0!"
         probe: "=QUOTIENT(5, 0)"
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # Combinatorial / number-base / precise-rounding family. Cases live in
+  # tests/oracle/cases/math_combinatorics.yaml; the family clusters share
+  # integer-overflow edges and locale-stable numeral conversions.
+  # -------------------------------------------------------------------------
+  - function: "FACT"
+    aspect: "factorial"
+    behaviors:
+      - name: "FACT(0) == 1 boundary"
+        probe: "=FACT(0)"
+        expected: impl
+      - name: "FACT(5) == 120 typical"
+        probe: "=FACT(5)"
+        expected: impl
+      - name: "fractional input truncates toward zero"
+        probe: "=FACT(5.9)"
+        expected: impl
+      - name: "negative input -> #NUM!"
+        probe: "=FACT(-1)"
+        expected: impl
+      - name: "overflow above 170 -> #NUM!"
+        probe: "=FACT(171)"
+        expected: impl
+
+  - function: "FACTDOUBLE"
+    aspect: "double factorial"
+    behaviors:
+      - name: "FACTDOUBLE(0) == 1 boundary"
+        probe: "=FACTDOUBLE(0)"
+        expected: impl
+      - name: "FACTDOUBLE(-1) == 1 Excel quirk"
+        probe: "=FACTDOUBLE(-1)"
+        expected: impl
+      - name: "odd input 7!! = 105"
+        probe: "=FACTDOUBLE(7)"
+        expected: impl
+      - name: "even input 8!! = 384"
+        probe: "=FACTDOUBLE(8)"
+        expected: impl
+      - name: "fractional input truncates toward zero"
+        probe: "=FACTDOUBLE(7.9)"
+        expected: impl
+
+  - function: "COMBIN"
+    aspect: "binomial coefficient (no repetition)"
+    behaviors:
+      - name: "typical C(5,2) = 10"
+        probe: "=COMBIN(5, 2)"
+        expected: impl
+      - name: "C(n,n) = 1 boundary"
+        probe: "=COMBIN(7, 7)"
+        expected: impl
+      - name: "k > n -> #NUM!"
+        probe: "=COMBIN(3, 5)"
+        expected: impl
+      - name: "fractional inputs truncate"
+        probe: "=COMBIN(5.9, 2.5)"
+        expected: impl
+      - name: "C(n,0) = 1 boundary"
+        probe: "=COMBIN(7, 0)"
+        expected: impl
+
+  - function: "COMBINA"
+    aspect: "binomial coefficient with repetition"
+    behaviors:
+      - name: "typical multichoose(4, 3) = 20"
+        probe: "=COMBINA(4, 3)"
+        expected: impl
+      - name: "k > n is allowed (repetition)"
+        probe: "=COMBINA(3, 5)"
+        expected: impl
+      - name: "COMBINA(0, 0) = 1 boundary"
+        probe: "=COMBINA(0, 0)"
+        expected: impl
+      - name: "negative input -> #NUM!"
+        probe: "=COMBINA(-1, 2)"
+        expected: impl
+      - name: "k = 0 returns 1"
+        probe: "=COMBINA(5, 0)"
+        expected: impl
+
+  - function: "MULTINOMIAL"
+    aspect: "multinomial coefficient"
+    behaviors:
+      - name: "single argument returns 1"
+        probe: "=MULTINOMIAL(5)"
+        expected: impl
+      - name: "two args matches binomial"
+        probe: "=MULTINOMIAL(2, 3)"
+        expected: impl
+      - name: "three args 6!/(1!2!3!) = 60"
+        probe: "=MULTINOMIAL(1, 2, 3)"
+        expected: impl
+      - name: "negative argument -> #NUM!"
+        probe: "=MULTINOMIAL(2, -1, 3)"
+        expected: impl
+      - name: "with zero argument acts as identity"
+        probe: "=MULTINOMIAL(0, 3, 2)"
+        expected: impl
+
+  - function: "GCD"
+    aspect: "greatest common divisor"
+    behaviors:
+      - name: "typical two-argument GCD(12, 18) = 6"
+        probe: "=GCD(12, 18)"
+        expected: impl
+      - name: "three-argument GCD(24, 36, 60) = 12"
+        probe: "=GCD(24, 36, 60)"
+        expected: impl
+      - name: "GCD(0, 0) == 0 boundary"
+        probe: "=GCD(0, 0)"
+        expected: impl
+      - name: "negative argument -> #NUM!"
+        probe: "=GCD(12, -18)"
+        expected: impl
+      - name: "GCD(0, n) == n identity"
+        probe: "=GCD(0, 18)"
+        expected: impl
+
+  - function: "LCM"
+    aspect: "least common multiple"
+    behaviors:
+      - name: "typical two-argument LCM(4, 6) = 12"
+        probe: "=LCM(4, 6)"
+        expected: impl
+      - name: "three-argument LCM(2, 3, 4) = 12"
+        probe: "=LCM(2, 3, 4)"
+        expected: impl
+      - name: "any zero argument forces LCM = 0"
+        probe: "=LCM(4, 0, 6)"
+        expected: impl
+      - name: "negative argument -> #NUM!"
+        probe: "=LCM(4, -6)"
+        expected: impl
+      - name: "coprime arguments LCM(8, 9) = 72"
+        probe: "=LCM(8, 9)"
+        expected: impl
+
+  - function: "ARABIC"
+    aspect: "Roman -> integer conversion"
+    behaviors:
+      - name: "subtractive Roman MCMXCIX = 1999"
+        probe: "=ARABIC(\"MCMXCIX\")"
+        expected: impl
+      - name: "empty string returns 0"
+        probe: "=ARABIC(\"\")"
+        expected: impl
+      - name: "leading minus produces negative result"
+        probe: "=ARABIC(\"-MCM\")"
+        expected: impl
+      - name: "invalid Roman -> #VALUE!"
+        probe: "=ARABIC(\"FOO\")"
+        expected: impl
+      - name: "lowercase letters accepted"
+        probe: "=ARABIC(\"xiv\")"
+        expected: impl
+
+  - function: "ROMAN"
+    aspect: "integer -> Roman numeral conversion"
+    behaviors:
+      - name: "classic form 1999 -> MCMXCIX"
+        probe: "=ROMAN(1999)"
+        expected: impl
+      - name: "ROMAN(0) returns empty string"
+        probe: "=ROMAN(0)"
+        expected: diverged
+      - name: "negative input -> #VALUE!"
+        probe: "=ROMAN(-1)"
+        expected: impl
+      - name: "above 3999 -> #VALUE!"
+        probe: "=ROMAN(4000)"
+        expected: impl
+      - name: "simplified form selector form 4 (most concise)"
+        probe: "=ROMAN(499, 4)"
+        expected: impl
+
+  - function: "BASE"
+    aspect: "integer -> base-N string"
+    behaviors:
+      - name: "binary conversion BASE(7, 2) = 111"
+        probe: "=BASE(7, 2)"
+        expected: impl
+      - name: "hexadecimal conversion BASE(15, 16) = F"
+        probe: "=BASE(15, 16)"
+        expected: impl
+      - name: "minimum-length zero pad"
+        probe: "=BASE(7, 2, 8)"
+        expected: impl
+      - name: "negative input -> #NUM!"
+        probe: "=BASE(-1, 2)"
+        expected: impl
+      - name: "radix below 2 -> #NUM!"
+        probe: "=BASE(5, 1)"
+        expected: impl
+
+  - function: "DECIMAL"
+    aspect: "base-N string -> integer"
+    behaviors:
+      - name: "binary parse DECIMAL(\"111\", 2) = 7"
+        probe: "=DECIMAL(\"111\", 2)"
+        expected: impl
+      - name: "hexadecimal parse uppercase"
+        probe: "=DECIMAL(\"FF\", 16)"
+        expected: impl
+      - name: "hexadecimal parse lowercase"
+        probe: "=DECIMAL(\"ff\", 16)"
+        expected: impl
+      - name: "empty input -> #VALUE!"
+        probe: "=DECIMAL(\"\", 10)"
+        expected: impl
+      - name: "digit out of radix range -> #NUM!"
+        probe: "=DECIMAL(\"2\", 2)"
+        expected: impl
+
+  - function: "CEILING.PRECISE"
+    aspect: "round toward +infinity to multiple"
+    behaviors:
+      - name: "positive value default sig"
+        probe: "=CEILING.PRECISE(4.3)"
+        expected: impl
+      - name: "negative value rounds toward +infinity"
+        probe: "=CEILING.PRECISE(-4.3)"
+        expected: impl
+      - name: "negative significance treated as |sig|"
+        probe: "=CEILING.PRECISE(-4.3, -2)"
+        expected: impl
+      - name: "zero significance returns 0"
+        probe: "=CEILING.PRECISE(4.3, 0)"
+        expected: impl
+      - name: "positive value with sig=2 rounds to next multiple"
+        probe: "=CEILING.PRECISE(7.3, 2)"
+        expected: impl
+
+  - function: "FLOOR.PRECISE"
+    aspect: "round toward -infinity to multiple"
+    behaviors:
+      - name: "positive value default sig"
+        probe: "=FLOOR.PRECISE(4.7)"
+        expected: impl
+      - name: "negative value rounds toward -infinity"
+        probe: "=FLOOR.PRECISE(-4.3)"
+        expected: impl
+      - name: "negative significance treated as |sig|"
+        probe: "=FLOOR.PRECISE(4.7, -2)"
+        expected: impl
+      - name: "zero significance returns 0"
+        probe: "=FLOOR.PRECISE(4.7, 0)"
+        expected: impl
+      - name: "positive value with sig=2 rounds down"
+        probe: "=FLOOR.PRECISE(7.7, 2)"
+        expected: impl
+
+  - function: "ISO.CEILING"
+    aspect: "ISO half-toward-+inf rounding (alias of CEILING.PRECISE)"
+    behaviors:
+      - name: "positive value with sig=2"
+        probe: "=ISO.CEILING(4.3, 2)"
+        expected: impl
+      - name: "negative value rounds toward +infinity"
+        probe: "=ISO.CEILING(-4.3)"
+        expected: impl
+      - name: "default significance = 1"
+        probe: "=ISO.CEILING(4.3)"
+        expected: impl
+      - name: "zero significance returns 0"
+        probe: "=ISO.CEILING(4.3, 0)"
+        expected: impl
+      - name: "negative significance treated as |sig|"
+        probe: "=ISO.CEILING(7.3, -2)"
+        expected: impl
+
+  - function: "SQRTPI"
+    aspect: "sqrt(x * pi)"
+    behaviors:
+      - name: "SQRTPI(1) = sqrt(pi)"
+        probe: "=SQRTPI(1)"
+        expected: impl
+      - name: "SQRTPI(0) = 0"
+        probe: "=SQRTPI(0)"
+        expected: impl
+      - name: "SQRTPI(4) = 2 * sqrt(pi)"
+        probe: "=SQRTPI(4)"
+        expected: impl
+      - name: "negative input -> #NUM!"
+        probe: "=SQRTPI(-1)"
+        expected: impl
+      - name: "SQRTPI(2) = sqrt(2 * pi)"
+        probe: "=SQRTPI(2)"
+        expected: impl
+
+  - function: "PERMUT"
+    aspect: "permutations without repetition"
+    behaviors:
+      - name: "typical PERMUT(5, 2) = 20"
+        probe: "=PERMUT(5, 2)"
+        expected: impl
+      - name: "PERMUT(n, 0) = 1 boundary"
+        probe: "=PERMUT(5, 0)"
+        expected: impl
+      - name: "k > n -> #NUM!"
+        probe: "=PERMUT(3, 5)"
+        expected: impl
+      - name: "PERMUT(n, n) = n!"
+        probe: "=PERMUT(5, 5)"
+        expected: impl
+      - name: "fractional arguments truncate"
+        probe: "=PERMUT(5.9, 2.5)"
+        expected: impl
+
+  - function: "PERMUTATIONA"
+    aspect: "permutations with repetition (n^k)"
+    behaviors:
+      - name: "typical PERMUTATIONA(3, 2) = 9"
+        probe: "=PERMUTATIONA(3, 2)"
+        expected: impl
+      - name: "PERMUTATIONA(0, 0) = 1 boundary"
+        probe: "=PERMUTATIONA(0, 0)"
+        expected: impl
+      - name: "k > n is allowed (repetition)"
+        probe: "=PERMUTATIONA(3, 5)"
+        expected: impl
+      - name: "n = 0 with positive k -> #NUM!"
+        probe: "=PERMUTATIONA(0, 3)"
+        expected: impl
+      - name: "fractional arguments truncate"
+        probe: "=PERMUTATIONA(3.9, 2.5)"
+        expected: impl

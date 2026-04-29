@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-23T10:06:39Z"
+    "generated_at": "2026-04-29T00:46:25Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -95,6 +95,15 @@
       }
     },
     {
+      "id": "factdouble_fractional_truncates",
+      "formula": "=FACTDOUBLE(7.9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 105.0
+      }
+    },
+    {
       "id": "combin_five_choose_two",
       "formula": "=COMBIN(5, 2)",
       "setup": {},
@@ -128,6 +137,15 @@
       "expect": {
         "kind": "number",
         "value": 10.0
+      }
+    },
+    {
+      "id": "combin_k_zero_is_one",
+      "formula": "=COMBIN(7, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
       }
     },
     {
@@ -167,6 +185,15 @@
       }
     },
     {
+      "id": "combina_k_zero",
+      "formula": "=COMBINA(5, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
       "id": "multinomial_single_arg",
       "formula": "=MULTINOMIAL(5)",
       "setup": {},
@@ -200,6 +227,15 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      }
+    },
+    {
+      "id": "multinomial_with_zero",
+      "formula": "=MULTINOMIAL(0, 3, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.999999999999998
       }
     },
     {
@@ -239,6 +275,15 @@
       }
     },
     {
+      "id": "gcd_with_zero_argument",
+      "formula": "=GCD(0, 18)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 18.0
+      }
+    },
+    {
       "id": "lcm_two_args",
       "formula": "=LCM(4, 6)",
       "setup": {},
@@ -272,6 +317,15 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      }
+    },
+    {
+      "id": "lcm_coprime",
+      "formula": "=LCM(8, 9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 72.0
       }
     },
     {
@@ -578,6 +632,15 @@
       }
     },
     {
+      "id": "ceiling_precise_sig_two",
+      "formula": "=CEILING.PRECISE(7.3, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
       "id": "floor_precise_positive_default",
       "formula": "=FLOOR.PRECISE(4.7)",
       "setup": {},
@@ -611,6 +674,15 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      }
+    },
+    {
+      "id": "floor_precise_sig_two",
+      "formula": "=FLOOR.PRECISE(7.7, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
       }
     },
     {
@@ -650,6 +722,15 @@
       }
     },
     {
+      "id": "iso_ceiling_negative_sig",
+      "formula": "=ISO.CEILING(7.3, -2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
       "id": "sqrtpi_one",
       "formula": "=SQRTPI(1)",
       "setup": {},
@@ -683,6 +764,105 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      }
+    },
+    {
+      "id": "sqrtpi_two",
+      "formula": "=SQRTPI(2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.5066282746310002
+      }
+    },
+    {
+      "id": "permut_basic",
+      "formula": "=PERMUT(5, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "permut_k_zero",
+      "formula": "=PERMUT(5, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "permut_k_gt_n_is_num",
+      "formula": "=PERMUT(3, 5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "permut_k_equals_n",
+      "formula": "=PERMUT(5, 5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 120.0
+      }
+    },
+    {
+      "id": "permut_fractional_truncates",
+      "formula": "=PERMUT(5.9, 2.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "permutationa_basic",
+      "formula": "=PERMUTATIONA(3, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "permutationa_zero_zero_is_one",
+      "formula": "=PERMUTATIONA(0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "permutationa_k_gt_n_allowed",
+      "formula": "=PERMUTATIONA(3, 5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 243.0
+      }
+    },
+    {
+      "id": "permutationa_n_zero_k_positive",
+      "formula": "=PERMUTATIONA(0, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "permutationa_fractional_truncates",
+      "formula": "=PERMUTATIONA(3.9, 2.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.0
       }
     }
   ]
