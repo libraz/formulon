@@ -6,13 +6,19 @@
 // `Workbook::set_cell_value` / `set_cell_formula`. Shared strings are
 // resolved against the SST in-pipeline; styles, defined names, and
 // table metadata are parsed for round-trip preservation (defined names
-// land on `Workbook::defined_names()`, tables on `Workbook::tables()`).
-// The writer-side emission for those parts arrives in Bundle 2.5. Every
-// part not consumed by this slice is recorded in
-// `OoxmlReadResult::unknown_parts` so callers can detect "we have a
-// part but did not load it" cases. Bundle 2.5 will switch the policy
-// from "everything we did not parse" to "everything we did not
-// recognise".
+// land on `Workbook::defined_names()`, tables on `Workbook::tables()`,
+// the writer slice emits both back unchanged). Every Override-listed
+// part the reader did not consume is captured raw — path, content
+// type, and bytes — into `OoxmlReadResult::unknown_parts` so the
+// writer can re-emit them verbatim ("unknown-part passthrough"). The
+// same payload is also stashed on the workbook via
+// `Workbook::passthrough_parts()` so callers that only retain the
+// workbook (e.g. `read_ooxml(...).workbook` on the right-hand side of
+// an assignment) still get the round-trip guarantee.
+//
+// Default-typed binary parts (images, OLE objects) are NOT captured by
+// this slice; only Override-listed parts round-trip. This is acceptable
+// for v1 round-trip and matches the design's "minimal corpus" target.
 //
 // Design references:
 //   * backup/plans/04-xlsx-io.md §4.2 (package structure)
@@ -27,6 +33,7 @@
 #include <string>
 #include <vector>
 
+#include "io/passthrough_part.h"
 #include "io/zip_reader.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -36,9 +43,9 @@ namespace formulon {
 namespace io {
 
 /// Result of `read_ooxml`: a constructed (but not recalc'd) Workbook plus
-/// a list of OOXML parts the reader did not consume yet. Unknown parts
-/// are preserved so a future round-trip slice (Bundle 2.5) can write
-/// them back unchanged.
+/// a list of OOXML parts the reader did not consume. Unknown parts are
+/// preserved with their raw bytes so the writer can round-trip them
+/// unchanged.
 ///
 /// `pending_sst_count` reports the number of `t="s"` cell references the
 /// reader resolved against the shared-strings table during this read.
@@ -59,9 +66,14 @@ namespace io {
 /// constraint internally — see the note in
 /// `eval/recalc_engine.cpp` Phase 4b.) Once Bundle 2.3 introduces a
 /// workbook-owned shared-string pool the storage will move there.
+///
+/// `unknown_parts` carries the same passthrough payload that is also
+/// copied onto the workbook via `set_passthrough_parts`. Both views are
+/// populated; callers that only retain the workbook still get a
+/// round-trip-clean writer pass.
 struct OoxmlReadResult {
   Workbook workbook;
-  std::vector<std::string> unknown_parts;
+  std::vector<PassthroughPart> unknown_parts;
   std::uint32_t pending_sst_count = 0;
   // `std::deque` is intentional: we need pointer/iterator stability so
   // cell `Value::text` views into earlier entries do not invalidate

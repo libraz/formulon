@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "io/defined_names.h"
+#include "io/passthrough_part.h"
 #include "io/tables_reader.h"
 #include "sheet.h"
 #include "utils/error.h"
@@ -197,6 +198,17 @@ class Workbook {
   /// same reason as `set_defined_names`.
   void set_tables(std::vector<io::TableMetadata> tables) { tables_ = std::move(tables); }
 
+  /// Read-only access to the verbatim Override-listed parts the reader
+  /// did not consume. The writer emits each entry as-is, including its
+  /// `<Override>` registration in `[Content_Types].xml`. Default-typed
+  /// binary parts (images, OLE objects) are NOT represented here.
+  const std::vector<io::PassthroughPart>& passthrough_parts() const noexcept { return passthrough_parts_; }
+
+  /// Replaces the workbook's passthrough-part list. Move-assigns to
+  /// keep the I/O hand-off allocation-free for archives carrying many
+  /// preserved parts.
+  void set_passthrough_parts(std::vector<io::PassthroughPart> parts) { passthrough_parts_ = std::move(parts); }
+
  private:
   Workbook();
 
@@ -206,9 +218,10 @@ class Workbook {
   // its own transitive deps on the dep graph / arena / parser).
   std::unique_ptr<eval::RecalcEngine> engine_;
   // Passive OOXML metadata; populated by the reader and consumed by
-  // the eventual writer extension (Bundle 2.5). Empty by default.
+  // the writer for round-trip preservation. Empty by default.
   std::vector<io::DefinedName> defined_names_;
   std::vector<io::TableMetadata> tables_;
+  std::vector<io::PassthroughPart> passthrough_parts_;
 };
 
 }  // namespace formulon

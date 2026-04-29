@@ -304,10 +304,10 @@ TEST(OoxmlRoundTrip, SstResolutionEndToEnd) {
   EXPECT_EQ(result.pending_sst_count, 3U);
 
   // sharedStrings.xml and styles.xml should NOT surface as unknown.
-  for (const std::string& part : result.unknown_parts) {
-    EXPECT_NE(part, "xl/sharedStrings.xml");
-    EXPECT_NE(part, "xl/styles.xml");
-    EXPECT_NE(part, "xl/worksheets/sheet1.xml");
+  for (const io::PassthroughPart& part : result.unknown_parts) {
+    EXPECT_NE(part.path, "xl/sharedStrings.xml");
+    EXPECT_NE(part.path, "xl/styles.xml");
+    EXPECT_NE(part.path, "xl/worksheets/sheet1.xml");
   }
 
   const Workbook& dst = result.workbook;

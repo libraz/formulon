@@ -154,19 +154,19 @@ TEST(OoxmlReader, UnknownPartsExcludesSheetAndStylesAndSst) {
 
   auto result_or = read_ooxml(SpanOf(bytes));
   ASSERT_TRUE(static_cast<bool>(result_or));
-  const std::vector<std::string>& parts = result_or.value().unknown_parts;
+  const std::vector<PassthroughPart>& parts = result_or.value().unknown_parts;
 
   // The reader consumes sheet*.xml and xl/styles.xml. The latter is a
   // best-effort validate-only parse but still counts as consumed so the
   // round-trip pipeline does not surface it as unknown. The empty
   // workbook does not emit a sharedStrings part, so the assertion below
   // is just sanity: it must not appear either.
-  EXPECT_EQ(std::find(parts.begin(), parts.end(), "xl/styles.xml"), parts.end())
-      << "styles.xml unexpectedly still in unknown_parts";
-  EXPECT_EQ(std::find(parts.begin(), parts.end(), "xl/worksheets/sheet1.xml"), parts.end())
-      << "sheet1.xml unexpectedly still in unknown_parts";
-  EXPECT_EQ(std::find(parts.begin(), parts.end(), "xl/sharedStrings.xml"), parts.end())
-      << "sharedStrings.xml unexpectedly in unknown_parts";
+  auto path_eq = [&parts](std::string_view target) {
+    return std::find_if(parts.begin(), parts.end(), [target](const PassthroughPart& p) { return p.path == target; });
+  };
+  EXPECT_EQ(path_eq("xl/styles.xml"), parts.end()) << "styles.xml unexpectedly still in unknown_parts";
+  EXPECT_EQ(path_eq("xl/worksheets/sheet1.xml"), parts.end()) << "sheet1.xml unexpectedly still in unknown_parts";
+  EXPECT_EQ(path_eq("xl/sharedStrings.xml"), parts.end()) << "sharedStrings.xml unexpectedly in unknown_parts";
 }
 
 TEST(OoxmlReader, EmptyWorkbookFactoryProducesZeroSheets) {

@@ -142,11 +142,22 @@ Expected<void, Error> VerifyContentTypes(const std::vector<std::uint8_t>& ct_byt
   return Expected<void, Error>::Ok();
 }
 
+/// One entry from `[Content_Types].xml`'s `<Override>` list, paired with
+/// its declared content type. The reader uses the content type (a) to
+/// decide whether the part is interesting at all (we only consume
+/// recognised content types) and (b) so the writer slice can re-emit
+/// the `<Override>` for passthrough parts verbatim.
+struct OverrideEntry {
+  std::string part_name;     // package-relative, no leading slash
+  std::string content_type;  // verbatim ContentType= attribute value
+};
+
 /// Lists every part name advertised by `[Content_Types].xml`'s `<Override>`
-/// elements. Used to compute the unknown-parts set; defaults are ignored
-/// because they describe extensions, not specific parts.
-std::vector<std::string> ListOverridePartNames(const std::vector<std::uint8_t>& ct_bytes) {
-  std::vector<std::string> out;
+/// elements together with its content type. `<Default>` entries are
+/// ignored: they describe extensions rather than specific parts and the
+/// passthrough flow only carries Override-registered parts.
+std::vector<OverrideEntry> ListOverridePartEntries(const std::vector<std::uint8_t>& ct_bytes) {
+  std::vector<OverrideEntry> out;
   pugi::xml_document doc;
   pugi::xml_parse_result parse =
       doc.load_buffer(ct_bytes.data(), ct_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
@@ -163,9 +174,11 @@ std::vector<std::string> ListOverridePartNames(const std::vector<std::uint8_t>& 
       if (!part_name.empty() && part_name.front() == '/') {
         part_name.erase(0, 1);
       }
-      if (!part_name.empty()) {
-        out.push_back(std::move(part_name));
+      if (part_name.empty()) {
+        continue;
       }
+      std::string content_type = node.attribute("ContentType").value();
+      out.push_back(OverrideEntry{std::move(part_name), std::move(content_type)});
     }
   }
   return out;
@@ -407,7 +420,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   if (auto v = VerifyContentTypes(ct_bytes); !v) {
     return v.error();
   }
-  const std::vector<std::string> override_part_names = ListOverridePartNames(ct_bytes);
+  const std::vector<OverrideEntry> override_part_entries = ListOverridePartEntries(ct_bytes);
 
   // 2. _rels/.rels — locate the workbook part path.
   if (!zip.has_entry("_rels/.rels")) {
@@ -741,17 +754,45 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   // the workbook-scope vector onto the workbook for round-trip.
   wb.set_tables(std::move(tables_metadata));
 
-  // Compute unknown_parts: every Override-listed part name we did not
-  // touch above. Bundle 2.5 will refine the categorisation; for now this
-  // keeps round-trip work in scope without trying to be clever.
-  std::vector<std::string> unknown_parts;
-  unknown_parts.reserve(override_part_names.size());
-  for (const std::string& part : override_part_names) {
-    if (consumed_parts.find(part) == consumed_parts.end()) {
-      unknown_parts.push_back(part);
+  // Compute unknown_parts: every Override-listed part the reader did
+  // not consume, captured raw so the writer can re-emit it verbatim.
+  // Default-typed parts (images, OLE) are out of scope at this layer;
+  // see `passthrough_part.h` for the rationale.
+  std::vector<PassthroughPart> unknown_parts;
+  unknown_parts.reserve(override_part_entries.size());
+  for (const OverrideEntry& entry : override_part_entries) {
+    if (consumed_parts.find(entry.part_name) != consumed_parts.end()) {
+      continue;
     }
+    // Read the bytes once. Failures here are propagated as ZIP errors;
+    // the part was advertised in `[Content_Types].xml`, so if miniz
+    // cannot extract it the package itself is corrupt.
+    if (!zip.has_entry(entry.part_name)) {
+      // Override referenced a part that does not exist in the archive.
+      // We treat this as "nothing to passthrough" rather than fail: the
+      // part is missing and there's no way to round-trip it. A future
+      // bundle may surface a structured warning.
+      continue;
+    }
+    auto bytes_or = zip.read_entry(entry.part_name);
+    if (!bytes_or) {
+      return bytes_or.error();
+    }
+    PassthroughPart part;
+    part.path = entry.part_name;
+    part.content_type = entry.content_type;
+    part.bytes = std::move(bytes_or.value());
+    unknown_parts.push_back(std::move(part));
   }
-  std::sort(unknown_parts.begin(), unknown_parts.end());
+  // Stable order so callers / tests can compare deterministically.
+  std::sort(unknown_parts.begin(), unknown_parts.end(),
+            [](const PassthroughPart& a, const PassthroughPart& b) { return a.path < b.path; });
+
+  // Hand the same payload to the workbook so the writer can find it
+  // even when the caller only retains `result.workbook`. The
+  // `OoxmlReadResult::unknown_parts` view stays populated for tests and
+  // tooling that want to inspect what was preserved.
+  wb.set_passthrough_parts(unknown_parts);
 
   OoxmlReadResult result{std::move(wb), std::move(unknown_parts), pending_sst_count, std::move(result_text_storage)};
   return result;
