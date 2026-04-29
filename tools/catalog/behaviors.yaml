@@ -8746,3 +8746,319 @@ groups:
       - name: "round-trip with T.DIST.2T"
         probe: "=T.INV.2T(T.DIST.2T(2, 10), 10) - 2"
         expected: impl
+
+  # =========================================================================
+  # financial_ext family — auxiliary financial helpers (DOLLARDE / DOLLARFR
+  # / EFFECT / NOMINAL / FVSCHEDULE / PDURATION / RRI / MIRR / ISPMT). All
+  # cases live under tests/oracle/cases/financial_ext.yaml.
+  # =========================================================================
+
+  - function: "DOLLARDE"
+    aspect: "fractional-dollar to decimal-dollar conversion"
+    behaviors:
+      - name: "sixteenths fraction (denom=16)"
+        probe: "=DOLLARDE(1.02, 16)"
+        expected: impl
+      - name: "halves single-digit (denom=2)"
+        probe: "=DOLLARDE(1.1, 2)"
+        expected: impl
+      - name: "denom=1 identity"
+        probe: "=DOLLARDE(2.5, 1)"
+        expected: impl
+      - name: "negative denominator -> #NUM!"
+        probe: "=DOLLARDE(1.1, -2)"
+        expected: impl
+      - name: "fractional denominator truncates to 0 -> #DIV/0!"
+        probe: "=DOLLARDE(1.1, 0.5)"
+        expected: impl
+
+  - function: "DOLLARFR"
+    aspect: "decimal-dollar to fractional-dollar conversion"
+    behaviors:
+      - name: "sixteenths fraction (inverse of DOLLARDE example)"
+        probe: "=DOLLARFR(1.125, 16)"
+        expected: impl
+      - name: "halves fraction (denom=2)"
+        probe: "=DOLLARFR(1.5, 2)"
+        expected: impl
+      - name: "negative denominator -> #NUM!"
+        probe: "=DOLLARFR(1.5, -2)"
+        expected: impl
+      - name: "zero denominator -> #DIV/0!"
+        probe: "=DOLLARFR(1.5, 0)"
+        expected: impl
+      - name: "negative dollar amount preserved"
+        probe: "=DOLLARFR(-1.5, 2)"
+        expected: impl
+
+  - function: "EFFECT"
+    aspect: "effective annual interest rate"
+    behaviors:
+      - name: "monthly compounding (npery=12)"
+        probe: "=EFFECT(0.0525, 12)"
+        expected: impl
+      - name: "annual compounding identity (npery=1)"
+        probe: "=EFFECT(0.05, 1)"
+        expected: impl
+      - name: "negative nominal rate -> #NUM!"
+        probe: "=EFFECT(-0.05, 12)"
+        expected: impl
+      - name: "npery below one truncates to 0 -> #NUM!"
+        probe: "=EFFECT(0.05, 0.5)"
+        expected: impl
+      - name: "quarterly compounding (npery=4)"
+        probe: "=EFFECT(0.05, 4)"
+        expected: impl
+
+  - function: "NOMINAL"
+    aspect: "nominal annual interest rate"
+    behaviors:
+      - name: "monthly inverse of EFFECT"
+        probe: "=NOMINAL(0.053781812, 12)"
+        expected: impl
+      - name: "annual identity (npery=1)"
+        probe: "=NOMINAL(0.05, 1)"
+        expected: impl
+      - name: "negative effective rate -> #NUM!"
+        probe: "=NOMINAL(-0.05, 12)"
+        expected: impl
+      - name: "npery below one truncates to 0 -> #NUM!"
+        probe: "=NOMINAL(0.05, 0.5)"
+        expected: impl
+      - name: "quarterly inverse of EFFECT"
+        probe: "=NOMINAL(0.0509453, 4)"
+        expected: impl
+
+  - function: "FVSCHEDULE"
+    aspect: "future value over a schedule of compounding rates"
+    behaviors:
+      - name: "range-shaped multi-rate schedule"
+        probe: "=FVSCHEDULE(1000, A1:A3)"
+        expected: impl
+      - name: "single scalar rate"
+        probe: "=FVSCHEDULE(1000, 0.05)"
+        expected: impl
+      - name: "single negative rate (drawdown)"
+        probe: "=FVSCHEDULE(1000, -0.1)"
+        expected: impl
+      - name: "schedule with a zero-rate period"
+        probe: "=FVSCHEDULE(1000, {0.05, 0, 0.10})"
+        expected: impl
+      - name: "schedule with a negative-rate period"
+        probe: "=FVSCHEDULE(1000, {0.10, -0.20, 0.10})"
+        expected: impl
+
+  - function: "PDURATION"
+    aspect: "periods required to grow pv to fv at a fixed rate"
+    behaviors:
+      - name: "doubling at 10% (~7.27 periods)"
+        probe: "=PDURATION(0.1, 1000, 2000)"
+        expected: impl
+      - name: "no growth (pv == fv) -> 0"
+        probe: "=PDURATION(0.05, 1000, 1000)"
+        expected: impl
+      - name: "rate=0 -> #NUM!"
+        probe: "=PDURATION(0, 1000, 2000)"
+        expected: impl
+      - name: "negative pv -> #NUM!"
+        probe: "=PDURATION(0.1, -1000, 2000)"
+        expected: impl
+      - name: "negative fv -> #NUM!"
+        probe: "=PDURATION(0.1, 1000, -2000)"
+        expected: impl
+
+  - function: "RRI"
+    aspect: "equivalent interest rate from pv/fv over nper periods"
+    behaviors:
+      - name: "doubling over five years (~14.87%)"
+        probe: "=RRI(5, 1000, 2000)"
+        expected: impl
+      - name: "single-period full ratio (rate = fv/pv - 1)"
+        probe: "=RRI(1, 1000, 1100)"
+        expected: impl
+      - name: "no growth (pv == fv) -> 0"
+        probe: "=RRI(5, 1000, 1000)"
+        expected: impl
+      - name: "nper=0 -> #NUM!"
+        probe: "=RRI(0, 1000, 2000)"
+        expected: impl
+      - name: "negative pv -> #NUM!"
+        probe: "=RRI(5, -1000, 2000)"
+        expected: impl
+
+  - function: "MIRR"
+    aspect: "modified internal rate of return"
+    behaviors:
+      - name: "Microsoft docs example over six flows"
+        probe: "=MIRR(A1:A6, 0.1, 0.12)"
+        expected: impl
+      - name: "inline array literal cash flows"
+        probe: "=MIRR({-1000, 500, 700}, 0.1, 0.1)"
+        expected: impl
+      - name: "all positive flows -> #DIV/0!"
+        probe: "=MIRR({100, 200, 300}, 0.1, 0.1)"
+        expected: impl
+      - name: "all negative flows -> -1"
+        probe: "=MIRR({-100, -200, -300}, 0.1, 0.1)"
+        expected: impl
+      - name: "reinvestment > finance rate"
+        probe: "=MIRR(A1:A5, 0.05, 0.15)"
+        expected: impl
+
+  - function: "ISPMT"
+    aspect: "interest portion under a simple-interest schedule"
+    behaviors:
+      - name: "first period (per=0): full interest"
+        probe: "=ISPMT(0.05, 0, 10, 1000)"
+        expected: impl
+      - name: "last period (per=nper): zero interest"
+        probe: "=ISPMT(0.05, 10, 10, 1000)"
+        expected: impl
+      - name: "mid-schedule with monthly rate"
+        probe: "=ISPMT(0.1/12, 1, 36, 8000000)"
+        expected: impl
+      - name: "negative pv flips sign"
+        probe: "=ISPMT(0.05, 1, 10, -1000)"
+        expected: impl
+      - name: "nper=0 -> #DIV/0!"
+        probe: "=ISPMT(0.05, 0, 0, 1000)"
+        expected: impl
+
+  # =========================================================================
+  # shape family — reference-shape introspection (ROW / ROWS / COLUMN /
+  # COLUMNS), local-binding (LET), and shape-aware aggregates (SUM /
+  # SUMPRODUCT). All cases live under tests/oracle/cases/shape.yaml.
+  # =========================================================================
+
+  - function: "COLUMN"
+    aspect: "column-index of a reference"
+    behaviors:
+      - name: "single-cell ref -> 1-based column"
+        probe: "=COLUMN(C5)"
+        expected: impl
+      - name: "rectangle ref -> first column"
+        probe: "=COLUMN(B2:D4)"
+        expected: impl
+      - name: "no argument -> formula cell column"
+        probe: "=COLUMN()"
+        expected: impl
+      - name: "horizontal range consumed by SUMPRODUCT"
+        probe: "COLUMN(A1:E1)"
+        expected: impl
+      - name: "ref resolved through INDIRECT"
+        probe: "=COLUMN(INDIRECT(\"D7\"))"
+        expected: impl
+
+  - function: "ROW"
+    aspect: "row-index of a reference"
+    behaviors:
+      - name: "single-cell ref -> 1-based row"
+        probe: "=ROW(C5)"
+        expected: impl
+      - name: "rectangle ref -> first row"
+        probe: "=ROW(B2:D4)"
+        expected: impl
+      - name: "no argument -> formula cell row"
+        probe: "=ROW()"
+        expected: impl
+      - name: "vertical range consumed by SUM"
+        probe: "ROW(A1:A5)"
+        expected: impl
+      - name: "ref resolved through INDIRECT"
+        probe: "=ROW(INDIRECT(\"D7\"))"
+        expected: impl
+
+  - function: "COLUMNS"
+    aspect: "column count of a reference or array"
+    behaviors:
+      - name: "rectangle ref -> column count"
+        probe: "=COLUMNS(A1:B3)"
+        expected: impl
+      - name: "single-cell ref -> 1"
+        probe: "=COLUMNS(A1)"
+        expected: impl
+      - name: "horizontal array literal"
+        probe: "=COLUMNS({1,2,3})"
+        expected: impl
+      - name: "scalar number -> 1 (1x1)"
+        probe: "=COLUMNS(42)"
+        expected: impl
+      - name: "INDIRECT-resolved rectangle"
+        probe: "=COLUMNS(INDIRECT(\"A1:B3\"))"
+        expected: impl
+
+  - function: "ROWS"
+    aspect: "row count of a reference or array"
+    behaviors:
+      - name: "rectangle ref -> row count"
+        probe: "=ROWS(A1:B3)"
+        expected: impl
+      - name: "single-cell ref -> 1"
+        probe: "=ROWS(A1)"
+        expected: impl
+      - name: "vertical array literal"
+        probe: "=ROWS({1;2;3})"
+        expected: impl
+      - name: "scalar number -> 1 (1x1)"
+        probe: "=ROWS(42)"
+        expected: impl
+      - name: "IF returning a rangeop preserves shape"
+        probe: "=ROWS(IF(TRUE,A1:B3,A1:B3))"
+        expected: impl
+
+  - function: "LET"
+    aspect: "local-binding scope and forwarding"
+    behaviors:
+      - name: "single binding"
+        probe: "=LET(x, 2, x*3)"
+        expected: impl
+      - name: "multi binding"
+        probe: "=LET(a, 2, b, 3, a + b)"
+        expected: impl
+      - name: "intermediate computation reuses earlier binding"
+        probe: "=LET(x, 4, y, x*x, y + 1)"
+        expected: impl
+      - name: "binds a RangeOp; forwarded to ROWS"
+        probe: "=LET(x, A1:C3, ROWS(x))"
+        expected: impl
+      - name: "error in binding propagates"
+        probe: "=LET(x, NA(), x + 1)"
+        expected: impl
+
+  - function: "SUM"
+    aspect: "scalar / range / shape-aware addition"
+    behaviors:
+      - name: "scalar arguments"
+        probe: "=SUM(1, 2, 3)"
+        expected: impl
+      - name: "vertical range"
+        probe: "=SUM(A1:A3)"
+        expected: impl
+      - name: "consumes ROW(range) shape"
+        probe: "=SUM(ROW(A1:A5))"
+        expected: impl
+      - name: "text and blank cells ignored"
+        probe: "=SUM(B1:B3)"
+        expected: impl
+      - name: "error in operand propagates"
+        probe: "=SUM(C1:C3)"
+        expected: impl
+
+  - function: "SUMPRODUCT"
+    aspect: "elementwise product then sum"
+    behaviors:
+      - name: "two equal-shape arrays"
+        probe: "=SUMPRODUCT(A1:A3,B1:B3)"
+        expected: impl
+      - name: "single array reduces to SUM"
+        probe: "=SUMPRODUCT(A1:A3)"
+        expected: impl
+      - name: "shape mismatch -> #VALUE!"
+        probe: "=SUMPRODUCT(A1:A2,B1:B3)"
+        expected: impl
+      - name: "boolean array coercion via *1"
+        probe: "=SUMPRODUCT((A1:A5>2)*1)"
+        expected: impl
+      - name: "error in array literal propagates"
+        probe: "=SUMPRODUCT({1,2,#N/A})"
+        expected: impl

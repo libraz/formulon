@@ -43,6 +43,10 @@ cases:
   - id: dollarfr_zero_denom_is_div0
     formula: "=DOLLARFR(1.5, 0)"
 
+  - id: dollarfr_negative_amount
+    description: "DOLLARFR on a negative dollar amount: -1.5 with denom=2 -> -1.1"
+    formula: "=DOLLARFR(-1.5, 2)"
+
   # -- EFFECT -------------------------------------------------------------
   - id: effect_monthly_compounding
     description: "5.25% nominal compounded monthly -> ~5.378% effective"
@@ -59,6 +63,10 @@ cases:
     description: "npery=0.5 truncates to 0 -> #NUM!"
     formula: "=EFFECT(0.05, 0.5)"
 
+  - id: effect_quarterly_compounding
+    description: "5% nominal compounded quarterly (npery=4) -> ~5.0945% effective"
+    formula: "=EFFECT(0.05, 4)"
+
   # -- NOMINAL ------------------------------------------------------------
   - id: nominal_inverse_of_effect
     description: "NOMINAL round-trips EFFECT: ~5.378% -> 5.25%"
@@ -73,6 +81,10 @@ cases:
   - id: nominal_npery_below_one_is_num
     formula: "=NOMINAL(0.05, 0.5)"
 
+  - id: nominal_quarterly_compounding
+    description: "Quarterly inverse of EFFECT: ~5.0945% effective -> 5% nominal"
+    formula: "=NOMINAL(0.0509453, 4)"
+
   # -- FVSCHEDULE ---------------------------------------------------------
   - id: fvschedule_range_of_rates
     description: "principal=1000, rates {5%, 5%, 10%} -> 1212.75"
@@ -86,6 +98,14 @@ cases:
   - id: fvschedule_negative_rate
     description: "Negative rate reduces principal"
     formula: "=FVSCHEDULE(1000, -0.1)"
+
+  - id: fvschedule_with_zero_rate_entry
+    description: "Mixed schedule including a zero-rate period (no growth that period)"
+    formula: "=FVSCHEDULE(1000, {0.05, 0, 0.10})"
+
+  - id: fvschedule_with_negative_rate_entry
+    description: "Mixed schedule including a negative-rate period (drawdown then recovery)"
+    formula: "=FVSCHEDULE(1000, {0.10, -0.20, 0.10})"
 
   # -- PDURATION ----------------------------------------------------------
   - id: pduration_double_at_ten_percent
@@ -135,13 +155,16 @@ cases:
 
   - id: mirr_all_positive_is_div0
     description: "No sign change -> #DIV/0!"
-    setup: { A1: 100, A2: 200, A3: 300 }
-    formula: "=MIRR(A1:A3, 0.1, 0.1)"
+    formula: "=MIRR({100, 200, 300}, 0.1, 0.1)"
 
   - id: mirr_all_negative_is_minus_one
     description: "All-negative CF: npv_pos=0 -> ratio=0 -> pow(0, x)-1 = -1"
-    setup: { A1: -100, A2: -200, A3: -300 }
-    formula: "=MIRR(A1:A3, 0.1, 0.1)"
+    formula: "=MIRR({-100, -200, -300}, 0.1, 0.1)"
+
+  - id: mirr_reinvestment_above_finance_rate
+    description: "Reinvestment rate (15%) > finance rate (5%): MIRR exceeds the standard IRR for the same flows."
+    setup: { A1: -1000, A2: 200, A3: 300, A4: 400, A5: 500 }
+    formula: "=MIRR(A1:A5, 0.05, 0.15)"
 
   # -- ISPMT --------------------------------------------------------------
   - id: ispmt_first_period_full_interest

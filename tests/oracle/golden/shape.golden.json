@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T10:03:08Z"
+    "generated_at": "2026-04-29T02:26:57Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -811,6 +811,135 @@
       "expect": {
         "kind": "number",
         "value": 2.0
+      }
+    },
+    {
+      "id": "column_through_indirect",
+      "formula": "=COLUMN(INDIRECT(\"D7\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "row_through_indirect",
+      "formula": "=ROW(INDIRECT(\"D7\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "let_single_binding",
+      "formula": "=LET(x, 2, x*3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "let_multi_binding",
+      "formula": "=LET(a, 2, b, 3, a + b)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "let_intermediate_computation",
+      "formula": "=LET(x, 4, y, x*x, y + 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 17.0
+      }
+    },
+    {
+      "id": "let_error_propagates",
+      "formula": "=LET(x, NA(), x + 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sum_scalar_args",
+      "formula": "=SUM(1, 2, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "sum_range_arg",
+      "formula": "=SUM(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "sum_text_and_blank_ignored",
+      "formula": "=SUM(B1:B3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "sum_error_propagates",
+      "formula": "=SUM(C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
       }
     }
   ]

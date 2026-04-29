@@ -213,3 +213,53 @@ cases:
     description: "COLUMNS(CHOOSE(1,A1:B2,A1:B3)) -> 2 (CHOOSE returns the chosen reference)."
     setup: { A1: 1, A2: 2, B1: 3, B2: 4 }
     formula: "=COLUMNS(CHOOSE(1,A1:B2,A1:B3))"
+
+  # =========================================================================
+  # Shape closure perspectives appended for closure cluster.
+  # =========================================================================
+
+  # -- COLUMN / ROW: ref argument resolved through INDIRECT ----------------
+  - id: column_through_indirect
+    description: "COLUMN(INDIRECT(\"D7\")) -> 4 (column-letter-resolved through the textual ref)."
+    formula: "=COLUMN(INDIRECT(\"D7\"))"
+
+  - id: row_through_indirect
+    description: "ROW(INDIRECT(\"D7\")) -> 7 (row-letter-resolved through the textual ref)."
+    formula: "=ROW(INDIRECT(\"D7\"))"
+
+  # -- LET closure perspectives ------------------------------------------
+  - id: let_single_binding
+    description: "Single binding: LET(x, 2, x*3) = 6."
+    formula: "=LET(x, 2, x*3)"
+
+  - id: let_multi_binding
+    description: "Two bindings: LET(a, 2, b, 3, a + b) = 5."
+    formula: "=LET(a, 2, b, 3, a + b)"
+
+  - id: let_intermediate_computation
+    description: "Intermediate uses an earlier binding: LET(x, 4, y, x*x, y+1) = 17."
+    formula: "=LET(x, 4, y, x*x, y + 1)"
+
+  - id: let_error_propagates
+    description: "LET propagates an error from a binding expression: NA() flows through."
+    formula: "=LET(x, NA(), x + 1)"
+
+  # -- SUM closure perspectives ------------------------------------------
+  - id: sum_scalar_args
+    description: "SUM of scalar arguments: 1 + 2 + 3 = 6."
+    formula: "=SUM(1, 2, 3)"
+
+  - id: sum_range_arg
+    description: "SUM of a vertical range: A1:A3 = 1+2+3 = 6."
+    setup: { A1: 1, A2: 2, A3: 3 }
+    formula: "=SUM(A1:A3)"
+
+  - id: sum_text_and_blank_ignored
+    description: "SUM ignores text and blank cells in a range; only numeric B1=1 and B3=3 contribute."
+    setup: { B1: 1, B2: "x", B3: 3 }
+    formula: "=SUM(B1:B3)"
+
+  - id: sum_error_propagates
+    description: "Error in an operand propagates: 1 + #DIV/0! -> #DIV/0!."
+    setup: { C1: 1, C2: "=1/0", C3: 3 }
+    formula: "=SUM(C1:C3)"

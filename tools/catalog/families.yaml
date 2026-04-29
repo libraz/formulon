@@ -349,3 +349,31 @@ families:
     category_file: tests/oracle/cases/financial_rates.yaml
     min_perspectives_per_member: 5
     cluster_reason: "Discount-rate / Treasury-bill / matured-yield family; share DCC basis (0..4) parameter and settlement-vs-maturity ordering edges."
+
+  # -- Auxiliary financial helpers ------------------------------------------
+  # Dollar fraction conversion (DOLLARDE / DOLLARFR), effective vs. nominal
+  # rate translation (EFFECT / NOMINAL), schedule-based future value
+  # (FVSCHEDULE), modified IRR with separate finance / reinvestment rates
+  # (MIRR), and the period / rate solvers (PDURATION / RRI / ISPMT). They
+  # share the rate / npery validity perspectives, the small-fraction edge
+  # (`fraction < 1` -> #DIV/0!) and the all-positive / all-negative
+  # cashflow signedness perspectives that ride alongside MIRR.
+  - name: financial_ext
+    members: [DOLLARDE, DOLLARFR, EFFECT, FVSCHEDULE, ISPMT, MIRR, NOMINAL, PDURATION, RRI]
+    category_file: tests/oracle/cases/financial_ext.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Auxiliary financial helpers (dollar fraction conversion, effective/nominal rate, schedule-based future value, modified IRR, period/rate solvers)."
+
+  # -- Reference-shape introspection and shape-aware aggregates -------------
+  # ROW / ROWS / COLUMN / COLUMNS read 1-based row/column metadata from a
+  # reference-shaped argument; LET binds intermediate computations and
+  # forwards them as references; SUM / SUMPRODUCT consume those shapes via
+  # range-aware accumulation. They share the Ref / RangeOp / ArrayLiteral
+  # AST surface that lazy dispatch must preserve, the dynamic-array spill
+  # fixtures (SEQUENCE, INDIRECT, IF returning a range), and broadcast vs.
+  # parallel-shape semantics that SUMPRODUCT exercises on top.
+  - name: shape
+    members: [COLUMN, COLUMNS, LET, ROW, ROWS, SUM, SUMPRODUCT]
+    category_file: tests/oracle/cases/shape.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Reference-shape introspection (ROW/ROWS/COLUMN/COLUMNS), local-binding (LET), and shape-aware aggregates (SUM/SUMPRODUCT) share dynamic-array fixtures and spill semantics."
