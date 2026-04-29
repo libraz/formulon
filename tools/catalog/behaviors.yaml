@@ -8087,3 +8087,205 @@ groups:
       - name: "field selected via cell reference"
         probe: '=DVARP(A1:C5, C1, '
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # Financial discount-rate / Treasury-bill / matured-yield family. All ten
+  # functions live in `tests/oracle/cases/financial_rates.yaml` and share
+  # the DCC basis matrix (0..4) parameter and the settlement-vs-maturity
+  # ordering edges. Five perspectives per function: a standard call, a
+  # non-default DCC basis (or short-dated edge for T-bills), an ordering
+  # error (settlement >= maturity, or > 1y for T-bills), a domain error
+  # (zero / negative price / rate / investment / discount) and one extra
+  # perspective tied to the function's specific contract (default-basis,
+  # invalid-basis, etc.).
+  # -------------------------------------------------------------------------
+
+  - function: "DISC"
+    aspect: "discount rate of a security"
+    behaviors:
+      - name: "docs example basis 1 (actual/actual) -> ~0.05279"
+        probe: '=DISC(DATE(2018,1,25), DATE(2018,6,15), 97.975, 100, 1)'
+        expected: impl
+      - name: "default basis 0 (US 30/360)"
+        probe: '=DISC(DATE(2018,1,25), DATE(2018,6,15), 97.975, 100)'
+        expected: impl
+      - name: "basis 2 (actual/360)"
+        probe: '=DISC(DATE(2018,1,25), DATE(2018,6,15), 97.975, 100, 2)'
+        expected: impl
+      - name: "invalid basis 5 -> #NUM!"
+        probe: '=DISC(DATE(2018,1,25), DATE(2018,6,15), 97.975, 100, 5)'
+        expected: impl
+      - name: "settlement >= maturity -> #NUM!"
+        probe: '=DISC(DATE(2018,6,15), DATE(2018,1,25), 97.975, 100, 0)'
+        expected: impl
+
+  - function: "INTRATE"
+    aspect: "interest rate of a fully invested security"
+    behaviors:
+      - name: "docs example basis 2 (actual/360) -> ~0.05768"
+        probe: '=INTRATE(DATE(2008,2,15), DATE(2008,5,15), 1000000, 1014420, 2)'
+        expected: impl
+      - name: "default basis 0 (US 30/360)"
+        probe: '=INTRATE(DATE(2008,2,15), DATE(2008,5,15), 1000000, 1014420)'
+        expected: impl
+      - name: "basis 4 (European 30/360)"
+        probe: '=INTRATE(DATE(2008,2,15), DATE(2008,5,15), 1000000, 1014420, 4)'
+        expected: impl
+      - name: "settlement >= maturity -> #NUM!"
+        probe: '=INTRATE(DATE(2008,5,15), DATE(2008,2,15), 1000000, 1014420, 2)'
+        expected: impl
+      - name: "investment <= 0 -> #NUM!"
+        probe: '=INTRATE(DATE(2008,2,15), DATE(2008,5,15), 0, 1014420, 2)'
+        expected: impl
+
+  - function: "RECEIVED"
+    aspect: "amount received at maturity for a fully invested security"
+    behaviors:
+      - name: "docs example basis 2 (actual/360) -> ~1014584.65"
+        probe: '=RECEIVED(DATE(2008,2,15), DATE(2008,5,15), 1000000, 0.0575, 2)'
+        expected: impl
+      - name: "default basis 0 (US 30/360)"
+        probe: '=RECEIVED(DATE(2008,2,15), DATE(2008,5,15), 1000000, 0.0575)'
+        expected: impl
+      - name: "basis 1 (actual/actual)"
+        probe: '=RECEIVED(DATE(2008,2,15), DATE(2008,5,15), 1000000, 0.0575, 1)'
+        expected: impl
+      - name: "settlement >= maturity -> #NUM!"
+        probe: '=RECEIVED(DATE(2008,5,15), DATE(2008,2,15), 1000000, 0.0575, 2)'
+        expected: impl
+      - name: "discount <= 0 -> #NUM!"
+        probe: '=RECEIVED(DATE(2008,2,15), DATE(2008,5,15), 1000000, 0, 2)'
+        expected: impl
+
+  - function: "TBILLEQ"
+    aspect: "bond-equivalent yield of a Treasury bill"
+    behaviors:
+      - name: "docs example short branch (DSM <= 182) -> ~0.09414"
+        probe: '=TBILLEQ(DATE(2008,3,31), DATE(2008,6,1), 0.0914)'
+        expected: impl
+      - name: "long branch (DSM > 182): semi-annual-compounding quadratic"
+        probe: '=TBILLEQ(DATE(2020,1,1), DATE(2020,10,27), 0.05)'
+        expected: impl
+      - name: "DSM > 365 -> #NUM!"
+        probe: '=TBILLEQ(DATE(2008,3,31), DATE(2010,3,31), 0.09)'
+        expected: impl
+      - name: "discount <= 0 -> #NUM!"
+        probe: '=TBILLEQ(DATE(2008,3,31), DATE(2008,6,1), 0)'
+        expected: impl
+      - name: "settlement >= maturity -> #NUM!"
+        probe: '=TBILLEQ(DATE(2008,6,1), DATE(2008,3,31), 0.0914)'
+        expected: impl
+
+  - function: "TBILLPRICE"
+    aspect: "T-bill price per 100 face given discount"
+    behaviors:
+      - name: "docs example -> ~98.45"
+        probe: '=TBILLPRICE(DATE(2008,3,31), DATE(2008,6,1), 0.09)'
+        expected: impl
+      - name: "DSM > 365 -> #NUM!"
+        probe: '=TBILLPRICE(DATE(2008,3,31), DATE(2010,3,31), 0.09)'
+        expected: impl
+      - name: "next-day maturity (DSM=1) ~ 99.975"
+        probe: '=TBILLPRICE(DATE(2020,1,1), DATE(2020,1,2), 0.09)'
+        expected: impl
+      - name: "discount <= 0 -> #NUM!"
+        probe: '=TBILLPRICE(DATE(2008,3,31), DATE(2008,6,1), 0)'
+        expected: impl
+      - name: "settlement >= maturity -> #NUM!"
+        probe: '=TBILLPRICE(DATE(2008,6,1), DATE(2008,3,31), 0.09)'
+        expected: impl
+
+  - function: "TBILLYIELD"
+    aspect: "T-bill yield given price"
+    behaviors:
+      - name: "docs example -> ~0.09141"
+        probe: '=TBILLYIELD(DATE(2008,3,31), DATE(2008,6,1), 98.45)'
+        expected: impl
+      - name: "next-day maturity (DSM=1)"
+        probe: '=TBILLYIELD(DATE(2020,1,1), DATE(2020,1,2), 99.975)'
+        expected: impl
+      - name: "DSM > 365 -> #NUM!"
+        probe: '=TBILLYIELD(DATE(2008,3,31), DATE(2010,3,31), 98.45)'
+        expected: impl
+      - name: "pr <= 0 -> #NUM!"
+        probe: '=TBILLYIELD(DATE(2008,3,31), DATE(2008,6,1), 0)'
+        expected: impl
+      - name: "settlement >= maturity -> #NUM!"
+        probe: '=TBILLYIELD(DATE(2008,6,1), DATE(2008,3,31), 98.45)'
+        expected: impl
+
+  - function: "PRICEDISC"
+    aspect: "price per 100 face for a discounted security"
+    behaviors:
+      - name: "basis 2 (actual/360)"
+        probe: '=PRICEDISC(DATE(2018,2,16), DATE(2018,3,1), 0.0525, 100, 2)'
+        expected: impl
+      - name: "default basis 0 (US 30/360)"
+        probe: '=PRICEDISC(DATE(2018,2,16), DATE(2018,3,1), 0.0525, 100)'
+        expected: impl
+      - name: "invalid basis 5 -> #NUM!"
+        probe: '=PRICEDISC(DATE(2018,2,16), DATE(2018,3,1), 0.0525, 100, 5)'
+        expected: impl
+      - name: "settlement >= maturity -> #NUM!"
+        probe: '=PRICEDISC(DATE(2018,3,1), DATE(2018,2,16), 0.0525, 100, 2)'
+        expected: impl
+      - name: "discount <= 0 -> #NUM!"
+        probe: '=PRICEDISC(DATE(2018,2,16), DATE(2018,3,1), 0, 100, 2)'
+        expected: impl
+
+  - function: "PRICEMAT"
+    aspect: "price per 100 face for an at-maturity security"
+    behaviors:
+      - name: "basis 0 (US 30/360)"
+        probe: '=PRICEMAT(DATE(2008,2,15), DATE(2008,4,13), DATE(2007,11,11), 0.061, 0.061, 0)'
+        expected: impl
+      - name: "default basis 0 (omit trailing arg)"
+        probe: '=PRICEMAT(DATE(2008,2,15), DATE(2008,4,13), DATE(2007,11,11), 0.061, 0.061)'
+        expected: impl
+      - name: "basis 2 (actual/360)"
+        probe: '=PRICEMAT(DATE(2008,2,15), DATE(2008,4,13), DATE(2007,11,11), 0.061, 0.061, 2)'
+        expected: impl
+      - name: "issue >= settlement -> #NUM!"
+        probe: '=PRICEMAT(DATE(2008,2,15), DATE(2008,4,13), DATE(2008,3,1), 0.061, 0.061, 0)'
+        expected: impl
+      - name: "rate < 0 -> #NUM!"
+        probe: '=PRICEMAT(DATE(2008,2,15), DATE(2008,4,13), DATE(2007,11,11), -0.01, 0.061, 0)'
+        expected: impl
+
+  - function: "YIELDDISC"
+    aspect: "annual yield of a discounted security"
+    behaviors:
+      - name: "docs example basis 2 (actual/360) -> ~0.052823"
+        probe: '=YIELDDISC(DATE(2008,2,16), DATE(2008,3,1), 99.795, 100, 2)'
+        expected: impl
+      - name: "default basis 0 (US 30/360)"
+        probe: '=YIELDDISC(DATE(2008,2,16), DATE(2008,3,1), 99.795, 100)'
+        expected: impl
+      - name: "basis 1 (actual/actual)"
+        probe: '=YIELDDISC(DATE(2008,2,16), DATE(2008,3,1), 99.795, 100, 1)'
+        expected: impl
+      - name: "settlement >= maturity -> #NUM!"
+        probe: '=YIELDDISC(DATE(2008,3,1), DATE(2008,2,16), 99.795, 100, 2)'
+        expected: impl
+      - name: "pr <= 0 -> #NUM!"
+        probe: '=YIELDDISC(DATE(2008,2,16), DATE(2008,3,1), 0, 100, 2)'
+        expected: impl
+
+  - function: "YIELDMAT"
+    aspect: "annual yield of an at-maturity security"
+    behaviors:
+      - name: "docs example basis 0 (US 30/360) -> ~0.060954"
+        probe: '=YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2007,11,8), 0.0625, 100.0123, 0)'
+        expected: impl
+      - name: "default basis 0 (omit trailing arg)"
+        probe: '=YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2007,11,8), 0.0625, 100.0123)'
+        expected: impl
+      - name: "basis 2 (actual/360)"
+        probe: '=YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2007,11,8), 0.0625, 100.0123, 2)'
+        expected: impl
+      - name: "issue >= settlement -> #NUM!"
+        probe: '=YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2008,4,1), 0.0625, 100.0123, 0)'
+        expected: impl
+      - name: "pr <= 0 -> #NUM!"
+        probe: '=YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2007,11,8), 0.0625, 0, 0)'
+        expected: impl

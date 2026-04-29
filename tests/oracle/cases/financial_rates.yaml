@@ -117,3 +117,113 @@ cases:
   - id: yieldmat_default_basis
     description: "YIELDMAT with default basis 0 (omit trailing arg)"
     formula: "=YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2007,11,8), 0.0625, 100.0123)"
+
+  # -- DISC additional perspectives ---------------------------------------
+  - id: disc_settlement_after_maturity_is_num
+    description: "DISC with settlement after maturity -> #NUM!"
+    formula: "=DISC(DATE(2018,6,15), DATE(2018,1,25), 97.975, 100, 0)"
+
+  # -- INTRATE additional perspectives ------------------------------------
+  - id: intrate_basis_european_30_360
+    description: "INTRATE with basis 4 (European 30/360)"
+    formula: "=INTRATE(DATE(2008,2,15), DATE(2008,5,15), 1000000, 1014420, 4)"
+
+  - id: intrate_zero_investment_is_num
+    description: "INTRATE with investment <= 0 -> #NUM!"
+    formula: "=INTRATE(DATE(2008,2,15), DATE(2008,5,15), 0, 1014420, 2)"
+
+  # -- RECEIVED additional perspectives -----------------------------------
+  - id: received_basis_actual_actual
+    description: "RECEIVED with basis 1 (actual/actual)"
+    formula: "=RECEIVED(DATE(2008,2,15), DATE(2008,5,15), 1000000, 0.0575, 1)"
+
+  - id: received_settlement_after_maturity_is_num
+    description: "RECEIVED with settlement >= maturity -> #NUM!"
+    formula: "=RECEIVED(DATE(2008,5,15), DATE(2008,2,15), 1000000, 0.0575, 2)"
+
+  - id: received_zero_discount_is_num
+    description: "RECEIVED with discount <= 0 -> #NUM!"
+    formula: "=RECEIVED(DATE(2008,2,15), DATE(2008,5,15), 1000000, 0, 2)"
+
+  # -- TBILLEQ additional perspectives ------------------------------------
+  - id: tbilleq_zero_discount_is_num
+    description: "TBILLEQ with discount <= 0 -> #NUM!"
+    formula: "=TBILLEQ(DATE(2008,3,31), DATE(2008,6,1), 0)"
+
+  - id: tbilleq_settlement_after_maturity_is_num
+    description: "TBILLEQ with settlement >= maturity -> #NUM!"
+    formula: "=TBILLEQ(DATE(2008,6,1), DATE(2008,3,31), 0.0914)"
+
+  # -- TBILLPRICE additional perspectives ---------------------------------
+  - id: tbillprice_short_dated_next_day
+    description: "TBILLPRICE: next-day maturity (DSM=1) ~ 99.975"
+    formula: "=TBILLPRICE(DATE(2020,1,1), DATE(2020,1,2), 0.09)"
+
+  - id: tbillprice_zero_discount_is_num
+    description: "TBILLPRICE with discount <= 0 -> #NUM!"
+    formula: "=TBILLPRICE(DATE(2008,3,31), DATE(2008,6,1), 0)"
+
+  - id: tbillprice_settlement_after_maturity_is_num
+    description: "TBILLPRICE with settlement >= maturity -> #NUM!"
+    formula: "=TBILLPRICE(DATE(2008,6,1), DATE(2008,3,31), 0.09)"
+
+  # -- TBILLYIELD additional perspectives ---------------------------------
+  - id: tbillyield_short_dated_next_day
+    description: "TBILLYIELD: next-day maturity (DSM=1) yields very high annualised rate"
+    formula: "=TBILLYIELD(DATE(2020,1,1), DATE(2020,1,2), 99.975)"
+
+  - id: tbillyield_dsm_over_365_is_num
+    description: "TBILLYIELD with maturity > 1 year after settlement -> #NUM!"
+    formula: "=TBILLYIELD(DATE(2008,3,31), DATE(2010,3,31), 98.45)"
+
+  - id: tbillyield_zero_price_is_num
+    description: "TBILLYIELD with pr <= 0 -> #NUM!"
+    formula: "=TBILLYIELD(DATE(2008,3,31), DATE(2008,6,1), 0)"
+
+  - id: tbillyield_settlement_after_maturity_is_num
+    description: "TBILLYIELD with settlement >= maturity -> #NUM!"
+    formula: "=TBILLYIELD(DATE(2008,6,1), DATE(2008,3,31), 98.45)"
+
+  # -- PRICEDISC additional perspectives ----------------------------------
+  - id: pricedisc_settlement_after_maturity_is_num
+    description: "PRICEDISC with settlement >= maturity -> #NUM!"
+    formula: "=PRICEDISC(DATE(2018,3,1), DATE(2018,2,16), 0.0525, 100, 2)"
+
+  - id: pricedisc_zero_discount_is_num
+    description: "PRICEDISC with discount <= 0 -> #NUM!"
+    formula: "=PRICEDISC(DATE(2018,2,16), DATE(2018,3,1), 0, 100, 2)"
+
+  # -- PRICEMAT additional perspectives -----------------------------------
+  - id: pricemat_basis_actual_360
+    description: "PRICEMAT with basis 2 (actual/360)"
+    formula: "=PRICEMAT(DATE(2008,2,15), DATE(2008,4,13), DATE(2007,11,11), 0.061, 0.061, 2)"
+
+  - id: pricemat_zero_rate_is_num
+    description: "PRICEMAT with rate < 0 -> #NUM!"
+    formula: "=PRICEMAT(DATE(2008,2,15), DATE(2008,4,13), DATE(2007,11,11), -0.01, 0.061, 0)"
+
+  # -- YIELDDISC additional perspectives ----------------------------------
+  - id: yielddisc_basis_actual_actual
+    description: "YIELDDISC with basis 1 (actual/actual)"
+    formula: "=YIELDDISC(DATE(2008,2,16), DATE(2008,3,1), 99.795, 100, 1)"
+
+  - id: yielddisc_settlement_after_maturity_is_num
+    description: "YIELDDISC with settlement >= maturity -> #NUM!"
+    formula: "=YIELDDISC(DATE(2008,3,1), DATE(2008,2,16), 99.795, 100, 2)"
+
+  - id: yielddisc_zero_price_is_num
+    description: "YIELDDISC with pr <= 0 -> #NUM!"
+    formula: "=YIELDDISC(DATE(2008,2,16), DATE(2008,3,1), 0, 100, 2)"
+
+  # -- YIELDMAT additional perspectives -----------------------------------
+  - id: yieldmat_basis_actual_360
+    description: "YIELDMAT with basis 2 (actual/360)"
+    formula: "=YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2007,11,8), 0.0625, 100.0123, 2)"
+
+  - id: yieldmat_issue_after_settlement_is_num
+    description: "YIELDMAT with issue >= settlement -> #NUM!"
+    formula: "=YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2008,4,1), 0.0625, 100.0123, 0)"
+
+  - id: yieldmat_zero_price_is_num
+    description: "YIELDMAT with pr <= 0 -> #NUM!"
+    formula: "=YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2007,11,8), 0.0625, 0, 0)"

@@ -301,3 +301,17 @@ families:
     category_file: tests/oracle/cases/financial.yaml
     min_perspectives_per_member: 5
     cluster_reason: "TVM and depreciation family; share rate/period sign-convention edges (loan vs. annuity, type=0 vs type=1) and Newton-Raphson tail-bit drift."
+
+  # -- Financial discount-rate / Treasury-bill / matured-yield family ------
+  # Discount-rate (DISC / INTRATE / RECEIVED), price/yield-from-discount
+  # (PRICEDISC / YIELDDISC), at-maturity price/yield (PRICEMAT / YIELDMAT)
+  # and Treasury-bill primitives (TBILLEQ / TBILLPRICE / TBILLYIELD). They
+  # share the DCC basis matrix (0..4) parameter, the settlement-vs-maturity
+  # ordering edges (and issue-vs-settlement for the *MAT pair), and the
+  # ACT/360 convention used by every T-bill function. Closure perspectives
+  # parallel across the cluster.
+  - name: financial_rates
+    members: [DISC, INTRATE, PRICEDISC, PRICEMAT, RECEIVED, TBILLEQ, TBILLPRICE, TBILLYIELD, YIELDDISC, YIELDMAT]
+    category_file: tests/oracle/cases/financial_rates.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Discount-rate / Treasury-bill / matured-yield family; share DCC basis (0..4) parameter and settlement-vs-maturity ordering edges."
