@@ -14,7 +14,7 @@ SRC_DIRS := src tests
 CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 2>/dev/null)
 
 .PHONY: all build release test test-slow test-all fmt lint clean \
-        wasm wasm-debug test-wasm test-python \
+        wasm wasm-debug test-wasm test-python size-check \
         oracle-setup oracle-setup-mac oracle-setup-wsl \
         oracle-gen oracle-verify \
         ironcalc-import ironcalc-verify \
@@ -108,6 +108,12 @@ test-wasm:
 test-python:
 	@echo "test-python: not yet implemented (planned for M12)"
 	@exit 0
+
+# Standalone .wasm size report. Reads the artifact built by `make wasm`
+# and gates against the milestone size ceiling. See
+# tools/bench/wasm_size_report.sh and CLAUDE.md "WASM Size Policy".
+size-check:
+	@sh tools/bench/wasm_size_report.sh $(WASM_BUILD_DIR)/formulon.wasm
 
 # -- Oracle targets --------------------------------------------------------
 # Drive Mac Excel 365 to generate golden JSON (oracle-gen), and verify

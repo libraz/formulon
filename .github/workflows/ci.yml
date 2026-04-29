@@ -1,0 +1,164 @@
+# Formulon CI workflow.
+#
+# Three jobs:
+#   - native           : build + ctest (fast labels), gated by an allowlist
+#                        of pre-existing flakes (tools/ci/expected_flakes.txt).
+#   - wasm             : build the WASM artifact, run the size report against
+#                        the 1.8 MiB hard ceiling, smoke-test under Node 20,
+#                        and upload formulon.wasm as a downloadable artifact.
+#   - format-and-lint  : clang-format dry-run + clang-tidy. Soft-fail for now
+#                        (continue-on-error: true) until the existing warnings
+#                        are drained; hard-flip is scheduled for Phase 6.
+#
+# The +10 KiB WASM growth review rule (CLAUDE.md "WASM Size Policy") is *not*
+# enforced here -- the size script only blocks at the hard ceiling. The +10 KiB
+# review remains a soft policy enforced by the wasm-size-guardian agent.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: Build and test (native, Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build libbrotli-dev brotli
+
+      - name: Cache CMake build directory
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: native-build-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'Makefile', 'cmake/**') }}
+          restore-keys: |
+            native-build-${{ runner.os }}-
+
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run fast tests
+        id: ctest
+        continue-on-error: true
+        working-directory: build
+        run: ctest -LE "SLOW|LOAD" --output-on-failure --timeout 30
+
+      - name: Check failures against allowlist
+        run: |
+          if [ -f build/Testing/Temporary/LastTestsFailed.log ]; then
+            python3 tools/ci/check_test_failures.py \
+              --failed build/Testing/Temporary/LastTestsFailed.log \
+              --allowlist tools/ci/expected_flakes.txt
+          else
+            echo "ctest produced no LastTestsFailed.log; assuming success"
+          fi
+
+  wasm:
+    name: Build WASM and check size
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends brotli
+
+      - name: Set up Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          # Pin to keep WASM size deterministic. Update in lockstep with the
+          # local toolchain when bumping; size deltas in the report after
+          # bumping should be inspected by wasm-size-guardian.
+          version: 3.1.74
+          actions-cache-folder: emsdk-cache
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build WASM
+        run: make wasm
+
+      - name: Size report (human)
+        run: tools/bench/wasm_size_report.sh build-wasm/formulon.wasm
+
+      - name: Size report (JSON, for step summary)
+        run: |
+          tools/bench/wasm_size_report.sh build-wasm/formulon.wasm --json \
+            > /tmp/wasm_size.json
+          {
+            echo "## WASM size report"
+            echo ""
+            echo '```json'
+            cat /tmp/wasm_size.json
+            echo ""
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload WASM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: formulon-wasm
+          path: |
+            build-wasm/formulon.wasm
+            build-wasm/formulon.js
+          retention-days: 7
+
+      - name: WASM smoke test (Node)
+        run: make test-wasm
+
+  format-and-lint:
+    name: clang-format and clang-tidy
+    runs-on: ubuntu-latest
+    # Soft-fail until the pre-existing warnings backlog is drained.
+    # Hard-flip is scheduled for Phase 6; remove this line at that point.
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build clang-format clang-tidy
+
+      - name: clang-format check
+        run: |
+          find src tests -type f \( -name '*.cpp' -o -name '*.h' \) \
+            | xargs clang-format --dry-run -Werror
+
+      - name: Configure (Debug, for compile_commands.json)
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build (compile_commands.json)
+        run: cmake --build build --parallel
+
+      - name: clang-tidy
+        run: |
+          make lint > /tmp/lint.log 2>&1 || true
+          tail -200 /tmp/lint.log
+          if grep -E "warning:|error:" /tmp/lint.log >/dev/null; then
+            echo "clang-tidy reported warnings/errors (soft-fail; see log above)"
+            exit 1
+          fi
