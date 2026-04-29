@@ -85,9 +85,11 @@ set(FORMULON_CORE_SOURCES
   src/value.cpp
   src/sheet.cpp
   src/workbook.cpp
+  src/io/ooxml_reader.cpp
   src/io/ooxml_writer.cpp
   src/io/ooxml_writer_cell.cpp
   src/io/xml_escape.cpp
+  src/io/zip_reader.cpp
   src/parser/tokenizer.cpp
   src/parser/ast.cpp
   src/parser/ast_dump.cpp

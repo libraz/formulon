@@ -41,6 +41,11 @@ Workbook Workbook::create() {
   return wb;
 }
 
+Workbook Workbook::create_empty() {
+  // No default sheet; callers are expected to populate via add_sheet().
+  return Workbook{};
+}
+
 Sheet& Workbook::add_sheet(std::string name) {
   sheets_.emplace_back(Sheet{std::move(name)});
   return sheets_.back();

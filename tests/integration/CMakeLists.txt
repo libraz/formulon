@@ -6,6 +6,7 @@
 
 set(FORMULON_INTEGRATION_TEST_SOURCES
   ooxml_minimal_writer_test.cpp
+  ooxml_roundtrip_test.cpp
   workbook_iterative_test.cpp
   workbook_recalc_test.cpp
 )

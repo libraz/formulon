@@ -21,7 +21,9 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/utils/double_format_test.cpp
   unit/deps/miniz_smoke_test.cpp
   unit/deps/pugixml_smoke_test.cpp
+  unit/io/ooxml_reader_test.cpp
   unit/io/ooxml_writer_cell_test.cpp
+  unit/io/zip_reader_test.cpp
   unit/parser/tokenizer_test.cpp
   unit/parser/ast_test.cpp
   unit/parser/ast_dump_test.cpp

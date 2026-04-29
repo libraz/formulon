@@ -41,6 +41,22 @@ class Workbook {
   /// Factory for the default workbook: a single sheet named `"Sheet1"`.
   static Workbook create();
 
+  /// Factory for a workbook with no sheets at all.
+  ///
+  /// Designed for I/O paths (notably `io::read_ooxml`) that need to
+  /// reconstruct a workbook from an external description and append
+  /// sheets in source-defined order; using `create()` would require the
+  /// reader to mutate the implicit `"Sheet1"` placeholder before adding
+  /// the real sheets, which is awkward and makes empty-archive handling
+  /// ambiguous. Most callers should still use `create()`; this factory
+  /// is intentionally separate so the "default Sheet1" guarantee of
+  /// `create()` stays unsurprising.
+  ///
+  /// Move-only contract is identical to `create()`. Note that a
+  /// zero-sheet workbook is invalid input for `save()` — Excel rejects
+  /// empty sheet lists, and so do we.
+  static Workbook create_empty();
+
   Workbook(const Workbook&) = delete;
   Workbook& operator=(const Workbook&) = delete;
   Workbook(Workbook&&) noexcept;
