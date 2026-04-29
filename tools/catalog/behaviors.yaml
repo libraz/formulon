@@ -235,7 +235,8 @@ groups:
   # -------------------------------------------------------------------------
   # NUMBERVALUE separator overrides. The 1-arg form uses en-US defaults
   # (`.` decimal, `,` group); the 2- and 3-arg forms accept caller-supplied
-  # overrides.
+  # overrides. The trailing-percent and non-numeric-rejection perspectives
+  # round out the closure unit.
   # -------------------------------------------------------------------------
   - function: "NUMBERVALUE"
     aspect: "locale separators"
@@ -248,6 +249,12 @@ groups:
         expected: impl
       - name: "custom group separator (3-arg)"
         probe_regex: 'NUMBERVALUE\("[^"]+",\s*"[^"]+",\s*"'
+        expected: impl
+      - name: "trailing percent suffix divides by 100 per occurrence"
+        probe_regex: 'NUMBERVALUE\("[^"]*%'
+        expected: impl
+      - name: "non-numeric input -> #VALUE!"
+        probe_regex: 'NUMBERVALUE\("abc'
         expected: impl
 
   # -------------------------------------------------------------------------
@@ -10387,3 +10394,59 @@ groups:
       - name: "with sheet name (quoted)"
         probe: "=ADDRESS(1,1,1,TRUE,\"Sheet 1\")"
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # AREAS singleton (cases under tests/oracle/cases/areas.yaml).
+  # AREAS counts the number of disjoint rectangles in a reference argument.
+  # Formulon answers from AST shape (Ref / RangeOp / UnionOp), with an
+  # explicit allowlist of reference-returning functions (INDIRECT / OFFSET /
+  # CHOOSE / IF / IFS / SWITCH / INDEX / XLOOKUP) treated as a single area
+  # so the most common runtime-eval cases agree with Excel.
+  # -------------------------------------------------------------------------
+  - function: "AREAS"
+    aspect: "structural area count"
+    behaviors:
+      - name: "single contiguous rectangle range -> 1"
+        probe_regex: 'AREAS\([A-Z$]+\d+:'
+        expected: impl
+      - name: "explicit single cell ref -> 1"
+        probe_regex: 'AREAS\(\$?[A-Z]+\$?\d+\)'
+        expected: impl
+      - name: "union of two or more areas -> N"
+        probe_regex: 'AREAS\(\('
+        expected: impl
+      - name: "intersection operator (space) -> 1 or #NULL!"
+        probe_regex: 'AREAS\([A-Z]+\d+:[A-Z]+\d+\s+[A-Z]+\d+:'
+        expected: impl
+      - name: "reference-returning call argument (INDIRECT/OFFSET/CHOOSE/IF)"
+        probe_regex: 'AREAS\((INDIRECT|OFFSET|CHOOSE|IF)\('
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # ENCODEURL singleton (cases under tests/oracle/cases/encodeurl.yaml).
+  # RFC 3986 percent-encoding with uppercase hex; the unreserved set
+  # (ALPHA / DIGIT / "-" / "." / "_" / "~") passes through, everything else
+  # is %HH-encoded over UTF-8 bytes. All perspectives are marked `diverged`
+  # because Mac Excel 365 ja-JP does not register ENCODEURL (#NAME? on every
+  # probe); see the seven skip-oracle entries in tests/divergence.yaml.
+  # Formulon implements the documented Microsoft 365 semantics (verified
+  # against the published reference) and unit tests cover the actual output.
+  # -------------------------------------------------------------------------
+  - function: "ENCODEURL"
+    aspect: "RFC 3986 percent-encoding"
+    behaviors:
+      - name: "ASCII space -> %20"
+        probe: '=ENCODEURL("hello world")'
+        expected: diverged
+      - name: "query-string reserved chars (?, =, &) percent-encoded"
+        probe_regex: 'ENCODEURL\("[^"]*[?=&]'
+        expected: diverged
+      - name: "RFC 3986 unreserved set (alnum + -_.~) passes through"
+        probe_regex: 'ENCODEURL\("[A-Za-z0-9\-_.~]+"\)'
+        expected: diverged
+      - name: "multibyte (UTF-8) input encoded byte-by-byte"
+        probe_regex: 'ENCODEURL\("[^\x00-\x7f]'
+        expected: diverged
+      - name: "percent self-encodes to %25"
+        probe_regex: 'ENCODEURL\("[^"]*%'
+        expected: diverged

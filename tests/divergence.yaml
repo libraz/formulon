@@ -1798,6 +1798,60 @@ entries:
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
 
+  # -- ENCODEURL: not available in Mac Excel 365 ja-JP ----------------------
+  # Mac Excel 365 ja-JP returns #NAME? for every ENCODEURL invocation:
+  # the function is documented in the Microsoft 365 catalog but is not
+  # registered in this build/locale. Formulon implements the RFC 3986
+  # percent-encoding semantics described in the Microsoft documentation
+  # (uppercase hex, unreserved set ALPHA / DIGIT / "-" / "." / "_" / "~",
+  # UTF-8 byte expansion for multibyte input); cross-checked with Windows
+  # Excel 365 and online documentation samples. We prefer the Formulon
+  # answer here; the cases stay in the suite so a future Mac Excel build
+  # that re-registers ENCODEURL will surface a clean diff and we can drop
+  # these skip entries.
+  - id: encodeurl_space
+    mode: skip-oracle
+    reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME? on every probe). Formulon implements the documented RFC 3986 percent-encoding correctly; verified against Microsoft's documentation."
+    prefer: formulon
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: encodeurl_query_string_chars
+    mode: skip-oracle
+    reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?). Formulon: \"a/b c?d=1&e=2\" -> \"a%2Fb%20c%3Fd%3D1%26e%3D2\"."
+    prefer: formulon
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: encodeurl_unreserved_passthrough
+    mode: skip-oracle
+    reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?). Formulon: RFC 3986 unreserved set passes through verbatim."
+    prefer: formulon
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: encodeurl_japanese_utf8
+    mode: skip-oracle
+    reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?). Formulon: \"日本語\" -> \"%E6%97%A5%E6%9C%AC%E8%AA%9E\" (UTF-8 byte expansion, uppercase hex)."
+    prefer: formulon
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: encodeurl_bool_true
+    mode: skip-oracle
+    reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?). Formulon coerces TRUE -> \"TRUE\" then percent-encodes -> \"TRUE\" (all unreserved)."
+    prefer: formulon
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: encodeurl_empty_string
+    mode: skip-oracle
+    reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?). Formulon: \"\" -> \"\" (empty input passes through)."
+    prefer: formulon
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: encodeurl_percent_self_encodes
+    mode: skip-oracle
+    reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?). Formulon: \"100%\" -> \"100%25\" (percent itself is reserved)."
+    prefer: formulon
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a
