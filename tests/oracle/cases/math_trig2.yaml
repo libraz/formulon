@@ -23,6 +23,10 @@ cases:
     description: "|x| beyond ~710 overflows double: expect #NUM!"
     formula: "=SINH(1000)"
 
+  - id: sinh_identity_with_cosh_equals_exp
+    description: "SINH(x) + COSH(x) == EXP(x)."
+    formula: "=SINH(2)+COSH(2)-EXP(2)"
+
   # -- COSH ----------------------------------------------------------------
   - id: cosh_of_zero
     formula: "=COSH(0)"
@@ -38,6 +42,10 @@ cases:
   - id: cosh_overflow_is_num
     formula: "=COSH(1000)"
 
+  - id: cosh_identity_squared_minus_sinh_squared_is_one
+    description: "COSH(x)^2 - SINH(x)^2 == 1."
+    formula: "=COSH(1.5)^2-SINH(1.5)^2"
+
   # -- TANH ----------------------------------------------------------------
   - id: tanh_of_zero
     formula: "=TANH(0)"
@@ -52,6 +60,10 @@ cases:
   - id: tanh_negative_large_is_nearly_minus_one
     formula: "=TANH(-100)"
 
+  - id: tanh_identity_sinh_over_cosh
+    description: "TANH(x) == SINH(x)/COSH(x)."
+    formula: "=TANH(0.5)-SINH(0.5)/COSH(0.5)"
+
   # -- ASINH / ACOSH / ATANH -----------------------------------------------
   - id: asinh_of_zero
     formula: "=ASINH(0)"
@@ -62,6 +74,14 @@ cases:
   - id: asinh_sinh_round_trip
     formula: "=ASINH(SINH(0.75))"
 
+  - id: asinh_of_negative_one
+    description: "ASINH is odd: ASINH(-1) == -ASINH(1)."
+    formula: "=ASINH(-1)"
+
+  - id: asinh_large_grows_like_log
+    description: "ASINH(x) ~ ln(2x) for large x."
+    formula: "=ASINH(1000)"
+
   - id: acosh_of_one
     formula: "=ACOSH(1)"
 
@@ -71,6 +91,14 @@ cases:
   - id: acosh_below_one_is_num
     description: "Outside domain |x| >= 1: expect #NUM!"
     formula: "=ACOSH(0.5)"
+
+  - id: acosh_round_trip_with_cosh
+    description: "ACOSH(COSH(x)) == |x| for x >= 0."
+    formula: "=ACOSH(COSH(1.25))"
+
+  - id: acosh_large_grows_like_log
+    description: "ACOSH(x) ~ ln(2x) for large x."
+    formula: "=ACOSH(1000)"
 
   - id: atanh_of_zero
     formula: "=ATANH(0)"
@@ -85,6 +113,10 @@ cases:
   - id: atanh_above_one_is_num
     formula: "=ATANH(2)"
 
+  - id: atanh_round_trip_with_tanh
+    description: "ATANH(TANH(x)) == x within open interval."
+    formula: "=ATANH(TANH(0.6))"
+
   # -- SEC / CSC / COT -----------------------------------------------------
   - id: sec_of_zero
     formula: "=SEC(0)"
@@ -95,6 +127,14 @@ cases:
 
   - id: sec_of_pi
     formula: "=SEC(PI())"
+
+  - id: sec_of_third_pi
+    description: "SEC(pi/3) == 2."
+    formula: "=SEC(PI()/3)"
+
+  - id: sec_identity_with_cos
+    description: "SEC(x) * COS(x) == 1."
+    formula: "=SEC(1.2)*COS(1.2)"
 
   - id: csc_of_zero_is_div0
     description: "sin(0) == 0 -> #DIV/0!"
@@ -107,6 +147,14 @@ cases:
     description: "CSC(pi/4) = sqrt(2)"
     formula: "=CSC(PI()/4)"
 
+  - id: csc_of_sixth_pi
+    description: "CSC(pi/6) == 2."
+    formula: "=CSC(PI()/6)"
+
+  - id: csc_identity_with_sin
+    description: "CSC(x) * SIN(x) == 1."
+    formula: "=CSC(0.7)*SIN(0.7)"
+
   - id: cot_of_zero_is_div0
     formula: "=COT(0)"
 
@@ -115,6 +163,14 @@ cases:
 
   - id: cot_of_negative_quarter_pi
     formula: "=COT(-PI()/4)"
+
+  - id: cot_of_third_pi
+    description: "COT(pi/3) == 1/sqrt(3)."
+    formula: "=COT(PI()/3)"
+
+  - id: cot_identity_with_tan
+    description: "COT(x) * TAN(x) == 1."
+    formula: "=COT(0.9)*TAN(0.9)"
 
   # -- ACOT ----------------------------------------------------------------
   - id: acot_of_zero
@@ -129,6 +185,14 @@ cases:
     description: "Range is (0, PI); ACOT(-1) = 3*pi/4, NOT -pi/4."
     formula: "=ACOT(-1)"
 
+  - id: acot_large_approaches_zero
+    description: "ACOT(x) -> 0 as x -> +infinity."
+    formula: "=ACOT(1000000)"
+
+  - id: acot_round_trip_with_cot
+    description: "COT(ACOT(x)) == x."
+    formula: "=COT(ACOT(2.5))-2.5"
+
   # -- SECH / CSCH / COTH / ACOTH ------------------------------------------
   - id: sech_of_zero
     formula: "=SECH(0)"
@@ -136,6 +200,18 @@ cases:
   - id: sech_large_is_zero
     description: "cosh overflow -> SECH collapses to 0"
     formula: "=SECH(1000)"
+
+  - id: sech_of_one
+    description: "SECH(1) == 1/cosh(1)."
+    formula: "=SECH(1)"
+
+  - id: sech_negative_matches_positive
+    description: "SECH is even: SECH(-x) == SECH(x)."
+    formula: "=SECH(-1.5)-SECH(1.5)"
+
+  - id: sech_identity_with_cosh
+    description: "SECH(x) * COSH(x) == 1."
+    formula: "=SECH(0.8)*COSH(0.8)"
 
   - id: csch_of_zero_is_div0
     formula: "=CSCH(0)"
@@ -146,6 +222,14 @@ cases:
 
   - id: csch_large_is_zero
     formula: "=CSCH(1000)"
+
+  - id: csch_negative_is_odd
+    description: "CSCH is odd: CSCH(-x) == -CSCH(x)."
+    formula: "=CSCH(-1)+CSCH(1)"
+
+  - id: csch_identity_with_sinh
+    description: "CSCH(x) * SINH(x) == 1."
+    formula: "=CSCH(0.6)*SINH(0.6)"
 
   - id: coth_of_zero_is_div0
     formula: "=COTH(0)"
@@ -159,6 +243,10 @@ cases:
   - id: coth_negative_large_approaches_minus_one
     formula: "=COTH(-1000)"
 
+  - id: coth_identity_with_tanh
+    description: "COTH(x) * TANH(x) == 1."
+    formula: "=COTH(1.1)*TANH(1.1)"
+
   - id: acoth_of_two
     formula: "=ACOTH(2)"
 
@@ -169,6 +257,14 @@ cases:
   - id: acoth_inside_is_num
     description: "|x| <= 1 is outside domain."
     formula: "=ACOTH(0.5)"
+
+  - id: acoth_round_trip_with_coth
+    description: "COTH(ACOTH(x)) == x for |x| > 1."
+    formula: "=COTH(ACOTH(2.5))-2.5"
+
+  - id: acoth_negative_branch
+    description: "ACOTH(-x) == -ACOTH(x) for |x| > 1."
+    formula: "=ACOTH(-3)+ACOTH(3)"
 
   # -- EVEN ---------------------------------------------------------------
   - id: even_of_one_point_five

@@ -6616,3 +6616,331 @@ groups:
       - name: "alpha <= 0 -> #NUM!"
         probe: "=WEIBULL.DIST(1, 0, 2, TRUE)"
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # Hyperbolic / reciprocal-trig / parity helpers (math_trig2 family).
+  # Cases live in tests/oracle/cases/math_trig2.yaml.
+  # -------------------------------------------------------------------------
+
+  - function: "SINH"
+    aspect: "hyperbolic sine"
+    behaviors:
+      - name: "SINH(0) == 0"
+        probe: "=SINH(0)"
+        expected: impl
+      - name: "SINH(1) base value"
+        probe: "=SINH(1)"
+        expected: impl
+      - name: "odd-symmetry SINH(-x) == -SINH(x)"
+        probe: "=SINH(-1)"
+        expected: impl
+      - name: "overflow large |x| -> #NUM!"
+        probe: "=SINH(1000)"
+        expected: impl
+      - name: "identity SINH(x)+COSH(x) == EXP(x)"
+        probe: "=SINH(2)+COSH(2)-EXP(2)"
+        expected: impl
+
+  - function: "COSH"
+    aspect: "hyperbolic cosine"
+    behaviors:
+      - name: "COSH(0) == 1"
+        probe: "=COSH(0)"
+        expected: impl
+      - name: "COSH(1) base value"
+        probe: "=COSH(1)"
+        expected: impl
+      - name: "even-symmetry COSH(-x) == COSH(x)"
+        probe: "=COSH(-1)"
+        expected: impl
+      - name: "overflow large |x| -> #NUM!"
+        probe: "=COSH(1000)"
+        expected: impl
+      - name: "identity COSH(x)^2 - SINH(x)^2 == 1"
+        probe: "=COSH(1.5)^2-SINH(1.5)^2"
+        expected: impl
+
+  - function: "TANH"
+    aspect: "hyperbolic tangent"
+    behaviors:
+      - name: "TANH(0) == 0"
+        probe: "=TANH(0)"
+        expected: impl
+      - name: "TANH(1) base value"
+        probe: "=TANH(1)"
+        expected: impl
+      - name: "asymptote +infinity -> 1"
+        probe: "=TANH(100)"
+        expected: impl
+      - name: "asymptote -infinity -> -1"
+        probe: "=TANH(-100)"
+        expected: impl
+      - name: "identity TANH(x) == SINH(x)/COSH(x)"
+        probe: "=TANH(0.5)-SINH(0.5)/COSH(0.5)"
+        expected: impl
+
+  - function: "ASINH"
+    aspect: "inverse hyperbolic sine"
+    behaviors:
+      - name: "ASINH(0) == 0"
+        probe: "=ASINH(0)"
+        expected: impl
+      - name: "ASINH(1) base value"
+        probe: "=ASINH(1)"
+        expected: impl
+      - name: "round-trip ASINH(SINH(x)) == x"
+        probe: "=ASINH(SINH(0.75))"
+        expected: impl
+      - name: "odd-symmetry ASINH(-1)"
+        probe: "=ASINH(-1)"
+        expected: impl
+      - name: "large x ~ ln(2x)"
+        probe: "=ASINH(1000)"
+        expected: impl
+
+  - function: "ACOSH"
+    aspect: "inverse hyperbolic cosine"
+    behaviors:
+      - name: "ACOSH(1) == 0 boundary"
+        probe: "=ACOSH(1)"
+        expected: impl
+      - name: "ACOSH(2) base value"
+        probe: "=ACOSH(2)"
+        expected: impl
+      - name: "below-domain x<1 -> #NUM!"
+        probe: "=ACOSH(0.5)"
+        expected: impl
+      - name: "round-trip ACOSH(COSH(x))"
+        probe: "=ACOSH(COSH(1.25))"
+        expected: impl
+      - name: "large x ~ ln(2x)"
+        probe: "=ACOSH(1000)"
+        expected: impl
+
+  - function: "ATANH"
+    aspect: "inverse hyperbolic tangent"
+    behaviors:
+      - name: "ATANH(0) == 0"
+        probe: "=ATANH(0)"
+        expected: impl
+      - name: "ATANH(0.5) base value"
+        probe: "=ATANH(0.5)"
+        expected: impl
+      - name: "endpoint x=1 -> #NUM!"
+        probe: "=ATANH(1)"
+        expected: impl
+      - name: "outside |x|>1 -> #NUM!"
+        probe: "=ATANH(2)"
+        expected: impl
+      - name: "round-trip ATANH(TANH(x)) == x"
+        probe: "=ATANH(TANH(0.6))"
+        expected: impl
+
+  - function: "SEC"
+    aspect: "secant (reciprocal cosine)"
+    behaviors:
+      - name: "SEC(0) == 1"
+        probe: "=SEC(0)"
+        expected: impl
+      - name: "SEC(pi/4) == sqrt(2)"
+        probe: "=SEC(PI()/4)"
+        expected: impl
+      - name: "SEC(pi) == -1"
+        probe: "=SEC(PI())"
+        expected: impl
+      - name: "SEC(pi/3) == 2"
+        probe: "=SEC(PI()/3)"
+        expected: impl
+      - name: "identity SEC(x)*COS(x) == 1"
+        probe: "=SEC(1.2)*COS(1.2)"
+        expected: impl
+
+  - function: "CSC"
+    aspect: "cosecant (reciprocal sine)"
+    behaviors:
+      - name: "CSC(0) -> #DIV/0!"
+        probe: "=CSC(0)"
+        expected: impl
+      - name: "CSC(pi/2) == 1"
+        probe: "=CSC(PI()/2)"
+        expected: impl
+      - name: "CSC(pi/4) == sqrt(2)"
+        probe: "=CSC(PI()/4)"
+        expected: impl
+      - name: "CSC(pi/6) == 2"
+        probe: "=CSC(PI()/6)"
+        expected: impl
+      - name: "identity CSC(x)*SIN(x) == 1"
+        probe: "=CSC(0.7)*SIN(0.7)"
+        expected: impl
+
+  - function: "COT"
+    aspect: "cotangent (reciprocal tangent)"
+    behaviors:
+      - name: "COT(0) -> #DIV/0!"
+        probe: "=COT(0)"
+        expected: impl
+      - name: "COT(pi/4) == 1"
+        probe: "=COT(PI()/4)"
+        expected: impl
+      - name: "COT(-pi/4) == -1 (odd)"
+        probe: "=COT(-PI()/4)"
+        expected: impl
+      - name: "COT(pi/3) == 1/sqrt(3)"
+        probe: "=COT(PI()/3)"
+        expected: impl
+      - name: "identity COT(x)*TAN(x) == 1"
+        probe: "=COT(0.9)*TAN(0.9)"
+        expected: impl
+
+  - function: "ACOT"
+    aspect: "inverse cotangent (range (0, pi))"
+    behaviors:
+      - name: "ACOT(0) == pi/2"
+        probe: "=ACOT(0)"
+        expected: impl
+      - name: "ACOT(1) == pi/4"
+        probe: "=ACOT(1)"
+        expected: impl
+      - name: "ACOT(-1) == 3*pi/4 (range NOT odd)"
+        probe: "=ACOT(-1)"
+        expected: impl
+      - name: "large x -> 0"
+        probe: "=ACOT(1000000)"
+        expected: impl
+      - name: "round-trip COT(ACOT(x)) == x"
+        probe: "=COT(ACOT(2.5))-2.5"
+        expected: impl
+
+  - function: "SECH"
+    aspect: "hyperbolic secant"
+    behaviors:
+      - name: "SECH(0) == 1"
+        probe: "=SECH(0)"
+        expected: impl
+      - name: "large x -> 0 (no overflow)"
+        probe: "=SECH(1000)"
+        expected: impl
+      - name: "SECH(1) base value"
+        probe: "=SECH(1)"
+        expected: impl
+      - name: "even-symmetry SECH(-x) == SECH(x)"
+        probe: "=SECH(-1.5)-SECH(1.5)"
+        expected: impl
+      - name: "identity SECH(x)*COSH(x) == 1"
+        probe: "=SECH(0.8)*COSH(0.8)"
+        expected: impl
+
+  - function: "CSCH"
+    aspect: "hyperbolic cosecant"
+    behaviors:
+      - name: "CSCH(0) -> #DIV/0!"
+        probe: "=CSCH(0)"
+        expected: impl
+      - name: "CSCH(1) base value"
+        probe: "=CSCH(1)"
+        expected: impl
+      - name: "large x -> 0"
+        probe: "=CSCH(1000)"
+        expected: impl
+      - name: "odd-symmetry CSCH(-x) == -CSCH(x)"
+        probe: "=CSCH(-1)+CSCH(1)"
+        expected: impl
+      - name: "identity CSCH(x)*SINH(x) == 1"
+        probe: "=CSCH(0.6)*SINH(0.6)"
+        expected: impl
+
+  - function: "COTH"
+    aspect: "hyperbolic cotangent"
+    behaviors:
+      - name: "COTH(0) -> #DIV/0!"
+        probe: "=COTH(0)"
+        expected: impl
+      - name: "COTH(1) base value"
+        probe: "=COTH(1)"
+        expected: impl
+      - name: "asymptote +infinity -> 1"
+        probe: "=COTH(1000)"
+        expected: impl
+      - name: "asymptote -infinity -> -1"
+        probe: "=COTH(-1000)"
+        expected: impl
+      - name: "identity COTH(x)*TANH(x) == 1"
+        probe: "=COTH(1.1)*TANH(1.1)"
+        expected: impl
+
+  - function: "ACOTH"
+    aspect: "inverse hyperbolic cotangent"
+    behaviors:
+      - name: "ACOTH(2) base value"
+        probe: "=ACOTH(2)"
+        expected: impl
+      - name: "endpoint |x|=1 -> #NUM!"
+        probe: "=ACOTH(1)"
+        expected: impl
+      - name: "inside |x|<1 -> #NUM!"
+        probe: "=ACOTH(0.5)"
+        expected: impl
+      - name: "round-trip COTH(ACOTH(x)) == x"
+        probe: "=COTH(ACOTH(2.5))-2.5"
+        expected: impl
+      - name: "odd-symmetry ACOTH(-x) == -ACOTH(x)"
+        probe: "=ACOTH(-3)+ACOTH(3)"
+        expected: impl
+
+  - function: "EVEN"
+    aspect: "round to even integer away from zero"
+    behaviors:
+      - name: "positive fractional rounds away from zero"
+        probe: "=EVEN(1.5)"
+        expected: impl
+      - name: "odd integer rounds up to next even"
+        probe: "=EVEN(3)"
+        expected: impl
+      - name: "even integer unchanged"
+        probe: "=EVEN(4)"
+        expected: impl
+      - name: "negative fractional rounds away from zero"
+        probe: "=EVEN(-1.5)"
+        expected: impl
+      - name: "EVEN(0) == 0"
+        probe: "=EVEN(0)"
+        expected: impl
+
+  - function: "ODD"
+    aspect: "round to odd integer away from zero"
+    behaviors:
+      - name: "positive fractional rounds to next odd"
+        probe: "=ODD(1.5)"
+        expected: impl
+      - name: "even integer rounds up to next odd"
+        probe: "=ODD(2)"
+        expected: impl
+      - name: "odd integer unchanged"
+        probe: "=ODD(3)"
+        expected: impl
+      - name: "negative fractional rounds to next odd"
+        probe: "=ODD(-1.5)"
+        expected: impl
+      - name: "ODD(0) == 1 quirk"
+        probe: "=ODD(0)"
+        expected: impl
+
+  - function: "QUOTIENT"
+    aspect: "integer division truncated toward zero"
+    behaviors:
+      - name: "positive over positive"
+        probe: "=QUOTIENT(10, 3)"
+        expected: impl
+      - name: "negative numerator truncates toward zero"
+        probe: "=QUOTIENT(-10, 3)"
+        expected: impl
+      - name: "negative denominator"
+        probe: "=QUOTIENT(10, -3)"
+        expected: impl
+      - name: "fractional numerator truncated"
+        probe: "=QUOTIENT(5.9, 2)"
+        expected: impl
+      - name: "zero denominator -> #DIV/0!"
+        probe: "=QUOTIENT(5, 0)"
+        expected: impl

@@ -220,6 +220,20 @@ families:
     min_perspectives_per_member: 5
     cluster_reason: "Post-2010 distribution functions; share PDF/CDF dichotomy, parameter-validity edges (negative variance, p-out-of-range)."
 
+  # -- Hyperbolic / reciprocal-trig / parity helpers ------------------------
+  # Co-located in tests/oracle/cases/math_trig2.yaml. They share identity-
+  # edge perspectives (zero, +/- infinity, pi/2) and the reciprocal pairs
+  # (SINH<->CSCH, COSH<->SECH, TANH<->COTH, SIN<->CSC, COS<->SEC, TAN<->COT)
+  # co-evolve on tail-bit drift across libm transcendentals. EVEN / ODD /
+  # QUOTIENT ride along because they sit in the same suite file and share
+  # the rounding-toward-away semantics that several reciprocal-trig
+  # boundary cases also exercise.
+  - name: math_trig2
+    members: [ACOSH, ACOT, ACOTH, ASINH, ATANH, COSH, COT, COTH, CSC, CSCH, EVEN, ODD, QUOTIENT, SEC, SECH, SINH, TANH]
+    category_file: tests/oracle/cases/math_trig2.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Hyperbolic / reciprocal trig identities and rounding-parity helpers; share identity-edge perspectives (zero, +/- infinity, pi/2)."
+
   # -- Post-2010 beta / gamma / lognormal / Weibull distribution family ----
   # These post-2010 spellings share special-function backends (regularized
   # incomplete beta and gamma, log-gamma) and the same tail-bit edges
