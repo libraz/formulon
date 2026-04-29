@@ -7859,3 +7859,231 @@ groups:
       - name: "negative x with zero step -> 0"
         probe: "=GESTEP(-2,0)"
         expected: impl
+
+  - function: "DAVERAGE"
+    aspect: "database mean over criteria-filtered rows"
+    behaviors:
+      - name: "basic match: text criterion in E1:E2"
+        probe: '=DAVERAGE(A1:C5, "Sales", E1:E2)'
+        expected: impl
+      - name: "field selected by 1-based numeric index"
+        probe: '=DAVERAGE(A1:C5, 3, '
+        expected: impl
+      - name: "multi-row OR criteria block (E1:E3)"
+        probe: '=DAVERAGE(A1:C5, "Sales", E1:E3)'
+        expected: impl
+      - name: "multi-column AND criteria block (E1:F2)"
+        probe: '=DAVERAGE(A1:C5, "Sales", E1:F2)'
+        expected: impl
+      - name: "field selected via cell reference"
+        probe: '=DAVERAGE(A1:C5, C1, '
+        expected: impl
+
+  - function: "DCOUNT"
+    aspect: "database count of numeric field cells over criteria-filtered rows"
+    behaviors:
+      - name: "basic match: text criterion in E1:E2"
+        probe: '=DCOUNT(A1:C5, "Sales", E1:E2)'
+        expected: impl
+      - name: "field selected by 1-based numeric index"
+        probe: '=DCOUNT(A1:C5, 3, '
+        expected: impl
+      - name: "multi-row OR criteria block (E1:E3)"
+        probe: '=DCOUNT(A1:C5, "Sales", E1:E3)'
+        expected: impl
+      - name: "multi-column AND criteria block (E1:F2)"
+        probe: '=DCOUNT(A1:C5, "Sales", E1:F2)'
+        expected: impl
+      - name: "field selected via cell reference"
+        probe: '=DCOUNT(A1:C5, C1, '
+        expected: impl
+
+  - function: "DCOUNTA"
+    aspect: "database count of non-blank field cells over criteria-filtered rows"
+    behaviors:
+      - name: "basic match: text criterion in E1:E2"
+        probe: '=DCOUNTA(A1:C5, "Sales", E1:E2)'
+        expected: impl
+      - name: "field selected by 1-based numeric index"
+        probe: '=DCOUNTA(A1:C5, 3, '
+        expected: impl
+      - name: "multi-row OR criteria block (E1:E3)"
+        probe: '=DCOUNTA(A1:C5, "Sales", E1:E3)'
+        expected: impl
+      - name: "multi-column AND criteria block (E1:F2)"
+        probe: '=DCOUNTA(A1:C5, "Sales", E1:F2)'
+        expected: impl
+      - name: "field selected via cell reference"
+        probe: '=DCOUNTA(A1:C5, C1, '
+        expected: impl
+
+  - function: "DGET"
+    aspect: "database lookup of unique field cell over criteria-filtered rows"
+    behaviors:
+      - name: "basic match: text criterion in E1:E2"
+        probe: '=DGET(A1:C5, "Sales", E1:E2)'
+        expected: impl
+      - name: "field selected by 1-based numeric index"
+        probe: '=DGET(A1:C5, 3, '
+        expected: impl
+      - name: "multi-row OR criteria block (E1:E3)"
+        probe: '=DGET(A1:C5, "Sales", E1:E3)'
+        expected: impl
+      - name: "multi-column AND criteria block (E1:F2)"
+        probe: '=DGET(A1:C5, "Sales", E1:F2)'
+        expected: impl
+      - name: "field selected via cell reference"
+        probe: '=DGET(A1:C5, C1, '
+        expected: impl
+
+  - function: "DMAX"
+    aspect: "database maximum over criteria-filtered rows"
+    behaviors:
+      - name: "basic match: text criterion in E1:E2"
+        probe: '=DMAX(A1:C5, "Sales", E1:E2)'
+        expected: impl
+      - name: "field selected by 1-based numeric index"
+        probe: '=DMAX(A1:C5, 3, '
+        expected: impl
+      - name: "multi-row OR criteria block (E1:E3)"
+        probe: '=DMAX(A1:C5, "Sales", E1:E3)'
+        expected: impl
+      - name: "multi-column AND criteria block (E1:F2)"
+        probe: '=DMAX(A1:C5, "Sales", E1:F2)'
+        expected: impl
+      - name: "field selected via cell reference"
+        probe: '=DMAX(A1:C5, C1, '
+        expected: impl
+
+  - function: "DMIN"
+    aspect: "database minimum over criteria-filtered rows"
+    behaviors:
+      - name: "basic match: text criterion in E1:E2"
+        probe: '=DMIN(A1:C5, "Sales", E1:E2)'
+        expected: impl
+      - name: "field selected by 1-based numeric index"
+        probe: '=DMIN(A1:C5, 3, '
+        expected: impl
+      - name: "multi-row OR criteria block (E1:E3)"
+        probe: '=DMIN(A1:C5, "Sales", E1:E3)'
+        expected: impl
+      - name: "multi-column AND criteria block (E1:F2)"
+        probe: '=DMIN(A1:C5, "Sales", E1:F2)'
+        expected: impl
+      - name: "field selected via cell reference"
+        probe: '=DMIN(A1:C5, C1, '
+        expected: impl
+
+  - function: "DPRODUCT"
+    aspect: "database product over criteria-filtered rows"
+    behaviors:
+      - name: "basic match: text criterion in E1:E2"
+        probe: '=DPRODUCT(A1:C5, "Sales", E1:E2)'
+        expected: impl
+      - name: "field selected by 1-based numeric index"
+        probe: '=DPRODUCT(A1:C5, 3, '
+        expected: impl
+      - name: "multi-row OR criteria block (E1:E3)"
+        probe: '=DPRODUCT(A1:C5, "Sales", E1:E3)'
+        expected: impl
+      - name: "multi-column AND criteria block (E1:F2)"
+        probe: '=DPRODUCT(A1:C5, "Sales", E1:F2)'
+        expected: impl
+      - name: "field selected via cell reference"
+        probe: '=DPRODUCT(A1:C5, C1, '
+        expected: impl
+
+  - function: "DSTDEV"
+    aspect: "database sample standard deviation over criteria-filtered rows"
+    behaviors:
+      - name: "basic match: text criterion in E1:E2"
+        probe: '=DSTDEV(A1:C5, "Sales", E1:E2)'
+        expected: impl
+      - name: "field selected by 1-based numeric index"
+        probe: '=DSTDEV(A1:C5, 3, '
+        expected: impl
+      - name: "multi-row OR criteria block (E1:E3)"
+        probe: '=DSTDEV(A1:C5, "Sales", E1:E3)'
+        expected: impl
+      - name: "multi-column AND criteria block (E1:F2)"
+        probe: '=DSTDEV(A1:C5, "Sales", E1:F2)'
+        expected: impl
+      - name: "field selected via cell reference"
+        probe: '=DSTDEV(A1:C5, C1, '
+        expected: impl
+
+  - function: "DSTDEVP"
+    aspect: "database population standard deviation over criteria-filtered rows"
+    behaviors:
+      - name: "basic match: text criterion in E1:E2"
+        probe: '=DSTDEVP(A1:C5, "Sales", E1:E2)'
+        expected: impl
+      - name: "field selected by 1-based numeric index"
+        probe: '=DSTDEVP(A1:C5, 3, '
+        expected: impl
+      - name: "multi-row OR criteria block (E1:E3)"
+        probe: '=DSTDEVP(A1:C5, "Sales", E1:E3)'
+        expected: impl
+      - name: "multi-column AND criteria block (E1:F2)"
+        probe: '=DSTDEVP(A1:C5, "Sales", E1:F2)'
+        expected: impl
+      - name: "field selected via cell reference"
+        probe: '=DSTDEVP(A1:C5, C1, '
+        expected: impl
+
+  - function: "DSUM"
+    aspect: "database sum over criteria-filtered rows"
+    behaviors:
+      - name: "basic match: text criterion in E1:E2"
+        probe: '=DSUM(A1:C5, "Sales", E1:E2)'
+        expected: impl
+      - name: "field selected by 1-based numeric index"
+        probe: '=DSUM(A1:C5, 3, '
+        expected: impl
+      - name: "multi-row OR criteria block (E1:E3)"
+        probe: '=DSUM(A1:C5, "Sales", E1:E3)'
+        expected: impl
+      - name: "multi-column AND criteria block (E1:F2)"
+        probe: '=DSUM(A1:C5, "Sales", E1:F2)'
+        expected: impl
+      - name: "field selected via cell reference"
+        probe: '=DSUM(A1:C5, C1, '
+        expected: impl
+
+  - function: "DVAR"
+    aspect: "database sample variance over criteria-filtered rows"
+    behaviors:
+      - name: "basic match: text criterion in E1:E2"
+        probe: '=DVAR(A1:C5, "Sales", E1:E2)'
+        expected: impl
+      - name: "field selected by 1-based numeric index"
+        probe: '=DVAR(A1:C5, 3, '
+        expected: impl
+      - name: "multi-row OR criteria block (E1:E3)"
+        probe: '=DVAR(A1:C5, "Sales", E1:E3)'
+        expected: impl
+      - name: "multi-column AND criteria block (E1:F2)"
+        probe: '=DVAR(A1:C5, "Sales", E1:F2)'
+        expected: impl
+      - name: "field selected via cell reference"
+        probe: '=DVAR(A1:C5, C1, '
+        expected: impl
+
+  - function: "DVARP"
+    aspect: "database population variance over criteria-filtered rows"
+    behaviors:
+      - name: "basic match: text criterion in E1:E2"
+        probe: '=DVARP(A1:C5, "Sales", E1:E2)'
+        expected: impl
+      - name: "field selected by 1-based numeric index"
+        probe: '=DVARP(A1:C5, 3, '
+        expected: impl
+      - name: "multi-row OR criteria block (E1:E3)"
+        probe: '=DVARP(A1:C5, "Sales", E1:E3)'
+        expected: impl
+      - name: "multi-column AND criteria block (E1:F2)"
+        probe: '=DVARP(A1:C5, "Sales", E1:F2)'
+        expected: impl
+      - name: "field selected via cell reference"
+        probe: '=DVARP(A1:C5, C1, '
+        expected: impl

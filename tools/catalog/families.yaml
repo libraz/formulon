@@ -275,6 +275,20 @@ families:
     min_perspectives_per_member: 5
     cluster_reason: "Base-conversion and bit-manipulation family; share two's-complement edge cases (10-bit signed range), padded-output formatting, and 48-bit integer ceiling for bit ops."
 
+  # -- Database aggregates (D-functions) -----------------------------------
+  # The dozen D-functions all take the same `(database, field, criteria)`
+  # argument shape and read records out of a tabular range with a header
+  # row, projecting through `field` and filtering through a criteria
+  # range. They share criterion-parsing, field-selector resolution
+  # (text/index/cell), and the no-match aggregation quirks (DSUM=0,
+  # DAVERAGE=#DIV/0!, DGET=#VALUE!, DPRODUCT=0, etc.). Closure
+  # perspectives parallel across the cluster.
+  - name: database
+    members: [DAVERAGE, DCOUNT, DCOUNTA, DGET, DMAX, DMIN, DPRODUCT, DSTDEV, DSTDEVP, DSUM, DVAR, DVARP]
+    category_file: tests/oracle/cases/database.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "D-functions share database/criteria/field-selector argument shape; closure perspectives parallel across the cluster (criterion match, blank, multi-row, no-match #VALUE!)."
+
   # -- Financial TVM and depreciation family -------------------------------
   # Time-value-of-money primitives (PV/FV/PMT/RATE/NPER/NPV/IRR), loan
   # amortization split (CUMIPMT/CUMPRINC/IPMT/PPMT) and book-depreciation

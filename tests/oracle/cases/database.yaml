@@ -1066,3 +1066,1270 @@ cases:
       E1: Fruit
       E2: ">=A*"
     formula: "=DSUM(A1:C5, \"Sales\", E1:E2)"
+
+  # ========================================================================
+  # Closure perspectives for the D-function family. Each member function
+  # (apart from DSUM, which already has 30 cases) gets parallel coverage
+  # across five distinct formula shapes:
+  #   - basic_text_match    : text criterion in E1:E2
+  #   - field_index_3       : numeric field selector "3"
+  #   - multi_row_or        : multi-row OR criteria E1:E3
+  #   - multi_col_and       : multi-column AND criteria E1:F2
+  #   - field_cell_ref      : field selected via cell reference C1
+  # All cases reuse the canonical fruit/region/sales fixture in A1:C5.
+  # ========================================================================
+
+  # -- DAVERAGE ----------------------------------------------------
+  - id: daverage_basic_text_match
+    description: "DAVERAGE: basic match: text criterion in E1:E2"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DAVERAGE(A1:C5, \"Sales\", E1:E2)"
+
+  - id: daverage_field_index_3
+    description: "DAVERAGE: field selected by 1-based index 3"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DAVERAGE(A1:C5, 3, E1:E2)"
+
+  - id: daverage_multi_row_or
+    description: "DAVERAGE: multi-row OR criterion: E1:E3 selects Apple or Pear records"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+      E3: Pear
+    formula: "=DAVERAGE(A1:C5, \"Sales\", E1:E3)"
+
+  - id: daverage_multi_col_and
+    description: "DAVERAGE: multi-column AND criterion: Fruit=Apple AND Region=East"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      F1: Region
+      E2: Apple
+      F2: East
+    formula: "=DAVERAGE(A1:C5, \"Sales\", E1:F2)"
+
+  - id: daverage_field_cell_ref
+    description: "DAVERAGE: field selected via cell reference C1 (= Sales)"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DAVERAGE(A1:C5, C1, E1:E2)"
+
+  # -- DCOUNT ------------------------------------------------------
+  - id: dcount_basic_text_match
+    description: "DCOUNT: basic match: text criterion in E1:E2"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DCOUNT(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dcount_field_index_3
+    description: "DCOUNT: field selected by 1-based index 3"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DCOUNT(A1:C5, 3, E1:E2)"
+
+  - id: dcount_multi_row_or
+    description: "DCOUNT: multi-row OR criterion: E1:E3 selects Apple or Pear records"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+      E3: Pear
+    formula: "=DCOUNT(A1:C5, \"Sales\", E1:E3)"
+
+  - id: dcount_multi_col_and
+    description: "DCOUNT: multi-column AND criterion: Fruit=Apple AND Region=East"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      F1: Region
+      E2: Apple
+      F2: East
+    formula: "=DCOUNT(A1:C5, \"Sales\", E1:F2)"
+
+  - id: dcount_field_cell_ref
+    description: "DCOUNT: field selected via cell reference C1 (= Sales)"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DCOUNT(A1:C5, C1, E1:E2)"
+
+  # -- DCOUNTA -----------------------------------------------------
+  - id: dcounta_basic_text_match
+    description: "DCOUNTA: basic match: text criterion in E1:E2"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DCOUNTA(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dcounta_field_index_3
+    description: "DCOUNTA: field selected by 1-based index 3"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DCOUNTA(A1:C5, 3, E1:E2)"
+
+  - id: dcounta_multi_row_or
+    description: "DCOUNTA: multi-row OR criterion: E1:E3 selects Apple or Pear records"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+      E3: Pear
+    formula: "=DCOUNTA(A1:C5, \"Sales\", E1:E3)"
+
+  - id: dcounta_multi_col_and
+    description: "DCOUNTA: multi-column AND criterion: Fruit=Apple AND Region=East"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      F1: Region
+      E2: Apple
+      F2: East
+    formula: "=DCOUNTA(A1:C5, \"Sales\", E1:F2)"
+
+  - id: dcounta_field_cell_ref
+    description: "DCOUNTA: field selected via cell reference C1 (= Sales)"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DCOUNTA(A1:C5, C1, E1:E2)"
+
+  # -- DGET --------------------------------------------------------
+  - id: dget_basic_text_match
+    description: "DGET: basic match: text criterion in E1:E2"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DGET(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dget_field_index_3
+    description: "DGET: field selected by 1-based index 3"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DGET(A1:C5, 3, E1:E2)"
+
+  - id: dget_multi_row_or
+    description: "DGET: multi-row OR criterion: E1:E3 selects Apple or Pear records"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+      E3: Pear
+    formula: "=DGET(A1:C5, \"Sales\", E1:E3)"
+
+  - id: dget_multi_col_and
+    description: "DGET: multi-column AND criterion: Fruit=Apple AND Region=East"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      F1: Region
+      E2: Apple
+      F2: East
+    formula: "=DGET(A1:C5, \"Sales\", E1:F2)"
+
+  - id: dget_field_cell_ref
+    description: "DGET: field selected via cell reference C1 (= Sales)"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DGET(A1:C5, C1, E1:E2)"
+
+  # -- DMAX --------------------------------------------------------
+  - id: dmax_basic_text_match
+    description: "DMAX: basic match: text criterion in E1:E2"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DMAX(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dmax_field_index_3
+    description: "DMAX: field selected by 1-based index 3"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DMAX(A1:C5, 3, E1:E2)"
+
+  - id: dmax_multi_row_or
+    description: "DMAX: multi-row OR criterion: E1:E3 selects Apple or Pear records"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+      E3: Pear
+    formula: "=DMAX(A1:C5, \"Sales\", E1:E3)"
+
+  - id: dmax_multi_col_and
+    description: "DMAX: multi-column AND criterion: Fruit=Apple AND Region=East"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      F1: Region
+      E2: Apple
+      F2: East
+    formula: "=DMAX(A1:C5, \"Sales\", E1:F2)"
+
+  - id: dmax_field_cell_ref
+    description: "DMAX: field selected via cell reference C1 (= Sales)"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DMAX(A1:C5, C1, E1:E2)"
+
+  # -- DMIN --------------------------------------------------------
+  - id: dmin_basic_text_match
+    description: "DMIN: basic match: text criterion in E1:E2"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DMIN(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dmin_field_index_3
+    description: "DMIN: field selected by 1-based index 3"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DMIN(A1:C5, 3, E1:E2)"
+
+  - id: dmin_multi_row_or
+    description: "DMIN: multi-row OR criterion: E1:E3 selects Apple or Pear records"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+      E3: Pear
+    formula: "=DMIN(A1:C5, \"Sales\", E1:E3)"
+
+  - id: dmin_multi_col_and
+    description: "DMIN: multi-column AND criterion: Fruit=Apple AND Region=East"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      F1: Region
+      E2: Apple
+      F2: East
+    formula: "=DMIN(A1:C5, \"Sales\", E1:F2)"
+
+  - id: dmin_field_cell_ref
+    description: "DMIN: field selected via cell reference C1 (= Sales)"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DMIN(A1:C5, C1, E1:E2)"
+
+  # -- DPRODUCT ----------------------------------------------------
+  - id: dproduct_basic_text_match
+    description: "DPRODUCT: basic match: text criterion in E1:E2"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DPRODUCT(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dproduct_field_index_3
+    description: "DPRODUCT: field selected by 1-based index 3"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DPRODUCT(A1:C5, 3, E1:E2)"
+
+  - id: dproduct_multi_row_or
+    description: "DPRODUCT: multi-row OR criterion: E1:E3 selects Apple or Pear records"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+      E3: Pear
+    formula: "=DPRODUCT(A1:C5, \"Sales\", E1:E3)"
+
+  - id: dproduct_multi_col_and
+    description: "DPRODUCT: multi-column AND criterion: Fruit=Apple AND Region=East"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      F1: Region
+      E2: Apple
+      F2: East
+    formula: "=DPRODUCT(A1:C5, \"Sales\", E1:F2)"
+
+  - id: dproduct_field_cell_ref
+    description: "DPRODUCT: field selected via cell reference C1 (= Sales)"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DPRODUCT(A1:C5, C1, E1:E2)"
+
+  # -- DSTDEV ------------------------------------------------------
+  - id: dstdev_basic_text_match
+    description: "DSTDEV: basic match: text criterion in E1:E2"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DSTDEV(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dstdev_field_index_3
+    description: "DSTDEV: field selected by 1-based index 3"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DSTDEV(A1:C5, 3, E1:E2)"
+
+  - id: dstdev_multi_row_or
+    description: "DSTDEV: multi-row OR criterion: E1:E3 selects Apple or Pear records"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+      E3: Pear
+    formula: "=DSTDEV(A1:C5, \"Sales\", E1:E3)"
+
+  - id: dstdev_multi_col_and
+    description: "DSTDEV: multi-column AND criterion: Fruit=Apple AND Region=East"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      F1: Region
+      E2: Apple
+      F2: East
+    formula: "=DSTDEV(A1:C5, \"Sales\", E1:F2)"
+
+  - id: dstdev_field_cell_ref
+    description: "DSTDEV: field selected via cell reference C1 (= Sales)"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DSTDEV(A1:C5, C1, E1:E2)"
+
+  # -- DSTDEVP -----------------------------------------------------
+  - id: dstdevp_basic_text_match
+    description: "DSTDEVP: basic match: text criterion in E1:E2"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DSTDEVP(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dstdevp_field_index_3
+    description: "DSTDEVP: field selected by 1-based index 3"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DSTDEVP(A1:C5, 3, E1:E2)"
+
+  - id: dstdevp_multi_row_or
+    description: "DSTDEVP: multi-row OR criterion: E1:E3 selects Apple or Pear records"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+      E3: Pear
+    formula: "=DSTDEVP(A1:C5, \"Sales\", E1:E3)"
+
+  - id: dstdevp_multi_col_and
+    description: "DSTDEVP: multi-column AND criterion: Fruit=Apple AND Region=East"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      F1: Region
+      E2: Apple
+      F2: East
+    formula: "=DSTDEVP(A1:C5, \"Sales\", E1:F2)"
+
+  - id: dstdevp_field_cell_ref
+    description: "DSTDEVP: field selected via cell reference C1 (= Sales)"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DSTDEVP(A1:C5, C1, E1:E2)"
+
+  # -- DVAR --------------------------------------------------------
+  - id: dvar_basic_text_match
+    description: "DVAR: basic match: text criterion in E1:E2"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DVAR(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dvar_field_index_3
+    description: "DVAR: field selected by 1-based index 3"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DVAR(A1:C5, 3, E1:E2)"
+
+  - id: dvar_multi_row_or
+    description: "DVAR: multi-row OR criterion: E1:E3 selects Apple or Pear records"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+      E3: Pear
+    formula: "=DVAR(A1:C5, \"Sales\", E1:E3)"
+
+  - id: dvar_multi_col_and
+    description: "DVAR: multi-column AND criterion: Fruit=Apple AND Region=East"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      F1: Region
+      E2: Apple
+      F2: East
+    formula: "=DVAR(A1:C5, \"Sales\", E1:F2)"
+
+  - id: dvar_field_cell_ref
+    description: "DVAR: field selected via cell reference C1 (= Sales)"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DVAR(A1:C5, C1, E1:E2)"
+
+  # -- DVARP -------------------------------------------------------
+  - id: dvarp_basic_text_match
+    description: "DVARP: basic match: text criterion in E1:E2"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DVARP(A1:C5, \"Sales\", E1:E2)"
+
+  - id: dvarp_field_index_3
+    description: "DVARP: field selected by 1-based index 3"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DVARP(A1:C5, 3, E1:E2)"
+
+  - id: dvarp_multi_row_or
+    description: "DVARP: multi-row OR criterion: E1:E3 selects Apple or Pear records"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+      E3: Pear
+    formula: "=DVARP(A1:C5, \"Sales\", E1:E3)"
+
+  - id: dvarp_multi_col_and
+    description: "DVARP: multi-column AND criterion: Fruit=Apple AND Region=East"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      F1: Region
+      E2: Apple
+      F2: East
+    formula: "=DVARP(A1:C5, \"Sales\", E1:F2)"
+
+  - id: dvarp_field_cell_ref
+    description: "DVARP: field selected via cell reference C1 (= Sales)"
+    setup:
+      A1: Fruit
+      B1: Region
+      C1: Sales
+      A2: Apple
+      B2: East
+      C2: 100
+      A3: Apple
+      B3: West
+      C3: 200
+      A4: Pear
+      B4: East
+      C4: 50
+      A5: Banana
+      B5: West
+      C5: 300
+      E1: Fruit
+      E2: Apple
+    formula: "=DVARP(A1:C5, C1, E1:E2)"
+

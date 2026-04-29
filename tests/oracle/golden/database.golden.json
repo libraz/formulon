@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T08:22:54Z"
+    "generated_at": "2026-04-29T01:27:33Z"
   },
   "tolerance": {
     "abs": 1e-10,
@@ -3701,6 +3701,4428 @@
       "expect": {
         "kind": "number",
         "value": 650.0
+      }
+    },
+    {
+      "id": "daverage_basic_text_match",
+      "formula": "=DAVERAGE(A1:C5, \"Sales\", E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 150.0
+      }
+    },
+    {
+      "id": "daverage_field_index_3",
+      "formula": "=DAVERAGE(A1:C5, 3, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 150.0
+      }
+    },
+    {
+      "id": "daverage_multi_row_or",
+      "formula": "=DAVERAGE(A1:C5, \"Sales\", E1:E3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Pear"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 116.66666666666667
+      }
+    },
+    {
+      "id": "daverage_multi_col_and",
+      "formula": "=DAVERAGE(A1:C5, \"Sales\", E1:F2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "East"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "daverage_field_cell_ref",
+      "formula": "=DAVERAGE(A1:C5, C1, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 150.0
+      }
+    },
+    {
+      "id": "dcount_basic_text_match",
+      "formula": "=DCOUNT(A1:C5, \"Sales\", E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "dcount_field_index_3",
+      "formula": "=DCOUNT(A1:C5, 3, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "dcount_multi_row_or",
+      "formula": "=DCOUNT(A1:C5, \"Sales\", E1:E3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Pear"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "dcount_multi_col_and",
+      "formula": "=DCOUNT(A1:C5, \"Sales\", E1:F2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "East"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "dcount_field_cell_ref",
+      "formula": "=DCOUNT(A1:C5, C1, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "dcounta_basic_text_match",
+      "formula": "=DCOUNTA(A1:C5, \"Sales\", E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "dcounta_field_index_3",
+      "formula": "=DCOUNTA(A1:C5, 3, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "dcounta_multi_row_or",
+      "formula": "=DCOUNTA(A1:C5, \"Sales\", E1:E3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Pear"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "dcounta_multi_col_and",
+      "formula": "=DCOUNTA(A1:C5, \"Sales\", E1:F2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "East"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "dcounta_field_cell_ref",
+      "formula": "=DCOUNTA(A1:C5, C1, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "dget_basic_text_match",
+      "formula": "=DGET(A1:C5, \"Sales\", E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "dget_field_index_3",
+      "formula": "=DGET(A1:C5, 3, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "dget_multi_row_or",
+      "formula": "=DGET(A1:C5, \"Sales\", E1:E3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Pear"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "dget_multi_col_and",
+      "formula": "=DGET(A1:C5, \"Sales\", E1:F2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "East"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "dget_field_cell_ref",
+      "formula": "=DGET(A1:C5, C1, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "dmax_basic_text_match",
+      "formula": "=DMAX(A1:C5, \"Sales\", E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 200.0
+      }
+    },
+    {
+      "id": "dmax_field_index_3",
+      "formula": "=DMAX(A1:C5, 3, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 200.0
+      }
+    },
+    {
+      "id": "dmax_multi_row_or",
+      "formula": "=DMAX(A1:C5, \"Sales\", E1:E3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Pear"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 200.0
+      }
+    },
+    {
+      "id": "dmax_multi_col_and",
+      "formula": "=DMAX(A1:C5, \"Sales\", E1:F2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "East"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "dmax_field_cell_ref",
+      "formula": "=DMAX(A1:C5, C1, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 200.0
+      }
+    },
+    {
+      "id": "dmin_basic_text_match",
+      "formula": "=DMIN(A1:C5, \"Sales\", E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "dmin_field_index_3",
+      "formula": "=DMIN(A1:C5, 3, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "dmin_multi_row_or",
+      "formula": "=DMIN(A1:C5, \"Sales\", E1:E3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Pear"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "dmin_multi_col_and",
+      "formula": "=DMIN(A1:C5, \"Sales\", E1:F2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "East"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "dmin_field_cell_ref",
+      "formula": "=DMIN(A1:C5, C1, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "dproduct_basic_text_match",
+      "formula": "=DPRODUCT(A1:C5, \"Sales\", E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20000.0
+      }
+    },
+    {
+      "id": "dproduct_field_index_3",
+      "formula": "=DPRODUCT(A1:C5, 3, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20000.0
+      }
+    },
+    {
+      "id": "dproduct_multi_row_or",
+      "formula": "=DPRODUCT(A1:C5, \"Sales\", E1:E3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Pear"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1000000.0
+      }
+    },
+    {
+      "id": "dproduct_multi_col_and",
+      "formula": "=DPRODUCT(A1:C5, \"Sales\", E1:F2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "East"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "dproduct_field_cell_ref",
+      "formula": "=DPRODUCT(A1:C5, C1, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20000.0
+      }
+    },
+    {
+      "id": "dstdev_basic_text_match",
+      "formula": "=DSTDEV(A1:C5, \"Sales\", E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 70.71067811865476
+      }
+    },
+    {
+      "id": "dstdev_field_index_3",
+      "formula": "=DSTDEV(A1:C5, 3, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 70.71067811865476
+      }
+    },
+    {
+      "id": "dstdev_multi_row_or",
+      "formula": "=DSTDEV(A1:C5, \"Sales\", E1:E3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Pear"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 76.37626158259732
+      }
+    },
+    {
+      "id": "dstdev_multi_col_and",
+      "formula": "=DSTDEV(A1:C5, \"Sales\", E1:F2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "East"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "dstdev_field_cell_ref",
+      "formula": "=DSTDEV(A1:C5, C1, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 70.71067811865476
+      }
+    },
+    {
+      "id": "dstdevp_basic_text_match",
+      "formula": "=DSTDEVP(A1:C5, \"Sales\", E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "dstdevp_field_index_3",
+      "formula": "=DSTDEVP(A1:C5, 3, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "dstdevp_multi_row_or",
+      "formula": "=DSTDEVP(A1:C5, \"Sales\", E1:E3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Pear"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 62.36095644623236
+      }
+    },
+    {
+      "id": "dstdevp_multi_col_and",
+      "formula": "=DSTDEVP(A1:C5, \"Sales\", E1:F2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "East"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "dstdevp_field_cell_ref",
+      "formula": "=DSTDEVP(A1:C5, C1, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "dvar_basic_text_match",
+      "formula": "=DVAR(A1:C5, \"Sales\", E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5000.0
+      }
+    },
+    {
+      "id": "dvar_field_index_3",
+      "formula": "=DVAR(A1:C5, 3, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5000.0
+      }
+    },
+    {
+      "id": "dvar_multi_row_or",
+      "formula": "=DVAR(A1:C5, \"Sales\", E1:E3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Pear"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5833.333333333332
+      }
+    },
+    {
+      "id": "dvar_multi_col_and",
+      "formula": "=DVAR(A1:C5, \"Sales\", E1:F2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "East"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "dvar_field_cell_ref",
+      "formula": "=DVAR(A1:C5, C1, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5000.0
+      }
+    },
+    {
+      "id": "dvarp_basic_text_match",
+      "formula": "=DVARP(A1:C5, \"Sales\", E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2500.0
+      }
+    },
+    {
+      "id": "dvarp_field_index_3",
+      "formula": "=DVARP(A1:C5, 3, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2500.0
+      }
+    },
+    {
+      "id": "dvarp_multi_row_or",
+      "formula": "=DVARP(A1:C5, \"Sales\", E1:E3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Pear"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3888.8888888888887
+      }
+    },
+    {
+      "id": "dvarp_multi_col_and",
+      "formula": "=DVARP(A1:C5, \"Sales\", E1:F2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "F1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "F2": {
+          "kind": "text",
+          "value": "East"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "dvarp_field_cell_ref",
+      "formula": "=DVARP(A1:C5, C1, E1:E2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "Region"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "Sales"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "Apple"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "Pear"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "East"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A5": {
+          "kind": "text",
+          "value": "Banana"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "West"
+        },
+        "C5": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "E1": {
+          "kind": "text",
+          "value": "Fruit"
+        },
+        "E2": {
+          "kind": "text",
+          "value": "Apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2500.0
       }
     }
   ]
