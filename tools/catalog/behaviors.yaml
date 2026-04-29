@@ -9062,3 +9062,326 @@ groups:
       - name: "error in array literal propagates"
         probe: "=SUMPRODUCT({1,2,#N/A})"
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # Bivariate-regression family: CORREL / COVARIANCE.P / COVARIANCE.S /
+  # FORECAST / FORECAST.LINEAR / INTERCEPT / RSQ / SLOPE. All members live
+  # in tests/oracle/cases/regression.yaml and consume the same `(known_y,
+  # known_x)` argument shape. Probes hit the YAML `formula:` field; case
+  # `id`s carry per-fixture semantics.
+  # -------------------------------------------------------------------------
+
+  - function: "CORREL"
+    aspect: "Pearson correlation coefficient"
+    behaviors:
+      - name: "general r over reference dataset"
+        probe: "=CORREL(B1:B5, A1:A5)"
+        expected: impl
+      - name: "perfect positive correlation"
+        probe: "=CORREL(A1:A3, B1:B3)"
+        expected: impl
+      - name: "shape mismatch -> #N/A"
+        probe: "=CORREL(A1:A2, B1:B3)"
+        expected: impl
+      - name: "row-vector pair"
+        probe: "=CORREL(A1:C1, A2:C2)"
+        expected: impl
+      - name: "row-vs-column with matching cell counts"
+        probe: "=CORREL(A1:C1, A2:A4)"
+        expected: impl
+
+  - function: "COVARIANCE.P"
+    aspect: "population covariance (divisor n)"
+    behaviors:
+      - name: "population covariance over reference dataset"
+        probe: "=COVARIANCE.P(B1:B5, A1:A5)"
+        expected: impl
+      - name: "perfect linear y = 2x"
+        probe: "=COVARIANCE.P(B1:B3, A1:A3)"
+        expected: impl
+      - name: "single-pair n=1 -> 0"
+        probe: "=COVARIANCE.P(A1:A1, B1:B1)"
+        expected: impl
+      - name: "shape mismatch -> #N/A"
+        probe: "=COVARIANCE.P(A1:A2, B1:B3)"
+        expected: impl
+      - name: "with negatives (anti-correlation)"
+        probe: "=COVARIANCE.P(B1:B3, A1:A3)"
+        expected: impl
+
+  - function: "COVARIANCE.S"
+    aspect: "sample covariance (divisor n-1)"
+    behaviors:
+      - name: "sample covariance over reference dataset"
+        probe: "=COVARIANCE.S(B1:B5, A1:A5)"
+        expected: impl
+      - name: "n=2 sample"
+        probe: "=COVARIANCE.S(B1:B2, A1:A2)"
+        expected: impl
+      - name: "n=1 -> #DIV/0!"
+        probe: "=COVARIANCE.S(A1:A1, B1:B1)"
+        expected: impl
+      - name: "perfect linear y = 2x"
+        probe: "=COVARIANCE.S(B1:B3, A1:A3)"
+        expected: impl
+      - name: "with negatives (anti-correlation)"
+        probe: "=COVARIANCE.S(B1:B3, A1:A3)"
+        expected: impl
+
+  - function: "FORECAST"
+    aspect: "legacy alias for FORECAST.LINEAR"
+    # FORECAST cases share the (x, known_y, known_x) argument shape; per-fixture
+    # semantics (interpolation vs extrapolation, negative slope, mismatch) are
+    # documented in case `id`s.
+    behaviors:
+      - name: "interpolation at x=3 on reference dataset"
+        probe: "=FORECAST(3, B1:B5, A1:A5)"
+        expected: impl
+      - name: "at x=0 equals intercept"
+        probe: "=FORECAST(0, B1:B5, A1:A5)"
+        expected: impl
+      - name: "extrapolation beyond known x"
+        probe: "=FORECAST(10, B1:B5, A1:A5)"
+        expected: impl
+      - name: "negative slope"
+        probe: "=FORECAST(4, B1:B3, A1:A3)"
+        expected: impl
+      - name: "shape mismatch -> #N/A"
+        probe: "=FORECAST(2, B1:B3, A1:A2)"
+        expected: impl
+
+  - function: "FORECAST.LINEAR"
+    aspect: "linear-regression point forecast"
+    behaviors:
+      - name: "at x=0 equals intercept"
+        probe: "=FORECAST.LINEAR(0, B1:B5, A1:A5)"
+        expected: impl
+      - name: "interpolation at x=3 on reference dataset"
+        probe: "=FORECAST.LINEAR(3, B1:B5, A1:A5)"
+        expected: impl
+      - name: "extrapolation beyond known x"
+        probe: "=FORECAST.LINEAR(10, B1:B5, A1:A5)"
+        expected: impl
+      - name: "constant known_x -> #DIV/0!"
+        probe: "=FORECAST.LINEAR(2, B1:B3, A1:A3)"
+        expected: impl
+      - name: "negative slope"
+        probe: "=FORECAST.LINEAR(4, B1:B3, A1:A3)"
+        expected: impl
+
+  - function: "INTERCEPT"
+    aspect: "linear-regression y-intercept"
+    behaviors:
+      - name: "intercept on reference dataset"
+        probe: "=INTERCEPT(B1:B5, A1:A5)"
+        expected: impl
+      - name: "horizontal line -> intercept = constant y"
+        probe: "=INTERCEPT(B1:B3, A1:A3)"
+        expected: impl
+      - name: "perfect linear y = 2x -> intercept = 0"
+        probe: "=INTERCEPT(B1:B4, A1:A4)"
+        expected: impl
+      - name: "shape mismatch -> #N/A"
+        probe: "=INTERCEPT(B1:B3, A1:A2)"
+        expected: impl
+      - name: "intercept identity slope*3 + intercept"
+        probe: "=SLOPE(B1:B5,A1:A5)*3 + INTERCEPT(B1:B5,A1:A5)"
+        expected: impl
+
+  - function: "RSQ"
+    aspect: "coefficient of determination (r-squared)"
+    behaviors:
+      - name: "RSQ on reference dataset"
+        probe: "=RSQ(B1:B5, A1:A5)"
+        expected: impl
+      - name: "perfect linear y = 2x -> 1"
+        probe: "=RSQ(B1:B4, A1:A4)"
+        expected: impl
+      - name: "constant y -> #DIV/0!"
+        probe: "=RSQ(B1:B3, A1:A3)"
+        expected: impl
+      - name: "RSQ identity = CORREL^2"
+        probe: "=RSQ(B1:B5,A1:A5) - CORREL(B1:B5,A1:A5)^2"
+        expected: impl
+      - name: "shape mismatch -> #N/A"
+        probe: "=RSQ(B1:B3, A1:A2)"
+        expected: impl
+
+  - function: "SLOPE"
+    aspect: "linear-regression slope"
+    behaviors:
+      - name: "slope on reference dataset"
+        probe: "=SLOPE(B1:B5, A1:A5)"
+        expected: impl
+      - name: "vertical line (var_x = 0) -> #DIV/0!"
+        probe: "=SLOPE(B1:B3, A1:A3)"
+        expected: impl
+      - name: "negative slope"
+        probe: "=SLOPE(B1:B3, A1:A3)"
+        expected: impl
+      - name: "shape mismatch -> #N/A"
+        probe: "=SLOPE(B1:B3, A1:A2)"
+        expected: impl
+      - name: "inline array literal arguments"
+        probe: "=SLOPE({2,4,6}, {1,2,3})"
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # Bessel and error-function family: BESSELI / BESSELJ / BESSELK / BESSELY
+  # / ERF / ERF.PRECISE / ERFC / ERFC.PRECISE. All members live in
+  # tests/oracle/cases/engineering_special.yaml; per-case tolerance is
+  # widened where Excel's A&S polynomial approximations diverge from
+  # Formulon's series / POSIX-delegated values (see tests/divergence.yaml).
+  # -------------------------------------------------------------------------
+
+  - function: "BESSELI"
+    aspect: "modified Bessel function of the first kind I_n(x)"
+    behaviors:
+      - name: "I_0(1)"
+        probe: "=BESSELI(1,0)"
+        expected: impl
+      - name: "I_0(0) = 1"
+        probe: "=BESSELI(0,0)"
+        expected: impl
+      - name: "I_n(0) = 0 for n >= 1"
+        probe: "=BESSELI(0,1)"
+        expected: impl
+      - name: "I_1(2)"
+        probe: "=BESSELI(2,1)"
+        expected: impl
+      - name: "large-x growth I_0(20)"
+        probe: "=BESSELI(20,0)"
+        expected: impl
+
+  - function: "BESSELJ"
+    aspect: "Bessel function of the first kind J_n(x)"
+    behaviors:
+      - name: "J_0(0) = 1"
+        probe: "=BESSELJ(0,0)"
+        expected: impl
+      - name: "J_n(0) = 0 for n >= 1"
+        probe: "=BESSELJ(0,1)"
+        expected: impl
+      - name: "J_0(1)"
+        probe: "=BESSELJ(1,0)"
+        expected: impl
+      - name: "negative order rejected -> #NUM!"
+        probe: "=BESSELJ(1,-1)"
+        expected: impl
+      - name: "large-x oscillatory regime J_0(10)"
+        probe: "=BESSELJ(10,0)"
+        expected: impl
+
+  - function: "BESSELK"
+    aspect: "modified Bessel function of the second kind K_n(x)"
+    behaviors:
+      - name: "K_0(1)"
+        probe: "=BESSELK(1,0)"
+        expected: impl
+      - name: "K_1(2)"
+        probe: "=BESSELK(2,1)"
+        expected: impl
+      - name: "K_n(0) singular -> #NUM!"
+        probe: "=BESSELK(0,0)"
+        expected: impl
+      - name: "negative x rejected -> #NUM!"
+        probe: "=BESSELK(-1,0)"
+        expected: impl
+      - name: "large-x decay K_0(20)"
+        probe: "=BESSELK(20,0)"
+        expected: impl
+
+  - function: "BESSELY"
+    aspect: "Bessel function of the second kind Y_n(x)"
+    behaviors:
+      - name: "Y_0(1)"
+        probe: "=BESSELY(1,0)"
+        expected: impl
+      - name: "Y_1(1)"
+        probe: "=BESSELY(1,1)"
+        expected: impl
+      - name: "Y_n(0) singular -> #NUM!"
+        probe: "=BESSELY(0,0)"
+        expected: impl
+      - name: "negative x rejected -> #NUM!"
+        probe: "=BESSELY(-1,0)"
+        expected: impl
+      - name: "Y_5 at moderate x -> heavy magnitude"
+        probe: "=BESSELY(2,5)"
+        expected: impl
+
+  - function: "ERF"
+    aspect: "error function (1- or 2-argument form)"
+    behaviors:
+      - name: "erf(0) = 0"
+        probe: "=ERF(0)"
+        expected: impl
+      - name: "erf(-x) = -erf(x) (odd)"
+        probe: "=ERF(-1)"
+        expected: impl
+      - name: "two-argument interval erf(b) - erf(a)"
+        probe: "=ERF(1,2)"
+        expected: impl
+      - name: "large-x asymptote erf(6) ~ 1"
+        probe: "=ERF(6)"
+        expected: impl
+      - name: "error in argument propagates"
+        probe: "=ERF(#N/A)"
+        expected: impl
+
+  - function: "ERF.PRECISE"
+    aspect: "strict 1-arg error function"
+    behaviors:
+      - name: "ERF.PRECISE(0) = 0"
+        probe: "=ERF.PRECISE(0)"
+        expected: impl
+      - name: "ERF.PRECISE(1)"
+        probe: "=ERF.PRECISE(1)"
+        expected: impl
+      - name: "odd function: ERF.PRECISE(-1) = -ERF.PRECISE(1)"
+        probe: "=ERF.PRECISE(-1)"
+        expected: impl
+      - name: "large-x asymptote ~ 1"
+        probe: "=ERF.PRECISE(6)"
+        expected: impl
+      - name: "two-argument form rejected (Excel returns blank, Formulon #VALUE!)"
+        probe: "=ERF.PRECISE(1,2)"
+        expected: diverged
+
+  - function: "ERFC"
+    aspect: "complementary error function 1 - erf(x)"
+    behaviors:
+      - name: "erfc(0) = 1"
+        probe: "=ERFC(0)"
+        expected: impl
+      - name: "erfc(1) ~ 0.157299"
+        probe: "=ERFC(1)"
+        expected: impl
+      - name: "large-x tail erfc(6) ~ 1e-17"
+        probe: "=ERFC(6)"
+        expected: impl
+      - name: "negative arg erfc(-1) = 2 - erfc(1)"
+        probe: "=ERFC(-1)"
+        expected: impl
+      - name: "negative arg erfc(-2) ~ 1.99532"
+        probe: "=ERFC(-2)"
+        expected: impl
+
+  - function: "ERFC.PRECISE"
+    aspect: "strict 1-arg complementary error function"
+    behaviors:
+      - name: "ERFC.PRECISE(1)"
+        probe: "=ERFC.PRECISE(1)"
+        expected: impl
+      - name: "ERFC.PRECISE(0) = 1"
+        probe: "=ERFC.PRECISE(0)"
+        expected: impl
+      - name: "negative arg ERFC.PRECISE(-1) = 2 - ERFC.PRECISE(1)"
+        probe: "=ERFC.PRECISE(-1)"
+        expected: impl
+      - name: "large-x tail ~ 0"
+        probe: "=ERFC.PRECISE(6)"
+        expected: impl
+      - name: "two-argument form rejected (Excel returns blank, Formulon #VALUE!)"
+        probe: "=ERFC.PRECISE(1,2)"
+        expected: diverged

@@ -218,3 +218,48 @@ cases:
     description: "Blank x -> 0; K_n(0) -> #NUM!"
     setup: { A1: null }
     formula: "=BESSELK(A1,0)"
+
+  # ========================================================================
+  # Closure expansion (appended 2026-04-29) — bring BESSELY / ERFC /
+  # ERF.PRECISE / ERFC.PRECISE up to 5 perspectives each.
+  # ========================================================================
+
+  # -- BESSELY -------------------------------------------------------------
+  - id: bessely_one_one
+    description: "Y_1(1)"
+    formula: "=BESSELY(1,1)"
+
+  # -- ERFC ----------------------------------------------------------------
+  - id: erfc_negative_two
+    description: "erfc(-2) = 2 - erf(-2)*-1 = 1 + erf(2) ~= 1.99532"
+    formula: "=ERFC(-2)"
+
+  # -- ERF.PRECISE ---------------------------------------------------------
+  - id: erf_precise_zero
+    description: "ERF.PRECISE(0) = 0"
+    formula: "=ERF.PRECISE(0)"
+
+  - id: erf_precise_negative
+    description: "ERF.PRECISE(-1) = -ERF.PRECISE(1) (odd function)"
+    formula: "=ERF.PRECISE(-1)"
+
+  - id: erf_precise_large_positive
+    description: "ERF.PRECISE(6) ~= 1 (saturates)"
+    formula: "=ERF.PRECISE(6)"
+
+  # -- ERFC.PRECISE --------------------------------------------------------
+  - id: erfc_precise_zero
+    description: "ERFC.PRECISE(0) = 1"
+    formula: "=ERFC.PRECISE(0)"
+
+  - id: erfc_precise_negative
+    description: "ERFC.PRECISE(-1) = 2 - ERFC.PRECISE(1) ~= 1.842700793"
+    formula: "=ERFC.PRECISE(-1)"
+
+  - id: erfc_precise_large_positive
+    description: "ERFC.PRECISE(6) ~ 0 (saturates)"
+    formula: "=ERFC.PRECISE(6)"
+
+  - id: erfc_precise_two_arg_rejected
+    description: "ERFC.PRECISE is strict 1-arg; 2nd arg surfaces #VALUE!"
+    formula: "=ERFC.PRECISE(1,2)"

@@ -321,3 +321,82 @@ cases:
   - id: steyx_array_literal_pair
     description: "Inline array literals on the reference dataset -> sqrt(0.8)"
     formula: "=STEYX({2;4;5;4;5}, {1;2;3;4;5})"
+
+  # ========================================================================
+  # Closure expansion (appended 2026-04-29) — bring COVARIANCE.P / COVARIANCE.S
+  # / INTERCEPT / RSQ / FORECAST / FORECAST.LINEAR up to 5 perspectives each.
+  # Reference dataset on this suite: y = {2,4,5,4,5}, x = {1,2,3,4,5} with
+  #   sum_xx=10, sum_yy=6, sum_xy=6, mean_x=3, mean_y=4,
+  #   slope = 0.6, intercept = 2.2, r^2 = 0.6, COVARIANCE.P = 1.2, .S = 1.5.
+  # ========================================================================
+
+  # -- COVARIANCE.P additional perspectives --------------------------------
+  - id: covar_p_perfect_linear
+    description: "y = 2x with mean_x=2, mean_y=4 -> Cov_P = sum((x-2)(y-4))/3 = 4/3 ~= 1.3333"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 2, B2: 4, B3: 6 }
+    formula: "=COVARIANCE.P(B1:B3, A1:A3)"
+
+  - id: covar_p_with_negatives
+    description: "Mixed-sign data; (x,y)=(-2,6),(0,4),(2,2), mean_x=0, mean_y=4 -> -8/3"
+    setup: { A1: -2, A2: 0, A3: 2, B1: 6, B2: 4, B3: 2 }
+    formula: "=COVARIANCE.P(B1:B3, A1:A3)"
+
+  # -- COVARIANCE.S additional perspectives --------------------------------
+  - id: covar_s_perfect_linear
+    description: "y = 2x, n=3 -> Cov_S = sum((x-2)(y-4))/(n-1) = 4/2 = 2"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 2, B2: 4, B3: 6 }
+    formula: "=COVARIANCE.S(B1:B3, A1:A3)"
+
+  - id: covar_s_with_negatives
+    description: "Mixed-sign data -> sample covariance is negative"
+    setup: { A1: -2, A2: 0, A3: 2, B1: 6, B2: 4, B3: 2 }
+    formula: "=COVARIANCE.S(B1:B3, A1:A3)"
+
+  # -- INTERCEPT additional perspectives -----------------------------------
+  - id: intercept_perfect_linear
+    description: "y = 2x exactly -> intercept = 0"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, B1: 2, B2: 4, B3: 6, B4: 8 }
+    formula: "=INTERCEPT(B1:B4, A1:A4)"
+
+  - id: intercept_shape_mismatch_is_na
+    description: "Mismatched array sizes -> #N/A"
+    setup: { A1: 1, A2: 2, B1: 1, B2: 2, B3: 3 }
+    formula: "=INTERCEPT(B1:B3, A1:A2)"
+
+  # -- RSQ additional perspectives -----------------------------------------
+  - id: rsq_with_negatives
+    description: "Strictly anti-correlated data -> RSQ = 1 (squared)"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 6, B2: 4, B3: 2 }
+    formula: "=RSQ(B1:B3, A1:A3)"
+
+  - id: rsq_shape_mismatch_is_na
+    description: "Mismatched array sizes -> #N/A"
+    setup: { A1: 1, A2: 2, B1: 1, B2: 2, B3: 3 }
+    formula: "=RSQ(B1:B3, A1:A2)"
+
+  # -- FORECAST (legacy) additional perspectives ---------------------------
+  - id: forecast_at_x_zero_legacy
+    description: "Legacy FORECAST at x=0 = intercept = 2.2"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 2, B2: 4, B3: 5, B4: 4, B5: 5 }
+    formula: "=FORECAST(0, B1:B5, A1:A5)"
+
+  - id: forecast_extrapolation_legacy
+    description: "Legacy FORECAST extrapolation; x=10 -> 8.2"
+    setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 2, B2: 4, B3: 5, B4: 4, B5: 5 }
+    formula: "=FORECAST(10, B1:B5, A1:A5)"
+
+  - id: forecast_negative_slope_legacy
+    description: "Decreasing y vs increasing x; x=4 lies on slope=-2 line -> 0"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 6, B2: 4, B3: 2 }
+    formula: "=FORECAST(4, B1:B3, A1:A3)"
+
+  - id: forecast_shape_mismatch_is_na_legacy
+    description: "Legacy FORECAST mismatched array sizes -> #N/A"
+    setup: { A1: 1, A2: 2, B1: 1, B2: 2, B3: 3 }
+    formula: "=FORECAST(2, B1:B3, A1:A2)"
+
+  # -- FORECAST.LINEAR additional perspective ------------------------------
+  - id: forecast_linear_negative_slope
+    description: "Decreasing y vs increasing x; x=4 lies on slope=-2 line -> 0"
+    setup: { A1: 1, A2: 2, A3: 3, B1: 6, B2: 4, B3: 2 }
+    formula: "=FORECAST.LINEAR(4, B1:B3, A1:A3)"

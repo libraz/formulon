@@ -377,3 +377,30 @@ families:
     category_file: tests/oracle/cases/shape.yaml
     min_perspectives_per_member: 5
     cluster_reason: "Reference-shape introspection (ROW/ROWS/COLUMN/COLUMNS), local-binding (LET), and shape-aware aggregates (SUM/SUMPRODUCT) share dynamic-array fixtures and spill semantics."
+
+  # -- Bivariate regression family -----------------------------------------
+  # CORREL / COVARIANCE.P / COVARIANCE.S / FORECAST / FORECAST.LINEAR /
+  # INTERCEPT / RSQ / SLOPE all consume the same `(known_y, known_x)` argument
+  # shape (FORECAST adds a leading scalar `x`). They share the reference
+  # dataset y={2,4,5,4,5} / x={1,2,3,4,5}, the length-mismatch -> #N/A
+  # surface, and the constant-x -> #DIV/0! degenerate. Closure perspectives
+  # parallel across the cluster.
+  - name: regression_pairwise
+    members: [CORREL, "COVARIANCE.P", "COVARIANCE.S", FORECAST, "FORECAST.LINEAR", INTERCEPT, RSQ, SLOPE]
+    category_file: tests/oracle/cases/regression.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Bivariate regression family (correlation / covariance / forecast / intercept / slope / R^2); share known_x / known_y fixtures and length-mismatch perspectives."
+
+  # -- Bessel and error-function family ------------------------------------
+  # The four Bessel functions (J / Y / I / K) and the four error-function
+  # variants (ERF / ERF.PRECISE / ERFC / ERFC.PRECISE) all live in
+  # `src/eval/builtins/engineering.cpp`'s special-function block. They share
+  # infinite-series convergence edges (small-x power series vs large-x
+  # asymptotic), the negative-x rejection for second-kind Bessel members,
+  # and the 1-bit numerical drift on transcendentals that motivates the
+  # widened tolerance entries in tests/divergence.yaml.
+  - name: engineering_special
+    members: [BESSELI, BESSELJ, BESSELK, BESSELY, ERF, "ERF.PRECISE", ERFC, "ERFC.PRECISE"]
+    category_file: tests/oracle/cases/engineering_special.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Bessel-function and error-function family; share infinite-series convergence edges and 1-bit numerical drift on transcendentals."

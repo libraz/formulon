@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T09:25:32Z"
+    "generated_at": "2026-04-29T02:50:14Z"
   },
   "tolerance": {
     "abs": 1e-08,
@@ -439,6 +439,84 @@
         "kind": "error",
         "code": "#NUM!"
       }
+    },
+    {
+      "id": "bessely_one_one",
+      "formula": "=BESSELY(1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.7812128209531197
+      }
+    },
+    {
+      "id": "erfc_negative_two",
+      "formula": "=ERFC(-2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.9953222650189528
+      }
+    },
+    {
+      "id": "erf_precise_zero",
+      "formula": "=ERF.PRECISE(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "erf_precise_negative",
+      "formula": "=ERF.PRECISE(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.8427007929497149
+      }
+    },
+    {
+      "id": "erf_precise_large_positive",
+      "formula": "=ERF.PRECISE(6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "erfc_precise_zero",
+      "formula": "=ERFC.PRECISE(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "erfc_precise_negative",
+      "formula": "=ERFC.PRECISE(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.8427007929497148
+      }
+    },
+    {
+      "id": "erfc_precise_large_positive",
+      "formula": "=ERFC.PRECISE(6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.1519736712498925e-17
+      }
+    },
+    {
+      "id": "erfc_precise_two_arg_rejected",
+      "formula": "=ERFC.PRECISE(1,2)",
+      "setup": {},
+      "skipped": "Mac Excel rejects =ERFC.PRECISE(1,2) at the formula level; xlwings reads the rejection back as blank. Formulon correctly surfaces #VALUE! from arity enforcement, mirroring erf_precise_two_arg_rejected."
     }
   ]
 }

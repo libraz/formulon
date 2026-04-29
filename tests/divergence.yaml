@@ -360,6 +360,13 @@ entries:
     first_noted: 2026-04-26
     last_verified_excel_version: "16.108.1"
 
+  - id: erfc_precise_two_arg_rejected
+    mode: skip-oracle
+    reason: "Mac Excel rejects =ERFC.PRECISE(1,2) at the formula level; xlwings reads the rejection back as blank. Formulon correctly surfaces #VALUE! from arity enforcement, mirroring erf_precise_two_arg_rejected."
+    prefer: formulon
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+
   # -- No-infrastructure stubs --------------------------------------------
   # These functions return a deterministic Excel-visible surface in lieu
   # of a Formulon subsystem that is not yet built out. The stubs live in
