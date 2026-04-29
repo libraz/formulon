@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T04:04:41Z"
+    "generated_at": "2026-04-29T03:05:58Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -1076,6 +1076,204 @@
       "expect": {
         "kind": "number",
         "value": 200.0
+      }
+    },
+    {
+      "id": "hlookup_approx_sorted",
+      "formula": "=HLOOKUP(25,A1:C2,2,TRUE)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "low"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "mid"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "high"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "mid"
+      }
+    },
+    {
+      "id": "hlookup_first_match_wins",
+      "formula": "=HLOOKUP(\"y\",A1:C2,2,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "y"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "y"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "hlookup_not_found_exact",
+      "formula": "=HLOOKUP(\"z\",A1:C2,2,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "b"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "c"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "hlookup_row_out_of_range",
+      "formula": "=HLOOKUP(\"a\",A1:B2,5,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "xmatch_search_reverse_returns_last",
+      "formula": "=XMATCH(\"x\",A1:A3,0,-1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "xmatch_binary_search_ascending",
+      "formula": "=XMATCH(30,A1:A4,0,2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "xmatch_not_found_returns_na",
+      "formula": "=XMATCH(99,A1:A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
       }
     }
   ]

@@ -479,3 +479,231 @@ cases:
       A7: true
       A8: false
     formula: "=COUNTIF(A1:A10,_xlfn.CONCAT(\"<>\",\"TRUE\"))"
+
+  # =========================================================================
+  # Coverage extension: parallel perspective set across the conditional
+  # aggregator family (AVERAGEIF / SUMIF / MAXIFS / MINIFS / SUMIFS).
+  # Probe-set: equal criterion, > comparison, wildcard, no-match aggregate
+  # identity, multi-criteria. Companion to the existing wildcard / lex
+  # probes above.
+  # =========================================================================
+
+  # -- AVERAGEIF perspective sweep ---------------------------------------
+  - id: averageif_equal_criterion_basic
+    description: "AVERAGEIF with equal-text criterion against text criteria-range"
+    setup:
+      A1: "x"
+      A2: "y"
+      A3: "x"
+      B1: 10
+      B2: 20
+      B3: 30
+    formula: "=AVERAGEIF(A1:A3,\"x\",B1:B3)"
+
+  - id: averageif_gt_numeric_criterion
+    description: "AVERAGEIF with > numeric criterion picks values above threshold"
+    setup:
+      A1: 5
+      A2: 15
+      A3: 25
+    formula: "=AVERAGEIF(A1:A3,\">10\")"
+
+  - id: averageif_no_match_returns_div0
+    description: "AVERAGEIF with no matching cells returns #DIV/0!"
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+    formula: "=AVERAGEIF(A1:A3,\">100\")"
+
+  - id: averageif_wildcard_text_criterion
+    description: "AVERAGEIF with wildcard text criterion over text criteria range"
+    setup:
+      A1: "apple"
+      A2: "banana"
+      A3: "apricot"
+      B1: 10
+      B2: 20
+      B3: 30
+    formula: "=AVERAGEIF(A1:A3,\"ap*\",B1:B3)"
+
+  # -- SUMIF perspective sweep -------------------------------------------
+  - id: sumif_equal_text_criterion
+    description: "SUMIF equal-text criterion sums matching numeric cells"
+    setup:
+      A1: "x"
+      A2: "y"
+      A3: "x"
+      B1: 10
+      B2: 20
+      B3: 30
+    formula: "=SUMIF(A1:A3,\"x\",B1:B3)"
+
+  - id: sumif_gt_numeric_criterion_no_sum_range
+    description: "SUMIF without sum_range sums values directly above threshold"
+    setup:
+      A1: 5
+      A2: 15
+      A3: 25
+    formula: "=SUMIF(A1:A3,\">10\")"
+
+  - id: sumif_no_match_returns_zero
+    description: "SUMIF empty match returns 0"
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+    formula: "=SUMIF(A1:A3,\">100\")"
+
+  - id: sumif_wildcard_text_with_sum_range
+    description: "SUMIF wildcard against text criteria-range with separate sum_range"
+    setup:
+      A1: "apple"
+      A2: "banana"
+      A3: "apricot"
+      B1: 10
+      B2: 20
+      B3: 30
+    formula: "=SUMIF(A1:A3,\"ap*\",B1:B3)"
+
+  # -- MAXIFS perspective sweep ------------------------------------------
+  - id: maxifs_single_criterion_match
+    description: "MAXIFS over single criterion returns max of matching rows"
+    setup:
+      A1: 5
+      A2: 15
+      A3: 25
+      B1: "x"
+      B2: "y"
+      B3: "x"
+    formula: "=MAXIFS(A1:A3,B1:B3,\"x\")"
+
+  - id: maxifs_multi_criteria_and
+    description: "MAXIFS combines multiple criteria via AND"
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: 40
+      B1: "east"
+      B2: "east"
+      B3: "west"
+      B4: "east"
+      C1: "small"
+      C2: "large"
+      C3: "large"
+      C4: "small"
+    formula: "=MAXIFS(A1:A4,B1:B4,\"east\",C1:C4,\"small\")"
+
+  - id: maxifs_no_match_returns_zero
+    description: "MAXIFS with no match returns 0"
+    setup:
+      A1: 5
+      A2: 15
+      A3: 25
+      B1: "x"
+      B2: "y"
+      B3: "x"
+    formula: "=MAXIFS(A1:A3,B1:B3,\"z\")"
+
+  - id: maxifs_negative_values
+    description: "MAXIFS over negative values picks the largest (least negative)"
+    setup:
+      A1: -50
+      A2: -10
+      A3: -30
+      B1: "x"
+      B2: "x"
+      B3: "x"
+    formula: "=MAXIFS(A1:A3,B1:B3,\"x\")"
+
+  # -- MINIFS perspective sweep ------------------------------------------
+  - id: minifs_single_criterion_match
+    description: "MINIFS over single criterion returns min of matching rows"
+    setup:
+      A1: 5
+      A2: 15
+      A3: 25
+      B1: "x"
+      B2: "y"
+      B3: "x"
+    formula: "=MINIFS(A1:A3,B1:B3,\"x\")"
+
+  - id: minifs_multi_criteria_and
+    description: "MINIFS combines multiple criteria via AND"
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: 40
+      B1: "east"
+      B2: "east"
+      B3: "west"
+      B4: "east"
+      C1: "small"
+      C2: "large"
+      C3: "large"
+      C4: "small"
+    formula: "=MINIFS(A1:A4,B1:B4,\"east\",C1:C4,\"small\")"
+
+  - id: minifs_no_match_returns_zero
+    description: "MINIFS with no match returns 0"
+    setup:
+      A1: 5
+      A2: 15
+      A3: 25
+      B1: "x"
+      B2: "y"
+      B3: "x"
+    formula: "=MINIFS(A1:A3,B1:B3,\"z\")"
+
+  - id: minifs_negative_values
+    description: "MINIFS over negative values picks the smallest (most negative)"
+    setup:
+      A1: -50
+      A2: -10
+      A3: -30
+      B1: "x"
+      B2: "x"
+      B3: "x"
+    formula: "=MINIFS(A1:A3,B1:B3,\"x\")"
+
+  # -- SUMIFS perspective sweep ------------------------------------------
+  - id: sumifs_single_criterion
+    description: "SUMIFS with single equal criterion"
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      B1: "x"
+      B2: "y"
+      B3: "x"
+    formula: "=SUMIFS(A1:A3,B1:B3,\"x\")"
+
+  - id: sumifs_multi_criteria_and
+    description: "SUMIFS multi-criteria AND"
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: 40
+      B1: "east"
+      B2: "east"
+      B3: "west"
+      B4: "east"
+      C1: "small"
+      C2: "large"
+      C3: "large"
+      C4: "small"
+    formula: "=SUMIFS(A1:A4,B1:B4,\"east\",C1:C4,\"small\")"
+
+  - id: sumifs_no_match_returns_zero
+    description: "SUMIFS empty match returns 0"
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      B1: "x"
+      B2: "y"
+      B3: "x"
+    formula: "=SUMIFS(A1:A3,B1:B3,\"z\")"

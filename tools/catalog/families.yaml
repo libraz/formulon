@@ -391,6 +391,46 @@ families:
     min_perspectives_per_member: 5
     cluster_reason: "Bivariate regression family (correlation / covariance / forecast / intercept / slope / R^2); share known_x / known_y fixtures and length-mismatch perspectives."
 
+  # -- Lookup family --------------------------------------------------------
+  # Linear / index-based / dynamic-array lookup family. CHOOSE / INDEX /
+  # MATCH (linear), VLOOKUP / HLOOKUP (sorted-or-exact tabular), XLOOKUP /
+  # XMATCH (dynamic-array, search_mode + match_mode dimensions). They share
+  # lookup-array fixtures, the not-found -> #N/A surface, wildcard
+  # (?, *, ~?, ~*) interpretation under exact-match mode, and the
+  # row/column-out-of-bounds -> #REF! propagation.
+  - name: lookup
+    members: [CHOOSE, HLOOKUP, INDEX, MATCH, VLOOKUP, XLOOKUP, XMATCH]
+    category_file: tests/oracle/cases/lookup.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Lookup family (linear / index-based / dynamic-array); share lookup-array fixtures and not-found semantics."
+
+  # -- Coupon-bond schedule family -----------------------------------------
+  # COUPDAYBS / COUPDAYS / COUPDAYSNC / COUPNCD / COUPNUM / COUPPCD compute
+  # the coupon schedule for fixed-coupon bonds. They share the DCC basis
+  # matrix (0..4) parameter, the frequency in {1, 2, 4} validity edge, and
+  # the settlement-vs-maturity ordering -> #NUM! convention. DATE is
+  # intentionally NOT a member: it is a date-constructor used inside the
+  # coupon test fixtures and is closed in the datetime family.
+  - name: financial_coupon
+    members: [COUPDAYBS, COUPDAYS, COUPDAYSNC, COUPNCD, COUPNUM, COUPPCD]
+    category_file: tests/oracle/cases/financial_coupon.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Coupon-bond schedule family; share DCC basis (0..4), settlement-vs-maturity ordering, and frequency 1/2/4 perspectives."
+
+  # -- Conditional-aggregator family ---------------------------------------
+  # AVERAGEIF / COUNTIF / MAXIFS / MINIFS / SUMIF / SUMIFS share the
+  # criterion-string parser (=, <>, comparison, wildcard, error / blank /
+  # bool needles), the criteria-range vs sum-range length-mismatch ->
+  # #VALUE! surface, and the empty-match aggregate identity (0 for SUM*,
+  # 0 for MAXIFS / MINIFS, #DIV/0! for AVERAGEIF). Edge perspectives in
+  # countif_edges.yaml exercise these shared seams with a single fixture
+  # set so closure perspectives parallel across the cluster.
+  - name: countif_edges
+    members: [AVERAGEIF, COUNTIF, MAXIFS, MINIFS, SUMIF, SUMIFS]
+    category_file: tests/oracle/cases/countif_edges.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Conditional-aggregator family; share criterion-string fixtures (=, <>, wildcard, comparison) and length-mismatch perspectives."
+
   # -- Bessel and error-function family ------------------------------------
   # The four Bessel functions (J / Y / I / K) and the four error-function
   # variants (ERF / ERF.PRECISE / ERFC / ERFC.PRECISE) all live in

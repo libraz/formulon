@@ -9385,3 +9385,388 @@ groups:
       - name: "two-argument form rejected (Excel returns blank, Formulon #VALUE!)"
         probe: "=ERFC.PRECISE(1,2)"
         expected: diverged
+
+  # -------------------------------------------------------------------------
+  # Lookup family: CHOOSE / INDEX / MATCH / VLOOKUP / HLOOKUP / XLOOKUP /
+  # XMATCH. Members live in tests/oracle/cases/lookup.yaml; probes hit the
+  # YAML `formula:` field of cases that exercise the named perspective.
+  # Perspectives parallel across the cluster: exact-match, approximate or
+  # search-mode variant, not-found behavior, wildcard interpretation, and
+  # error / out-of-bounds propagation.
+  # -------------------------------------------------------------------------
+
+  - function: "MATCH"
+    aspect: "linear lookup with match_type {-1, 0, 1}"
+    behaviors:
+      - name: "exact match (match_type=0) hits a value"
+        probe: "=MATCH(20,A1:A3,0)"
+        expected: impl
+      - name: "exact match miss returns #N/A"
+        probe: "=MATCH(25,A1:A3,0)"
+        expected: impl
+      - name: "approximate match ascending (match_type=1)"
+        probe: "=MATCH(25,A1:A3,1)"
+        expected: impl
+      - name: "approximate match descending (match_type=-1)"
+        probe: "=MATCH(15,A1:A3,-1)"
+        expected: impl
+      - name: "wildcard ? in lookup_value"
+        probe: "=MATCH(\"ca?\",A1:A3,0)"
+        expected: impl
+
+  - function: "INDEX"
+    aspect: "row/column index extraction from a reference"
+    behaviors:
+      - name: "1D vector index"
+        probe: "=INDEX(A1:A3,2)"
+        expected: impl
+      - name: "2D row, column index"
+        probe: "=INDEX(A1:B2,2,1)"
+        expected: impl
+      - name: "row=0 returns the entire column"
+        probe: "=INDEX(A1:A3,0)"
+        expected: impl
+      - name: "col=0 on 2D returns the entire row"
+        probe: "=INDEX(A1:B2,1,0)"
+        expected: impl
+      - name: "row out of range -> #REF!"
+        probe: "=INDEX(A1:A3,5)"
+        expected: impl
+
+  - function: "CHOOSE"
+    aspect: "1-based selection from a value list"
+    behaviors:
+      - name: "selects the second value"
+        probe: "=CHOOSE(2,\"a\",\"b\",\"c\")"
+        expected: impl
+      - name: "index out of range -> #VALUE!"
+        probe: "=CHOOSE(5,\"a\",\"b\",\"c\")"
+        expected: impl
+      - name: "index zero -> #VALUE!"
+        probe: "=CHOOSE(0,\"a\",\"b\",\"c\")"
+        expected: impl
+      - name: "negative index -> #VALUE!"
+        probe: "=CHOOSE(-1,\"a\",\"b\",\"c\")"
+        expected: impl
+      - name: "error in index propagates"
+        probe: "=CHOOSE(#REF!,\"a\",\"b\",\"c\")"
+        expected: impl
+
+  - function: "VLOOKUP"
+    aspect: "vertical tabular lookup with range_lookup TRUE/FALSE"
+    behaviors:
+      - name: "exact match (range_lookup=FALSE) hits"
+        probe: "=VLOOKUP(\"banana\",A1:B3,2,FALSE)"
+        expected: impl
+      - name: "exact match miss -> #N/A"
+        probe: "=VLOOKUP(\"cherry\",A1:B2,2,FALSE)"
+        expected: impl
+      - name: "approximate match (range_lookup=TRUE) on sorted range"
+        probe: "=VLOOKUP(25,A1:B3,2,TRUE)"
+        expected: impl
+      - name: "wildcard pattern with exact match"
+        probe: "=VLOOKUP(\"b*\",A1:B3,2,FALSE)"
+        expected: impl
+      - name: "col_index_num out of range -> #REF!"
+        probe: "=VLOOKUP(\"apple\",A1:B2,3,FALSE)"
+        expected: impl
+
+  - function: "HLOOKUP"
+    aspect: "horizontal tabular lookup with range_lookup TRUE/FALSE"
+    behaviors:
+      - name: "exact match (range_lookup=FALSE) hits"
+        probe: "=HLOOKUP(\"b\",A1:C2,2,FALSE)"
+        expected: impl
+      - name: "approximate match (range_lookup=TRUE) on sorted row"
+        probe: "=HLOOKUP(25,A1:C2,2,TRUE)"
+        expected: impl
+      - name: "duplicate-key columns: first match wins"
+        probe: "=HLOOKUP(\"y\",A1:C2,2,FALSE)"
+        expected: impl
+      - name: "exact match miss -> #N/A"
+        probe: "=HLOOKUP(\"z\",A1:C2,2,FALSE)"
+        expected: impl
+      - name: "row_index_num out of range -> #REF!"
+        probe: "=HLOOKUP(\"a\",A1:B2,5,FALSE)"
+        expected: impl
+
+  - function: "XLOOKUP"
+    aspect: "dynamic-array lookup with match_mode and search_mode"
+    behaviors:
+      - name: "default exact match hits"
+        probe: "=XLOOKUP(20,A1:A2,B1:B2)"
+        expected: impl
+      - name: "if_not_found default returned on miss"
+        probe: "=XLOOKUP(30,A1:A2,B1:B2,\"missing\")"
+        expected: impl
+      - name: "match_mode=-1 next-smaller"
+        probe: "=XLOOKUP(25,A1:A3,B1:B3,,-1)"
+        expected: impl
+      - name: "match_mode=2 wildcard"
+        probe: "=XLOOKUP(\"b*\",A1:A3,B1:B3,,2)"
+        expected: impl
+      - name: "search_mode=-1 reverse search returns last match"
+        probe: "=XLOOKUP(\"x\",A1:A3,B1:B3,,0,-1)"
+        expected: impl
+
+  - function: "XMATCH"
+    aspect: "dynamic-array index lookup with match_mode and search_mode"
+    behaviors:
+      - name: "exact match (match_mode=0) hits"
+        probe: "=XMATCH(20,A1:A3,0)"
+        expected: impl
+      - name: "wildcard match_mode=2"
+        probe: "=XMATCH(\"ca?\",A1:A3,2)"
+        expected: impl
+      - name: "search_mode=-1 reverse returns last match"
+        probe: "=XMATCH(\"x\",A1:A3,0,-1)"
+        expected: impl
+      - name: "search_mode=2 binary search ascending"
+        probe: "=XMATCH(30,A1:A4,0,2)"
+        expected: impl
+      - name: "exact match miss -> #N/A"
+        probe: "=XMATCH(99,A1:A3,0)"
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # Coupon-bond schedule family: COUPPCD / COUPNCD / COUPNUM / COUPDAYBS /
+  # COUPDAYS / COUPDAYSNC. Members live in tests/oracle/cases/financial_coupon.yaml.
+  # Perspectives parallel across the cluster: semi-annual / annual / quarterly
+  # frequency and a basis sweep across {0, 2, 3, 4} (basis 1 is the canonical
+  # entry). Settlement >= maturity -> #NUM!.
+  # -------------------------------------------------------------------------
+
+  - function: "COUPPCD"
+    aspect: "previous-coupon date schedule"
+    behaviors:
+      - name: "canonical semi-annual basis 1"
+        probe: "=COUPPCD(DATE(2011,1,25), DATE(2011,11,15), 2, 1)"
+        expected: impl
+      - name: "settlement at coupon boundary"
+        probe: "=COUPPCD(DATE(2011,5,15), DATE(2011,11,15), 2, 1)"
+        expected: impl
+      - name: "end-of-month maturity (Aug-31, quarterly)"
+        probe: "=COUPPCD(DATE(2020,6,1), DATE(2020,8,31), 4, 1)"
+        expected: impl
+      - name: "settlement >= maturity -> #NUM!"
+        probe: "=COUPPCD(DATE(2011,11,15), DATE(2011,1,25), 2, 1)"
+        expected: impl
+      - name: "bad basis (5) -> #NUM!"
+        probe: "=COUPPCD(DATE(2011,1,25), DATE(2011,11,15), 2, 5)"
+        expected: impl
+
+  - function: "COUPNCD"
+    aspect: "next-coupon date schedule"
+    behaviors:
+      - name: "canonical semi-annual basis 1"
+        probe: "=COUPNCD(DATE(2011,1,25), DATE(2011,11,15), 2, 1)"
+        expected: impl
+      - name: "basis 0 (US 30/360)"
+        probe: "=COUPNCD(DATE(2011,1,25), DATE(2011,11,15), 2, 0)"
+        expected: impl
+      - name: "basis 2 (actual/360)"
+        probe: "=COUPNCD(DATE(2011,1,25), DATE(2011,11,15), 2, 2)"
+        expected: impl
+      - name: "basis 4 (EU 30/360)"
+        probe: "=COUPNCD(DATE(2011,1,25), DATE(2011,11,15), 2, 4)"
+        expected: impl
+      - name: "settlement == maturity -> #NUM!"
+        probe: "=COUPNCD(DATE(2011,11,15), DATE(2011,11,15), 2, 1)"
+        expected: impl
+
+  - function: "COUPNUM"
+    aspect: "remaining coupons until maturity"
+    behaviors:
+      - name: "canonical semi-annual basis 1"
+        probe: "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 2, 1)"
+        expected: impl
+      - name: "annual frequency 1"
+        probe: "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 1, 1)"
+        expected: impl
+      - name: "quarterly frequency 4"
+        probe: "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 4, 1)"
+        expected: impl
+      - name: "frequency truncation (2.7 -> 2)"
+        probe: "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 2.7, 1)"
+        expected: impl
+      - name: "zero frequency -> #NUM!"
+        probe: "=COUPNUM(DATE(2011,1,25), DATE(2011,11,15), 0, 1)"
+        expected: impl
+
+  - function: "COUPDAYBS"
+    aspect: "days from coupon period start to settlement"
+    behaviors:
+      - name: "canonical semi-annual basis 1"
+        probe: "=COUPDAYBS(DATE(2011,1,25), DATE(2011,11,15), 2, 1)"
+        expected: impl
+      - name: "basis 0 (US 30/360)"
+        probe: "=COUPDAYBS(DATE(2011,1,25), DATE(2011,11,15), 2, 0)"
+        expected: impl
+      - name: "basis 2 (actual/360)"
+        probe: "=COUPDAYBS(DATE(2011,1,25), DATE(2011,11,15), 2, 2)"
+        expected: impl
+      - name: "basis 3 (actual/365)"
+        probe: "=COUPDAYBS(DATE(2011,1,25), DATE(2011,11,15), 2, 3)"
+        expected: impl
+      - name: "basis 4 (EU 30/360)"
+        probe: "=COUPDAYBS(DATE(2011,1,25), DATE(2011,11,15), 2, 4)"
+        expected: impl
+
+  - function: "COUPDAYS"
+    aspect: "length of the coupon period containing settlement"
+    behaviors:
+      - name: "canonical semi-annual basis 1 -> 181"
+        probe: "=COUPDAYS(DATE(2011,1,25), DATE(2011,11,15), 2, 1)"
+        expected: impl
+      - name: "basis 0 (30/360 US) -> 180"
+        probe: "=COUPDAYS(DATE(2011,1,25), DATE(2011,11,15), 2, 0)"
+        expected: impl
+      - name: "basis 2 (actual/360) -> 180"
+        probe: "=COUPDAYS(DATE(2011,1,25), DATE(2011,11,15), 2, 2)"
+        expected: impl
+      - name: "basis 3 (actual/365) -> 182.5"
+        probe: "=COUPDAYS(DATE(2011,1,25), DATE(2011,11,15), 2, 3)"
+        expected: impl
+      - name: "negative basis -> #NUM!"
+        probe: "=COUPDAYS(DATE(2011,1,25), DATE(2011,11,15), 2, -1)"
+        expected: impl
+
+  - function: "COUPDAYSNC"
+    aspect: "days from settlement to next coupon"
+    behaviors:
+      - name: "canonical semi-annual basis 1"
+        probe: "=COUPDAYSNC(DATE(2011,1,25), DATE(2011,11,15), 2, 1)"
+        expected: impl
+      - name: "basis 0 (US 30/360)"
+        probe: "=COUPDAYSNC(DATE(2011,1,25), DATE(2011,11,15), 2, 0)"
+        expected: impl
+      - name: "basis 2 (actual/360)"
+        probe: "=COUPDAYSNC(DATE(2011,1,25), DATE(2011,11,15), 2, 2)"
+        expected: impl
+      - name: "basis 3 (actual/365)"
+        probe: "=COUPDAYSNC(DATE(2011,1,25), DATE(2011,11,15), 2, 3)"
+        expected: impl
+      - name: "basis 4 (EU 30/360)"
+        probe: "=COUPDAYSNC(DATE(2011,1,25), DATE(2011,11,15), 2, 4)"
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # Conditional-aggregator family: AVERAGEIF / SUMIF / COUNTIF / MAXIFS /
+  # MINIFS / SUMIFS. Members live in tests/oracle/cases/countif_edges.yaml.
+  # Perspectives parallel across the cluster: equal criterion, > comparison,
+  # wildcard, no-match aggregate identity, and multi-criteria.
+  # -------------------------------------------------------------------------
+
+  - function: "COUNTIF"
+    aspect: "criterion-string parsing across error/text/bool/wildcard"
+    behaviors:
+      - name: "literal-error needle equals literal-error cells"
+        probe: "=COUNTIF(A1:A4,B1)"
+        expected: impl
+      - name: "lex-< comparison criterion (\"<brown\")"
+        probe: "=COUNTIF(A1:A6,\"<brown\")"
+        expected: impl
+      - name: "wildcard pattern over mixed text/number range"
+        probe: "=COUNTIF(A1:A8,\"12*\")"
+        expected: impl
+      - name: "<>TRUE not-equal-bool criterion"
+        probe: "=COUNTIF(A1:A8,\"<>TRUE\")"
+        expected: impl
+      - name: "empty-criterion (=\"\") over blank/formula-empty range"
+        probe: "=COUNTIF(A1:A4,\"\")"
+        expected: impl
+
+  - function: "AVERAGEIF"
+    aspect: "conditional mean with optional sum_range"
+    behaviors:
+      - name: "equal-text criterion with sum_range"
+        probe: "=AVERAGEIF(A1:A3,\"x\",B1:B3)"
+        expected: impl
+      - name: "> numeric criterion (no sum_range)"
+        probe: "=AVERAGEIF(A1:A3,\">10\")"
+        expected: impl
+      - name: "no-match returns #DIV/0!"
+        probe: "=AVERAGEIF(A1:A3,\">100\")"
+        expected: impl
+      - name: "wildcard text criterion with sum_range"
+        probe: "=AVERAGEIF(A1:A3,\"ap*\",B1:B3)"
+        expected: impl
+      - name: "wildcard against mixed text/number range, sum_range error skipped"
+        probe: "=AVERAGEIF(A1:A8,\"12*\",B1:B8)"
+        expected: impl
+
+  - function: "SUMIF"
+    aspect: "conditional sum with optional sum_range"
+    behaviors:
+      - name: "equal-text criterion with sum_range"
+        probe: "=SUMIF(A1:A3,\"x\",B1:B3)"
+        expected: impl
+      - name: "> numeric criterion (no sum_range)"
+        probe: "=SUMIF(A1:A3,\">10\")"
+        expected: impl
+      - name: "no-match returns 0"
+        probe: "=SUMIF(A1:A3,\">100\")"
+        expected: impl
+      - name: "wildcard text criterion with sum_range"
+        probe: "=SUMIF(A1:A3,\"ap*\",B1:B3)"
+        expected: impl
+      - name: "wildcard against mixed text/number range, sum_range error skipped"
+        probe: "=SUMIF(A1:A8,\"12*\",B1:B8)"
+        expected: impl
+
+  - function: "MAXIFS"
+    aspect: "conditional maximum across one or more criteria"
+    behaviors:
+      - name: "single equal criterion"
+        probe: "=MAXIFS(A1:A3,B1:B3,\"x\")"
+        expected: impl
+      - name: "multi-criteria AND"
+        probe: "=MAXIFS(A1:A4,B1:B4,\"east\",C1:C4,\"small\")"
+        expected: impl
+      - name: "no-match returns 0"
+        probe: "=MAXIFS(A1:A3,B1:B3,\"z\")"
+        expected: impl
+      - name: "negative values"
+        probe: "=MAXIFS(A1:A3,B1:B3,\"x\")"
+        expected: impl
+      - name: "lex-> criterion propagates sum-range error"
+        probe: "=MAXIFS(A1:A3,B1:B3,\">c\")"
+        expected: impl
+
+  - function: "MINIFS"
+    aspect: "conditional minimum across one or more criteria"
+    behaviors:
+      - name: "single equal criterion"
+        probe: "=MINIFS(A1:A3,B1:B3,\"x\")"
+        expected: impl
+      - name: "multi-criteria AND"
+        probe: "=MINIFS(A1:A4,B1:B4,\"east\",C1:C4,\"small\")"
+        expected: impl
+      - name: "no-match returns 0"
+        probe: "=MINIFS(A1:A3,B1:B3,\"z\")"
+        expected: impl
+      - name: "negative values"
+        probe: "=MINIFS(A1:A3,B1:B3,\"x\")"
+        expected: impl
+      - name: "lex-> criterion propagates sum-range error"
+        probe: "=MINIFS(A1:A3,B1:B3,\">c\")"
+        expected: impl
+
+  - function: "SUMIFS"
+    aspect: "conditional sum across one or more criteria"
+    behaviors:
+      - name: "single equal criterion"
+        probe: "=SUMIFS(A1:A3,B1:B3,\"x\")"
+        expected: impl
+      - name: "multi-criteria AND"
+        probe: "=SUMIFS(A1:A4,B1:B4,\"east\",C1:C4,\"small\")"
+        expected: impl
+      - name: "no-match returns 0"
+        probe: "=SUMIFS(A1:A3,B1:B3,\"z\")"
+        expected: impl
+      - name: "lex-> criterion propagates sum-range error"
+        probe: "=SUMIFS(A1:A3,B1:B3,\">c\")"
+        expected: impl
+      - name: "lex-> criterion over full IronCalc-shaped range"
+        probe: "=SUMIFS(A1:A19,B1:B19,\">c\")"
+        expected: impl

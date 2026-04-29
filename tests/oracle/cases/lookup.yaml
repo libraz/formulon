@@ -229,3 +229,49 @@ cases:
   - id: vlookup_jp_text
     setup: { A1: "りんご", B1: 100, A2: "ぶどう", B2: 200 }
     formula: "=VLOOKUP(\"ぶどう\",A1:B2,2,FALSE)"
+
+  # =========================================================================
+  # HLOOKUP coverage extension: range_lookup TRUE / FALSE, multi-match,
+  # not-found, and row_index out-of-bounds.
+  # =========================================================================
+  - id: hlookup_approx_sorted
+    description: "range_lookup=TRUE on ascending row -> largest value <= lookup"
+    setup: { A1: 10, B1: 20, C1: 30,
+             A2: "low", B2: "mid", C2: "high" }
+    formula: "=HLOOKUP(25,A1:C2,2,TRUE)"
+
+  - id: hlookup_first_match_wins
+    description: "Multiple equal-key columns: HLOOKUP returns the first match"
+    setup: { A1: "x", B1: "y", C1: "y",
+             A2: 1,   B2: 2,   C2: 3 }
+    formula: "=HLOOKUP(\"y\",A1:C2,2,FALSE)"
+
+  - id: hlookup_not_found_exact
+    description: "Exact match but value absent -> #N/A"
+    setup: { A1: "a", B1: "b", C1: "c",
+             A2: 10,  B2: 20,  C2: 30 }
+    formula: "=HLOOKUP(\"z\",A1:C2,2,FALSE)"
+
+  - id: hlookup_row_out_of_range
+    description: "row_index_num > height of table_array -> #REF!"
+    setup: { A1: "a", B1: "b",
+             A2: 10,  B2: 20 }
+    formula: "=HLOOKUP(\"a\",A1:B2,5,FALSE)"
+
+  # =========================================================================
+  # XMATCH coverage extension: search_mode reverse, sorted binary, not-found.
+  # =========================================================================
+  - id: xmatch_search_reverse_returns_last
+    description: "search_mode=-1 returns the last (highest-index) match"
+    setup: { A1: "x", A2: "y", A3: "x" }
+    formula: "=XMATCH(\"x\",A1:A3,0,-1)"
+
+  - id: xmatch_binary_search_ascending
+    description: "search_mode=2 binary search on ascending data"
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40 }
+    formula: "=XMATCH(30,A1:A4,0,2)"
+
+  - id: xmatch_not_found_returns_na
+    description: "Exact match (mode=0) without a hit -> #N/A"
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=XMATCH(99,A1:A3,0)"

@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-24T21:08:14Z"
+    "generated_at": "2026-04-29T03:09:26Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -1276,6 +1276,676 @@
       "expect": {
         "kind": "number",
         "value": 6.0
+      }
+    },
+    {
+      "id": "averageif_equal_criterion_basic",
+      "formula": "=AVERAGEIF(A1:A3,\"x\",B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "averageif_gt_numeric_criterion",
+      "formula": "=AVERAGEIF(A1:A3,\">10\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 25.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "averageif_no_match_returns_div0",
+      "formula": "=AVERAGEIF(A1:A3,\">100\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "averageif_wildcard_text_criterion",
+      "formula": "=AVERAGEIF(A1:A3,\"ap*\",B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "apricot"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "sumif_equal_text_criterion",
+      "formula": "=SUMIF(A1:A3,\"x\",B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 40.0
+      }
+    },
+    {
+      "id": "sumif_gt_numeric_criterion_no_sum_range",
+      "formula": "=SUMIF(A1:A3,\">10\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 25.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 40.0
+      }
+    },
+    {
+      "id": "sumif_no_match_returns_zero",
+      "formula": "=SUMIF(A1:A3,\">100\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sumif_wildcard_text_with_sum_range",
+      "formula": "=SUMIF(A1:A3,\"ap*\",B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "apricot"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 40.0
+      }
+    },
+    {
+      "id": "maxifs_single_criterion_match",
+      "formula": "=MAXIFS(A1:A3,B1:B3,\"x\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 25.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 25.0
+      }
+    },
+    {
+      "id": "maxifs_multi_criteria_and",
+      "formula": "=MAXIFS(A1:A4,B1:B4,\"east\",C1:C4,\"small\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "east"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "east"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "west"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "east"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "small"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "large"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "large"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "small"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 40.0
+      }
+    },
+    {
+      "id": "maxifs_no_match_returns_zero",
+      "formula": "=MAXIFS(A1:A3,B1:B3,\"z\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 25.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "maxifs_negative_values",
+      "formula": "=MAXIFS(A1:A3,B1:B3,\"x\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -50.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": -30.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -10.0
+      }
+    },
+    {
+      "id": "minifs_single_criterion_match",
+      "formula": "=MINIFS(A1:A3,B1:B3,\"x\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 25.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "minifs_multi_criteria_and",
+      "formula": "=MINIFS(A1:A4,B1:B4,\"east\",C1:C4,\"small\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "east"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "east"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "west"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "east"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "small"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "large"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "large"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "small"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "minifs_no_match_returns_zero",
+      "formula": "=MINIFS(A1:A3,B1:B3,\"z\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 25.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "minifs_negative_values",
+      "formula": "=MINIFS(A1:A3,B1:B3,\"x\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -50.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": -10.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": -30.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -50.0
+      }
+    },
+    {
+      "id": "sumifs_single_criterion",
+      "formula": "=SUMIFS(A1:A3,B1:B3,\"x\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 40.0
+      }
+    },
+    {
+      "id": "sumifs_multi_criteria_and",
+      "formula": "=SUMIFS(A1:A4,B1:B4,\"east\",C1:C4,\"small\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "east"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "east"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "west"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "east"
+        },
+        "C1": {
+          "kind": "text",
+          "value": "small"
+        },
+        "C2": {
+          "kind": "text",
+          "value": "large"
+        },
+        "C3": {
+          "kind": "text",
+          "value": "large"
+        },
+        "C4": {
+          "kind": "text",
+          "value": "small"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "sumifs_no_match_returns_zero",
+      "formula": "=SUMIFS(A1:A3,B1:B3,\"z\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
       }
     }
   ]
