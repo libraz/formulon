@@ -86,12 +86,14 @@ set(FORMULON_CORE_SOURCES
   src/sheet.cpp
   src/workbook.cpp
   src/io/cell_parser.cpp
+  src/io/defined_names.cpp
   src/io/ooxml_reader.cpp
   src/io/ooxml_writer.cpp
   src/io/ooxml_writer_cell.cpp
   src/io/sheet_reader.cpp
   src/io/sst_reader.cpp
   src/io/styles_reader.cpp
+  src/io/tables_reader.cpp
   src/io/xml_escape.cpp
   src/io/zip_reader.cpp
   src/parser/tokenizer.cpp

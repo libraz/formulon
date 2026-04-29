@@ -29,9 +29,11 @@
 #include <utility>
 #include <vector>
 
+#include "io/defined_names.h"
 #include "io/sheet_reader.h"
 #include "io/sst_reader.h"
 #include "io/styles_reader.h"
+#include "io/tables_reader.h"
 #include "io/zip_reader.h"
 #include "pugixml.hpp"
 #include "sheet.h"
@@ -52,6 +54,7 @@ constexpr std::string_view kRelWorksheet =
 constexpr std::string_view kRelSharedStrings =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
 constexpr std::string_view kRelStyles = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
+constexpr std::string_view kRelTable = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table";
 
 // Content types we expect to see referenced from `[Content_Types].xml`.
 // We only look up the workbook content type to verify the package is
@@ -312,6 +315,74 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
   return rels;
 }
 
+/// Returns the sheet rels file path corresponding to `sheet_path`. For
+/// example, `xl/worksheets/sheet1.xml` becomes
+/// `xl/worksheets/_rels/sheet1.xml.rels`. Sheet parts at the package
+/// root (no directory component) similarly produce `_rels/<file>.rels`.
+std::string SheetRelsPath(std::string_view sheet_path) {
+  const std::size_t slash = sheet_path.find_last_of('/');
+  std::string out;
+  if (slash == std::string_view::npos) {
+    out.append("_rels/").append(sheet_path).append(".rels");
+  } else {
+    out.append(sheet_path.substr(0, slash));
+    out.append("/_rels/");
+    out.append(sheet_path.substr(slash + 1));
+    out.append(".rels");
+  }
+  return out;
+}
+
+/// Loads `sheet_rels_path` and returns the resolved table-part paths it
+/// references. The caller is expected to check `zip.has_entry(...)`
+/// before invoking us; absent rels files are not an error (most sheets
+/// have none) and are handled at the call site.
+///
+/// Each returned path is resolved relative to the sheet's directory so
+/// `Target="../tables/table1.xml"` from `xl/worksheets/_rels/sheet1.xml.rels`
+/// becomes `xl/tables/table1.xml`. Non-table relationships are silently
+/// ignored at this layer; Bundle 2.5+ will widen the categorisation.
+Expected<std::vector<std::string>, Error> LoadSheetTableTargets(const ZipReader& zip, std::string_view sheet_rels_path,
+                                                                std::string_view sheet_dir) {
+  std::vector<std::string> targets;
+  auto rels_bytes_or = zip.read_entry(sheet_rels_path);
+  if (!rels_bytes_or) {
+    return rels_bytes_or.error();
+  }
+  const std::vector<std::uint8_t>& rels_bytes = rels_bytes_or.value();
+
+  pugi::xml_document doc;
+  pugi::xml_parse_result parse =
+      doc.load_buffer(rels_bytes.data(), rels_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
+  if (!parse) {
+    std::string ctx("context=ooxml_reader part=");
+    ctx.append(sheet_rels_path);
+    ctx.append(" desc=");
+    ctx.append(parse.description());
+    return make_error(FormulonErrorCode::kIoXmlParse, "sheet rels: pugixml parse failed", std::move(ctx));
+  }
+  pugi::xml_node root = doc.child("Relationships");
+  if (!root) {
+    std::string ctx("context=ooxml_reader part=");
+    ctx.append(sheet_rels_path);
+    return make_error(FormulonErrorCode::kIoRelationshipBroken, "sheet rels: missing <Relationships>", std::move(ctx));
+  }
+  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+    const std::string_view type = rel.attribute("Type").value();
+    const std::string_view target = rel.attribute("Target").value();
+    if (target.empty()) {
+      continue;
+    }
+    if (type == kRelTable) {
+      targets.push_back(ResolveRelativePath(sheet_dir, target));
+    }
+    // Other rel types (printerSettings, drawings, comments, ...) are
+    // out of scope for Bundle 2.4. A future bundle may widen this
+    // dispatch.
+  }
+  return targets;
+}
+
 }  // namespace
 
 Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
@@ -542,7 +613,14 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   // We retain each sheet's `pending_sst_cells` so the SST resolution
   // pass below can rewrite the placeholder text values without rerunning
   // the sheet walk.
+  //
+  // The same loop also walks each sheet's `_rels/sheetN.xml.rels` (when
+  // present) to discover and load referenced table parts. Tables are
+  // accumulated into `tables_metadata` and stashed on the workbook
+  // after the loop; this is passive metadata for round-trip and does
+  // not influence cell evaluation at this layer.
   std::vector<SheetReadContext> sheet_contexts(sheet_part_paths.size());
+  std::vector<TableMetadata> tables_metadata;
   for (std::size_t i = 0; i < sheet_part_paths.size(); ++i) {
     const std::string& sheet_path = sheet_part_paths[i];
     if (!zip.has_entry(sheet_path)) {
@@ -571,6 +649,37 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     auto rs = read_sheet_data(sheet_doc, i, wb, sheet_contexts[i], result_text_storage);
     if (!rs) {
       return rs.error();
+    }
+
+    // Sheet rels file (`xl/worksheets/_rels/sheetN.xml.rels`) — drives
+    // the table-part lookup. Optional: most sheets have no rels at all.
+    const std::string sheet_rels_path = SheetRelsPath(sheet_path);
+    if (zip.has_entry(sheet_rels_path)) {
+      const std::string sheet_dir = DirOf(sheet_path);
+      auto targets_or = LoadSheetTableTargets(zip, sheet_rels_path, sheet_dir);
+      if (!targets_or) {
+        return targets_or.error();
+      }
+      consumed_parts.insert(sheet_rels_path);
+      for (const std::string& table_path : targets_or.value()) {
+        if (!zip.has_entry(table_path)) {
+          std::string ctx("context=ooxml_reader sheet_index=");
+          ctx.append(std::to_string(i));
+          ctx.append(" table_path=").append(table_path);
+          return make_error(FormulonErrorCode::kIoRelationshipBroken, "table: rel target missing from package",
+                            std::move(ctx));
+        }
+        auto table_bytes_or = zip.read_entry(table_path);
+        if (!table_bytes_or) {
+          return table_bytes_or.error();
+        }
+        auto table_or = read_table(table_bytes_or.value(), i);
+        if (!table_or) {
+          return table_or.error();
+        }
+        tables_metadata.push_back(std::move(table_or.value()));
+        consumed_parts.insert(table_path);
+      }
     }
   }
 
@@ -616,6 +725,21 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
       ++pending_sst_count;
     }
   }
+
+  // 7. Defined names — parsed from the same `wb_doc` we already loaded
+  // above. Pure metadata extraction; the writer slice (Bundle 2.5) will
+  // emit them back. Resolution at evaluation time arrives in Phase 4.
+  // We run this after sheet construction so future name validation can
+  // cross-reference sheet indices without re-shuffling the call order.
+  auto defined_names_or = read_defined_names(wb_doc);
+  if (!defined_names_or) {
+    return defined_names_or.error();
+  }
+  wb.set_defined_names(std::move(defined_names_or.value()));
+
+  // 8. Tables — already accumulated in the per-sheet loop above. Move
+  // the workbook-scope vector onto the workbook for round-trip.
+  wb.set_tables(std::move(tables_metadata));
 
   // Compute unknown_parts: every Override-listed part name we did not
   // touch above. Bundle 2.5 will refine the categorisation; for now this

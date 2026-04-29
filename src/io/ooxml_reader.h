@@ -4,14 +4,15 @@
 // structure (sheet names + order) and per-sheet cell contents — every
 // `<c>` in `xl/worksheets/sheet*.xml` is decoded into the workbook via
 // `Workbook::set_cell_value` / `set_cell_formula`. Shared strings are
-// not yet resolved (cells that carry `t="s"` write a `Text("")`
-// placeholder and surface the SST index via
-// `OoxmlReadResult::pending_sst_count`); styles, defined names, and
-// tables are parsed by follow-up bundles (2.3 - 2.5). Every part not
-// consumed by this slice is recorded in `OoxmlReadResult::unknown_parts`
-// so callers can detect "we have a part but did not load it" cases.
-// Bundle 2.5 will switch the policy from "everything we did not parse"
-// to "everything we did not recognise".
+// resolved against the SST in-pipeline; styles, defined names, and
+// table metadata are parsed for round-trip preservation (defined names
+// land on `Workbook::defined_names()`, tables on `Workbook::tables()`).
+// The writer-side emission for those parts arrives in Bundle 2.5. Every
+// part not consumed by this slice is recorded in
+// `OoxmlReadResult::unknown_parts` so callers can detect "we have a
+// part but did not load it" cases. Bundle 2.5 will switch the policy
+// from "everything we did not parse" to "everything we did not
+// recognise".
 //
 // Design references:
 //   * backup/plans/04-xlsx-io.md §4.2 (package structure)
@@ -87,16 +88,24 @@ struct OoxmlReadResult {
 ///     content-type registry)
 ///   * `_rels/.rels`                 — root relationship lookup
 ///   * `xl/workbook.xml`             — sheet enumeration in document order
+///     plus `<definedNames>` metadata (preserved on the workbook for
+///     round-trip)
 ///   * `xl/_rels/workbook.xml.rels`  — sheet, sharedStrings and styles
 ///     relationship target lookup
 ///   * `xl/worksheets/sheet*.xml`    — cell contents (literals + formulas)
 ///     decoded via `cell_parser` and dispatched through the public
 ///     Workbook API; the recalc engine is registered for every formula
 ///     cell. Cells with `t="s"` are resolved against the loaded SST.
+///   * `xl/worksheets/_rels/sheet*.xml.rels` (when present) — walked
+///     for table relationships; non-table relationships are deferred to
+///     a later bundle.
 ///   * `xl/sharedStrings.xml`        — flat shared-string list; entries
 ///     are owned by `text_storage` and aliased by the resolved cells.
 ///   * `xl/styles.xml`               — parsed for validation only (this
 ///     slice does not yet build a runtime style model).
+///   * `xl/tables/table*.xml`        — table metadata (id, name, ref,
+///     header/totals row, columns); preserved on the workbook for
+///     round-trip but not yet wired into evaluation.
 ///
 /// Returns `FormulonErrorCode::kIoZipCorrupt` for archive-level failures,
 /// `kIoXmlParse` for malformed XML, and `kIoRelationshipBroken` /

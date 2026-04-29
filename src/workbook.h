@@ -2,9 +2,12 @@
 //
 // Top-level workbook model. The current surface owns a vector of `Sheet`
 // instances and exposes a `save()` method that serialises the workbook to
-// a `.xlsx` byte stream via the OOXML writer slice. Defined names, styles,
-// shared strings, tables, pivots and the full cell store will be layered
-// on in follow-up work (see backup/plans/04-xlsx-io.md).
+// a `.xlsx` byte stream via the OOXML writer slice. Defined-name and
+// table metadata are preserved here as passive round-trip state so the
+// reader/writer pipeline can carry them through unchanged; named-range
+// resolution at evaluation time and structured-reference parsing arrive
+// in Phase 4. Styles, shared strings, pivots and the full cell store
+// will be layered on in follow-up work (see backup/plans/04-xlsx-io.md).
 
 #ifndef FORMULON_WORKBOOK_H_
 #define FORMULON_WORKBOOK_H_
@@ -16,6 +19,8 @@
 #include <string_view>
 #include <vector>
 
+#include "io/defined_names.h"
+#include "io/tables_reader.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -167,6 +172,31 @@ class Workbook {
   /// Returns the active iterative-calc options.
   const eval::IterativeOptions& iterative_options() const noexcept;
 
+  // ---------------------------------------------------------------------------
+  // Passive round-trip metadata (Bundle 2.4)
+  // ---------------------------------------------------------------------------
+  //
+  // Defined names and tables are preserved so the OOXML writer slice can
+  // emit them back unchanged. Neither participates in the dep graph at
+  // this layer; named-range / structured-reference resolution at
+  // evaluation time arrives in Phase 4.
+
+  /// Read-only access to the workbook's defined-name list (in source
+  /// declaration order).
+  const std::vector<io::DefinedName>& defined_names() const noexcept { return defined_names_; }
+
+  /// Replaces the workbook's defined-name list. Move-assigns to keep
+  /// the I/O hand-off allocation-free for large name lists.
+  void set_defined_names(std::vector<io::DefinedName> names) { defined_names_ = std::move(names); }
+
+  /// Read-only access to the workbook's table-metadata list (in
+  /// archive-discovery order, which matches the per-sheet rels walk).
+  const std::vector<io::TableMetadata>& tables() const noexcept { return tables_; }
+
+  /// Replaces the workbook's table-metadata list. Move-assigns for the
+  /// same reason as `set_defined_names`.
+  void set_tables(std::vector<io::TableMetadata> tables) { tables_ = std::move(tables); }
+
  private:
   Workbook();
 
@@ -175,6 +205,10 @@ class Workbook {
   // `workbook.h` without dragging the `eval/recalc_engine.h` header (and
   // its own transitive deps on the dep graph / arena / parser).
   std::unique_ptr<eval::RecalcEngine> engine_;
+  // Passive OOXML metadata; populated by the reader and consumed by
+  // the eventual writer extension (Bundle 2.5). Empty by default.
+  std::vector<io::DefinedName> defined_names_;
+  std::vector<io::TableMetadata> tables_;
 };
 
 }  // namespace formulon
