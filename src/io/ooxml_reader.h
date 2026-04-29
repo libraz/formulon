@@ -1,12 +1,17 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// OOXML (.xlsx) package reader. The current slice (Bundle 2.1) extracts
-// the workbook structure: sheet names and order. Cells, shared strings,
-// styles and tables are parsed by follow-up bundles (2.2 - 2.5). Every
-// part not consumed by this slice is recorded in
-// `OoxmlReadResult::unknown_parts` so callers can detect "we have a part
-// but did not load it" cases. Bundle 2.5 will switch the policy from
-// "everything we did not parse" to "everything we did not recognise".
+// OOXML (.xlsx) package reader. The current slice extracts the workbook
+// structure (sheet names + order) and per-sheet cell contents — every
+// `<c>` in `xl/worksheets/sheet*.xml` is decoded into the workbook via
+// `Workbook::set_cell_value` / `set_cell_formula`. Shared strings are
+// not yet resolved (cells that carry `t="s"` write a `Text("")`
+// placeholder and surface the SST index via
+// `OoxmlReadResult::pending_sst_count`); styles, defined names, and
+// tables are parsed by follow-up bundles (2.3 - 2.5). Every part not
+// consumed by this slice is recorded in `OoxmlReadResult::unknown_parts`
+// so callers can detect "we have a part but did not load it" cases.
+// Bundle 2.5 will switch the policy from "everything we did not parse"
+// to "everything we did not recognise".
 //
 // Design references:
 //   * backup/plans/04-xlsx-io.md §4.2 (package structure)
@@ -16,6 +21,8 @@
 #ifndef FORMULON_IO_OOXML_READER_H_
 #define FORMULON_IO_OOXML_READER_H_
 
+#include <cstdint>
+#include <deque>
 #include <string>
 #include <vector>
 
@@ -31,9 +38,43 @@ namespace io {
 /// a list of OOXML parts the reader did not consume yet. Unknown parts
 /// are preserved so a future round-trip slice (Bundle 2.5) can write
 /// them back unchanged.
+///
+/// `pending_sst_count` reports how many cells in the workbook carried
+/// `t="s"` and therefore have a `Text("")` placeholder waiting for the
+/// shared-strings table to be loaded (Bundle 2.3). It is the sum across
+/// every sheet of the per-sheet `SheetReadContext::pending_sst_cells`
+/// vectors; the (row, col, index) details are not exposed in this slice
+/// because no consumer needs them yet.
+///
+/// `text_storage` holds the inline-string payloads decoded from
+/// `<is><t>...</t></is>` cells. `Value::text` is non-owning, so the
+/// engine-wide rule is "the workbook's text views are valid for as long
+/// as their backing storage is alive". `text_storage` is that backing
+/// storage for cells loaded via the OOXML reader: callers must keep the
+/// `OoxmlReadResult` alive at least as long as they read text values
+/// from `workbook`. (The recalc engine has the same per-pass arena
+/// constraint internally — see the note in
+/// `eval/recalc_engine.cpp` Phase 4b.) Once Bundle 2.3 introduces a
+/// workbook-owned shared-string pool the storage will move there.
 struct OoxmlReadResult {
   Workbook workbook;
   std::vector<std::string> unknown_parts;
+  std::uint32_t pending_sst_count = 0;
+  // `std::deque` is intentional: we need pointer/iterator stability so
+  // cell `Value::text` views into earlier entries do not invalidate
+  // when later strings are appended. `std::vector` would reallocate.
+  // Using a list-of-strings instead of a single concatenated buffer
+  // keeps lookup-free O(1) appends and avoids rebasing string_views on
+  // every push_back.
+  // (Public C++17 has no `pmr::monotonic_buffer_resource` portability
+  // story we can lean on across all targets, so this stays simple.)
+  // Iterator stability is the only guarantee we rely on; ordering and
+  // duplicate-merging are explicitly NOT promised.
+  // NOTE: header field is intentionally a plain forwarded type to keep
+  // ABI surface predictable; if dependence on `<deque>` becomes a size
+  // concern (per backup/plans/18-wasm-size-optimization.md) we can
+  // PIMPL it later.
+  std::deque<std::string> text_storage;
 };
 
 /// Reads an OOXML (.xlsx) package from in-memory bytes.
@@ -45,16 +86,17 @@ struct OoxmlReadResult {
 ///   * `_rels/.rels`                 — root relationship lookup
 ///   * `xl/workbook.xml`             — sheet enumeration in document order
 ///   * `xl/_rels/workbook.xml.rels`  — sheet relationship target lookup
-///
-/// Cell data is **not** loaded by this slice: every `Sheet` returned is
-/// empty. The reader still resolves each sheet's relationship target so
-/// later bundles can layer the per-sheet `<sheetData>` parser on top.
+///   * `xl/worksheets/sheet*.xml`    — cell contents (literals + formulas)
+///     decoded via `cell_parser` and dispatched through the public
+///     Workbook API; the recalc engine is registered for every formula
+///     cell. Cells with `t="s"` write a `Text("")` placeholder; the
+///     workbook-level SST resolution lands in Bundle 2.3.
 ///
 /// Returns `FormulonErrorCode::kIoZipCorrupt` for archive-level failures,
 /// `kIoXmlParse` for malformed XML, and `kIoRelationshipBroken` /
 /// `kIoContentTypeInvalid` when required relationships or content types
-/// are missing. An empty sheet list is rejected with `kIoSheetCorrupt`
-/// (Excel does the same).
+/// are missing. `kIoSheetCorrupt` surfaces for an empty sheet list, a
+/// malformed `<c>` element, or an unresolved shared-formula reference.
 Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes);
 
 }  // namespace io

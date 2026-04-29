@@ -1,19 +1,24 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// OOXML reader implementation — Bundle 2.1 slice. Walks the in-memory
-// package via `ZipReader`, parses the four package-structure parts
-// with pugixml, and builds an empty Workbook whose sheets reflect the
-// `<sheets>` order from `xl/workbook.xml`.
+// OOXML reader implementation. Walks the in-memory package via
+// `ZipReader`, parses the four package-structure parts with pugixml,
+// builds a Workbook whose sheets reflect the `<sheets>` order from
+// `xl/workbook.xml`, and then drives the per-sheet cell parser
+// (`io::read_sheet_data`) so each `<c>` lands in the workbook with its
+// formula registered against the recalc engine.
 //
-// All heavy lifting (cell parsing, SST, styles) is deferred to later
-// bundles; here we only need enough to make round-trip tests of sheet
-// names possible.
+// Shared-strings resolution, styles, defined names, and tables are
+// deferred to later bundles. Cells that carry `t="s"` write a
+// `Text("")` placeholder; the (row, col, index) tuple is collected by
+// the sheet reader's context and the running total is surfaced via
+// `OoxmlReadResult::pending_sst_count`.
 
 #include "io/ooxml_reader.h"
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -21,6 +26,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/sheet_reader.h"
 #include "io/zip_reader.h"
 #include "pugixml.hpp"
 #include "sheet.h"
@@ -398,7 +404,12 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     consumed_parts.insert(std::move(rels_path));
   }
 
-  std::size_t sheet_count = 0;
+  // Collect (display_name, part_path) per sheet in document order. The
+  // sheet's `r:id` attribute resolves to a part path through
+  // `sheet_rels`. We need both pieces in sync so the sheet at workbook
+  // index `i` is read from `sheet_part_paths[i]`.
+  const std::unordered_map<std::string, std::string>& sheet_rels = sheet_rels_or.value();
+  std::vector<std::string> sheet_part_paths;
   for (pugi::xml_node sn = sheets_node.child("sheet"); sn; sn = sn.next_sibling("sheet")) {
     std::string name = sn.attribute("name").value();
     // OOXML requires a non-empty name; treat blank as corrupt rather than
@@ -409,20 +420,81 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
                         "workbook.xml: <sheet> with empty name attribute",
                         "context=ooxml_reader part=" + workbook_path);
     }
-    // The `r:id` attribute resolves a sheet to its part path via
-    // `sheet_rels`. We do *not* mark those paths as consumed in this
-    // slice: the sheet's `<sheetData>` is the next bundle's job, so
-    // every `xl/worksheets/sheet*.xml` belongs in `unknown_parts` for
-    // round-trip preservation. (See `consumed_parts` above for the
-    // four parts this slice actually parses.)
+    // Resolve r:id -> sheet part path. Excel always emits the attribute;
+    // accept both the Office-namespaced ("r:id") and the unprefixed
+    // ("id") variants because pugixml exposes namespace-prefixed names
+    // verbatim and writers in the wild diverge on which one they use.
+    std::string rid = sn.attribute("r:id").value();
+    if (rid.empty()) {
+      rid = sn.attribute("id").value();
+    }
+    if (rid.empty()) {
+      return make_error(FormulonErrorCode::kIoSheetCorrupt,
+                        "workbook.xml: <sheet> missing r:id attribute",
+                        "context=ooxml_reader part=" + workbook_path);
+    }
+    auto it = sheet_rels.find(rid);
+    if (it == sheet_rels.end()) {
+      std::string ctx("context=ooxml_reader part=");
+      ctx.append(workbook_path);
+      ctx.append(" rid=");
+      ctx.append(rid);
+      return make_error(FormulonErrorCode::kIoRelationshipBroken,
+                        "workbook.xml: r:id has no matching workbook relationship",
+                        std::move(ctx));
+    }
     wb.add_sheet(std::move(name));
-    ++sheet_count;
+    sheet_part_paths.push_back(it->second);
+    consumed_parts.insert(it->second);
   }
 
-  if (sheet_count == 0) {
+  if (sheet_part_paths.empty()) {
     return make_error(FormulonErrorCode::kIoSheetCorrupt,
                       "workbook.xml: empty <sheets> list",
                       "context=ooxml_reader part=" + workbook_path);
+  }
+
+  // Read each sheet's <sheetData> via the cell-aware sheet reader.
+  // The sheet reader appends every inline-string payload directly into
+  // `result_text_storage`, a pointer-stable `std::deque` whose lifetime
+  // is the read result. Cells therefore hold `Value::text` views that
+  // remain valid as long as the `OoxmlReadResult` is alive — no
+  // post-load repointing is needed.
+  std::uint32_t pending_sst_count = 0;
+  std::deque<std::string> result_text_storage;
+  for (std::size_t i = 0; i < sheet_part_paths.size(); ++i) {
+    const std::string& sheet_path = sheet_part_paths[i];
+    if (!zip.has_entry(sheet_path)) {
+      // The relationship resolved to a path the package does not
+      // contain. Treat as a structural error rather than silently
+      // skipping: a missing sheet part is data loss.
+      std::string ctx("context=ooxml_reader sheet_path=");
+      ctx.append(sheet_path);
+      return make_error(FormulonErrorCode::kIoSheetCorrupt,
+                        "sheet part missing from package",
+                        std::move(ctx));
+    }
+    auto sheet_bytes_or = zip.read_entry(sheet_path);
+    if (!sheet_bytes_or) {
+      return sheet_bytes_or.error();
+    }
+    const std::vector<std::uint8_t>& sheet_bytes = sheet_bytes_or.value();
+    pugi::xml_document sheet_doc;
+    pugi::xml_parse_result sheet_parse =
+        sheet_doc.load_buffer(sheet_bytes.data(), sheet_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
+    if (!sheet_parse) {
+      std::string ctx("context=ooxml_reader part=");
+      ctx.append(sheet_path);
+      ctx.append(" desc=");
+      ctx.append(sheet_parse.description());
+      return make_error(FormulonErrorCode::kIoXmlParse, "sheet*.xml: pugixml parse failed", std::move(ctx));
+    }
+    SheetReadContext sheet_ctx;
+    auto rs = read_sheet_data(sheet_doc, i, wb, sheet_ctx, result_text_storage);
+    if (!rs) {
+      return rs.error();
+    }
+    pending_sst_count += static_cast<std::uint32_t>(sheet_ctx.pending_sst_cells.size());
   }
 
   // Compute unknown_parts: every Override-listed part name we did not
@@ -437,7 +509,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   }
   std::sort(unknown_parts.begin(), unknown_parts.end());
 
-  OoxmlReadResult result{std::move(wb), std::move(unknown_parts)};
+  OoxmlReadResult result{std::move(wb), std::move(unknown_parts), pending_sst_count, std::move(result_text_storage)};
   return result;
 }
 

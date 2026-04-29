@@ -147,7 +147,7 @@ TEST(OoxmlReader, RejectsArchiveWithoutPackageRels) {
   EXPECT_EQ(result_or.error().code, FormulonErrorCode::kIoRelationshipBroken);
 }
 
-TEST(OoxmlReader, UnknownPartsContainsStylesAndSheetXml) {
+TEST(OoxmlReader, UnknownPartsContainsStylesButNotSheetXml) {
   Workbook wb = Workbook::create();
   const std::vector<std::uint8_t> bytes = SaveOrDie(wb);
 
@@ -155,14 +155,13 @@ TEST(OoxmlReader, UnknownPartsContainsStylesAndSheetXml) {
   ASSERT_TRUE(static_cast<bool>(result_or));
   const std::vector<std::string>& parts = result_or.value().unknown_parts;
 
-  // Bundle 2.1 only consumes [Content_Types].xml, _rels/.rels,
-  // xl/workbook.xml and xl/_rels/workbook.xml.rels. The two remaining
-  // Override-listed parts (the worksheet and the stylesheet) must
-  // surface in unknown_parts so a future round-trip slice can preserve
-  // them.
+  // The reader now consumes sheet*.xml as well, so the worksheet part
+  // must NOT appear in `unknown_parts` (we parsed it). The stylesheet
+  // is still on the deferred list and remains here for future bundles
+  // to round-trip.
   EXPECT_NE(std::find(parts.begin(), parts.end(), "xl/styles.xml"), parts.end()) << "styles.xml not in unknown_parts";
-  EXPECT_NE(std::find(parts.begin(), parts.end(), "xl/worksheets/sheet1.xml"), parts.end())
-      << "sheet1.xml not in unknown_parts";
+  EXPECT_EQ(std::find(parts.begin(), parts.end(), "xl/worksheets/sheet1.xml"), parts.end())
+      << "sheet1.xml unexpectedly still in unknown_parts";
 }
 
 TEST(OoxmlReader, EmptyWorkbookFactoryProducesZeroSheets) {
