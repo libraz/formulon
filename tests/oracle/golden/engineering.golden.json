@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-29T01:11:51Z"
+    "generated_at": "2026-04-29T04:31:38Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -695,6 +695,186 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      }
+    },
+    {
+      "id": "bin2hex_positive",
+      "formula": "=BIN2HEX(\"1010\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "A"
+      }
+    },
+    {
+      "id": "bin2hex_zero",
+      "formula": "=BIN2HEX(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "bin2hex_places_pads",
+      "formula": "=BIN2HEX(\"1010\",4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "000A"
+      }
+    },
+    {
+      "id": "bin2hex_twos_complement_negative",
+      "formula": "=BIN2HEX(\"1111111110\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "FFFFFFFFFE"
+      }
+    },
+    {
+      "id": "bin2hex_invalid_digit",
+      "formula": "=BIN2HEX(\"12\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "hex2oct_positive",
+      "formula": "=HEX2OCT(\"F\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "17"
+      }
+    },
+    {
+      "id": "hex2oct_zero",
+      "formula": "=HEX2OCT(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "hex2oct_places_pads",
+      "formula": "=HEX2OCT(\"F\",4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0017"
+      }
+    },
+    {
+      "id": "hex2oct_twos_complement_negative",
+      "formula": "=HEX2OCT(\"FFFFFFFFFE\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "7777777776"
+      }
+    },
+    {
+      "id": "hex2oct_invalid_digit",
+      "formula": "=HEX2OCT(\"1G\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "oct2bin_positive",
+      "formula": "=OCT2BIN(\"12\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1010"
+      }
+    },
+    {
+      "id": "oct2bin_zero",
+      "formula": "=OCT2BIN(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "oct2bin_places_pads",
+      "formula": "=OCT2BIN(\"12\",8)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "00001010"
+      }
+    },
+    {
+      "id": "oct2bin_twos_complement_negative",
+      "formula": "=OCT2BIN(\"7777777776\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1111111110"
+      }
+    },
+    {
+      "id": "oct2bin_invalid_digit",
+      "formula": "=OCT2BIN(\"18\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "oct2hex_positive",
+      "formula": "=OCT2HEX(\"17\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "F"
+      }
+    },
+    {
+      "id": "oct2hex_zero",
+      "formula": "=OCT2HEX(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "oct2hex_places_pads",
+      "formula": "=OCT2HEX(\"17\",4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "000F"
+      }
+    },
+    {
+      "id": "oct2hex_twos_complement_negative",
+      "formula": "=OCT2HEX(\"7777777776\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "FFFFFFFFFE"
+      }
+    },
+    {
+      "id": "oct2hex_invalid_digit",
+      "formula": "=OCT2HEX(\"18\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
       }
     }
   ]

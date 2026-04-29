@@ -102,7 +102,7 @@ groups:
         expected: impl
       - name: "[$-411] ja-JP locale prefix"
         probe: "[$-411]"
-        expected: missing
+        expected: impl
       - name: "[h] elapsed hours"
         probe: "[h]"
         expected: impl
@@ -982,13 +982,6 @@ groups:
     behaviors:
       - name: "well-formed XML + XPath"
         probe_regex: 'FILTERXML\("<'
-        expected: diverged
-
-  - function: "INFO"
-    aspect: "environment-key dispatch"
-    behaviors:
-      - name: "directory key -> environment-specific"
-        probe_regex: 'INFO\("'
         expected: diverged
 
   - function: "CUBEKPIMEMBER"
@@ -10450,3 +10443,310 @@ groups:
       - name: "percent self-encodes to %25"
         probe_regex: 'ENCODEURL\("[^"]*%'
         expected: diverged
+
+  # -------------------------------------------------------------------------
+  # BIN2HEX (cases under tests/oracle/cases/engineering.yaml). Mirrors the
+  # BIN2DEC / BIN2OCT perspective set: positive value, zero, places-pad,
+  # 10-digit two's-complement negative, invalid digit -> #NUM!.
+  # -------------------------------------------------------------------------
+  - function: "BIN2HEX"
+    aspect: "binary -> hex with two's-complement and places padding"
+    behaviors:
+      - name: "positive value"
+        probe: '=BIN2HEX("1010")'
+        expected: impl
+      - name: "zero"
+        probe: '=BIN2HEX("0")'
+        expected: impl
+      - name: "places pad"
+        probe: '=BIN2HEX("1010",4)'
+        expected: impl
+      - name: "10-digit two's-complement negative"
+        probe: '=BIN2HEX("1111111110")'
+        expected: impl
+      - name: "invalid digit -> #NUM!"
+        probe: '=BIN2HEX("12")'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # HEX2OCT (cases under tests/oracle/cases/engineering.yaml). Mirrors the
+  # HEX2BIN / HEX2DEC perspective set.
+  # -------------------------------------------------------------------------
+  - function: "HEX2OCT"
+    aspect: "hex -> octal with two's-complement and places padding"
+    behaviors:
+      - name: "positive value"
+        probe: '=HEX2OCT("F")'
+        expected: impl
+      - name: "zero"
+        probe: '=HEX2OCT("0")'
+        expected: impl
+      - name: "places pad"
+        probe: '=HEX2OCT("F",4)'
+        expected: impl
+      - name: "10-digit two's-complement negative"
+        probe: '=HEX2OCT("FFFFFFFFFE")'
+        expected: impl
+      - name: "invalid digit -> #NUM!"
+        probe: '=HEX2OCT("1G")'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # OCT2BIN (cases under tests/oracle/cases/engineering.yaml). Mirrors the
+  # OCT2DEC perspective set.
+  # -------------------------------------------------------------------------
+  - function: "OCT2BIN"
+    aspect: "octal -> binary with two's-complement and places padding"
+    behaviors:
+      - name: "positive value"
+        probe: '=OCT2BIN("12")'
+        expected: impl
+      - name: "zero"
+        probe: '=OCT2BIN("0")'
+        expected: impl
+      - name: "places pad"
+        probe: '=OCT2BIN("12",8)'
+        expected: impl
+      - name: "10-digit two's-complement negative"
+        probe: '=OCT2BIN("7777777776")'
+        expected: impl
+      - name: "invalid digit -> #NUM!"
+        probe: '=OCT2BIN("18")'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # OCT2HEX (cases under tests/oracle/cases/engineering.yaml). Mirrors the
+  # OCT2BIN perspective set; output base differs but two's-complement
+  # encoding edges parallel.
+  # -------------------------------------------------------------------------
+  - function: "OCT2HEX"
+    aspect: "octal -> hex with two's-complement and places padding"
+    behaviors:
+      - name: "positive value"
+        probe: '=OCT2HEX("17")'
+        expected: impl
+      - name: "zero"
+        probe: '=OCT2HEX("0")'
+        expected: impl
+      - name: "places pad"
+        probe: '=OCT2HEX("17",4)'
+        expected: impl
+      - name: "10-digit two's-complement negative"
+        probe: '=OCT2HEX("7777777776")'
+        expected: impl
+      - name: "invalid digit -> #NUM!"
+        probe: '=OCT2HEX("18")'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # IMCOT (cases under tests/oracle/cases/complex.yaml). Mirrors IMTAN's
+  # perspective set; reciprocal-trig identities co-evolve with IMTAN.
+  # -------------------------------------------------------------------------
+  - function: "IMCOT"
+    aspect: "complex cotangent (cos/sin)"
+    behaviors:
+      - name: "pure real"
+        probe: '=IMCOT("1")'
+        expected: impl
+      - name: "pure imaginary axis"
+        probe: '=IMCOT("i")'
+        expected: impl
+      - name: "zero -> #NUM! (sin(0)=0 in denominator)"
+        probe: '=IMCOT("0")'
+        expected: impl
+      - name: "reciprocal identity with IMTAN"
+        probe_regex: 'IMPRODUCT\(IMCOT\("[^"]+"\),IMTAN\('
+        expected: impl
+      - name: "negative real (odd function)"
+        probe: '=IMCOT("-1")'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # IMCSCH (cases under tests/oracle/cases/complex.yaml). Mirrors IMSINH's
+  # perspective set; reciprocal-hyperbolic identities co-evolve with IMSINH.
+  # -------------------------------------------------------------------------
+  - function: "IMCSCH"
+    aspect: "complex hyperbolic cosecant (1/sinh)"
+    behaviors:
+      - name: "pure real"
+        probe: '=IMCSCH("1")'
+        expected: impl
+      - name: "pure imaginary axis"
+        probe: '=IMCSCH("i")'
+        expected: impl
+      - name: "zero -> #NUM! (sinh(0)=0 in denominator)"
+        probe: '=IMCSCH("0")'
+        expected: impl
+      - name: "reciprocal identity with IMSINH"
+        probe_regex: 'IMPRODUCT\(IMCSCH\("[^"]+"\),IMSINH\('
+        expected: impl
+      - name: "negative real (odd function)"
+        probe: '=IMCSCH("-1")'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # IMSECH (cases under tests/oracle/cases/complex.yaml). Mirrors IMCOSH's
+  # perspective set; reciprocal-hyperbolic identities co-evolve with IMCOSH.
+  # IMSECH is even (sech(-z) = sech(z)), distinguishing it from IMCSCH/IMCOT.
+  # -------------------------------------------------------------------------
+  - function: "IMSECH"
+    aspect: "complex hyperbolic secant (1/cosh)"
+    behaviors:
+      - name: "zero -> 1+0i"
+        probe: '=IMSECH("0")'
+        expected: impl
+      - name: "pure real"
+        probe: '=IMSECH("1")'
+        expected: impl
+      - name: "pure imaginary axis"
+        probe: '=IMSECH("i")'
+        expected: impl
+      - name: "reciprocal identity with IMCOSH"
+        probe_regex: 'IMPRODUCT\(IMSECH\("[^"]+"\),IMCOSH\('
+        expected: impl
+      - name: "negative real (even function)"
+        probe: '=IMSECH("-1")'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # CONVERT (cases under tests/oracle/cases/convert.yaml). Unit-conversion
+  # lookup table; the engine matches the documented Microsoft 365 unit list
+  # and constant table.
+  # -------------------------------------------------------------------------
+  - function: "CONVERT"
+    aspect: "unit-conversion lookup table"
+    behaviors:
+      - name: "distance: meter -> foot"
+        probe: '=CONVERT(1,"m","ft")'
+        expected: impl
+      - name: "mass: gram -> kilogram (decimal SI prefix)"
+        probe: '=CONVERT(1000,"g","kg")'
+        expected: impl
+      - name: "temperature: K -> C (offset, not scale)"
+        probe: '=CONVERT(273.15,"K","C")'
+        expected: impl
+      - name: "energy: J -> cal"
+        probe: '=CONVERT(1,"J","cal")'
+        expected: impl
+      - name: "invalid unit -> #N/A"
+        probe: '=CONVERT(1,"m","bogus")'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # FORMULATEXT (cases under tests/oracle/cases/formulatext.yaml). Returns
+  # the formula source from a referenced cell; #N/A on blank or non-formula
+  # targets.
+  # -------------------------------------------------------------------------
+  - function: "FORMULATEXT"
+    aspect: "formula-source introspection"
+    behaviors:
+      - name: "simple SUM source recovered"
+        probe: '=FORMULATEXT(B1)'
+        expected: impl
+      - name: "multi-arg call recovered as written"
+        probe_regex: 'FORMULATEXT\(B1\)'
+        expected: impl
+      - name: "nested functions preserved"
+        probe_regex: 'FORMULATEXT\(B1\)'
+        expected: impl
+      - name: "blank cell -> #N/A"
+        probe_regex: 'FORMULATEXT\(B1\)'
+        expected: impl
+      - name: "literal-value cell (no formula) -> #N/A"
+        probe_regex: 'FORMULATEXT\(B1\)'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # INFO (cases under tests/oracle/cases/info_function.yaml). Environment
+  # introspection; every probe is a documented divergence because release /
+  # OS / system / numfile / recalc strings vary by host. See
+  # tests/divergence.yaml for the skip-oracle entries.
+  # -------------------------------------------------------------------------
+  - function: "INFO"
+    aspect: "environment-key dispatch"
+    behaviors:
+      - name: "release key -> environment-specific"
+        probe: '=INFO("release")'
+        expected: diverged
+      - name: "osversion key -> host OS string"
+        probe: '=INFO("osversion")'
+        expected: diverged
+      - name: "system key -> 'mac' / 'pcdos' on Excel"
+        probe: '=INFO("system")'
+        expected: diverged
+      - name: "numfile key -> count of open workbooks"
+        probe: '=INFO("numfile")'
+        expected: diverged
+      - name: "recalc key -> 'Automatic' / 'Manual'"
+        probe: '=INFO("recalc")'
+        expected: diverged
+
+  # -------------------------------------------------------------------------
+  # LOOKUP (cases under tests/oracle/cases/lookup.yaml). Legacy 2-argument
+  # (array form) and 3-argument (vector form). Always approximate match;
+  # lookup vector must be sorted ascending. Returns last value <= lookup.
+  # -------------------------------------------------------------------------
+  - function: "LOOKUP"
+    aspect: "legacy approximate lookup (vector + array forms)"
+    behaviors:
+      - name: "vector form: exact match"
+        probe: '=LOOKUP(20,A1:A3,B1:B3)'
+        expected: impl
+      - name: "vector form: approximate match"
+        probe: '=LOOKUP(25,A1:A3,B1:B3)'
+        expected: impl
+      - name: "array form: 2-argument"
+        probe: '=LOOKUP(2,A1:B3)'
+        expected: impl
+      - name: "below smallest -> #N/A"
+        probe: '=LOOKUP(5,A1:A3,B1:B3)'
+        expected: impl
+      - name: "above largest -> last result"
+        probe: '=LOOKUP(99,A1:A3,B1:B3)'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # SUBTOTAL (cases under tests/oracle/cases/subtotal.yaml). Function-code
+  # dispatcher: 1-11 includes hidden rows, 101-111 excludes hidden rows.
+  # -------------------------------------------------------------------------
+  - function: "SUBTOTAL"
+    aspect: "function-code dispatcher (1-11 / 101-111)"
+    behaviors:
+      - name: "code=1 dispatches to AVERAGE"
+        probe: '=SUBTOTAL(1,A1:A4)'
+        expected: impl
+      - name: "code=4 dispatches to MAX"
+        probe: '=SUBTOTAL(4,A1:A4)'
+        expected: impl
+      - name: "code=9 dispatches to SUM"
+        probe: '=SUBTOTAL(9,A1:A4)'
+        expected: impl
+      - name: "code=109 = SUM excluding hidden rows"
+        probe: '=SUBTOTAL(109,A1:A4)'
+        expected: impl
+      - name: "invalid code -> #VALUE!"
+        probe: '=SUBTOTAL(99,A1:A3)'
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # VALUETOTEXT (cases under tests/oracle/cases/valuetotext.yaml). Concise
+  # (format=0) vs strict (format=1) serialization; strict mode quotes text.
+  # -------------------------------------------------------------------------
+  - function: "VALUETOTEXT"
+    aspect: "value-to-text serialization (concise / strict)"
+    behaviors:
+      - name: "number passthrough"
+        probe: '=VALUETOTEXT(123.45)'
+        expected: impl
+      - name: "concise mode: text unquoted"
+        probe: '=VALUETOTEXT("hello")'
+        expected: impl
+      - name: "strict mode: text wrapped in double quotes"
+        probe: '=VALUETOTEXT("hello",1)'
+        expected: impl
+      - name: "boolean renders TRUE/FALSE uppercase"
+        probe: '=VALUETOTEXT(TRUE)'
+        expected: impl
+      - name: "error rendered as canonical name"
+        probe: '=VALUETOTEXT(NA())'
+        expected: impl

@@ -1,0 +1,33 @@
+suite: convert
+description: >
+  CONVERT unit-conversion lookup. Excel exposes a fixed table of constants
+  spanning weight, distance, time, pressure, force, energy, power, magnetism,
+  temperature, volume, area and information. The Formulon engine matches the
+  documented Microsoft 365 unit list and constant table.
+tolerance: { abs: 1.0e-9, rel: 1.0e-9 }
+locale: ja-JP
+cases:
+  # -- Distance: meter -> foot --------------------------------------------
+  - id: convert_meter_to_foot
+    description: "1 m = 3.280839895... ft"
+    formula: "=CONVERT(1,\"m\",\"ft\")"
+
+  # -- Mass: gram -> kilogram (decimal SI prefix) -------------------------
+  - id: convert_gram_to_kilogram
+    description: "1000 g = 1 kg"
+    formula: "=CONVERT(1000,\"g\",\"kg\")"
+
+  # -- Temperature: Kelvin -> Celsius (offset, not scale) -----------------
+  - id: convert_kelvin_to_celsius
+    description: "273.15 K = 0 C"
+    formula: "=CONVERT(273.15,\"K\",\"C\")"
+
+  # -- Energy: joule -> calorie -------------------------------------------
+  - id: convert_joule_to_calorie
+    description: "1 J ~ 0.2390057... cal (thermochemical)"
+    formula: "=CONVERT(1,\"J\",\"cal\")"
+
+  # -- Invalid unit -> #N/A -----------------------------------------------
+  - id: convert_invalid_unit_is_na
+    description: "Unknown destination unit -> #N/A"
+    formula: "=CONVERT(1,\"m\",\"bogus\")"

@@ -1,0 +1,82 @@
+{
+  "suite": "formulatext",
+  "description": "FORMULATEXT returns the formula source string from a referenced cell. Setup writes a formula into a cell with the `=` shorthand (case_schema normalises strings starting with `=` to `{kind: formula}`). The probe cell `=FORMULATEXT(B1)` then reads back the source. If the target cell holds a literal value or is empty, FORMULATEXT returns #N/A.\n",
+  "environment": {
+    "excel_version": "16.108.1",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-04-29T04:34:00Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "formulatext_simple_sum",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=SUM(1,2,3)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SUM(1,2,3)"
+      }
+    },
+    {
+      "id": "formulatext_multi_arg",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=IF(1>0,\"yes\",\"no\")"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=IF(1>0,\"yes\",\"no\")"
+      }
+    },
+    {
+      "id": "formulatext_nested",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=ROUND(SUM(A1:A3),2)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ROUND(SUM(A1:A3),2)"
+      }
+    },
+    {
+      "id": "formulatext_blank_cell_is_na",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "formulatext_value_cell_is_na",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 42.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

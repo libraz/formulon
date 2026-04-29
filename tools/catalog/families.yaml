@@ -175,7 +175,7 @@ families:
 
   # -- External / stub-only --------------------------------------------------
   - name: external_stubs
-    members: [IMAGE, PY, RTD, STOCKHISTORY, WEBSERVICE, COPILOT, DETECTLANGUAGE, TRANSLATE, ARRAYTOTEXT, FILTERXML, INFO, CUBEKPIMEMBER, CUBEMEMBER, CUBEMEMBERPROPERTY, CUBERANKEDMEMBER, CUBESET, CUBESETCOUNT, CUBEVALUE, GETPIVOTDATA, PHONETIC]
+    members: [IMAGE, PY, RTD, STOCKHISTORY, WEBSERVICE, COPILOT, DETECTLANGUAGE, TRANSLATE, ARRAYTOTEXT, FILTERXML, CUBEKPIMEMBER, CUBEMEMBER, CUBEMEMBERPROPERTY, CUBERANKEDMEMBER, CUBESET, CUBESETCOUNT, CUBEVALUE, GETPIVOTDATA, PHONETIC]
     category_file: tests/oracle/cases/external_stubs.yaml
     min_perspectives_per_member: 1
     cluster_reason: "Stubs by design; closure is a divergence-only declaration."
@@ -201,7 +201,7 @@ families:
   # transcendentals (IMSIN/IMCOS/IMEXP) so closure perspectives are best
   # exercised against the same complex.yaml suite.
   - name: complex
-    members: [COMPLEX, IMABS, IMAGINARY, IMARGUMENT, IMCONJUGATE, IMCOS, IMCOSH, IMCSC, IMDIV, IMEXP, IMLN, IMLOG10, IMLOG2, IMPOWER, IMPRODUCT, IMREAL, IMSEC, IMSIN, IMSINH, IMSQRT, IMSUB, IMSUM, IMTAN]
+    members: [COMPLEX, IMABS, IMAGINARY, IMARGUMENT, IMCONJUGATE, IMCOS, IMCOSH, IMCOT, IMCSC, IMCSCH, IMDIV, IMEXP, IMLN, IMLOG10, IMLOG2, IMPOWER, IMPRODUCT, IMREAL, IMSEC, IMSECH, IMSIN, IMSINH, IMSQRT, IMSUB, IMSUM, IMTAN]
     category_file: tests/oracle/cases/complex.yaml
     min_perspectives_per_member: 5
     cluster_reason: "Complex-number engineering family shares COMPLEX( real, imag, suffix ) input fixtures and 'i'/'j' suffix dispatch."
@@ -284,7 +284,7 @@ families:
   # DEC2*/?2? side, and the 48-bit non-negative integer ceiling for bit
   # ops. Closure perspectives co-evolve on these shared edges.
   - name: engineering
-    members: [BIN2DEC, BIN2OCT, BITAND, BITLSHIFT, BITOR, BITRSHIFT, BITXOR, DEC2BIN, DEC2HEX, DEC2OCT, DELTA, GESTEP, HEX2BIN, HEX2DEC, OCT2DEC]
+    members: [BIN2DEC, BIN2HEX, BIN2OCT, BITAND, BITLSHIFT, BITOR, BITRSHIFT, BITXOR, DEC2BIN, DEC2HEX, DEC2OCT, DELTA, GESTEP, HEX2BIN, HEX2DEC, HEX2OCT, OCT2BIN, OCT2DEC, OCT2HEX]
     category_file: tests/oracle/cases/engineering.yaml
     min_perspectives_per_member: 5
     cluster_reason: "Base-conversion and bit-manipulation family; share two's-complement edge cases (10-bit signed range), padded-output formatting, and 48-bit integer ceiling for bit ops."
@@ -399,7 +399,7 @@ families:
   # (?, *, ~?, ~*) interpretation under exact-match mode, and the
   # row/column-out-of-bounds -> #REF! propagation.
   - name: lookup
-    members: [CHOOSE, HLOOKUP, INDEX, MATCH, VLOOKUP, XLOOKUP, XMATCH]
+    members: [CHOOSE, HLOOKUP, INDEX, LOOKUP, MATCH, VLOOKUP, XLOOKUP, XMATCH]
     category_file: tests/oracle/cases/lookup.yaml
     min_perspectives_per_member: 5
     cluster_reason: "Lookup family (linear / index-based / dynamic-array); share lookup-array fixtures and not-found semantics."
@@ -555,3 +555,65 @@ families:
     category_file: tests/oracle/cases/references.yaml
     min_perspectives_per_member: 5
     cluster_reason: "Pure scalar text builder; cases live with INDIRECT/OFFSET in references.yaml since they share the reference-manipulation surface."
+
+  # -- TEXT format-string singleton (cases live in text_format.yaml) -------
+  # Routed explicitly so closure_check uses the text_format.yaml category
+  # instead of the text.yaml suite (which holds STRING / SPLIT / CONCAT
+  # probes that do not call TEXT). 82+ format-code cases live in
+  # text_format.yaml and back the 25 declared format-string behaviors.
+  - name: text_format
+    members: [TEXT]
+    category_file: tests/oracle/cases/text_format.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "TEXT format-string family; format-code cases live in text_format.yaml separate from the text-function suite."
+
+  # -- CONVERT singleton ---------------------------------------------------
+  # Unit-conversion lookup table; one function, no shared semantics with
+  # any other family.
+  - name: convert_singleton
+    members: [CONVERT]
+    category_file: tests/oracle/cases/convert.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Unit conversion (energy / distance / mass / temperature); engine matches Excel constant tables."
+
+  # -- FORMULATEXT singleton -----------------------------------------------
+  # Returns the formula source from a referenced cell. Distinct from
+  # ISFORMULA (info family) because it returns the formula string, not a
+  # boolean predicate.
+  - name: formulatext_singleton
+    members: [FORMULATEXT]
+    category_file: tests/oracle/cases/formulatext.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Formula introspection; returns formula text from a cell reference."
+
+  # -- INFO environment-key singleton --------------------------------------
+  # Environment introspection (release, version, osversion, system,
+  # numfile). Outputs are environment-specific and diverge across hosts;
+  # all probes are skip-oracle in tests/divergence.yaml. Routed away from
+  # the unrelated `info` family (IS* / type-introspection) to avoid the
+  # name collision in closure_check.resolve_family().
+  - name: info_function
+    members: [INFO]
+    category_file: tests/oracle/cases/info_function.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Environment introspection; locale / release / system info — divergent across hosts, all cases are skip-oracle."
+
+  # -- SUBTOTAL singleton --------------------------------------------------
+  # Function-code-driven aggregator (1=AVERAGE, 9=SUM, ...). 1-11 includes
+  # hidden rows; 101-111 excludes hidden rows. Distinct surface from the
+  # countif_edges family because the dispatch is by integer code, not by
+  # criterion string.
+  - name: subtotal_singleton
+    members: [SUBTOTAL]
+    category_file: tests/oracle/cases/subtotal.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Function-code dispatcher; 1-11 includes hidden, 101-111 excludes hidden rows."
+
+  # -- VALUETOTEXT singleton -----------------------------------------------
+  # Value-to-text serializer with concise (format=0) and strict (format=1)
+  # modes. Strict mode quotes text and reports errors verbatim.
+  - name: valuetotext_singleton
+    members: [VALUETOTEXT]
+    category_file: tests/oracle/cases/valuetotext.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Value-to-text serializer with concise (default) and strict (quoted) format modes."

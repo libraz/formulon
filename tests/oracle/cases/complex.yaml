@@ -515,3 +515,72 @@ cases:
   - id: imtan_negative_real
     description: "tan(-1) = -tan(1) — odd function"
     formula: "=IMTAN(\"-1\")"
+
+  # -- IMCOT perspectives -------------------------------------------------
+  - id: imcot_pure_real
+    description: "cot(1) — matches scalar cot (cos/sin)"
+    formula: "=IMCOT(\"1\")"
+
+  - id: imcot_pure_imag
+    description: "cot(i) = -i*coth(1) — pure imaginary axis"
+    formula: "=IMCOT(\"i\")"
+
+  - id: imcot_zero_is_div0
+    description: "cot(0) -> #NUM! (sin(0)=0 in denominator)"
+    formula: "=IMCOT(\"0\")"
+
+  - id: imcot_identity_with_imtan
+    description: "IMCOT(z) * IMTAN(z) = 1+0i — reciprocal identity (1-ULP libm drift on imag tail)"
+    formula: "=IMPRODUCT(IMCOT(\"1+i\"),IMTAN(\"1+i\"))"
+    compare_mode: complex_text
+    tolerance: { abs: 1e-14 }
+
+  - id: imcot_negative_real
+    description: "cot(-1) = -cot(1) — odd function"
+    formula: "=IMCOT(\"-1\")"
+
+  # -- IMCSCH perspectives ------------------------------------------------
+  - id: imcsch_pure_real
+    description: "csch(1) = 1/sinh(1) — matches scalar csch"
+    formula: "=IMCSCH(\"1\")"
+
+  - id: imcsch_pure_imag
+    description: "csch(i) = -i/sin(1) — pure imaginary axis"
+    formula: "=IMCSCH(\"i\")"
+
+  - id: imcsch_zero_is_div0
+    description: "csch(0) -> #NUM! (sinh(0)=0 in denominator)"
+    formula: "=IMCSCH(\"0\")"
+
+  - id: imcsch_identity_with_imsinh
+    description: "IMCSCH(z) * IMSINH(z) = 1+0i — reciprocal identity (1-ULP libm drift on imag tail)"
+    formula: "=IMPRODUCT(IMCSCH(\"1+i\"),IMSINH(\"1+i\"))"
+    compare_mode: complex_text
+    tolerance: { abs: 1e-14 }
+
+  - id: imcsch_negative_real
+    description: "csch(-1) = -csch(1) — odd function"
+    formula: "=IMCSCH(\"-1\")"
+
+  # -- IMSECH perspectives ------------------------------------------------
+  - id: imsech_zero_is_one
+    description: "sech(0) = 1/cosh(0) = 1+0i"
+    formula: "=IMSECH(\"0\")"
+
+  - id: imsech_pure_real
+    description: "sech(1) = 1/cosh(1) — matches scalar sech"
+    formula: "=IMSECH(\"1\")"
+
+  - id: imsech_pure_imag
+    description: "sech(i) = 1/cos(1) — pure imaginary axis"
+    formula: "=IMSECH(\"i\")"
+
+  - id: imsech_identity_with_imcosh
+    description: "IMSECH(z) * IMCOSH(z) = 1+0i — reciprocal identity (1-ULP libm drift on imag tail)"
+    formula: "=IMPRODUCT(IMSECH(\"1+i\"),IMCOSH(\"1+i\"))"
+    compare_mode: complex_text
+    tolerance: { abs: 1e-14 }
+
+  - id: imsech_negative_real
+    description: "sech(-1) = sech(1) — even function"
+    formula: "=IMSECH(\"-1\")"

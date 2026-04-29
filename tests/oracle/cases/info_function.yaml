@@ -1,0 +1,30 @@
+suite: info_function
+description: >
+  INFO returns environment-specific strings (release version, OS version,
+  system identifier, recalc mode, current directory, open file count). The
+  values are intrinsically host-bound: Mac Excel 365 ja-JP returns
+  Microsoft-version strings, Formulon returns its own engine identifier.
+  Every probe is a documented divergence (`mode: skip-oracle`) — closure
+  is a divergence-only declaration.
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  - id: info_release
+    description: "INFO(\"release\") — Excel build vs. Formulon engine version"
+    formula: "=INFO(\"release\")"
+
+  - id: info_osversion
+    description: "INFO(\"osversion\") — host OS string"
+    formula: "=INFO(\"osversion\")"
+
+  - id: info_system
+    description: "INFO(\"system\") — 'mac' / 'pcdos' on Excel; Formulon has its own value"
+    formula: "=INFO(\"system\")"
+
+  - id: info_numfile
+    description: "INFO(\"numfile\") — count of open workbooks; varies by host"
+    formula: "=INFO(\"numfile\")"
+
+  - id: info_recalc
+    description: "INFO(\"recalc\") — 'Automatic' or 'Manual'; Formulon has no notion of mode"
+    formula: "=INFO(\"recalc\")"

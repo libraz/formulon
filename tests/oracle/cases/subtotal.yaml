@@ -1,0 +1,34 @@
+suite: subtotal
+description: >
+  SUBTOTAL is a function-code-driven aggregator. Codes 1-11 dispatch to
+  AVERAGE / COUNT / COUNTA / MAX / MIN / PRODUCT / STDEV / STDEVP / SUM /
+  VAR / VARP, including hidden rows. Codes 101-111 dispatch to the same
+  aggregators but exclude rows hidden via row-level hiding (column-hide
+  and filter-hide are handled separately). Invalid codes -> #VALUE!.
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  - id: subtotal_average_code_1
+    description: "code=1 dispatches to AVERAGE"
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40 }
+    formula: "=SUBTOTAL(1,A1:A4)"
+
+  - id: subtotal_max_code_4
+    description: "code=4 dispatches to MAX"
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40 }
+    formula: "=SUBTOTAL(4,A1:A4)"
+
+  - id: subtotal_sum_code_9
+    description: "code=9 dispatches to SUM"
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40 }
+    formula: "=SUBTOTAL(9,A1:A4)"
+
+  - id: subtotal_sum_code_109_excl_hidden
+    description: "code=109 = SUM excluding hidden rows; no rows hidden -> identical to 9"
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40 }
+    formula: "=SUBTOTAL(109,A1:A4)"
+
+  - id: subtotal_invalid_code_is_value
+    description: "code outside 1..11 / 101..111 -> #VALUE!"
+    setup: { A1: 10, A2: 20, A3: 30 }
+    formula: "=SUBTOTAL(99,A1:A3)"

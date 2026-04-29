@@ -165,6 +165,10 @@ cases:
   - id: text_locale_prefix_discarded
     formula: "=TEXT(5, \"[$-409]0.00\")"
 
+  - id: text_locale_prefix_jajp_discarded
+    description: "[$-411] ja-JP locale prefix is discarded the same way as [$-409]; the format body still applies."
+    formula: "=TEXT(5, \"[$-411]0.00\")"
+
   # -- TEXT: text input + @ substitution ----------------------------------
   - id: text_at_substitutes
     formula: "=TEXT(\"abc\", \"text is @\")"

@@ -1,0 +1,29 @@
+suite: valuetotext
+description: >
+  VALUETOTEXT serializes a value to text using either concise (format=0,
+  default) or strict (format=1) formatting. Concise mode passes scalars
+  through with default Excel rendering. Strict mode quotes text values
+  and reports errors verbatim. Numbers and booleans render the same in
+  both modes.
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  - id: valuetotext_number_passthrough
+    description: "Numbers render the same in concise mode"
+    formula: "=VALUETOTEXT(123.45)"
+
+  - id: valuetotext_text_concise_default
+    description: "Concise mode (format=0) passes text through unquoted"
+    formula: "=VALUETOTEXT(\"hello\")"
+
+  - id: valuetotext_text_strict_quoted
+    description: "Strict mode (format=1) wraps text in double quotes"
+    formula: "=VALUETOTEXT(\"hello\",1)"
+
+  - id: valuetotext_boolean_renders_uppercase
+    description: "Booleans render as TRUE/FALSE uppercase regardless of mode"
+    formula: "=VALUETOTEXT(TRUE)"
+
+  - id: valuetotext_error_concise
+    description: "Errors render as their canonical name in concise mode"
+    formula: "=VALUETOTEXT(NA())"

@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T05:36:03Z"
+    "generated_at": "2026-04-29T04:33:29Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -409,6 +409,15 @@
     {
       "id": "text_locale_prefix_discarded",
       "formula": "=TEXT(5, \"[$-409]0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "5.00"
+      }
+    },
+    {
+      "id": "text_locale_prefix_jajp_discarded",
+      "formula": "=TEXT(5, \"[$-411]0.00\")",
       "setup": {},
       "expect": {
         "kind": "text",

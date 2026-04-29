@@ -1,0 +1,34 @@
+suite: formulatext
+description: >
+  FORMULATEXT returns the formula source string from a referenced cell.
+  Setup writes a formula into a cell with the `=` shorthand (case_schema
+  normalises strings starting with `=` to `{kind: formula}`). The probe
+  cell `=FORMULATEXT(B1)` then reads back the source. If the target cell
+  holds a literal value or is empty, FORMULATEXT returns #N/A.
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  - id: formulatext_simple_sum
+    description: "FORMULATEXT recovers a simple SUM source"
+    setup: { B1: "=SUM(1,2,3)" }
+    formula: "=FORMULATEXT(B1)"
+
+  - id: formulatext_multi_arg
+    description: "FORMULATEXT recovers a multi-arg call as written"
+    setup: { B1: "=IF(1>0,\"yes\",\"no\")" }
+    formula: "=FORMULATEXT(B1)"
+
+  - id: formulatext_nested
+    description: "FORMULATEXT preserves nested function calls"
+    setup: { B1: "=ROUND(SUM(A1:A3),2)" }
+    formula: "=FORMULATEXT(B1)"
+
+  - id: formulatext_blank_cell_is_na
+    description: "FORMULATEXT on a blank cell -> #N/A"
+    setup: {}
+    formula: "=FORMULATEXT(B1)"
+
+  - id: formulatext_value_cell_is_na
+    description: "FORMULATEXT on a literal-value cell (no formula) -> #N/A"
+    setup: { B1: 42 }
+    formula: "=FORMULATEXT(B1)"

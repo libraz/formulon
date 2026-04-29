@@ -275,3 +275,39 @@ cases:
     description: "Exact match (mode=0) without a hit -> #N/A"
     setup: { A1: 10, A2: 20, A3: 30 }
     formula: "=XMATCH(99,A1:A3,0)"
+
+  # =========================================================================
+  # LOOKUP coverage: legacy 2-argument (array form) and 3-argument (vector
+  # form). Always approximate match; lookup vector must be sorted ascending.
+  # Returns the last value <= lookup_value, or #N/A if no value <= lookup_value.
+  # =========================================================================
+  - id: lookup_vector_form_exact
+    description: "vector form: lookup_value, lookup_vector, result_vector — exact match"
+    setup: { A1: 10, A2: 20, A3: 30,
+             B1: "low", B2: "mid", B3: "high" }
+    formula: "=LOOKUP(20,A1:A3,B1:B3)"
+
+  - id: lookup_vector_form_approx
+    description: "Approximate match: 25 falls between 20 and 30 -> 'mid'"
+    setup: { A1: 10, A2: 20, A3: 30,
+             B1: "low", B2: "mid", B3: "high" }
+    formula: "=LOOKUP(25,A1:A3,B1:B3)"
+
+  - id: lookup_array_form_square
+    description: "array form: square table; LOOKUP returns the last column on a row match"
+    setup: { A1: 1, B1: "a",
+             A2: 2, B2: "b",
+             A3: 3, B3: "c" }
+    formula: "=LOOKUP(2,A1:B3)"
+
+  - id: lookup_below_smallest_is_na
+    description: "lookup_value < smallest in vector -> #N/A"
+    setup: { A1: 10, A2: 20, A3: 30,
+             B1: "low", B2: "mid", B3: "high" }
+    formula: "=LOOKUP(5,A1:A3,B1:B3)"
+
+  - id: lookup_above_largest_returns_last
+    description: "lookup_value >= largest -> last result"
+    setup: { A1: 10, A2: 20, A3: 30,
+             B1: "low", B2: "mid", B3: "high" }
+    formula: "=LOOKUP(99,A1:A3,B1:B3)"

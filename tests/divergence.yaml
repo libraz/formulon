@@ -1851,6 +1851,36 @@ entries:
     prefer: formulon
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
+  - id: info_release
+    mode: skip-oracle
+    reason: "INFO(\"release\") returns the host application's version string; intrinsically environment-bound. Mac Excel 365 returns its build number, Formulon returns the engine version."
+    prefer: formulon
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: info_osversion
+    mode: skip-oracle
+    reason: "INFO(\"osversion\") returns the host OS version string; intrinsically environment-bound."
+    prefer: formulon
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: info_system
+    mode: skip-oracle
+    reason: "INFO(\"system\") returns the host OS family (\"mac\" / \"pcdos\" on Excel); intrinsically environment-bound."
+    prefer: formulon
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: info_numfile
+    mode: skip-oracle
+    reason: "INFO(\"numfile\") returns the count of currently open workbooks; varies with host state."
+    prefer: formulon
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
+  - id: info_recalc
+    mode: skip-oracle
+    reason: "INFO(\"recalc\") returns the host application's recalculation mode (\"Automatic\" / \"Manual\"); Formulon has no notion of recalc mode."
+    prefer: formulon
+    first_noted: 2026-04-29
+    last_verified_excel_version: "16.108.1"
 
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect

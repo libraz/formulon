@@ -306,3 +306,83 @@ cases:
   - id: gestep_negative_x_below_zero_step
     description: "x = -2 < 0 -> 0."
     formula: "=GESTEP(-2,0)"
+
+  # -- Closure expansion: BIN2HEX -----------------------------------------
+  - id: bin2hex_positive
+    description: "BIN '1010' = 10 -> hex 'A'."
+    formula: "=BIN2HEX(\"1010\")"
+
+  - id: bin2hex_zero
+    formula: "=BIN2HEX(\"0\")"
+
+  - id: bin2hex_places_pads
+    description: "places=4 pads small positive output to 4 hex digits."
+    formula: "=BIN2HEX(\"1010\",4)"
+
+  - id: bin2hex_twos_complement_negative
+    description: "10-digit BIN '1111111110' = -2 renders as 10-digit HEX two's complement."
+    formula: "=BIN2HEX(\"1111111110\")"
+
+  - id: bin2hex_invalid_digit
+    description: "Digit '2' invalid in base 2 -> #NUM!."
+    formula: "=BIN2HEX(\"12\")"
+
+  # -- Closure expansion: HEX2OCT -----------------------------------------
+  - id: hex2oct_positive
+    description: "HEX 'F' = 15 -> octal '17'."
+    formula: "=HEX2OCT(\"F\")"
+
+  - id: hex2oct_zero
+    formula: "=HEX2OCT(\"0\")"
+
+  - id: hex2oct_places_pads
+    description: "places=4 pads small positive output to 4 octal digits."
+    formula: "=HEX2OCT(\"F\",4)"
+
+  - id: hex2oct_twos_complement_negative
+    description: "10-digit HEX 'FFFFFFFFFE' = -2 renders as 10-digit OCT two's complement."
+    formula: "=HEX2OCT(\"FFFFFFFFFE\")"
+
+  - id: hex2oct_invalid_digit
+    description: "Digit 'G' invalid in base 16 -> #NUM!."
+    formula: "=HEX2OCT(\"1G\")"
+
+  # -- Closure expansion: OCT2BIN -----------------------------------------
+  - id: oct2bin_positive
+    description: "OCT '12' = 10 -> binary '1010'."
+    formula: "=OCT2BIN(\"12\")"
+
+  - id: oct2bin_zero
+    formula: "=OCT2BIN(\"0\")"
+
+  - id: oct2bin_places_pads
+    description: "places=8 pads small positive output to 8 binary digits."
+    formula: "=OCT2BIN(\"12\",8)"
+
+  - id: oct2bin_twos_complement_negative
+    description: "10-digit OCT '7777777776' = -2 renders as 10-digit BIN two's complement."
+    formula: "=OCT2BIN(\"7777777776\")"
+
+  - id: oct2bin_invalid_digit
+    description: "Digit '8' invalid in base 8 -> #NUM!."
+    formula: "=OCT2BIN(\"18\")"
+
+  # -- Closure expansion: OCT2HEX -----------------------------------------
+  - id: oct2hex_positive
+    description: "OCT '17' = 15 -> hex 'F'."
+    formula: "=OCT2HEX(\"17\")"
+
+  - id: oct2hex_zero
+    formula: "=OCT2HEX(\"0\")"
+
+  - id: oct2hex_places_pads
+    description: "places=4 pads small positive output to 4 hex digits."
+    formula: "=OCT2HEX(\"17\",4)"
+
+  - id: oct2hex_twos_complement_negative
+    description: "10-digit OCT '7777777776' = -2 renders as 10-digit HEX two's complement."
+    formula: "=OCT2HEX(\"7777777776\")"
+
+  - id: oct2hex_invalid_digit
+    description: "Digit '8' invalid in base 8 -> #NUM!."
+    formula: "=OCT2HEX(\"18\")"

@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-28T22:57:47Z"
+    "generated_at": "2026-04-29T04:40:53Z"
   },
   "tolerance": {
     "abs": 1e-05,
@@ -1114,6 +1114,156 @@
       "expect": {
         "kind": "text",
         "value": "-1.5574077246549"
+      }
+    },
+    {
+      "id": "imcot_pure_real",
+      "formula": "=IMCOT(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.642092615934331"
+      }
+    },
+    {
+      "id": "imcot_pure_imag",
+      "formula": "=IMCOT(\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1.31303528549933i"
+      }
+    },
+    {
+      "id": "imcot_zero_is_div0",
+      "formula": "=IMCOT(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "imcot_identity_with_imtan",
+      "formula": "=IMPRODUCT(IMCOT(\"1+i\"),IMTAN(\"1+i\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.999999999999996-9.43689570931383E-16i"
+      },
+      "tolerance": {
+        "abs": 1e-14,
+        "rel": 0.0
+      },
+      "compare_mode": "complex_text"
+    },
+    {
+      "id": "imcot_negative_real",
+      "formula": "=IMCOT(\"-1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0.642092615934331"
+      }
+    },
+    {
+      "id": "imcsch_pure_real",
+      "formula": "=IMCSCH(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.850918128239322"
+      }
+    },
+    {
+      "id": "imcsch_pure_imag",
+      "formula": "=IMCSCH(\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1.18839510577812i"
+      }
+    },
+    {
+      "id": "imcsch_zero_is_div0",
+      "formula": "=IMCSCH(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "imcsch_identity_with_imsinh",
+      "formula": "=IMPRODUCT(IMCSCH(\"1+i\"),IMSINH(\"1+i\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1-5.55111512312578E-17i"
+      },
+      "tolerance": {
+        "abs": 1e-14,
+        "rel": 0.0
+      },
+      "compare_mode": "complex_text"
+    },
+    {
+      "id": "imcsch_negative_real",
+      "formula": "=IMCSCH(\"-1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0.850918128239322"
+      }
+    },
+    {
+      "id": "imsech_zero_is_one",
+      "formula": "=IMSECH(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "imsech_pure_real",
+      "formula": "=IMSECH(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.648054273663885"
+      }
+    },
+    {
+      "id": "imsech_pure_imag",
+      "formula": "=IMSECH(\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.85081571768093"
+      }
+    },
+    {
+      "id": "imsech_identity_with_imcosh",
+      "formula": "=IMPRODUCT(IMSECH(\"1+i\"),IMCOSH(\"1+i\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1+2.22044604925031E-16i"
+      },
+      "tolerance": {
+        "abs": 1e-14,
+        "rel": 0.0
+      },
+      "compare_mode": "complex_text"
+    },
+    {
+      "id": "imsech_negative_real",
+      "formula": "=IMSECH(\"-1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.648054273663885"
       }
     }
   ]
