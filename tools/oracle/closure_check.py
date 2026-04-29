@@ -159,11 +159,17 @@ def singleton_family(fn: str) -> Family:
 
 
 def resolve_family(target: str, by_name: Dict[str, Family], by_member: Dict[str, Family]) -> Family:
-    if target.lower() in by_name:
-        return by_name[target.lower()]
+    # Function-name lookup (by_member) takes precedence over family-name
+    # lookup (by_name). Some function names collide with family names — e.g.
+    # the INFO function vs. the `info` family of IS* / type-introspection
+    # functions — and a bare `INFO` argument should be interpreted as the
+    # function. The explicit `family=NAME` selector in main() routes the
+    # other way for callers that want the family.
     fn = target.upper()
     if fn in by_member:
         return by_member[fn]
+    if target.lower() in by_name:
+        return by_name[target.lower()]
     return singleton_family(fn)
 
 

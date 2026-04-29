@@ -803,9 +803,20 @@ Value eval_hlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
 //     matched offset and fall back to `#N/A` if the index is out of range
 //     (Excel's observable behaviour).
 //
-// The array form `LOOKUP(lookup_value, array)` is intentionally not yet
-// implemented -- it is deprecated, and the IronCalc oracle only covers the
-// vector form.
+// The 2-argument call site has two flavours:
+//
+//   * Vector form: `lookup_vector` is 1-D (1 row OR 1 column). Scan the
+//     vector for the largest value <= lookup_value and return that same
+//     cell.
+//   * Array form: `array` is 2-D. When taller than wide (rows >= cols),
+//     scan the first column and return the corresponding cell of the LAST
+//     column. When wider than tall, scan the first row and return the
+//     corresponding cell of the LAST row. Square arrays default to the
+//     taller-than-wide rule.
+//
+// The 3-argument form is always vector-shaped: `lookup_vector` and
+// `result_vector` must be parallel 1-D ranges; the matched offset on
+// `lookup_vector` indexes `result_vector`.
 Value eval_lookup_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -839,9 +850,21 @@ Value eval_lookup_lazy(const parser::AstNode& call, Arena& arena, const Function
   }
 
   if (arity == 2) {
-    // Result comes from lookup_vector itself at the matched axis position.
-    const std::size_t flat = axis == LookupAxis::Column ? (off * static_cast<std::size_t>(lcols))
-                                                        : off;  // Row -> first-row strip index
+    // Vector form (1-D input): result is the matched cell of the lookup
+    // vector itself. Array form (2-D input): result is the corresponding
+    // cell of the last column (taller-than-wide) or last row (wider-than-
+    // tall). The two paths agree on a 1-D input because last-col == col 0
+    // and last-row == row 0 in that case.
+    std::size_t flat = 0;
+    if (axis == LookupAxis::Column) {
+      // Scan first column; return last column at the matched row offset.
+      const std::size_t last_col = static_cast<std::size_t>(lcols) - 1U;
+      flat = off * static_cast<std::size_t>(lcols) + last_col;
+    } else {
+      // Scan first row; return last row at the matched column offset.
+      const std::size_t last_row = static_cast<std::size_t>(lrows) - 1U;
+      flat = last_row * static_cast<std::size_t>(lcols) + off;
+    }
     return flat < lookup_cells.size() ? lookup_cells[flat] : Value::error(ErrorCode::NA);
   }
 
@@ -858,8 +881,7 @@ Value eval_lookup_lazy(const parser::AstNode& call, Arena& arena, const Function
   // result vector as parallel to the lookup vector, so the "axis position"
   // maps to the same offset regardless of orientation.
   const LookupAxis raxis = rrows >= rcols ? LookupAxis::Column : LookupAxis::Row;
-  const std::size_t flat =
-      raxis == LookupAxis::Column ? (off * static_cast<std::size_t>(rcols)) : off;
+  const std::size_t flat = raxis == LookupAxis::Column ? (off * static_cast<std::size_t>(rcols)) : off;
   return flat < result_cells.size() ? result_cells[flat] : Value::error(ErrorCode::NA);
 }
 
