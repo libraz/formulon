@@ -208,7 +208,11 @@ Value Rept(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
     return Value::error(ErrorCode::Value);
   }
   std::string out;
-  out.reserve(text.value().size() * reps);
+  // The `unit_len * reps` overflow check above guarantees the product
+  // fits within Excel's text-cap and therefore within `size_t` on every
+  // supported target (including 32-bit wasm32). Cast explicitly to
+  // silence `-Wshorten-64-to-32` under wasm32 where `size_t` is 32-bit.
+  out.reserve(static_cast<std::size_t>(text.value().size() * reps));
   for (std::uint64_t i = 0; i < reps; ++i) {
     out.append(text.value());
   }

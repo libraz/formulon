@@ -56,20 +56,54 @@ lint:
 
 clean:
 	rm -rf $(BUILD_DIR) build-release build-relwithdebinfo \
-	       build-asan build-ubsan build-tsan build-coverage
+	       build-asan build-ubsan build-tsan build-coverage \
+	       $(WASM_BUILD_DIR) $(WASM_DEBUG_BUILD_DIR)
 
-# ---- Stubs wired in later milestones -------------------------------------
+# -- WASM build / smoke-test targets --------------------------------------
+# `make wasm`        -> Release-mode formulon.{js,wasm} under build-wasm/.
+# `make wasm-debug`  -> Debug-mode artifact (with assertions) under
+#                       build-wasm-debug/.
+# `make test-wasm`   -> Node-based smoke tests against build-wasm/formulon.js.
+#
+# All three short-circuit cleanly when the host lacks emscripten so the
+# native CI path stays green without an Emscripten install.
+EM_CMAKE := emcmake cmake
+WASM_BUILD_DIR ?= build-wasm
+WASM_DEBUG_BUILD_DIR ?= build-wasm-debug
+
 wasm:
-	@echo "wasm: not yet implemented (planned for M11)"
-	@exit 0
+	@if ! command -v emcmake >/dev/null 2>&1; then \
+	  echo "wasm: emscripten toolchain not found in PATH"; \
+	  echo "  Install: https://emscripten.org/docs/getting_started/downloads.html"; \
+	  exit 1; \
+	fi
+	$(EM_CMAKE) -B $(WASM_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release \
+	  -DFM_BUILD_WASM=ON -DFM_BUILD_TESTING=OFF -DFM_BUILD_CLI=OFF
+	$(CMAKE) --build $(WASM_BUILD_DIR) --parallel --target formulon_wasm
+	@echo ""
+	@echo "wasm artifacts:"
+	@ls -la $(WASM_BUILD_DIR)/formulon.wasm $(WASM_BUILD_DIR)/formulon.js 2>/dev/null || \
+	  echo "  (artifacts not found; check build log above)"
 
 wasm-debug:
-	@echo "wasm-debug: not yet implemented (planned for M11)"
-	@exit 0
+	@if ! command -v emcmake >/dev/null 2>&1; then \
+	  echo "wasm-debug: emscripten toolchain not found in PATH"; \
+	  exit 1; \
+	fi
+	$(EM_CMAKE) -B $(WASM_DEBUG_BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug \
+	  -DFM_BUILD_WASM=ON -DFM_BUILD_TESTING=OFF -DFM_BUILD_CLI=OFF
+	$(CMAKE) --build $(WASM_DEBUG_BUILD_DIR) --parallel --target formulon_wasm
 
 test-wasm:
-	@echo "test-wasm: not yet implemented (planned for M11)"
-	@exit 0
+	@if [ ! -f $(WASM_BUILD_DIR)/formulon.js ]; then \
+	  echo "test-wasm: $(WASM_BUILD_DIR)/formulon.js missing; run 'make wasm' first"; \
+	  exit 1; \
+	fi
+	@if ! command -v node >/dev/null 2>&1; then \
+	  echo "test-wasm: node not found in PATH"; \
+	  exit 1; \
+	fi
+	node tests/wasm/run.mjs
 
 test-python:
 	@echo "test-python: not yet implemented (planned for M12)"

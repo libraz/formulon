@@ -300,6 +300,14 @@ if(FM_BUILD_CLI)
 endif()
 
 # ---------------------------------------------------------------------------
+# WASM target (Emscripten / embind bindings)
+# ---------------------------------------------------------------------------
+# The actual target wiring lives in cmake/FormulonWasm.cmake so the top
+# of the build remains untouched on native CI (where emscripten is not
+# installed). The script is a no-op unless FM_BUILD_WASM=ON.
+include(cmake/FormulonWasm.cmake)
+
+# ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
 if(FM_BUILD_TESTING)

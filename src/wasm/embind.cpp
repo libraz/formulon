@@ -1,0 +1,653 @@
+// Copyright 2026 libraz. Licensed under the MIT License.
+//
+// Emscripten / embind bindings for the Formulon WASM build.
+//
+// This translation unit is compiled only when `FM_BUILD_WASM=ON` (i.e.
+// the build is being driven by `emcmake`). It is a thin C++ wrapper
+// around the stable C ABI declared in `c_api/formulon_c.h`; the
+// JavaScript / TypeScript surface NEVER touches `formulon::Workbook`,
+// `formulon::Value`, or any other internal symbol directly. This keeps
+// the WASM binding decoupled from engine internals exactly the way the
+// CLI, Python ctypes wheel, and any future binding are.
+//
+// ## Design notes
+//
+//   * The whole engine is built with `-fno-exceptions -fno-rtti` and we
+//     do NOT lift that constraint here. embind itself can be compiled
+//     without exception catching as long as user code never throws —
+//     the binding surface uses a result-object pattern (`{ ok, status,
+//     message, ... }`) instead of throwing across the JS boundary.
+//
+//   * Every entry point clears and re-fetches the thread-local last
+//     error so JS callers can read `lastErrorMessage()` / `lastErrorContext()`
+//     after a failed call. That mirrors the contract of the C ABI.
+//
+//   * `JsWorkbook` owns an `fm_workbook_t*` via RAII (destructor calls
+//     `fm_workbook_destroy`). It is move-only on the C++ side; embind
+//     surfaces it as a JS class with explicit `delete()` semantics
+//     (Emscripten convention for native handles).
+//
+//   * `loadBytes` accepts `emscripten::val` because that's the simplest
+//     way to receive a `Uint8Array` without committing to a typed-array
+//     binding helper. We copy into a `std::vector<uint8_t>` and forward
+//     to `fm_workbook_load`. `save` mirrors the inverse direction:
+//     allocate the C-side buffer, copy into a fresh `Uint8Array` on the
+//     JS heap, free the native buffer.
+//
+//   * `evalFormula(formula)` is a convenience that mirrors
+//     `formulon_cli eval`: create empty workbook, place the formula at
+//     `Sheet1!A1`, recalc, return the cached value.
+
+#include <emscripten/bind.h>
+#include <emscripten/val.h>
+
+#include <cstdint>
+#include <cstring>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "c_api/formulon_c.h"
+
+namespace {
+
+/// Mirror of `fm_value_t` for the JS boundary.
+///
+/// embind's `value_object<>` cannot register a C union directly, so we
+/// flatten the variant payload into individual scalar fields and let JS
+/// code dispatch on `kind`. Only the field selected by `kind` is
+/// meaningful; the others carry default-zero values.
+struct JsValue {
+  int32_t kind = 0;     ///< `fm_value_kind_t` ordinal (0..7).
+  double number = 0.0;  ///< Active when kind == FM_VAL_NUMBER.
+  int32_t boolean = 0;  ///< Active when kind == FM_VAL_BOOL (0/1).
+  std::string text;     ///< Active when kind == FM_VAL_TEXT.
+  int32_t errorCode = 0;  ///< Active when kind == FM_VAL_ERROR.
+};
+
+/// Generic { ok, status, message, context } envelope returned by every
+/// fallible binding entry point. Modelled as a value-object so JS sees
+/// `{ ok: true, status: 0, message: '', context: '' }` on success, or
+/// `{ ok: false, status: <int>, message: <str>, context: <str> }` on
+/// failure. This is the substitute for throwing across the JS boundary,
+/// which we cannot do under `-fno-exceptions`.
+struct JsStatus {
+  bool ok = true;
+  int32_t status = 0;
+  std::string message;
+  std::string context;
+};
+
+/// Result envelope for `evalFormula` — bundles a `JsStatus` and a
+/// `JsValue` payload so JS only inspects one return shape.
+struct JsEvalResult {
+  JsStatus status;
+  JsValue value;
+};
+
+/// Result envelope for `getValue` calls on a `Workbook`.
+struct JsCellResult {
+  JsStatus status;
+  JsValue value;
+};
+
+/// Result envelope for `save()` returning the bytes as a JS Uint8Array.
+struct JsSaveResult {
+  JsStatus status;
+  emscripten::val bytes = emscripten::val::null();
+};
+
+/// Result envelope for `sheetName` (string-payload variant of JsStatus).
+struct JsStringResult {
+  JsStatus status;
+  std::string value;
+};
+
+/// Builds an `ok` envelope with empty diagnostic strings.
+JsStatus ok_status() { return JsStatus{true, 0, std::string(), std::string()}; }
+
+/// Builds a failure envelope, copying out the thread-local diagnostics
+/// surfaced by the most recent C-ABI call.
+JsStatus error_status(int32_t code) {
+  JsStatus s;
+  s.ok = false;
+  s.status = code;
+  const char* msg = fm_last_error_message();
+  const char* ctx = fm_last_error_context();
+  s.message = msg != nullptr ? msg : "";
+  s.context = ctx != nullptr ? ctx : "";
+  return s;
+}
+
+/// Translates a `fm_value_t` into the embind-friendly `JsValue`.
+///
+/// The text variant is copied (embind owns the string on the JS side).
+/// The other variants project the scalar payload directly.
+JsValue translate_value(const fm_value_t& v) {
+  JsValue out;
+  out.kind = static_cast<int32_t>(v.kind);
+  switch (v.kind) {
+    case FM_VAL_NUMBER:
+      out.number = v.u.number;
+      break;
+    case FM_VAL_BOOL:
+      out.boolean = v.u.boolean;
+      break;
+    case FM_VAL_TEXT:
+      out.text = (v.u.text != nullptr) ? std::string(v.u.text) : std::string();
+      break;
+    case FM_VAL_ERROR:
+      out.errorCode = v.u.error_code;
+      break;
+    case FM_VAL_BLANK:
+    case FM_VAL_ARRAY:
+    case FM_VAL_REF:
+    case FM_VAL_LAMBDA:
+    default:
+      // Other variants carry no scalar payload across this boundary.
+      break;
+  }
+  return out;
+}
+
+/// Copies the contents of a JS Uint8Array (passed via `emscripten::val`)
+/// into a `std::vector<uint8_t>`. Returns an empty vector when the
+/// argument is not a typed array.
+std::vector<uint8_t> val_to_bytes(const emscripten::val& v) {
+  if (v.isNull() || v.isUndefined()) {
+    return {};
+  }
+  // `length` works for both Uint8Array and plain arrays; `byteLength`
+  // is the canonical Uint8Array property. Prefer `length`.
+  const auto len_val = v["length"];
+  if (len_val.isUndefined()) {
+    return {};
+  }
+  const std::size_t len = len_val.as<std::size_t>();
+  std::vector<uint8_t> out(len);
+  if (len == 0) {
+    return out;
+  }
+  // emscripten::val's vecFromJSArray copies element-by-element via
+  // `as<T>`. For a typed Uint8Array this is correct and avoids relying
+  // on heap-pointer aliasing tricks that depend on internal layout.
+  for (std::size_t i = 0; i < len; ++i) {
+    out[i] = v[i].as<uint8_t>();
+  }
+  return out;
+}
+
+/// Materialises a fresh JS `Uint8Array` from a contiguous byte range.
+///
+/// We construct an empty Uint8Array of the requested length on the JS
+/// side and write each byte through `set(i, val)`. This is O(N) but
+/// avoids any reliance on internal heap layout, and the smoke-test
+/// payloads (a few KB at most) keep this comfortably under a
+/// millisecond.
+emscripten::val bytes_to_val(const uint8_t* data, std::size_t len) {
+  emscripten::val u8 = emscripten::val::global("Uint8Array").new_(len);
+  for (std::size_t i = 0; i < len; ++i) {
+    u8.set(i, data[i]);
+  }
+  return u8;
+}
+
+/// RAII wrapper around `fm_workbook_t*`. Move-only; embind surfaces it
+/// as a JS class with `.delete()` for explicit lifetime management.
+class JsWorkbook {
+ public:
+  JsWorkbook() = default;
+
+  ~JsWorkbook() {
+    if (handle_ != nullptr) {
+      fm_workbook_destroy(handle_);
+      handle_ = nullptr;
+    }
+  }
+
+  // Move-only.
+  JsWorkbook(const JsWorkbook&) = delete;
+  JsWorkbook& operator=(const JsWorkbook&) = delete;
+
+  JsWorkbook(JsWorkbook&& other) noexcept : handle_(other.handle_) { other.handle_ = nullptr; }
+
+  JsWorkbook& operator=(JsWorkbook&& other) noexcept {
+    if (this != &other) {
+      if (handle_ != nullptr) {
+        fm_workbook_destroy(handle_);
+      }
+      handle_ = other.handle_;
+      other.handle_ = nullptr;
+    }
+    return *this;
+  }
+
+  /// Static factory: empty workbook with the default `Sheet1`.
+  static JsWorkbook* createDefault() {
+    auto wb = std::unique_ptr<JsWorkbook>(new JsWorkbook());
+    fm_status_t rc = fm_workbook_create(&wb->handle_);
+    if (rc != 0) {
+      // The handle remains null; the caller can read lastErrorMessage().
+      // We still return the object so JS can inspect status via a
+      // subsequent isValid() check.
+    }
+    return wb.release();
+  }
+
+  /// Static factory: empty workbook with no sheets.
+  static JsWorkbook* createEmpty() {
+    auto wb = std::unique_ptr<JsWorkbook>(new JsWorkbook());
+    (void)fm_workbook_create_empty(&wb->handle_);
+    return wb.release();
+  }
+
+  /// Static factory: load from an in-memory `.xlsx` byte buffer.
+  ///
+  /// On success returns a newly-allocated JsWorkbook with a populated
+  /// handle. On failure the returned wrapper has a null handle and the
+  /// caller should consult `lastErrorMessage()` for diagnostics. JS
+  /// callers should always test `isValid()` before using the workbook.
+  static JsWorkbook* loadBytes(emscripten::val bytes) {
+    auto wb = std::unique_ptr<JsWorkbook>(new JsWorkbook());
+    const std::vector<uint8_t> buf = val_to_bytes(bytes);
+    if (buf.empty()) {
+      return wb.release();
+    }
+    (void)fm_workbook_load(buf.data(), buf.size(), &wb->handle_);
+    return wb.release();
+  }
+
+  /// True when the wrapper holds a live handle.
+  bool isValid() const { return handle_ != nullptr; }
+
+  /// Returns `{ ok, status, message, context, bytes }`. `bytes` is a
+  /// freshly-allocated Uint8Array on the JS heap; `null` on failure.
+  JsSaveResult save() const {
+    JsSaveResult r;
+    if (handle_ == nullptr) {
+      r.status = error_status(/*kBindingNullPointer=*/7000);
+      return r;
+    }
+    uint8_t* out = nullptr;
+    std::size_t len = 0;
+    fm_status_t rc = fm_workbook_save(handle_, &out, &len);
+    if (rc != 0) {
+      r.status = error_status(rc);
+      return r;
+    }
+    r.bytes = bytes_to_val(out, len);
+    fm_buffer_free(out);
+    r.status = ok_status();
+    return r;
+  }
+
+  /// Appends a new sheet with the given UTF-8 display name.
+  JsStatus addSheet(const std::string& name) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_add_sheet(handle_, name.c_str());
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Returns the number of sheets (0 when handle is invalid).
+  uint32_t sheetCount() const {
+    if (handle_ == nullptr) {
+      return 0;
+    }
+    return static_cast<uint32_t>(fm_workbook_sheet_count(handle_));
+  }
+
+  /// Returns the display name of sheet `idx`.
+  JsStringResult sheetName(uint32_t idx) const {
+    JsStringResult r;
+    if (handle_ == nullptr) {
+      r.status = error_status(7000);
+      return r;
+    }
+    const char* name = nullptr;
+    fm_status_t rc = fm_workbook_sheet_name(handle_, idx, &name);
+    if (rc != 0) {
+      r.status = error_status(rc);
+      return r;
+    }
+    r.value = (name != nullptr) ? std::string(name) : std::string();
+    r.status = ok_status();
+    return r;
+  }
+
+  /// Sets a numeric literal at `(sheet, row, col)`.
+  JsStatus setNumber(uint32_t sheet, uint32_t row, uint32_t col, double value) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_set_number(handle_, sheet, row, col, value);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Sets a boolean literal at `(sheet, row, col)`.
+  JsStatus setBool(uint32_t sheet, uint32_t row, uint32_t col, bool value) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_set_bool(handle_, sheet, row, col, value ? 1 : 0);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Sets a UTF-8 text literal at `(sheet, row, col)`.
+  JsStatus setText(uint32_t sheet, uint32_t row, uint32_t col, const std::string& text) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_set_text(handle_, sheet, row, col, text.c_str());
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Stores a Blank literal (clearing the cell).
+  JsStatus setBlank(uint32_t sheet, uint32_t row, uint32_t col) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_set_blank(handle_, sheet, row, col);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Stores a formula at `(sheet, row, col)`.
+  JsStatus setFormula(uint32_t sheet, uint32_t row, uint32_t col, const std::string& formula) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_set_formula(handle_, sheet, row, col, formula.c_str());
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Reads the cached cell value at `(sheet, row, col)`.
+  JsCellResult getValue(uint32_t sheet, uint32_t row, uint32_t col) const {
+    JsCellResult r;
+    if (handle_ == nullptr) {
+      r.status = error_status(7000);
+      return r;
+    }
+    fm_value_t v{};
+    fm_status_t rc = fm_workbook_get_value(handle_, sheet, row, col, &v);
+    if (rc != 0) {
+      r.status = error_status(rc);
+      return r;
+    }
+    r.value = translate_value(v);
+    r.status = ok_status();
+    return r;
+  }
+
+  /// Drives a full incremental recalc.
+  JsStatus recalc() {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_recalc(handle_);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Configures iterative-calculation knobs.
+  JsStatus setIterative(bool enabled, uint32_t max_iterations, double max_change) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_set_iterative(handle_, enabled ? 1 : 0, static_cast<int32_t>(max_iterations),
+                                               max_change);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  // ---- Iteration / metadata accessors --------------------------------------
+  // These mirror the C-ABI iteration / metadata entry points. Each one
+  // returns either a status-bearing envelope or, for plain count
+  // accessors, an unsigned integer (0 when the handle is invalid).
+
+  uint32_t cellCount(uint32_t sheet) const {
+    if (handle_ == nullptr) {
+      return 0;
+    }
+    std::size_t count = 0;
+    if (fm_workbook_cell_count(handle_, sheet, &count) != 0) {
+      return 0;
+    }
+    return static_cast<uint32_t>(count);
+  }
+
+  /// Returns `{ status, row, col, formula, value }` for the `idx`-th
+  /// stored cell on `sheet`.
+  emscripten::val cellAt(uint32_t sheet, uint32_t idx) const {
+    emscripten::val o = emscripten::val::object();
+    if (handle_ == nullptr) {
+      o.set("status", error_status(7000));
+      return o;
+    }
+    uint32_t row = 0;
+    uint32_t col = 0;
+    const char* formula = nullptr;
+    fm_value_t v{};
+    fm_status_t rc = fm_workbook_cell_at(handle_, sheet, idx, &row, &col, &formula, &v);
+    if (rc != 0) {
+      o.set("status", error_status(rc));
+      return o;
+    }
+    o.set("status", ok_status());
+    o.set("row", row);
+    o.set("col", col);
+    o.set("formula", formula != nullptr ? emscripten::val(std::string(formula)) : emscripten::val::null());
+    o.set("value", translate_value(v));
+    return o;
+  }
+
+  uint32_t definedNameCount() const {
+    if (handle_ == nullptr) {
+      return 0;
+    }
+    return static_cast<uint32_t>(fm_workbook_defined_name_count(handle_));
+  }
+
+  emscripten::val definedNameAt(uint32_t idx) const {
+    emscripten::val o = emscripten::val::object();
+    if (handle_ == nullptr) {
+      o.set("status", error_status(7000));
+      return o;
+    }
+    const char* name = nullptr;
+    const char* formula = nullptr;
+    fm_status_t rc = fm_workbook_defined_name_at(handle_, idx, &name, &formula);
+    if (rc != 0) {
+      o.set("status", error_status(rc));
+      return o;
+    }
+    o.set("status", ok_status());
+    o.set("name", name != nullptr ? std::string(name) : std::string());
+    o.set("formula", formula != nullptr ? std::string(formula) : std::string());
+    return o;
+  }
+
+  uint32_t tableCount() const {
+    if (handle_ == nullptr) {
+      return 0;
+    }
+    return static_cast<uint32_t>(fm_workbook_table_count(handle_));
+  }
+
+  emscripten::val tableAt(uint32_t idx) const {
+    emscripten::val o = emscripten::val::object();
+    if (handle_ == nullptr) {
+      o.set("status", error_status(7000));
+      return o;
+    }
+    const char* name = nullptr;
+    const char* display = nullptr;
+    const char* ref = nullptr;
+    std::size_t sheet_index = 0;
+    fm_status_t rc = fm_workbook_table_at(handle_, idx, &name, &display, &ref, &sheet_index);
+    if (rc != 0) {
+      o.set("status", error_status(rc));
+      return o;
+    }
+    o.set("status", ok_status());
+    o.set("name", name != nullptr ? std::string(name) : std::string());
+    o.set("displayName", display != nullptr ? std::string(display) : std::string());
+    o.set("ref", ref != nullptr ? std::string(ref) : std::string());
+    o.set("sheetIndex", static_cast<uint32_t>(sheet_index));
+    return o;
+  }
+
+  uint32_t passthroughCount() const {
+    if (handle_ == nullptr) {
+      return 0;
+    }
+    return static_cast<uint32_t>(fm_workbook_passthrough_count(handle_));
+  }
+
+  emscripten::val passthroughAt(uint32_t idx) const {
+    emscripten::val o = emscripten::val::object();
+    if (handle_ == nullptr) {
+      o.set("status", error_status(7000));
+      return o;
+    }
+    const char* path = nullptr;
+    fm_status_t rc = fm_workbook_passthrough_at(handle_, idx, &path);
+    if (rc != 0) {
+      o.set("status", error_status(rc));
+      return o;
+    }
+    o.set("status", ok_status());
+    o.set("path", path != nullptr ? std::string(path) : std::string());
+    return o;
+  }
+
+ private:
+  fm_workbook_t* handle_ = nullptr;
+};
+
+/// Convenience: evaluate a single formula in a fresh workbook.
+///
+/// Mirrors the `formulon_cli eval <formula>` workflow: spin up an empty
+/// workbook with the default Sheet1, place the formula at A1, recalc,
+/// and return the resulting cell value.
+JsEvalResult eval_formula(const std::string& formula) {
+  JsEvalResult r;
+  fm_workbook_t* wb = nullptr;
+  fm_status_t rc = fm_workbook_create(&wb);
+  if (rc != 0) {
+    r.status = error_status(rc);
+    return r;
+  }
+  rc = fm_workbook_set_formula(wb, 0, 0, 0, formula.c_str());
+  if (rc != 0) {
+    r.status = error_status(rc);
+    fm_workbook_destroy(wb);
+    return r;
+  }
+  rc = fm_workbook_recalc(wb);
+  if (rc != 0) {
+    r.status = error_status(rc);
+    fm_workbook_destroy(wb);
+    return r;
+  }
+  fm_value_t v{};
+  rc = fm_workbook_get_value(wb, 0, 0, 0, &v);
+  if (rc != 0) {
+    r.status = error_status(rc);
+    fm_workbook_destroy(wb);
+    return r;
+  }
+  r.value = translate_value(v);
+  r.status = ok_status();
+  fm_workbook_destroy(wb);
+  return r;
+}
+
+/// Returns the Formulon library version (NUL-terminated UTF-8).
+std::string version_string() {
+  const char* s = fm_version_string();
+  return s != nullptr ? std::string(s) : std::string();
+}
+
+/// Returns the static C string for `status`.
+std::string status_string(int32_t status) {
+  const char* s = fm_status_string(static_cast<fm_status_t>(status));
+  return s != nullptr ? std::string(s) : std::string();
+}
+
+/// Returns the most-recent thread-local error message.
+std::string last_error_message() {
+  const char* s = fm_last_error_message();
+  return s != nullptr ? std::string(s) : std::string();
+}
+
+/// Returns the most-recent thread-local error context.
+std::string last_error_context() {
+  const char* s = fm_last_error_context();
+  return s != nullptr ? std::string(s) : std::string();
+}
+
+}  // namespace
+
+EMSCRIPTEN_BINDINGS(formulon) {
+  using emscripten::allow_raw_pointers;
+  using emscripten::class_;
+  using emscripten::function;
+  using emscripten::value_object;
+
+  // ---- Value-object surface ------------------------------------------------
+  value_object<JsStatus>("Status")
+      .field("ok", &JsStatus::ok)
+      .field("status", &JsStatus::status)
+      .field("message", &JsStatus::message)
+      .field("context", &JsStatus::context);
+
+  value_object<JsValue>("Value")
+      .field("kind", &JsValue::kind)
+      .field("number", &JsValue::number)
+      .field("boolean", &JsValue::boolean)
+      .field("text", &JsValue::text)
+      .field("errorCode", &JsValue::errorCode);
+
+  value_object<JsCellResult>("CellResult").field("status", &JsCellResult::status).field("value", &JsCellResult::value);
+
+  value_object<JsEvalResult>("EvalResult").field("status", &JsEvalResult::status).field("value", &JsEvalResult::value);
+
+  value_object<JsSaveResult>("SaveResult").field("status", &JsSaveResult::status).field("bytes", &JsSaveResult::bytes);
+
+  value_object<JsStringResult>("StringResult")
+      .field("status", &JsStringResult::status)
+      .field("value", &JsStringResult::value);
+
+  // ---- Workbook class ------------------------------------------------------
+  class_<JsWorkbook>("Workbook")
+      .class_function("createDefault", &JsWorkbook::createDefault, allow_raw_pointers())
+      .class_function("createEmpty", &JsWorkbook::createEmpty, allow_raw_pointers())
+      .class_function("loadBytes", &JsWorkbook::loadBytes, allow_raw_pointers())
+      .function("isValid", &JsWorkbook::isValid)
+      .function("save", &JsWorkbook::save)
+      .function("addSheet", &JsWorkbook::addSheet)
+      .function("sheetCount", &JsWorkbook::sheetCount)
+      .function("sheetName", &JsWorkbook::sheetName)
+      .function("setNumber", &JsWorkbook::setNumber)
+      .function("setBool", &JsWorkbook::setBool)
+      .function("setText", &JsWorkbook::setText)
+      .function("setBlank", &JsWorkbook::setBlank)
+      .function("setFormula", &JsWorkbook::setFormula)
+      .function("getValue", &JsWorkbook::getValue)
+      .function("recalc", &JsWorkbook::recalc)
+      .function("setIterative", &JsWorkbook::setIterative)
+      .function("cellCount", &JsWorkbook::cellCount)
+      .function("cellAt", &JsWorkbook::cellAt)
+      .function("definedNameCount", &JsWorkbook::definedNameCount)
+      .function("definedNameAt", &JsWorkbook::definedNameAt)
+      .function("tableCount", &JsWorkbook::tableCount)
+      .function("tableAt", &JsWorkbook::tableAt)
+      .function("passthroughCount", &JsWorkbook::passthroughCount)
+      .function("passthroughAt", &JsWorkbook::passthroughAt);
+
+  // ---- Free functions ------------------------------------------------------
+  function("evalFormula", &eval_formula);
+  function("versionString", &version_string);
+  function("statusString", &status_string);
+  function("lastErrorMessage", &last_error_message);
+  function("lastErrorContext", &last_error_context);
+}
