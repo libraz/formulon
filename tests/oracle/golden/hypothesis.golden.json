@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T09:07:02Z"
+    "generated_at": "2026-04-29T02:06:39Z"
   },
   "tolerance": {
     "abs": 1e-06,
@@ -2000,6 +2000,718 @@
       "expect": {
         "kind": "number",
         "value": 0.0010528257933665394
+      }
+    },
+    {
+      "id": "ttest_paired_small",
+      "formula": "=TTEST(A1:A5, B1:B5, 2, 1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.1778078083562213
+      }
+    },
+    {
+      "id": "ttest_welch_two_tailed",
+      "formula": "=TTEST(A1:A5, B1:B5, 2, 3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.08693823344354362
+      }
+    },
+    {
+      "id": "ttest_identical_samples_p_one",
+      "formula": "=TTEST(A1:A5, B1:B5, 2, 2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "ttest_one_tail_half_of_two_tail",
+      "formula": "=TTEST(A1:A5, B1:B5, 2, 2) - 2*TTEST(A1:A5, B1:B5, 1, 2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "ftest_basic",
+      "formula": "=FTEST(A1:A5, B1:B5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 15.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 28.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 31.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 38.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.6483178467861743
+      }
+    },
+    {
+      "id": "ftest_identical_samples_p_one",
+      "formula": "=FTEST(A1:A5, B1:B5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "ftest_constant_input_is_div0",
+      "formula": "=FTEST(A1:A5, B1:B5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ftest_mismatched_sizes_ok",
+      "formula": "=FTEST(A1:A5, B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 14.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.617283950617284
+      }
+    },
+    {
+      "id": "chitest_2x2_table",
+      "formula": "=CHITEST(A1:B2, C1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 58.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 35.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 25.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 45.35
+        },
+        "D1": {
+          "kind": "number",
+          "value": 23.65
+        },
+        "C2": {
+          "kind": "number",
+          "value": 47.65
+        },
+        "D2": {
+          "kind": "number",
+          "value": 24.85
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.00021976269980379738
+      }
+    },
+    {
+      "id": "chitest_one_dimensional",
+      "formula": "=CHITEST(A1:A3, B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "chitest_dim_mismatch_is_na",
+      "formula": "=CHITEST(A1:A3, B1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "chitest_zero_expected_is_div0",
+      "formula": "=CHITEST(A1:A3, B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ztest_known_sigma",
+      "formula": "=ZTEST(A1:A10, 4, 2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.04099516050019153
+      }
+    },
+    {
+      "id": "ztest_sample_sigma",
+      "formula": "=ZTEST(A1:A10, 4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.09057419685136381
+      }
+    },
+    {
+      "id": "ztest_x_outside_range",
+      "formula": "=ZTEST(A1:A10, 0, 2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A9": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A10": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.6976929098244557e-16
+      }
+    },
+    {
+      "id": "ztest_sigma_zero_is_div0",
+      "formula": "=ZTEST(A1:A5, 4, 0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
       }
     }
   ]

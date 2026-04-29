@@ -104,6 +104,10 @@ cases:
     description: "T.DIST.RT rejects negative x in Excel (#NUM!)"
     formula: "=T.DIST.RT(-1, 10)"
 
+  - id: t_dist_rt_large_x_near_zero
+    description: "Right-tail at large positive x approaches 0"
+    formula: "=T.DIST.RT(100, 10)"
+
   # -- T.DIST.2T --------------------------------------------------------
   - id: t_dist_2t_at_zero
     description: "Two-tail at x=0 is 1.0 (the entire distribution mass)"

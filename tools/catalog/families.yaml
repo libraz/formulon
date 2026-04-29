@@ -316,6 +316,26 @@ families:
     min_perspectives_per_member: 5
     cluster_reason: "TVM and depreciation family; share rate/period sign-convention edges (loan vs. annuity, type=0 vs type=1) and Newton-Raphson tail-bit drift."
 
+  # -- Hypothesis-test / probability family ---------------------------------
+  # Chi-square / F / T / Z hypothesis tests plus PROB. Pre-2010 *TEST aliases
+  # (CHITEST / FTEST / TTEST / ZTEST) share fixtures with their post-2010
+  # *.TEST forms; PROB rides along because it lives in the same suite file
+  # and shares the discrete-distribution / range-shape perspective set.
+  - name: hypothesis
+    members: ["CHISQ.TEST", CHITEST, "F.TEST", FTEST, PROB, "T.TEST", TTEST, "Z.TEST", ZTEST]
+    category_file: tests/oracle/cases/hypothesis.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Hypothesis-test family (chi-square / F / T / Z); pre-2010 *TEST aliases share fixtures with post-2010 *.TEST forms."
+
+  # -- Student's-t distribution family --------------------------------------
+  # T.DIST / T.DIST.2T / T.DIST.RT and the inverses T.INV / T.INV.2T share
+  # the df-parameter validity edges and the one-tail/two-tail dichotomy.
+  - name: t_dist
+    members: ["T.DIST", "T.DIST.2T", "T.DIST.RT", "T.INV", "T.INV.2T"]
+    category_file: tests/oracle/cases/t_dist.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Student's-t distribution family; share df-parameter validity edges and one-tail/two-tail dichotomy."
+
   # -- Financial discount-rate / Treasury-bill / matured-yield family ------
   # Discount-rate (DISC / INTRATE / RECEIVED), price/yield-from-discount
   # (PRICEDISC / YIELDDISC), at-maturity price/yield (PRICEMAT / YIELDMAT)

@@ -8467,3 +8467,282 @@ groups:
       - name: "round-trip DEGREES(RADIANS(45)) == 45"
         probe: "=DEGREES(RADIANS(45))"
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # Hypothesis-test / probability family. Covered by `tests/oracle/cases/
+  # hypothesis.yaml` and exercised under the `hypothesis` family in
+  # `tools/catalog/families.yaml`. Each function declares five perspectives
+  # spanning the test-type / tail / shape / boundary / error-input axes.
+  # -------------------------------------------------------------------------
+  - function: "T.TEST"
+    aspect: "Student's t-test variants and validity edges"
+    behaviors:
+      - name: "paired (type=1)"
+        probe: "=T.TEST(A1:A5, B1:B5, 2, 1)"
+        expected: impl
+      - name: "two-sample equal-var (type=2)"
+        probe: "=T.TEST(A1:A5, B1:B5, 2, 2)"
+        expected: impl
+      - name: "two-sample unequal-var Welch (type=3)"
+        probe: "=T.TEST(A1:A5, B1:B5, 2, 3)"
+        expected: impl
+      - name: "type out-of-range (type=0) -> #NUM!"
+        probe: "=T.TEST(A1:A5, B1:B5, 2, 0)"
+        expected: impl
+      - name: "tails out-of-range (tails=3) -> #NUM!"
+        probe: "=T.TEST(A1:A5, B1:B5, 3, 2)"
+        expected: impl
+
+  - function: "TTEST"
+    aspect: "legacy alias of T.TEST"
+    behaviors:
+      - name: "paired (type=1)"
+        probe: "=TTEST(A1:A5, B1:B5, 2, 1)"
+        expected: impl
+      - name: "Welch unequal-var (type=3)"
+        probe: "=TTEST(A1:A5, B1:B5, 2, 3)"
+        expected: impl
+      - name: "identical samples -> p ~ 1"
+        probe: "=TTEST(A1:A5, B1:B5, 2, 2)"
+        expected: impl
+      - name: "one-tail / two-tail identity"
+        probe: "2*TTEST(A1:A5, B1:B5, 1, 2)"
+        expected: impl
+      - name: "matches T.TEST"
+        probe: "=TTEST(A1:A5, B1:B5, 2, 2) - T.TEST(A1:A5, B1:B5, 2, 2)"
+        expected: impl
+
+  - function: "F.TEST"
+    aspect: "F-test of equal variances"
+    behaviors:
+      - name: "basic two-sample variance comparison"
+        probe: "=F.TEST(A1:A5, B1:B5)"
+        expected: impl
+      - name: "n=1 sample -> #DIV/0!"
+        probe: "=F.TEST(A1, B1)"
+        expected: impl
+      - name: "constant input (variance=0) -> #DIV/0!"
+        probe_regex: '=F\.TEST\(A1:A5, B1:B5\)'
+        expected: impl
+      - name: "mismatched sample sizes accepted"
+        probe: "=F.TEST(A1:A5, B1:B3)"
+        expected: impl
+      - name: "text cells skipped in range"
+        probe: "=F.TEST(A1:A6, B1:B5)"
+        expected: impl
+
+  - function: "FTEST"
+    aspect: "legacy alias of F.TEST"
+    behaviors:
+      - name: "basic two-sample variance comparison"
+        probe: "=FTEST(A1:A5, B1:B5)"
+        expected: impl
+      - name: "constant input -> #DIV/0!"
+        probe_regex: '=FTEST\(A1:A5, B1:B5\)'
+        expected: impl
+      - name: "mismatched sample sizes accepted"
+        probe: "=FTEST(A1:A5, B1:B3)"
+        expected: impl
+      - name: "identical samples -> p ~ 1"
+        probe_regex: '=FTEST\(A1:A5, B1:B5\)'
+        expected: impl
+      - name: "matches F.TEST"
+        probe: "=FTEST(A1:A5, B1:B5) - F.TEST(A1:A5, B1:B5)"
+        expected: impl
+
+  - function: "CHISQ.TEST"
+    aspect: "chi-squared independence test"
+    behaviors:
+      - name: "2x2 contingency table"
+        probe: "=CHISQ.TEST(A1:B2, C1:D2)"
+        expected: impl
+      - name: "1-D vector (df = n-1) perfect match -> p=1"
+        probe: "=CHISQ.TEST(A1:A3, B1:B3)"
+        expected: impl
+      - name: "1x1 table (df=0) -> #N/A"
+        probe: "=CHISQ.TEST(A1, B1)"
+        expected: impl
+      - name: "zero expected count -> #DIV/0!"
+        probe_regex: '=CHISQ\.TEST\(A1:A3, B1:B3\)'
+        expected: impl
+      - name: "dimension mismatch -> #N/A"
+        probe: "=CHISQ.TEST(A1:A3, B1:B2)"
+        expected: impl
+
+  - function: "CHITEST"
+    aspect: "legacy alias of CHISQ.TEST"
+    behaviors:
+      - name: "2x2 contingency table"
+        probe: "=CHITEST(A1:B2, C1:D2)"
+        expected: impl
+      - name: "1-D vector perfect match -> p=1"
+        probe: "=CHITEST(A1:A3, B1:B3)"
+        expected: impl
+      - name: "dimension mismatch -> #N/A"
+        probe: "=CHITEST(A1:A3, B1:B2)"
+        expected: impl
+      - name: "zero expected count -> #DIV/0!"
+        probe_regex: '=CHITEST\(A1:A3, B1:B3\)'
+        expected: impl
+      - name: "matches CHISQ.TEST"
+        probe: "=CHITEST(A1:B2, C1:D2) - CHISQ.TEST(A1:B2, C1:D2)"
+        expected: impl
+
+  - function: "Z.TEST"
+    aspect: "one-tailed z-test"
+    behaviors:
+      - name: "explicit sigma supplied"
+        probe: "=Z.TEST(A1:A10, 4, 2)"
+        expected: impl
+      - name: "sample sigma (sigma omitted)"
+        probe: "=Z.TEST(A1:A10, 4)"
+        expected: impl
+      - name: "sigma=0 -> #DIV/0!"
+        probe: "=Z.TEST(A1:A5, 4, 0)"
+        expected: impl
+      - name: "x far from sample mean -> extreme tail"
+        probe: "=Z.TEST(A1:A10, 0, 2)"
+        expected: impl
+      - name: "n=1 with sample sigma -> #DIV/0!"
+        probe: "=Z.TEST(A1, 4)"
+        expected: impl
+
+  - function: "ZTEST"
+    aspect: "legacy alias of Z.TEST"
+    behaviors:
+      - name: "explicit sigma supplied"
+        probe: "=ZTEST(A1:A10, 4, 2)"
+        expected: impl
+      - name: "sample sigma (sigma omitted)"
+        probe: "=ZTEST(A1:A10, 4)"
+        expected: impl
+      - name: "x far from sample mean -> extreme tail"
+        probe: "=ZTEST(A1:A10, 0, 2)"
+        expected: impl
+      - name: "sigma=0 -> #DIV/0!"
+        probe: "=ZTEST(A1:A5, 4, 0)"
+        expected: impl
+      - name: "matches Z.TEST"
+        probe: "=ZTEST(A1:A10, 4) - Z.TEST(A1:A10, 4)"
+        expected: impl
+
+  - function: "PROB"
+    aspect: "discrete-distribution probability"
+    behaviors:
+      - name: "single-bin (upper omitted)"
+        probe: "=PROB(A1:A4, B1:B4, 2)"
+        expected: impl
+      - name: "range lower..upper"
+        probe: "=PROB(A1:A4, B1:B4, 2, 3)"
+        expected: impl
+      - name: "lower==upper hits the single-bin probability"
+        probe: "=PROB(A1:A4, B1:B4, 3, 3)"
+        expected: impl
+      - name: "size mismatch -> #N/A"
+        probe: "=PROB(A1:A4, B1:B2, 2)"
+        expected: impl
+      - name: "lower > upper edge"
+        probe: "=PROB(A1:A4, B1:B4, 3, 2)"
+        expected: impl
+
+  # -------------------------------------------------------------------------
+  # Student's-t distribution family. Covered by `tests/oracle/cases/
+  # t_dist.yaml` and exercised under the `t_dist` family in
+  # `tools/catalog/families.yaml`. Each function declares five perspectives
+  # spanning cumulative/PDF dichotomy, df-validity, tail behaviour, and
+  # the inverse round-trip identity.
+  # -------------------------------------------------------------------------
+  - function: "T.DIST"
+    aspect: "Student's t cumulative distribution / PDF"
+    behaviors:
+      - name: "CDF cumulative=TRUE basic"
+        probe: "=T.DIST(1, 5, TRUE)"
+        expected: impl
+      - name: "PDF cumulative=FALSE"
+        probe: "=T.DIST(0, 5, FALSE)"
+        expected: impl
+      - name: "median: T.DIST(0, df, TRUE) = 0.5"
+        probe: "=T.DIST(0, 5, TRUE)"
+        expected: impl
+      - name: "df=1 (Cauchy)"
+        probe: "=T.DIST(1, 1, TRUE)"
+        expected: impl
+      - name: "df<1 -> #NUM!"
+        probe: "=T.DIST(0, 0, TRUE)"
+        expected: impl
+
+  - function: "T.DIST.2T"
+    aspect: "Student's t two-tailed distribution"
+    behaviors:
+      - name: "standard call x>0"
+        probe: "=T.DIST.2T(2, 10)"
+        expected: impl
+      - name: "x=0 -> 1.0 (entire mass)"
+        probe: "=T.DIST.2T(0, 10)"
+        expected: impl
+      - name: "negative x -> #NUM!"
+        probe: "=T.DIST.2T(-1, 10)"
+        expected: impl
+      - name: "df=0 -> #NUM!"
+        probe: "=T.DIST.2T(2, 0)"
+        expected: impl
+      - name: "negative df -> #NUM!"
+        probe: "=T.DIST.2T(2, -5)"
+        expected: impl
+
+  - function: "T.DIST.RT"
+    aspect: "Student's t right-tailed distribution"
+    behaviors:
+      - name: "standard call x>0"
+        probe: "=T.DIST.RT(1.5, 10)"
+        expected: impl
+      - name: "x=0 -> 0.5"
+        probe: "=T.DIST.RT(0, 10)"
+        expected: impl
+      - name: "negative x -> #NUM!"
+        probe: "=T.DIST.RT(-1, 10)"
+        expected: impl
+      - name: "complement T.DIST + T.DIST.RT = 1"
+        probe: "=T.DIST(1.5, 10, TRUE) + T.DIST.RT(1.5, 10)"
+        expected: impl
+      - name: "large positive t -> ~0"
+        probe: "=T.DIST.RT(100, 10)"
+        expected: impl
+
+  - function: "T.INV"
+    aspect: "Student's t left-tail inverse"
+    behaviors:
+      - name: "median p=0.5 -> 0"
+        probe: "=T.INV(0.5, 10)"
+        expected: impl
+      - name: "95th percentile"
+        probe: "=T.INV(0.95, 10)"
+        expected: impl
+      - name: "p=0 boundary"
+        probe: "=T.INV(0, 10)"
+        expected: impl
+      - name: "p=1 boundary"
+        probe: "=T.INV(1, 10)"
+        expected: impl
+      - name: "round-trip with T.DIST"
+        probe: "=T.INV(T.DIST(1, 5, TRUE), 5) - 1"
+        expected: impl
+
+  - function: "T.INV.2T"
+    aspect: "Student's t two-tail inverse"
+    behaviors:
+      - name: "standard p in (0,1)"
+        probe: "=T.INV.2T(0.05, 10)"
+        expected: impl
+      - name: "p=1 -> 0"
+        probe: "=T.INV.2T(1, 10)"
+        expected: impl
+      - name: "p=0 -> #NUM!"
+        probe: "=T.INV.2T(0, 10)"
+        expected: impl
+      - name: "p>1 -> #NUM!"
+        probe: "=T.INV.2T(1.5, 10)"
+        expected: impl
+      - name: "round-trip with T.DIST.2T"
+        probe: "=T.INV.2T(T.DIST.2T(2, 10), 10) - 2"
+        expected: impl
