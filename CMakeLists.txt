@@ -29,6 +29,7 @@ endif()
 option(FM_BUILD_TESTING       "Build unit/property/oracle tests" ON)
 option(FM_BUILD_WASM          "Build WASM target (requires emscripten)" OFF)
 option(FM_BUILD_PYTHON_SHARED "Build shared lib for Python ctypes" OFF)
+option(FM_BUILD_C_API_SHARED  "Build libformulon shared lib exporting the C ABI" OFF)
 option(FM_BUILD_CLI           "Build formulon_cli binary" ON)
 option(FM_BUILD_FUZZ          "Build libFuzzer harnesses (clang only)" OFF)
 option(FM_ENABLE_COVERAGE     "Enable gcov/lcov" OFF)
@@ -200,6 +201,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/info_lazy.cpp
   src/eval/lookups/classic.cpp
   src/eval/lookups/xlookup.cpp
+  src/c_api/formulon_c.cpp
 )
 
 add_library(formulon_core OBJECT ${FORMULON_CORE_SOURCES})
@@ -242,6 +244,33 @@ target_link_libraries(formulon_static
 )
 
 # No per-target warning flags: formulon_static only aggregates objects.
+
+# ---------------------------------------------------------------------------
+# Optional shared library exporting the C ABI (libformulon).
+#
+# Default OFF: in-tree consumers (CLI, WASM bindings, tests) link the static
+# archive directly. The shared variant exists for out-of-process language
+# bindings (Python ctypes, future REST host, etc.) that need to dlopen a
+# single artifact and resolve only the `fm_*` symbols. The C API
+# translation unit is built with default visibility for its `FM_API`
+# entry points; everything else stays hidden because the rest of the
+# core is compiled with `-fvisibility=hidden`.
+# ---------------------------------------------------------------------------
+if(FM_BUILD_C_API_SHARED)
+  add_library(formulon SHARED $<TARGET_OBJECTS:formulon_core>)
+
+  target_include_directories(formulon
+    PUBLIC
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+  )
+
+  target_link_libraries(formulon
+    PUBLIC
+      formulon::miniz
+      formulon::pugixml
+      formulon::pcre2
+  )
+endif()
 
 # ---------------------------------------------------------------------------
 # CLI target (option kept ON by default, but the binary is not built until

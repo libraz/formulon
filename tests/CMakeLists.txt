@@ -212,3 +212,4 @@ endif()
 
 add_subdirectory(integration)
 add_subdirectory(oracle)
+add_subdirectory(c_api)
