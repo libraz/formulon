@@ -6399,3 +6399,220 @@ groups:
       - name: "larger failure count produces a smaller PMF tail"
         probe: "=NEGBINOMDIST(20, 5, 0.25)"
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # Post-2010 beta / gamma / lognormal / Weibull distribution family.
+  # Cases live under `tests/oracle/cases/distributions_ext.yaml`. Pre-2010
+  # aliases (BETADIST / HYPGEOMDIST / LOGINV / LOGNORMDIST / WEIBULL) live
+  # in the `stats_compat` family and are intentionally not re-declared
+  # here; their probes are owned by the legacy alias declarations.
+  # -------------------------------------------------------------------------
+
+  - function: "BETA.DIST"
+    aspect: "regularized incomplete beta CDF / PDF on [A, B]"
+    behaviors:
+      - name: "cumulative=TRUE basic CDF"
+        probe: "=BETA.DIST(0.4, 8, 10, TRUE)"
+        expected: impl
+      - name: "cumulative=FALSE PDF (alpha=beta=2)"
+        probe: "=BETA.DIST(0.5, 2, 2, FALSE)"
+        expected: impl
+      - name: "scaled support [A, B]"
+        probe: "=BETA.DIST(1.8, 8, 10, TRUE, 1, 3)"
+        expected: impl
+      - name: "x outside [A, B] -> #NUM!"
+        probe: "=BETA.DIST(1.5, 2, 3, TRUE)"
+        expected: impl
+      - name: "non-positive shape parameter -> #NUM!"
+        probe: "=BETA.DIST(0.5, 0, 3, TRUE)"
+        expected: impl
+
+  - function: "BETA.INV"
+    aspect: "inverse regularized incomplete beta on [A, B]"
+    behaviors:
+      - name: "median of symmetric BETA(2, 2) is 0.5"
+        probe: "=BETA.INV(0.5, 2, 2)"
+        expected: impl
+      - name: "round-trip BETA.INV(BETA.DIST(...))"
+        probe: "=BETA.INV(BETA.DIST(0.4, 8, 10, TRUE), 8, 10)"
+        expected: impl
+      - name: "p=0 boundary -> #NUM!"
+        probe: "=BETA.INV(0, 2, 3)"
+        expected: impl
+      - name: "p=1 boundary -> #NUM!"
+        probe: "=BETA.INV(1, 2, 3)"
+        expected: impl
+      - name: "scaled support [A, B] round-trip"
+        probe: "=BETA.INV(BETA.DIST(1.8, 8, 10, TRUE, 1, 3), 8, 10, 1, 3)"
+        expected: impl
+
+  - function: "GAMMA"
+    aspect: "Euler gamma function"
+    behaviors:
+      - name: "Γ(integer) = (n-1)!"
+        probe: "=GAMMA(5)"
+        expected: impl
+      - name: "Γ(0.5) = sqrt(pi)"
+        probe: "=GAMMA(0.5)"
+        expected: impl
+      - name: "Γ(1.5) = sqrt(pi)/2"
+        probe: "=GAMMA(1.5)"
+        expected: impl
+      - name: "Γ(0) is a pole -> #NUM!"
+        probe: "=GAMMA(0)"
+        expected: impl
+      - name: "Γ(171) overflows IEEE 754 double -> #NUM!"
+        probe: "=GAMMA(171)"
+        expected: impl
+
+  - function: "GAMMA.DIST"
+    aspect: "gamma distribution CDF / PDF"
+    behaviors:
+      - name: "cumulative=TRUE CDF"
+        probe: "=GAMMA.DIST(2, 3, 2, TRUE)"
+        expected: impl
+      - name: "cumulative=FALSE PDF"
+        probe: "=GAMMA.DIST(2, 3, 2, FALSE)"
+        expected: impl
+      - name: "x=0 boundary CDF=0"
+        probe: "=GAMMA.DIST(0, 3, 2, TRUE)"
+        expected: impl
+      - name: "negative x -> #NUM!"
+        probe: "=GAMMA.DIST(-1, 3, 2, TRUE)"
+        expected: impl
+      - name: "alpha=1 reduces to exponential PDF"
+        probe: "=GAMMA.DIST(1, 1, 2, FALSE)"
+        expected: impl
+
+  - function: "GAMMA.INV"
+    aspect: "inverse gamma distribution quantile"
+    behaviors:
+      - name: "median quantile p=0.5"
+        probe: "=GAMMA.INV(0.5, 3, 2)"
+        expected: impl
+      - name: "round-trip GAMMA.INV(GAMMA.DIST(...))"
+        probe: "=GAMMA.INV(GAMMA.DIST(4, 3, 2, TRUE), 3, 2)"
+        expected: impl
+      - name: "p=0 returns left endpoint of support"
+        probe: "=GAMMA.INV(0, 3, 2)"
+        expected: impl
+      - name: "p=0 alpha=1 (exponential) endpoint"
+        probe: "=GAMMA.INV(0, 1, 2)"
+        expected: impl
+      - name: "alpha <= 0 -> #NUM!"
+        probe: "=GAMMA.INV(0.5, -1, 2)"
+        expected: impl
+
+  - function: "GAMMALN"
+    aspect: "natural log of gamma function"
+    behaviors:
+      - name: "ln Γ(1) = 0"
+        probe: "=GAMMALN(1)"
+        expected: impl
+      - name: "ln Γ(0.5) = ln(sqrt(pi))"
+        probe: "=GAMMALN(0.5)"
+        expected: impl
+      - name: "ln Γ(10) = ln(9!)"
+        probe: "=GAMMALN(10)"
+        expected: impl
+      - name: "x <= 0 (integer pole) -> #NUM!"
+        probe: "=GAMMALN(-1)"
+        expected: impl
+      - name: "x <= 0 (non-integer) -> #NUM!"
+        probe: "=GAMMALN(-0.5)"
+        expected: impl
+
+  - function: "GAMMALN.PRECISE"
+    aspect: "high-precision spelling of GAMMALN"
+    behaviors:
+      - name: "ln Γ(1) = 0"
+        probe: "=GAMMALN.PRECISE(1)"
+        expected: impl
+      - name: "ln Γ(0.5) = ln(sqrt(pi))"
+        probe: "=GAMMALN.PRECISE(0.5)"
+        expected: impl
+      - name: "matches GAMMALN at fractional argument"
+        probe: "=GAMMALN.PRECISE(7.5)"
+        expected: impl
+      - name: "ln Γ(10) = ln(9!)"
+        probe: "=GAMMALN.PRECISE(10)"
+        expected: impl
+      - name: "x <= 0 -> #NUM!"
+        probe: "=GAMMALN.PRECISE(-1)"
+        expected: impl
+
+  - function: "HYPGEOM.DIST"
+    aspect: "hypergeometric PMF / CDF (urn problem)"
+    behaviors:
+      - name: "PMF basic urn problem"
+        probe: "=HYPGEOM.DIST(1, 4, 8, 20, FALSE)"
+        expected: impl
+      - name: "PMF at k=0 boundary"
+        probe: "=HYPGEOM.DIST(0, 4, 8, 20, FALSE)"
+        expected: impl
+      - name: "CDF over full support sums to 1"
+        probe: "=HYPGEOM.DIST(4, 4, 8, 20, TRUE)"
+        expected: impl
+      - name: "k > sample size returns 0 (PMF)"
+        probe: "=HYPGEOM.DIST(5, 4, 8, 20, FALSE)"
+        expected: impl
+      - name: "negative k -> #NUM!"
+        probe: "=HYPGEOM.DIST(-1, 4, 8, 20, FALSE)"
+        expected: impl
+
+  - function: "LOGNORM.DIST"
+    aspect: "lognormal CDF / PDF"
+    behaviors:
+      - name: "cumulative=TRUE CDF"
+        probe: "=LOGNORM.DIST(4, 3.5, 1.2, TRUE)"
+        expected: impl
+      - name: "cumulative=FALSE PDF (standard lognormal)"
+        probe: "=LOGNORM.DIST(1, 0, 1, FALSE)"
+        expected: impl
+      - name: "x=0 boundary -> #NUM!"
+        probe: "=LOGNORM.DIST(0, 0, 1, TRUE)"
+        expected: impl
+      - name: "sigma=0 -> #NUM!"
+        probe: "=LOGNORM.DIST(1, 0, 0, TRUE)"
+        expected: impl
+      - name: "negative sigma -> #NUM!"
+        probe: "=LOGNORM.DIST(1, 0, -1, TRUE)"
+        expected: impl
+
+  - function: "LOGNORM.INV"
+    aspect: "inverse lognormal quantile"
+    behaviors:
+      - name: "median = exp(mu)"
+        probe: "=LOGNORM.INV(0.5, 0, 1)"
+        expected: impl
+      - name: "round-trip LOGNORM.INV(LOGNORM.DIST(...))"
+        probe: "=LOGNORM.INV(LOGNORM.DIST(2, 0, 1, TRUE), 0, 1)"
+        expected: impl
+      - name: "p=0 boundary -> #NUM!"
+        probe: "=LOGNORM.INV(0, 0, 1)"
+        expected: impl
+      - name: "p=1 boundary -> #NUM!"
+        probe: "=LOGNORM.INV(1, 0, 1)"
+        expected: impl
+      - name: "upper-tail quantile p=0.95"
+        probe: "=LOGNORM.INV(0.95, 0, 1)"
+        expected: impl
+
+  - function: "WEIBULL.DIST"
+    aspect: "Weibull CDF / PDF"
+    behaviors:
+      - name: "cumulative=TRUE CDF"
+        probe: "=WEIBULL.DIST(105, 20, 100, TRUE)"
+        expected: impl
+      - name: "cumulative=FALSE PDF (alpha=1 -> exponential)"
+        probe: "=WEIBULL.DIST(0, 1, 1, FALSE)"
+        expected: impl
+      - name: "x=0 boundary CDF=0"
+        probe: "=WEIBULL.DIST(0, 2, 1, TRUE)"
+        expected: impl
+      - name: "negative x -> #NUM!"
+        probe: "=WEIBULL.DIST(-1, 2, 3, TRUE)"
+        expected: impl
+      - name: "alpha <= 0 -> #NUM!"
+        probe: "=WEIBULL.DIST(1, 0, 2, TRUE)"
+        expected: impl

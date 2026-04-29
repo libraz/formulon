@@ -284,3 +284,48 @@ cases:
   - id: hypgeomdist_legacy_parity
     description: "Legacy HYPGEOMDIST(1, 4, 8, 20) matches HYPGEOM.DIST(...,FALSE)"
     formula: "=HYPGEOMDIST(1, 4, 8, 20)"
+
+  # =========================================================================
+  # Distributions-ext closure perspectives (appended 2026-04-29). Each
+  # function in the post-2010 beta/gamma/lognormal/Weibull family needs at
+  # least five distinct behaviors declared in tools/catalog/behaviors.yaml.
+  # The probes below complete the perspective set for the four members
+  # whose case counts were below five (GAMMA.INV, GAMMALN, GAMMALN.PRECISE,
+  # LOGNORM.INV).
+  # =========================================================================
+
+  # -- GAMMA.INV (need +1) ------------------------------------------------
+  - id: gamma_inv_median
+    description: "GAMMA.INV(0.5, 3, 2) is the median of GAMMA(3, 2)"
+    formula: "=GAMMA.INV(0.5, 3, 2)"
+
+  # -- LOGNORM.INV (need +1) ----------------------------------------------
+  - id: lognorm_inv_upper_tail
+    description: "LOGNORM.INV(0.95, 0, 1) is the 95th percentile of standard lognormal"
+    formula: "=LOGNORM.INV(0.95, 0, 1)"
+
+  # -- GAMMALN (need +2) --------------------------------------------------
+  - id: gammaln_one_is_zero
+    description: "ln Γ(1) = ln(0!) = 0"
+    formula: "=GAMMALN(1)"
+
+  - id: gammaln_half_is_log_sqrt_pi
+    description: "ln Γ(0.5) = ln(sqrt(pi)) ~ 0.572365"
+    formula: "=GAMMALN(0.5)"
+
+  # -- GAMMALN.PRECISE (need +4) ------------------------------------------
+  - id: gammaln_precise_one_is_zero
+    description: "ln Γ(1) = 0 via GAMMALN.PRECISE"
+    formula: "=GAMMALN.PRECISE(1)"
+
+  - id: gammaln_precise_half
+    description: "ln Γ(0.5) = ln(sqrt(pi)) via GAMMALN.PRECISE"
+    formula: "=GAMMALN.PRECISE(0.5)"
+
+  - id: gammaln_precise_ten
+    description: "ln Γ(10) = ln(9!) via GAMMALN.PRECISE"
+    formula: "=GAMMALN.PRECISE(10)"
+
+  - id: gammaln_precise_negative_is_num
+    description: "GAMMALN.PRECISE rejects x <= 0; yields #NUM!"
+    formula: "=GAMMALN.PRECISE(-1)"

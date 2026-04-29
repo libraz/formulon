@@ -219,3 +219,16 @@ families:
     category_file: tests/oracle/cases/distributions.yaml
     min_perspectives_per_member: 5
     cluster_reason: "Post-2010 distribution functions; share PDF/CDF dichotomy, parameter-validity edges (negative variance, p-out-of-range)."
+
+  # -- Post-2010 beta / gamma / lognormal / Weibull distribution family ----
+  # These post-2010 spellings share special-function backends (regularized
+  # incomplete beta and gamma, log-gamma) and the same tail-bit edges
+  # (support boundaries, parameter validity, cumulative TRUE vs FALSE,
+  # inverse round-trip). The pre-2010 aliases (BETADIST / HYPGEOMDIST /
+  # LOGINV / LOGNORMDIST / WEIBULL) are intentionally NOT included here
+  # because they live in the `stats_compat` family.
+  - name: distributions_ext
+    members: ["BETA.DIST", "BETA.INV", GAMMA, "GAMMA.DIST", "GAMMA.INV", GAMMALN, "GAMMALN.PRECISE", "HYPGEOM.DIST", "LOGNORM.DIST", "LOGNORM.INV", "WEIBULL.DIST"]
+    category_file: tests/oracle/cases/distributions_ext.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Post-2010 beta/gamma/lognormal/Weibull family; share special-function backends and tail-bit edges."
