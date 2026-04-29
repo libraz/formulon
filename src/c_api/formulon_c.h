@@ -345,6 +345,116 @@ FM_API fm_status_t fm_workbook_get_value(const fm_workbook_t* wb, size_t sheet_i
                                          fm_value_t* out);
 
 /* -------------------------------------------------------------------------- */
+/* Iteration / dump                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Returns the number of stored cell slots on `sheet_index`.
+ *
+ * Counts every populated `Cell` (literal, formula, or implicitly created
+ * during row growth) on the sheet's row-sparse / column-dense storage.
+ * Phantom cells of a spill region that have no underlying stored slot
+ * are NOT counted.
+ *
+ * The count is suitable as the upper bound for `fm_workbook_cell_at`
+ * iteration: indices in `[0, count)` enumerate every stored cell. The
+ * iteration order is implementation-defined but stable for a given
+ * workbook state (no cell mutation has occurred between calls).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL` or `out_count == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_workbook_cell_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
+
+/**
+ * @brief Reads the `idx`-th cell on `sheet_index`.
+ *
+ * Iteration order is implementation-defined but stable for a given
+ * workbook state (sorted by `(row, col)` ascending).
+ *
+ * On success the call writes `*out_row`, `*out_col`, `*out_value`, and
+ * — if `out_formula != NULL` — points `*out_formula` at the cell's raw
+ * formula text (or `NULL` when the cell is a pure literal). The
+ * formula pointer borrows from the workbook handle and is valid until
+ * the next mutation that touches the sheet's cell store or until the
+ * handle is destroyed.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb`, `out_row`, `out_col`, or
+ *         `out_value` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or
+ *         `idx >= cell_count`.
+ */
+FM_API fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx, uint32_t* out_row,
+                                       uint32_t* out_col, const char** out_formula, fm_value_t* out_value);
+
+/**
+ * @brief Returns the number of defined names attached to the workbook.
+ *
+ * Defined names round-trip through OOXML even when not yet evaluated.
+ * Counts every `<definedName>` entry in declaration order.
+ *
+ * @return `0` when `wb == NULL`; otherwise the size of the workbook's
+ *         defined-name list.
+ */
+FM_API size_t fm_workbook_defined_name_count(const fm_workbook_t* wb);
+
+/**
+ * @brief Reads the `idx`-th defined name.
+ *
+ * On success `*out_name` and `*out_formula` borrow NUL-terminated UTF-8
+ * pointers from the workbook handle. Both are valid until the next
+ * mutation of the defined-name list or until the handle is destroyed.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `idx` is out of range.
+ */
+FM_API fm_status_t fm_workbook_defined_name_at(const fm_workbook_t* wb, size_t idx, const char** out_name,
+                                               const char** out_formula);
+
+/**
+ * @brief Returns the number of tables attached to the workbook.
+ *
+ * @return `0` when `wb == NULL`; otherwise the size of the workbook's
+ *         table-metadata list.
+ */
+FM_API size_t fm_workbook_table_count(const fm_workbook_t* wb);
+
+/**
+ * @brief Reads the `idx`-th table's identifying metadata.
+ *
+ * On success `*out_name`, `*out_display_name`, and `*out_ref` borrow
+ * NUL-terminated UTF-8 pointers from the workbook handle. Same lifetime
+ * contract as `fm_workbook_defined_name_at`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `idx` is out of range.
+ */
+FM_API fm_status_t fm_workbook_table_at(const fm_workbook_t* wb, size_t idx, const char** out_name,
+                                        const char** out_display_name, const char** out_ref, size_t* out_sheet_index);
+
+/**
+ * @brief Returns the number of passthrough OOXML parts the reader
+ *        carried through unchanged.
+ *
+ * @return `0` when `wb == NULL`; otherwise the size of the workbook's
+ *         passthrough-part list.
+ */
+FM_API size_t fm_workbook_passthrough_count(const fm_workbook_t* wb);
+
+/**
+ * @brief Reads the `idx`-th passthrough part's path.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `idx` is out of range.
+ */
+FM_API fm_status_t fm_workbook_passthrough_at(const fm_workbook_t* wb, size_t idx, const char** out_path);
+
+/* -------------------------------------------------------------------------- */
 /* Recalc                                                                     */
 /* -------------------------------------------------------------------------- */
 

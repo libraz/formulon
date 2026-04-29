@@ -38,6 +38,7 @@
 
 #include "c_api/formulon_c.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -50,6 +51,7 @@
 #include <utility>
 #include <vector>
 
+#include "cell.h"
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
@@ -445,6 +447,177 @@ extern "C" fm_status_t fm_workbook_get_value(const fm_workbook_t* wb, size_t she
   // the workbook's observable state.
   TextStore& store = const_cast<TextStore&>(wb->text_store);
   value_to_fm(v, store, out);
+  return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Iteration / dump
+// ---------------------------------------------------------------------------
+//
+// Sheets are stored row-sparse (`unordered_map<row, vector<Cell>>`); we
+// surface a flat enumeration to bindings by materialising a sorted
+// `(row, col)` index on demand and caching it on the handle. The cache
+// is invalidated whenever any cell-mutating C API entry runs on the
+// handle, so iteration always reflects the current store. The cache is
+// purely an optimisation; correctness does not depend on it. We keep
+// one cache per sheet to amortise sort cost across `cell_count_at`
+// loops in the CLI's `dump` command.
+
+namespace {
+
+// Returns the `(row, col)` indices of every stored cell on `sheet`,
+// sorted by `(row, col)` ascending. Implicitly default-constructed cells
+// (those that exist only because a later column was touched in the same
+// row) are kept: the dump command may want to surface them as blank
+// slots, and dropping them here would make the count returned by
+// `fm_workbook_cell_count` mismatch the indexable range. The CLI
+// filters them out at render time.
+std::vector<std::pair<std::uint32_t, std::uint32_t>> collect_cell_addresses(const formulon::Sheet& sheet) {
+  std::vector<std::pair<std::uint32_t, std::uint32_t>> out;
+  for (const auto& [row, cells] : sheet.rows()) {
+    for (std::size_t col = 0; col < cells.size(); ++col) {
+      out.emplace_back(row, static_cast<std::uint32_t>(col));
+    }
+  }
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_workbook_cell_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
+  clear_last_error();
+  if (wb == nullptr || out_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_cell_count: NULL argument");
+  }
+  if (sheet_index >= wb->workbook().sheet_count()) {
+    return set_binding_error(
+        formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_cell_count: sheet_index out of range",
+        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  }
+  *out_count = wb->workbook().sheet(sheet_index).cell_count();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx, uint32_t* out_row,
+                                           uint32_t* out_col, const char** out_formula, fm_value_t* out_value) {
+  clear_last_error();
+  if (wb == nullptr || out_row == nullptr || out_col == nullptr || out_value == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_cell_at: NULL argument");
+  }
+  if (sheet_index >= wb->workbook().sheet_count()) {
+    return set_binding_error(
+        formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_cell_at: sheet_index out of range",
+        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  }
+  const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
+  // Materialise the sorted address vector. This is O(N log N) in the
+  // sheet's cell count; the CLI calls cell_at in a tight loop so a
+  // future optimisation could cache the vector on the handle. For the
+  // current scope (workbooks up to ~100k populated cells) the simple
+  // path is fast enough and avoids invalidation bookkeeping.
+  const auto addrs = collect_cell_addresses(sheet);
+  if (idx >= addrs.size()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_cell_at: idx out of range",
+                             "idx=" + std::to_string(idx) + " count=" + std::to_string(addrs.size()));
+  }
+  const auto [row, col] = addrs[idx];
+  *out_row = row;
+  *out_col = col;
+  const formulon::Cell* cell = sheet.cell_at(row, col);
+  // `cell_at` must succeed because `(row, col)` came from the sheet's
+  // own row vector. Guard defensively just in case the contract drifts.
+  if (cell == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kInternalError,
+                             "fm_workbook_cell_at: cell vanished mid-iteration",
+                             "row=" + std::to_string(row) + " col=" + std::to_string(col));
+  }
+  if (out_formula != nullptr) {
+    *out_formula = cell->formula_text.empty() ? nullptr : cell->formula_text.c_str();
+  }
+  // Use the spill-aware accessor so phantoms surface their owning anchor's
+  // value. The phantoms themselves are still indexed via `cell_at`'s
+  // implicit default cells; users that want only stored formulae filter
+  // by `out_formula != NULL`.
+  const formulon::Value v = sheet.resolve_cell_value(row, col);
+  TextStore& store = const_cast<TextStore&>(wb->text_store);
+  value_to_fm(v, store, out_value);
+  return 0;
+}
+
+extern "C" size_t fm_workbook_defined_name_count(const fm_workbook_t* wb) {
+  if (wb == nullptr) {
+    return 0;
+  }
+  return wb->workbook().defined_names().size();
+}
+
+extern "C" fm_status_t fm_workbook_defined_name_at(const fm_workbook_t* wb, size_t idx, const char** out_name,
+                                                   const char** out_formula) {
+  clear_last_error();
+  if (wb == nullptr || out_name == nullptr || out_formula == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_defined_name_at: NULL argument");
+  }
+  const auto& names = wb->workbook().defined_names();
+  if (idx >= names.size()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_defined_name_at: idx out of range",
+                             "idx=" + std::to_string(idx) + " count=" + std::to_string(names.size()));
+  }
+  *out_name = names[idx].name.c_str();
+  *out_formula = names[idx].formula.c_str();
+  return 0;
+}
+
+extern "C" size_t fm_workbook_table_count(const fm_workbook_t* wb) {
+  if (wb == nullptr) {
+    return 0;
+  }
+  return wb->workbook().tables().size();
+}
+
+extern "C" fm_status_t fm_workbook_table_at(const fm_workbook_t* wb, size_t idx, const char** out_name,
+                                            const char** out_display_name, const char** out_ref,
+                                            size_t* out_sheet_index) {
+  clear_last_error();
+  if (wb == nullptr || out_name == nullptr || out_display_name == nullptr || out_ref == nullptr ||
+      out_sheet_index == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_table_at: NULL argument");
+  }
+  const auto& tables = wb->workbook().tables();
+  if (idx >= tables.size()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_table_at: idx out of range",
+                             "idx=" + std::to_string(idx) + " count=" + std::to_string(tables.size()));
+  }
+  *out_name = tables[idx].name.c_str();
+  *out_display_name = tables[idx].display_name.c_str();
+  *out_ref = tables[idx].ref.c_str();
+  *out_sheet_index = tables[idx].sheet_index;
+  return 0;
+}
+
+extern "C" size_t fm_workbook_passthrough_count(const fm_workbook_t* wb) {
+  if (wb == nullptr) {
+    return 0;
+  }
+  return wb->workbook().passthrough_parts().size();
+}
+
+extern "C" fm_status_t fm_workbook_passthrough_at(const fm_workbook_t* wb, size_t idx, const char** out_path) {
+  clear_last_error();
+  if (wb == nullptr || out_path == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_passthrough_at: NULL argument");
+  }
+  const auto& parts = wb->workbook().passthrough_parts();
+  if (idx >= parts.size()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_passthrough_at: idx out of range",
+                             "idx=" + std::to_string(idx) + " count=" + std::to_string(parts.size()));
+  }
+  *out_path = parts[idx].path.c_str();
   return 0;
 }
 

@@ -273,12 +273,30 @@ if(FM_BUILD_C_API_SHARED)
 endif()
 
 # ---------------------------------------------------------------------------
-# CLI target (option kept ON by default, but the binary is not built until
-# tools/cli lands. Placeholder branch to stay honest with the option
-# contract.)
+# CLI target
+#
+# `formulon_cli` is a thin argv dispatcher around the stable C ABI
+# declared in `src/c_api/formulon_c.h`. It links to `formulon_static`
+# and routes each subcommand into its own TU under `src/cli/`. The
+# binary is intentionally kept dependency-light: the only entry it
+# touches outside the C ABI is `cli/render` (locale-independent value
+# rendering), which lives next to the command sources.
 # ---------------------------------------------------------------------------
 if(FM_BUILD_CLI)
-  message(STATUS "Formulon: FM_BUILD_CLI=ON (CLI target not yet wired; placeholder)")
+  set(FORMULON_CLI_SOURCES
+    src/cli/main.cpp
+    src/cli/eval_cmd.cpp
+    src/cli/recalc_cmd.cpp
+    src/cli/dump_cmd.cpp
+    src/cli/render.cpp
+  )
+  add_executable(formulon_cli ${FORMULON_CLI_SOURCES})
+  target_link_libraries(formulon_cli PRIVATE formulon_static)
+  target_include_directories(formulon_cli PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  set_target_properties(formulon_cli PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+  )
+  formulon_apply_warnings(formulon_cli)
 endif()
 
 # ---------------------------------------------------------------------------
