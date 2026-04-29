@@ -23,7 +23,9 @@ namespace formulon {
 namespace io {
 namespace {
 
-ByteSpan SpanOf(const std::vector<std::uint8_t>& bytes) { return ByteSpan{bytes.data(), bytes.size()}; }
+ByteSpan SpanOf(const std::vector<std::uint8_t>& bytes) {
+  return ByteSpan{bytes.data(), bytes.size()};
+}
 
 std::vector<std::uint8_t> SaveOrDie(const Workbook& wb) {
   auto save_or = wb.save();
@@ -67,8 +69,7 @@ TEST(OoxmlReader, JapaneseSheetNameSurvivesRoundTrip) {
 
   auto result_or = read_ooxml(SpanOf(bytes));
   ASSERT_TRUE(static_cast<bool>(result_or));
-  EXPECT_EQ(result_or.value().workbook.sheet(0).name(),
-            "\xE6\x97\xA5\xE6\x9C\xAC\xE3\x82\xB7\xE3\x83\xBC\xE3\x83\x88");
+  EXPECT_EQ(result_or.value().workbook.sheet(0).name(), "\xE6\x97\xA5\xE6\x9C\xAC\xE3\x82\xB7\xE3\x83\xBC\xE3\x83\x88");
 }
 
 TEST(OoxmlReader, RejectsNonZipBuffer) {
@@ -147,7 +148,7 @@ TEST(OoxmlReader, RejectsArchiveWithoutPackageRels) {
   EXPECT_EQ(result_or.error().code, FormulonErrorCode::kIoRelationshipBroken);
 }
 
-TEST(OoxmlReader, UnknownPartsContainsStylesButNotSheetXml) {
+TEST(OoxmlReader, UnknownPartsExcludesSheetAndStylesAndSst) {
   Workbook wb = Workbook::create();
   const std::vector<std::uint8_t> bytes = SaveOrDie(wb);
 
@@ -155,13 +156,17 @@ TEST(OoxmlReader, UnknownPartsContainsStylesButNotSheetXml) {
   ASSERT_TRUE(static_cast<bool>(result_or));
   const std::vector<std::string>& parts = result_or.value().unknown_parts;
 
-  // The reader now consumes sheet*.xml as well, so the worksheet part
-  // must NOT appear in `unknown_parts` (we parsed it). The stylesheet
-  // is still on the deferred list and remains here for future bundles
-  // to round-trip.
-  EXPECT_NE(std::find(parts.begin(), parts.end(), "xl/styles.xml"), parts.end()) << "styles.xml not in unknown_parts";
+  // The reader consumes sheet*.xml and xl/styles.xml. The latter is a
+  // best-effort validate-only parse but still counts as consumed so the
+  // round-trip pipeline does not surface it as unknown. The empty
+  // workbook does not emit a sharedStrings part, so the assertion below
+  // is just sanity: it must not appear either.
+  EXPECT_EQ(std::find(parts.begin(), parts.end(), "xl/styles.xml"), parts.end())
+      << "styles.xml unexpectedly still in unknown_parts";
   EXPECT_EQ(std::find(parts.begin(), parts.end(), "xl/worksheets/sheet1.xml"), parts.end())
       << "sheet1.xml unexpectedly still in unknown_parts";
+  EXPECT_EQ(std::find(parts.begin(), parts.end(), "xl/sharedStrings.xml"), parts.end())
+      << "sharedStrings.xml unexpectedly in unknown_parts";
 }
 
 TEST(OoxmlReader, EmptyWorkbookFactoryProducesZeroSheets) {

@@ -7,11 +7,14 @@
 // (`io::read_sheet_data`) so each `<c>` lands in the workbook with its
 // formula registered against the recalc engine.
 //
-// Shared-strings resolution, styles, defined names, and tables are
-// deferred to later bundles. Cells that carry `t="s"` write a
-// `Text("")` placeholder; the (row, col, index) tuple is collected by
-// the sheet reader's context and the running total is surfaced via
-// `OoxmlReadResult::pending_sst_count`.
+// Shared-strings (`xl/sharedStrings.xml`) resolution is wired in: the
+// SST is loaded ahead of the per-sheet read loop, each sheet queues its
+// `(row, col, sst_index)` tuples in a per-sheet `SheetReadContext`, and
+// a final resolution pass replaces the placeholder `Text("")` values
+// with views into the SST. Styles (`xl/styles.xml`) is parsed for
+// validation only — the runtime style model lands when the formatter
+// pipeline begins consuming it. Defined names and tables remain
+// deferred.
 
 #include "io/ooxml_reader.h"
 
@@ -27,11 +30,14 @@
 #include <vector>
 
 #include "io/sheet_reader.h"
+#include "io/sst_reader.h"
+#include "io/styles_reader.h"
 #include "io/zip_reader.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "value.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -43,14 +49,16 @@ constexpr std::string_view kRelOfficeDocument =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
 constexpr std::string_view kRelWorksheet =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
+constexpr std::string_view kRelSharedStrings =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
+constexpr std::string_view kRelStyles = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
 
 // Content types we expect to see referenced from `[Content_Types].xml`.
 // We only look up the workbook content type to verify the package is
 // well-formed; the full content-type registry is built in a later bundle
 // (which will recognise the worksheet, styles, sharedStrings, etc.
 // content types as well).
-constexpr std::string_view kCtWorkbook =
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
+constexpr std::string_view kCtWorkbook = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
 
 /// Returns the part path the package-level rels file points at for
 /// `OfficeDocument`. The OOXML spec allows arbitrary placement (Excel
@@ -68,8 +76,7 @@ Expected<std::string, Error> ResolveOfficeDocumentPath(const std::vector<std::ui
   }
   pugi::xml_node root = doc.child("Relationships");
   if (!root) {
-    return make_error(FormulonErrorCode::kIoRelationshipBroken,
-                      "package-level rels: missing <Relationships>",
+    return make_error(FormulonErrorCode::kIoRelationshipBroken, "package-level rels: missing <Relationships>",
                       "context=ooxml_reader part=_rels/.rels");
   }
   for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
@@ -111,8 +118,7 @@ Expected<void, Error> VerifyContentTypes(const std::vector<std::uint8_t>& ct_byt
   }
   pugi::xml_node root = doc.child("Types");
   if (!root) {
-    return make_error(FormulonErrorCode::kIoContentTypeInvalid,
-                      "[Content_Types].xml: missing <Types> root",
+    return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: missing <Types> root",
                       "context=ooxml_reader part=[Content_Types].xml");
   }
   bool saw_workbook = false;
@@ -224,12 +230,22 @@ std::string DirOf(std::string_view path) {
   return std::string(path.substr(0, pos));
 }
 
+/// Aggregated workbook-relationship lookup: per-sheet `rId -> path` map
+/// plus optional resolved paths for the `sharedStrings` and `styles`
+/// parts. Empty `sst_path` / `styles_path` mean "no such relationship",
+/// which is legal — the package can omit either part.
+struct WorkbookRels {
+  std::unordered_map<std::string, std::string> sheet_targets;
+  std::string sst_path;
+  std::string styles_path;
+};
+
 /// Loads `<workbook_dir>/_rels/<workbook_filename>.rels` (if present) and
 /// returns the relationship-id -> resolved target-path map for each
-/// worksheet relationship.
-Expected<std::unordered_map<std::string, std::string>, Error> LoadWorkbookRels(const ZipReader& zip,
-                                                                               std::string_view workbook_path) {
-  std::unordered_map<std::string, std::string> sheet_targets;
+/// worksheet relationship, plus the resolved target paths for the
+/// shared-strings and styles relationships when present.
+Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string_view workbook_path) {
+  WorkbookRels rels;
 
   // workbook_path = "xl/workbook.xml" => rels = "xl/_rels/workbook.xml.rels"
   const std::size_t slash = workbook_path.find_last_of('/');
@@ -245,8 +261,7 @@ Expected<std::unordered_map<std::string, std::string>, Error> LoadWorkbookRels(c
 
   if (!zip.has_entry(rels_path)) {
     // Excel always emits this; treat absence as a broken package.
-    return make_error(FormulonErrorCode::kIoRelationshipBroken,
-                      "workbook rels: part not found",
+    return make_error(FormulonErrorCode::kIoRelationshipBroken, "workbook rels: part not found",
                       "context=ooxml_reader rels_path=" + rels_path);
   }
   auto rels_bytes_or = zip.read_entry(rels_path);
@@ -269,24 +284,32 @@ Expected<std::unordered_map<std::string, std::string>, Error> LoadWorkbookRels(c
   if (!root) {
     std::string ctx("context=ooxml_reader part=");
     ctx.append(rels_path);
-    return make_error(FormulonErrorCode::kIoRelationshipBroken,
-                      "workbook rels: missing <Relationships>", std::move(ctx));
+    return make_error(FormulonErrorCode::kIoRelationshipBroken, "workbook rels: missing <Relationships>",
+                      std::move(ctx));
   }
 
   const std::string base_dir = DirOf(workbook_path);
   for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
     const std::string_view type = rel.attribute("Type").value();
-    if (type != kRelWorksheet) {
-      continue;
-    }
-    const std::string id = rel.attribute("Id").value();
     const std::string_view target = rel.attribute("Target").value();
-    if (id.empty() || target.empty()) {
+    if (target.empty()) {
       continue;
     }
-    sheet_targets.emplace(id, ResolveRelativePath(base_dir, target));
+    if (type == kRelWorksheet) {
+      const std::string id = rel.attribute("Id").value();
+      if (id.empty()) {
+        continue;
+      }
+      rels.sheet_targets.emplace(id, ResolveRelativePath(base_dir, target));
+    } else if (type == kRelSharedStrings) {
+      // Last writer wins on duplicates (Excel never emits more than one,
+      // but defending against malformed inputs costs almost nothing).
+      rels.sst_path = ResolveRelativePath(base_dir, target);
+    } else if (type == kRelStyles) {
+      rels.styles_path = ResolveRelativePath(base_dir, target);
+    }
   }
-  return sheet_targets;
+  return rels;
 }
 
 }  // namespace
@@ -302,8 +325,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
 
   // 1. [Content_Types].xml — sanity check + listing for unknown_parts.
   if (!zip.has_entry("[Content_Types].xml")) {
-    return make_error(FormulonErrorCode::kIoContentTypeInvalid,
-                      "[Content_Types].xml: missing from package",
+    return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: missing from package",
                       "context=ooxml_reader");
   }
   auto ct_bytes_or = zip.read_entry("[Content_Types].xml");
@@ -318,8 +340,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
 
   // 2. _rels/.rels — locate the workbook part path.
   if (!zip.has_entry("_rels/.rels")) {
-    return make_error(FormulonErrorCode::kIoRelationshipBroken,
-                      "_rels/.rels: missing from package",
+    return make_error(FormulonErrorCode::kIoRelationshipBroken, "_rels/.rels: missing from package",
                       "context=ooxml_reader");
   }
   auto root_rels_or = zip.read_entry("_rels/.rels");
@@ -332,21 +353,19 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   }
   const std::string workbook_path = wb_path_or.value();
 
-  // 3. xl/_rels/workbook.xml.rels — load and validate. The resolved
-  // sheet rId -> part-path map is dropped on the floor for now (the
-  // sheet contents themselves are deferred to the next bundle); we
-  // still want to error here if the rels file is missing or malformed
-  // so the package's structural invariants are checked up front rather
-  // than at first sheet read.
-  auto sheet_rels_or = LoadWorkbookRels(zip, workbook_path);
-  if (!sheet_rels_or) {
-    return sheet_rels_or.error();
+  // 3. xl/_rels/workbook.xml.rels — load and validate. We need both the
+  // sheet rId -> part-path map (for the per-sheet read loop below) and
+  // the resolved paths for the sharedStrings / styles parts so we can
+  // load them at the right point in the pipeline.
+  auto wb_rels_or = LoadWorkbookRels(zip, workbook_path);
+  if (!wb_rels_or) {
+    return wb_rels_or.error();
   }
+  const WorkbookRels& wb_rels = wb_rels_or.value();
 
   // 4. xl/workbook.xml — the <sheets> list (in document order).
   if (!zip.has_entry(workbook_path)) {
-    return make_error(FormulonErrorCode::kIoSheetCorrupt,
-                      "workbook.xml: part not found at relationship target",
+    return make_error(FormulonErrorCode::kIoSheetCorrupt, "workbook.xml: part not found at relationship target",
                       "context=ooxml_reader workbook_path=" + workbook_path);
   }
   auto wb_bytes_or = zip.read_entry(workbook_path);
@@ -367,14 +386,12 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   }
   pugi::xml_node wb_root = wb_doc.child("workbook");
   if (!wb_root) {
-    return make_error(FormulonErrorCode::kIoSheetCorrupt,
-                      "workbook.xml: missing <workbook> root",
+    return make_error(FormulonErrorCode::kIoSheetCorrupt, "workbook.xml: missing <workbook> root",
                       "context=ooxml_reader part=" + workbook_path);
   }
   pugi::xml_node sheets_node = wb_root.child("sheets");
   if (!sheets_node) {
-    return make_error(FormulonErrorCode::kIoSheetCorrupt,
-                      "workbook.xml: missing <sheets>",
+    return make_error(FormulonErrorCode::kIoSheetCorrupt, "workbook.xml: missing <sheets>",
                       "context=ooxml_reader part=" + workbook_path);
   }
 
@@ -408,7 +425,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   // sheet's `r:id` attribute resolves to a part path through
   // `sheet_rels`. We need both pieces in sync so the sheet at workbook
   // index `i` is read from `sheet_part_paths[i]`.
-  const std::unordered_map<std::string, std::string>& sheet_rels = sheet_rels_or.value();
+  const std::unordered_map<std::string, std::string>& sheet_rels = wb_rels.sheet_targets;
   std::vector<std::string> sheet_part_paths;
   for (pugi::xml_node sn = sheets_node.child("sheet"); sn; sn = sn.next_sibling("sheet")) {
     std::string name = sn.attribute("name").value();
@@ -416,8 +433,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     // silently appending an unnamed sheet (which would round-trip to an
     // invalid workbook).
     if (name.empty()) {
-      return make_error(FormulonErrorCode::kIoSheetCorrupt,
-                        "workbook.xml: <sheet> with empty name attribute",
+      return make_error(FormulonErrorCode::kIoSheetCorrupt, "workbook.xml: <sheet> with empty name attribute",
                         "context=ooxml_reader part=" + workbook_path);
     }
     // Resolve r:id -> sheet part path. Excel always emits the attribute;
@@ -429,8 +445,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
       rid = sn.attribute("id").value();
     }
     if (rid.empty()) {
-      return make_error(FormulonErrorCode::kIoSheetCorrupt,
-                        "workbook.xml: <sheet> missing r:id attribute",
+      return make_error(FormulonErrorCode::kIoSheetCorrupt, "workbook.xml: <sheet> missing r:id attribute",
                         "context=ooxml_reader part=" + workbook_path);
     }
     auto it = sheet_rels.find(rid);
@@ -440,8 +455,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
       ctx.append(" rid=");
       ctx.append(rid);
       return make_error(FormulonErrorCode::kIoRelationshipBroken,
-                        "workbook.xml: r:id has no matching workbook relationship",
-                        std::move(ctx));
+                        "workbook.xml: r:id has no matching workbook relationship", std::move(ctx));
     }
     wb.add_sheet(std::move(name));
     sheet_part_paths.push_back(it->second);
@@ -449,19 +463,86 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   }
 
   if (sheet_part_paths.empty()) {
-    return make_error(FormulonErrorCode::kIoSheetCorrupt,
-                      "workbook.xml: empty <sheets> list",
+    return make_error(FormulonErrorCode::kIoSheetCorrupt, "workbook.xml: empty <sheets> list",
                       "context=ooxml_reader part=" + workbook_path);
   }
 
-  // Read each sheet's <sheetData> via the cell-aware sheet reader.
+  // result_text_storage is the workbook-lifetime backing store for every
+  // string the reader owns: inline-string `<is>` payloads decoded by the
+  // sheet reader AND every entry in the shared-string table loaded
+  // below. A `std::deque` (pointer-stable across appends) is required so
+  // the `string_view`s handed to cells remain valid as later strings are
+  // appended.
+  std::deque<std::string> result_text_storage;
+
+  // 4a. Shared strings — must load BEFORE the sheet read loop because
+  // the sheet reader queues `(row, col, sst_index)` tuples that we
+  // resolve after the loop. The relationship is optional; a workbook
+  // with no text-via-SST cells legally omits it.
+  SharedStringTable sst;
+  if (!wb_rels.sst_path.empty()) {
+    if (!zip.has_entry(wb_rels.sst_path)) {
+      std::string ctx("context=ooxml_reader sst_path=");
+      ctx.append(wb_rels.sst_path);
+      return make_error(FormulonErrorCode::kIoRelationshipBroken, "sharedStrings: rel target missing from package",
+                        std::move(ctx));
+    }
+    auto sst_bytes_or = zip.read_entry(wb_rels.sst_path);
+    if (!sst_bytes_or) {
+      return sst_bytes_or.error();
+    }
+    auto sst_or = read_shared_strings(sst_bytes_or.value(), result_text_storage);
+    if (!sst_or) {
+      return sst_or.error();
+    }
+    sst = std::move(sst_or.value());
+    consumed_parts.insert(wb_rels.sst_path);
+  }
+  // Always swallow the canonical SST path if present in the archive,
+  // even when no relationship pointed to it (some writers emit the part
+  // via Override only). This keeps `unknown_parts` from surfacing it.
+  if (zip.has_entry("xl/sharedStrings.xml")) {
+    consumed_parts.insert("xl/sharedStrings.xml");
+  }
+
+  // 4b. Styles — read for validation only at this slice. The full
+  // numFmt/font/fill runtime model lands later when the formatter
+  // pipeline begins consuming it. Mark consumed regardless of whether
+  // the rel was present, mirroring the SST treatment above.
+  if (!wb_rels.styles_path.empty()) {
+    if (!zip.has_entry(wb_rels.styles_path)) {
+      std::string ctx("context=ooxml_reader styles_path=");
+      ctx.append(wb_rels.styles_path);
+      return make_error(FormulonErrorCode::kIoRelationshipBroken, "styles: rel target missing from package",
+                        std::move(ctx));
+    }
+    auto styles_bytes_or = zip.read_entry(wb_rels.styles_path);
+    if (!styles_bytes_or) {
+      return styles_bytes_or.error();
+    }
+    auto styles_or = read_styles(styles_bytes_or.value());
+    if (!styles_or) {
+      return styles_or.error();
+    }
+    // Result is intentionally discarded; see read_styles() docs.
+    (void)styles_or.value();
+    consumed_parts.insert(wb_rels.styles_path);
+  }
+  if (zip.has_entry("xl/styles.xml")) {
+    consumed_parts.insert("xl/styles.xml");
+  }
+
+  // 5. Read each sheet's <sheetData> via the cell-aware sheet reader.
   // The sheet reader appends every inline-string payload directly into
   // `result_text_storage`, a pointer-stable `std::deque` whose lifetime
   // is the read result. Cells therefore hold `Value::text` views that
   // remain valid as long as the `OoxmlReadResult` is alive — no
   // post-load repointing is needed.
-  std::uint32_t pending_sst_count = 0;
-  std::deque<std::string> result_text_storage;
+  //
+  // We retain each sheet's `pending_sst_cells` so the SST resolution
+  // pass below can rewrite the placeholder text values without rerunning
+  // the sheet walk.
+  std::vector<SheetReadContext> sheet_contexts(sheet_part_paths.size());
   for (std::size_t i = 0; i < sheet_part_paths.size(); ++i) {
     const std::string& sheet_path = sheet_part_paths[i];
     if (!zip.has_entry(sheet_path)) {
@@ -470,9 +551,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
       // skipping: a missing sheet part is data loss.
       std::string ctx("context=ooxml_reader sheet_path=");
       ctx.append(sheet_path);
-      return make_error(FormulonErrorCode::kIoSheetCorrupt,
-                        "sheet part missing from package",
-                        std::move(ctx));
+      return make_error(FormulonErrorCode::kIoSheetCorrupt, "sheet part missing from package", std::move(ctx));
     }
     auto sheet_bytes_or = zip.read_entry(sheet_path);
     if (!sheet_bytes_or) {
@@ -489,12 +568,53 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
       ctx.append(sheet_parse.description());
       return make_error(FormulonErrorCode::kIoXmlParse, "sheet*.xml: pugixml parse failed", std::move(ctx));
     }
-    SheetReadContext sheet_ctx;
-    auto rs = read_sheet_data(sheet_doc, i, wb, sheet_ctx, result_text_storage);
+    auto rs = read_sheet_data(sheet_doc, i, wb, sheet_contexts[i], result_text_storage);
     if (!rs) {
       return rs.error();
     }
-    pending_sst_count += static_cast<std::uint32_t>(sheet_ctx.pending_sst_cells.size());
+  }
+
+  // 6. Resolve every queued SST reference: replace each cell's
+  // `Text("")` placeholder with a view into the SST entry. We use
+  // `Sheet::set_cell_cached_value` directly rather than
+  // `Workbook::set_cell_value` because (a) these cells are pure data
+  // (no formula text to disturb) and (b) the workbook is freshly built
+  // from disk, so there is no live dep-graph state to dirty.
+  std::uint32_t pending_sst_count = 0;
+  for (std::size_t i = 0; i < sheet_contexts.size(); ++i) {
+    const SheetReadContext& sctx = sheet_contexts[i];
+    if (sctx.pending_sst_cells.empty()) {
+      continue;
+    }
+    if (wb_rels.sst_path.empty() && sst.entries.empty()) {
+      // Sheet referenced an SST index but the package did not declare a
+      // sharedStrings part. The first such reference is the diagnostic
+      // anchor.
+      const auto& first = sctx.pending_sst_cells.front();
+      std::string ctx("context=ooxml_reader sheet_index=");
+      ctx.append(std::to_string(i));
+      ctx.append(" row=").append(std::to_string(std::get<0>(first)));
+      ctx.append(" col=").append(std::to_string(std::get<1>(first)));
+      ctx.append(" sst_index=").append(std::to_string(std::get<2>(first)));
+      return make_error(FormulonErrorCode::kIoSheetCorrupt,
+                        "sheet references SST but package has no sharedStrings part", std::move(ctx));
+    }
+    for (const auto& triple : sctx.pending_sst_cells) {
+      const std::uint32_t row = std::get<0>(triple);
+      const std::uint32_t col = std::get<1>(triple);
+      const std::uint32_t idx = std::get<2>(triple);
+      if (idx >= sst.entries.size()) {
+        std::string ctx("context=ooxml_reader sheet_index=");
+        ctx.append(std::to_string(i));
+        ctx.append(" row=").append(std::to_string(row));
+        ctx.append(" col=").append(std::to_string(col));
+        ctx.append(" sst_index=").append(std::to_string(idx));
+        ctx.append(" sst_size=").append(std::to_string(sst.entries.size()));
+        return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared-string index out of range", std::move(ctx));
+      }
+      wb.sheet(i).set_cell_cached_value(row, col, Value::text(sst.entries[idx]));
+      ++pending_sst_count;
+    }
   }
 
   // Compute unknown_parts: every Override-listed part name we did not

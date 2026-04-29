@@ -39,12 +39,14 @@ namespace io {
 /// are preserved so a future round-trip slice (Bundle 2.5) can write
 /// them back unchanged.
 ///
-/// `pending_sst_count` reports how many cells in the workbook carried
-/// `t="s"` and therefore have a `Text("")` placeholder waiting for the
-/// shared-strings table to be loaded (Bundle 2.3). It is the sum across
-/// every sheet of the per-sheet `SheetReadContext::pending_sst_cells`
-/// vectors; the (row, col, index) details are not exposed in this slice
-/// because no consumer needs them yet.
+/// `pending_sst_count` reports the number of `t="s"` cell references the
+/// reader resolved against the shared-strings table during this read.
+/// (Earlier slices used the same field to surface "still pending"
+/// counts; with the SST reader wired in, every reference is resolved
+/// in-pipeline and the field is purely an audit counter.) Cells that
+/// previously held a `Text("")` placeholder now carry a `Value::text`
+/// view into the corresponding SST entry, which is itself owned by
+/// `text_storage`.
 ///
 /// `text_storage` holds the inline-string payloads decoded from
 /// `<is><t>...</t></is>` cells. `Value::text` is non-owning, so the
@@ -85,12 +87,16 @@ struct OoxmlReadResult {
 ///     content-type registry)
 ///   * `_rels/.rels`                 — root relationship lookup
 ///   * `xl/workbook.xml`             — sheet enumeration in document order
-///   * `xl/_rels/workbook.xml.rels`  — sheet relationship target lookup
+///   * `xl/_rels/workbook.xml.rels`  — sheet, sharedStrings and styles
+///     relationship target lookup
 ///   * `xl/worksheets/sheet*.xml`    — cell contents (literals + formulas)
 ///     decoded via `cell_parser` and dispatched through the public
 ///     Workbook API; the recalc engine is registered for every formula
-///     cell. Cells with `t="s"` write a `Text("")` placeholder; the
-///     workbook-level SST resolution lands in Bundle 2.3.
+///     cell. Cells with `t="s"` are resolved against the loaded SST.
+///   * `xl/sharedStrings.xml`        — flat shared-string list; entries
+///     are owned by `text_storage` and aliased by the resolved cells.
+///   * `xl/styles.xml`               — parsed for validation only (this
+///     slice does not yet build a runtime style model).
 ///
 /// Returns `FormulonErrorCode::kIoZipCorrupt` for archive-level failures,
 /// `kIoXmlParse` for malformed XML, and `kIoRelationshipBroken` /
