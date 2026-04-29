@@ -8289,3 +8289,181 @@ groups:
       - name: "pr <= 0 -> #NUM!"
         probe: '=YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2007,11,8), 0.0625, 0, 0)'
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # Primary trigonometry family (math_trig). Cases live in
+  # tests/oracle/cases/math_trig.yaml. Each function shares the radian-
+  # vs-degree conversion edges and identity perspectives (zero, +/- pi/2,
+  # pi, 2 pi). Probes are direct-literal substrings of the case formulas.
+  # -------------------------------------------------------------------------
+
+  - function: "SIN"
+    aspect: "circular sine"
+    behaviors:
+      - name: "SIN(0) == 0"
+        probe: "=SIN(0)"
+        expected: impl
+      - name: "SIN(pi/2) == 1"
+        probe: "=SIN(PI()/2)"
+        expected: impl
+      - name: "SIN(pi) approx 0 (within 1e-12 due to PI() rounding)"
+        probe: "=SIN(PI())"
+        expected: impl
+      - name: "odd-symmetry SIN(-x) + SIN(x) == 0"
+        probe: "=SIN(-1)+SIN(1)"
+        expected: impl
+      - name: "round-trip SIN(ASIN(x)) == x"
+        probe: "=SIN(ASIN(0.5))"
+        expected: impl
+
+  - function: "COS"
+    aspect: "circular cosine"
+    behaviors:
+      - name: "COS(0) == 1"
+        probe: "=COS(0)"
+        expected: impl
+      - name: "COS(pi) == -1"
+        probe: "=COS(PI())"
+        expected: impl
+      - name: "COS(pi/2) approx 0"
+        probe: "=COS(PI()/2)"
+        expected: impl
+      - name: "COS(2*pi) == 1 (full revolution)"
+        probe: "=COS(2*PI())"
+        expected: impl
+      - name: "even-symmetry COS(-x) == COS(x)"
+        probe: "=COS(-1)-COS(1)"
+        expected: impl
+
+  - function: "TAN"
+    aspect: "circular tangent"
+    behaviors:
+      - name: "TAN(0) == 0"
+        probe: "=TAN(0)"
+        expected: impl
+      - name: "TAN(pi/4) == 1"
+        probe: "=TAN(PI()/4)"
+        expected: impl
+      - name: "TAN(-pi/4) == -1 (odd)"
+        probe: "=TAN(-PI()/4)"
+        expected: impl
+      - name: "TAN(pi) approx 0 (within 1e-12)"
+        probe: "=TAN(PI())"
+        expected: impl
+      - name: "identity TAN(x) == SIN(x)/COS(x)"
+        probe: "=TAN(0.5)-SIN(0.5)/COS(0.5)"
+        expected: impl
+
+  - function: "ASIN"
+    aspect: "inverse sine, range [-pi/2, pi/2]"
+    behaviors:
+      - name: "ASIN(0) == 0"
+        probe: "=ASIN(0)"
+        expected: impl
+      - name: "ASIN(1) == pi/2"
+        probe: "=ASIN(1)"
+        expected: impl
+      - name: "ASIN(-1) == -pi/2"
+        probe: "=ASIN(-1)"
+        expected: impl
+      - name: "|x| > 1 -> #NUM!"
+        probe: "=ASIN(2)"
+        expected: impl
+      - name: "round-trip SIN(ASIN(0.5)) == 0.5"
+        probe: "=SIN(ASIN(0.5))"
+        expected: impl
+
+  - function: "ACOS"
+    aspect: "inverse cosine, range [0, pi]"
+    behaviors:
+      - name: "ACOS(0) == pi/2"
+        probe: "=ACOS(0)"
+        expected: impl
+      - name: "ACOS(1) == 0"
+        probe: "=ACOS(1)"
+        expected: impl
+      - name: "ACOS(-1) == pi"
+        probe: "=ACOS(-1)"
+        expected: impl
+      - name: "|x| > 1 -> #NUM!"
+        probe: "=ACOS(-2)"
+        expected: impl
+      - name: "round-trip COS(ACOS(x)) == x"
+        probe: "=COS(ACOS(0.3))"
+        expected: impl
+
+  - function: "ATAN"
+    aspect: "inverse tangent, range (-pi/2, pi/2)"
+    behaviors:
+      - name: "ATAN(0) == 0"
+        probe: "=ATAN(0)"
+        expected: impl
+      - name: "ATAN(1) == pi/4"
+        probe: "=ATAN(1)"
+        expected: impl
+      - name: "ATAN(-1) == -pi/4 (odd)"
+        probe: "=ATAN(-1)"
+        expected: impl
+      - name: "large positive x approaches pi/2"
+        probe: "=ATAN(1E12)"
+        expected: impl
+      - name: "small x approx x (small-angle approximation)"
+        probe: "=ATAN(0.1)"
+        expected: impl
+
+  - function: "ATAN2"
+    aspect: "inverse tangent of (x, y), Excel arg order is (x, y)"
+    behaviors:
+      - name: "ATAN2(1, 0) == 0 (positive x-axis)"
+        probe: "=ATAN2(1,0)"
+        expected: impl
+      - name: "ATAN2(0, 1) == pi/2 (positive y-axis)"
+        probe: "=ATAN2(0,1)"
+        expected: impl
+      - name: "quadrant 2: ATAN2(-1, 1) == 3*pi/4"
+        probe: "=ATAN2(-1,1)"
+        expected: impl
+      - name: "quadrant 3: ATAN2(-1, -1) == -3*pi/4"
+        probe: "=ATAN2(-1,-1)"
+        expected: impl
+      - name: "ATAN2(0, 0) -> #DIV/0!"
+        probe: "=ATAN2(0,0)"
+        expected: impl
+
+  - function: "DEGREES"
+    aspect: "radians-to-degrees conversion"
+    behaviors:
+      - name: "DEGREES(pi) == 180"
+        probe: "=DEGREES(PI())"
+        expected: impl
+      - name: "DEGREES(0) == 0"
+        probe: "=DEGREES(0)"
+        expected: impl
+      - name: "DEGREES(pi/2) == 90"
+        probe: "=DEGREES(PI()/2)"
+        expected: impl
+      - name: "DEGREES(-pi) == -180 (odd)"
+        probe: "=DEGREES(-PI())"
+        expected: impl
+      - name: "round-trip DEGREES(RADIANS(45)) == 45"
+        probe: "=DEGREES(RADIANS(45))"
+        expected: impl
+
+  - function: "RADIANS"
+    aspect: "degrees-to-radians conversion"
+    behaviors:
+      - name: "RADIANS(180) == pi"
+        probe: "=RADIANS(180)"
+        expected: impl
+      - name: "RADIANS(0) == 0"
+        probe: "=RADIANS(0)"
+        expected: impl
+      - name: "RADIANS(90) == pi/2"
+        probe: "=RADIANS(90)"
+        expected: impl
+      - name: "RADIANS(-90) == -pi/2 (odd)"
+        probe: "=RADIANS(-90)"
+        expected: impl
+      - name: "round-trip DEGREES(RADIANS(45)) == 45"
+        probe: "=DEGREES(RADIANS(45))"
+        expected: impl

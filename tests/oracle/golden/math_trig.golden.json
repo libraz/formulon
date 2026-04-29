@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-23T02:35:34Z"
+    "generated_at": "2026-04-29T01:55:50Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -92,6 +92,51 @@
       "expect": {
         "kind": "number",
         "value": -0.9999999999999999
+      }
+    },
+    {
+      "id": "tan_of_pi",
+      "formula": "=TAN(PI())",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.2246467991473532e-16
+      }
+    },
+    {
+      "id": "tan_identity_sin_over_cos",
+      "formula": "=TAN(0.5)-SIN(0.5)/COS(0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "cos_of_two_pi",
+      "formula": "=COS(2*PI())",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "cos_even_symmetry",
+      "formula": "=COS(-1)-COS(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sin_odd_symmetry",
+      "formula": "=SIN(-1)+SIN(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
       }
     },
     {
@@ -194,6 +239,33 @@
       }
     },
     {
+      "id": "atan_large_positive",
+      "formula": "=ATAN(1E12)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267938967
+      }
+    },
+    {
+      "id": "atan_small_value",
+      "formula": "=ATAN(0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.09966865249116204
+      }
+    },
+    {
+      "id": "acos_roundtrip_cos",
+      "formula": "=COS(ACOS(0.3))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.3000000000000001
+      }
+    },
+    {
       "id": "atan2_unit_y",
       "formula": "=ATAN2(1,0)",
       "setup": {},
@@ -290,6 +362,24 @@
       "expect": {
         "kind": "number",
         "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "degrees_of_neg_pi",
+      "formula": "=DEGREES(-PI())",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -180.0
+      }
+    },
+    {
+      "id": "radians_of_neg_90",
+      "formula": "=RADIANS(-90)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.5707963267948966
       }
     },
     {

@@ -220,6 +220,20 @@ families:
     min_perspectives_per_member: 5
     cluster_reason: "Post-2010 distribution functions; share PDF/CDF dichotomy, parameter-validity edges (negative variance, p-out-of-range)."
 
+  # -- Primary trigonometry family -----------------------------------------
+  # SIN / COS / TAN, their inverses (ASIN / ACOS / ATAN / ATAN2), and the
+  # angle-conversion pair DEGREES / RADIANS. They share radian-vs-degree
+  # conversion edges, identity perspectives (zero, +/- pi/2, pi, 2 pi), and
+  # the COS/SIN/TAN <-> arc-* round-trip relations. PI is intentionally NOT
+  # a family member: it is closed as a singleton because it takes no
+  # arguments (only one perspective: PI() == 3.14159...) and merely appears
+  # nested inside the trig case formulas here.
+  - name: math_trig
+    members: [ACOS, ASIN, ATAN, ATAN2, COS, DEGREES, RADIANS, SIN, TAN]
+    category_file: tests/oracle/cases/math_trig.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Primary trig family; share radian/degree conversion edges and identity perspectives (zero, +/- pi, pi/2)."
+
   # -- Hyperbolic / reciprocal-trig / parity helpers ------------------------
   # Co-located in tests/oracle/cases/math_trig2.yaml. They share identity-
   # edge perspectives (zero, +/- infinity, pi/2) and the reciprocal pairs

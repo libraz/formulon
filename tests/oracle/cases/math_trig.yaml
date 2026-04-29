@@ -32,6 +32,26 @@ cases:
   - id: tan_of_negative
     formula: "=TAN(-PI()/4)"
 
+  - id: tan_of_pi
+    description: "TAN(pi) is not exactly 0 due to PI() rounding; expect tiny residue (within 1e-12)"
+    formula: "=TAN(PI())"
+
+  - id: tan_identity_sin_over_cos
+    description: "Identity TAN(x) == SIN(x)/COS(x); residual within tolerance"
+    formula: "=TAN(0.5)-SIN(0.5)/COS(0.5)"
+
+  - id: cos_of_two_pi
+    description: "COS(2*pi) == 1 (one full revolution)"
+    formula: "=COS(2*PI())"
+
+  - id: cos_even_symmetry
+    description: "Even function: COS(-1) == COS(1); residual within tolerance"
+    formula: "=COS(-1)-COS(1)"
+
+  - id: sin_odd_symmetry
+    description: "Odd function: SIN(-1) + SIN(1) == 0; residual within tolerance"
+    formula: "=SIN(-1)+SIN(1)"
+
   # -- ASIN / ACOS / ATAN --------------------------------------------------
   - id: asin_of_zero
     formula: "=ASIN(0)"
@@ -66,6 +86,18 @@ cases:
 
   - id: atan_of_neg_one
     formula: "=ATAN(-1)"
+
+  - id: atan_large_positive
+    description: "ATAN(1E12) approaches pi/2 from below"
+    formula: "=ATAN(1E12)"
+
+  - id: atan_small_value
+    description: "ATAN(0.1) close to 0.1 (small-angle approximation)"
+    formula: "=ATAN(0.1)"
+
+  - id: acos_roundtrip_cos
+    description: "Round-trip COS(ACOS(x)) == x for |x| <= 1"
+    formula: "=COS(ACOS(0.3))"
 
   # -- ATAN2 ---------------------------------------------------------------
   # Note: Excel ATAN2(x, y) takes X FIRST then Y, unlike C's atan2(y, x).
@@ -105,6 +137,14 @@ cases:
 
   - id: radians_of_90
     formula: "=RADIANS(90)"
+
+  - id: degrees_of_neg_pi
+    description: "DEGREES(-pi) == -180 (odd function)"
+    formula: "=DEGREES(-PI())"
+
+  - id: radians_of_neg_90
+    description: "RADIANS(-90) == -pi/2 (odd function)"
+    formula: "=RADIANS(-90)"
 
   # -- Roundtrip -----------------------------------------------------------
   - id: sin_of_asin_halfway
