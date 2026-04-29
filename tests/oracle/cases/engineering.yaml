@@ -116,3 +116,193 @@ cases:
 
   - id: gestep_default_step_zero
     formula: "=GESTEP(-1)"
+
+  # -- Closure expansion: *2DEC -------------------------------------------
+  - id: bin2dec_zero
+    description: "BIN2DEC(\"0\") -> 0; minimum non-empty input."
+    formula: "=BIN2DEC(\"0\")"
+
+  - id: bin2dec_max_positive_511
+    description: "10-digit input '0111111111' is the BIN signed maximum (511)."
+    formula: "=BIN2DEC(\"0111111111\")"
+
+  - id: oct2dec_positive_small
+    description: "OCT 17 = 15 in decimal."
+    formula: "=OCT2DEC(\"17\")"
+
+  - id: oct2dec_zero
+    formula: "=OCT2DEC(\"0\")"
+
+  - id: oct2dec_max_positive
+    description: "10-digit '3777777777' is the OCT signed maximum (2^29-1)."
+    formula: "=OCT2DEC(\"3777777777\")"
+
+  - id: oct2dec_invalid_digit
+    description: "Digit '8' is not valid in base 8 -> #NUM!."
+    formula: "=OCT2DEC(\"18\")"
+
+  - id: hex2dec_zero
+    formula: "=HEX2DEC(\"0\")"
+
+  - id: hex2dec_max_positive
+    description: "10-digit '7FFFFFFFFF' is the HEX signed maximum (2^39-1)."
+    formula: "=HEX2DEC(\"7FFFFFFFFF\")"
+
+  - id: hex2dec_invalid_digit
+    description: "Digit 'G' is not valid in base 16 -> #NUM!."
+    formula: "=HEX2DEC(\"1G\")"
+
+  # -- Closure expansion: BIN2OCT -----------------------------------------
+  - id: bin2oct_zero
+    formula: "=BIN2OCT(\"0\")"
+
+  - id: bin2oct_places_pads
+    description: "places=4 left-pads the small positive output with zeros."
+    formula: "=BIN2OCT(\"1010\",4)"
+
+  - id: bin2oct_twos_complement_negative
+    description: "10-digit '1111111110' decodes as -2; negative result is rendered in 10-digit OCT two's complement."
+    formula: "=BIN2OCT(\"1111111110\")"
+
+  - id: bin2oct_invalid_digit
+    description: "Digit '2' invalid in base 2 -> #NUM!."
+    formula: "=BIN2OCT(\"12\")"
+
+  # -- Closure expansion: HEX2BIN -----------------------------------------
+  - id: hex2bin_positive_small
+    description: "HEX 'F' = 15 fits in BIN, encodes minimum-width."
+    formula: "=HEX2BIN(\"F\")"
+
+  - id: hex2bin_zero
+    formula: "=HEX2BIN(\"0\")"
+
+  - id: hex2bin_places_pads
+    description: "places=8 pads positive 'F' output to 8 digits."
+    formula: "=HEX2BIN(\"F\",8)"
+
+  - id: hex2bin_negative_twos_complement
+    description: "10-digit hex 'FFFFFFFFFE' decodes as -2; rendered as 10-digit BIN two's complement."
+    formula: "=HEX2BIN(\"FFFFFFFFFE\")"
+
+  # -- Closure expansion: DEC2OCT -----------------------------------------
+  - id: dec2oct_zero
+    formula: "=DEC2OCT(0)"
+
+  - id: dec2oct_places_pads
+    description: "places=4 pads positive small output to 4 octal digits."
+    formula: "=DEC2OCT(8,4)"
+
+  - id: dec2oct_negative_twos_complement
+    description: "-1 renders as 10-digit OCT two's complement '7777777777'."
+    formula: "=DEC2OCT(-1)"
+
+  - id: dec2oct_out_of_range
+    description: "2^29 exceeds OCT signed max -> #NUM!."
+    formula: "=DEC2OCT(536870912)"
+
+  # -- Closure expansion: DEC2HEX -----------------------------------------
+  - id: dec2hex_zero
+    formula: "=DEC2HEX(0)"
+
+  - id: dec2hex_places_pads
+    description: "places=4 pads small positive to 4 hex digits."
+    formula: "=DEC2HEX(255,4)"
+
+  - id: dec2hex_out_of_range
+    description: "2^39 exceeds HEX signed max -> #NUM!."
+    formula: "=DEC2HEX(549755813888)"
+
+  # -- Closure expansion: BITAND ------------------------------------------
+  - id: bitand_with_zero
+    description: "n AND 0 -> 0 (annihilator)."
+    formula: "=BITAND(15,0)"
+
+  - id: bitand_self_identity
+    description: "n AND n -> n (idempotency)."
+    formula: "=BITAND(15,15)"
+
+  - id: bitand_overflow_48bit
+    description: "Operand exceeds 2^48-1 -> #NUM!."
+    formula: "=BITAND(281474976710656,1)"
+
+  # -- Closure expansion: BITOR -------------------------------------------
+  - id: bitor_with_zero
+    description: "n OR 0 -> n (identity)."
+    formula: "=BITOR(15,0)"
+
+  - id: bitor_self_identity
+    description: "n OR n -> n (idempotency)."
+    formula: "=BITOR(15,15)"
+
+  - id: bitor_disjoint_bits
+    description: "BITOR(8,4) -> 12 (no overlap)."
+    formula: "=BITOR(8,4)"
+
+  - id: bitor_negative_input
+    description: "Negative operand -> #NUM!."
+    formula: "=BITOR(-1,1)"
+
+  # -- Closure expansion: BITXOR ------------------------------------------
+  - id: bitxor_self_zero
+    description: "n XOR n -> 0 (involution)."
+    formula: "=BITXOR(15,15)"
+
+  - id: bitxor_with_zero
+    description: "n XOR 0 -> n (identity)."
+    formula: "=BITXOR(15,0)"
+
+  - id: bitxor_disjoint_bits
+    description: "BITXOR(8,4) -> 12 (XOR with disjoint bits = OR)."
+    formula: "=BITXOR(8,4)"
+
+  - id: bitxor_negative_input
+    description: "Negative operand -> #NUM!."
+    formula: "=BITXOR(-1,1)"
+
+  # -- Closure expansion: BITLSHIFT ---------------------------------------
+  - id: bitlshift_zero_shift_identity
+    description: "Shift of 0 returns the input unchanged."
+    formula: "=BITLSHIFT(15,0)"
+
+  - id: bitlshift_zero_input
+    description: "0 shifted any amount stays 0."
+    formula: "=BITLSHIFT(0,8)"
+
+  # -- Closure expansion: BITRSHIFT ---------------------------------------
+  - id: bitrshift_zero_shift_identity
+    description: "Shift of 0 returns the input unchanged."
+    formula: "=BITRSHIFT(15,0)"
+
+  - id: bitrshift_drain_to_zero
+    description: "Right-shifting beyond all set bits collapses to 0."
+    formula: "=BITRSHIFT(15,8)"
+
+  - id: bitrshift_negative_shift_leftward
+    description: "Negative shift on BITRSHIFT moves bits left."
+    formula: "=BITRSHIFT(2,-3)"
+
+  - id: bitrshift_negative_input
+    description: "Negative input -> #NUM!."
+    formula: "=BITRSHIFT(-1,1)"
+
+  # -- Closure expansion: DELTA -------------------------------------------
+  - id: delta_unequal
+    description: "5 != 4 -> 0."
+    formula: "=DELTA(5,4)"
+
+  - id: delta_negative_equal
+    description: "Negative equal pair -> 1."
+    formula: "=DELTA(-3,-3)"
+
+  - id: delta_zero_zero
+    description: "0 == 0 -> 1."
+    formula: "=DELTA(0,0)"
+
+  # -- Closure expansion: GESTEP ------------------------------------------
+  - id: gestep_below_step
+    description: "x < step -> 0."
+    formula: "=GESTEP(3,4)"
+
+  - id: gestep_negative_x_below_zero_step
+    description: "x = -2 < 0 -> 0."
+    formula: "=GESTEP(-2,0)"

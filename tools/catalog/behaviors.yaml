@@ -7565,3 +7565,297 @@ groups:
       - name: "month > 12 -> #NUM!"
         probe: "=DB(10000, 1000, 5, 1, 13)"
         expected: impl
+
+  # -------------------------------------------------------------------------
+  # Engineering: base conversion, bit operations, and step comparators.
+  # Covered by `src/eval/builtins/engineering.cpp` and exercised under
+  # `tests/oracle/cases/engineering.yaml`. The shared semantic edges are
+  # ten-digit two's-complement decoding on the source-base side, padded
+  # output via `places`, and the 48-bit non-negative integer ceiling for
+  # the bit operators.
+  # -------------------------------------------------------------------------
+
+  - function: "BIN2DEC"
+    aspect: "binary string to decimal"
+    behaviors:
+      - name: "positive small input"
+        probe: '=BIN2DEC("1010")'
+        expected: impl
+      - name: "zero input"
+        probe: '=BIN2DEC("0")'
+        expected: impl
+      - name: "10-digit two's complement decodes to negative"
+        probe: '=BIN2DEC("1111111110")'
+        expected: impl
+      - name: "10-digit max positive '0111111111' = 511"
+        probe: '=BIN2DEC("0111111111")'
+        expected: impl
+      - name: "invalid base-2 digit -> #NUM!"
+        probe: '=BIN2DEC("102")'
+        expected: impl
+
+  - function: "BIN2OCT"
+    aspect: "binary to octal cross-base conversion"
+    behaviors:
+      - name: "positive small input"
+        probe: '=BIN2OCT("1010")'
+        expected: impl
+      - name: "zero input"
+        probe: '=BIN2OCT("0")'
+        expected: impl
+      - name: "places left-pads positive output"
+        probe: '=BIN2OCT("1010",4)'
+        expected: impl
+      - name: "10-digit two's-complement input decodes to negative"
+        probe: '=BIN2OCT("1111111110")'
+        expected: impl
+      - name: "invalid base-2 digit -> #NUM!"
+        probe: '=BIN2OCT("12")'
+        expected: impl
+
+  - function: "OCT2DEC"
+    aspect: "octal string to decimal"
+    behaviors:
+      - name: "positive small input"
+        probe: '=OCT2DEC("17")'
+        expected: impl
+      - name: "zero input"
+        probe: '=OCT2DEC("0")'
+        expected: impl
+      - name: "10-digit two's complement '7777777777' = -1"
+        probe: '=OCT2DEC("7777777777")'
+        expected: impl
+      - name: "10-digit max positive '3777777777' = 2^29-1"
+        probe: '=OCT2DEC("3777777777")'
+        expected: impl
+      - name: "invalid base-8 digit -> #NUM!"
+        probe: '=OCT2DEC("18")'
+        expected: impl
+
+  - function: "HEX2DEC"
+    aspect: "hexadecimal string to decimal"
+    behaviors:
+      - name: "lowercase hex digits accepted"
+        probe: '=HEX2DEC("ff")'
+        expected: impl
+      - name: "zero input"
+        probe: '=HEX2DEC("0")'
+        expected: impl
+      - name: "10-digit two's complement 'FFFFFFFFFF' = -1"
+        probe: '=HEX2DEC("FFFFFFFFFF")'
+        expected: impl
+      - name: "10-digit max positive '7FFFFFFFFF' = 2^39-1"
+        probe: '=HEX2DEC("7FFFFFFFFF")'
+        expected: impl
+      - name: "invalid base-16 digit -> #NUM!"
+        probe: '=HEX2DEC("1G")'
+        expected: impl
+
+  - function: "HEX2BIN"
+    aspect: "hexadecimal to binary cross-base conversion"
+    behaviors:
+      - name: "positive small input fits in BIN range"
+        probe: '=HEX2BIN("F")'
+        expected: impl
+      - name: "zero input"
+        probe: '=HEX2BIN("0")'
+        expected: impl
+      - name: "places left-pads positive output"
+        probe: '=HEX2BIN("F",8)'
+        expected: impl
+      - name: "10-digit hex two's-complement input decodes to negative"
+        probe: '=HEX2BIN("FFFFFFFFFE")'
+        expected: impl
+      - name: "decoded value > 511 -> #NUM!"
+        probe: '=HEX2BIN("200")'
+        expected: impl
+
+  - function: "DEC2BIN"
+    aspect: "decimal to binary"
+    behaviors:
+      - name: "positive small input"
+        probe: "=DEC2BIN(10)"
+        expected: impl
+      - name: "negative input renders as 10-digit two's complement"
+        probe: "=DEC2BIN(-2)"
+        expected: impl
+      - name: "places left-pads positive output"
+        probe: "=DEC2BIN(2,4)"
+        expected: impl
+      - name: "places ignored for negative results"
+        probe: "=DEC2BIN(-2,4)"
+        expected: impl
+      - name: "input > 511 -> #NUM!"
+        probe: "=DEC2BIN(512)"
+        expected: impl
+
+  - function: "DEC2OCT"
+    aspect: "decimal to octal"
+    behaviors:
+      - name: "positive small input"
+        probe: "=DEC2OCT(15)"
+        expected: impl
+      - name: "zero input"
+        probe: "=DEC2OCT(0)"
+        expected: impl
+      - name: "places left-pads positive output"
+        probe: "=DEC2OCT(8,4)"
+        expected: impl
+      - name: "negative input renders as 10-digit OCT two's complement"
+        probe: "=DEC2OCT(-1)"
+        expected: impl
+      - name: "input >= 2^29 -> #NUM!"
+        probe: "=DEC2OCT(536870912)"
+        expected: impl
+
+  - function: "DEC2HEX"
+    aspect: "decimal to hexadecimal"
+    behaviors:
+      - name: "positive input renders uppercase"
+        probe: "=DEC2HEX(255)"
+        expected: impl
+      - name: "zero input"
+        probe: "=DEC2HEX(0)"
+        expected: impl
+      - name: "places left-pads positive output"
+        probe: "=DEC2HEX(255,4)"
+        expected: impl
+      - name: "negative input renders as 10-digit HEX two's complement"
+        probe: "=DEC2HEX(-1)"
+        expected: impl
+      - name: "input >= 2^39 -> #NUM!"
+        probe: "=DEC2HEX(549755813888)"
+        expected: impl
+
+  - function: "BITAND"
+    aspect: "48-bit bitwise AND"
+    behaviors:
+      - name: "basic positive operands"
+        probe: "=BITAND(5,3)"
+        expected: impl
+      - name: "AND with zero is the annihilator"
+        probe: "=BITAND(15,0)"
+        expected: impl
+      - name: "n AND n is idempotent"
+        probe: "=BITAND(15,15)"
+        expected: impl
+      - name: "negative operand -> #NUM!"
+        probe: "=BITAND(-1,1)"
+        expected: impl
+      - name: "operand >= 2^48 -> #NUM!"
+        probe: "=BITAND(281474976710656,1)"
+        expected: impl
+
+  - function: "BITOR"
+    aspect: "48-bit bitwise OR"
+    behaviors:
+      - name: "basic positive operands"
+        probe: "=BITOR(5,3)"
+        expected: impl
+      - name: "OR with zero is the identity"
+        probe: "=BITOR(15,0)"
+        expected: impl
+      - name: "n OR n is idempotent"
+        probe: "=BITOR(15,15)"
+        expected: impl
+      - name: "disjoint-bit operands collapse to OR"
+        probe: "=BITOR(8,4)"
+        expected: impl
+      - name: "negative operand -> #NUM!"
+        probe: "=BITOR(-1,1)"
+        expected: impl
+
+  - function: "BITXOR"
+    aspect: "48-bit bitwise XOR"
+    behaviors:
+      - name: "basic positive operands"
+        probe: "=BITXOR(5,3)"
+        expected: impl
+      - name: "n XOR n -> 0 (involution)"
+        probe: "=BITXOR(15,15)"
+        expected: impl
+      - name: "XOR with zero is the identity"
+        probe: "=BITXOR(15,0)"
+        expected: impl
+      - name: "disjoint-bit operands behave like OR"
+        probe: "=BITXOR(8,4)"
+        expected: impl
+      - name: "negative operand -> #NUM!"
+        probe: "=BITXOR(-1,1)"
+        expected: impl
+
+  - function: "BITLSHIFT"
+    aspect: "48-bit left shift"
+    behaviors:
+      - name: "basic positive shift multiplies by 2^k"
+        probe: "=BITLSHIFT(1,8)"
+        expected: impl
+      - name: "shift of 0 is the identity"
+        probe: "=BITLSHIFT(15,0)"
+        expected: impl
+      - name: "0 shifted by any amount stays 0"
+        probe: "=BITLSHIFT(0,8)"
+        expected: impl
+      - name: "negative shift moves bits right"
+        probe: "=BITLSHIFT(8,-2)"
+        expected: impl
+      - name: "shift overflows the 48-bit window -> #NUM!"
+        probe: "=BITLSHIFT(1,48)"
+        expected: impl
+
+  - function: "BITRSHIFT"
+    aspect: "48-bit right shift"
+    behaviors:
+      - name: "basic positive shift integer-divides by 2^k"
+        probe: "=BITRSHIFT(256,4)"
+        expected: impl
+      - name: "shift of 0 is the identity"
+        probe: "=BITRSHIFT(15,0)"
+        expected: impl
+      - name: "shift beyond all set bits drains to 0"
+        probe: "=BITRSHIFT(15,8)"
+        expected: impl
+      - name: "negative shift moves bits left"
+        probe: "=BITRSHIFT(2,-3)"
+        expected: impl
+      - name: "negative input -> #NUM!"
+        probe: "=BITRSHIFT(-1,1)"
+        expected: impl
+
+  - function: "DELTA"
+    aspect: "Kronecker delta comparator"
+    behaviors:
+      - name: "equal numbers -> 1"
+        probe: "=DELTA(5,5)"
+        expected: impl
+      - name: "unequal numbers -> 0"
+        probe: "=DELTA(5,4)"
+        expected: impl
+      - name: "second argument defaults to 0"
+        probe: "=DELTA(3)"
+        expected: impl
+      - name: "negative equal pair -> 1"
+        probe: "=DELTA(-3,-3)"
+        expected: impl
+      - name: "0 == 0 -> 1"
+        probe: "=DELTA(0,0)"
+        expected: impl
+
+  - function: "GESTEP"
+    aspect: "step-function comparator"
+    behaviors:
+      - name: "x > step -> 1"
+        probe: "=GESTEP(5,4)"
+        expected: impl
+      - name: "x == step counts as >= step (-> 1)"
+        probe: "=GESTEP(5,5)"
+        expected: impl
+      - name: "step argument defaults to 0"
+        probe: "=GESTEP(-1)"
+        expected: impl
+      - name: "x < step -> 0"
+        probe: "=GESTEP(3,4)"
+        expected: impl
+      - name: "negative x with zero step -> 0"
+        probe: "=GESTEP(-2,0)"
+        expected: impl

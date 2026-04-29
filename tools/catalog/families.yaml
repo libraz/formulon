@@ -261,6 +261,20 @@ families:
     min_perspectives_per_member: 5
     cluster_reason: "Post-2010 beta/gamma/lognormal/Weibull family; share special-function backends and tail-bit edges."
 
+  # -- Engineering bit / base-conversion / step family ----------------------
+  # Base-conversion (BIN/OCT/HEX <-> DEC), bit operations (BITAND / BITOR /
+  # BITXOR / BITLSHIFT / BITRSHIFT), and the two comparators (DELTA /
+  # GESTEP). They share the integer-only engineering surface in
+  # `src/eval/builtins/engineering.cpp`: ten-digit two's-complement decoding
+  # for the source-base side, padded-output formatting via `places` for the
+  # DEC2*/?2? side, and the 48-bit non-negative integer ceiling for bit
+  # ops. Closure perspectives co-evolve on these shared edges.
+  - name: engineering
+    members: [BIN2DEC, BIN2OCT, BITAND, BITLSHIFT, BITOR, BITRSHIFT, BITXOR, DEC2BIN, DEC2HEX, DEC2OCT, DELTA, GESTEP, HEX2BIN, HEX2DEC, OCT2DEC]
+    category_file: tests/oracle/cases/engineering.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Base-conversion and bit-manipulation family; share two's-complement edge cases (10-bit signed range), padded-output formatting, and 48-bit integer ceiling for bit ops."
+
   # -- Financial TVM and depreciation family -------------------------------
   # Time-value-of-money primitives (PV/FV/PMT/RATE/NPER/NPV/IRR), loan
   # amortization split (CUMIPMT/CUMPRINC/IPMT/PPMT) and book-depreciation
