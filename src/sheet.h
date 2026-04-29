@@ -141,6 +141,23 @@ class Sheet {
   /// `set_cell_value` for the rationale.
   void set_cell_formula(std::uint32_t row, std::uint32_t col, std::string formula);
 
+  /// Updates only the cached `Value` of an existing cell at `(row, col)`.
+  ///
+  /// The cell's `formula_text` is preserved exactly — this is the post-
+  /// evaluation update path used by the recalc engine, which has just
+  /// computed a fresh value for a formula cell and needs to write it back
+  /// without erasing the formula. If the cell does not yet exist, it is
+  /// created as a plain literal (empty `formula_text`, `cached_value = v`),
+  /// growing the row vector exactly as `set_cell_value` would.
+  ///
+  /// Unlike `set_cell_value`, this method does NOT eagerly clear any
+  /// spill region covering `(row, col)`: cached-value updates are not
+  /// considered structural mutations of the cell, so phantoms continue to
+  /// reflect their owning anchor's array. The recalc engine separately
+  /// commits any new spill before reaching this method via
+  /// `EvalContext::dispatch_array_result`.
+  void set_cell_cached_value(std::uint32_t row, std::uint32_t col, Value v);
+
   /// Returns a non-owning pointer to the cell at `(row, col)`, or `nullptr`
   /// when the coordinate is not in storage.
   ///

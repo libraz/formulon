@@ -31,6 +31,12 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/tree_walker_test.cpp
   unit/eval/eval_context_test.cpp
   unit/eval/eval_state_test.cpp
+  unit/eval/dep_graph_test.cpp
+  unit/eval/dep_extractor_test.cpp
+  unit/eval/dirty_set_test.cpp
+  unit/eval/iterative_solver_test.cpp
+  unit/eval/recalc_engine_test.cpp
+  unit/eval/volatile_tracker_test.cpp
   unit/eval/cross_sheet_test.cpp
   unit/eval/utf8_length_test.cpp
   unit/eval/function_registry_test.cpp

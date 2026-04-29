@@ -98,6 +98,12 @@ set(FORMULON_CORE_SOURCES
   src/eval/utf8_length.cpp
   src/eval/text_ops.cpp
   src/eval/rng.cpp
+  src/eval/dep_graph.cpp
+  src/eval/dep_extractor.cpp
+  src/eval/dirty_set.cpp
+  src/eval/iterative_solver.cpp
+  src/eval/recalc_engine.cpp
+  src/eval/volatile_tracker.cpp
   src/eval/function_registry.cpp
   src/eval/special_forms_catalog.cpp
   src/eval/builtins.cpp

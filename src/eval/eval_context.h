@@ -98,6 +98,25 @@ class EvalContext {
               EvalState& state) noexcept
       : current_sheet_(&current_sheet), state_(&state), workbook_(&workbook) {}
 
+  /// Workbook-aware, *state-less* factory. Unqualified refs resolve
+  /// against `current_sheet`, qualified refs are looked up in `workbook`,
+  /// and formula cells return their `cached_value` verbatim (the 3-arg
+  /// `resolve_ref` overload short-circuits when `state() == nullptr`).
+  ///
+  /// This is the entry point used by the iterative-calc solver: cyclic
+  /// SCC members evaluate against the previous iteration's cached values
+  /// rather than triggering re-entrant evaluation that would surface
+  /// `#REF!` on any back-edge inside the cycle.
+  ///
+  /// Both `workbook` and `current_sheet` must outlive the context.
+  static EvalContext workbook_only(const Workbook& workbook,
+                                   const Sheet& current_sheet) noexcept {
+    EvalContext out;
+    out.current_sheet_ = &current_sheet;
+    out.workbook_ = &workbook;
+    return out;
+  }
+
   /// Resolves an A1 reference to the cell's cached `Value` (non-recursive).
   ///
   /// The mapping from `Reference` states to returned values:

@@ -144,6 +144,24 @@ void Sheet::set_cell_formula(std::uint32_t row, std::uint32_t col, std::string f
   slot.cached_value = Value::blank();
 }
 
+void Sheet::set_cell_cached_value(std::uint32_t row, std::uint32_t col, Value v) {
+  // Bounds checks are advisory: callers above this layer (parser, OOXML
+  // reader, recalc engine) own coordinate validation. A debug assert
+  // catches programming errors without imposing a release-mode branch.
+  assert(row < kMaxRows && col < kMaxCols);
+
+  // Cached-value updates do NOT trigger spill invalidation: the recalc
+  // engine writes the post-evaluation result of a formula cell, and any
+  // structural change (formula edit, literal write into a phantom) is
+  // already routed through `set_cell_formula` / `set_cell_value` which
+  // handle invalidation separately. Letting cached-value updates bypass
+  // the spill table also keeps the spill anchor's `cached_value`
+  // synchronised with `commit_spill` (which sets it to `cells[0]`).
+  std::vector<Cell>& row_cells = rows_[row];
+  Cell& slot = EnsureSlot(row_cells, col);
+  slot.cached_value = v;
+}
+
 const Cell* Sheet::cell_at(std::uint32_t row, std::uint32_t col) const noexcept {
   const auto it = rows_.find(row);
   if (it == rows_.end()) {
