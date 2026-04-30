@@ -44,28 +44,26 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// Owns the parse / eval arenas and the parser so callers can inspect any
-// produced diagnostics. Re-creating per test is cheap and isolates state.
-struct ParseAndEval {
-  Arena parse_arena;
-  Arena eval_arena;
-  parser::Parser p;
-  parser::AstNode* root = nullptr;
-
-  explicit ParseAndEval(std::string_view src) : p(src, parse_arena) { root = p.parse(); }
-
-  Value run() {
-    if (root == nullptr) {
-      return Value::error(ErrorCode::Name);
-    }
-    return evaluate(*root, eval_arena, default_registry(), EvalContext{});
-  }
-};
-
+// Parses `src` and evaluates it through the default function registry.
+// Parse / eval arenas have process lifetime via `static thread_local` so the
+// returned `Value`'s arena-backed payload (text, array cells, lambda body)
+// survives until the next `EvalSrc` call. Each call resets the shared arenas
+// to avoid cross-test contamination, matching the helper pattern in
+// `builtins_countif_test.cpp`. A stack-local `ParseAndEval` would free both
+// arenas at function return, leaving the returned `Value` dangling — caught
+// by AddressSanitizer as heap-use-after-free in `Value::as_array_cells()`.
 Value EvalSrc(std::string_view src) {
-  ParseAndEval pe(src);
-  EXPECT_TRUE(pe.p.errors().empty()) << "unexpected parse errors for: " << src;
-  return pe.run();
+  static thread_local Arena parse_arena;
+  static thread_local Arena eval_arena;
+  parse_arena.reset();
+  eval_arena.reset();
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_TRUE(p.errors().empty()) << "unexpected parse errors for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return evaluate(*root, eval_arena, default_registry(), EvalContext{});
 }
 
 // Reads cell `(r, c)` from a 2D ArrayValue using row-major indexing.
