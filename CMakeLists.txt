@@ -97,6 +97,10 @@ set(FORMULON_CORE_SOURCES
   src/io/tables_reader.cpp
   src/io/xml_escape.cpp
   src/io/zip_reader.cpp
+  src/io/xlsb/func_id_table.cpp
+  src/io/xlsb/ptg.cpp
+  src/io/xlsb/reader.cpp
+  src/io/xlsb/record.cpp
   src/parser/tokenizer.cpp
   src/parser/ast.cpp
   src/parser/ast_dump.cpp

@@ -100,6 +100,10 @@ enum class FormulonErrorCode : int32_t {
   kIoCsvEncodingDetect = 5015,
   kIoWriteFailed = 5016,
   kIoCalcChainMismatch = 5017,
+  kIoXlsbRecordTruncated = 5018,
+  kIoXlsbUnknownRecord = 5019,
+  kIoXlsbUnsupportedPtg = 5020,
+  kIoXlsbCorrupt = 5021,
 
   // ===== 6000-6999: Crypto / Security =====
   kCryptoAgileNotSupported = 6000,
@@ -318,6 +322,14 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kIoWriteFailed";
     case FormulonErrorCode::kIoCalcChainMismatch:
       return "kIoCalcChainMismatch";
+    case FormulonErrorCode::kIoXlsbRecordTruncated:
+      return "kIoXlsbRecordTruncated";
+    case FormulonErrorCode::kIoXlsbUnknownRecord:
+      return "kIoXlsbUnknownRecord";
+    case FormulonErrorCode::kIoXlsbUnsupportedPtg:
+      return "kIoXlsbUnsupportedPtg";
+    case FormulonErrorCode::kIoXlsbCorrupt:
+      return "kIoXlsbCorrupt";
 
     // Crypto / Security
     case FormulonErrorCode::kCryptoAgileNotSupported:

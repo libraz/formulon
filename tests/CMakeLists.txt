@@ -30,6 +30,10 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/styles_reader_test.cpp
   unit/io/tables_reader_test.cpp
   unit/io/zip_reader_test.cpp
+  unit/io/xlsb/func_id_test.cpp
+  unit/io/xlsb/ptg_test.cpp
+  unit/io/xlsb/reader_test.cpp
+  unit/io/xlsb/record_test.cpp
   unit/parser/tokenizer_test.cpp
   unit/parser/ast_test.cpp
   unit/parser/ast_dump_test.cpp
