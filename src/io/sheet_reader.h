@@ -21,6 +21,7 @@
 #include <tuple>
 #include <vector>
 
+#include "io/zip_reader.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -83,6 +84,41 @@ struct SheetReadContext {
 /// of the text values.
 Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::size_t sheet_index, Workbook& workbook,
                                       SheetReadContext& ctx, std::deque<std::string>& text_storage);
+
+/// Sheet-XML byte size at which the OOXML reader switches from the
+/// pugixml DOM path to the streaming SAX scanner. Below this threshold
+/// the DOM fits comfortably in memory and the per-cell pugixml
+/// overhead is amortised; above it the DOM grows linearly with cell
+/// count and the SAX path is preferred.
+///
+/// The native default (256 KiB) is a conservative empirical pick: a
+/// worksheet with ~10000 cells is typically ~150-200 KB, well below
+/// the threshold; a 1M-cell sheet is multi-MB and obviously above it.
+///
+/// On WASM we set the threshold to `SIZE_MAX` so the SAX path is
+/// statically unreachable; the linker then dead-code-eliminates the
+/// streaming scanner and shrinks the binary by ~15-20 KiB. WASM
+/// callers that need streaming reads can recompile with
+/// `-DFORMULON_WASM_ENABLE_SAX=1` (see `cmake/FormulonWasm.cmake`).
+#if defined(FORMULON_WASM) && !defined(FORMULON_WASM_ENABLE_SAX)
+constexpr std::size_t kSaxThresholdBytes = static_cast<std::size_t>(-1);
+#else
+constexpr std::size_t kSaxThresholdBytes = 256U * 1024U;
+#endif
+
+/// Streaming variant of `read_sheet_data`. Walks the sheet XML
+/// directly off `sheet_xml.data` via the SAX scanner and writes cells
+/// into the workbook one at a time, without building a DOM. Behaviour
+/// is identical to the DOM path (same cell coverage, same shared-
+/// formula bookkeeping, same SST queueing); only the underlying parser
+/// differs.
+///
+/// Used by the OOXML reader when the sheet's raw XML is at least
+/// `kSaxThresholdBytes`. The DOM path remains the default below the
+/// threshold so the WASM build does not pay the SAX setup cost on
+/// every small sheet.
+Expected<void, Error> read_sheet_data_sax(ByteSpan sheet_xml, std::size_t sheet_index, Workbook& workbook,
+                                          SheetReadContext& ctx, std::deque<std::string>& text_storage);
 
 }  // namespace io
 }  // namespace formulon

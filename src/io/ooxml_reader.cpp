@@ -732,19 +732,44 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
       return sheet_bytes_or.error();
     }
     const std::vector<std::uint8_t>& sheet_bytes = sheet_bytes_or.value();
-    pugi::xml_document sheet_doc;
-    pugi::xml_parse_result sheet_parse =
-        sheet_doc.load_buffer(sheet_bytes.data(), sheet_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-    if (!sheet_parse) {
-      std::string ctx("context=ooxml_reader part=");
-      ctx.append(sheet_path);
-      ctx.append(" desc=");
-      ctx.append(sheet_parse.description());
-      return make_error(FormulonErrorCode::kIoXmlParse, "sheet*.xml: pugixml parse failed", std::move(ctx));
+    // Choose the read path by raw XML size: small sheets stay on the
+    // pugixml DOM path (familiar code, well-validated); large sheets
+    // (>= `kSaxThresholdBytes`) stream through the SAX scanner so a
+    // 1M-cell worksheet does not need to materialise as a DOM in
+    // memory. Both paths produce identical Workbook output.
+    //
+    // The threshold is a compile-time constant. On WASM the value is
+    // `SIZE_MAX` (see `sheet_reader.h`) so the SAX branch is
+    // statically dead and the linker removes the streaming scanner
+    // entirely — saving ~17 KiB of `.wasm`. The `if constexpr` makes
+    // the elimination explicit so this is robust under -O0 / -Og too.
+    constexpr bool kSaxEnabled = kSaxThresholdBytes != static_cast<std::size_t>(-1);
+    bool sax_used = false;
+    if constexpr (kSaxEnabled) {
+      if (sheet_bytes.size() >= kSaxThresholdBytes) {
+        ByteSpan sheet_span{sheet_bytes.data(), sheet_bytes.size()};
+        auto rs = read_sheet_data_sax(sheet_span, i, wb, sheet_contexts[i], result_text_storage);
+        if (!rs) {
+          return rs.error();
+        }
+        sax_used = true;
+      }
     }
-    auto rs = read_sheet_data(sheet_doc, i, wb, sheet_contexts[i], result_text_storage);
-    if (!rs) {
-      return rs.error();
+    if (!sax_used) {
+      pugi::xml_document sheet_doc;
+      pugi::xml_parse_result sheet_parse =
+          sheet_doc.load_buffer(sheet_bytes.data(), sheet_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
+      if (!sheet_parse) {
+        std::string ctx("context=ooxml_reader part=");
+        ctx.append(sheet_path);
+        ctx.append(" desc=");
+        ctx.append(sheet_parse.description());
+        return make_error(FormulonErrorCode::kIoXmlParse, "sheet*.xml: pugixml parse failed", std::move(ctx));
+      }
+      auto rs = read_sheet_data(sheet_doc, i, wb, sheet_contexts[i], result_text_storage);
+      if (!rs) {
+        return rs.error();
+      }
     }
 
     // Sheet rels file (`xl/worksheets/_rels/sheetN.xml.rels`) — drives

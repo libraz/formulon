@@ -25,6 +25,7 @@
 #include <utility>
 
 #include "io/cell_parser.h"
+#include "io/sax_xml_reader.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -204,6 +205,96 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
   }
   return Expected<void, Error>::Ok();
 }
+
+// ---------------------------------------------------------------------------
+// SAX-path implementation. The streaming scanner produces one
+// `CellRecord` per `<c>` element; this helper translates that record
+// into the same `Workbook` mutations the DOM path performs by
+// delegating value decoding to `decode_cell_payload` (shared with
+// `parse_cell_element`).
+//
+// The implementation is `#if`-guarded so WASM builds (where the
+// OOXML reader's threshold pins the dispatch to DOM) do not pay the
+// compile-time cost. See `src/io/sax_xml_reader.cpp` for the matching
+// guard on the streaming scanner.
+// ---------------------------------------------------------------------------
+
+#if !defined(FORMULON_WASM) || defined(FORMULON_WASM_ENABLE_SAX)
+
+namespace {
+
+/// Per-call state passed through `SheetSaxCallbacks::user_data`. The
+/// scanner's callbacks need access to the workbook, the sheet index,
+/// the SST queue, and the text-storage deque; bundling them here
+/// avoids `std::function` capture entirely.
+struct SaxApplyState {
+  std::size_t sheet_index;
+  Workbook* workbook;
+  SheetReadContext* ctx;
+  std::deque<std::string>* text_storage;
+};
+
+/// Translates one `CellRecord` into the same workbook mutations the
+/// DOM path produces.
+///
+/// Shared-formula and array-formula attributes (`<f t="shared" si=>`,
+/// `<f t="array">`) are NOT surfaced through the SAX record, so the
+/// SAX path treats every `<f>` body as plain. Sheets that rely on
+/// shared formulas typically come in well under `kSaxThresholdBytes`
+/// and route through the DOM path instead.
+Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_index, Workbook& workbook,
+                                      SheetReadContext& ctx, std::deque<std::string>& text_storage) {
+  const bool value_present = rec.is_inline_string || !rec.value.empty();
+  auto payload_or = decode_cell_payload(rec.t, rec.value, value_present, rec.is_inline_string, text_storage);
+  if (!payload_or) {
+    return payload_or.error();
+  }
+  const ParsedCell& parsed = payload_or.value();
+
+  if (!rec.formula.empty()) {
+    std::string with_eq("=");
+    with_eq.append(rec.formula);
+    auto wf = workbook.set_cell_formula(sheet_index, rec.row, rec.col, std::move(with_eq));
+    if (!wf) {
+      return wf.error();
+    }
+  } else if (!parsed.value.is_blank()) {
+    auto wv = workbook.set_cell_value(sheet_index, rec.row, rec.col, parsed.value);
+    if (!wv) {
+      return wv.error();
+    }
+  }
+  if (parsed.is_sst_index) {
+    ctx.pending_sst_cells.emplace_back(rec.row, rec.col, parsed.sst_index);
+  }
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> SaxOnCellTrampoline(void* user_data, const CellRecord& rec) {
+  auto* st = static_cast<SaxApplyState*>(user_data);
+  return ApplyCellRecord(rec, st->sheet_index, *st->workbook, *st->ctx, *st->text_storage);
+}
+
+}  // namespace
+
+Expected<void, Error> read_sheet_data_sax(ByteSpan sheet_xml, std::size_t sheet_index, Workbook& workbook,
+                                          SheetReadContext& ctx, std::deque<std::string>& text_storage) {
+  if (sheet_index >= workbook.sheet_count()) {
+    std::string ctxs("context=sheet_reader_sax sheet_index=");
+    ctxs.append(std::to_string(sheet_index));
+    ctxs.append(" sheet_count=");
+    ctxs.append(std::to_string(workbook.sheet_count()));
+    return make_error(FormulonErrorCode::kInvalidArgument, "read_sheet_data_sax: sheet_index out of range",
+                      std::move(ctxs));
+  }
+  SaxApplyState state{sheet_index, &workbook, &ctx, &text_storage};
+  SheetSaxCallbacks cb;
+  cb.user_data = &state;
+  cb.on_cell = &SaxOnCellTrampoline;
+  return scan_sheet_data(sheet_xml, cb);
+}
+
+#endif  // !FORMULON_WASM || FORMULON_WASM_ENABLE_SAX
 
 }  // namespace io
 }  // namespace formulon

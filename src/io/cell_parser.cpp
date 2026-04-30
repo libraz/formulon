@@ -264,9 +264,108 @@ Expected<std::pair<std::uint32_t, std::uint32_t>, Error> parse_a1(std::string_vi
   return std::pair<std::uint32_t, std::uint32_t>{row_1based - 1U, col_1based - 1U};
 }
 
-Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::deque<std::string>& text_storage) {
+Expected<ParsedCell, Error> decode_cell_payload(std::string_view t, std::string_view v_text, bool value_present,
+                                                bool is_inline_string, std::deque<std::string>& text_storage) {
   ParsedCell out;
+  if (t.empty()) {
+    t = std::string_view("n");
+  }
+  const bool t_ok = (t == "n" || t == "b" || t == "e" || t == "s" || t == "str" || t == "inlineStr" || t == "d");
+  if (!t_ok) {
+    std::string ctx("context=cell_parser t=");
+    ctx.append(t);
+    return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: unsupported t= value", std::move(ctx));
+  }
 
+  if (t == "inlineStr" || is_inline_string) {
+    if (!value_present) {
+      out.value = Value::text(std::string_view{});
+      return out;
+    }
+    text_storage.emplace_back(std::string(v_text));
+    out.value = Value::text(text_storage.back());
+    return out;
+  }
+  if (t == "str") {
+    if (value_present) {
+      text_storage.emplace_back(std::string(v_text));
+      out.value = Value::text(text_storage.back());
+    } else {
+      out.value = Value::text(std::string_view{});
+    }
+    return out;
+  }
+  if (t == "s") {
+    if (!value_present) {
+      return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: t='s' without <v> child",
+                        "context=cell_parser");
+    }
+    double idx = 0.0;
+    if (!ParseDouble(v_text, &idx) || idx < 0.0 || idx > 4294967295.0) {
+      std::string ctx("context=cell_parser v=");
+      ctx.append(v_text);
+      return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: t='s' has unparseable index", std::move(ctx));
+    }
+    out.is_sst_index = true;
+    out.sst_index = static_cast<std::uint32_t>(idx);
+    out.value = Value::text(std::string_view{});
+    return out;
+  }
+  if (t == "b") {
+    if (!value_present) {
+      return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: t='b' without <v> child",
+                        "context=cell_parser");
+    }
+    if (v_text == "1") {
+      out.value = Value::boolean(true);
+    } else if (v_text == "0") {
+      out.value = Value::boolean(false);
+    } else {
+      std::string ctx("context=cell_parser v=");
+      ctx.append(v_text);
+      return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: t='b' must be 0 or 1", std::move(ctx));
+    }
+    return out;
+  }
+  if (t == "e") {
+    if (!value_present) {
+      return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: t='e' without <v> child",
+                        "context=cell_parser");
+    }
+    ErrorCode code{};
+    if (!ParseErrorDisplay(v_text, &code)) {
+      std::string ctx("context=cell_parser v=");
+      ctx.append(v_text);
+      return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: unrecognised error display", std::move(ctx));
+    }
+    out.value = Value::error(code);
+    return out;
+  }
+  if (t == "d") {
+    if (value_present) {
+      text_storage.emplace_back(std::string(v_text));
+      out.value = Value::text(text_storage.back());
+    } else {
+      out.value = Value::text(std::string_view{});
+    }
+    return out;
+  }
+  // Default / t == "n".
+  if (!value_present) {
+    out.value = Value::blank();
+    return out;
+  }
+  double num = 0.0;
+  if (!ParseDouble(v_text, &num)) {
+    std::string ctx("context=cell_parser v=");
+    ctx.append(v_text);
+    return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: t='n' has unparseable <v>", std::move(ctx));
+  }
+  out.value = Value::number(num);
+  return out;
+}
+
+Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::deque<std::string>& text_storage) {
   // r=A1 — required.
   pugi::xml_attribute r_attr = node.attribute("r");
   if (!r_attr) {
@@ -278,167 +377,55 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
   if (!rc_or) {
     return rc_or.error();
   }
-  out.row = rc_or.value().first;
-  out.col = rc_or.value().second;
+  std::uint32_t row = rc_or.value().first;
+  std::uint32_t col = rc_or.value().second;
 
-  // t= — type. Default is "n" (number) when absent.
+  // t= — type.
   std::string_view t = node.attribute("t").value();
-  if (t.empty()) {
-    t = "n";
-  }
-  // Recognised set: n, b, e, s, str, inlineStr, d. Anything else is an
-  // explicit error: silently mapping unknown types to a default would
-  // lose data (and round-trip would fail).
-  const bool t_ok = (t == "n" || t == "b" || t == "e" || t == "s" || t == "str" || t == "inlineStr" || t == "d");
-  if (!t_ok) {
-    std::string ctx("context=cell_parser ref=");
-    ctx.append(ref);
-    ctx.append(" t=");
-    ctx.append(t);
-    return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: unsupported t= value", std::move(ctx));
-  }
 
-  // <f>...</f> — formula. The OOXML cached value is held in the sibling
-  // <v>, which we read below regardless of formula presence.
+  // <f>...</f> — formula text (leading '=' stripped).
+  std::string formula;
   pugi::xml_node f_node = node.child("f");
   if (f_node) {
-    // Strip leading '=' if present (Excel's writer never emits one, but
-    // be defensive for other producers).
-    std::string formula = f_node.text().get();
+    formula = f_node.text().get();
     if (!formula.empty() && formula.front() == '=') {
       formula.erase(0, 1);
     }
-    out.formula = std::move(formula);
   }
 
-  // <v> / <is> — value.
+  // <v> / <is> — value. Inline-string concatenation is done eagerly
+  // into a scratch buffer so the shared `decode_cell_payload` only
+  // sees a flat `string_view`.
   pugi::xml_node v_node = node.child("v");
   pugi::xml_node is_node = node.child("is");
-
-  if (t == "inlineStr" || t == "str") {
-    // inlineStr: child is `<is>`; flatten rich-text.
-    // str (legacy formula-as-string result): cached value lives in `<v>`
-    //   as plain text rather than a number.
-    if (t == "inlineStr") {
-      if (!is_node) {
-        // inlineStr without <is>: blank text rather than crash. Excel
-        // accepts this shape on read.
-        out.value = Value::text(std::string_view{});
-        return out;
-      }
-      // `Value::text` is non-owning; append the decoded string to the
-      // caller's `text_storage` (a pointer-stable container) so the
-      // resulting `string_view` outlives this function. The deque's
-      // back() reference stays valid until the caller drops the
-      // container.
-      text_storage.emplace_back();
-      ConcatInlineStringText(is_node, text_storage.back());
-      out.value = Value::text(text_storage.back());
-      return out;
-    }
-    // t == "str"
-    if (v_node) {
-      text_storage.emplace_back(v_node.text().get());
-      out.value = Value::text(text_storage.back());
-    } else {
-      out.value = Value::text(std::string_view{});
-    }
-    return out;
+  std::string inline_concat;
+  std::string_view v_text;
+  bool value_present = false;
+  bool is_inline = false;
+  if (is_node) {
+    is_inline = true;
+    value_present = true;
+    ConcatInlineStringText(is_node, inline_concat);
+    v_text = inline_concat;
+  } else if (v_node) {
+    value_present = true;
+    v_text = v_node.text().get();
   }
 
-  if (t == "s") {
-    // Shared string: surface index, write a placeholder. Bundle 2.3
-    // resolves this against the workbook's SST.
-    if (!v_node) {
-      std::string ctx("context=cell_parser ref=");
-      ctx.append(ref);
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: t='s' without <v> child", std::move(ctx));
+  auto payload_or = decode_cell_payload(t, v_text, value_present, is_inline, text_storage);
+  if (!payload_or) {
+    // Re-decorate the error context with the cell ref for actionable
+    // diagnostics.
+    Error e = payload_or.error();
+    if (!ref.empty()) {
+      e.context.append(" ref=").append(ref);
     }
-    double idx = 0.0;
-    if (!ParseDouble(v_node.text().get(), &idx) || idx < 0.0 || idx > 4294967295.0) {
-      std::string ctx("context=cell_parser ref=");
-      ctx.append(ref);
-      ctx.append(" v=");
-      ctx.append(v_node.text().get());
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: t='s' has unparseable index", std::move(ctx));
-    }
-    out.is_sst_index = true;
-    out.sst_index = static_cast<std::uint32_t>(idx);
-    // Empty placeholder; writer will replace once SST is loaded.
-    out.value = Value::text(std::string_view{});
-    return out;
+    return e;
   }
-
-  if (t == "b") {
-    if (!v_node) {
-      std::string ctx("context=cell_parser ref=");
-      ctx.append(ref);
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: t='b' without <v> child", std::move(ctx));
-    }
-    const std::string_view body = v_node.text().get();
-    if (body == "1") {
-      out.value = Value::boolean(true);
-    } else if (body == "0") {
-      out.value = Value::boolean(false);
-    } else {
-      std::string ctx("context=cell_parser ref=");
-      ctx.append(ref);
-      ctx.append(" v=");
-      ctx.append(body);
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: t='b' must be 0 or 1", std::move(ctx));
-    }
-    return out;
-  }
-
-  if (t == "e") {
-    if (!v_node) {
-      std::string ctx("context=cell_parser ref=");
-      ctx.append(ref);
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: t='e' without <v> child", std::move(ctx));
-    }
-    ErrorCode code{};
-    const std::string_view body = v_node.text().get();
-    if (!ParseErrorDisplay(body, &code)) {
-      std::string ctx("context=cell_parser ref=");
-      ctx.append(ref);
-      ctx.append(" v=");
-      ctx.append(body);
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: unrecognised error display", std::move(ctx));
-    }
-    out.value = Value::error(code);
-    return out;
-  }
-
-  if (t == "d") {
-    // ISO-8601 date string. Excel rarely emits this and resolving it to
-    // a serial number is the styles layer's job; surface as Text for
-    // round-trip preservation.
-    if (v_node) {
-      text_storage.emplace_back(v_node.text().get());
-      out.value = Value::text(text_storage.back());
-    } else {
-      out.value = Value::text(std::string_view{});
-    }
-    return out;
-  }
-
-  // Default / t == "n": number, or blank if no <v>.
-  if (!v_node) {
-    // No cached value. For formula cells this is legal (Excel will
-    // recalc on load); for literal cells this means a truly blank
-    // numeric cell, which we map to Blank.
-    out.value = Value::blank();
-    return out;
-  }
-  double num = 0.0;
-  if (!ParseDouble(v_node.text().get(), &num)) {
-    std::string ctx("context=cell_parser ref=");
-    ctx.append(ref);
-    ctx.append(" v=");
-    ctx.append(v_node.text().get());
-    return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: t='n' has unparseable <v>", std::move(ctx));
-  }
-  out.value = Value::number(num);
+  ParsedCell out = payload_or.value();
+  out.row = row;
+  out.col = col;
+  out.formula = std::move(formula);
   return out;
 }
 

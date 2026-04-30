@@ -106,6 +106,30 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
 /// `XFD`, row past `1048576`, or row `0`) are also rejected.
 Expected<std::pair<std::uint32_t, std::uint32_t>, Error> parse_a1(std::string_view ref);
 
+/// String-view-only cell-payload decoder, shared between the DOM and
+/// SAX read paths. Encodes the type-specific behaviour ("n", "b",
+/// "e", "s", "str", "inlineStr", "d") of the OOXML `<c>` payload
+/// without requiring a pugixml node.
+///
+/// Inputs:
+///   * `t`                  - the `t=` attribute value, or empty (=> "n")
+///   * `v_text`             - text content of `<v>` (entity-decoded)
+///   * `value_present`      - true if a `<v>` or `<is>` child existed
+///   * `is_inline_string`   - true if the value came from `<is>` rather
+///                            than `<v>` (i.e. `t="inlineStr"`)
+///   * `text_storage`       - durable backing-store for owned strings
+///                            (the same `std::deque<std::string>` the
+///                            DOM path uses).
+/// Outputs (via `result`):
+///   * `value`              - decoded `Value` per the OOXML rules
+///   * `is_sst_index`       - true iff `t="s"`; the index is in
+///                            `sst_index`
+///
+/// Returns `kIoSheetCorrupt` on any per-type contract violation
+/// (unsupported `t=`, malformed `<v>` payload, ...).
+Expected<ParsedCell, Error> decode_cell_payload(std::string_view t, std::string_view v_text, bool value_present,
+                                                bool is_inline_string, std::deque<std::string>& text_storage);
+
 }  // namespace io
 }  // namespace formulon
 

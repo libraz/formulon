@@ -66,3 +66,32 @@ gtest_discover_tests(formulon_ooxml_corpus_100_tests
   TEST_LIST formulon_ooxml_corpus_100_test_list
   PROPERTIES LABELS "SLOW"
 )
+
+# ---------------------------------------------------------------------------
+# SAX vs DOM parity gate over the same 100-book feature matrix.
+#
+# Drives every book through both the production DOM reader and the
+# streaming SAX reader and asserts that the resulting workbooks are
+# cell-by-cell identical. SLOW-labelled for the same reasons as the
+# DOM-only corpus.
+# ---------------------------------------------------------------------------
+
+add_executable(formulon_sax_corpus_parity_tests sax_corpus_parity_test.cpp)
+
+target_link_libraries(formulon_sax_corpus_parity_tests
+  PRIVATE
+    formulon_static
+    gtest_main
+)
+
+target_include_directories(formulon_sax_corpus_parity_tests
+  PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+formulon_apply_warnings(formulon_sax_corpus_parity_tests)
+
+gtest_discover_tests(formulon_sax_corpus_parity_tests
+  TEST_LIST formulon_sax_corpus_parity_test_list
+  PROPERTIES LABELS "SLOW"
+)

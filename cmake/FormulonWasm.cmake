@@ -129,6 +129,13 @@ target_compile_options(formulon_wasm PRIVATE
 # host pthread requirements.
 target_compile_options(formulon_core PRIVATE -pthread)
 
+# Define `FORMULON_WASM` for every TU under the WASM build. The
+# `read_ooxml` SAX/DOM dispatch consults this macro: WASM builds get
+# `kSaxThresholdBytes = SIZE_MAX`, which lets the linker
+# dead-code-eliminate the streaming scanner (~15-20 KiB savings vs
+# always-active SAX). Native builds keep the threshold at 256 KiB.
+target_compile_definitions(formulon_core PRIVATE FORMULON_WASM=1)
+
 target_link_options(formulon_wasm PRIVATE
   ${_FM_WASM_OPT_FLAGS}
   ${_FM_WASM_LINK_OPT_FLAGS}
