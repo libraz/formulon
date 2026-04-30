@@ -185,6 +185,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/range_args.cpp
   src/eval/scalar_ops.cpp
   src/eval/special_forms_lazy.cpp
+  src/eval/structured_ref.cpp
   src/eval/aggregate_lazy.cpp
   src/eval/areas_lazy.cpp
   src/eval/cell_lazy.cpp

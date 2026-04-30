@@ -175,14 +175,15 @@ TEST(ParserErrors, UnbalancedBracketsForOpenStructuredRef) {
   EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::UnbalancedBrackets));
 }
 
-TEST(ParserErrors, BalancedStructuredRefStaysUnsupported) {
-  // The grammar for structured refs is deferred; a balanced bracketed form
-  // must keep emitting UnsupportedConstruct (not UnbalancedBrackets).
+TEST(ParserErrors, BalancedStructuredRefParses) {
+  // A balanced `Table[col]` is a structured (table) reference; the parser
+  // produces a `NodeKind::StructuredRef` node and emits no error.
   Arena a;
   Parser p("=Table[col]", a);
-  (void)p.parse();
-  EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::UnsupportedConstruct));
-  EXPECT_FALSE(HasErrorCode(p.errors(), ParseErrorCode::UnbalancedBrackets));
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_EQ(root->kind(), NodeKind::StructuredRef);
+  EXPECT_TRUE(p.errors().empty());
 }
 
 TEST(ParserErrors, InvalidRangeRhsIsLiteral) {

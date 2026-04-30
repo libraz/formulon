@@ -168,6 +168,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/textsplit_eval_test.cpp
   unit/eval/trimrange_eval_test.cpp
   unit/parser/spill_ref_test.cpp
+  unit/parser/structured_ref_test.cpp
+  unit/eval/structured_ref_eval_test.cpp
   unit/registry_catalog_test.cpp
 )
 

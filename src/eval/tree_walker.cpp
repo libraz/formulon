@@ -44,6 +44,7 @@
 #include "eval/series_sum_lazy.h"
 #include "eval/shape_ops_lazy.h"
 #include "eval/special_forms_lazy.h"
+#include "eval/structured_ref.h"
 #include "eval/textsplit_lazy.h"
 #include "eval/trimrange_lazy.h"
 #include "eval/workdays_lazy.h"
@@ -867,6 +868,60 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       }
       continue;
     }
+    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::StructuredRef) {
+      // Structured (table) reference argument: evaluate it and unpack the
+      // resulting Array row-major into the values vector. Mirrors the
+      // SpillRef / RangeOp branches so SUM / AVERAGE / COUNTIF / ... see
+      // the rectangle's cells exactly as if `Table[Col]` had been written
+      // as a literal `A2:A10`. Errors short-circuit per `propagate_errors`.
+      // Scalar (single-cell) results fall through to the generic argument
+      // path; the only effect is that the per-cell `range_filter_*` rules
+      // are not applied, which matches Mac for a single-cell `Sales[@Col]`
+      // (Excel never broadcasts a single-cell structured ref through the
+      // range-filter pipeline). The array-shaped path applies the filters
+      // exactly like the RangeOp / SpillRef branches.
+      Value sr_val = eval_node(arg_node, arena, registry, ctx);
+      if (def->propagate_errors && sr_val.is_error()) {
+        return sr_val;
+      }
+      if (sr_val.is_array()) {
+        had_range_shaped_arg = true;
+        const ArrayValue* a = sr_val.as_array();
+        const std::size_t sr_total = static_cast<std::size_t>(a->rows) * static_cast<std::size_t>(a->cols);
+        for (std::size_t k = 0; k < sr_total; ++k) {
+          const Value& v = a->cells[k];
+          if (def->propagate_errors && v.is_error()) {
+            return v;
+          }
+          if (def->range_filter_numeric_only && v.kind() != ValueKind::Number) {
+            continue;
+          }
+          if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
+            continue;
+          }
+          if (def->range_filter_a_coerce) {
+            if (v.kind() == ValueKind::Blank) {
+              continue;
+            }
+            if (v.kind() == ValueKind::Bool) {
+              values.push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
+              continue;
+            }
+            if (v.kind() == ValueKind::Text) {
+              values.push_back(Value::number(0.0));
+              continue;
+            }
+          }
+          values.push_back(v);
+        }
+        continue;
+      }
+      // Scalar single-cell result: push without range-filtering. Falling
+      // through to the bottom-of-loop scalar handling would re-eval the
+      // node; the value we already have is correct.
+      values.push_back(sr_val);
+      continue;
+    }
     if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Call &&
         strings::case_insensitive_eq(arg_node.as_call_name(), "COLUMN")) {
       had_range_shaped_arg = true;
@@ -1452,8 +1507,82 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
 
     // -- Unsupported: external names --------------------------------------
     case parser::NodeKind::ExternalRef:
-    case parser::NodeKind::StructuredRef:
       return Value::error(ErrorCode::Name);
+
+    case parser::NodeKind::StructuredRef: {
+      // Resolve the table reference (`Table[Col]`, `Table[#All]`, ...) to a
+      // concrete rectangle on the table's home sheet, then read the cells
+      // through the existing reference-resolution machinery. The bracket
+      // payload was captured verbatim by the parser into the node's
+      // `column` slot; the resolver re-parses it here so multi-specifier
+      // and column-range forms can flow through a single AST shape.
+      const Workbook* wb = ctx.workbook();
+      const Sheet* current = ctx.current_sheet();
+      if (wb == nullptr || current == nullptr) {
+        return Value::error(ErrorCode::Name);
+      }
+      auto sel_or = parse_structured_ref_payload(node.as_structured_ref_column());
+      if (!sel_or) {
+        return Value::error(sel_or.error());
+      }
+      StructuredRefSelector sel = std::move(sel_or).value();
+      sel.table_name = node.as_structured_ref_table();
+      // Locate the current sheet's workbook index; falling back to 0 is fine
+      // because the resolver only consults `current_sheet_index` for
+      // future cross-sheet contracts (the row-implicit form uses the
+      // formula cell's row directly).
+      std::uint32_t current_sheet_index = 0;
+      for (std::size_t i = 0; i < wb->sheet_count(); ++i) {
+        if (&wb->sheet(i) == current) {
+          current_sheet_index = static_cast<std::uint32_t>(i);
+          break;
+        }
+      }
+      const std::uint32_t current_row = ctx.has_formula_cell() ? ctx.formula_row() : EvalContext::kNoFormulaCell;
+      auto rect_or = resolve_structured_ref(sel, *wb, current_sheet_index, current_row);
+      if (!rect_or) {
+        return Value::error(rect_or.error());
+      }
+      const StructuredRefRange rect = std::move(rect_or).value();
+      // Build A1 references for the rectangle's two corners and let
+      // `expand_range` do the actual cell fetch. This funnels structured
+      // refs through the same cross-sheet / cycle-detecting path as a
+      // literal `Sheet1!A1:C10` reference.
+      parser::Reference lhs{};
+      lhs.sheet = rect.sheet_name;
+      lhs.row = rect.row_first;
+      lhs.col = rect.col_first;
+      parser::Reference rhs{};
+      rhs.sheet = rect.sheet_name;
+      rhs.row = rect.row_last;
+      rhs.col = rect.col_last;
+      // Single-cell rectangle: read the value directly, mirroring `Ref`.
+      if (rect.row_first == rect.row_last && rect.col_first == rect.col_last) {
+        return ctx.resolve_ref(lhs, arena, registry);
+      }
+      auto cells = ctx.expand_range(lhs, rhs, arena, registry);
+      if (!cells) {
+        return Value::error(cells.error());
+      }
+      const std::uint32_t rows = rect.row_last - rect.row_first + 1u;
+      const std::uint32_t cols = rect.col_last - rect.col_first + 1u;
+      const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+      Value* buffer = arena.create_array<Value>(total);
+      if (buffer == nullptr) {
+        return Value::error(ErrorCode::Num);
+      }
+      for (std::size_t i = 0; i < total && i < cells.value().size(); ++i) {
+        buffer[i] = cells.value()[i];
+      }
+      ArrayValue* arr = arena.create<ArrayValue>();
+      if (arr == nullptr) {
+        return Value::error(ErrorCode::Num);
+      }
+      arr->rows = rows;
+      arr->cols = cols;
+      arr->cells = buffer;
+      return Value::array(arr);
+    }
 
     case parser::NodeKind::Lambda: {
       // Build a runtime closure capturing the current name environment so a

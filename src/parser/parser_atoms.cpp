@@ -429,11 +429,84 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
   // Ident followed by:
   //   `(`   -> function call (preserving Ident lexeme as the function name).
   //   `!`   -> unquoted sheet qualifier (the Ident is the sheet name).
+  //   `[`   -> structured (table) reference (`Table[Col]`, `Table[#All]`,
+  //            `Table[[#Headers],[Col]]`, etc.). The ident lexeme is the
+  //            table name; the bracket payload is captured verbatim and the
+  //            resolver re-parses it at evaluation time.
   //   `:`   -> potential full-column reference, iff both sides are valid
   //            column-letter runs of equal absolute index.
   //   else  -> NameRef.
   const Token& ident = peek();
   const TokenKind next = peek_kind_at(1);
+
+  if (next == TokenKind::LBracket) {
+    // Scan forward through balanced brackets to locate the matching `]`. We
+    // record the byte offsets of the outer `[` and `]` lexemes so we can
+    // slice the raw bracket payload (including any whitespace runs the
+    // tokenizer dropped) from the source buffer.
+    const Token& lbracket = peek_at(1);
+    std::size_t depth = 1;
+    std::size_t close_offset = 0;  // 0-based offset (in tokens) from `lbracket`
+    bool found_close = false;
+    for (std::size_t i = 2;; ++i) {
+      const TokenKind k = peek_kind_at(i);
+      if (k == TokenKind::Eof) {
+        break;
+      }
+      if (k == TokenKind::LBracket) {
+        ++depth;
+      } else if (k == TokenKind::RBracket) {
+        --depth;
+        if (depth == 0) {
+          close_offset = i;
+          found_close = true;
+          break;
+        }
+      }
+    }
+    if (!found_close) {
+      record_error_with_token(ParseErrorCode::UnbalancedBrackets, lbracket.range, lbracket.lexeme);
+      AstNode* placeholder = make_error_placeholder(arena_);
+      if (placeholder != nullptr) {
+        placeholder->set_range(lbracket.range);
+      }
+      return placeholder;
+    }
+    const Token& rbracket = peek_at(close_offset);
+    // Compute the byte slice of the bracket payload from the source buffer.
+    // The tokenizer's `lexeme` field is a view into `source_`, so pointer
+    // arithmetic gives us absolute byte offsets without re-walking the
+    // formula text. The payload spans (after `[`, before `]`).
+    const char* src_begin = source_.data();
+    const char* lbracket_end = lbracket.lexeme.data() + lbracket.lexeme.size();
+    const char* rbracket_begin = rbracket.lexeme.data();
+    const std::size_t payload_start = static_cast<std::size_t>(lbracket_end - src_begin);
+    const std::size_t payload_end = static_cast<std::size_t>(rbracket_begin - src_begin);
+    const std::string_view payload = source_.substr(payload_start, payload_end - payload_start);
+    // Record the payload byte span so `promote_lexer_errors` can suppress
+    // any `#All` / `#Headers` / ... diagnostics emitted by `scan_error_literal`
+    // for tokens that fall inside this structured reference.
+    struct_ref_byte_spans_.emplace_back(static_cast<std::uint32_t>(payload_start),
+                                        static_cast<std::uint32_t>(payload_end));
+    const std::string_view table_name = ident.lexeme;
+    const TextRange span = SpanRange(ident.range, rbracket.range);
+    advance();                                             // Ident
+    for (std::size_t i = 0; i <= close_offset - 1; ++i) {  // LBracket .. RBracket
+      advance();
+    }
+    // Pack the entire bracket payload into the AST node's `column` slot.
+    // The resolver in `eval/structured_ref.cpp` re-parses it at evaluation
+    // time — splitting specifier fragments, column ranges, and the `@`
+    // shorthand — and produces the final rectangle. Keeping the payload
+    // verbatim here means the parser does not need to know about specifier
+    // names or multi-fragment grammar.
+    AstNode* n = make_structured_ref(arena_, table_name, payload, StructuredRefModifier::None);
+    if (n == nullptr) {
+      return nullptr;
+    }
+    n->set_range(span);
+    return n;
+  }
 
   if (next == TokenKind::LParen) {
     // LET is a special form: binding names are bare identifiers that must

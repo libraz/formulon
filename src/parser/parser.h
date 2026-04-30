@@ -32,6 +32,7 @@
 
 #include <cstdint>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "parser/ast.h"
@@ -175,7 +176,13 @@ class Parser {
   // not a valid column-letter run.
   static std::uint32_t decode_column_letters(std::string_view lex, bool* col_abs) noexcept;
 
-  // Promotes any tokenizer-level errors into `errors_`.
+  // Promotes any tokenizer-level errors into `errors_`. Errors whose
+  // source byte-range falls inside one of the parser-recognised
+  // structured-reference bracket payloads (see `struct_ref_byte_spans_`)
+  // are suppressed: the tokenizer flags `[#All]`, `[#Headers]`, ... as
+  // `InvalidErrorLiteral` because they do not match the canonical error
+  // catalogue, but the parser handles them as opaque payload bytes so
+  // they should not surface as user-visible diagnostics.
   void promote_lexer_errors(const std::vector<LexerError>& lex_errors);
 
   // Source + token storage.
@@ -199,6 +206,14 @@ class Parser {
   // Current recursion depth of `parse_expression`, used to enforce
   // `ParserOptions::max_parse_depth`.
   std::uint32_t depth_ = 0;
+
+  // Byte offsets (relative to `source_.data()`) of each structured-ref
+  // bracket payload the parser has consumed: `(payload_start, payload_end)`
+  // pairs covering the bytes between the outer `[` and `]` (exclusive on
+  // both ends). Used by lexer-error promotion to suppress tokenizer
+  // diagnostics for `#`-prefixed specifiers (`#All`, `#Headers`, ...) that
+  // the lexer would otherwise flag as `InvalidErrorLiteral`.
+  std::vector<std::pair<std::uint32_t, std::uint32_t>> struct_ref_byte_spans_;
 };
 
 }  // namespace parser

@@ -428,7 +428,32 @@ AstNode* Parser::parse() {
 
   // Lift any tokenizer-level errors before parsing so callers see them even
   // if the parse otherwise succeeds. Promotion does not bail the parser.
+  // We track which `errors_` entries were promoted from the lexer so a
+  // post-parse cleanup pass can drop the ones whose source position falls
+  // inside a structured-reference bracket payload (the lexer flags
+  // `#All` / `#Headers` / ... as `InvalidErrorLiteral` since they do not
+  // match the canonical Excel error catalogue, but those are valid
+  // payload bytes once the parser has identified the surrounding
+  // `Ident LBracket ... RBracket` shape).
+  const std::size_t lexer_errors_first = errors_.size();
   promote_lexer_errors(tz.errors());
+  const std::size_t lexer_errors_last = errors_.size();
+  // Snapshot the lexeme byte-positions of every lexer error so we can
+  // correlate them with `struct_ref_byte_spans_` after parsing. The
+  // `errors_` vector itself only stores UTF-16 ranges; the lexeme view
+  // gives us byte offsets straight into `source_`.
+  std::vector<std::uint32_t> lexer_error_byte_starts;
+  lexer_error_byte_starts.reserve(tz.errors().size());
+  for (const auto& le : tz.errors()) {
+    if (!le.lexeme.empty()) {
+      lexer_error_byte_starts.push_back(static_cast<std::uint32_t>(le.lexeme.data() - source_.data()));
+    } else {
+      // Fallback: errors without a lexeme cannot be range-correlated; flag
+      // them as "always preserve" by writing a sentinel that no span will
+      // match.
+      lexer_error_byte_starts.push_back(static_cast<std::uint32_t>(-1));
+    }
+  }
 
   // Optional Excel formula prefix `=`. Only stripped at the very front and
   // only if the very first token is `Eq` (so `=A1=B1` keeps the inner `=`).
@@ -464,6 +489,46 @@ AstNode* Parser::parse() {
     } else {
       record_error_with_token(ParseErrorCode::UnexpectedToken, tok.range, tok.lexeme);
       skip_to_sync(SyncContext::TopLevel);
+    }
+  }
+
+  // Drop any lexer-promoted errors whose lexeme byte-offset fell inside a
+  // consumed structured-reference bracket payload. The lexer cannot know
+  // it is scanning a structured-ref token (it has no parser-level
+  // context), so it flags `#All`, `#Headers`, ... as `InvalidErrorLiteral`;
+  // by the time we reach this point the parser has identified those bytes
+  // as the bracket payload of a `StructuredRef` AST node, so they should
+  // not surface as user-visible diagnostics.
+  if (!struct_ref_byte_spans_.empty() && lexer_errors_last > lexer_errors_first) {
+    auto in_struct_span = [this](std::uint32_t byte_pos) noexcept {
+      if (byte_pos == static_cast<std::uint32_t>(-1)) {
+        return false;
+      }
+      for (const auto& span : struct_ref_byte_spans_) {
+        if (byte_pos >= span.first && byte_pos < span.second) {
+          return true;
+        }
+      }
+      return false;
+    };
+    std::size_t write = lexer_errors_first;
+    for (std::size_t read = lexer_errors_first; read < lexer_errors_last; ++read) {
+      const std::uint32_t byte_pos = lexer_error_byte_starts[read - lexer_errors_first];
+      if (in_struct_span(byte_pos)) {
+        continue;
+      }
+      if (write != read) {
+        errors_[write] = errors_[read];
+      }
+      ++write;
+    }
+    if (write < lexer_errors_last) {
+      const std::size_t removed = lexer_errors_last - write;
+      // Shift any post-lexer parse-error entries left to fill the gap.
+      for (std::size_t i = lexer_errors_last; i < errors_.size(); ++i) {
+        errors_[i - removed] = errors_[i];
+      }
+      errors_.resize(errors_.size() - removed);
     }
   }
   return root_;
