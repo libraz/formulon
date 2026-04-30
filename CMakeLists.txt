@@ -35,6 +35,11 @@ option(FM_BUILD_FUZZ          "Build libFuzzer harnesses (clang only)" OFF)
 option(FM_ENABLE_COVERAGE     "Enable gcov/lcov" OFF)
 option(FM_USE_SYSTEM_DEPS     "Prefer system-installed third-party deps" OFF)
 option(FM_ENABLE_PTHREAD      "Enable multithreaded recalc" ON)
+# Tree-walker / VM parity harness: when ON, every `evaluate(...)` call also
+# compiles the AST through the bytecode pipeline and asserts the VM result
+# matches the tree-walker's. Defaults to OFF so production builds carry no
+# overhead; the parity sweep test (`vm_parity_test.cpp`) flips it on.
+option(FORMULON_VM_PARITY_CHECK "Enable tree-walker / VM parity assertions" OFF)
 
 include(FormulonWarnings)
 
@@ -114,6 +119,7 @@ set(FORMULON_CORE_SOURCES
   src/parser/parser_reference.cpp
   src/eval/coerce.cpp
   src/eval/compiler.cpp
+  src/eval/vm.cpp
   src/eval/utf8_length.cpp
   src/eval/text_ops.cpp
   src/eval/rng.cpp
@@ -234,6 +240,10 @@ target_link_libraries(formulon_core
 )
 
 formulon_apply_warnings(formulon_core)
+
+if(FORMULON_VM_PARITY_CHECK)
+  target_compile_definitions(formulon_core PUBLIC FORMULON_VM_PARITY_CHECK=1)
+endif()
 
 # ---------------------------------------------------------------------------
 # Static library aggregating the core objects

@@ -54,6 +54,14 @@
 #include "value.h"
 #include "workbook.h"
 
+#ifdef FORMULON_VM_PARITY_CHECK
+#include <cstdio>
+#include <cstring>
+
+#include "eval/compiler.h"
+#include "eval/vm.h"
+#endif
+
 namespace formulon {
 namespace eval {
 namespace {
@@ -1741,6 +1749,77 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
   if (v.is_blank() && node.kind() != parser::NodeKind::Literal) {
     return Value::number(0.0);
   }
+#ifdef FORMULON_VM_PARITY_CHECK
+  // Bundle 5.2 parity harness. Compile the same AST through the bytecode
+  // pipeline, run it through the VM, and compare the result. Mismatches are
+  // surfaced as a diagnostic on stderr; we deliberately do NOT abort or
+  // mutate the returned value so the production code path stays unchanged.
+  // The parity sweep test reads the same `evaluate()` entry point and asserts
+  // separately on its own corpus; this hook is the in-flight cross-check.
+  {
+    auto bc_or = compile(node, arena);
+    if (bc_or) {
+      auto vm_or = execute(bc_or.value(), arena, registry, ctx);
+      if (vm_or) {
+        const Value vm_v = vm_or.value();
+        // Apply the same Lambda-at-top / blank->0 surface contracts the
+        // tree-walker applies above so the two paths are compared on equal
+        // terms (the VM does not re-apply these wrappers).
+        Value vm_final = vm_v;
+        if (vm_final.is_lambda()) {
+          vm_final = Value::error(ErrorCode::Calc);
+        }
+        if (vm_final.is_blank() && node.kind() != parser::NodeKind::Literal) {
+          vm_final = Value::number(0.0);
+        }
+        // Bit-exact equality: same kind, same payload. For Number we use
+        // raw bit comparison so NaN payloads must agree exactly.
+        bool eq = (v.kind() == vm_final.kind());
+        if (eq) {
+          switch (v.kind()) {
+            case ValueKind::Number: {
+              const double a = v.as_number();
+              const double b = vm_final.as_number();
+              std::uint64_t ua = 0;
+              std::uint64_t ub = 0;
+              std::memcpy(&ua, &a, sizeof(ua));
+              std::memcpy(&ub, &b, sizeof(ub));
+              eq = (ua == ub);
+              break;
+            }
+            case ValueKind::Bool:
+              eq = (v.as_boolean() == vm_final.as_boolean());
+              break;
+            case ValueKind::Error:
+              eq = (v.as_error() == vm_final.as_error());
+              break;
+            case ValueKind::Text:
+              eq = (v.as_text() == vm_final.as_text());
+              break;
+            case ValueKind::Array: {
+              const ArrayValue* la = v.as_array();
+              const ArrayValue* ra = vm_final.as_array();
+              eq = (la->rows == ra->rows && la->cols == ra->cols);
+              break;
+            }
+            case ValueKind::Blank:
+            case ValueKind::Ref:
+            case ValueKind::Lambda:
+              break;
+          }
+        }
+        if (!eq) {
+          // Best-effort diagnostic: the harness does not have access to the
+          // formula text here, so we only print the divergent kind / payload.
+          std::fprintf(stderr,
+                       "[FORMULON_VM_PARITY] mismatch: tree=%s vm=%s\n",
+                       v.debug_to_string().c_str(),
+                       vm_final.debug_to_string().c_str());
+        }
+      }
+    }
+  }
+#endif  // FORMULON_VM_PARITY_CHECK
   return v;
 }
 

@@ -446,6 +446,36 @@ Expected<void, Error> compile_call(BodyState& bs, const parser::AstNode& node) {
   if (kind == LazyKind::IfError || kind == LazyKind::IfNa) {
     return compile_iferror_or_ifna(bs, node);
   }
+  // Name-bound lambda dispatch: when the call's name matches a LET slot or a
+  // lambda parameter that resolves at compile time to the lexical scope,
+  // emit a LoadLet / LoadLambdaArg followed by `CallLambda` so the runtime
+  // closure value is invoked directly. This mirrors the tree-walker's
+  // `dispatch_call` lookup against `ctx.name_env()` for `=LET(f, LAMBDA(...),
+  // f(7))` style formulas. Names that resolve to neither scope fall through
+  // to the generic registry-driven `Call` opcode.
+  const std::string_view call_name = node.as_call_name();
+  for (std::size_t i = bs.let_scope.names.size(); i > 0; --i) {
+    if (bs.let_scope.names[i - 1] == call_name) {
+      FM_RETURN_IF_ERROR(emit(bs, node, OpCode::LoadLet, bs.let_scope.slots[i - 1]));
+      const std::uint32_t arity_let = node.as_call_arity();
+      for (std::uint32_t k = 0; k < arity_let; ++k) {
+        FM_RETURN_IF_ERROR(compile_node(bs, node.as_call_arg(k)));
+      }
+      FM_RETURN_IF_ERROR(emit(bs, node, OpCode::CallLambda, arity_let));
+      return {};
+    }
+  }
+  for (std::size_t i = bs.lambda_scope.names.size(); i > 0; --i) {
+    if (bs.lambda_scope.names[i - 1] == call_name) {
+      FM_RETURN_IF_ERROR(emit(bs, node, OpCode::LoadLambdaArg, bs.lambda_scope.slots[i - 1]));
+      const std::uint32_t arity_la = node.as_call_arity();
+      for (std::uint32_t k = 0; k < arity_la; ++k) {
+        FM_RETURN_IF_ERROR(compile_node(bs, node.as_call_arg(k)));
+      }
+      FM_RETURN_IF_ERROR(emit(bs, node, OpCode::CallLambda, arity_la));
+      return {};
+    }
+  }
   const std::uint32_t arity = node.as_call_arity();
   for (std::uint32_t i = 0; i < arity; ++i) {
     FM_RETURN_IF_ERROR(compile_node(bs, node.as_call_arg(i)));

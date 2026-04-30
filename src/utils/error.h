@@ -83,6 +83,26 @@ enum class FormulonErrorCode : int32_t {
   /// A `Lambda` declares more parameters than the operand encoding allows
   /// (more than 2^16 params).
   kVmLambdaParamOverflow = 2056,
+  /// The bytecode body has no instructions; the VM cannot decide what to
+  /// return. Indicates a compiler bug, since `compile()` always emits at
+  /// least a `Return`.
+  kVmEmptyBytecode = 2057,
+  /// An opcode that pops `N` operands found fewer than `N` values on the
+  /// operand stack.
+  kVmStackUnderflow = 2058,
+  /// The operand stack grew past the VM's hard cap. Defends against runaway
+  /// `Union` / pathological array literals in handcrafted bytecode.
+  kVmStackOverflow = 2059,
+  /// An instruction word carries an opcode value outside the declared
+  /// `OpCode` enum. Indicates corrupted or hand-rolled bytecode.
+  kVmInvalidOpcode = 2060,
+  /// A `Jump` / `JumpIfFalse` target points outside the current code stream.
+  kVmInvalidJumpTarget = 2061,
+  /// `LoadLet` referenced a slot that no `StoreLet` has populated yet.
+  kVmLetSlotMissing = 2062,
+  /// `CallLambda` was invoked with an argument count that does not satisfy
+  /// the closure's `[required..param_count]` arity range.
+  kVmLambdaArityMismatch = 2063,
 
   // ===== 3000-3999: Functions =====
   kFnNotRegistered = 3000,
@@ -287,6 +307,20 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kVmLetSlotOverflow";
     case FormulonErrorCode::kVmLambdaParamOverflow:
       return "kVmLambdaParamOverflow";
+    case FormulonErrorCode::kVmEmptyBytecode:
+      return "kVmEmptyBytecode";
+    case FormulonErrorCode::kVmStackUnderflow:
+      return "kVmStackUnderflow";
+    case FormulonErrorCode::kVmStackOverflow:
+      return "kVmStackOverflow";
+    case FormulonErrorCode::kVmInvalidOpcode:
+      return "kVmInvalidOpcode";
+    case FormulonErrorCode::kVmInvalidJumpTarget:
+      return "kVmInvalidJumpTarget";
+    case FormulonErrorCode::kVmLetSlotMissing:
+      return "kVmLetSlotMissing";
+    case FormulonErrorCode::kVmLambdaArityMismatch:
+      return "kVmLambdaArityMismatch";
 
     // Functions
     case FormulonErrorCode::kFnNotRegistered:
