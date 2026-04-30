@@ -57,6 +57,14 @@ namespace eval {
 /// either lowers successfully or yields an error result.
 Expected<ByteCode, Error> compile(const parser::AstNode& root, Arena& arena);
 
+/// Convenience: lowers `root` and then runs the bytecode optimiser
+/// (`eval::optimize`) on the result. Equivalent to calling `compile()`
+/// followed by `optimize()`. Useful for tests and benchmarks that want
+/// the post-optimisation stream in a single call. The default `compile()`
+/// remains untouched so callers that need the raw lowering can still
+/// access it.
+Expected<ByteCode, Error> compile_and_optimize(const parser::AstNode& root, Arena& arena);
+
 }  // namespace eval
 }  // namespace formulon
 

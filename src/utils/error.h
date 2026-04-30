@@ -103,6 +103,13 @@ enum class FormulonErrorCode : int32_t {
   /// `CallLambda` was invoked with an argument count that does not satisfy
   /// the closure's `[required..param_count]` arity range.
   kVmLambdaArityMismatch = 2063,
+  /// The bytecode optimiser failed to lower a pass (constant fold / name
+  /// inline / range canonicalise / branch hoist) without producing
+  /// behaviour-preserving output. The raw input bytecode is returned
+  /// unchanged whenever this is observed; the error is reserved for hard
+  /// failures (e.g. constants-pool overflow when re-pooling a folded
+  /// result). The optimiser never invents Excel-visible faults.
+  kVmOptimizerFailed = 2064,
 
   // ===== 3000-3999: Functions =====
   kFnNotRegistered = 3000,
@@ -321,6 +328,8 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kVmLetSlotMissing";
     case FormulonErrorCode::kVmLambdaArityMismatch:
       return "kVmLambdaArityMismatch";
+    case FormulonErrorCode::kVmOptimizerFailed:
+      return "kVmOptimizerFailed";
 
     // Functions
     case FormulonErrorCode::kFnNotRegistered:

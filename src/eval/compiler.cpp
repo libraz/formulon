@@ -37,6 +37,7 @@
 #include <vector>
 
 #include "eval/bytecode.h"
+#include "eval/optimizer.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "utils/arena.h"
@@ -661,6 +662,11 @@ Expected<ByteCode, Error> compile(const parser::AstNode& root, Arena& arena) {
   FM_RETURN_IF_ERROR(compile_node(bs, root));
   FM_RETURN_IF_ERROR(emit(bs, root, OpCode::Return));
   return std::move(ctx.bc);
+}
+
+Expected<ByteCode, Error> compile_and_optimize(const parser::AstNode& root, Arena& arena) {
+  FM_ASSIGN_OR_RETURN(auto bc, compile(root, arena));
+  return optimize(std::move(bc), arena);
 }
 
 // --------------------------------------------------------------------------
