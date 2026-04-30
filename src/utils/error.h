@@ -128,6 +128,11 @@ enum class FormulonErrorCode : int32_t {
   kGraphInvalidNodeRef = 4002,
   kGraphScheduleFailed = 4003,
   kGraphThreadPoolError = 4004,
+  /// `recalc_parallel` was invoked while another `recalc_parallel` call on
+  /// the same thread was still in flight. The scheduler does not support
+  /// nested recalc; callers (typically a UDF that re-enters the engine)
+  /// must avoid triggering recalc from inside an evaluator callback.
+  kGraphRecalcReentrant = 4005,
 
   // ===== 5000-5999: I/O (OOXML / XLSB / CSV) =====
   kIoFileNotFound = 5000,
@@ -362,6 +367,8 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kGraphScheduleFailed";
     case FormulonErrorCode::kGraphThreadPoolError:
       return "kGraphThreadPoolError";
+    case FormulonErrorCode::kGraphRecalcReentrant:
+      return "kGraphRecalcReentrant";
 
     // I/O
     case FormulonErrorCode::kIoFileNotFound:

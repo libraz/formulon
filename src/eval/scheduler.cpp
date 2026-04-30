@@ -47,6 +47,31 @@ namespace {
 // browser runtimes.
 constexpr std::uint32_t kMaxAutoThreads = 8U;
 
+// Per-thread re-entrancy flag. Set to true on entry to `recalc_parallel`
+// and cleared on exit. A nested invocation on the same thread (typically a
+// UDF that re-enters the engine via `Workbook::recalc_parallel`) trips the
+// flag and surfaces `kGraphRecalcReentrant`. The scheduler intentionally
+// does NOT extend the check across worker threads: separate threads are
+// still expected to obey the documented "no two concurrent
+// `recalc_parallel` on the same workbook" contract; this guard exists to
+// fail fast on a recursive same-thread call rather than to police
+// cross-thread misuse.
+thread_local bool g_in_recalc = false;
+
+// RAII guard that scopes the `g_in_recalc` flag to a recalc invocation.
+// Captures the prior value so it restores correctly even when nested
+// invocations are blocked further up the stack (the outer call releases
+// the flag and the next sibling invocation proceeds normally).
+struct ReentrantGuard {
+  bool prev;
+  ReentrantGuard() noexcept : prev(g_in_recalc) { g_in_recalc = true; }
+  ~ReentrantGuard() { g_in_recalc = prev; }
+  ReentrantGuard(const ReentrantGuard&) = delete;
+  ReentrantGuard& operator=(const ReentrantGuard&) = delete;
+  ReentrantGuard(ReentrantGuard&&) = delete;
+  ReentrantGuard& operator=(ReentrantGuard&&) = delete;
+};
+
 // Returns true when the SCC `component` is cyclic (more than one cell, or
 // a singleton with a self-loop). Mirrors `recalc_engine.cpp`'s helper —
 // kept private here to avoid a public dependency.
@@ -375,6 +400,19 @@ std::uint32_t resolve_thread_count(std::uint32_t requested) {
 // ---------------------------------------------------------------------------
 Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry& registry, const SchedulerConfig& cfg,
                                            SchedulerStats* stats, RecalcEngine& engine) {
+  // Re-entrancy check. If this thread is already inside a
+  // `recalc_parallel` invocation, surface `kGraphRecalcReentrant` instead
+  // of corrupting the dirty / dep-graph bookkeeping. Triggered today only
+  // by a UDF that calls back into the engine; the guard exists so a future
+  // host-callable function family cannot accidentally race the dirty set
+  // by attempting nested recalc.
+  if (g_in_recalc) {
+    return make_error(FormulonErrorCode::kGraphRecalcReentrant,
+                      "recalc_parallel called recursively on the same thread",
+                      "the scheduler does not support nested recalc; the inner call is rejected");
+  }
+  ReentrantGuard guard;
+
   // Phase 1 + 2: seed the dirty set with volatile cells, BFS-propagate
   // dirtiness through reverse edges. Mirrors `RecalcEngine::recalc`.
   engine.volatiles_.for_each([&](CellNodeId cell) {
