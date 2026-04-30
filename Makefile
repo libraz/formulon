@@ -15,6 +15,7 @@ CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 
 
 .PHONY: all build release test test-slow test-all fmt lint clean \
         wasm wasm-debug test-wasm test-python size-check \
+        npm-package npm-test npm-pack \
         oracle-setup oracle-setup-mac oracle-setup-wsl \
         oracle-gen oracle-verify oracle-contribute \
         ironcalc-import ironcalc-verify \
@@ -104,6 +105,45 @@ test-wasm:
 	  exit 1; \
 	fi
 	node tests/wasm/run.mjs
+
+# -- npm packaging targets ------------------------------------------------
+# `make npm-package` -> stage build-wasm/formulon.{js,wasm} + the
+#                       hand-written .d.ts into packages/npm/dist/.
+# `make npm-test`    -> run node:test smoke tests against the staged
+#                       package (catches staging mistakes that running
+#                       against build-wasm/ would mask).
+# `make npm-pack`    -> produce a publishable .tgz under build-wasm/.
+#
+# None of these run automatically as part of `make build` / `make test`.
+# Publishing is a manual, out-of-band step.
+NPM_PKG_DIR := packages/npm
+
+npm-package: wasm
+	@if ! command -v node >/dev/null 2>&1; then \
+	  echo "npm-package: node not found in PATH"; \
+	  exit 1; \
+	fi
+	node $(NPM_PKG_DIR)/scripts/stage.mjs \
+	  --build-dir $(WASM_BUILD_DIR) \
+	  --out-dir $(NPM_PKG_DIR)/dist
+
+npm-test: npm-package
+	@if ! command -v node >/dev/null 2>&1; then \
+	  echo "npm-test: node not found in PATH"; \
+	  exit 1; \
+	fi
+	(cd $(NPM_PKG_DIR) && node --test 'test/*.test.mjs')
+
+npm-pack: npm-package
+	@if ! command -v npm >/dev/null 2>&1; then \
+	  echo "npm-pack: npm not found in PATH"; \
+	  exit 1; \
+	fi
+	(cd $(NPM_PKG_DIR) && npm pack --pack-destination ../../$(WASM_BUILD_DIR)/)
+	@echo ""
+	@echo "npm tarball:"
+	@ls -la $(WASM_BUILD_DIR)/libraz-formulon-*.tgz 2>/dev/null | tail -1 || \
+	  echo "  (tarball not found; check log above)"
 
 test-python:
 	@echo "test-python: not yet implemented (planned for M12)"

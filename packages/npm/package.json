@@ -1,0 +1,45 @@
+{
+  "name": "@libraz/formulon",
+  "version": "0.1.0",
+  "description": "Excel 365 calculation engine -- WASM binding",
+  "license": "Apache-2.0",
+  "author": "libraz",
+  "type": "module",
+  "main": "./dist/formulon.js",
+  "types": "./dist/formulon.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/formulon.d.ts",
+      "import": "./dist/formulon.js",
+      "default": "./dist/formulon.js"
+    },
+    "./formulon.wasm": "./dist/formulon.wasm",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/**",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "excel",
+    "spreadsheet",
+    "formula",
+    "wasm",
+    "xlsx",
+    "calculation"
+  ],
+  "homepage": "https://github.com/libraz/formulon",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/libraz/formulon.git"
+  },
+  "bugs": {
+    "url": "https://github.com/libraz/formulon/issues"
+  },
+  "sideEffects": false
+}

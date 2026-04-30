@@ -1,0 +1,10 @@
+# The "files" field in package.json already restricts what ships, but this
+# acts as a belt-and-braces guard to keep development scaffolding out of the
+# published tarball.
+scripts/
+test/
+tsconfig.json
+node_modules/
+*.log
+*.tsbuildinfo
+.DS_Store
