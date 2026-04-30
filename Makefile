@@ -16,6 +16,7 @@ CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 
 .PHONY: all build release test test-slow test-all fmt lint clean \
         wasm wasm-debug test-wasm test-python size-check \
         npm-package npm-test npm-pack \
+        python-package python-test python-wheel \
         oracle-setup oracle-setup-mac oracle-setup-wsl \
         oracle-gen oracle-verify oracle-contribute \
         ironcalc-import ironcalc-verify \
@@ -145,9 +146,50 @@ npm-pack: npm-package
 	@ls -la $(WASM_BUILD_DIR)/libraz-formulon-*.tgz 2>/dev/null | tail -1 || \
 	  echo "  (tarball not found; check log above)"
 
-test-python:
-	@echo "test-python: not yet implemented (planned for M12)"
-	@exit 0
+# -- Python packaging targets --------------------------------------------
+# `make python-package` -> build libformulon (FM_BUILD_C_API_SHARED=ON) and
+#                          stage it into packages/python/formulon/_lib/.
+# `make python-test`    -> run the unittest smoke suite against the staged
+#                          source tree (catches stage / packaging errors).
+# `make python-wheel`   -> produce build-py/dist/formulon-*.whl.
+#
+# All three are stdlib-only on the Python side; they need CMake +
+# Python 3.9+ but no PyPI dependencies. Cross-platform manylinux /
+# universal2 wheel building is a later bundle.
+PY_PKG_DIR := packages/python
+PY_BUILD_DIR ?= build-py
+
+python-package:
+	@if ! command -v python3 >/dev/null 2>&1; then \
+	  echo "python-package: python3 not found in PATH"; \
+	  exit 1; \
+	fi
+	@if ! command -v $(CMAKE) >/dev/null 2>&1; then \
+	  echo "python-package: cmake not found in PATH"; \
+	  exit 1; \
+	fi
+	python3 $(PY_PKG_DIR)/scripts/stage.py \
+	  --build-dir $(PY_BUILD_DIR) --config Release
+
+python-test: python-package
+	@(cd $(PY_PKG_DIR) && python3 -m unittest discover -v tests)
+
+python-wheel: python-package
+	@if ! python3 -m pip --version >/dev/null 2>&1; then \
+	  echo "python-wheel: pip not available for python3"; \
+	  exit 1; \
+	fi
+	mkdir -p $(PY_BUILD_DIR)/dist
+	(cd $(PY_PKG_DIR) && python3 -m pip wheel . \
+	  --wheel-dir ../../$(PY_BUILD_DIR)/dist/ \
+	  --no-deps --no-build-isolation)
+	@echo ""
+	@echo "python wheel:"
+	@ls -la $(PY_BUILD_DIR)/dist/formulon-*.whl 2>/dev/null | tail -1 || \
+	  echo "  (wheel not found; check log above)"
+
+# Alias kept for backward compatibility with `make test-python`.
+test-python: python-test
 
 # Standalone .wasm size report. Reads the artifact built by `make wasm`
 # and gates against the milestone size ceiling. See

@@ -1,0 +1,13 @@
+include LICENSE
+include NOTICE
+include README.md
+include pyproject.toml
+include formulon/py.typed
+include formulon/*.pyi
+recursive-include formulon/_lib *.so *.dylib *.dll *.lib
+prune tests
+prune scripts
+global-exclude __pycache__
+global-exclude *.py[co]
+global-exclude .DS_Store
+global-exclude .gitkeep

@@ -1,0 +1,75 @@
+# PEP 621 metadata for the Formulon Python wheel.
+#
+# The wheel ships a per-platform shared library (libformulon.{dylib,so,dll})
+# that is built out-of-band by `make python-package`. We deliberately do NOT
+# build C++ from inside `pip wheel`, because that would require CMake +
+# clang/gcc on every host that pip-installs from sdist.
+#
+# Build flow:
+#   1. `make python-package` -> builds libformulon and stages it into
+#                               packages/python/formulon/_lib/.
+#   2. `make python-wheel`   -> runs `pip wheel .` against this directory.
+#
+# Stdlib-only at runtime. ctypes is the only binding mechanism.
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "formulon"
+version = "0.1.0"
+description = "Excel 365 calculation engine -- Python binding"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "libraz" }]
+requires-python = ">=3.9"
+keywords = ["excel", "spreadsheet", "formula", "xlsx", "calculation"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Office/Business :: Financial :: Spreadsheet",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Homepage = "https://github.com/libraz/formulon"
+Source = "https://github.com/libraz/formulon"
+Issues = "https://github.com/libraz/formulon/issues"
+
+[tool.setuptools]
+packages = ["formulon"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+# Be explicit so the platform-specific shared library, the PEP 561 marker,
+# and any sibling stub files all land in the wheel. setuptools' default
+# package-data discovery will not pick up files in _lib/ otherwise.
+formulon = [
+  "_lib/*.so",
+  "_lib/*.dylib",
+  "_lib/*.dll",
+  "_lib/*.lib",
+  "py.typed",
+  "*.pyi",
+]
+
+# Note on wheel tagging:
+# This wheel ships a native shared library (libformulon.{dylib,so,dll}),
+# but with a pure-pyproject.toml configuration setuptools cannot emit a
+# platform-tagged wheel automatically (that hook lives in setup.py via
+# Distribution.has_ext_modules). For the host-targeted verification flow
+# this is acceptable: the Makefile's `python-wheel` target passes
+# `--build-option=--plat-name=<host>` to `pip wheel` so the produced
+# artefact carries the correct platform tag. Cross-platform wheel
+# building (cibuildwheel matrix) is a later bundle.

@@ -32,10 +32,11 @@ emsdk/
 core
 core.*
 
-# Binaries
-formulon
-formulon-cli
-formulon_cli
+# Binaries (anchored to repo root so the rule doesn't shadow
+# packages/python/formulon/ or any other directory called "formulon").
+/formulon
+/formulon-cli
+/formulon_cli
 *.exe
 
 # Dependencies
@@ -112,6 +113,14 @@ __pycache__/
 .ruff_cache/
 .pytest_cache/
 dumps/
+
+# Python wheel staging artefacts (libformulon is built per-platform and
+# should not be checked in; the empty _lib/.gitkeep keeps the directory).
+packages/python/formulon/_lib/lib*.dylib
+packages/python/formulon/_lib/lib*.so
+packages/python/formulon/_lib/*.dll
+packages/python/formulon/_lib/*.lib
+build-py/
 
 # Oracle generated artifacts (golden JSON is committed; intermediate workbooks are not)
 tests/oracle/work/
