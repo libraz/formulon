@@ -32,3 +32,37 @@ target_include_directories(formulon_integration_tests
 formulon_apply_warnings(formulon_integration_tests)
 
 gtest_discover_tests(formulon_integration_tests)
+
+# ---------------------------------------------------------------------------
+# Slow-labelled 100-book OOXML round-trip corpus.
+#
+# Lives in its own executable so the per-binary fast-suite budget is not
+# inflated by 100 two-cycle pipelines (some of which exercise 100x100
+# cell shapes). The corresponding ctest cases are tagged with the
+# `SLOW` label so the default fast suite (`ctest -LE "SLOW|LOAD"`)
+# skips them; opt-in invocations (`ctest -L SLOW` or the full suite)
+# pick them up.
+# ---------------------------------------------------------------------------
+
+add_executable(formulon_ooxml_corpus_100_tests ooxml_corpus_100_test.cpp)
+
+target_link_libraries(formulon_ooxml_corpus_100_tests
+  PRIVATE
+    formulon_static
+    gtest_main
+)
+
+target_include_directories(formulon_ooxml_corpus_100_tests
+  PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+formulon_apply_warnings(formulon_ooxml_corpus_100_tests)
+
+# `TEST_LIST` lets us label every discovered ctest entry without naming
+# them one-by-one (gtest_discover_tests synthesises one ctest test per
+# parameterised case).
+gtest_discover_tests(formulon_ooxml_corpus_100_tests
+  TEST_LIST formulon_ooxml_corpus_100_test_list
+  PROPERTIES LABELS "SLOW"
+)
