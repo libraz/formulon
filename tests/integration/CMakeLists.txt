@@ -5,10 +5,13 @@
 # isolated from the fast unit-test suite.
 
 set(FORMULON_INTEGRATION_TEST_SOURCES
+  legacy_at_test.cpp
   ooxml_corpus_test.cpp
   ooxml_metadata_test.cpp
   ooxml_minimal_writer_test.cpp
   ooxml_roundtrip_test.cpp
+  spill_collision_test.cpp
+  table_boundary_test.cpp
   workbook_iterative_test.cpp
   workbook_recalc_test.cpp
 )
