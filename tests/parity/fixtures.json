@@ -1,0 +1,22 @@
+[
+  {"id": "sum_int",         "formula": "=SUM(1,2,3)",   "expect": {"kind": "number", "value": 6}},
+  {"id": "pi",              "formula": "=PI()",          "expect": {"kind": "number"}},
+  {"id": "div0",            "formula": "=1/0",           "expect": {"kind": "error", "value": "#DIV/0!"}},
+  {"id": "ref_error",       "formula": "=#REF!",         "expect": {"kind": "error", "value": "#REF!"}},
+  {"id": "bool_true",       "formula": "=TRUE",          "expect": {"kind": "bool", "value": true}},
+  {"id": "bool_false",      "formula": "=FALSE",         "expect": {"kind": "bool", "value": false}},
+  {"id": "text_ascii",      "formula": "=\"hello\"",    "expect": {"kind": "text", "value": "hello"}},
+  {"id": "text_empty",      "formula": "=\"\"",         "expect": {"kind": "text", "value": ""}},
+  {"id": "text_utf8_jp",    "formula": "=\"こんにちは\"",   "expect": {"kind": "text", "value": "こんにちは"}},
+  {"id": "text_emoji",      "formula": "=\"😀\"",        "expect": {"kind": "text", "value": "😀"}},
+  {"id": "tiny",            "formula": "=1E-300",        "expect": {"kind": "number", "value": 1e-300}},
+  {"id": "huge",            "formula": "=1E308",         "expect": {"kind": "number", "value": 1e308}},
+  {"id": "fractional",      "formula": "=1/3",           "expect": {"kind": "number"}},
+  {"id": "integer_large",   "formula": "=2^50",          "expect": {"kind": "number"}},
+  {"id": "negative_number", "formula": "=-42",           "expect": {"kind": "number", "value": -42}},
+  {"id": "value_error",     "formula": "=\"a\"+1",      "expect": {"kind": "error", "value": "#VALUE!"}},
+  {"id": "name_error",      "formula": "=NOTAFUNC()",    "expect": {"kind": "error", "value": "#NAME?"}},
+  {"id": "num_error_sqrt",  "formula": "=SQRT(-1)",      "expect": {"kind": "error", "value": "#NUM!"}},
+  {"id": "na",              "formula": "=NA()",          "expect": {"kind": "error", "value": "#N/A"}},
+  {"id": "intersect_err",   "formula": "=A1 B1",         "expect": {"kind": "error", "value": "#REF!"}}
+]

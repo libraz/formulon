@@ -17,6 +17,7 @@ CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 
         wasm wasm-debug test-wasm test-python size-check \
         npm-package npm-test npm-pack \
         python-package python-test python-wheel \
+        parity-test \
         oracle-setup oracle-setup-mac oracle-setup-wsl \
         oracle-gen oracle-verify oracle-contribute \
         ironcalc-import ironcalc-verify \
@@ -187,6 +188,23 @@ python-wheel: python-package
 	@echo "python wheel:"
 	@ls -la $(PY_BUILD_DIR)/dist/formulon-*.whl 2>/dev/null | tail -1 || \
 	  echo "  (wheel not found; check log above)"
+
+# -- Cross-channel parity gate ------------------------------------------------
+# `make parity-test` -> evaluate fixtures.json on every available channel
+#                       (CLI / npm / Python wheel) and assert all channels
+#                       agree at %.15g-canonicalized IEEE-754 bit
+#                       granularity. Skip-aware: missing channels are
+#                       reported but do not fail. Fails (exit 1) only when
+#                       two or more channels actually disagreed.
+#
+# Intentionally has no make-level dependency on `npm-package`, `python-package`,
+# or the native build: the runner itself decides which channels to exercise
+# based on what is on disk. Driving the prerequisite builds is a CI-side
+# concern.
+parity-test:
+	@command -v python3 >/dev/null 2>&1 || { \
+	  echo "parity-test: python3 not found"; exit 1; }
+	python3 tests/parity/run_parity.py
 
 # Alias kept for backward compatibility with `make test-python`.
 test-python: python-test
