@@ -20,10 +20,23 @@
 // this slice; only Override-listed parts round-trip. This is acceptable
 // for v1 round-trip and matches the design's "minimal corpus" target.
 //
+// Macro-enabled (`.xlsm` / `.xltm`) and template (`.xltx`) packages are
+// recognised by the workbook content type and detected purely as a
+// `WorkbookKind` discriminator on the result; the reader treats them
+// exactly like a plain `.xlsx` for cell content (the schemas are
+// identical), and any `xl/vbaProject.bin` payload is captured via the
+// existing passthrough mechanism so the writer can re-emit it verbatim.
+// The engine NEVER executes VBA — preservation is byte-level only.
+// Unrecognised workbook content types surface a structured-log warning
+// (`ooxml.reader.unknown_workbook_content_type`) and fall back to
+// `WorkbookKind::kXlsx` rather than failing the read; this is
+// intentional Excel-compatibility-first behaviour.
+//
 // Design references:
 //   * backup/plans/04-xlsx-io.md §4.2 (package structure)
 //   * backup/plans/04-xlsx-io.md §4.4 (Reader pipeline)
-//   * backup/plans/26-implementation-plan.md (Phase 2 sequencing)
+//   * backup/plans/26-implementation-plan.md (Phase 2 sequencing,
+//     Phase 4.3 xlsm + xltx detection)
 
 #ifndef FORMULON_IO_OOXML_READER_H_
 #define FORMULON_IO_OOXML_READER_H_

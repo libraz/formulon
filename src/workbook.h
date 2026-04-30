@@ -22,6 +22,7 @@
 #include "io/defined_names.h"
 #include "io/passthrough_part.h"
 #include "io/tables_reader.h"
+#include "io/workbook_kind.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -209,6 +210,22 @@ class Workbook {
   /// preserved parts.
   void set_passthrough_parts(std::vector<io::PassthroughPart> parts) { passthrough_parts_ = std::move(parts); }
 
+  /// Returns the OOXML workbook variant this instance round-trips as.
+  /// Defaults to `WorkbookKind::kXlsx`; the reader updates it from the
+  /// workbook part's content type, and the writer consults it when
+  /// emitting `[Content_Types].xml`. The engine treats all four kinds
+  /// identically for cell evaluation; only the package envelope (and,
+  /// for `.xlsm` / `.xltm`, the captured `xl/vbaProject.bin` carried in
+  /// `passthrough_parts()`) differs.
+  io::WorkbookKind kind() const noexcept { return kind_; }
+
+  /// Sets the workbook variant. Plain data — no lifecycle implications,
+  /// no recalc-engine interaction. Callers using the writer to emit a
+  /// macro-enabled variant must additionally ensure `xl/vbaProject.bin`
+  /// is present in `passthrough_parts()`; the writer does not synthesise
+  /// the part.
+  void set_kind(io::WorkbookKind kind) noexcept { kind_ = kind; }
+
  private:
   Workbook();
 
@@ -222,6 +239,11 @@ class Workbook {
   std::vector<io::DefinedName> defined_names_;
   std::vector<io::TableMetadata> tables_;
   std::vector<io::PassthroughPart> passthrough_parts_;
+  // OOXML workbook variant. Defaults to plain `.xlsx`; the reader sets
+  // this from `[Content_Types].xml` and the writer consults it when
+  // emitting the workbook content-type Override. Plain data; no
+  // lifecycle implications.
+  io::WorkbookKind kind_ = io::WorkbookKind::kXlsx;
 };
 
 }  // namespace formulon

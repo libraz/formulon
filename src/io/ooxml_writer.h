@@ -20,7 +20,15 @@
 namespace formulon {
 namespace io {
 
-/// Serialises `wb` into an in-memory `.xlsx` byte stream.
+/// Serialises `wb` into an in-memory OOXML byte stream.
+///
+/// The workbook content type emitted in `[Content_Types].xml` follows
+/// `wb.kind()`: plain `.xlsx`, `.xlsm` (macro-enabled), `.xltx`
+/// (template), or `.xltm` (macro-enabled template) all share the same
+/// part schemas; only the workbook part's content type changes. The
+/// engine never executes VBA — `xl/vbaProject.bin` (when present) is
+/// carried verbatim through `wb.passthrough_parts()` and re-emitted by
+/// the same passthrough path used for any other Override-listed part.
 ///
 /// Always-emitted parts:
 ///   * `[Content_Types].xml`

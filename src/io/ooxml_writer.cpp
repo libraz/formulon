@@ -29,6 +29,7 @@
 #include "io/ooxml_writer_cell.h"
 #include "io/passthrough_part.h"
 #include "io/tables_reader.h"
+#include "io/workbook_kind.h"
 #include "io/xml_escape.h"
 #include "miniz.h"
 #include "sheet.h"
@@ -49,7 +50,9 @@ constexpr std::string_view kXmlDecl = "<?xml version=\"1.0\" encoding=\"UTF-8\" 
 
 constexpr std::string_view kCtPackageRels = "application/vnd.openxmlformats-package.relationships+xml";
 constexpr std::string_view kCtXml = "application/xml";
-constexpr std::string_view kCtWorkbook = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
+// The workbook part's content type depends on `Workbook::kind()`; we
+// fetch it via `io::workbook_kind_content_type` at emission time rather
+// than wiring four constants here.
 constexpr std::string_view kCtWorksheet = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
 constexpr std::string_view kCtStyles = "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
 constexpr std::string_view kCtTable = "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml";
@@ -204,7 +207,7 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   out.append(kCtXml);
   out.append("\"/>\n");
   out.append("  <Override PartName=\"/xl/workbook.xml\" ContentType=\"");
-  out.append(kCtWorkbook);
+  out.append(workbook_kind_content_type(wb.kind()));
   out.append("\"/>\n");
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     out.append("  <Override PartName=\"/xl/worksheets/sheet");

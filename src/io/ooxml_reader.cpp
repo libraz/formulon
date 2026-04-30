@@ -34,11 +34,13 @@
 #include "io/sst_reader.h"
 #include "io/styles_reader.h"
 #include "io/tables_reader.h"
+#include "io/workbook_kind.h"
 #include "io/zip_reader.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/structured_log.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -58,10 +60,49 @@ constexpr std::string_view kRelTable = "http://schemas.openxmlformats.org/office
 
 // Content types we expect to see referenced from `[Content_Types].xml`.
 // We only look up the workbook content type to verify the package is
-// well-formed; the full content-type registry is built in a later bundle
-// (which will recognise the worksheet, styles, sharedStrings, etc.
-// content types as well).
-constexpr std::string_view kCtWorkbook = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
+// well-formed and to discriminate between `.xlsx` / `.xlsm` / `.xltx` /
+// `.xltm` packages; the full content-type registry is built in a later
+// bundle (which will recognise the worksheet, styles, sharedStrings,
+// etc. content types as well).
+constexpr std::string_view kCtWorkbookXlsx =
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
+constexpr std::string_view kCtWorkbookXlsm = "application/vnd.ms-excel.sheet.macroEnabled.main+xml";
+constexpr std::string_view kCtWorkbookXltx =
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.template.main+xml";
+constexpr std::string_view kCtWorkbookXltm = "application/vnd.ms-excel.template.macroEnabled.main+xml";
+
+/// Returns the matching `WorkbookKind` for `content_type`, or
+/// `std::nullopt` when the string does not match any of the four
+/// recognised workbook variants. Comparison is case-sensitive — Excel
+/// emits the canonical lowercase form and we follow [OPC] §10's strict
+/// matching rules.
+struct DetectedKind {
+  io::WorkbookKind kind;
+  bool recognised;
+};
+DetectedKind DetectWorkbookKind(std::string_view content_type) {
+  if (content_type == kCtWorkbookXlsx) {
+    return {io::WorkbookKind::kXlsx, true};
+  }
+  if (content_type == kCtWorkbookXlsm) {
+    return {io::WorkbookKind::kXlsm, true};
+  }
+  if (content_type == kCtWorkbookXltx) {
+    return {io::WorkbookKind::kXltx, true};
+  }
+  if (content_type == kCtWorkbookXltm) {
+    return {io::WorkbookKind::kXltm, true};
+  }
+  return {io::WorkbookKind::kXlsx, false};
+}
+
+/// Returns true if `content_type` references one of the four known
+/// workbook variants. Used to gate "looks like a spreadsheet package"
+/// without committing to the kind discriminator yet.
+bool IsKnownWorkbookContentType(std::string_view content_type) {
+  return content_type == kCtWorkbookXlsx || content_type == kCtWorkbookXlsm || content_type == kCtWorkbookXltx ||
+         content_type == kCtWorkbookXltm;
+}
 
 /// Returns the part path the package-level rels file points at for
 /// `OfficeDocument`. The OOXML spec allows arbitrary placement (Excel
@@ -105,12 +146,20 @@ Expected<std::string, Error> ResolveOfficeDocumentPath(const std::vector<std::ui
                     "context=ooxml_reader part=_rels/.rels");
 }
 
-/// Verifies that `[Content_Types].xml` references the workbook content
-/// type at least once. The full content-type registry is deferred to a
-/// later bundle — for now we simply gate on "looks like a spreadsheet
-/// package" so callers do not get half-built workbooks for non-Excel
-/// archives that happen to contain a workbook.xml.
-Expected<void, Error> VerifyContentTypes(const std::vector<std::uint8_t>& ct_bytes) {
+/// Verifies that `[Content_Types].xml` references a workbook content
+/// type at least once and returns the corresponding `WorkbookKind`.
+///
+/// The package is considered well-formed if any `<Override>` declares
+/// either one of the four known workbook content types (xlsx / xlsm /
+/// xltx / xltm) OR a content type that ends in
+/// `spreadsheetml.sheet.main+xml` / similar — we are intentionally
+/// strict here and only accept the four canonical strings. Anything
+/// else yields a structured-log warning and a `kXlsx` fallback so
+/// Excel-compatibility-first behaviour is preserved (the engine still
+/// reads cells from non-canonical packages).
+///
+/// The full content-type registry is deferred to a later bundle.
+Expected<io::WorkbookKind, Error> VerifyContentTypes(const std::vector<std::uint8_t>& ct_bytes) {
   pugi::xml_document doc;
   pugi::xml_parse_result parse =
       doc.load_buffer(ct_bytes.data(), ct_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
@@ -124,22 +173,51 @@ Expected<void, Error> VerifyContentTypes(const std::vector<std::uint8_t>& ct_byt
     return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: missing <Types> root",
                       "context=ooxml_reader part=[Content_Types].xml");
   }
-  bool saw_workbook = false;
+  // We need to recognise one of two situations:
+  //   (a) An Override carries one of the four canonical workbook
+  //       content types — we accept the package and pin the kind.
+  //   (b) An Override exists for `/xl/workbook.xml` (or whatever the
+  //       package-level rels file points at) but with an unfamiliar
+  //       content type. We still accept the package for round-trip
+  //       reads but log a warning and fall back to `kXlsx`.
+  // The package-level rels file is parsed later in the pipeline; at
+  // this point we walk every Override looking for a recognised kind
+  // first, and only if we find none do we record the first
+  // workbook-shaped override (heuristic: ContentType ends in
+  // `+xml` and the part name is a candidate workbook). Keeping the
+  // logic simple here matches the original "saw_workbook" heuristic
+  // while extending it to four kinds.
+  bool any_workbook_like = false;
+  std::string first_unknown_ct;
   for (pugi::xml_node node = root.first_child(); node; node = node.next_sibling()) {
-    if (std::string_view(node.name()) == "Override") {
-      const std::string_view ct = node.attribute("ContentType").value();
-      if (ct == kCtWorkbook) {
-        saw_workbook = true;
-        break;
+    if (std::string_view(node.name()) != "Override") {
+      continue;
+    }
+    const std::string_view ct = node.attribute("ContentType").value();
+    if (IsKnownWorkbookContentType(ct)) {
+      return DetectWorkbookKind(ct).kind;
+    }
+    // Heuristic for case (b): part name targets `xl/workbook.xml`
+    // (the canonical Excel placement) but with a content type we do
+    // not recognise. Surface the first such occurrence so the warning
+    // names the actual offender.
+    if (first_unknown_ct.empty()) {
+      const std::string_view part_name = node.attribute("PartName").value();
+      if (part_name == "/xl/workbook.xml" || part_name == "xl/workbook.xml") {
+        first_unknown_ct.assign(ct);
+        any_workbook_like = true;
       }
     }
   }
-  if (!saw_workbook) {
-    return make_error(FormulonErrorCode::kIoContentTypeInvalid,
-                      "[Content_Types].xml: no workbook content-type override",
-                      "context=ooxml_reader part=[Content_Types].xml");
+  if (any_workbook_like) {
+    StructuredLog("ooxml.reader.unknown_workbook_content_type")
+        .field("content_type", first_unknown_ct)
+        .field("fallback_kind", std::string_view("kXlsx"))
+        .warn();
+    return io::WorkbookKind::kXlsx;
   }
-  return Expected<void, Error>::Ok();
+  return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: no workbook content-type override",
+                    "context=ooxml_reader part=[Content_Types].xml");
 }
 
 /// One entry from `[Content_Types].xml`'s `<Override>` list, paired with
@@ -417,9 +495,11 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     return ct_bytes_or.error();
   }
   const std::vector<std::uint8_t>& ct_bytes = ct_bytes_or.value();
-  if (auto v = VerifyContentTypes(ct_bytes); !v) {
-    return v.error();
+  auto kind_or = VerifyContentTypes(ct_bytes);
+  if (!kind_or) {
+    return kind_or.error();
   }
+  const io::WorkbookKind workbook_kind = kind_or.value();
   const std::vector<OverrideEntry> override_part_entries = ListOverridePartEntries(ct_bytes);
 
   // 2. _rels/.rels — locate the workbook part path.
@@ -481,8 +561,11 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
 
   // Build the workbook bottom-up: empty container, then append sheets in
   // document order. `create_empty()` keeps this loop simple — no implicit
-  // Sheet1 to overwrite or remove.
+  // Sheet1 to overwrite or remove. The workbook kind is set up-front so
+  // any subsequent error path (e.g. corrupt sheet) still returns metadata
+  // consistent with the `[Content_Types].xml` declaration we observed.
   Workbook wb = Workbook::create_empty();
+  wb.set_kind(workbook_kind);
 
   // Track which sheet relationships were consumed, so the unknown-parts
   // computation can subtract them.
