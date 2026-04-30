@@ -34,6 +34,9 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/ptg_test.cpp
   unit/io/xlsb/reader_test.cpp
   unit/io/xlsb/record_test.cpp
+  unit/io/xlsb/record_writer_test.cpp
+  unit/io/xlsb/sst_writer_test.cpp
+  unit/io/xlsb/writer_test.cpp
   unit/parser/tokenizer_test.cpp
   unit/parser/ast_test.cpp
   unit/parser/ast_dump_test.cpp

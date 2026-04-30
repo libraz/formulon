@@ -1,0 +1,144 @@
+// Copyright 2026 libraz. Licensed under the MIT License.
+//
+// Unit tests for the XLSB shared-string-table builder + emitter.
+// Symmetry with `read_xlsb`'s SST decoder is checked by re-walking the
+// emitted bytes through `io/xlsb/record.h` (the writer's reader-side
+// counterpart) — Bundle 4.1's SST decoder lives inside
+// `read_xlsb` and isn't directly callable, so we hand-decode the
+// records the same way the reader does.
+
+#include "io/xlsb/sst_writer.h"
+
+#include <cstdint>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include "gtest/gtest.h"
+#include "io/xlsb/record.h"
+#include "io/zip_reader.h"
+
+namespace formulon {
+namespace io {
+namespace xlsb {
+namespace {
+
+ByteSpan SpanOf(const std::vector<std::uint8_t>& v) {
+  return ByteSpan{v.data(), v.size()};
+}
+
+// Walks a serialised SST body the way `read_xlsb` does: skip records
+// other than `BrtSSTItem`, decode each item as `(u8 flags, XLWideString)`.
+// Returns the decoded items in stream order.
+std::vector<std::string> DecodeSstStream(const std::vector<std::uint8_t>& body) {
+  std::vector<std::string> out;
+  ByteSpan cursor = SpanOf(body);
+  while (cursor.size > 0) {
+    auto rec = read_record(cursor);
+    if (!rec) {
+      ADD_FAILURE() << "read_record failed: " << rec.error().message;
+      return out;
+    }
+    if (rec.value().type != static_cast<std::uint16_t>(XlsbRecordType::BrtSSTItem)) {
+      continue;
+    }
+    ByteSpan p = rec.value().payload;
+    auto flags = read_u8(p);
+    if (!flags) {
+      ADD_FAILURE() << "BrtSSTItem flags truncated";
+      return out;
+    }
+    (void)flags.value();
+    auto s = read_xlwidestring(p);
+    if (!s) {
+      ADD_FAILURE() << "BrtSSTItem string truncated: " << s.error().message;
+      return out;
+    }
+    out.push_back(s.value());
+  }
+  return out;
+}
+
+TEST(XlsbSstBuilder, EmptyBuilderEmitsBeginEndFraming) {
+  SstBuilder sst;
+  EXPECT_TRUE(sst.empty());
+  EXPECT_EQ(sst.size(), 0U);
+  auto body_or = emit_sst(sst);
+  ASSERT_TRUE(static_cast<bool>(body_or));
+
+  // Just begin + end records, no items.
+  const std::vector<std::string> items = DecodeSstStream(body_or.value());
+  EXPECT_TRUE(items.empty());
+}
+
+TEST(XlsbSstBuilder, InternsIdenticalStringsToSameIndex) {
+  SstBuilder sst;
+  EXPECT_EQ(sst.intern("apple"), 0U);
+  EXPECT_EQ(sst.intern("banana"), 1U);
+  EXPECT_EQ(sst.intern("apple"), 0U);
+  EXPECT_EQ(sst.intern("cherry"), 2U);
+  EXPECT_EQ(sst.intern("banana"), 1U);
+  EXPECT_EQ(sst.size(), 3U);
+
+  ASSERT_EQ(sst.entries().size(), 3U);
+  EXPECT_EQ(sst.entries()[0], "apple");
+  EXPECT_EQ(sst.entries()[1], "banana");
+  EXPECT_EQ(sst.entries()[2], "cherry");
+}
+
+TEST(XlsbSstBuilder, EmittedStreamRoundTripsThroughReader) {
+  SstBuilder sst;
+  sst.intern("alpha");
+  sst.intern("beta");
+  sst.intern("alpha");
+  sst.intern("gamma");
+
+  auto body_or = emit_sst(sst);
+  ASSERT_TRUE(static_cast<bool>(body_or));
+  const std::vector<std::string> items = DecodeSstStream(body_or.value());
+  ASSERT_EQ(items.size(), 3U);
+  EXPECT_EQ(items[0], "alpha");
+  EXPECT_EQ(items[1], "beta");
+  EXPECT_EQ(items[2], "gamma");
+}
+
+TEST(XlsbSstBuilder, InternHandlesBmpAndSurrogatePairStrings) {
+  SstBuilder sst;
+  // BMP only ("日本") and a string that triggers surrogate pairs ("🌟ok")
+  // to exercise the writer's UTF-16 expansion.
+  EXPECT_EQ(sst.intern("\xE6\x97\xA5\xE6\x9C\xAC"), 0U);
+  EXPECT_EQ(sst.intern("\xF0\x9F\x8C\x9F""ok"), 1U);
+
+  auto body_or = emit_sst(sst);
+  ASSERT_TRUE(static_cast<bool>(body_or));
+  const std::vector<std::string> items = DecodeSstStream(body_or.value());
+  ASSERT_EQ(items.size(), 2U);
+  EXPECT_EQ(items[0], "\xE6\x97\xA5\xE6\x9C\xAC");
+  EXPECT_EQ(items[1], "\xF0\x9F\x8C\x9F""ok");
+}
+
+TEST(XlsbSstBuilder, BeginRecordCarriesCountFields) {
+  SstBuilder sst;
+  sst.intern("a");
+  sst.intern("b");
+  auto body_or = emit_sst(sst);
+  ASSERT_TRUE(static_cast<bool>(body_or));
+  const std::vector<std::uint8_t>& body = body_or.value();
+
+  ByteSpan cursor = SpanOf(body);
+  auto rec = read_record(cursor);
+  ASSERT_TRUE(static_cast<bool>(rec));
+  EXPECT_EQ(rec.value().type, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginSst));
+  ByteSpan p = rec.value().payload;
+  auto total = read_u32(p);
+  auto unique = read_u32(p);
+  ASSERT_TRUE(static_cast<bool>(total));
+  ASSERT_TRUE(static_cast<bool>(unique));
+  EXPECT_EQ(total.value(), 2U);
+  EXPECT_EQ(unique.value(), 2U);
+}
+
+}  // namespace
+}  // namespace xlsb
+}  // namespace io
+}  // namespace formulon
