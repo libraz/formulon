@@ -16,7 +16,7 @@ CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 
 .PHONY: all build release test test-slow test-all fmt lint clean \
         wasm wasm-debug test-wasm test-python size-check \
         oracle-setup oracle-setup-mac oracle-setup-wsl \
-        oracle-gen oracle-verify \
+        oracle-gen oracle-verify oracle-contribute \
         ironcalc-import ironcalc-verify \
         fuzz-parser fuzz-xlsx fuzz-eval bench coverage \
         function-status behavior-status
@@ -189,6 +189,21 @@ oracle-verify:
 	@# in the ctest test list on the next run.
 	@rm -f $(BUILD_DIR)/tests/oracle/formulon_oracle_tests*_tests.cmake
 	@(cd $(BUILD_DIR) && $(CTEST) -L oracle --output-on-failure --timeout 60)
+
+# One-command contributor onramp. Runs oracle-setup when the venv is
+# missing, then dispatches to cli.py contribute, which probes Excel for
+# version + locale, picks (or maps) the target, skips generation if the
+# committed golden already covers the contributor's Excel build, and
+# otherwise runs preflight + oracle_gen + push instructions.
+#
+# Override the auto-detected target with TARGET=<name> when needed.
+oracle-contribute:
+	@if [ ! -x "$(ORACLE_VENV)/bin/python" ]; then \
+	  echo "oracle-contribute: venv missing -- bootstrapping via oracle-setup..."; \
+	  $(MAKE) oracle-setup; \
+	fi
+	@$(ORACLE_VENV)/bin/python tools/oracle/cli.py contribute \
+	  $(if $(TARGET),--target $(TARGET),)
 
 # -- IronCalc secondary oracle --------------------------------------------
 # Imports xlsx fixtures vendored from IronCalc (dual MIT / Apache-2.0)

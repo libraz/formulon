@@ -78,6 +78,15 @@ the bytecode VM are under active construction.
 Feedback, issue reports, and oracle divergence reports are welcome, but
 please do not rely on Formulon for production workloads yet.
 
+## Contributing
+
+The fastest way to help right now is to **donate Excel oracle data
+from your locale**. If you have Excel 365 in any locale beyond Mac
+ja-JP, one command (`make oracle-contribute`) drives Excel, captures
+goldens, and walks you through the PR. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the full flow and the rationale
+for why this is community-driven.
+
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

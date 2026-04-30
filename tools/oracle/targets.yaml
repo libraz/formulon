@@ -1,10 +1,20 @@
 # Oracle generation targets. The "primary" target is the canonical 1-bit
 # compatibility reference; variants are opt-in additional environments
 # whose goldens land under tests/oracle/variants/<name>/.
+#
+# Target name shape: <host>-<excel-major>-<locale>
+#
+# `status:` is informational metadata used by the contributor CLI:
+#   primary    -- the 1-bit reference; maintained by the core team
+#   scaffolded -- target wired up; goldens may be partial / stale
+#   wanted     -- entry reserved; goldens not yet contributed.
+#                 Pick one of these via `make oracle-contribute TARGET=...`
+#                 if you have Excel running in that locale.
 primary: mac-365-ja_JP
 
 targets:
   mac-365-ja_JP:
+    status: primary
     driver: macos_excel
     runs_on: [Darwin]
     locale: ja-JP
@@ -16,6 +26,7 @@ targets:
                                           # (e.g. tests/oracle/variants/<name>/divergence.yaml).
 
   win-365-ja_JP:
+    status: scaffolded
     driver: windows_excel
     # runs_on lists OS values that platform.system() returns. Linux here
     # means WSL2 -- the bridge driver auto-detects via /proc/version and
@@ -29,3 +40,76 @@ targets:
     # discover a usable Windows Python from WSL2. Until then, set it
     # manually, e.g.:
     #   win_python: "/mnt/c/Users/<you>/AppData/Local/Programs/Python/Python312/python.exe"
+
+  # ----------------------------------------------------------------------
+  # Wanted targets. These slots are reserved so contributors and the core
+  # team agree on naming before any goldens land. To donate one, see
+  # CONTRIBUTING.md (`make oracle-contribute TARGET=<name>`).
+  # ----------------------------------------------------------------------
+
+  mac-365-en_US:
+    status: wanted
+    driver: macos_excel
+    runs_on: [Darwin]
+    locale: en-US
+    output_dir: tests/oracle/variants/mac-365-en_US/golden
+    environment_md: tests/oracle/variants/mac-365-en_US/ENVIRONMENT.md
+    divergence: tests/oracle/variants/mac-365-en_US/divergence.yaml
+
+  win-365-en_US:
+    status: wanted
+    driver: windows_excel
+    runs_on: [Windows, Linux]
+    locale: en-US
+    output_dir: tests/oracle/variants/win-365-en_US/golden
+    environment_md: tests/oracle/variants/win-365-en_US/ENVIRONMENT.md
+    divergence: tests/oracle/variants/win-365-en_US/divergence.yaml
+
+  win-365-de_DE:
+    # Decimal-comma locale; exercises TEXT formatting and DATEVALUE parsing
+    # paths that ja-JP / en-US never reach.
+    status: wanted
+    driver: windows_excel
+    runs_on: [Windows, Linux]
+    locale: de-DE
+    output_dir: tests/oracle/variants/win-365-de_DE/golden
+    environment_md: tests/oracle/variants/win-365-de_DE/ENVIRONMENT.md
+    divergence: tests/oracle/variants/win-365-de_DE/divergence.yaml
+
+  win-365-fr_FR:
+    status: wanted
+    driver: windows_excel
+    runs_on: [Windows, Linux]
+    locale: fr-FR
+    output_dir: tests/oracle/variants/win-365-fr_FR/golden
+    environment_md: tests/oracle/variants/win-365-fr_FR/ENVIRONMENT.md
+    divergence: tests/oracle/variants/win-365-fr_FR/divergence.yaml
+
+  win-365-zh_CN:
+    # Anchors NUMBERSTRING and Chinese-locale TEXT format codes.
+    status: wanted
+    driver: windows_excel
+    runs_on: [Windows, Linux]
+    locale: zh-CN
+    output_dir: tests/oracle/variants/win-365-zh_CN/golden
+    environment_md: tests/oracle/variants/win-365-zh_CN/ENVIRONMENT.md
+    divergence: tests/oracle/variants/win-365-zh_CN/divergence.yaml
+
+  win-365-ko_KR:
+    status: wanted
+    driver: windows_excel
+    runs_on: [Windows, Linux]
+    locale: ko-KR
+    output_dir: tests/oracle/variants/win-365-ko_KR/golden
+    environment_md: tests/oracle/variants/win-365-ko_KR/ENVIRONMENT.md
+    divergence: tests/oracle/variants/win-365-ko_KR/divergence.yaml
+
+  win-365-th_TH:
+    # Anchors BAHTTEXT against authentic Thai-locale Excel.
+    status: wanted
+    driver: windows_excel
+    runs_on: [Windows, Linux]
+    locale: th-TH
+    output_dir: tests/oracle/variants/win-365-th_TH/golden
+    environment_md: tests/oracle/variants/win-365-th_TH/ENVIRONMENT.md
+    divergence: tests/oracle/variants/win-365-th_TH/divergence.yaml

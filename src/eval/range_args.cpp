@@ -215,10 +215,52 @@ bool resolve_range_arg(const parser::AstNode& raw_arg, Arena& arena, const Funct
     }
     return true;
   }
-  // Any other shape — literal, call, arithmetic, array — is not a range
-  // and Excel rejects it with #VALUE!.
-  *out_err_code = ErrorCode::Value;
-  return false;
+  // Generic fallback: evaluate the expression and inspect the resulting
+  // `Value`. Dynamic-array producers (MUNIT, SEQUENCE, RANDARRAY, MAP,
+  // REDUCE, BYROW, BYCOL, MAKEARRAY, LAMBDA invocations, ...) return a
+  // `Value::Array` here, which we unpack row-major into `out_cells` so
+  // INDEX / SUMPRODUCT / MATCH / aggregators navigate the rectangle as if
+  // it had been written as a literal range. Errors propagate; bare scalars
+  // (Number / Bool / Text / Blank) collapse to a 1x1 range, which fixes
+  // `=SUM(<scalar>)`-style formulas that previously surfaced #VALUE!.
+  // Reference-shaped nodes (`RangeOp` / `Ref` / `SpillRef` / `OFFSET` /
+  // `CHOOSE` / `IF` / `ROW` / `COLUMN`) never reach this branch — their
+  // dedicated expansion paths above handle them without re-evaluation.
+  const Value result = eval_node(arg_node, arena, registry, ctx);
+  if (result.is_error()) {
+    *out_err_code = result.as_error();
+    return false;
+  }
+  if (result.is_array()) {
+    const std::uint32_t rows = result.as_array_rows();
+    const std::uint32_t cols = result.as_array_cols();
+    const Value* src = result.as_array_cells();
+    const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+    out_cells->clear();
+    out_cells->reserve(total);
+    for (std::size_t i = 0; i < total; ++i) {
+      out_cells->push_back(src[i]);
+    }
+    if (out_rows != nullptr) {
+      *out_rows = rows;
+    }
+    if (out_cols != nullptr) {
+      *out_cols = cols;
+    }
+    return true;
+  }
+  // Scalar value (Number / Bool / Text / Blank / Lambda): treat as a 1x1
+  // range so single-argument aggregators (`=SUM(7)`, `=AVERAGE(A1+1)`)
+  // behave as Excel does instead of failing.
+  out_cells->clear();
+  out_cells->push_back(result);
+  if (out_rows != nullptr) {
+    *out_rows = 1U;
+  }
+  if (out_cols != nullptr) {
+    *out_cols = 1U;
+  }
+  return true;
 }
 
 }  // namespace eval
