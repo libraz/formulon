@@ -113,6 +113,7 @@ set(FORMULON_CORE_SOURCES
   src/parser/parser_atoms.cpp
   src/parser/parser_reference.cpp
   src/eval/coerce.cpp
+  src/eval/compiler.cpp
   src/eval/utf8_length.cpp
   src/eval/text_ops.cpp
   src/eval/rng.cpp

@@ -46,6 +46,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/parser/parser_test.cpp
   unit/parser/parser_error_test.cpp
   unit/parser/let_test.cpp
+  unit/eval/bytecode_test.cpp
+  unit/eval/compiler_test.cpp
   unit/eval/tree_walker_test.cpp
   unit/eval/eval_context_test.cpp
   unit/eval/eval_state_test.cpp

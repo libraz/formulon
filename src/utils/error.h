@@ -62,6 +62,27 @@ enum class FormulonErrorCode : int32_t {
   kEvalInvalidReference = 2006,
   kEvalLambdaNotFound = 2007,
   kEvalSpillCollision = 2008,
+  // --- AST -> ByteCode compiler (2050-2069) -------------------------------
+  /// Generic compile failure that does not match a more specific code below.
+  kVmCompileFailed = 2050,
+  /// The compiler encountered an AST node it cannot lower (e.g. an
+  /// `ErrorPlaceholder` from panic-mode parser recovery, or a node kind
+  /// not yet supported by the backend).
+  kVmUnsupportedNode = 2051,
+  /// The constants pool has overflowed its 24-bit operand budget (more than
+  /// 2^24 distinct constants in a single bytecode body).
+  kVmConstPoolOverflow = 2052,
+  /// The names pool has overflowed its 24-bit operand budget.
+  kVmNamePoolOverflow = 2053,
+  /// The instruction stream has overflowed its 32-bit operand budget (jump
+  /// targets > 2^32 instructions).
+  kVmInstructionLimit = 2054,
+  /// A `LetBinding` references more local slots than the compiler can
+  /// encode in 24 bits (more than 2^24 LET-bound names in a single body).
+  kVmLetSlotOverflow = 2055,
+  /// A `Lambda` declares more parameters than the operand encoding allows
+  /// (more than 2^16 params).
+  kVmLambdaParamOverflow = 2056,
 
   // ===== 3000-3999: Functions =====
   kFnNotRegistered = 3000,
@@ -252,6 +273,20 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kEvalLambdaNotFound";
     case FormulonErrorCode::kEvalSpillCollision:
       return "kEvalSpillCollision";
+    case FormulonErrorCode::kVmCompileFailed:
+      return "kVmCompileFailed";
+    case FormulonErrorCode::kVmUnsupportedNode:
+      return "kVmUnsupportedNode";
+    case FormulonErrorCode::kVmConstPoolOverflow:
+      return "kVmConstPoolOverflow";
+    case FormulonErrorCode::kVmNamePoolOverflow:
+      return "kVmNamePoolOverflow";
+    case FormulonErrorCode::kVmInstructionLimit:
+      return "kVmInstructionLimit";
+    case FormulonErrorCode::kVmLetSlotOverflow:
+      return "kVmLetSlotOverflow";
+    case FormulonErrorCode::kVmLambdaParamOverflow:
+      return "kVmLambdaParamOverflow";
 
     // Functions
     case FormulonErrorCode::kFnNotRegistered:
