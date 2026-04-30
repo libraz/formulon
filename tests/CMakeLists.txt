@@ -228,6 +228,7 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
 endif()
 
 add_subdirectory(integration)
+add_subdirectory(concurrency)
 add_subdirectory(oracle)
 add_subdirectory(c_api)
 if(FM_BUILD_CLI)

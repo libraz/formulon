@@ -55,6 +55,16 @@ class Workbook;
 namespace eval {
 
 class FunctionRegistry;
+class RecalcEngine;
+struct SchedulerConfig;
+struct SchedulerStats;
+
+// Free-function entry point of the parallel scheduler. Declared here so
+// the implementation in `scheduler.cpp` can be made a friend of
+// `RecalcEngine` and reach its private graph / dirty / volatile state
+// without further widening the engine's public surface.
+Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry& registry, const SchedulerConfig& cfg,
+                                           SchedulerStats* stats, RecalcEngine& engine);
 
 /// Statistics describing a single `recalc()` pass. Useful for tests and
 /// observability; the recalc engine itself does not interpret these counts.
@@ -168,6 +178,13 @@ class RecalcEngine {
   const IterativeOptions& iterative_options() const noexcept { return iterative_; }
 
  private:
+  // The parallel scheduler reads `graph_` / `volatiles_` and mutates
+  // `dirty_` / `arena_` via the same algorithm as `recalc()`. Granting
+  // friendship rather than widening the public surface keeps the
+  // single-threaded contract intact for every other caller.
+  friend Expected<void, Error> recalc_parallel_impl(Workbook&, const FunctionRegistry&, const SchedulerConfig&,
+                                                    SchedulerStats*, RecalcEngine&);
+
   DepGraph graph_;
   VolatileTracker volatiles_;
   DirtySet dirty_;

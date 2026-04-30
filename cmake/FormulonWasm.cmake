@@ -60,6 +60,17 @@ target_link_libraries(formulon_wasm PRIVATE formulon_static)
 # embind requires `-lembind` at link time. Compile flags mirror the
 # project-wide stance (`-fno-exceptions -fno-rtti`) plus optimisation
 # tier; link flags configure the JS / module surface.
+#
+# Threads (parallel recalc scheduler): `-pthread` is required at both
+# compile and link time under Emscripten. The link side additionally
+# wants `-sUSE_PTHREADS=1` and a non-zero `PTHREAD_POOL_SIZE` so the
+# runtime preallocates worker Web Workers up front. The 8-thread cap
+# matches `kMaxAutoThreads` in `src/eval/scheduler.cpp`.
+#
+# @size-budget-event: +~14 KB one-time pthread runtime (Bundle 5.4,
+# approved by wasm-size-guardian). Future scheduler additions will not
+# re-add this cost. See backup/plans/18-wasm-size-optimization.md
+# §18.6.4 for the formulon.pthread.wasm split-binary plan.
 set(_FM_WASM_COMMON_LINK_FLAGS
   "-lembind"
   "-sWASM=1"
@@ -73,6 +84,9 @@ set(_FM_WASM_COMMON_LINK_FLAGS
   "-sFILESYSTEM=0"
   "-sDISABLE_EXCEPTION_CATCHING=1"
   "-sMALLOC=emmalloc"
+  "-pthread"
+  "-sUSE_PTHREADS=1"
+  "-sPTHREAD_POOL_SIZE=8"
   "--closure=0"
 )
 
@@ -105,7 +119,15 @@ target_compile_options(formulon_wasm PRIVATE
   ${_FM_WASM_OPT_FLAGS}
   -fno-exceptions
   -frtti
+  -pthread
 )
+
+# Threading is wired in at the workbook scheduler. Under Emscripten the
+# core library MUST also be built with `-pthread` so atomics in the
+# scheduler's worker pool resolve to the multi-threaded ABI. Native
+# builds do not need a special flag — `Threads::Threads` propagates the
+# host pthread requirements.
+target_compile_options(formulon_core PRIVATE -pthread)
 
 target_link_options(formulon_wasm PRIVATE
   ${_FM_WASM_OPT_FLAGS}

@@ -17,6 +17,11 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+# Threads are required by the parallel recalc scheduler. `Threads::Threads`
+# is INTERFACE-linked into `formulon_core` below; under Emscripten the WASM
+# wiring in `cmake/FormulonWasm.cmake` adds `-pthread` / `-sUSE_PTHREADS`.
+find_package(Threads REQUIRED)
+
 # Reproducible build: honour SOURCE_DATE_EPOCH if present.
 if(DEFINED ENV{SOURCE_DATE_EPOCH})
   set(FORMULON_SOURCE_DATE_EPOCH "$ENV{SOURCE_DATE_EPOCH}")
@@ -129,6 +134,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/dirty_set.cpp
   src/eval/iterative_solver.cpp
   src/eval/recalc_engine.cpp
+  src/eval/scheduler.cpp
   src/eval/volatile_tracker.cpp
   src/eval/function_registry.cpp
   src/eval/special_forms_catalog.cpp
@@ -238,6 +244,7 @@ target_link_libraries(formulon_core
     formulon::miniz
     formulon::pugixml
     formulon::pcre2
+    Threads::Threads
 )
 
 formulon_apply_warnings(formulon_core)
@@ -263,6 +270,7 @@ target_link_libraries(formulon_static
     formulon::miniz
     formulon::pugixml
     formulon::pcre2
+    Threads::Threads
 )
 
 # No per-target warning flags: formulon_static only aggregates objects.
@@ -291,6 +299,7 @@ if(FM_BUILD_C_API_SHARED)
       formulon::miniz
       formulon::pugixml
       formulon::pcre2
+      Threads::Threads
   )
 endif()
 

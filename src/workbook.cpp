@@ -18,6 +18,7 @@
 #include "eval/dep_graph.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
+#include "eval/scheduler.h"
 #include "io/ooxml_writer.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -69,7 +70,9 @@ std::size_t Workbook::sheet_index_by_name(std::string_view name) const noexcept 
   return static_cast<std::size_t>(-1);
 }
 
-Expected<std::vector<std::uint8_t>, Error> Workbook::save() const { return io::write_ooxml(*this); }
+Expected<std::vector<std::uint8_t>, Error> Workbook::save() const {
+  return io::write_ooxml(*this);
+}
 
 namespace {
 
@@ -97,8 +100,7 @@ Expected<void, Error> Workbook::set_cell_value(std::size_t sheet_index, std::uin
                                                Value value) {
   if (sheet_index >= sheets_.size()) {
     return make_error(FormulonErrorCode::kInvalidArgument, "set_cell_value: sheet_index out of range",
-                      "sheet_index=" + std::to_string(sheet_index) +
-                          " sheet_count=" + std::to_string(sheets_.size()));
+                      "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(sheets_.size()));
   }
 
   const eval::CellNodeId node = make_node(sheet_index, row, col);
@@ -125,8 +127,7 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
                                                  std::string formula) {
   if (sheet_index >= sheets_.size()) {
     return make_error(FormulonErrorCode::kInvalidArgument, "set_cell_formula: sheet_index out of range",
-                      "sheet_index=" + std::to_string(sheet_index) +
-                          " sheet_count=" + std::to_string(sheets_.size()));
+                      "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(sheets_.size()));
   }
 
   const eval::CellNodeId node = make_node(sheet_index, row, col);
@@ -167,8 +168,17 @@ Expected<eval::RecalcStats, Error> Workbook::recalc(const eval::FunctionRegistry
   return engine_->recalc(*this, registry);
 }
 
-void Workbook::set_iterative_options(eval::IterativeOptions opts) { engine_->set_iterative_options(opts); }
+Expected<void, Error> Workbook::recalc_parallel(const eval::FunctionRegistry& registry,
+                                                const eval::SchedulerConfig& cfg, eval::SchedulerStats* stats) {
+  return eval::recalc_parallel(*this, registry, cfg, stats);
+}
 
-const eval::IterativeOptions& Workbook::iterative_options() const noexcept { return engine_->iterative_options(); }
+void Workbook::set_iterative_options(eval::IterativeOptions opts) {
+  engine_->set_iterative_options(opts);
+}
+
+const eval::IterativeOptions& Workbook::iterative_options() const noexcept {
+  return engine_->iterative_options();
+}
 
 }  // namespace formulon

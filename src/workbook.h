@@ -35,6 +35,8 @@ class FunctionRegistry;
 class RecalcEngine;
 struct IterativeOptions;
 struct RecalcStats;
+struct SchedulerConfig;
+struct SchedulerStats;
 }  // namespace eval
 
 /// Move-only container representing a spreadsheet workbook.
@@ -162,6 +164,28 @@ class Workbook {
   /// Returns the embedded recalc engine. Exposed for tests and debug
   /// tooling; lifetime is tied to the workbook.
   const eval::RecalcEngine& recalc_engine() const noexcept { return *engine_; }
+
+  /// Mutable access to the embedded recalc engine. Used by the parallel
+  /// scheduler entry point in `eval/scheduler.{h,cpp}` to drive the same
+  /// dirty-set / dep-graph state the single-threaded `recalc()` consumes.
+  /// External callers should prefer `recalc()` / `recalc_parallel()`; the
+  /// raw engine handle is provided for the few code paths (the scheduler,
+  /// targeted tests) that need direct access.
+  eval::RecalcEngine& recalc_engine() noexcept { return *engine_; }
+
+  /// Drives a parallel incremental recalc using the embedded engine.
+  ///
+  /// Wrapper around `eval::recalc_parallel(*this, registry, cfg, stats)`.
+  /// Callers MUST NOT race two `recalc_parallel` invocations on the same
+  /// workbook — the scheduler does not own a workbook-level lock.
+  ///
+  /// `cfg` and `stats` are forward-declared types; callers wanting the
+  /// default config / no-stats shape should pass an explicit
+  /// `eval::SchedulerConfig{}` (header users that include
+  /// `eval/scheduler.h` for the full definitions can construct it
+  /// inline).
+  Expected<void, Error> recalc_parallel(const eval::FunctionRegistry& registry, const eval::SchedulerConfig& cfg,
+                                        eval::SchedulerStats* stats);
 
   /// Sets iterative-calc options for the workbook's recalc engine.
   /// Defaults match Excel's out-of-the-box settings:
