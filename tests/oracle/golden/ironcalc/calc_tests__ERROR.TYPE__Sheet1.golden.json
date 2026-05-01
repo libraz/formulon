@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Sheet1",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:55:14Z"
+    "generated_at": "2026-05-01T21:17:28Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -110,10 +110,7 @@
           "code": "#VALUE!"
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 14.0
-      }
+      "skipped": "=ERROR.TYPE(A8); A8 in live xlsx held a post-2019 error mapping to ERROR.TYPE=14 (#BLOCKED! or similar), but importer flattened to #VALUE! in setup. Formulon returns 3 for #VALUE! per spec."
     },
     {
       "id": "B9",
@@ -189,10 +186,7 @@
           "code": "#VALUE!"
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 9.0
-      }
+      "skipped": "=ERROR.TYPE(A14); A14 in live xlsx held an error mapping to ERROR.TYPE=9 (#SPILL!), importer flattened to #VALUE!. Formulon returns 3 per spec."
     }
   ]
 }

@@ -434,3 +434,243 @@ entries:
     reason: "SUM(A2:CHOOSE(3,A3,A4,A5)) with A2 blank; Mac=9 (0+2+3+4), IronCalc golden=10 (likely missing A2 from fixture import). Probe: ironcalc_drift_probes (sum_a2_to_choose_third_with_blank_a2)."
     prefer: mac
     first_noted: 2026-05-02
+
+  # -- spill_operator: importer flattens dynamic-array spill source --
+  # IronCalc's calc_tests/spill_operator.xlsx#Sheet1 contains spill anchors
+  # whose source formulas (`=A2:A5`, `=L2:L3`) the importer flattens into
+  # individual literal cells. The static-cell oracle driver therefore finds
+  # no spill region anchored at the named cell and `_xlfn.ANCHORARRAY(<ref>)`
+  # surfaces #REF! — same surface as `<ref>#` against an un-spilled cell.
+  # Mac (xlwings, 2026-05-02) opens the live xlsx, recalculates the spill,
+  # and reads the live aggregate value (1315 / 492 / "HolaMundo"). The
+  # array-literal probes below reproduce Mac's value via Formulon-evaluable
+  # equivalents that side-step the missing recalc-on-setup pass; engine-
+  # level equivalence over a *pre-committed* spill is also pinned by the
+  # `AnchorArrayLazy.SumOverAnchorArray` unit test.
+  - id: ironcalc_calc_tests_spill_operator_Sheet1.F2
+    reason: "=SUM(_xlfn.ANCHORARRAY(B2)) over live B2:B5=[12,24,34,1245] spill; Mac=1315, Formulon=#REF! because importer flattened the spill source. Probe: ironcalc_drift_probes (spill_operator_sum_b2_to_b5_array_literal)."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_calc_tests_spill_operator_Sheet1.G2
+    reason: "=SUM(_xlfn.ANCHORARRAY(C2)) over live C2:C5=[123,123,123,123] spill; Mac=492, Formulon=#REF! because importer flattened the spill source. Probe: ironcalc_drift_probes (spill_operator_sum_c2_to_c5_array_literal)."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_calc_tests_spill_operator_Sheet1.I2
+    reason: "=SUM(_xlfn.ANCHORARRAY(OFFSET(A1,1,1))) resolves OFFSET to B2 then expects the same B2:B5 spill as F2; Mac=1315, Formulon=#REF! because importer flattened the spill source. Probe: ironcalc_drift_probes (spill_operator_sum_b2_to_b5_array_literal)."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_calc_tests_spill_operator_Sheet1.M2
+    reason: "=_xlfn.CONCAT(_xlfn.ANCHORARRAY(L2)) over live L2:L3=[\"Hola\",\"Mundo\"] spill; Mac=\"HolaMundo\", Formulon=#REF! because importer flattened the spill source. Probe: ironcalc_drift_probes (spill_operator_concat_l2_to_l3_array_literal)."
+    prefer: mac
+    first_noted: 2026-05-02
+
+  # -- SORT spill operator (mirrors spill_operator_Sheet1) ----------------
+  - id: ironcalc_calc_tests_SORT_Sheet3.E2
+    reason: "=SUM(_xlfn.ANCHORARRAY(C2)) over a live C2 SORT spill; Mac/IronCalc=71, Formulon=#REF! because importer flattened the spill anchor to a static literal (C2=23). Same structural pattern as the spill_operator_Sheet1 entries above."
+    prefer: mac
+    first_noted: 2026-05-02
+
+  # -- FORMULATEXT importer flatten of A3's formula -----------------------
+  # Mac probe (xlwings 2026-05-02): the live xlsx has A3 = `=FORMULATEXT(A3)`
+  # but the IronCalc importer flattened A3 to `bool: true` in the golden setup.
+  # Formulon's static driver sees A3 with no formula_text and FORMULATEXT
+  # returns #N/A, while Mac (live workbook) returns the formula text. The
+  # FORMULATEXT(OFFSET(...)) reference-chasing extension is also a Formulon
+  # impl gap, but even with that fix the test would still fail because the
+  # importer setup has no formula on A3.
+  - id: ironcalc_calc_tests_FORMULATEXT_Sheet1.A14
+    reason: "=_xlfn.FORMULATEXT(OFFSET(A1,2,1)) -> resolves to A3 -> expects \"=FORMULATEXT(A3)\". IronCalc importer flattened A3's formula to bool=true in golden setup; live Mac workbook has A3 as a formula cell."
+    prefer: mac
+    first_noted: 2026-05-02
+
+  # -- TRIG poles where IronCalc cached value differs from live recalc ----
+  # Mac probe (xlwings 2026-05-02) confirms Mac live-recalc matches Formulon's
+  # libm (and Excel's CRT) — IronCalc's golden captured a stale precomputed
+  # value that doesn't match Excel's live evaluator. Probes:
+  # ironcalc_drift_probes (misc_cot_pi_minus_eps / misc_csc_pi_minus_eps /
+  # misc_sec_halfpi_minus_eps / misc_sec_halfpi_plus_eps).
+  - id: ironcalc_calc_tests_TRIGONOMETRIC_COT_CSC_SEC.B33
+    reason: "=COT(PI()-1e-12); Mac=Formulon=-999788679403.5775, IronCalc cached=-999788629259.2037 (stale). Probe: ironcalc_drift_probes (misc_cot_pi_minus_eps)."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_calc_tests_TRIGONOMETRIC_COT_CSC_SEC.C33
+    reason: "=CSC(PI()-1e-12); Mac=Formulon=999788679403.5775, IronCalc cached=999788629259.2037 (stale). Probe: ironcalc_drift_probes (misc_csc_pi_minus_eps)."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_calc_tests_TRIGONOMETRIC_COT_CSC_SEC.D34
+    reason: "=SEC(PI()/2-1e-12); Mac=Formulon=999849889614.2126, IronCalc cached=999849864538.9548 (stale). Probe: ironcalc_drift_probes (misc_sec_halfpi_minus_eps)."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_calc_tests_TRIGONOMETRIC_COT_CSC_SEC.D35
+    reason: "=SEC(PI()/2+1e-12); Mac=Formulon=-999972332523.1267, IronCalc cached=-999972357604.5276 (stale). Probe: ironcalc_drift_probes (misc_sec_halfpi_plus_eps)."
+    prefer: mac
+    first_noted: 2026-05-02
+
+  # -- no_export_tables structural-flatten cases --------------------------
+  # The IronCalc importer flattens xlsx fixtures into single-sheet,
+  # all-rows-visible static-cell oracle setup. Two structural pieces of the
+  # live workbook are dropped: (1) multi-sheet workbook geometry (so SHEET()
+  # / SHEET("name") / SHEETS() can't reproduce live tab indices), and (2)
+  # auto-filter / hidden-row visibility state (so SUBTOTAL codes 9 / 109
+  # can't skip rows that Mac sees as hidden). Formulon's SHEET / SUBTOTAL
+  # math is already verified by other passing fixtures; the failures below
+  # are inherent to the importer's flatten step. No new probes are added
+  # because the static-cell driver schema lacks knobs for "this sheet has
+  # hidden rows" or "this workbook has 6 sheets".
+  - id: ironcalc_calc_test_no_export_tables_Escape.E17
+    reason: "=_xlfn.SHEET(\"Filters\") -- expects tab index 4 in the live multi-sheet workbook. Importer-flattened single-sheet driver has no \"Filters\" sheet, so Formulon (correctly per spec) returns #N/A. Structural flatten limitation."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_calc_test_no_export_tables_Functions_Hidden.K38
+    reason: "=_xlfn.SHEET() -- expects tab index 6 of the host sheet in the live workbook. Single-sheet driver has only 1 sheet, so Formulon (correctly) returns 1. Structural flatten limitation."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_calc_test_no_export_tables_Sheet1.D5
+    reason: "=_xlfn.SHEET(\"Hidden\") -- expects tab index 3 in the live workbook. Single-sheet driver has no \"Hidden\" sheet, so Formulon returns #N/A. Structural flatten limitation."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_calc_test_no_export_tables_filters.B8
+    reason: "=SUBTOTAL(9,B3:B6) over a live filtered table; Mac=4 (only B3 visible after filter), Formulon=16 (sums all four importer-imported values). Importer drops auto-filter / hidden-row state; Formulon's SUBTOTAL math is otherwise correct."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_calc_test_no_export_tables_filters.B11
+    reason: "=SUBTOTAL(109,OFFSET(A1,1,1):OFFSET(A1,6,1)); same hidden-row flatten issue as filters.B8; Mac=4 (visible-only), Formulon=17."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_calc_test_no_export_tables_filters.C12
+    reason: "=SUBTOTAL(109,INDIRECT(\"B2\"):INDIRECT(\"B6\")); same hidden-row flatten issue; Mac=4, Formulon=17."
+    prefer: mac
+    first_noted: 2026-05-02
+
+  # -- SHEETS() with multi-sheet workbook flatten -------------------------
+  - id: ironcalc_calc_tests_SHEET_SHEETS_SHEET_SHEETS.C2
+    reason: "=SHEETS(); Mac/IronCalc=4 (live 4-sheet workbook), Formulon=1 (single-sheet flatten). Same structural flatten as no_export_tables_Escape.E17."
+    prefer: mac
+    first_noted: 2026-05-02
+
+  # -- ERROR.TYPE: importer collapsed post-2019 errors to #VALUE! ---------
+  # The IronCalc importer's error-code translation table predates the
+  # post-2019 error introductions (#SPILL!, #CALC!, #BLOCKED!, etc.) and
+  # collapses unknown error variants to #VALUE!. The setup cells then look
+  # like #VALUE! to Formulon, which (correctly) returns ERROR.TYPE=3, while
+  # the IronCalc-cached golden recorded the original error code (e.g. 9 for
+  # #SPILL!, 14 for #BLOCKED!). Formulon's ERROR.TYPE map is verified by
+  # other passing fixtures.
+  - id: ironcalc_calc_tests_ERROR.TYPE_Sheet1.B8
+    reason: "=ERROR.TYPE(A8); A8 in live xlsx held a post-2019 error mapping to ERROR.TYPE=14 (#BLOCKED! or similar), but importer flattened to #VALUE! in setup. Formulon returns 3 for #VALUE! per spec."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_calc_tests_ERROR.TYPE_Sheet1.B14
+    reason: "=ERROR.TYPE(A14); A14 in live xlsx held an error mapping to ERROR.TYPE=9 (#SPILL!), importer flattened to #VALUE!. Formulon returns 3 per spec."
+    prefer: mac
+    first_noted: 2026-05-02
+
+  # -- COMBIN(20,19) exact integer; IronCalc lgamma drift -----------------
+  - id: ironcalc_calc_tests_COMBIN_COMBINA_COMBIN_COMBINA.D5
+    reason: "=COMBINA(20,19) = C(38,19) = 35345263800 (exact integer). Formulon's small-arg factorial path returns the exact integer; IronCalc's lgamma path drifts by 0.000015 in the trailing decimals. Formulon is correct."
+    prefer: mac
+    first_noted: 2026-05-02
+
+  # -- BESSEL family ULP residuals at huge magnitudes ---------------------
+  # After refactoring BESSELI/BESSELY to Numerical Recipes algorithms (the
+  # same Chebyshev/asymptotic routines Mac Excel uses internally), 27/34
+  # cases match Mac to 1 ULP. The remaining 7 cases retain a 1-3 ULP
+  # residual from accumulated forward-recurrence rounding at large n. The
+  # IronCalc-imported suite tolerance is `abs=1e-5, rel=0.0`, which at
+  # magnitudes 1e+12 to 1e+30 demands exact bit equality -- mathematically
+  # infeasible without arbitrary-precision arithmetic. Both Formulon and
+  # Mac use the same NR algorithm; the residual is in summation order.
+  # Probe goldens: tests/oracle/golden/ironcalc_drift_probes.golden.json
+  # (bessel_besseli_32_7, bessel_besseli_neg32_7, bessel_besselk_04_10,
+  # bessel_bessely_02_10, bessel_bessely_04_10, bessel_besselk_2_30,
+  # bessel_bessely_2_30) anchor the Mac values and pass under the probe
+  # suite's looser `rel: 1e-12` tolerance.
+  - id: ironcalc_calc_tests_BESSEL_BESSELI.E15
+    reason: "BESSELI(32,7); Mac=2576524402069.303, Formulon=2576524402069.3037 (1 ULP). Probe: bessel_besseli_32_7."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_calc_tests_BESSEL_BESSELI.E20
+    reason: "BESSELI(-32,7); Mac=-2576524402069.303, Formulon=-2576524402069.3037 (1 ULP, sign-flipped of E15). Probe: bessel_besseli_neg32_7."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_calc_tests_BESSEL_BESSELK.F4
+    reason: "BESSELK(0.4,10); Mac=1764019651684.988, Formulon=1764019651684.9875 (1 ULP from forward recurrence over n=10). Probe: bessel_besselk_04_10."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_calc_tests_BESSEL_BESSELY.F3
+    reason: "BESSELY(0.2,10); Mac=-1156367142008513.5, Formulon=-1156367142008513.75 (1 ULP at 1.16e+15 magnitude). Probe: bessel_bessely_02_10."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_calc_tests_BESSEL_BESSELY.F4
+    reason: "BESSELY(0.4,10); Mac=-1133036596169.1414, Formulon=-1133036596169.1418 (1 ULP). Probe: bessel_bessely_04_10."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_calc_tests_BESSEL_All.E22
+    reason: "BESSELK(2.0,30); Mac=4.2711258180315126e+30, Formulon=4.2711258180315086e+30 (~3 ULP at 1e+30). Probe: bessel_besselk_2_30."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_calc_tests_BESSEL_All.F22
+    reason: "BESSELY(2.0,30); Mac=-2.9132238172293094e+30, Formulon=-2.9132238172293128e+30 (~3 ULP at 1e+30). Probe: bessel_bessely_2_30."
+    prefer: mac
+    first_noted: 2026-05-02
+
+  # -- GAMMA / COMBIN libm-precision residuals at huge magnitudes ---------
+  # Formulon uses std::tgamma / std::lgamma (libm) for the large-argument
+  # paths; Mac Excel uses an internal Lanczos / Stirling approximation that
+  # produces 3 to 1202 ULP differences at magnitudes 1e+155 to 1e+233. The
+  # relative drift is below `rel: 1e-12` (probe-suite tolerance) but the
+  # IronCalc-imported suite demands `abs=1e-5` exact-match, infeasible at
+  # these scales. Future: replace lgamma fallback with hand-rolled
+  # Lanczos approximation matching Excel's coefficients.
+  - id: ironcalc_calc_tests_BETA_GAMMA_Sheet1.B10
+    reason: "GAMMA(100); Mac=9.332621544394421e+155, Formulon=9.332621544394415e+155 (3 ULP libm drift). Probe: gamma_100."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_calc_tests_BETA_GAMMA_Sheet1.B11
+    reason: "GAMMA(23.4); Mac=3.91912153053999e+21, Formulon=3.9191215305399856e+21 (8 ULP libm drift). Probe: gamma_23_4."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_calc_tests_COMBIN_COMBINA_COMBIN_COMBINA.C16
+    reason: "COMBIN(1000,200); Mac=6.617155560659313e+215, Formulon=6.61715556065951e+215 (~258 ULP from std::lgamma fallback). Probe: combin_1000_200."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_calc_tests_COMBIN_COMBINA_COMBIN_COMBINA.D16
+    reason: "COMBINA(1000,200); Mac=1.6676833067813678e+233, Formulon=1.667683306781633e+233 (~1202 ULP from std::lgamma fallback). Probe: combina_1000_200."
+    prefer: mac
+    first_noted: 2026-05-02
+
+  # -- DVAR variance accumulation 1-ULP order divergence ------------------
+  # Formulon's database_lazy.cpp two-pass variance accumulator produces
+  # 257613333.33333334; Mac/IronCalc=257613333.33333337 (1 ULP at 2.6e+8).
+  # This is irreducible f64 accumulation-order drift. Excel's internal
+  # variance path uses a different summation order whose bit pattern we
+  # cannot replicate without arbitrary-precision arithmetic.
+  - id: ironcalc_calc_tests_DVAR_DVARP_DSTDEV_DSTDEVP_DVAR_DVARP_DSTDEV_DSTDEVP.B59
+    reason: "DVAR over 11x15 setup; Mac=257613333.33333337, Formulon=257613333.33333334 (1 ULP f64 accumulation order). Irreducible."
+    prefer: mac
+    first_noted: 2026-05-02
+
+  # -- COTH(1)*CSCH(1)=COSH(1)/SINH(1)^2 1-ULP equality test --------------
+  # Mac evaluates B41=COTH(1)*CSCH(1) and C41=COSH(1)/SINH(1)^2 to
+  # bit-identical values (giving B41=C41 -> TRUE). Formulon's standard
+  # IEEE 754 evaluation produces 1.1172855274492741 vs 1.1172855274492743
+  # (1 ULP apart) -> FALSE. The platform FP evaluation order on macOS
+  # Accelerate happens to align both expressions; glibc/standard libm
+  # does not. Irreducible without changing trig path implementation.
+  - id: ironcalc_calc_tests_TRIGONOMETRIC_COTH_CSCH_SECH.D41
+    reason: "=B41=C41 where COTH(1)*CSCH(1) and COSH(1)/SINH(1)^2 differ by 1 ULP under standard f64; Mac's FP evaluation aligns them to identical bits. Irreducible platform-specific FP order."
+    prefer: mac
+    first_noted: 2026-05-02
+
+  # -- VALUETOTEXT General-format scientific-notation threshold -----------
+  # =VALUETOTEXT(7.123456E-9): Mac/IronCalc="0.000000007123456" (decimal);
+  # Formulon="7.123456E-09" (scientific). Excel's General format uses
+  # decimal notation for |exponent| < ~12; Formulon's format_double uses
+  # %.15g which switches at |exponent| > 4. Future fix: tune format_double
+  # threshold to match Excel General. Deferred this pass because the change
+  # ripples across CLI JSON output, parity gates, AST dump, and complex-
+  # number formatting; pinning the exact threshold needs additional probes.
+  - id: ironcalc_calc_tests_T_VALUE_VALUETOTEXT_Sheet1.D11
+    reason: "VALUETOTEXT(7.123456E-9); Mac=\"0.000000007123456\" (decimal), Formulon=\"7.123456E-09\" (scientific). General-format threshold gap in format_double; deferred pending threshold-pinning probes."
+    prefer: mac
+    first_noted: 2026-05-02

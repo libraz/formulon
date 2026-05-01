@@ -461,6 +461,24 @@ TEST_P(OracleTest, Matches) {
   Sheet& sheet = wb.sheet(0);
   Arena text_arena;
 
+  // Determine the formula-under-test cell up-front so we can pre-register the
+  // formula text on the target cell before applying setup. This lets setup
+  // formulas that reference the test cell via FORMULATEXT / ISFORMULA observe
+  // the test cell as a formula cell. Setup overrides written below win because
+  // they execute after this pre-registration.
+  std::uint32_t case_row = 0;
+  std::uint32_t case_col = 0;
+  if (!a1_to_row_col(param.case_id, &case_row, &case_col)) {
+    // Z1 = (row=0, col=25). Match the xlwings driver convention.
+    case_row = 0U;
+    case_col = 25U;
+  }
+  // Pre-register the formula-under-test on its target cell so cross-references
+  // (e.g. setup formulas calling FORMULATEXT(<test-cell>)) see the cell as a
+  // formula cell. The actual value comes from `eval::evaluate` below; the
+  // formula_text stored here is only consulted by FORMULATEXT / ISFORMULA.
+  sheet.set_cell_formula(case_row, case_col, formula_src);
+
   if (const JsonValue* setup = param.raw_case.find("setup"); setup && setup->is_object()) {
     for (const auto& entry : setup->as_object()) {
       std::uint32_t row = 0;
@@ -499,20 +517,13 @@ TEST_P(OracleTest, Matches) {
   // Anchor the formula at its own cell so zero-arg ROW() / COLUMN() return
   // the case's row / column. Cases whose `id` is an A1 address (e.g. "A1",
   // "C5") use that address; all other cases (descriptive ids like
-  // "at_prefix_col_range_row_excluded") fall back to Z1, which matches the
-  // xlwings driver convention: every oracle-generated formula is placed at
-  // cell Z1 on a fresh sheet. The Z1 anchor is what differentiates spill
-  // (top-left) from implicit intersection (row/col projection) for the
-  // `implicit_intersection` suite and for any other suite that uses
-  // `@`-prefixed range arguments.
-  std::uint32_t case_row = 0;
-  std::uint32_t case_col = 0;
-  if (a1_to_row_col(param.case_id, &case_row, &case_col)) {
-    ctx = ctx.with_formula_cell(case_row, case_col);
-  } else {
-    // Z1 = (row=0, col=25). Match the xlwings driver convention.
-    ctx = ctx.with_formula_cell(0U, 25U);
-  }
+  // "at_prefix_col_range_row_excluded") fall back to Z1 (computed above),
+  // which matches the xlwings driver convention: every oracle-generated
+  // formula is placed at cell Z1 on a fresh sheet. The Z1 anchor is what
+  // differentiates spill (top-left) from implicit intersection (row/col
+  // projection) for the `implicit_intersection` suite and for any other suite
+  // that uses `@`-prefixed range arguments.
+  ctx = ctx.with_formula_cell(case_row, case_col);
   Value actual = eval::evaluate(*root, eval_arena, registry, ctx);
 
   std::string diff = compare_value(*expect_v, actual, param.tolerance_abs, param.tolerance_rel, param.compare_mode);

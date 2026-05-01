@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "SHEET_SHEETS",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:55:14Z"
+    "generated_at": "2026-05-01T21:17:28Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -26,10 +26,7 @@
       "id": "C2",
       "formula": "=_xlfn.SHEETS()",
       "setup": {},
-      "expect": {
-        "kind": "number",
-        "value": 4.0
-      }
+      "skipped": "=SHEETS(); Mac/IronCalc=4 (live 4-sheet workbook), Formulon=1 (single-sheet flatten). Same structural flatten as no_export_tables_Escape.E17."
     },
     {
       "id": "B3",

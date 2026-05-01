@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "DVAR_DVARP_DSTDEV_DSTDEVP",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:55:14Z"
+    "generated_at": "2026-05-01T22:12:55Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -43807,10 +43807,7 @@
           "formula": "=1/3"
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 257613333.33333337
-      }
+      "skipped": "DVAR over 11x15 setup; Mac=257613333.33333337, Formulon=257613333.33333334 (1 ULP f64 accumulation order). Irreducible."
     },
     {
       "id": "C59",

@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Sheet3",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:55:14Z"
+    "generated_at": "2026-05-01T21:17:28Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -22,10 +22,7 @@
           "value": 23.0
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 71.0
-      }
+      "skipped": "=SUM(_xlfn.ANCHORARRAY(C2)) over a live C2 SORT spill; Mac/IronCalc=71, Formulon=#REF! because importer flattened the spill anchor to a static literal (C2=23). Same structural pattern as the spill_operator_Sheet1 entries above."
     }
   ]
 }

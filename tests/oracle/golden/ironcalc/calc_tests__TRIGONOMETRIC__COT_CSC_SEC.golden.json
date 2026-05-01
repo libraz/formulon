@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "COT_CSC_SEC",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:55:14Z"
+    "generated_at": "2026-05-01T21:17:28Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -1428,10 +1428,7 @@
           "formula": "=PI() - 0.000000000001"
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": -999788629259.2037
-      }
+      "skipped": "=COT(PI()-1e-12); Mac=Formulon=-999788679403.5775, IronCalc cached=-999788629259.2037 (stale). Probe: ironcalc_drift_probes (misc_cot_pi_minus_eps)."
     },
     {
       "id": "C33",
@@ -1442,10 +1439,7 @@
           "formula": "=PI() - 0.000000000001"
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 999788629259.2037
-      }
+      "skipped": "=CSC(PI()-1e-12); Mac=Formulon=999788679403.5775, IronCalc cached=999788629259.2037 (stale). Probe: ironcalc_drift_probes (misc_csc_pi_minus_eps)."
     },
     {
       "id": "D33",
@@ -1507,10 +1501,7 @@
           "formula": "=PI()/2 - 0.000000000001"
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 999849864538.9548
-      }
+      "skipped": "=SEC(PI()/2-1e-12); Mac=Formulon=999849889614.2126, IronCalc cached=999849864538.9548 (stale). Probe: ironcalc_drift_probes (misc_sec_halfpi_minus_eps)."
     },
     {
       "id": "A35",
@@ -1558,10 +1549,7 @@
           "formula": "=PI()/2 + 0.000000000001"
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": -999972357604.5276
-      }
+      "skipped": "=SEC(PI()/2+1e-12); Mac=Formulon=-999972332523.1267, IronCalc cached=-999972357604.5276 (stale). Probe: ironcalc_drift_probes (misc_sec_halfpi_plus_eps)."
     }
   ]
 }

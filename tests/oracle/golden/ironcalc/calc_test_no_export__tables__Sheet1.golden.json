@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Sheet1",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:55:14Z"
+    "generated_at": "2026-05-01T21:17:28Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -17,10 +17,7 @@
       "id": "D5",
       "formula": "=_xlfn.SHEET(\"Hidden\")",
       "setup": {},
-      "expect": {
-        "kind": "number",
-        "value": 3.0
-      }
+      "skipped": "=_xlfn.SHEET(\"Hidden\") -- expects tab index 3 in the live workbook. Single-sheet driver has no \"Hidden\" sheet, so Formulon returns #N/A. Structural flatten limitation."
     },
     {
       "id": "D6",

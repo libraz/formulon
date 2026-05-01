@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Escape",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:55:14Z"
+    "generated_at": "2026-05-01T21:17:28Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -17,10 +17,7 @@
       "id": "E17",
       "formula": "=_xlfn.SHEET(\"Filters\")",
       "setup": {},
-      "expect": {
-        "kind": "number",
-        "value": 4.0
-      }
+      "skipped": "=_xlfn.SHEET(\"Filters\") -- expects tab index 4 in the live multi-sheet workbook. Importer-flattened single-sheet driver has no \"Filters\" sheet, so Formulon (correctly per spec) returns #N/A. Structural flatten limitation."
     }
   ]
 }

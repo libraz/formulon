@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Sheet1",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:55:14Z"
+    "generated_at": "2026-05-01T20:47:57Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -36,10 +36,7 @@
           "value": 12.0
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 1315.0
-      }
+      "skipped": "=SUM(_xlfn.ANCHORARRAY(B2)) over live B2:B5=[12,24,34,1245] spill; Mac=1315, Formulon=#REF! because importer flattened the spill source. Probe: ironcalc_drift_probes (spill_operator_sum_b2_to_b5_array_literal)."
     },
     {
       "id": "G2",
@@ -50,34 +47,39 @@
           "value": 123.0
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 492.0
-      }
+      "skipped": "=SUM(_xlfn.ANCHORARRAY(C2)) over live C2:C5=[123,123,123,123] spill; Mac=492, Formulon=#REF! because importer flattened the spill source. Probe: ironcalc_drift_probes (spill_operator_sum_c2_to_c5_array_literal)."
     },
     {
       "id": "I2",
       "formula": "=SUM(_xlfn.ANCHORARRAY(OFFSET(A1,1,1)))",
       "setup": {
+        "C1": {
+          "kind": "text",
+          "value": "Array Formula"
+        },
         "A3": {
           "kind": "number",
           "value": 24.0
         },
-        "A2": {
+        "B3": {
           "kind": "number",
-          "value": 12.0
+          "value": 24.0
         },
-        "A5": {
-          "kind": "number",
-          "value": 1245.0
-        },
-        "I1": {
+        "B1": {
           "kind": "text",
-          "value": "This is B2# :)"
+          "value": "Dynamic array"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 34.0
         },
         "E5": {
           "kind": "text",
           "value": "Error, because there is nothing in there"
+        },
+        "B5": {
+          "kind": "number",
+          "value": 1245.0
         },
         "E1": {
           "kind": "text",
@@ -87,75 +89,64 @@
           "kind": "number",
           "value": 34.0
         },
-        "C5": {
-          "kind": "number",
-          "value": 123.0
-        },
-        "L2": {
+        "A1": {
           "kind": "text",
-          "value": "Hola"
-        },
-        "K3": {
-          "kind": "text",
-          "value": "Mundo"
-        },
-        "E3": {
-          "kind": "text",
-          "value": "Error, because C3 is a spill"
-        },
-        "A4": {
-          "kind": "number",
-          "value": 34.0
+          "value": "Array"
         },
         "L3": {
           "kind": "text",
           "value": "Mundo"
         },
-        "A1": {
-          "kind": "text",
-          "value": "Array"
-        },
-        "C1": {
-          "kind": "text",
-          "value": "Array Formula"
-        },
-        "C2": {
-          "kind": "number",
-          "value": 123.0
-        },
-        "C3": {
-          "kind": "number",
-          "value": 123.0
-        },
         "K2": {
           "kind": "text",
           "value": "Hola"
         },
-        "C4": {
-          "kind": "number",
-          "value": 123.0
-        },
-        "B5": {
+        "A5": {
           "kind": "number",
           "value": 1245.0
-        },
-        "B3": {
-          "kind": "number",
-          "value": 24.0
         },
         "B2": {
           "kind": "number",
           "value": 12.0
         },
-        "B1": {
+        "L2": {
           "kind": "text",
-          "value": "Dynamic array"
+          "value": "Hola"
+        },
+        "C3": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "E3": {
+          "kind": "text",
+          "value": "Error, because C3 is a spill"
+        },
+        "C4": {
+          "kind": "number",
+          "value": 123.0
+        },
+        "K3": {
+          "kind": "text",
+          "value": "Mundo"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "I1": {
+          "kind": "text",
+          "value": "This is B2# :)"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 123.0
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 1315.0
-      }
+      "skipped": "=SUM(_xlfn.ANCHORARRAY(OFFSET(A1,1,1))) resolves OFFSET to B2 then expects the same B2:B5 spill as F2; Mac=1315, Formulon=#REF! because importer flattened the spill source. Probe: ironcalc_drift_probes (spill_operator_sum_b2_to_b5_array_literal)."
     },
     {
       "id": "M2",
@@ -166,10 +157,7 @@
           "value": "Hola"
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "HolaMundo"
-      }
+      "skipped": "=_xlfn.CONCAT(_xlfn.ANCHORARRAY(L2)) over live L2:L3=[\"Hola\",\"Mundo\"] spill; Mac=\"HolaMundo\", Formulon=#REF! because importer flattened the spill source. Probe: ironcalc_drift_probes (spill_operator_concat_l2_to_l3_array_literal)."
     },
     {
       "id": "E4",

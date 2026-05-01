@@ -48,3 +48,114 @@ cases:
     description: "SUM(A2:CHOOSE(3,A3,A4,A5)) with A2 blank, A3=2, A4=3, A5=4"
     setup: { A3: 2, A4: 3, A5: 4 }
     formula: "=SUM(A2:CHOOSE(3,A3,A4,A5))"
+
+  # =========================================================================
+  # spill_operator (calc_tests/spill_operator.xlsx#Sheet1) -- the IronCalc
+  # importer flattens the dynamic-array spill anchor's source formula
+  # (`=A2:A5`, `=L2:L3`, etc.) into individual literal cells, so Formulon's
+  # static-cell oracle driver finds no spill region at the anchor and
+  # surfaces #REF! for `_xlfn.ANCHORARRAY(<anchor>)`. Mac's xlwings driver
+  # opens the live xlsx, recalculates the spill, and reads the live value
+  # (1315 / 492 / "HolaMundo"). The probes below capture Mac's reference
+  # value via array-literal equivalents that Formulon's static driver CAN
+  # evaluate, anchoring the divergence reasons in tests/ironcalc_divergence.yaml.
+  # Mac probe via xlwings 2026-05-02; live xlsx values also persisted at
+  # build/bench_results/mac_probes.json (gitignored).
+  # =========================================================================
+  - id: spill_operator_sum_b2_to_b5_array_literal
+    description: "=SUM({12;24;34;1245}) -- Mac/Formulon equivalent of =SUM(B2#) over live B2:B5 spill"
+    formula: "=SUM({12;24;34;1245})"
+
+  - id: spill_operator_sum_c2_to_c5_array_literal
+    description: "=SUM({123;123;123;123}) -- Mac/Formulon equivalent of =SUM(C2#) over live C2:C5 spill"
+    formula: "=SUM({123;123;123;123})"
+
+  - id: spill_operator_concat_l2_to_l3_array_literal
+    description: '=CONCAT({"Hola";"Mundo"}) -- Mac/Formulon equivalent of =CONCAT(L2#) over live L2:L3 spill'
+    formula: '=CONCAT({"Hola";"Mundo"})'
+  # =========================================================================
+  # TRIG poles where Mac live-recalc != IronCalc cached. Mac probe
+  # (xlwings 2026-05-02) confirms Mac matches Formulon's libm/CRT result;
+  # IronCalc's golden captured a stale precomputed value. Cited from
+  # tests/ironcalc_divergence.yaml entries TRIGONOMETRIC_COT_CSC_SEC.B33
+  # / .C33 / .D34 / .D35.
+  # =========================================================================
+  - id: misc_cot_pi_minus_eps
+    description: "COT(PI()-1e-12) near pole; Mac/Formulon=-999788679403.5775, IronCalc cached=-999788629259.2037"
+    formula: "=COT(PI()-0.000000000001)"
+
+  - id: misc_csc_pi_minus_eps
+    description: "CSC(PI()-1e-12) near pole; Mac/Formulon=999788679403.5775, IronCalc cached=999788629259.2037"
+    formula: "=CSC(PI()-0.000000000001)"
+
+  - id: misc_sec_halfpi_minus_eps
+    description: "SEC(PI()/2-1e-12) near cos=0 pole; Mac/Formulon=999849889614.2126, IronCalc cached=999849864538.9548"
+    formula: "=SEC(PI()/2-0.000000000001)"
+
+  - id: misc_sec_halfpi_plus_eps
+    description: "SEC(PI()/2+1e-12) near cos=0 pole, opposite branch; Mac/Formulon=-999972332523.1267, IronCalc cached=-999972357604.5276"
+    formula: "=SEC(PI()/2+0.000000000001)"
+
+  # =========================================================================
+  # BESSEL family ULP residuals at huge magnitudes (1e+12 to 1e+30). After
+  # BESSELI/BESSELY refactor to Numerical Recipes algorithms (matches Mac
+  # within 1 ULP for 27/34 cases), these 7 cases retain a 1-3 ULP residual
+  # from forward/Miller recurrence accumulation. The IronCalc-imported
+  # suite tolerance is `abs=1e-5, rel=0.0` which at magnitude 1e+30 demands
+  # exact bit equality -- mathematically infeasible without arbitrary-
+  # precision arithmetic. Both Formulon and Mac use the same NR algorithm;
+  # the residual is in summation order, not algorithm choice.
+  # Mac probe via xlwings 2026-05-02; values also in
+  # build/bench_results/mac_probes.json (gitignored).
+  # =========================================================================
+  - id: bessel_besseli_32_7
+    description: "BESSELI(32,7) -- Mac=2576524402069.303, Formulon=2576524402069.3037 (1 ULP)"
+    formula: "=BESSELI(32, 7)"
+
+  - id: bessel_besseli_neg32_7
+    description: "BESSELI(-32,7) -- Mac=-2576524402069.303, Formulon=-2576524402069.3037 (1 ULP, sign-flipped of bessel_besseli_32_7)"
+    formula: "=BESSELI(-32, 7)"
+
+  - id: bessel_besselk_04_10
+    description: "BESSELK(0.4,10) -- Mac=1764019651684.988, Formulon=1764019651684.9875 (1 ULP)"
+    formula: "=BESSELK(0.4, 10)"
+
+  - id: bessel_bessely_02_10
+    description: "BESSELY(0.2,10) -- Mac=-1156367142008513.5, Formulon=-1156367142008513.75 (1 ULP)"
+    formula: "=BESSELY(0.2, 10)"
+
+  - id: bessel_bessely_04_10
+    description: "BESSELY(0.4,10) -- Mac=-1133036596169.1414, Formulon=-1133036596169.1418 (1 ULP)"
+    formula: "=BESSELY(0.4, 10)"
+
+  - id: bessel_besselk_2_30
+    description: "BESSELK(2.0,30) -- Mac=4.2711258180315126e+30, Formulon=4.2711258180315086e+30 (~3 ULP at 1e+30)"
+    formula: "=BESSELK(2.0, 30)"
+
+  - id: bessel_bessely_2_30
+    description: "BESSELY(2.0,30) -- Mac=-2.9132238172293094e+30, Formulon=-2.9132238172293128e+30 (~3 ULP at 1e+30)"
+    formula: "=BESSELY(2.0, 30)"
+
+  # =========================================================================
+  # GAMMA / COMBIN libm-precision residuals. Formulon uses std::tgamma /
+  # std::lgamma (libm) for the large-argument paths; Mac Excel uses an
+  # internal Lanczos / Stirling approximation. The relative drift is
+  # within `rel: 1e-12` probe tolerance, but exceeds the IronCalc-imported
+  # suite's `abs=1e-5, rel=0.0` exact-match contract at huge magnitudes
+  # (1e+155 to 1e+233). Mac probe via xlwings 2026-05-02.
+  # =========================================================================
+  - id: gamma_100
+    description: "GAMMA(100) -- Mac=9.332621544394421e+155, Formulon=9.332621544394415e+155 (3 ULP libm drift)"
+    formula: "=GAMMA(100)"
+
+  - id: gamma_23_4
+    description: "GAMMA(23.4) -- Mac=3.91912153053999e+21, Formulon=3.9191215305399856e+21 (8 ULP libm drift)"
+    formula: "=GAMMA(23.4)"
+
+  - id: combin_1000_200
+    description: "COMBIN(1000,200) -- Mac=6.617155560659313e+215, Formulon=6.61715556065951e+215 (~258 ULP, lgamma fallback)"
+    formula: "=COMBIN(1000, 200)"
+
+  - id: combina_1000_200
+    description: "COMBINA(1000,200) -- Mac=1.6676833067813678e+233, Formulon=1.667683306781633e+233 (~1202 ULP, lgamma fallback)"
+    formula: "=COMBINA(1000, 200)"
