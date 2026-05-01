@@ -8,6 +8,8 @@
 //   * Detect Excel volatile functions inside any Call node.
 //   * Resolve sheet-qualified refs against the workbook.
 //   * Skip ExternalRef / NameRef / StructuredRef / Lambda body silently.
+//   * Descend into LET binding initialisers and the LET body, so refs and
+//     volatile calls inside either surface as deps.
 
 #include "eval/dep_extractor.h"
 
@@ -240,6 +242,69 @@ TEST(DepExtractor, LambdaBodyNotDescendedInto) {
   ExtractedDeps deps = extract_deps(*root, 0U, wb);
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
+}
+
+TEST(DepExtractor, LetBindingInitialiserAndBodyBothEmitCellDeps) {
+  Workbook wb = Workbook::create();
+  Arena arena;
+  // =LET(x, A1, x + B1) — the binding initialiser reads A1; the body
+  // references the bound name `x` (which contributes nothing today since
+  // NameRef is a no-op) plus a real cell `B1`. Both A1 and B1 must surface
+  // as static deps so the recalc engine re-runs the LET formula when either
+  // changes.
+  const parser::AstNode* root = ParseFormula("LET(x,A1,x+B1)", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+  std::vector<CellNodeId> expected = {
+      CellNodeId{0U, 0U, 0U},  // A1
+      CellNodeId{0U, 0U, 1U},  // B1
+  };
+  EXPECT_EQ(Sorted(deps.cell_deps), Sorted(expected));
+}
+
+TEST(DepExtractor, LetBindingBoundNameDoesNotEmitDeps) {
+  Workbook wb = Workbook::create();
+  Arena arena;
+  // =LET(x, A1, x) — the body is the bound name itself. The NameRef case is
+  // a no-op pending defined-name support, so the body contributes nothing
+  // and only the initialiser's A1 is recorded.
+  const parser::AstNode* root = ParseFormula("LET(x,A1,x)", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+  ASSERT_EQ(deps.cell_deps.size(), 1u);
+  EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));
+}
+
+TEST(DepExtractor, LetBodyVolatileCallIsDetected) {
+  Workbook wb = Workbook::create();
+  Arena arena;
+  // =LET(x, 1, x + RAND()) — the volatile call lives in the body. With body
+  // descent, RAND() must promote the formula to volatile.
+  const parser::AstNode* root = ParseFormula("LET(x,1,x+RAND())", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_TRUE(deps.is_volatile);
+  EXPECT_TRUE(deps.cell_deps.empty());
+}
+
+TEST(DepExtractor, LetNestedLetBodiesAreDescended) {
+  Workbook wb = Workbook::create();
+  Arena arena;
+  // =LET(a, A1, LET(b, B1, a + b + C1)) — the outer body is itself a LET
+  // whose body references a real cell C1 and the bound names a, b. All
+  // three cell deps must surface through both layers of body descent.
+  const parser::AstNode* root = ParseFormula("LET(a,A1,LET(b,B1,a+b+C1))", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+  std::vector<CellNodeId> expected = {
+      CellNodeId{0U, 0U, 0U},  // A1
+      CellNodeId{0U, 0U, 1U},  // B1
+      CellNodeId{0U, 0U, 2U},  // C1
+  };
+  EXPECT_EQ(Sorted(deps.cell_deps), Sorted(expected));
 }
 
 TEST(DepExtractor, RangeAcrossSheetQualifierOnLeft) {

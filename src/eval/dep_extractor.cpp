@@ -266,15 +266,22 @@ void walk(const parser::AstNode& node, WalkState& state) {
 
     case parser::NodeKind::LetBinding: {
       // LET introduces local names that shadow workbook references inside
-      // its body. Walking initialisers (which are evaluated in the outer
-      // scope) is safe; walking the body would over-approximate by treating
-      // bound names as unresolved cell refs. Skip the body for now; refine
-      // when defined-name support lands.
+      // its body. Walking the binding initialisers is straightforward (they
+      // live in the outer scope). For the body, descending unconditionally
+      // is safe today because the `NameRef` case is a no-op pending
+      // defined-name support: a LET-bound name reaches `NameRef` and
+      // contributes nothing, while real cell `Ref` nodes and `Call` nodes
+      // inside the body emit their deps and volatile flags as usual.
+      // Skipping the body would under-approximate — `=LET(x, A1, x + B1)`
+      // would miss `B1`, and `=LET(x, 1, x + RAND())` would miss the
+      // volatile call. When defined-name tracking lands, this case will
+      // need a name-env stack so bound names short-circuit before reaching
+      // the `NameRef` resolver.
       const std::uint32_t binding_count = node.as_let_binding_count();
       for (std::uint32_t i = 0; i < binding_count; ++i) {
         walk(node.as_let_binding_expr(i), state);
       }
-      // TODO: descend into LET body once name-env-aware traversal lands.
+      walk(node.as_let_body(), state);
       return;
     }
 
