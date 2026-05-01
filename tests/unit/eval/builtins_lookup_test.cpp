@@ -485,16 +485,19 @@ TEST(BuiltinsChoose, ChooseAsRangeProducerSkipsTextInSum) {
   EXPECT_DOUBLE_EQ(v.as_number(), 68.0);
 }
 
-TEST(BuiltinsChoose, ChooseScalarChildStillFailsInSum) {
-  // Scalar children to CHOOSE in this aggregator context are unsupported:
-  // `resolve_range_arg` rejects a literal AST node with #VALUE!. This is
-  // the established behaviour until a `Value::Array` runtime lands.
+TEST(BuiltinsChoose, ChooseScalarChildIsTreatedAsOneCellRange) {
+  // CHOOSE's scalar child is treated as a 1-cell range by the aggregator
+  // (faf447f). Verified against Mac Excel 365 via xlwings: scalar
+  // SUM(CHOOSE(1, 7, A1:A2)) = 7, range SUM(CHOOSE(2, 7, A1:A2)) = 3.
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
   wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
-  const Value v = EvalSourceIn("=SUM(CHOOSE(1, 7, A1:A2))", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  const Value scalar = EvalSourceIn("=SUM(CHOOSE(1, 7, A1:A2))", wb, wb.sheet(0));
+  ASSERT_TRUE(scalar.is_number());
+  EXPECT_DOUBLE_EQ(scalar.as_number(), 7.0);
+  const Value range = EvalSourceIn("=SUM(CHOOSE(2, 7, A1:A2))", wb, wb.sheet(0));
+  ASSERT_TRUE(range.is_number());
+  EXPECT_DOUBLE_EQ(range.as_number(), 3.0);
 }
 
 TEST(BuiltinsChoose, ChooseOutOfRangeIndexIsValueError) {

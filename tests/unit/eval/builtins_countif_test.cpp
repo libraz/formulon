@@ -203,10 +203,17 @@ TEST(BuiltinsCountIf, SingleCellRefTreatedAsOneCellRange) {
 // COUNTIF — error / arity
 // ---------------------------------------------------------------------------
 
-TEST(BuiltinsCountIf, ScalarFirstArgIsValueError) {
-  const Value v = EvalSource("=COUNTIF(1, \">0\")");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+TEST(BuiltinsCountIf, ScalarFirstArgIsTreatedAsOneCellRange) {
+  // Mac Excel 365 accepts a scalar first argument and treats it as a
+  // 1-cell range (verified via xlwings: `=SUM(7)` -> 7, parallel
+  // semantics for COUNTIF). `resolve_range_arg`'s generic fallback
+  // (faf447f) implements that contract.
+  const Value match = EvalSource("=COUNTIF(1, \">0\")");
+  ASSERT_TRUE(match.is_number());
+  EXPECT_DOUBLE_EQ(match.as_number(), 1.0);
+  const Value miss = EvalSource("=COUNTIF(1, \"<0\")");
+  ASSERT_TRUE(miss.is_number());
+  EXPECT_DOUBLE_EQ(miss.as_number(), 0.0);
 }
 
 TEST(BuiltinsCountIf, CriterionIsErrorFiltersMatchingErrorCells) {

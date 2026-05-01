@@ -200,10 +200,16 @@ TEST(BuiltinsCountIfs, SingleCellRefActsAsOneCellRange) {
   EXPECT_DOUBLE_EQ(no.as_number(), 0.0);
 }
 
-TEST(BuiltinsCountIfs, ScalarFirstArgIsValueError) {
-  const Value v = EvalSource("=COUNTIFS(1, \">0\")");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+TEST(BuiltinsCountIfs, ScalarFirstArgIsTreatedAsOneCellRange) {
+  // COUNTIFS, like COUNTIF, accepts a scalar first argument and treats
+  // it as a 1-cell range (faf447f). The criterion is matched against
+  // that single value.
+  const Value match = EvalSource("=COUNTIFS(1, \">0\")");
+  ASSERT_TRUE(match.is_number());
+  EXPECT_DOUBLE_EQ(match.as_number(), 1.0);
+  const Value miss = EvalSource("=COUNTIFS(1, \"<0\")");
+  ASSERT_TRUE(miss.is_number());
+  EXPECT_DOUBLE_EQ(miss.as_number(), 0.0);
 }
 
 TEST(BuiltinsCountIfs, ErrorCellInCriteriaRangeIsSkipped) {
