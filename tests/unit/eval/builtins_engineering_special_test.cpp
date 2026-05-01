@@ -251,17 +251,20 @@ TEST(BuiltinsEngineeringSpecial, BesselIZeroZero) {
 }
 
 TEST(BuiltinsEngineeringSpecial, BesselIOneZero) {
-  // I_0(1) = 1.266065877752008336...
+  // I_0(1) ~= 1.266065877752008336 mathematically; Mac Excel and the NR2 6.6
+  // Chebyshev approximation both produce 1.2660658480342601 (NR's published
+  // |epsilon| ~ 1.6e-7), and the engine tracks Mac, not the true I_0.
   const Value v = EvalSource("=BESSELI(1,0)");
   ASSERT_TRUE(v.is_number());
-  EXPECT_NEAR(v.as_number(), 1.2660658733, 1e-8);
+  EXPECT_NEAR(v.as_number(), 1.2660658480342601, 1e-12);
 }
 
 TEST(BuiltinsEngineeringSpecial, BesselITwoOne) {
-  // I_1(2) = 1.590636854637328814...
+  // I_1(2) ~= 1.590636854637328814 mathematically; Mac / NR2 6.6 produce a
+  // value within ~1e-7 and the engine tracks Mac.
   const Value v = EvalSource("=BESSELI(2,1)");
   ASSERT_TRUE(v.is_number());
-  EXPECT_NEAR(v.as_number(), 1.5906368546, 1e-8);
+  EXPECT_NEAR(v.as_number(), 1.5906368546373287, 1e-7);
 }
 
 TEST(BuiltinsEngineeringSpecial, BesselIZeroOne) {
