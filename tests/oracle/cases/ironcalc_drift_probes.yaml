@@ -1,0 +1,50 @@
+suite: ironcalc_drift_probes
+description: >
+  Mac Excel 365 reference values for cases where Formulon and Mac agree
+  but the IronCalc-imported golden in tests/oracle/golden/ironcalc/ does
+  not. Each case here is the citation cited by an entry in
+  tests/ironcalc_divergence.yaml. The IronCalc test driver already
+  includes its own goldens; this suite exists to anchor the Mac probe
+  values that justify each `prefer: mac` divergence.
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  # =========================================================================
+  # TAN at multiples of pi/2. tan(x) is undefined at +/-pi/2; libm and
+  # IronCalc's Rust f64::tan() round to slightly different doubles for
+  # the closest representable approximations of pi/2 and 3*pi/2, which
+  # leaves a relative error of ~10^-3 in the gigantic finite output.
+  # Mac probe (xlwings, 2026-05-02) shows libm-shaped values: TAN(PI()/2)
+  # = 16331239353195370 and TAN(3*PI()/2) = 5443746451065123 (and their
+  # negatives). IronCalc's golden disagrees by ~3 in the 4th decimal of
+  # the mantissa.
+  # =========================================================================
+  - id: tan_neg_three_pi_over_two
+    description: "TAN(-3*PI()/2) -- libm/Mac value at asymptote"
+    formula: "=TAN(-3*PI()/2)"
+
+  - id: tan_neg_pi_over_two
+    description: "TAN(-PI()/2) -- libm/Mac value at asymptote"
+    formula: "=TAN(-PI()/2)"
+
+  - id: tan_pi_over_two
+    description: "TAN(PI()/2) -- libm/Mac value at asymptote"
+    formula: "=TAN(PI()/2)"
+
+  - id: tan_three_pi_over_two
+    description: "TAN(3*PI()/2) -- libm/Mac value at asymptote"
+    formula: "=TAN(3*PI()/2)"
+
+  # =========================================================================
+  # SUM(A2:CHOOSE(...)) with A2 blank. The IronCalc-imported golden for
+  # docs/CHOOSE.xlsx#A8 expects 10, but the imported setup leaves A2
+  # blank and the formula =SUM(A2:CHOOSE(3,A3,A4,A5)) with A3=2 A4=3
+  # A5=4 is 0+2+3+4 = 9 in Mac and Formulon. The IronCalc importer
+  # almost certainly dropped a non-zero A2 from the original fixture.
+  # Mac probe (xlwings, 2026-05-02): SUM = 9, COUNTA(A2:A5) = 3,
+  # CHOOSE(3,A3,A4,A5) = 4 (resolves to A5).
+  # =========================================================================
+  - id: sum_a2_to_choose_third_with_blank_a2
+    description: "SUM(A2:CHOOSE(3,A3,A4,A5)) with A2 blank, A3=2, A4=3, A5=4"
+    setup: { A3: 2, A4: 3, A5: 4 }
+    formula: "=SUM(A2:CHOOSE(3,A3,A4,A5))"

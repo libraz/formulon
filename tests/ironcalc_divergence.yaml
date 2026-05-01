@@ -399,3 +399,38 @@ entries:
     reason: "Same as AE3 with criterion AC10; Mac=10, IronCalc=11. Probe: countif_edges (countif_concat_ne_bool_true_over_range_with_blanks)."
     prefer: mac
     first_noted: 2026-04-26
+
+  # -- TAN at multiples of pi/2 ------------------------------------------
+  # tan(x) is undefined at +/-pi/2 and +/-3*pi/2. libm and IronCalc's
+  # Rust f64::tan() round to slightly different doubles for the closest
+  # representable approximations of those inputs, so the resulting
+  # finite-but-huge values disagree by ~3 in the 4th decimal of the
+  # mantissa. Mac matches libm. Probe: ironcalc_drift_probes
+  # (tan_*_pi_over_two).
+  - id: ironcalc_docs_TAN_Sheet1.B2
+    reason: "TAN(-3*PI()/2) at asymptote; Mac=-5443746451065123 (libm), IronCalc=-5441517425873024. Probe: ironcalc_drift_probes (tan_neg_three_pi_over_two)."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_docs_TAN_Sheet1.B4
+    reason: "TAN(-PI()/2) at asymptote; Mac=-1.633123935319537e+16 (libm), IronCalc=-1.6324552277619072e+16. Probe: ironcalc_drift_probes (tan_neg_pi_over_two)."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_docs_TAN_Sheet1.B8
+    reason: "TAN(PI()/2) at asymptote; Mac=1.633123935319537e+16 (libm), IronCalc=1.6324552277619072e+16. Probe: ironcalc_drift_probes (tan_pi_over_two)."
+    prefer: mac
+    first_noted: 2026-05-02
+  - id: ironcalc_docs_TAN_Sheet1.B10
+    reason: "TAN(3*PI()/2) at asymptote; Mac=5443746451065123 (libm), IronCalc=5441517425873024. Probe: ironcalc_drift_probes (tan_three_pi_over_two)."
+    prefer: mac
+    first_noted: 2026-05-02
+
+  # -- SUM(A2:CHOOSE(...)) with blank A2 ---------------------------------
+  # IronCalc's docs/CHOOSE.xlsx#A8 expects SUM(A2:CHOOSE(3,A3,A4,A5)) =
+  # 10, but the imported setup leaves A2 blank with A3=2 A4=3 A5=4, so
+  # 0+2+3+4 = 9. Mac matches Formulon at 9; the IronCalc importer most
+  # likely dropped a non-zero A2 from the original fixture. Probe:
+  # ironcalc_drift_probes (sum_a2_to_choose_third_with_blank_a2).
+  - id: ironcalc_docs_CHOOSE_Sheet1.A8
+    reason: "SUM(A2:CHOOSE(3,A3,A4,A5)) with A2 blank; Mac=9 (0+2+3+4), IronCalc golden=10 (likely missing A2 from fixture import). Probe: ironcalc_drift_probes (sum_a2_to_choose_third_with_blank_a2)."
+    prefer: mac
+    first_noted: 2026-05-02

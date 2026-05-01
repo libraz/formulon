@@ -1,0 +1,75 @@
+{
+  "suite": "ironcalc_drift_probes",
+  "description": "Mac Excel 365 reference values for cases where Formulon and Mac agree but the IronCalc-imported golden in tests/oracle/golden/ironcalc/ does not. Each case here is the citation cited by an entry in tests/ironcalc_divergence.yaml. The IronCalc test driver already includes its own goldens; this suite exists to anchor the Mac probe values that justify each `prefer: mac` divergence.\n",
+  "environment": {
+    "excel_version": "16.108.2",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-01T20:19:37Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "tan_neg_three_pi_over_two",
+      "formula": "=TAN(-3*PI()/2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5443746451065123.0
+      }
+    },
+    {
+      "id": "tan_neg_pi_over_two",
+      "formula": "=TAN(-PI()/2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.633123935319537e+16
+      }
+    },
+    {
+      "id": "tan_pi_over_two",
+      "formula": "=TAN(PI()/2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.633123935319537e+16
+      }
+    },
+    {
+      "id": "tan_three_pi_over_two",
+      "formula": "=TAN(3*PI()/2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5443746451065123.0
+      }
+    },
+    {
+      "id": "sum_a2_to_choose_third_with_blank_a2",
+      "formula": "=SUM(A2:CHOOSE(3,A3,A4,A5))",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    }
+  ]
+}

@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Sheet1",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:55:14Z"
+    "generated_at": "2026-05-01T20:20:44Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -53,10 +53,7 @@
           "value": 2.0
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 10.0
-      }
+      "skipped": "SUM(A2:CHOOSE(3,A3,A4,A5)) with A2 blank; Mac=9 (0+2+3+4), IronCalc golden=10 (likely missing A2 from fixture import). Probe: ironcalc_drift_probes (sum_a2_to_choose_third_with_blank_a2)."
     },
     {
       "id": "B8",
