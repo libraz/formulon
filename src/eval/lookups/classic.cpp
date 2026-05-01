@@ -20,6 +20,7 @@
 #include "eval/function_registry.h"
 #include "eval/jp_fold.h"
 #include "eval/lazy_impls.h"
+#include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -46,10 +47,27 @@ enum class LookupAxis : std::uint8_t { Column, Row };
 // mismatch rather than the `#VALUE!` that a strict range-only resolver
 // returns. Text scalars remain `#VALUE!` per Excel (`HLOOKUP(M,"Nothing",1)`
 // -> `#VALUE!`), and errors from the node evaluation propagate unchanged.
+//
+// The Text-vs-Number/Bool distinction is enforced AFTER `resolve_range_arg`
+// returns: that helper's generic-scalar fallback wraps any scalar (including
+// Text) into a 1x1 table, but Excel rejects a non-numeric/non-bool scalar
+// table_array with `#VALUE!`. We re-inspect the resolved 1x1 cell when the
+// caller AST is not range-shaped (Ref / RangeOp / SpillRef / OFFSET / CHOOSE /
+// INDIRECT / IF) — those shapes legitimately produce a 1x1 Text cell and must
+// not be downgraded to `#VALUE!`.
 bool resolve_table_array(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
                          std::uint32_t* out_rows, std::uint32_t* out_cols) {
   if (resolve_range_arg(arg_node, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols)) {
+    // Reject scalar Text table_array: `=HLOOKUP(M,"Nothing",1)` -> `#VALUE!`.
+    // A 1x1 Text cell that came from a real Ref / RangeOp / SpillRef or a
+    // reference-producing call (OFFSET/CHOOSE/INDIRECT/IF) is allowed because
+    // those nodes legitimately produce range-shaped values.
+    if (*out_rows == 1U && *out_cols == 1U && !out_cells->empty() && out_cells->front().kind() == ValueKind::Text &&
+        arg_node.kind() != parser::NodeKind::Ref && !is_range_shaped_ast(arg_node)) {
+      *out_err_code = ErrorCode::Value;
+      return false;
+    }
     return true;
   }
   if (*out_err_code != ErrorCode::Value) {
@@ -183,9 +201,16 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
       cmp = strings::case_insensitive_compare(fold_jp_text(cell.as_text(), /*fold_fullwidth_digits=*/false),
                                               fold_jp_text(lookup_value.as_text(), /*fold_fullwidth_digits=*/false));
       comparable = true;
-    } else if ((lookup_value.is_number() || lookup_value.is_blank()) && (cell.is_number() || cell.is_blank())) {
+    } else if ((lookup_value.is_number() || lookup_value.is_blank()) && cell.is_number()) {
+      // Blank cells in the scanned axis are NOT treated as numeric 0 in
+      // VLOOKUP/HLOOKUP approximate mode: Mac Excel returns `#N/A` for
+      // `=HLOOKUP(<blank>, $C$1:$G$6, 1)` even when the first row contains
+      // a blank cell at the matched offset, because blanks aren't part of
+      // the comparable ordering. Same rule when the lookup_value itself is
+      // blank — only real numeric cells participate in the approximate
+      // ranking, mirroring Mac Excel's empirical behaviour.
       const double lv = lookup_value.is_blank() ? 0.0 : lookup_value.as_number();
-      const double cv = cell.is_blank() ? 0.0 : cell.as_number();
+      const double cv = cell.as_number();
       cmp = cmp_numeric(cv, lv);
       comparable = true;
     } else if (lookup_value.is_boolean() && cell.is_boolean()) {
@@ -289,8 +314,15 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (!row_num_exp) {
     return Value::error(row_num_exp.error());
   }
-  const double row_raw = std::floor(row_num_exp.value());
+  const double row_orig = row_num_exp.value();
+  const double row_raw = std::floor(row_orig);
   if (row_raw < 0.0) {
+    return Value::error(ErrorCode::Value);
+  }
+  // Fractional sub-1 values (`row_num` in (0, 1)) floor to 0 but Excel rejects
+  // them with #VALUE!. The "whole-vector" / "whole-array" sentinel meaning of
+  // row_num == 0 only applies when the user explicitly passed 0.
+  if (row_raw == 0.0 && row_orig > 0.0) {
     return Value::error(ErrorCode::Value);
   }
   const auto row_idx = static_cast<std::uint32_t>(row_raw);
@@ -306,8 +338,13 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     if (!col_num_exp) {
       return Value::error(col_num_exp.error());
     }
-    const double col_raw = std::floor(col_num_exp.value());
+    const double col_orig = col_num_exp.value();
+    const double col_raw = std::floor(col_orig);
     if (col_raw < 0.0) {
+      return Value::error(ErrorCode::Value);
+    }
+    // Symmetric guard for sub-1 fractional col_num.
+    if (col_raw == 0.0 && col_orig > 0.0) {
       return Value::error(ErrorCode::Value);
     }
     col_idx = static_cast<std::uint32_t>(col_raw);
