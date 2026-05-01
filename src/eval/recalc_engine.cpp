@@ -254,11 +254,12 @@ Expected<RecalcStats, Error> RecalcEngine::recalc(Workbook& workbook, const Func
           // only on logic bugs but we degrade gracefully.
           return Value::blank();
         }
-        // Reset the bump arena per-evaluation; the previous iteration's
-        // arena-owned text payloads have already been written into the
-        // sheet's `cached_value` (which currently retains the pointer —
-        // see the TODO note further down for the cross-pass text-storage
-        // promotion).
+        // Reset the bump arena per-evaluation. The previous iteration's
+        // committed Text scalars survive this reset because
+        // `Sheet::set_cell_cached_value` deep-copies Text payloads into
+        // each cell's own `cached_text_owned` storage; Array results are
+        // similarly deep-copied into `SpillRegion::owned_strings` by
+        // `Sheet::commit_spill`.
         arena_->reset();
         return evaluate_cell(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_,
                              /*iterative_mode=*/true);
@@ -321,15 +322,16 @@ Expected<RecalcStats, Error> RecalcEngine::recalc(Workbook& workbook, const Func
       continue;
     }
     // Reset the per-pass arena before each evaluate so the bump allocator
-    // does not grow without bound across cells. Array results are deep-
-    // copied into sheet-owned storage by `Sheet::commit_spill` (via
-    // `EvalContext::dispatch_array_result`), so the spill table survives
-    // the reset.
-    //
-    // TODO: scalar Text results currently reference arena-owned bytes;
-    // they survive within the recalc pass but not across it. Promote
-    // them into a sheet-owned string store before the next iterative
-    // solver bundle wires in cross-pass cached values.
+    // does not grow without bound across cells. Both result shapes
+    // already survive this reset:
+    //   * Array results are deep-copied into sheet-owned storage by
+    //     `Sheet::commit_spill` (driven by
+    //     `EvalContext::dispatch_array_result`), keeping the spill table
+    //     independent of the arena.
+    //   * Scalar Text results are deep-copied into the destination cell's
+    //     `Cell::cached_text_owned` by `Sheet::set_cell_cached_value` on
+    //     the write below, so the cached `string_view` does not dangle
+    //     when the next cell's evaluation resets the arena.
     arena_->reset();
     Value result = evaluate_cell(workbook, sheet, *cell_data, only.row, only.col, registry, *arena_);
     sheet.set_cell_cached_value(only.row, only.col, result);

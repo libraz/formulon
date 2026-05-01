@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -159,7 +160,35 @@ void Sheet::set_cell_cached_value(std::uint32_t row, std::uint32_t col, Value v)
   // synchronised with `commit_spill` (which sets it to `cells[0]`).
   std::vector<Cell>& row_cells = rows_[row];
   Cell& slot = EnsureSlot(row_cells, col);
-  slot.cached_value = v;
+
+  if (v.is_text()) {
+    // Deep-copy the Text payload into a heap-stable `std::string` owned by
+    // the Cell so the stored `cached_value` no longer references whatever
+    // buffer the caller used (typically the recalc engine's per-evaluation
+    // `Arena`, which is about to be reset). Allocating a fresh
+    // `unique_ptr<std::string>` per write keeps the bytes at a fixed heap
+    // address that survives the Cell being relocated by `Sheet`'s row-
+    // vector growth and row-map rehash paths — a bare `std::string` would
+    // relocate its inline (SSO) bytes on every Cell move and dangle the
+    // `string_view` we are about to store.
+    //
+    // Construct from `v.as_text()` directly: even when the caller passes
+    // the cell's own current cached text back through this API, the new
+    // `std::string` allocates its own buffer before we replace
+    // `cached_text_owned`, so the source bytes remain valid for the
+    // duration of the construction.
+    auto owned = std::make_unique<std::string>(v.as_text());
+    const std::string_view view(*owned);
+    slot.cached_text_owned = std::move(owned);
+    slot.cached_value = Value::text(view);
+  } else {
+    // Non-Text path: keep the trivial assignment. The previous
+    // `cached_text_owned` (if any) is intentionally retained: the new
+    // `cached_value` does not reference it, and freeing it eagerly would
+    // produce no visible win. The next Text write replaces the pointer
+    // unconditionally.
+    slot.cached_value = v;
+  }
 }
 
 const Cell* Sheet::cell_at(std::uint32_t row, std::uint32_t col) const noexcept {

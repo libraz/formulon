@@ -14,6 +14,7 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   table_boundary_test.cpp
   workbook_iterative_test.cpp
   workbook_recalc_test.cpp
+  recalc_text_lifetime_test.cpp
 )
 
 add_executable(formulon_integration_tests ${FORMULON_INTEGRATION_TEST_SOURCES})

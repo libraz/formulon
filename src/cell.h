@@ -13,6 +13,7 @@
 #define FORMULON_CELL_H_
 
 #include <cstdint>
+#include <memory>
 #include <string>
 
 #include "value.h"
@@ -36,12 +37,39 @@ struct CellAddress {
 /// `formula_text` is the raw formula string starting with `=` (empty when
 /// the cell holds a literal). `cached_value` is the cell's effective Value:
 /// for a literal cell, this *is* the value; for a formula cell, it is the
-/// most recently computed result (populated lazily by the evaluator in a
-/// follow-up increment — for now formula cells are stored with
-/// `cached_value = Value::blank()` until evaluation is wired up).
+/// most recently computed result populated by the evaluator.
+///
+/// Lifetime contract for Text payloads:
+///
+///   * Values committed via `Sheet::set_cell_cached_value` (the recalc
+///     engine's post-evaluation write path) are deep-copied into
+///     `cached_text_owned` so the cell's `cached_value.as_text()` view
+///     survives across the per-evaluation arena resets the recalc engine
+///     performs between cells. Without this re-interning, a Text scalar
+///     produced by one cell's formula would dangle the moment the engine
+///     reset its bump arena before evaluating the next cell.
+///
+///   * Values committed via `Sheet::set_cell_value` keep the caller-owns
+///     contract: the OOXML reader, for example, points the `string_view` at
+///     the workbook-scoped shared string table and that storage outlives
+///     the cell. `cached_text_owned` is left untouched on this path.
+///
+/// `cached_text_owned` is a `unique_ptr<std::string>` rather than a bare
+/// `std::string` so the bytes live at a heap-stable address that survives
+/// Cell moves. `Sheet`'s row-sparse cell store routinely moves Cells when
+/// row vectors grow or the row map rehashes; a bare `std::string` would
+/// relocate its inline (SSO) bytes on every such move and dangle the
+/// `cached_value`'s internal `string_view`.
 struct Cell {
   std::string formula_text;
   Value cached_value = Value::blank();
+  /// Backing storage for `cached_value` when it is a Text re-interned by
+  /// `Sheet::set_cell_cached_value`. Null when the cached value was never
+  /// re-interned (e.g. a Text supplied through `Sheet::set_cell_value`
+  /// where the caller-owns contract applies, or any non-Text value). The
+  /// pointer is heap-stable so the `cached_value.as_text()` view does not
+  /// dangle when the owning Cell is moved by the `Sheet` storage layer.
+  std::unique_ptr<std::string> cached_text_owned;
 };
 
 }  // namespace formulon

@@ -150,6 +150,15 @@ class Sheet {
   /// created as a plain literal (empty `formula_text`, `cached_value = v`),
   /// growing the row vector exactly as `set_cell_value` would.
   ///
+  /// Text-payload lifetime: when `v.is_text()`, the bytes are deep-copied
+  /// into the cell's own `cached_text_owned` storage and the stored
+  /// `cached_value` is rewritten to reference that internal buffer. This
+  /// is what lets the recalc engine reset its per-evaluation `Arena`
+  /// between cells without dangling any Text scalar previously committed
+  /// here. The `set_cell_value` path retains the caller-owns lifetime
+  /// contract (used by the OOXML reader where the SST owns the bytes and
+  /// outlives the cell).
+  ///
   /// Unlike `set_cell_value`, this method does NOT eagerly clear any
   /// spill region covering `(row, col)`: cached-value updates are not
   /// considered structural mutations of the cell, so phantoms continue to
