@@ -35,6 +35,7 @@
 #include "eval/matrix_ops_lazy.h"
 #include "eval/name_env.h"
 #include "eval/name_env_resolve.h"
+#include "eval/phonetic_lazy.h"
 #include "eval/range_args.h"
 #include "eval/rank_lazy.h"
 #include "eval/reference_lazy.h"
@@ -242,6 +243,10 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"PERCENTRANK", &eval_percentrank_inc_lazy},
     {"PERCENTRANK.EXC", &eval_percentrank_exc_lazy},
     {"PERCENTRANK.INC", &eval_percentrank_inc_lazy},
+    // PHONETIC reads the cell's <rPh> annotation off the un-evaluated
+    // Ref AST; the eager dispatcher would flatten the argument to a
+    // Value before the impl could consult `Cell::phonetic_text`.
+    {"PHONETIC", &eval_phonetic_lazy},
     {"PIVOTBY", &eval_pivotby_lazy},
     {"PROB", &eval_prob_lazy},
     {"RANK", &eval_rank_eq_lazy},

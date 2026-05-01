@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "eval/utf8_length.h"
 #include "io/xml_escape.h"
 #include "sheet.h"
 #include "value.h"
@@ -83,7 +84,17 @@ void AppendErrorCellXml(std::string& out, std::string_view addr, ErrorCode code)
 // On entry, `out` already contains '<c r="ADDR"' (without the closing
 // quote or '>'). This function emits the closing quote, any type
 // attribute, the body, and the closing '</c>'.
-void AppendLiteralCellBody(std::string& out, const Value& value) {
+//
+// `phonetic` is the kana annotation associated with a Text-valued cell
+// (empty when none). When non-empty AND `value` is Text, the `<is>`
+// block expands from `<is><t>{text}</t></is>` to
+// `<is><t>{text}</t><rPh sb="0" eb="N"><t>{kana}</t></rPh></is>` where
+// `N` is the UTF-16 code-unit count of `value.as_text()`. The original
+// document may have carried multiple `<rPh>` blocks (one per kanji
+// span); we collapse them to a single block on round-trip because
+// PHONETIC()'s observable behaviour (the concatenated kana) is
+// preserved without per-span boundaries.
+void AppendLiteralCellBody(std::string& out, const Value& value, std::string_view phonetic) {
   if (value.is_number()) {
     out.append("\">");
     out.append("<v>");
@@ -100,7 +111,16 @@ void AppendLiteralCellBody(std::string& out, const Value& value) {
   if (value.is_text()) {
     out.append("\" t=\"inlineStr\"><is><t>");
     AppendXmlEscaped(out, value.as_text());
-    out.append("</t></is></c>");
+    out.append("</t>");
+    if (!phonetic.empty()) {
+      const std::uint32_t eb = formulon::eval::utf16_units_in(value.as_text());
+      out.append("<rPh sb=\"0\" eb=\"");
+      out.append(std::to_string(eb));
+      out.append("\"><t>");
+      AppendXmlEscaped(out, phonetic);
+      out.append("</t></rPh>");
+    }
+    out.append("</is></c>");
     return;
   }
   if (value.is_error()) {
@@ -212,10 +232,12 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
 
   // Literal-value cell. AppendLiteralCellBody completes the opening tag
   // (closing quote + optional type attribute), writes the body, and
-  // closes the </c>.
+  // closes the </c>. The cell's `phonetic_text` is forwarded so any
+  // <rPh> annotation captured at read time round-trips back through
+  // the inline-string block.
   out.append("<c r=\"");
   out.append(addr);
-  AppendLiteralCellBody(out, cell.cached_value);
+  AppendLiteralCellBody(out, cell.cached_value, cell.phonetic_text);
   return true;
 }
 

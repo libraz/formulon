@@ -843,6 +843,15 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
         return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared-string index out of range", std::move(ctx));
       }
       wb.sheet(i).set_cell_cached_value(row, col, Value::text(sst.entries[idx]));
+      // Propagate any <rPh> annotation from the SST entry onto the cell
+      // so PHONETIC() can surface the kana. The SST reader keeps
+      // `phonetic_for_entries` parallel to `entries`, with empty views
+      // for unannotated entries; we only commit a non-empty annotation
+      // to avoid allocating into `Cell::phonetic_text` for the common
+      // unannotated case.
+      if (idx < sst.phonetic_for_entries.size() && !sst.phonetic_for_entries[idx].empty()) {
+        wb.sheet(i).set_cell_phonetic(row, col, sst.phonetic_for_entries[idx]);
+      }
       ++pending_sst_count;
     }
   }

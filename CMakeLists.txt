@@ -224,6 +224,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/regex_lazy.cpp
   src/eval/hypothesis_lazy.cpp
   src/eval/info_lazy.cpp
+  src/eval/phonetic_lazy.cpp
   src/eval/lookups/classic.cpp
   src/eval/lookups/xlookup.cpp
   src/c_api/formulon_c.cpp

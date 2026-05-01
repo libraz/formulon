@@ -1,19 +1,25 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
 // Tests for the service-stub and no-infrastructure stub family:
-// IMAGE, RTD, TRANSLATE, DETECTLANGUAGE, COPILOT, PHONETIC,
-// GETPIVOTDATA, ISOMITTED. Each returns a deterministic Excel-visible
-// surface (see `src/eval/builtins/service_stubs.cpp` for the rationale);
-// all except ISOMITTED ride the eager dispatch path so an argument
-// error short-circuits before the fixed return fires. ISOMITTED is
-// registered with `propagate_errors = false` so it can inspect any
-// argument shape (including errors) and report "present". The tests
-// here pin:
+// IMAGE, RTD, TRANSLATE, DETECTLANGUAGE, COPILOT, GETPIVOTDATA,
+// PHONETIC (lazy), ISOMITTED (lazy). Each returns a deterministic
+// Excel-visible surface (see `src/eval/builtins/service_stubs.cpp` for
+// the rationale on the eager stubs; `phonetic_lazy.cpp` for the lazy
+// PHONETIC contract). The eager stubs ride `propagate_errors = true`
+// so an error argument short-circuits before the fixed return fires.
+// PHONETIC is a lazy form that reads `Cell::phonetic_text` off the
+// un-evaluated Reference AST and falls through to a value-based
+// passthrough surface (text -> text, blank -> "", non-text -> #N/A,
+// errors propagate). ISOMITTED is registered as a lazy form so it can
+// inspect any argument shape (including errors) and report "present".
+// The tests here pin:
 //
-//   * the nominal registry entries exist (registry look-up succeeds);
-//   * each stub returns its documented fixed surface on valid inputs;
-//   * an error argument propagates instead of the stub's nominal
-//     surface (except for ISOMITTED, where errors must NOT propagate).
+//   * the nominal registry entries exist for every eager stub;
+//   * each eager stub returns its documented fixed surface on valid
+//     inputs and propagates argument errors;
+//   * PHONETIC's non-Ref passthrough surface (the Ref path lives in
+//     `phonetic_lazy_test.cpp` because it requires a workbook fixture);
+//   * ISOMITTED's outside-lambda surface (errors must NOT propagate).
 
 #include <string_view>
 
@@ -45,21 +51,6 @@ Value EvalSource(std::string_view src) {
   return evaluate(*root, eval_arena);
 }
 
-// Invokes a registered function impl directly with a single argument.
-// Used for cases that cannot be expressed in formula syntax (notably the
-// Blank scalar, which has no literal form). Mirrors the helper in
-// `tests/unit/eval/builtins_info_test.cpp`.
-Value CallSingle(std::string_view name, const Value& arg) {
-  static thread_local Arena arena;
-  arena.reset();
-  const FunctionDef* def = default_registry().lookup(name);
-  EXPECT_NE(def, nullptr) << "function not registered: " << name;
-  if (def == nullptr) {
-    return Value::error(ErrorCode::Name);
-  }
-  return def->impl(&arg, 1u, arena);
-}
-
 // ---------------------------------------------------------------------------
 // Registry pin
 // ---------------------------------------------------------------------------
@@ -71,8 +62,11 @@ TEST(BuiltinsServiceStubRegistry, NamesRegistered) {
   EXPECT_NE(reg.lookup("TRANSLATE"), nullptr);
   EXPECT_NE(reg.lookup("DETECTLANGUAGE"), nullptr);
   EXPECT_NE(reg.lookup("COPILOT"), nullptr);
-  EXPECT_NE(reg.lookup("PHONETIC"), nullptr);
   EXPECT_NE(reg.lookup("GETPIVOTDATA"), nullptr);
+  // PHONETIC is intentionally not in the eager registry: it is a lazy
+  // form (see `eval_phonetic_lazy`) so it can read the referenced
+  // cell's `<rPh>` annotation off the un-evaluated Reference AST.
+  EXPECT_EQ(reg.lookup("PHONETIC"), nullptr);
   // ISOMITTED is intentionally not in the eager registry: it is a lazy
   // form (see `eval_isomitted_lazy`) so it can inspect the argument's
   // AST shape and the active NameEnv's omitted flag.
@@ -169,13 +163,16 @@ TEST(BuiltinsServiceStubCopilot, ArgumentErrorPropagates) {
 }
 
 // ---------------------------------------------------------------------------
-// PHONETIC - input text passthrough / #N/A on non-text
+// PHONETIC - non-Ref passthrough surface
 // ---------------------------------------------------------------------------
 //
-// Mac Excel reads the IME-typed kana from the OOXML <rPh> annotation and
-// falls back to the surface text when no annotation is present. Formulon
-// does not yet parse <rPh>, so every cell is unannotated and we always
-// return the surface text (or #N/A for non-text shapes that Mac rejects).
+// PHONETIC is a lazy form (see `eval_phonetic_lazy`). The Ref path —
+// where the impl reads `Cell::phonetic_text` off the un-evaluated
+// Reference AST — is exercised in `phonetic_lazy_test.cpp` because it
+// requires a workbook fixture with annotated cells. The cases below
+// cover the non-Ref arm: literal text passes through unchanged, blanks
+// surface as "", numeric / boolean values surface #N/A, and an error
+// argument propagates verbatim.
 
 TEST(BuiltinsServiceStubPhonetic, TextInputReturnsSameText) {
   const Value v = EvalSource("=PHONETIC(\"hello\")");
@@ -199,15 +196,6 @@ TEST(BuiltinsServiceStubPhonetic, BoolInputReturnsNA) {
   const Value v = EvalSource("=PHONETIC(TRUE)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::NA);
-}
-
-TEST(BuiltinsServiceStubPhonetic, BlankInputReturnsEmpty) {
-  // The formula grammar has no Blank literal (and IF(FALSE, "x") yields
-  // boolean FALSE rather than Blank), so invoke the impl directly to
-  // exercise the Blank branch.
-  const Value v = CallSingle("PHONETIC", Value::blank());
-  ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "");
 }
 
 TEST(BuiltinsServiceStubPhonetic, ArgumentErrorPropagates) {

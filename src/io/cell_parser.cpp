@@ -165,7 +165,9 @@ std::uint32_t ParseColumnLetters(std::string_view text, std::size_t* i) {
 /// Walks `is_node`'s descendants and concatenates every `<t>` text node
 /// payload into `out`, in document order. `<r><t>...</t></r>` rich-text
 /// runs are flattened: this slice does not preserve formatting because
-/// the workbook model has no rich-text storage yet.
+/// the workbook model has no rich-text storage yet. `<rPh>` (phonetic
+/// guides) are intentionally skipped; `ConcatInlinePhoneticText`
+/// captures them separately.
 void ConcatInlineStringText(const pugi::xml_node& is_node, std::string& out) {
   // Direct `<t>` (the simple inlineStr shape).
   for (pugi::xml_node t = is_node.child("t"); t; t = t.next_sibling("t")) {
@@ -176,6 +178,19 @@ void ConcatInlineStringText(const pugi::xml_node& is_node, std::string& out) {
   for (pugi::xml_node r = is_node.child("r"); r; r = r.next_sibling("r")) {
     for (pugi::xml_node rt = r.child("t"); rt; rt = rt.next_sibling("t")) {
       out.append(rt.text().get());
+    }
+  }
+}
+
+/// Walks every `<rPh>` direct child of `is_node` and concatenates their
+/// `<t>` descendants into `out` in document order. Each `<rPh>` block
+/// carries an `sb`/`eb` (start-byte / end-byte) span attribute, which is
+/// not preserved here: the engine surfaces only the concatenated kana
+/// through PHONETIC, so spans are unobservable at this layer.
+void ConcatInlinePhoneticText(const pugi::xml_node& is_node, std::string& out) {
+  for (pugi::xml_node rph = is_node.child("rPh"); rph; rph = rph.next_sibling("rPh")) {
+    for (pugi::xml_node t = rph.child("t"); t; t = t.next_sibling("t")) {
+      out.append(t.text().get());
     }
   }
 }
@@ -426,6 +441,21 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
   out.row = row;
   out.col = col;
   out.formula = std::move(formula);
+
+  // Capture <rPh> phonetic kana from the inline-string block (when
+  // present). SST-referenced cells (t="s") carry their phonetic on the
+  // matching <si> in xl/sharedStrings.xml; that path is plumbed through
+  // `SharedStringTable::phonetic_for_entries` instead. We append into
+  // the same caller-owned `text_storage` deque used for the cell's
+  // surface text, preserving the pointer-stability lifetime contract.
+  if (is_node) {
+    std::string phonetic_buf;
+    ConcatInlinePhoneticText(is_node, phonetic_buf);
+    if (!phonetic_buf.empty()) {
+      text_storage.emplace_back(std::move(phonetic_buf));
+      out.phonetic_text = text_storage.back();
+    }
+  }
   return out;
 }
 

@@ -70,6 +70,14 @@ struct Cell {
   /// pointer is heap-stable so the `cached_value.as_text()` view does not
   /// dangle when the owning Cell is moved by the `Sheet` storage layer.
   std::unique_ptr<std::string> cached_text_owned;
+  /// Kana annotation associated with a Text cell, populated from the OOXML
+  /// `<rPh>` markers attached to the cell's source `<si>` (SST entry) or
+  /// `<is>` (inline string). Empty when the cell carries no annotation.
+  /// `PHONETIC` reads this field directly via the lazy dispatch path; the
+  /// writer emits it back as `<rPh sb="0" eb="N">` inside the `<is>` block
+  /// on save. The annotation is stored as a single concatenated kana string
+  /// (multi-block `<rPh>` runs collapse to one block on round-trip).
+  std::string phonetic_text;
 };
 
 }  // namespace formulon

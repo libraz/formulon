@@ -24,25 +24,23 @@
 // No-infrastructure stubs (the supporting Formulon subsystem isn't built
 // out yet, so any answer the function might give is structurally absent):
 //
-//   * PHONETIC        -> input text passthrough / #N/A on non-text.
-//                        Mac Excel reads the IME-typed kana from the
-//                        OOXML <rPh> annotation block and falls back to
-//                        the surface text when no annotation is present.
-//                        Formulon does not yet parse <rPh> nor surface
-//                        phonetic metadata through `Value`, so every
-//                        cell is "unannotated" by construction and we
-//                        always return the input text. Non-text inputs
-//                        return #N/A to match Mac's strict-text rule.
 //   * GETPIVOTDATA    -> fixed #REF!   (no pivot tables yet, so no
 //                        field/item lookup can ever resolve; #REF!
 //                        matches Mac when the lookup target is invalid).
 //
-// All host-service stubs and PHONETIC / GETPIVOTDATA ride the eager dispatch
+// All host-service stubs and GETPIVOTDATA ride the eager dispatch
 // path (`accepts_ranges = false`, default `propagate_errors = true`) so an
 // error argument short-circuits before the fixed return fires -- this matches
 // the WEBSERVICE / PY stubs in `src/eval/builtins/web.cpp` and keeps the
 // surface consistent with real functions for formulas that propagate errors
 // through service calls.
+//
+// PHONETIC is NOT a stub. It is a real lazy form implemented in
+// `eval_phonetic_lazy` (see `phonetic_lazy.cpp`) and wired through
+// `tree_walker.cpp`'s lazy dispatch table. The lazy form reads the
+// referenced cell's `<rPh>` annotation directly off the un-evaluated
+// Reference AST; the eager dispatcher would flatten the argument to a
+// Value before the impl could consult `Cell::phonetic_text`.
 //
 // ISOMITTED is NOT a stub. It is a real lazy special form implemented in
 // `eval_isomitted_lazy` (see `special_forms_lazy.cpp`) and registered through
@@ -98,29 +96,6 @@ Value Copilot(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) 
   return Value::error(ErrorCode::Name);
 }
 
-// PHONETIC reads the IME-typed kana from the OOXML <rPh> annotation
-// block on the cell's rich text. Formulon's OOXML reader does not yet
-// surface <rPh> annotations into the `Value` model, so every cell is
-// effectively unannotated. Mac Excel returns the surface text unchanged
-// for unannotated text cells, returns #N/A for non-text references
-// (numbers, bools, dates), and returns the empty string for blanks.
-// We match that surface today; once <rPh> is parsed and threaded
-// through the value model, this stub gets replaced with a real lookup
-// against the annotation table.
-Value Phonetic(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  const Value& v = args[0];
-  if (v.is_text()) {
-    return v;
-  }
-  if (v.is_blank()) {
-    return Value::text(arena.intern(""));
-  }
-  // Number / Bool / Date / Array / Ref / Lambda all surface #N/A on
-  // Mac, matching the strict-text rule. Errors are short-circuited by
-  // the dispatcher (`propagate_errors = true`) and never reach here.
-  return Value::error(ErrorCode::NA);
-}
-
 // GETPIVOTDATA looks up a measure value inside a pivot table by
 // field/item key. Formulon does not yet implement pivot tables, so no
 // lookup can ever resolve, and #REF! is the surface Mac Excel returns
@@ -147,14 +122,16 @@ void register_service_stub_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"DETECTLANGUAGE", 1u, 1u, &DetectLanguage});
   // COPILOT(prompt, [context...]) -- variadic context cells.
   registry.register_function(FunctionDef{"COPILOT", 1u, 255u, &Copilot});
-  // PHONETIC(reference) -- exact arity 1. Default `propagate_errors = true`
-  // so an error argument short-circuits before the text/non-text branch.
-  registry.register_function(FunctionDef{"PHONETIC", 1u, 1u, &Phonetic});
   // GETPIVOTDATA(data_field, pivot_table, [field1, item1, ...]) -- min 2
   // (data_field + pivot anchor required), max kVariadic (field/item pairs
   // are optional and arbitrary in count). Default `propagate_errors = true`
   // so an error in any argument surfaces instead of the fixed #REF!.
   registry.register_function(FunctionDef{"GETPIVOTDATA", 2u, kVariadic, &GetPivotData});
+  // PHONETIC(reference) is registered through the lazy dispatch table in
+  // `tree_walker.cpp` (entry: PHONETIC -> eval_phonetic_lazy). The lazy
+  // path reads the referenced cell's `<rPh>` annotation off the
+  // un-evaluated Reference AST; the eager registry would flatten the
+  // argument to a Value before the impl could consult phonetic metadata.
   // ISOMITTED(argument) is registered through the lazy dispatch table in
   // `tree_walker.cpp` (entry: ISOMITTED -> eval_isomitted_lazy). The lazy
   // path inspects the argument's AST shape and the active `NameEnv`'s

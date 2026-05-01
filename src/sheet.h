@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -166,6 +167,22 @@ class Sheet {
   /// commits any new spill before reaching this method via
   /// `EvalContext::dispatch_array_result`.
   void set_cell_cached_value(std::uint32_t row, std::uint32_t col, Value v);
+
+  /// Stores a phonetic-kana annotation on the cell at `(row, col)`.
+  ///
+  /// Used by the OOXML reader after a Text cell is committed to copy the
+  /// `<rPh>` payload from the cell's source `<si>` (SST) or `<is>`
+  /// (inline string) into the cell's `phonetic_text` field. PHONETIC
+  /// reads this field directly via the lazy dispatch path; the writer
+  /// emits it back as `<rPh>` inside the `<is>` block on save.
+  ///
+  /// If the cell does not yet exist at `(row, col)` it is created as a
+  /// default-constructed slot (empty `formula_text`, blank
+  /// `cached_value`); growth and bounds semantics match
+  /// `set_cell_value`. Passing an empty `phonetic` clears any previous
+  /// annotation. This method does NOT touch the cell's stored value or
+  /// formula, and does NOT eagerly clear any covering spill region.
+  void set_cell_phonetic(std::uint32_t row, std::uint32_t col, std::string_view phonetic);
 
   /// Returns a non-owning pointer to the cell at `(row, col)`, or `nullptr`
   /// when the coordinate is not in storage.

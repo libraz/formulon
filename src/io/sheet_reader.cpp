@@ -201,6 +201,13 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
       if (parsed.is_sst_index) {
         ctx.pending_sst_cells.emplace_back(parsed.row, parsed.col, parsed.sst_index);
       }
+
+      // Inline-string cells carry any <rPh> annotation directly on the
+      // cell parser's output. SST-referenced cells route their phonetic
+      // through the post-loop SST resolution pass, so we skip them here.
+      if (!parsed.is_sst_index && !parsed.phonetic_text.empty()) {
+        workbook.sheet(sheet_index).set_cell_phonetic(parsed.row, parsed.col, parsed.phonetic_text);
+      }
     }
   }
   return Expected<void, Error>::Ok();

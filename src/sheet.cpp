@@ -191,6 +191,22 @@ void Sheet::set_cell_cached_value(std::uint32_t row, std::uint32_t col, Value v)
   }
 }
 
+void Sheet::set_cell_phonetic(std::uint32_t row, std::uint32_t col, std::string_view phonetic) {
+  // Bounds checks are advisory: callers above this layer (OOXML reader)
+  // own coordinate validation. A debug assert catches programming errors
+  // without imposing a release-mode branch.
+  assert(row < kMaxRows && col < kMaxCols);
+
+  // Phonetic-annotation writes are not structural mutations of the cell
+  // value — they parallel the surface text. Skip the spill-invalidation
+  // dance that `set_cell_value` performs; the OOXML reader writes the
+  // surface value first via `set_cell_cached_value`, and only the
+  // post-hoc phonetic copy lands here.
+  std::vector<Cell>& row_cells = rows_[row];
+  Cell& slot = EnsureSlot(row_cells, col);
+  slot.phonetic_text.assign(phonetic.begin(), phonetic.end());
+}
+
 const Cell* Sheet::cell_at(std::uint32_t row, std::uint32_t col) const noexcept {
   const auto it = rows_.find(row);
   if (it == rows_.end()) {

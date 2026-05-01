@@ -105,10 +105,11 @@ TEST(SstReader, RichTextRunsConcatenateInOrder) {
   EXPECT_EQ(result_or.value().entries[0], "foobarbaz");
 }
 
-TEST(SstReader, PhoneticGuidesAreIgnored) {
+TEST(SstReader, PhoneticGuidesAreNotFoldedIntoSurfaceText) {
   // <si><t>kanji</t><rPh sb="0" eb="2"><t>furigana</t></rPh></si>
-  // The phonetic guide must be skipped: we keep only the base "kanji"
-  // payload. (The <t> inside <rPh> is intentionally NOT concatenated.)
+  // The phonetic guide must be skipped from the surface text; the
+  // entry's base text is just "kanji". The kana lands on the parallel
+  // `phonetic_for_entries` slot instead.
   std::string xml(kXmlDecl);
   xml.append("<sst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">");
   xml.append("<si>");
@@ -122,6 +123,103 @@ TEST(SstReader, PhoneticGuidesAreIgnored) {
   ASSERT_TRUE(static_cast<bool>(result_or));
   ASSERT_EQ(result_or.value().entries.size(), 1U);
   EXPECT_EQ(result_or.value().entries[0], "kanji");
+  ASSERT_EQ(result_or.value().phonetic_for_entries.size(), 1U);
+  EXPECT_EQ(result_or.value().phonetic_for_entries[0], "furigana");
+}
+
+// ---------------------------------------------------------------------------
+// Phonetic (<rPh>) capture
+// ---------------------------------------------------------------------------
+
+TEST(SstReader, EntryWithoutPhoneticHasEmptyParallelView) {
+  // A plain <si><t>...</t></si> entry should produce an empty
+  // `string_view` in the parallel `phonetic_for_entries` slot, keeping
+  // the index alignment invariant.
+  std::string xml(kXmlDecl);
+  xml.append("<sst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">");
+  xml.append("<si><t>plain</t></si>");
+  xml.append("</sst>");
+
+  std::deque<std::string> storage;
+  auto result_or = read_shared_strings(Bytes(xml), storage);
+  ASSERT_TRUE(static_cast<bool>(result_or));
+  ASSERT_EQ(result_or.value().entries.size(), 1U);
+  ASSERT_EQ(result_or.value().phonetic_for_entries.size(), 1U);
+  EXPECT_EQ(result_or.value().entries[0], "plain");
+  EXPECT_TRUE(result_or.value().phonetic_for_entries[0].empty());
+}
+
+TEST(SstReader, MultiBlockPhoneticConcatenatesInDocumentOrder) {
+  // Mac Excel emits one <rPh> per kanji span. The reader collapses every
+  // <rPh><t> payload on a single <si> into one concatenated kana string.
+  // <si><t>山田太郎</t>
+  //     <rPh sb="0" eb="2"><t>やまだ</t></rPh>
+  //     <rPh sb="2" eb="4"><t>たろう</t></rPh>
+  // </si>
+  std::string xml(kXmlDecl);
+  xml.append("<sst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">");
+  xml.append("<si>");
+  xml.append("<t>\xE5\xB1\xB1\xE7\x94\xB0\xE5\xA4\xAA\xE9\x83\x8E</t>");
+  xml.append("<rPh sb=\"0\" eb=\"2\"><t>\xE3\x82\x84\xE3\x81\xBE\xE3\x81\xA0</t></rPh>");
+  xml.append("<rPh sb=\"2\" eb=\"4\"><t>\xE3\x81\x9F\xE3\x82\x8D\xE3\x81\x86</t></rPh>");
+  xml.append("</si>");
+  xml.append("</sst>");
+
+  std::deque<std::string> storage;
+  auto result_or = read_shared_strings(Bytes(xml), storage);
+  ASSERT_TRUE(static_cast<bool>(result_or));
+  ASSERT_EQ(result_or.value().entries.size(), 1U);
+  ASSERT_EQ(result_or.value().phonetic_for_entries.size(), 1U);
+  EXPECT_EQ(result_or.value().entries[0], "\xE5\xB1\xB1\xE7\x94\xB0\xE5\xA4\xAA\xE9\x83\x8E");
+  // やまだ + たろう = やまだたろう
+  EXPECT_EQ(result_or.value().phonetic_for_entries[0],
+            "\xE3\x82\x84\xE3\x81\xBE\xE3\x81\xA0\xE3\x81\x9F\xE3\x82\x8D\xE3\x81\x86");
+}
+
+TEST(SstReader, RichTextWithPhoneticBothPathsConcatenate) {
+  // Mixed shape: <si> carries <r><t> rich-text runs for the surface
+  // text AND <rPh><t> for the kana. Both paths must concatenate
+  // independently in document order.
+  std::string xml(kXmlDecl);
+  xml.append("<sst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">");
+  xml.append("<si>");
+  xml.append("<r><rPr><b/></rPr><t>foo</t></r>");
+  xml.append("<r><t>bar</t></r>");
+  xml.append("<rPh sb=\"0\" eb=\"3\"><t>kana1</t></rPh>");
+  xml.append("<rPh sb=\"3\" eb=\"6\"><t>kana2</t></rPh>");
+  xml.append("</si>");
+  xml.append("</sst>");
+
+  std::deque<std::string> storage;
+  auto result_or = read_shared_strings(Bytes(xml), storage);
+  ASSERT_TRUE(static_cast<bool>(result_or));
+  ASSERT_EQ(result_or.value().entries.size(), 1U);
+  ASSERT_EQ(result_or.value().phonetic_for_entries.size(), 1U);
+  EXPECT_EQ(result_or.value().entries[0], "foobar");
+  EXPECT_EQ(result_or.value().phonetic_for_entries[0], "kana1kana2");
+}
+
+TEST(SstReader, MixedAnnotatedAndPlainEntriesPreserveAlignment) {
+  // Multiple <si> entries with and without <rPh> must stay index-aligned
+  // between `entries` and `phonetic_for_entries`.
+  std::string xml(kXmlDecl);
+  xml.append("<sst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">");
+  xml.append("<si><t>plain</t></si>");
+  xml.append("<si><t>kanji</t><rPh sb=\"0\" eb=\"2\"><t>kana</t></rPh></si>");
+  xml.append("<si><t>another</t></si>");
+  xml.append("</sst>");
+
+  std::deque<std::string> storage;
+  auto result_or = read_shared_strings(Bytes(xml), storage);
+  ASSERT_TRUE(static_cast<bool>(result_or));
+  ASSERT_EQ(result_or.value().entries.size(), 3U);
+  ASSERT_EQ(result_or.value().phonetic_for_entries.size(), 3U);
+  EXPECT_EQ(result_or.value().entries[0], "plain");
+  EXPECT_TRUE(result_or.value().phonetic_for_entries[0].empty());
+  EXPECT_EQ(result_or.value().entries[1], "kanji");
+  EXPECT_EQ(result_or.value().phonetic_for_entries[1], "kana");
+  EXPECT_EQ(result_or.value().entries[2], "another");
+  EXPECT_TRUE(result_or.value().phonetic_for_entries[2].empty());
 }
 
 TEST(SstReader, JapaneseUnicode) {

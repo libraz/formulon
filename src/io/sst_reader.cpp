@@ -4,11 +4,13 @@
 // public contract.
 //
 // The walker is intentionally conservative: it concatenates every `<t>`
-// descendant of a given `<si>` (whether direct or under `<r>`), drops
-// every `<rPh>` subtree, and reports `kIoSheetCorrupt` when a `<si>`
-// carries neither a direct `<t>` nor any `<r><t>` payload. Rich-text
-// formatting attributes on `<r>`/`<rPr>` are not preserved (this layer
-// is plain-text only, by design).
+// descendant of a given `<si>` (whether direct or under `<r>`) into the
+// surface text and reports `kIoSheetCorrupt` when a `<si>` carries
+// neither a direct `<t>` nor any `<r><t>` payload. Rich-text formatting
+// attributes on `<r>`/`<rPr>` are not preserved (this layer is plain-
+// text only, by design). Phonetic-guide subtrees (`<rPh>`) are walked
+// separately and their concatenated `<t>` payloads land in
+// `phonetic_for_entries[i]` so PHONETIC() can surface the kana.
 
 #include "io/sst_reader.h"
 
@@ -49,9 +51,27 @@ std::size_t AppendSiText(const pugi::xml_node& node, std::string& out) {
     }
   }
 
-  // <rPh> (phonetic guides) is intentionally ignored.
+  // <rPh> (phonetic guides) are walked by `AppendPhoneticText`; this
+  // helper deliberately skips them so the surface text in `entries[i]`
+  // never picks up kana annotations.
 
   return count;
+}
+
+/// Walks every `<rPh>` direct child of `si_node` and concatenates their
+/// `<t>` descendants into `out` in document order. Each `<rPh>` block
+/// looks like `<rPh sb="0" eb="2"><t>やまだ</t></rPh>`; multi-block
+/// annotations on a single `<si>` (one per kanji span) are flattened
+/// into a single kana string. This is lossy with respect to the sb/eb
+/// span boundaries, which is acceptable: PHONETIC()'s observable result
+/// is the concatenated kana, so the spans are unobservable through the
+/// engine's surface today.
+void AppendPhoneticText(const pugi::xml_node& si_node, std::string& out) {
+  for (pugi::xml_node rph = si_node.child("rPh"); rph; rph = rph.next_sibling("rPh")) {
+    for (pugi::xml_node t = rph.child("t"); t; t = t.next_sibling("t")) {
+      out.append(t.text().get());
+    }
+  }
 }
 
 }  // namespace
@@ -93,6 +113,22 @@ Expected<SharedStringTable, Error> read_shared_strings(const std::vector<std::ui
                         std::move(ctx));
     }
     table.entries.emplace_back(payload);
+
+    // Capture phonetic kana from any <rPh> children. We append into
+    // `text_storage` (which is the same pointer-stable deque used for
+    // `entries`) so the resulting `string_view` shares the same
+    // lifetime. When the entry has no <rPh> we skip the append entirely
+    // and store an empty `string_view{}` to keep the index alignment
+    // invariant `phonetic_for_entries.size() == entries.size()`.
+    text_storage.emplace_back();
+    std::string& phonetic_payload = text_storage.back();
+    AppendPhoneticText(si, phonetic_payload);
+    if (phonetic_payload.empty()) {
+      text_storage.pop_back();
+      table.phonetic_for_entries.emplace_back();
+    } else {
+      table.phonetic_for_entries.emplace_back(phonetic_payload);
+    }
   }
 
   return table;
