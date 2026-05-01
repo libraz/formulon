@@ -576,9 +576,9 @@ Expected<std::vector<std::uint8_t>, Error> BuildSingleTable() {
   table.sheet_index = 0U;
   table.header_row = true;
   table.totals_row = true;
-  table.columns.push_back(io::TableColumn{1U, "Region", "Total", ""});
-  table.columns.push_back(io::TableColumn{2U, "Q1", "", "sum"});
-  table.columns.push_back(io::TableColumn{3U, "Q2", "", "sum"});
+  table.columns.push_back(io::TableColumn{1U, "Region", "Total", "", ""});
+  table.columns.push_back(io::TableColumn{2U, "Q1", "", "sum", ""});
+  table.columns.push_back(io::TableColumn{3U, "Q2", "", "sum", ""});
   std::vector<io::TableMetadata> tables;
   tables.push_back(std::move(table));
   wb.set_tables(std::move(tables));
@@ -597,8 +597,8 @@ Expected<std::vector<std::uint8_t>, Error> BuildMultipleTables() {
   t1.display_name = "Tbl1";
   t1.ref = "A1:B3";
   t1.sheet_index = 0U;
-  t1.columns.push_back(io::TableColumn{1U, "X", "", ""});
-  t1.columns.push_back(io::TableColumn{2U, "Y", "", ""});
+  t1.columns.push_back(io::TableColumn{1U, "X", "", "", ""});
+  t1.columns.push_back(io::TableColumn{2U, "Y", "", "", ""});
   tables.push_back(std::move(t1));
 
   io::TableMetadata t2;
@@ -607,8 +607,8 @@ Expected<std::vector<std::uint8_t>, Error> BuildMultipleTables() {
   t2.display_name = "Tbl2";
   t2.ref = "A1:B2";
   t2.sheet_index = 0U;
-  t2.columns.push_back(io::TableColumn{1U, "P", "", ""});
-  t2.columns.push_back(io::TableColumn{2U, "Q", "", ""});
+  t2.columns.push_back(io::TableColumn{1U, "P", "", "", ""});
+  t2.columns.push_back(io::TableColumn{2U, "Q", "", "", ""});
   tables.push_back(std::move(t2));
 
   io::TableMetadata t3;
@@ -617,7 +617,7 @@ Expected<std::vector<std::uint8_t>, Error> BuildMultipleTables() {
   t3.display_name = "Tbl3";
   t3.ref = "A1:A2";
   t3.sheet_index = 1U;
-  t3.columns.push_back(io::TableColumn{1U, "Z", "", ""});
+  t3.columns.push_back(io::TableColumn{1U, "Z", "", "", ""});
   tables.push_back(std::move(t3));
 
   wb.set_tables(std::move(tables));
@@ -707,8 +707,8 @@ Expected<std::vector<std::uint8_t>, Error> BuildKitchenSink() {
   tab.display_name = "ComboTable";
   tab.ref = "A1:B2";
   tab.sheet_index = 0U;
-  tab.columns.push_back(io::TableColumn{1U, "Alpha", "", ""});
-  tab.columns.push_back(io::TableColumn{2U, "Beta", "", ""});
+  tab.columns.push_back(io::TableColumn{1U, "Alpha", "", "", ""});
+  tab.columns.push_back(io::TableColumn{2U, "Beta", "", "", ""});
   std::vector<io::TableMetadata> tables;
   tables.push_back(std::move(tab));
   wb.set_tables(std::move(tables));

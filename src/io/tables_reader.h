@@ -8,9 +8,10 @@
 // the relationship and hands the bytes to this reader along with the
 // owning sheet's workbook-relative index.
 //
-// Calculated-column formulas (`<calculatedColumnFormula>`) are NOT
-// expanded at this layer. Phase 4 will revisit when the structured-
-// reference parser comes online.
+// Calculated-column formulas (`<calculatedColumnFormula>`) ARE preserved
+// verbatim on each `TableColumn` for honest round-trip; the structured-
+// reference parser does not run at this layer (the formula text is not
+// rewritten or evaluated here).
 //
 // Design references:
 //   * backup/plans/04-xlsx-io.md (table parts)
@@ -37,11 +38,19 @@ namespace io {
 /// when the table has a totals row that selects either a literal label
 /// (`totalsRowLabel="..."`) or a built-in function
 /// (`totalsRowFunction="sum"|...`); both default to empty.
+/// `calculated_column_formula` carries the raw text of the column's
+/// `<calculatedColumnFormula>` child, when present. An empty string
+/// means the element was absent in the source XML; the writer therefore
+/// omits the element entirely on round-trip.
 struct TableColumn {
   std::uint32_t id = 0;
   std::string name;
   std::string totals_label;
   std::string totals_function;
+  /// Raw text of `<calculatedColumnFormula>` (no leading `=`). Empty
+  /// when the element was absent in the source XML; structured-
+  /// references inside the text are NOT parsed or evaluated here.
+  std::string calculated_column_formula;
 };
 
 /// In-memory representation of one `xl/tables/tableN.xml` part.
@@ -87,8 +96,12 @@ struct TableMetadata {
 ///     `totalsRowFunction`. If both `totalsRowLabel` and
 ///     `totalsRowFunction` are present, both are preserved (Excel
 ///     emits at most one, but capturing both keeps the round-trip
-///     contract honest). `<calculatedColumnFormula>` children are
-///     intentionally ignored at this layer.
+///     contract honest). The `<calculatedColumnFormula>` child, when
+///     present, is preserved verbatim on `calculated_column_formula`;
+///     absence and an empty element collapse to the empty string,
+///     and the writer omits the element when the field is empty (so
+///     a workbook without calc-column formulas round-trips byte-
+///     compatibly).
 ///
 /// Errors:
 ///   * `kIoXmlParse` — pugixml could not parse `table_bytes`.

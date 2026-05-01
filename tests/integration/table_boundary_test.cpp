@@ -78,9 +78,9 @@ Workbook MakeSalesWorkbook() {
   table.header_row = true;
   table.totals_row = false;
   table.columns = {
-      io::TableColumn{1U, "Region", "", ""},
-      io::TableColumn{2U, "Product", "", ""},
-      io::TableColumn{3U, "Amount", "", ""},
+      io::TableColumn{1U, "Region", "", "", ""},
+      io::TableColumn{2U, "Product", "", "", ""},
+      io::TableColumn{3U, "Amount", "", "", ""},
   };
   std::vector<io::TableMetadata> tables = {std::move(table)};
   wb.set_tables(std::move(tables));

@@ -115,6 +115,68 @@ TEST(TablesReader, ColumnTotalsLabelAndFunctionCaptured) {
   EXPECT_EQ(table_or.value().columns[2].totals_function, "average");
 }
 
+TEST(TablesReader, CalculatedColumnFormulaPreserved) {
+  std::string xml(kXmlDecl);
+  xml.append(
+      "<table xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" id=\"5\" name=\"CalcTbl\" "
+      "displayName=\"CalcTbl\" ref=\"A1:C5\">");
+  xml.append("  <tableColumns count=\"3\">");
+  xml.append("    <tableColumn id=\"1\" name=\"A\"/>");
+  xml.append("    <tableColumn id=\"2\" name=\"B\"/>");
+  xml.append(
+      "    <tableColumn id=\"3\" name=\"Total\">"
+      "<calculatedColumnFormula>SUM(Tbl[@[A]:[B]])</calculatedColumnFormula>"
+      "</tableColumn>");
+  xml.append("  </tableColumns>");
+  xml.append("</table>");
+
+  auto table_or = read_table(Bytes(xml), 0U);
+  ASSERT_TRUE(static_cast<bool>(table_or)) << "read failed: " << table_or.error().message;
+  const TableMetadata& t = table_or.value();
+  ASSERT_EQ(t.columns.size(), 3U);
+  EXPECT_EQ(t.columns[0].calculated_column_formula, "");
+  EXPECT_EQ(t.columns[1].calculated_column_formula, "");
+  EXPECT_EQ(t.columns[2].calculated_column_formula, "SUM(Tbl[@[A]:[B]])");
+}
+
+TEST(TablesReader, CalculatedColumnFormulaWithXmlEscapesPreserved) {
+  // Verify the parser un-escapes the standard XML entities (`&lt;`,
+  // `&amp;`, `&gt;`) before storing the formula string. This is what
+  // pugixml's `text().as_string()` already does — the test pins the
+  // contract so a future refactor cannot silently double-escape.
+  std::string xml(kXmlDecl);
+  xml.append(
+      "<table xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" id=\"6\" name=\"EscTbl\" "
+      "displayName=\"EscTbl\" ref=\"A1:B2\">");
+  xml.append("  <tableColumns count=\"1\">");
+  xml.append(
+      "    <tableColumn id=\"1\" name=\"E\">"
+      "<calculatedColumnFormula>IF(A1&lt;5,&quot;x&quot;,&quot;y&quot;)&amp;\"!\"</calculatedColumnFormula>"
+      "</tableColumn>");
+  xml.append("  </tableColumns>");
+  xml.append("</table>");
+
+  auto table_or = read_table(Bytes(xml), 0U);
+  ASSERT_TRUE(static_cast<bool>(table_or));
+  ASSERT_EQ(table_or.value().columns.size(), 1U);
+  // Un-escaped: `<` and `&` and `"` show up as literal characters.
+  EXPECT_EQ(table_or.value().columns[0].calculated_column_formula, "IF(A1<5,\"x\",\"y\")&\"!\"");
+}
+
+TEST(TablesReader, MissingCalculatedColumnFormulaIsEmptyString) {
+  std::string xml(kXmlDecl);
+  xml.append(
+      "<table xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" id=\"8\" name=\"NoCalc\" "
+      "displayName=\"NoCalc\" ref=\"A1:A2\">");
+  xml.append("  <tableColumns count=\"1\"><tableColumn id=\"1\" name=\"X\"/></tableColumns>");
+  xml.append("</table>");
+
+  auto table_or = read_table(Bytes(xml), 0U);
+  ASSERT_TRUE(static_cast<bool>(table_or));
+  ASSERT_EQ(table_or.value().columns.size(), 1U);
+  EXPECT_TRUE(table_or.value().columns[0].calculated_column_formula.empty());
+}
+
 TEST(TablesReader, SheetIndexParameterIsPropagated) {
   // The reader does not infer the owning sheet from the part name; the
   // caller (ooxml_reader) supplies it from the rels walk. Verify the

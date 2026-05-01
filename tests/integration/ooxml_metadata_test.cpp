@@ -325,9 +325,9 @@ TEST(OoxmlMetadata, TableRoundTripThroughWriter) {
   table.sheet_index = 0;
   table.header_row = true;
   table.totals_row = true;
-  table.columns.push_back(io::TableColumn{1, "Region", "Total", ""});
-  table.columns.push_back(io::TableColumn{2, "Q1", "", "sum"});
-  table.columns.push_back(io::TableColumn{3, "Q2", "", "sum"});
+  table.columns.push_back(io::TableColumn{1, "Region", "Total", "", ""});
+  table.columns.push_back(io::TableColumn{2, "Q1", "", "sum", ""});
+  table.columns.push_back(io::TableColumn{3, "Q2", "", "sum", ""});
 
   std::vector<io::TableMetadata> tables;
   tables.push_back(std::move(table));
@@ -472,8 +472,8 @@ TEST(OoxmlMetadata, CombinedDefinedNamesTablesAndPassthrough) {
   table.display_name = "ComboTable";
   table.ref = "A1:B2";
   table.sheet_index = 0;
-  table.columns.push_back(io::TableColumn{1, "X", "", ""});
-  table.columns.push_back(io::TableColumn{2, "Y", "", ""});
+  table.columns.push_back(io::TableColumn{1, "X", "", "", ""});
+  table.columns.push_back(io::TableColumn{2, "Y", "", "", ""});
   std::vector<io::TableMetadata> tables;
   tables.push_back(std::move(table));
   wb.set_tables(std::move(tables));
@@ -503,6 +503,65 @@ TEST(OoxmlMetadata, CombinedDefinedNamesTablesAndPassthrough) {
   auto theme_it = std::find_if(result.unknown_parts.begin(), result.unknown_parts.end(),
                                [](const io::PassthroughPart& p) { return p.path == "xl/theme/theme1.xml"; });
   ASSERT_NE(theme_it, result.unknown_parts.end()) << "theme dropped during combined round-trip";
+}
+
+TEST(OoxmlMetadata, TableCalculatedColumnFormulaRoundTrip) {
+  // Verify that <calculatedColumnFormula> survives a full save -> read
+  // cycle without truncation, and that columns without one still emit
+  // the self-closing <tableColumn/> form (covered indirectly: column 0
+  // reads back with an empty formula string).
+  Workbook src = Workbook::create();  // single sheet "Sheet1"
+
+  io::TableMetadata table;
+  table.id = 11;
+  table.name = "MyTable";
+  table.display_name = "MyTable";
+  table.ref = "A1:B5";
+  table.sheet_index = 0;
+  io::TableColumn item;
+  item.id = 1;
+  item.name = "Item";
+  table.columns.push_back(std::move(item));
+  io::TableColumn total;
+  total.id = 2;
+  total.name = "Total";
+  total.calculated_column_formula = "SUM(MyTable[Qty])";
+  table.columns.push_back(std::move(total));
+
+  std::vector<io::TableMetadata> tables;
+  tables.push_back(std::move(table));
+  src.set_tables(std::move(tables));
+
+  const std::vector<std::uint8_t> bytes = SaveOrDie(src);
+
+  // Crack open the archive directly to assert the element is in the
+  // raw XML — round-trip equality on the in-memory model is below.
+  mz_zip_archive reader{};
+  ASSERT_NE(mz_zip_reader_init_mem(&reader, bytes.data(), bytes.size(), 0), MZ_FALSE);
+  const std::string part_name = "xl/tables/table11.xml";
+  const int idx = mz_zip_reader_locate_file(&reader, part_name.c_str(), nullptr, 0);
+  ASSERT_GE(idx, 0) << "expected " << part_name << " in archive";
+  std::size_t extracted_size = 0;
+  void* extracted = mz_zip_reader_extract_to_heap(&reader, static_cast<mz_uint>(idx), &extracted_size, 0);
+  ASSERT_NE(extracted, nullptr);
+  const std::string body(static_cast<const char*>(extracted), extracted_size);
+  mz_free(extracted);
+  mz_zip_reader_end(&reader);
+  EXPECT_NE(body.find("<calculatedColumnFormula>SUM(MyTable[Qty])</calculatedColumnFormula>"), std::string::npos)
+      << "calculatedColumnFormula element missing from emitted table part:\n"
+      << body;
+
+  // In-memory round-trip equality.
+  auto result_or = io::read_ooxml(SpanOf(bytes));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << "read_ooxml: " << result_or.error().message;
+  const Workbook& dst = result_or.value().workbook;
+  ASSERT_EQ(dst.tables().size(), 1U);
+  const io::TableMetadata& got = dst.tables()[0];
+  ASSERT_EQ(got.columns.size(), 2U);
+  EXPECT_EQ(got.columns[0].name, "Item");
+  EXPECT_TRUE(got.columns[0].calculated_column_formula.empty());
+  EXPECT_EQ(got.columns[1].name, "Total");
+  EXPECT_EQ(got.columns[1].calculated_column_formula, "SUM(MyTable[Qty])");
 }
 
 TEST(OoxmlMetadata, PassthroughCollisionWithGeneratedPathDropsPassthrough) {

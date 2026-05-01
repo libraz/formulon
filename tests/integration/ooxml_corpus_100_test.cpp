@@ -357,7 +357,7 @@ Expected<Workbook, Error> build_workbook(std::uint32_t book_id, const AxisValues
       t.header_row = true;
       t.totals_row = false;
       for (std::uint32_t c = 0; c < a.shape.cols; ++c) {
-        t.columns.push_back(io::TableColumn{c + 1U, std::string("Col") + std::to_string(c + 1U), "", ""});
+        t.columns.push_back(io::TableColumn{c + 1U, std::string("Col") + std::to_string(c + 1U), "", "", ""});
       }
       std::vector<io::TableMetadata> tables;
       tables.push_back(std::move(t));

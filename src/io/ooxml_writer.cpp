@@ -425,7 +425,19 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
       AppendXmlEscaped(out, col.totals_function);
       out.push_back('"');
     }
-    out.append("/>\n");
+    // <calculatedColumnFormula> is the only child of <tableColumn> we
+    // emit. When the field is empty we omit the element entirely (Excel
+    // never emits empty calc-column elements) and keep the self-closing
+    // <tableColumn/> form.
+    if (col.calculated_column_formula.empty()) {
+      out.append("/>\n");
+    } else {
+      out.append(">\n");
+      out.append("      <calculatedColumnFormula>");
+      AppendXmlEscaped(out, col.calculated_column_formula);
+      out.append("</calculatedColumnFormula>\n");
+      out.append("    </tableColumn>\n");
+    }
   }
   out.append("  </tableColumns>\n");
   out.append("</table>\n");

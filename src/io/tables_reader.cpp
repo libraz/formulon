@@ -100,8 +100,13 @@ Expected<TableMetadata, Error> read_table(const std::vector<std::uint8_t>& table
       if (pugi::xml_attribute fn = col.attribute("totalsRowFunction"); fn) {
         entry.totals_function = fn.value();
       }
-      // TODO(formulon, Phase 4): preserve <calculatedColumnFormula>
-      // when structured-reference rewriting lands.
+      // Preserve <calculatedColumnFormula> verbatim. Children come
+      // after attributes per the OOXML schema, so this lookup runs
+      // last for the column. pugixml's `text().as_string()` already
+      // returns the unescaped PCDATA payload.
+      if (pugi::xml_node fn_node = col.child("calculatedColumnFormula"); fn_node) {
+        entry.calculated_column_formula = fn_node.text().as_string();
+      }
       table.columns.push_back(std::move(entry));
     }
   }
