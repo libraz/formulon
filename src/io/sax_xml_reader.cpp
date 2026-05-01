@@ -524,6 +524,15 @@ struct CellScratch {
 /// recursive walk.
 bool ScanInlineString(const char* begin, const char* end, const char** p, CellScratch* scratch, Error* err) {
   scratch->inline_string.clear();
+  // Tracks whether we are currently inside an <rPh> (phonetic guide)
+  // subtree. <rPh> wraps a <t> element carrying kana, which must NOT
+  // be concatenated into the surface text — otherwise PHONETIC's
+  // surface-text fallback for unannotated cells would silently include
+  // the kana too. The DOM path's `cell_parser.cpp` extracts <rPh>
+  // separately into ParsedCell::phonetic_text; the SAX path does not
+  // yet capture phonetic, but at minimum it must avoid mixing kana
+  // bytes into the inline-string body.
+  bool in_rph = false;
   while (*p < end) {
     while (*p < end && **p != '<') {
       ++(*p);
@@ -548,6 +557,10 @@ bool ScanInlineString(const char* begin, const char* end, const char** p, CellSc
     if (header.is_end_tag && header.name == "is") {
       return true;
     }
+    if (header.is_end_tag && header.name == "rPh") {
+      in_rph = false;
+      continue;
+    }
     if (header.is_end_tag) {
       // Close of an inner element (e.g. </r>): keep streaming.
       continue;
@@ -555,11 +568,21 @@ bool ScanInlineString(const char* begin, const char* end, const char** p, CellSc
     if (header.self_closing) {
       continue;
     }
+    if (header.name == "rPh") {
+      in_rph = true;
+      continue;
+    }
     if (header.name == "t") {
       std::string_view raw;
       bool had_entities = false;
       if (!ScanTextContent(begin, end, p, "t", &raw, &had_entities, err)) {
         return false;
+      }
+      if (in_rph) {
+        // Inside <rPh>: drop the kana; we still had to consume the
+        // <t>...</t> body to advance the cursor past the matching
+        // close tag.
+        continue;
       }
       if (had_entities) {
         std::string tmp;

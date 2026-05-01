@@ -154,6 +154,42 @@ TEST(SaxXmlReader, SingleCellInlineStringRichText) {
   EXPECT_EQ(cap.cells[0].value, "foobar");
 }
 
+// <rPh> wraps a kana <t> that must NOT be folded into the surface text;
+// otherwise large sheets (>= kSaxThresholdBytes) would silently corrupt
+// inline-string cells whenever they carry a phonetic guide.
+TEST(SaxXmlReader, InlineStringWithRPhSkipsKana) {
+  const std::string xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"A1\" t=\"inlineStr\">"
+      "<is><t>\xE5\xB1\xB1\xE7\x94\xB0</t>"
+      "<rPh sb=\"0\" eb=\"2\"><t>\xE3\x82\x84\xE3\x81\xBE\xE3\x81\xA0</t></rPh></is>"
+      "</c></row></sheetData></worksheet>";
+  Capture cap;
+  ASSERT_TRUE(static_cast<bool>(scan_sheet_data(SpanOf(xml), MakeCallbacks(&cap))));
+  ASSERT_EQ(cap.cells.size(), 1U);
+  EXPECT_TRUE(cap.cells[0].is_inline_string);
+  EXPECT_EQ(cap.cells[0].value, "\xE5\xB1\xB1\xE7\x94\xB0");  // 山田 only
+}
+
+// Multi-block <rPh> (one per kanji span) plus rich-text <r><t> runs in
+// arbitrary order: surface concatenates only the <r><t> and bare <t>
+// payloads, never the kana inside <rPh>.
+TEST(SaxXmlReader, InlineStringWithMultipleRPhAndRichTextSkipsKana) {
+  const std::string xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"A1\" t=\"inlineStr\">"
+      "<is>"
+      "<r><t>\xE5\xB1\xB1\xE7\x94\xB0</t></r>"
+      "<rPh sb=\"0\" eb=\"2\"><t>\xE3\x82\x84\xE3\x81\xBE\xE3\x81\xA0</t></rPh>"
+      "<r><t>\xE5\xA4\xAA\xE9\x83\x8E</t></r>"
+      "<rPh sb=\"2\" eb=\"4\"><t>\xE3\x81\x9F\xE3\x82\x8D\xE3\x81\x86</t></rPh>"
+      "</is></c></row></sheetData></worksheet>";
+  Capture cap;
+  ASSERT_TRUE(static_cast<bool>(scan_sheet_data(SpanOf(xml), MakeCallbacks(&cap))));
+  ASSERT_EQ(cap.cells.size(), 1U);
+  EXPECT_EQ(cap.cells[0].value, "\xE5\xB1\xB1\xE7\x94\xB0\xE5\xA4\xAA\xE9\x83\x8E");  // 山田太郎
+}
+
 TEST(SaxXmlReader, SingleCellBoolean) {
   const std::string xml =
       "<worksheet><sheetData>"
