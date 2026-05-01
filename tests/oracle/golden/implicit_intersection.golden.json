@@ -2,11 +2,11 @@
   "suite": "implicit_intersection",
   "description": "Implicit intersection semantics for Mac Excel 365 (ja-JP). The xlwings driver places the formula under test at cell Z1 (row 1, column Z=26) on a fresh sheet per case. We use that fixed position to design differential tests: ranges that either include or exclude Z1's row / column. The two candidate behaviors are:\n\n  * Pre-365 implicit intersection: range -> single cell at the row /\n    column that aligns with the formula cell, or #VALUE! if no axis\n    aligns.\n  * Excel 365 dynamic-array spill: range stays as an array, and\n    xlwings reads back the spill anchor (top-left of the rectangle\n    placed at the formula cell).\n\nMac Excel 365 with @-prefix auto-conversion on legacy files lands on implicit intersection; fresh formulas typed in the formula bar use spill. This suite probes which behavior surfaces through xlwings.\n",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.108.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T00:51:06Z"
+    "generated_at": "2026-05-01T22:55:26Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -734,6 +734,131 @@
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "single_col_range_row_aligned",
+      "formula": "=_xlfn.SINGLE(A1:A5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 101.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 102.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "single_col_range_row_excluded",
+      "formula": "=_xlfn.SINGLE(A2:A6)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 60.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "single_row_range_col_excluded",
+      "formula": "=_xlfn.SINGLE(A1:E1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "single_2d_range_no_alignment",
+      "formula": "=_xlfn.SINGLE(A1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 22.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "single_scalar_identity",
+      "formula": "=_xlfn.SINGLE(42)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42.0
       }
     }
   ]

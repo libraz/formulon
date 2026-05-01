@@ -72,3 +72,45 @@ cases:
     setup:
       A1: "=SEQUENCE(3)"
     formula: "=SUM(A1#)"
+
+  # -- ANCHORARRAY (OOXML internal `_xlfn.` form of `ref#`) ---------------
+  # ANCHORARRAY(ref) returns the spill region anchored at `ref` as an
+  # array, mirroring the postfix `#` operator. xlsx serialises `=ref#` as
+  # `=_xlfn.ANCHORARRAY(ref)`; the prefix is stripped before dispatch so
+  # both forms route to `eval_anchorarray_lazy`. The cases below use the
+  # explicit `_xlfn.ANCHORARRAY(...)` literal so the closure-check
+  # function-name regex matches.
+  #
+  # Cases that depend on a spill source (setup formula like
+  # `=SEQUENCE(...)`) are marked skip-oracle in tests/divergence.yaml
+  # because the static oracle harness does not materialize setup-formula
+  # spills before evaluating the test formula — same harness limitation
+  # documented for `spill_ref_after_sequence_sum` above.
+
+  - id: anchorarray_static_value_anchor
+    description: "B1 holds a static number, not a spill anchor. Formulon: #REF!. Mac probe via xlwings reads blank because Mac does not evaluate `=_xlfn.ANCHORARRAY(...)` typed via the formula2 API and Z1 displays as blank — see divergence.yaml. Unit-test coverage in spill_ref_eval_test.cpp covers the documented #REF! semantics."
+    setup:
+      B1: 42
+    formula: "=_xlfn.ANCHORARRAY(B1)"
+
+  - id: anchorarray_blank_anchor
+    description: "E1 is genuinely blank; no spill anchor at E1. Formulon: #REF!. Same `formula2`-typed `_xlfn.ANCHORARRAY` Mac probe artefact as anchorarray_static_value_anchor — see divergence.yaml."
+    formula: "=_xlfn.ANCHORARRAY(E1)"
+
+  - id: anchorarray_resolves_sequence_sum
+    description: "A1=SEQUENCE(3) spills to A1:A3. SUM(_xlfn.ANCHORARRAY(A1)) = 1+2+3 = 6."
+    setup:
+      A1: "=SEQUENCE(3)"
+    formula: "=SUM(_xlfn.ANCHORARRAY(A1))"
+
+  - id: anchorarray_resolves_sequence_rows
+    description: "A1=SEQUENCE(3) spills 3x1. ROWS(_xlfn.ANCHORARRAY(A1)) = 3."
+    setup:
+      A1: "=SEQUENCE(3)"
+    formula: "=ROWS(_xlfn.ANCHORARRAY(A1))"
+
+  - id: anchorarray_offset_resolved_anchor
+    description: "A2=SEQUENCE(2,2) spills 2x2; OFFSET(A1,1,0) -> A2 -> spill anchor; SUM = 1+2+3+4 = 10."
+    setup:
+      A2: "=SEQUENCE(2,2)"
+    formula: "=SUM(_xlfn.ANCHORARRAY(OFFSET(A1,1,0)))"

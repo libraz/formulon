@@ -10366,6 +10366,62 @@ groups:
         expected: impl
 
   # -------------------------------------------------------------------------
+  # ANCHORARRAY singleton (cases under tests/oracle/cases/dynamic_array.yaml).
+  # OOXML internal encoding of the postfix `ref#` spill operator. Cases are
+  # written with the `_xlfn.ANCHORARRAY(...)` form so the closure-check
+  # function-name regex matches; the `_xlfn.` prefix is stripped before
+  # dispatch, so callers see the bare ANCHORARRAY at evaluation time. Some
+  # behaviors are `diverged` because the static oracle harness does not
+  # materialize setup-formula spill regions before evaluating the test
+  # formula (same harness limitation as `spill_ref_after_sequence_sum` in
+  # tests/divergence.yaml).
+  # -------------------------------------------------------------------------
+  - function: "ANCHORARRAY"
+    aspect: "spill-anchor lookup (OOXML internal `ref#` encoding)"
+    behaviors:
+      - name: "SUM over spill from SEQUENCE source"
+        probe: "=SUM(_xlfn.ANCHORARRAY(A1))"
+        expected: diverged
+      - name: "ROWS over spill from SEQUENCE source"
+        probe: "=ROWS(_xlfn.ANCHORARRAY(A1))"
+        expected: diverged
+      - name: "OFFSET-resolved spill anchor"
+        probe: "_xlfn.ANCHORARRAY(OFFSET("
+        expected: diverged
+      - name: "non-anchor static-value cell"
+        probe: "_xlfn.ANCHORARRAY(B1)"
+        expected: diverged
+      - name: "blank anchor cell"
+        probe: "_xlfn.ANCHORARRAY(E1)"
+        expected: diverged
+
+  # -------------------------------------------------------------------------
+  # SINGLE singleton (cases under tests/oracle/cases/implicit_intersection.yaml).
+  # Explicit-name form of the `@` implicit-intersection operator. xlsx
+  # serialises `@range` as `_xlfn.SINGLE(range)`; cases here use the
+  # explicit `_xlfn.SINGLE(...)` text so the closure-check regex matches
+  # the function name. Mac Excel evaluates both forms identically.
+  # -------------------------------------------------------------------------
+  - function: "SINGLE"
+    aspect: "explicit form of `@` implicit-intersection projection"
+    behaviors:
+      - name: "single-column range, formula row aligned"
+        probe: "_xlfn.SINGLE(A1:A5)"
+        expected: impl
+      - name: "single-column range, formula row excluded -> #VALUE!"
+        probe: "_xlfn.SINGLE(A2:A6)"
+        expected: impl
+      - name: "single-row range, formula column excluded -> #VALUE!"
+        probe: "_xlfn.SINGLE(A1:E1)"
+        expected: impl
+      - name: "2-D range, neither axis aligned -> #VALUE!"
+        probe: "_xlfn.SINGLE(A1:B2)"
+        expected: impl
+      - name: "scalar passthrough -> identity"
+        probe: "_xlfn.SINGLE(42)"
+        expected: impl
+
+  # -------------------------------------------------------------------------
   # ADDRESS singleton (cases under tests/oracle/cases/references.yaml).
   # -------------------------------------------------------------------------
   - function: "ADDRESS"

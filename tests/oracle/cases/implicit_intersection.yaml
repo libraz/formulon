@@ -338,3 +338,59 @@ cases:
       B3: 12
       A4: 21
     formula: "=@A3:B8"
+
+  # ----------------------------------------------------------------------
+  # Explicit SINGLE function form. xlsx serialises `@range` as
+  # `_xlfn.SINGLE(range)`; both forms route to the same projection logic.
+  # The cases here use the literal `_xlfn.SINGLE(...)` syntax to cover the
+  # explicit-name path independently of the `@`-prefix parser branch.
+  # ----------------------------------------------------------------------
+
+  # GG) SINGLE on a single-column range, formula row in range.
+  - id: single_col_range_row_aligned
+    description: "=_xlfn.SINGLE(A1:A5) at Z1; row 1 in 1..5 -> A1=42"
+    setup:
+      A1: 42
+      A2: 99
+      A3: 100
+      A4: 101
+      A5: 102
+    formula: "=_xlfn.SINGLE(A1:A5)"
+
+  # HH) SINGLE on a single-column range, formula row NOT in range.
+  - id: single_col_range_row_excluded
+    description: "=_xlfn.SINGLE(A2:A6) at Z1; row 1 NOT in 2..6 -> #VALUE!"
+    setup:
+      A2: 20
+      A3: 30
+      A4: 40
+      A5: 50
+      A6: 60
+    formula: "=_xlfn.SINGLE(A2:A6)"
+
+  # II) SINGLE on a single-row range, formula column NOT in range.
+  - id: single_row_range_col_excluded
+    description: "=_xlfn.SINGLE(A1:E1) at Z1; col Z (26) NOT in A..E (1..5) -> #VALUE!"
+    setup:
+      A1: 1
+      B1: 2
+      C1: 3
+      D1: 4
+      E1: 5
+    formula: "=_xlfn.SINGLE(A1:E1)"
+
+  # JJ) SINGLE on a 2-D range — neither axis aligns -> #VALUE!.
+  - id: single_2d_range_no_alignment
+    description: "=_xlfn.SINGLE(A1:B2) at Z1; 2-D and neither axis aligns -> #VALUE!"
+    setup:
+      A1: 11
+      B1: 12
+      A2: 21
+      B2: 22
+    formula: "=_xlfn.SINGLE(A1:B2)"
+
+  # KK) SINGLE on a scalar — identity passthrough (matches `@`'s behaviour
+  # for already-scalar operands).
+  - id: single_scalar_identity
+    description: "=_xlfn.SINGLE(42) at Z1; scalar passthrough -> 42"
+    formula: "=_xlfn.SINGLE(42)"

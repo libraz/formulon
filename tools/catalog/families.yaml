@@ -617,3 +617,25 @@ families:
     category_file: tests/oracle/cases/valuetotext.yaml
     min_perspectives_per_member: 5
     cluster_reason: "Value-to-text serializer with concise (default) and strict (quoted) format modes."
+
+  # -- ANCHORARRAY singleton -----------------------------------------------
+  # OOXML-internal encoding of the postfix `ref#` spill operator (`_xlfn.`
+  # prefix stripped before dispatch). Cases live in dynamic_array.yaml
+  # alongside SEQUENCE / TRANSPOSE because they share spill-region
+  # primitives and the anchor-unwrap harness convention.
+  - name: anchorarray
+    members: [ANCHORARRAY]
+    category_file: tests/oracle/cases/dynamic_array.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Spill-anchor lookup; encodes the user-facing `ref#` operator. Cases co-located with SEQUENCE / TRANSPOSE because they exercise the same spill-region machinery."
+
+  # -- SINGLE singleton ----------------------------------------------------
+  # Explicit-name form of the `@` implicit-intersection operator (xlsx
+  # serialises `@range` as `_xlfn.SINGLE(range)`). Cases live in
+  # implicit_intersection.yaml alongside the `@`-prefix probes so the two
+  # serialisation forms can be verified against the same Mac semantics.
+  - name: single
+    members: [SINGLE]
+    category_file: tests/oracle/cases/implicit_intersection.yaml
+    min_perspectives_per_member: 5
+    cluster_reason: "Explicit form of `@` IxI; cases co-located with the `@`-prefix probes since both serialisations route to the same projection logic."

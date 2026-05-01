@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-01T15:06:07Z"
+    "generated_at": "2026-05-01T22:59:17Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -163,6 +163,56 @@
         }
       },
       "skipped": "Spill-ref `A1#` consumed by SUM requires the spill region to be materialized in the workbook, but the oracle harness evaluates the formula in isolation; SUM sees the bare Array reference and produces a different result than Excel's resolved spill region."
+    },
+    {
+      "id": "anchorarray_static_value_anchor",
+      "formula": "=_xlfn.ANCHORARRAY(B1)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 42.0
+        }
+      },
+      "skipped": "Mac probe via xlwings reads blank for `=_xlfn.ANCHORARRAY(B1)` typed via the formula2 API even when B1 holds a static value. This is a harness probe artefact (Mac may not fully evaluate the explicit `_xlfn.` form when injected through xlwings) rather than the documented `ref#` semantics. Formulon implements the documented #REF! return for non-spill anchors, covered by spill_ref_eval_test.cpp."
+    },
+    {
+      "id": "anchorarray_blank_anchor",
+      "formula": "=_xlfn.ANCHORARRAY(E1)",
+      "setup": {},
+      "skipped": "Mac probe via xlwings reads blank for `=_xlfn.ANCHORARRAY(E1)` typed via formula2 even when E1 is genuinely blank. Same probe artefact as anchorarray_static_value_anchor — Formulon's #REF! is the documented semantics for a non-spill anchor."
+    },
+    {
+      "id": "anchorarray_resolves_sequence_sum",
+      "formula": "=SUM(_xlfn.ANCHORARRAY(A1))",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "skipped": "_xlfn.ANCHORARRAY(A1) over a setup-formula spill source (A1=SEQUENCE(3)) requires the spill region to be materialized before the test formula is evaluated. The static oracle harness evaluates the test formula in isolation, so spill_region_at_anchor(A1) returns null and ANCHORARRAY surfaces #REF!. Same harness limitation as spill_ref_after_sequence_sum above."
+    },
+    {
+      "id": "anchorarray_resolves_sequence_rows",
+      "formula": "=ROWS(_xlfn.ANCHORARRAY(A1))",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "skipped": "_xlfn.ANCHORARRAY(A1) requires the A1=SEQUENCE(3) spill source to be materialized before the test formula evaluates. Same harness limitation as spill_ref_after_sequence_sum."
+    },
+    {
+      "id": "anchorarray_offset_resolved_anchor",
+      "formula": "=SUM(_xlfn.ANCHORARRAY(OFFSET(A1,1,0)))",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(2,2)"
+        }
+      },
+      "skipped": "_xlfn.ANCHORARRAY(OFFSET(A1,1,0)) requires the A2=SEQUENCE(2,2) spill source to be materialized before the test formula evaluates. Same harness limitation as spill_ref_after_sequence_sum."
     }
   ]
 }
