@@ -274,6 +274,13 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   if (parsed.is_sst_index) {
     ctx.pending_sst_cells.emplace_back(rec.row, rec.col, parsed.sst_index);
   }
+  // Inline-string cells with <rPh> annotations carry their kana on the
+  // SAX record. SST-referenced cells (rec.phonetic stays empty by
+  // construction) route their phonetic through the post-loop SST
+  // resolution pass instead — same contract the DOM path uses.
+  if (!rec.phonetic.empty()) {
+    workbook.sheet(sheet_index).set_cell_phonetic(rec.row, rec.col, rec.phonetic);
+  }
   return Expected<void, Error>::Ok();
 }
 

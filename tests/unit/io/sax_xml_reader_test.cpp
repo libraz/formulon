@@ -35,6 +35,7 @@ struct CapturedCell {
   std::string formula;
   std::string value;
   bool is_inline_string = false;
+  std::string phonetic;
 };
 
 struct Capture {
@@ -54,7 +55,7 @@ Expected<void, Error> CaptureRowEnd(void* ud, std::uint32_t r) {
 Expected<void, Error> CaptureCell(void* ud, const CellRecord& rec) {
   static_cast<Capture*>(ud)->cells.push_back(CapturedCell{rec.row, rec.col, std::string(rec.t), std::string(rec.s),
                                                           std::string(rec.formula), std::string(rec.value),
-                                                          rec.is_inline_string});
+                                                          rec.is_inline_string, std::string(rec.phonetic)});
   return Expected<void, Error>::Ok();
 }
 
@@ -156,7 +157,9 @@ TEST(SaxXmlReader, SingleCellInlineStringRichText) {
 
 // <rPh> wraps a kana <t> that must NOT be folded into the surface text;
 // otherwise large sheets (>= kSaxThresholdBytes) would silently corrupt
-// inline-string cells whenever they carry a phonetic guide.
+// inline-string cells whenever they carry a phonetic guide. The kana is
+// captured separately in `phonetic` so PHONETIC works against SAX-
+// materialised cells.
 TEST(SaxXmlReader, InlineStringWithRPhSkipsKana) {
   const std::string xml =
       "<worksheet><sheetData>"
@@ -168,12 +171,13 @@ TEST(SaxXmlReader, InlineStringWithRPhSkipsKana) {
   ASSERT_TRUE(static_cast<bool>(scan_sheet_data(SpanOf(xml), MakeCallbacks(&cap))));
   ASSERT_EQ(cap.cells.size(), 1U);
   EXPECT_TRUE(cap.cells[0].is_inline_string);
-  EXPECT_EQ(cap.cells[0].value, "\xE5\xB1\xB1\xE7\x94\xB0");  // 山田 only
+  EXPECT_EQ(cap.cells[0].value, "\xE5\xB1\xB1\xE7\x94\xB0");  // 山田
+  EXPECT_EQ(cap.cells[0].phonetic, "\xE3\x82\x84\xE3\x81\xBE\xE3\x81\xA0");  // やまだ
 }
 
 // Multi-block <rPh> (one per kanji span) plus rich-text <r><t> runs in
 // arbitrary order: surface concatenates only the <r><t> and bare <t>
-// payloads, never the kana inside <rPh>.
+// payloads; phonetic concatenates every <rPh><t> in document order.
 TEST(SaxXmlReader, InlineStringWithMultipleRPhAndRichTextSkipsKana) {
   const std::string xml =
       "<worksheet><sheetData>"
@@ -188,6 +192,21 @@ TEST(SaxXmlReader, InlineStringWithMultipleRPhAndRichTextSkipsKana) {
   ASSERT_TRUE(static_cast<bool>(scan_sheet_data(SpanOf(xml), MakeCallbacks(&cap))));
   ASSERT_EQ(cap.cells.size(), 1U);
   EXPECT_EQ(cap.cells[0].value, "\xE5\xB1\xB1\xE7\x94\xB0\xE5\xA4\xAA\xE9\x83\x8E");  // 山田太郎
+  EXPECT_EQ(cap.cells[0].phonetic,
+            "\xE3\x82\x84\xE3\x81\xBE\xE3\x81\xA0\xE3\x81\x9F\xE3\x82\x8D\xE3\x81\x86");  // やまだたろう
+}
+
+// Inline string without <rPh>: phonetic stays empty.
+TEST(SaxXmlReader, InlineStringWithoutRPhPhoneticEmpty) {
+  const std::string xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>plain</t></is></c></row>"
+      "</sheetData></worksheet>";
+  Capture cap;
+  ASSERT_TRUE(static_cast<bool>(scan_sheet_data(SpanOf(xml), MakeCallbacks(&cap))));
+  ASSERT_EQ(cap.cells.size(), 1U);
+  EXPECT_EQ(cap.cells[0].value, "plain");
+  EXPECT_TRUE(cap.cells[0].phonetic.empty());
 }
 
 TEST(SaxXmlReader, SingleCellBoolean) {

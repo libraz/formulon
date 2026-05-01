@@ -69,13 +69,20 @@ struct CellRecord {
   std::string_view formula;
   /// Decoded text content of the cell:
   ///   * For `t="inlineStr"`: concatenation of all `<is><t>` and
-  ///     `<is><r><t>` text nodes (rich-text formatting dropped). The
-  ///     `is_inline_string` flag is set in this branch.
+  ///     `<is><r><t>` text nodes (rich-text formatting dropped). Any
+  ///     `<is><rPh><t>` payloads are excluded — they are surfaced
+  ///     separately via `phonetic`. The `is_inline_string` flag is
+  ///     set in this branch.
   ///   * Otherwise: text content of `<v>` (entity-decoded). Empty when
   ///     no `<v>` was present.
   std::string_view value;
   /// True iff the value came from `<is>...</is>` (i.e. `t="inlineStr"`).
   bool is_inline_string = false;
+  /// Concatenated kana from every `<is><rPh><t>` payload, in document
+  /// order. Empty when the cell has no inline phonetic annotation. SST-
+  /// referenced cells (`t="s"`) carry their phonetic through the SST
+  /// resolution pass instead and leave this field empty.
+  std::string_view phonetic;
 };
 
 /// Callback bundle handed to `scan_sheet_data`. Each callback returns

@@ -506,6 +506,10 @@ struct CellScratch {
   std::string decoded_value;
   std::string inline_string;
   std::string decoded_formula;
+  /// Concatenation of every `<rPh><t>` payload encountered while
+  /// scanning an `<is>` body. Cleared at the start of each
+  /// `ScanInlineString` call.
+  std::string inline_string_phonetic;
 };
 
 /// Reads `<is> ... </is>` content, concatenating every `<t>` body
@@ -524,14 +528,14 @@ struct CellScratch {
 /// recursive walk.
 bool ScanInlineString(const char* begin, const char* end, const char** p, CellScratch* scratch, Error* err) {
   scratch->inline_string.clear();
+  scratch->inline_string_phonetic.clear();
   // Tracks whether we are currently inside an <rPh> (phonetic guide)
   // subtree. <rPh> wraps a <t> element carrying kana, which must NOT
   // be concatenated into the surface text — otherwise PHONETIC's
   // surface-text fallback for unannotated cells would silently include
-  // the kana too. The DOM path's `cell_parser.cpp` extracts <rPh>
-  // separately into ParsedCell::phonetic_text; the SAX path does not
-  // yet capture phonetic, but at minimum it must avoid mixing kana
-  // bytes into the inline-string body.
+  // the kana too. The kana is captured separately into
+  // `inline_string_phonetic` so PHONETIC can return it for inline-
+  // string cells the SAX path materialises.
   bool in_rph = false;
   while (*p < end) {
     while (*p < end && **p != '<') {
@@ -578,18 +582,13 @@ bool ScanInlineString(const char* begin, const char* end, const char** p, CellSc
       if (!ScanTextContent(begin, end, p, "t", &raw, &had_entities, err)) {
         return false;
       }
-      if (in_rph) {
-        // Inside <rPh>: drop the kana; we still had to consume the
-        // <t>...</t> body to advance the cursor past the matching
-        // close tag.
-        continue;
-      }
+      std::string* dest = in_rph ? &scratch->inline_string_phonetic : &scratch->inline_string;
       if (had_entities) {
         std::string tmp;
         DecodeEntitiesInto(raw, &tmp);
-        scratch->inline_string.append(tmp);
+        dest->append(tmp);
       } else {
-        scratch->inline_string.append(raw.data(), raw.size());
+        dest->append(raw.data(), raw.size());
       }
     }
     // Other open elements (e.g. <r>, <rPr>) are descended into by
@@ -628,6 +627,7 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
   record->formula = std::string_view{};
   record->value = std::string_view{};
   record->is_inline_string = false;
+  record->phonetic = std::string_view{};
 
   if (cell_header.self_closing) {
     return true;
@@ -707,6 +707,7 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
       if (child.self_closing) {
         record->is_inline_string = true;
         record->value = std::string_view{};
+        record->phonetic = std::string_view{};
         continue;
       }
       if (!ScanInlineString(begin, end, p, scratch, err)) {
@@ -714,6 +715,7 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
       }
       record->is_inline_string = true;
       record->value = std::string_view(scratch->inline_string);
+      record->phonetic = std::string_view(scratch->inline_string_phonetic);
     } else if (!child.self_closing) {
       // Unrecognised child of <c>: skip it.
       if (!SkipUntilClose(begin, end, p, child.name, err)) {
