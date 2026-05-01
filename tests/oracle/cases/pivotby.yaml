@@ -37,3 +37,33 @@ cases:
   - id: pivotby_filter_array_excludes_all
     description: 'PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, SUM, 0, 0, 0, 0, 0, {FALSE;FALSE}) -> #VALUE! (filter eliminates every row)'
     formula: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, SUM, 0, 0, 0, 0, 0, {FALSE;FALSE})'
+
+  # =========================================================================
+  # Multi-column row_fields / col_fields / values. Mac Excel 365 (16.108.1,
+  # ja-JP) emits a cross-product spill; oracle compare_value cannot
+  # navigate ArrayValue. Unit tests in tests/unit/eval/builtins_pivotby_test.cpp
+  # (PivotBy.MultiColumn*) validate the spill content. Layout was captured
+  # via xlwings INDEX(spill, r, c) probes against Mac Excel; per-shape
+  # verification is in the unit suite. These oracle entries are skip-oracle
+  # placeholders so the closure surface is still discoverable from the YAML.
+  # =========================================================================
+
+  - id: pivotby_multi_col_rows_basic
+    description: 'Multi-column row_fields (K=2). PIVOTBY({"A","P";"B","Q";"A","P"}, {"X";"Y";"X"}, {1;2;3}, SUM, 0) -> 4x5 spill with 2 row-key cols.'
+    formula: '=PIVOTBY({"A","P";"B","Q";"A","P"}, {"X";"Y";"X"}, {1;2;3}, SUM, 0)'
+
+  - id: pivotby_multi_col_cols_basic
+    description: 'Multi-column col_fields (L=2). PIVOTBY({"A";"B";"A"}, {"X","M";"Y","N";"X","M"}, {1;2;3}, SUM, 0) -> 5x4 spill with 2 col-key rows.'
+    formula: '=PIVOTBY({"A";"B";"A"}, {"X","M";"Y","N";"X","M"}, {1;2;3}, SUM, 0)'
+
+  - id: pivotby_multi_values_basic
+    description: 'Multi-column values (V=2). PIVOTBY({"A";"B";"A"}, {"X";"Y";"X"}, {1,10;2,20;3,30}, SUM, 0) -> 4x7 spill, value cols tiled per col-group.'
+    formula: '=PIVOTBY({"A";"B";"A"}, {"X";"Y";"X"}, {1,10;2,20;3,30}, SUM, 0)'
+
+  - id: pivotby_multi_all_axes
+    description: 'All multi (K=2, L=2, V=2). 5x8 spill, dense cross-product layout.'
+    formula: '=PIVOTBY({"A","P";"B","Q";"A","P"}, {"X","M";"Y","N";"X","M"}, {1,10;2,20;3,30}, SUM, 0)'
+
+  - id: pivotby_multi_with_input_header
+    description: 'Multi-col rows + input/output header (K=2, fh=3). 5x5 spill including row_fields header row + values header tiled.'
+    formula: '=PIVOTBY({"R1","R2";"A","P";"B","Q";"A","P"}, {"C";"X";"Y";"X"}, {"V";1;2;3}, SUM, 3)'

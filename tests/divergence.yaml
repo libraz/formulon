@@ -706,6 +706,36 @@ entries:
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
+  - id: pivotby_multi_col_rows_basic
+    reason: "Multi-column PIVOTBY emits a 2D ArrayValue cross-product; oracle compare_value only handles scalars. Unit test PivotBy.MultiColumnRowFieldsBasic covers the K=2 layout (row-keys + col-groups + grand totals); shape captured against Mac Excel 16.108.1 via xlwings INDEX probes."
+    prefer: mac-excel-365
+    first_noted: 2026-05-02
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: pivotby_multi_col_cols_basic
+    reason: "Multi-column PIVOTBY (L=2 col_fields) emits a 2D ArrayValue with 2 col-key rows. Unit test PivotBy.MultiColumnColFieldsBasic covers the layout."
+    prefer: mac-excel-365
+    first_noted: 2026-05-02
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: pivotby_multi_values_basic
+    reason: "Multi-column values (V=2) tiles value labels per col-group. Unit test PivotBy.MultiColumnValuesBasic covers the layout."
+    prefer: mac-excel-365
+    first_noted: 2026-05-02
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: pivotby_multi_all_axes
+    reason: "K=2/L=2/V=2 dense cross-product spill. Unit test PivotBy.MultiColumnAllAxes covers the layout."
+    prefer: mac-excel-365
+    first_noted: 2026-05-02
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: pivotby_multi_with_input_header
+    reason: "Multi-col rows with field_headers=3 emits an output header row containing row_fields header + values header tiled. Unit test PivotBy.MultiColumnRowsWithFieldHeadersThree covers the layout."
+    prefer: mac-excel-365
+    first_noted: 2026-05-02
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
 
   # FILTER / UNIQUE / SORT / SORTBY (sort_filter family) — spill-output
   # cases. Each function evaluates its inputs via eval_node_as_array and
