@@ -9,6 +9,7 @@
 
 set(FORMULON_ORACLE_TEST_SOURCES
   json_reader.cpp
+  oracle_anchor.cpp
   oracle_runner.cpp
   oracle_test.cpp
 )
@@ -49,6 +50,36 @@ gtest_discover_tests(formulon_oracle_tests
   DISCOVERY_MODE PRE_TEST
   PROPERTIES LABELS "oracle"
 )
+
+# ---------------------------------------------------------------------------
+# Anchor helper unit test
+#
+# Standalone gtest binary covering `anchor_or_self`, the spill-anchor
+# projection helper used by oracle_test.cpp's compare_value. Built
+# unconditionally so the helper has direct unit coverage independent of
+# any golden-JSON state.
+# ---------------------------------------------------------------------------
+
+add_executable(formulon_oracle_anchor_test
+  oracle_anchor.cpp
+  oracle_anchor_test.cpp
+)
+
+target_link_libraries(formulon_oracle_anchor_test
+  PRIVATE
+    formulon_static
+    gtest_main
+)
+
+target_include_directories(formulon_oracle_anchor_test
+  PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}
+)
+
+formulon_apply_warnings(formulon_oracle_anchor_test)
+
+gtest_discover_tests(formulon_oracle_anchor_test)
 
 # ---------------------------------------------------------------------------
 # IronCalc oracle target

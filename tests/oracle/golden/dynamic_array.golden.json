@@ -2,11 +2,11 @@
   "suite": "dynamic_array",
   "description": "Dynamic-array (spilling) functions. SEQUENCE is the first acceptance case for cell-level spill machinery; the oracle reads back the anchor scalar (top-left of the spill region) since xlwings does not surface phantom cells through a single-cell read.",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.108.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-29T03:35:57Z"
+    "generated_at": "2026-05-01T15:06:07Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -17,37 +17,52 @@
       "id": "sequence_3",
       "formula": "=SEQUENCE(3)",
       "setup": {},
-      "skipped": "SEQUENCE returns ValueKind::Array; oracle runner does not unwrap to anchor scalar. Companion to byrow_sum_each_row."
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "sequence_2_3",
       "formula": "=SEQUENCE(2,3)",
       "setup": {},
-      "skipped": "Same as sequence_3: SEQUENCE Array result not anchor-unwrapped."
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "sequence_2_2_10_5",
       "formula": "=SEQUENCE(2,2,10,5)",
       "setup": {},
-      "skipped": "Same as sequence_3: SEQUENCE Array result not anchor-unwrapped."
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
     },
     {
       "id": "sequence_3_1_10_neg2",
       "formula": "=SEQUENCE(3,1,10,-2)",
       "setup": {},
-      "skipped": "Same as sequence_3: SEQUENCE Array result not anchor-unwrapped."
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
     },
     {
       "id": "sequence_3_1_half_quarter",
       "formula": "=SEQUENCE(3,1,0.5,0.25)",
       "setup": {},
-      "skipped": "Same as sequence_3: SEQUENCE Array result not anchor-unwrapped."
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
     },
     {
       "id": "sequence_zero_rows_value",
       "formula": "=SEQUENCE(0)",
       "setup": {},
-      "skipped": "Same as sequence_3: SEQUENCE error path returns Error scalar but golden registers an array-shaped error in some configurations; group with the SEQUENCE skip-oracle cluster for consistency."
+      "skipped": "SEQUENCE error path returns Error scalar but golden registers an array-shaped error in some configurations; re-verify after oracle-gen rerun captures the live Mac result post-anchor-unwrap landing."
     },
     {
       "id": "sequence_negative_rows_value",
@@ -71,7 +86,10 @@
       "id": "transpose_array_literal",
       "formula": "=TRANSPOSE({1,2,3;4,5,6})",
       "setup": {},
-      "skipped": "TRANSPOSE returns ValueKind::Array; oracle runner does not unwrap to anchor scalar. Companion to byrow_sum_each_row."
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "transpose_range",
@@ -94,31 +112,46 @@
           "value": 4.0
         }
       },
-      "skipped": "Same as transpose_array_literal: TRANSPOSE Array result not anchor-unwrapped."
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "transpose_scalar",
       "formula": "=TRANSPOSE(42)",
       "setup": {},
-      "skipped": "Same as transpose_array_literal: TRANSPOSE wraps scalar in 1x1 Array; oracle runner does not unwrap."
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
     },
     {
       "id": "transpose_single_row_to_column",
       "formula": "=TRANSPOSE({1,2,3,4})",
       "setup": {},
-      "skipped": "Same as transpose_array_literal: TRANSPOSE Array result not anchor-unwrapped."
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "transpose_single_column_to_row",
       "formula": "=TRANSPOSE({1;2;3;4})",
       "setup": {},
-      "skipped": "Same as transpose_array_literal: TRANSPOSE Array result not anchor-unwrapped."
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "transpose_text_array",
       "formula": "=TRANSPOSE({\"a\",\"b\";\"c\",\"d\"})",
       "setup": {},
-      "skipped": "Same as transpose_array_literal: TRANSPOSE Array result not anchor-unwrapped."
+      "expect": {
+        "kind": "text",
+        "value": "a"
+      }
     },
     {
       "id": "spill_ref_after_sequence_sum",

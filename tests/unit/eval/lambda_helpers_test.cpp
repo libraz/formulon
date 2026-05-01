@@ -139,6 +139,31 @@ TEST(LambdaHelpersByRow, NonLambdaSecondArgYieldsValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(LambdaHelpersByRow, ByrowSingleColumnInputUnwrapsTo1x1) {
+  // 3x1 input, lambda body `row*10` broadcasts over the 1x1 row slice and
+  // produces a 1x1 Array per iteration. Mac Excel anchor-unwraps that to a
+  // scalar, so BYROW emits a 3x1 Array {10; 20; 30}.
+  const Value v = EvalSrc("=BYROW({1;2;3}, LAMBDA(row, row*10))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 3U);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  ASSERT_TRUE(v.as_array_cells()[0].is_number());
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 10.0);
+  ASSERT_TRUE(v.as_array_cells()[1].is_number());
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 20.0);
+  ASSERT_TRUE(v.as_array_cells()[2].is_number());
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 30.0);
+}
+
+TEST(LambdaHelpersByRow, ByrowMultiCellLambdaReturnStillCalc) {
+  // 2x2 input: each row slice is 1x2. The lambda body returns the slice
+  // verbatim (a 1x2 Array, not 1x1), so the anchor-unwrap leaves it as
+  // an Array and BYROW must surface #CALC!.
+  const Value v = EvalSrc("=BYROW({1,2;3,4}, LAMBDA(row, row))");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Calc);
+}
+
 // ---------------------------------------------------------------------------
 // BYCOL
 // ---------------------------------------------------------------------------
@@ -190,6 +215,22 @@ TEST(LambdaHelpersByCol, ErrorInColumnPropagates) {
   const Value v = EvalSrc("=BYCOL({1,2;3,#DIV/0!}, LAMBDA(c, SUM(c)))");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+TEST(LambdaHelpersByCol, BycolSingleRowInputUnwrapsTo1x1) {
+  // 1x3 input, lambda body `col*10` broadcasts over the 1x1 column slice
+  // and produces a 1x1 Array per iteration. Mac Excel anchor-unwraps that
+  // to a scalar, so BYCOL emits a 1x3 Array {10, 20, 30}.
+  const Value v = EvalSrc("=BYCOL({1,2,3}, LAMBDA(col, col*10))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_EQ(v.as_array_cols(), 3U);
+  ASSERT_TRUE(v.as_array_cells()[0].is_number());
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 10.0);
+  ASSERT_TRUE(v.as_array_cells()[1].is_number());
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 20.0);
+  ASSERT_TRUE(v.as_array_cells()[2].is_number());
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 30.0);
 }
 
 // ---------------------------------------------------------------------------

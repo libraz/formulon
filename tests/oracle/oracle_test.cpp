@@ -34,6 +34,7 @@
 #include "parser/parser.h"
 #include "sheet.h"
 #include "tests/oracle/json_reader.h"
+#include "tests/oracle/oracle_anchor.h"
 #include "tests/oracle/oracle_runner.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -307,8 +308,13 @@ std::string compare_complex_text(const std::string& want, const std::string& got
 // `compare_mode` is "" or "exact" for the historical strict path, or a
 // structured comparator key (e.g. "complex_text") that selects an
 // alternative routine when the strict byte-equality check fails.
-std::string compare_value(const JsonValue& expect, const Value& actual, double tol_abs, double tol_rel,
+std::string compare_value(const JsonValue& expect, const Value& raw_actual, double tol_abs, double tol_rel,
                           std::string_view compare_mode) {
+  // Anchor projection: Excel reports the top-left scalar of any spill
+  // region while xlwings reads back only that cell. Formulon's eval
+  // surfaces the full Array; project it down so the kind dispatch
+  // below sees the same scalar Excel reports.
+  const Value& actual = anchor_or_self(raw_actual);
   if (!expect.is_object())
     return "golden 'expect' is not an object";
   const JsonValue* kind_v = expect.find("kind");

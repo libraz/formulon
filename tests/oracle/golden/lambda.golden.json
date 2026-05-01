@@ -2,11 +2,11 @@
   "suite": "lambda",
   "description": "LAMBDA + ISOMITTED + BYROW / BYCOL / MAP / REDUCE / SCAN / MAKEARRAY — higher-order family closure against Mac Excel 365 (ja-JP).",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.108.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-29T08:48:03Z"
+    "generated_at": "2026-05-01T15:05:12Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -125,7 +125,10 @@
       "id": "byrow_sum_each_row",
       "formula": "=BYROW({1,2,3;4,5,6}, LAMBDA(row, SUM(row)))",
       "setup": {},
-      "skipped": "BYROW returns ValueKind::Array; oracle runner does not unwrap to anchor scalar. Track follow-up to either unwrap in compare_value or anchor-resolve in BYROW eval."
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
     },
     {
       "id": "byrow_over_cell_range",
@@ -156,19 +159,28 @@
           "value": 6.0
         }
       },
-      "skipped": "Same as byrow_sum_each_row: BYROW Array result not anchor-unwrapped."
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
     },
     {
       "id": "byrow_single_row_input",
       "formula": "=BYROW({1,2,3}, LAMBDA(row, SUM(row)))",
       "setup": {},
-      "skipped": "Same as byrow_sum_each_row: BYROW Array result not anchor-unwrapped (single-row input still spills)."
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
     },
     {
       "id": "byrow_single_column_input",
       "formula": "=BYROW({1;2;3}, LAMBDA(row, row*10))",
       "setup": {},
-      "skipped": "Same as byrow_sum_each_row: BYROW Array result not anchor-unwrapped."
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
     },
     {
       "id": "byrow_lambda_arity_mismatch",
@@ -192,7 +204,10 @@
       "id": "bycol_sum_each_column",
       "formula": "=BYCOL({1,2,3;4,5,6}, LAMBDA(col, SUM(col)))",
       "setup": {},
-      "skipped": "BYCOL returns ValueKind::Array; oracle runner does not unwrap to anchor scalar. Companion to byrow_sum_each_row."
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
     },
     {
       "id": "bycol_over_cell_range",
@@ -223,19 +238,28 @@
           "value": 6.0
         }
       },
-      "skipped": "Same as bycol_sum_each_column."
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
     },
     {
       "id": "bycol_single_row_input",
       "formula": "=BYCOL({1,2,3}, LAMBDA(col, col*10))",
       "setup": {},
-      "skipped": "Same as bycol_sum_each_column."
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
     },
     {
       "id": "bycol_single_column_input",
       "formula": "=BYCOL({1;2;3}, LAMBDA(col, SUM(col)))",
       "setup": {},
-      "skipped": "Same as bycol_sum_each_column."
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
     },
     {
       "id": "bycol_lambda_arity_mismatch",
@@ -256,19 +280,28 @@
       "id": "map_single_array_doubles",
       "formula": "=MAP({1,2,3}, LAMBDA(x, x*2))",
       "setup": {},
-      "skipped": "MAP returns ValueKind::Array; oracle runner does not unwrap to anchor scalar. Companion to byrow_sum_each_row."
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
     },
     {
       "id": "map_two_array_sum",
       "formula": "=MAP({1,2,3}, {10,20,30}, LAMBDA(a, b, a+b))",
       "setup": {},
-      "skipped": "Same as map_single_array_doubles."
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
     },
     {
       "id": "map_three_array_sum",
       "formula": "=MAP({1,2,3}, {10,20,30}, {100,200,300}, LAMBDA(a, b, c, a+b+c))",
       "setup": {},
-      "skipped": "Same as map_single_array_doubles."
+      "expect": {
+        "kind": "number",
+        "value": 111.0
+      }
     },
     {
       "id": "map_shape_mismatch",
@@ -362,13 +395,19 @@
       "id": "scan_prefix_sum",
       "formula": "=SCAN(0, {1,2,3}, LAMBDA(a, v, a+v))",
       "setup": {},
-      "skipped": "SCAN returns ValueKind::Array; oracle runner does not unwrap to anchor scalar. Companion to byrow_sum_each_row."
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "scan_text_concat",
       "formula": "=SCAN(\"\", {\"a\",\"b\",\"c\"}, LAMBDA(a, v, a&v))",
       "setup": {},
-      "skipped": "Same as scan_prefix_sum."
+      "expect": {
+        "kind": "text",
+        "value": "a"
+      }
     },
     {
       "id": "scan_over_cell_range",
@@ -387,7 +426,10 @@
           "value": 3.0
         }
       },
-      "skipped": "Same as scan_prefix_sum."
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "scan_error_in_element",
@@ -399,43 +441,64 @@
       "id": "scan_single_element",
       "formula": "=SCAN(0, {5}, LAMBDA(a, v, a+v))",
       "setup": {},
-      "skipped": "Same as scan_prefix_sum (single-element source still spills)."
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
     },
     {
       "id": "scan_2d_source",
       "formula": "=SCAN(0, {1,2;3,4}, LAMBDA(a, v, a+v))",
       "setup": {},
-      "skipped": "Same as scan_prefix_sum (2D source spills row-major)."
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "makearray_3x3_row_col_product",
       "formula": "=MAKEARRAY(3,3,LAMBDA(r, c, r*c))",
       "setup": {},
-      "skipped": "MAKEARRAY returns ValueKind::Array; oracle runner does not unwrap to anchor scalar. Companion to byrow_sum_each_row."
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "makearray_single_row",
       "formula": "=MAKEARRAY(1,5,LAMBDA(r, c, c))",
       "setup": {},
-      "skipped": "Same as makearray_3x3_row_col_product."
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "makearray_single_column",
       "formula": "=MAKEARRAY(5,1,LAMBDA(r, c, r))",
       "setup": {},
-      "skipped": "Same as makearray_3x3_row_col_product."
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "makearray_constant_element",
       "formula": "=MAKEARRAY(2,2,LAMBDA(r, c, 7))",
       "setup": {},
-      "skipped": "Same as makearray_3x3_row_col_product."
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
     },
     {
       "id": "makearray_1x1_boundary",
       "formula": "=MAKEARRAY(1,1,LAMBDA(r, c, r+c))",
       "setup": {},
-      "skipped": "Same as makearray_3x3_row_col_product (1x1 boundary still produces an Array Value, not a unwrapped scalar)."
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
     },
     {
       "id": "makearray_lambda_returns_error",

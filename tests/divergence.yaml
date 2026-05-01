@@ -396,85 +396,17 @@ entries:
   # entries below are kept per-case so each one can be flipped to live
   # verification individually as the underlying gaps are closed.
 
-  # Gap 1: LAMBDA helper functions (BYROW / BYCOL / MAP / SCAN / MAKEARRAY)
-  # return ValueKind::Array in single-cell evaluation context. The oracle
-  # runner reads Excel's anchor scalar (top-left of the spill) and
-  # compares against scalar Values only — it does not unwrap Formulon
-  # arrays to their anchor cell. Result: every helper case fails with
-  # "expected number, got <unsupported>". The right fix is either (a)
-  # unwrap arrays to anchor in oracle_test.cpp::compare_value, or (b) make
-  # the lambda-helper eval paths return the anchor scalar when the formula
-  # cell is single-target. Tracked as follow-up work; entries are
-  # skip-oracle until then so verify is green.
-  - id: byrow_sum_each_row
-    mode: skip-oracle
-    reason: "BYROW returns ValueKind::Array; oracle runner does not unwrap to anchor scalar. Track follow-up to either unwrap in compare_value or anchor-resolve in BYROW eval."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-  - id: byrow_over_cell_range
-    mode: skip-oracle
-    reason: "Same as byrow_sum_each_row: BYROW Array result not anchor-unwrapped."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-  - id: byrow_single_row_input
-    mode: skip-oracle
-    reason: "Same as byrow_sum_each_row: BYROW Array result not anchor-unwrapped (single-row input still spills)."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-  - id: byrow_single_column_input
-    mode: skip-oracle
-    reason: "Same as byrow_sum_each_row: BYROW Array result not anchor-unwrapped."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-  - id: bycol_sum_each_column
-    mode: skip-oracle
-    reason: "BYCOL returns ValueKind::Array; oracle runner does not unwrap to anchor scalar. Companion to byrow_sum_each_row."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-  - id: bycol_over_cell_range
-    mode: skip-oracle
-    reason: "Same as bycol_sum_each_column."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-  - id: bycol_single_row_input
-    mode: skip-oracle
-    reason: "Same as bycol_sum_each_column."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-  - id: bycol_single_column_input
-    mode: skip-oracle
-    reason: "Same as bycol_sum_each_column."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+  # Gap 1: LAMBDA-helper anchor unwrap — closed 2026-05-01.
+  # BYROW / BYCOL / MAP / SCAN / MAKEARRAY (and SEQUENCE / TRANSPOSE in the
+  # dynamic-array suite) return ValueKind::Array in single-cell evaluation.
+  # The oracle comparator now projects Array results down to their top-left
+  # anchor cell (matching xlwings' read-back semantics); see
+  # tests/oracle/oracle_anchor.{h,cpp} and the corresponding unit tests.
+  # Pure "anchor not unwrapped" entries have been removed below; only
+  # cases with additional Mac-side quirks remain.
   - id: bycol_error_in_column
     mode: skip-oracle
     reason: "BYCOL with errored column produces a per-column array including the error; not anchor-unwrapped. Mac Excel returns blank at anchor (Z1) when one column errors — a separate quirk worth re-verifying when the unwrap path lands."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-  - id: map_single_array_doubles
-    mode: skip-oracle
-    reason: "MAP returns ValueKind::Array; oracle runner does not unwrap to anchor scalar. Companion to byrow_sum_each_row."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-  - id: map_two_array_sum
-    mode: skip-oracle
-    reason: "Same as map_single_array_doubles."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-  - id: map_three_array_sum
-    mode: skip-oracle
-    reason: "Same as map_single_array_doubles."
     prefer: mac-excel-365
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"
@@ -490,69 +422,9 @@ entries:
     prefer: mac-excel-365
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"
-  - id: scan_prefix_sum
-    mode: skip-oracle
-    reason: "SCAN returns ValueKind::Array; oracle runner does not unwrap to anchor scalar. Companion to byrow_sum_each_row."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-  - id: scan_text_concat
-    mode: skip-oracle
-    reason: "Same as scan_prefix_sum."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-  - id: scan_over_cell_range
-    mode: skip-oracle
-    reason: "Same as scan_prefix_sum."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
   - id: scan_error_in_element
     mode: skip-oracle
     reason: "SCAN propagating errors downstream; Mac anchor reads as blank. Skip-oracle pending unwrap."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-  - id: scan_single_element
-    mode: skip-oracle
-    reason: "Same as scan_prefix_sum (single-element source still spills)."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-  - id: scan_2d_source
-    mode: skip-oracle
-    reason: "Same as scan_prefix_sum (2D source spills row-major)."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-  - id: makearray_3x3_row_col_product
-    mode: skip-oracle
-    reason: "MAKEARRAY returns ValueKind::Array; oracle runner does not unwrap to anchor scalar. Companion to byrow_sum_each_row."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-  - id: makearray_single_row
-    mode: skip-oracle
-    reason: "Same as makearray_3x3_row_col_product."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-  - id: makearray_single_column
-    mode: skip-oracle
-    reason: "Same as makearray_3x3_row_col_product."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-  - id: makearray_constant_element
-    mode: skip-oracle
-    reason: "Same as makearray_3x3_row_col_product."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-  - id: makearray_1x1_boundary
-    mode: skip-oracle
-    reason: "Same as makearray_3x3_row_col_product (1x1 boundary still produces an Array Value, not a unwrapped scalar)."
     prefer: mac-excel-365
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"
@@ -1678,83 +1550,15 @@ entries:
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
 
-  # -- SEQUENCE / TRANSPOSE spill anchor unwrap -----------------------------
-  # SEQUENCE and TRANSPOSE return ValueKind::Array; the oracle runner reads
-  # Excel's anchor scalar (top-left of the spill region) but does not unwrap
-  # Formulon arrays back to their anchor, so every case fails with
-  # "expected number, got <unsupported>". Same root cause as the BYROW /
-  # BYCOL / MAP / SCAN / MAKEARRAY entries above. Skip-oracle until either
-  # (a) compare_value in oracle_test.cpp learns to unwrap Array -> anchor,
-  # or (b) the eval path returns the anchor scalar in single-cell context.
-  - id: sequence_3
-    mode: skip-oracle
-    reason: "SEQUENCE returns ValueKind::Array; oracle runner does not unwrap to anchor scalar. Companion to byrow_sum_each_row."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-  - id: sequence_2_3
-    mode: skip-oracle
-    reason: "Same as sequence_3: SEQUENCE Array result not anchor-unwrapped."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-  - id: sequence_2_2_10_5
-    mode: skip-oracle
-    reason: "Same as sequence_3: SEQUENCE Array result not anchor-unwrapped."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-  - id: sequence_3_1_10_neg2
-    mode: skip-oracle
-    reason: "Same as sequence_3: SEQUENCE Array result not anchor-unwrapped."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-  - id: sequence_3_1_half_quarter
-    mode: skip-oracle
-    reason: "Same as sequence_3: SEQUENCE Array result not anchor-unwrapped."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
+  # -- SEQUENCE / TRANSPOSE / SpillRef -------------------------------------
+  # The SEQUENCE / TRANSPOSE families' "anchor not unwrapped" entries were
+  # closed 2026-05-01 alongside the LAMBDA-helper unwrap (see comment near
+  # the BYROW block). One residual divergence in `sequence_zero_rows_value`
+  # remains because the error path pre-empts the anchor projection — kept
+  # for re-verification once oracle-gen reflects the live Mac result.
   - id: sequence_zero_rows_value
     mode: skip-oracle
-    reason: "Same as sequence_3: SEQUENCE error path returns Error scalar but golden registers an array-shaped error in some configurations; group with the SEQUENCE skip-oracle cluster for consistency."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-  - id: transpose_array_literal
-    mode: skip-oracle
-    reason: "TRANSPOSE returns ValueKind::Array; oracle runner does not unwrap to anchor scalar. Companion to byrow_sum_each_row."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-  - id: transpose_range
-    mode: skip-oracle
-    reason: "Same as transpose_array_literal: TRANSPOSE Array result not anchor-unwrapped."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-  - id: transpose_scalar
-    mode: skip-oracle
-    reason: "Same as transpose_array_literal: TRANSPOSE wraps scalar in 1x1 Array; oracle runner does not unwrap."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-  - id: transpose_single_row_to_column
-    mode: skip-oracle
-    reason: "Same as transpose_array_literal: TRANSPOSE Array result not anchor-unwrapped."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-  - id: transpose_single_column_to_row
-    mode: skip-oracle
-    reason: "Same as transpose_array_literal: TRANSPOSE Array result not anchor-unwrapped."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-  - id: transpose_text_array
-    mode: skip-oracle
-    reason: "Same as transpose_array_literal: TRANSPOSE Array result not anchor-unwrapped."
+    reason: "SEQUENCE error path returns Error scalar but golden registers an array-shaped error in some configurations; re-verify after oracle-gen rerun captures the live Mac result post-anchor-unwrap landing."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"

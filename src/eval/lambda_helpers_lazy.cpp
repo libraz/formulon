@@ -51,6 +51,25 @@ Value* alloc_cells(Arena& arena, std::uint32_t rows, std::uint32_t cols) {
   return arena.create_array<Value>(n);
 }
 
+// If `v` is a 1x1 Array, returns its single cell unchanged. Otherwise
+// returns `v` verbatim.
+//
+// BYROW / BYCOL / MAP / SCAN / MAKEARRAY require their lambda body to
+// produce a scalar per output slot. Mac Excel's lambda dispatch
+// implicitly anchor-unwraps a 1x1 Array result (e.g. `LAMBDA(row, row*10)`
+// applied to a 1x1 row slice produces {10}, which Excel projects to 10).
+// Multi-cell Arrays still surface #CALC! at the call site.
+Value unwrap_1x1_array(const Value& v) {
+  if (!v.is_array()) {
+    return v;
+  }
+  const ArrayValue* a = v.as_array();
+  if (a->rows == 1U && a->cols == 1U) {
+    return a->cells[0];
+  }
+  return v;
+}
+
 // Builds a fresh 1-cell-wide / 1-cell-tall `ArrayValue` carrying `cells`.
 // The buffer must already live in `arena`. Used by BYROW / BYCOL to hand a
 // row or column slice of the input to the per-cell lambda invocation. The
@@ -275,18 +294,16 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
     if (res.is_error()) {
       return res;
     }
-    if (res.is_array()) {
-      // Mac Excel surfaces #CALC! when a per-row / per-column lambda
-      // attempts a multi-cell return: BYROW / BYCOL have no slot to spill
-      // a sub-array into.
+    // Mac Excel anchor-unwraps a 1x1 Array lambda result (e.g.
+    // `LAMBDA(row, row*10)` applied to a 1x1 row slice produces {10},
+    // which Excel projects to 10). Multi-cell Arrays and lambda values
+    // still surface #CALC! because BYROW / BYCOL have no slot to spill
+    // a sub-array or closure into.
+    const Value scalar_res = unwrap_1x1_array(res);
+    if (scalar_res.is_array() || scalar_res.is_lambda()) {
       return Value::error(ErrorCode::Calc);
     }
-    if (res.is_lambda()) {
-      // A lambda body that returns another lambda has no scalar projection;
-      // surface #CALC! to match the multi-cell-return guard.
-      return Value::error(ErrorCode::Calc);
-    }
-    out_cells[i] = res;
+    out_cells[i] = scalar_res;
   }
 
   return wrap_array(arena, out_rows, out_cols, out_cells);
@@ -376,10 +393,13 @@ Value eval_map_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
     if (res.is_error()) {
       return res;
     }
-    if (res.is_array() || res.is_lambda()) {
+    // Anchor-unwrap a 1x1 Array result; multi-cell Arrays / lambda values
+    // still surface #CALC!.
+    const Value scalar_res = unwrap_1x1_array(res);
+    if (scalar_res.is_array() || scalar_res.is_lambda()) {
       return Value::error(ErrorCode::Calc);
     }
-    out_cells[idx] = res;
+    out_cells[idx] = scalar_res;
   }
 
   return wrap_array(arena, rows, cols, out_cells);
@@ -480,11 +500,13 @@ Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
       return res;
     }
     // SCAN, like BYROW / BYCOL / MAP, has a single output slot per cell;
-    // a multi-cell lambda return would require nested spilling.
-    if (res.is_array() || res.is_lambda()) {
+    // a multi-cell lambda return would require nested spilling. A 1x1
+    // Array result is anchor-unwrapped to its single cell.
+    const Value scalar_res = unwrap_1x1_array(res);
+    if (scalar_res.is_array() || scalar_res.is_lambda()) {
       return Value::error(ErrorCode::Calc);
     }
-    acc = res;
+    acc = scalar_res;
     out_cells[i] = acc;
   }
 
@@ -527,10 +549,13 @@ Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const Funct
       if (res.is_error()) {
         return res;
       }
-      if (res.is_array() || res.is_lambda()) {
+      // Anchor-unwrap a 1x1 Array result; multi-cell Arrays / lambda
+      // values still surface #CALC!.
+      const Value scalar_res = unwrap_1x1_array(res);
+      if (scalar_res.is_array() || scalar_res.is_lambda()) {
         return Value::error(ErrorCode::Calc);
       }
-      out_cells[static_cast<std::size_t>(r) * static_cast<std::size_t>(cols) + c] = res;
+      out_cells[static_cast<std::size_t>(r) * static_cast<std::size_t>(cols) + c] = scalar_res;
     }
   }
 
