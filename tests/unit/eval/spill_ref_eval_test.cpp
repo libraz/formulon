@@ -485,6 +485,163 @@ TEST(SpillRefLet, TransitiveLetBindingPreservesShape) {
   EXPECT_DOUBLE_EQ(v.as_number(), 60.0);
 }
 
+// ---------------------------------------------------------------------------
+// `_xlfn.ANCHORARRAY(ref)` — the OOXML internal encoding of `ref#`.
+// `strip_future_prefix` reduces the call name to bare `ANCHORARRAY` before
+// dispatch, so these tests parse both spellings and expect the same result.
+// ---------------------------------------------------------------------------
+
+TEST(AnchorArrayLazy, RefOverCommittedSpill) {
+  // Pre-commit a 3x1 spill at A1; `_xlfn.ANCHORARRAY(A1)` must return the
+  // same Value::Array shape and cells as the postfix-`#` SpillRef branch.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  std::vector<Value> cells{Value::number(10.0), Value::number(20.0), Value::number(30.0)};
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 1U, std::move(cells)));
+
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=_xlfn.ANCHORARRAY(A1)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 3U);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  const Value* read_cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(read_cells[0].as_number(), 10.0);
+  EXPECT_DOUBLE_EQ(read_cells[1].as_number(), 20.0);
+  EXPECT_DOUBLE_EQ(read_cells[2].as_number(), 30.0);
+}
+
+TEST(AnchorArrayLazy, BareNameWithoutXlfnPrefix) {
+  // Plain `ANCHORARRAY(A1)` should dispatch identically — the registry
+  // entry is name-canonicalised, and bare callers (e.g. user-typed
+  // formulas) must work the same as the OOXML-encoded `_xlfn.` form.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 1U, 1U, std::vector<Value>{Value::number(7.0)}));
+
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=ANCHORARRAY(A1)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 7.0);
+}
+
+TEST(AnchorArrayLazy, NoSpillReturnsRef) {
+  // No spill anchored at A1 -> #REF!. Same surface as `=A1#` against an
+  // un-spilled cell; the IronCalc spill_operator suite's E2 / E4 / E6
+  // cases hit this exact path.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=_xlfn.ANCHORARRAY(A1)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+TEST(AnchorArrayLazy, SumOverAnchorArray) {
+  // SUM consumes the resulting Value::Array like any other range-shaped
+  // arg, so `=SUM(_xlfn.ANCHORARRAY(A1))` over [10, 20, 30] is 60. This
+  // is the same shape as `=SUM(A1#)`.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  ASSERT_TRUE(sheet.commit_spill(
+      0U, 0U, 3U, 1U,
+      std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
+
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=SUM(_xlfn.ANCHORARRAY(A1))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 60.0);
+}
+
+TEST(AnchorArrayLazy, SumOverSequenceCallFlattens) {
+  // The eager dispatcher's generic Array-result flatten kicks in here:
+  // SEQUENCE returns a Value::Array, which the fallback unpacks row-major
+  // before calling SUM's impl. Mac Excel returns 6 for `=SUM(SEQUENCE(3))`
+  // (1+2+3); the same fix that lets `SUM(_xlfn.ANCHORARRAY(A1))` work also
+  // covers any other lazy builtin that returns an Array.
+  Arena parse_arena;
+  Arena eval_arena;
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+  const Value v = EvalUnder("=SUM(SEQUENCE(3))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 6.0);
+}
+
+TEST(AnchorArrayLazy, NestedOffsetCallResolvesAnchor) {
+  // `_xlfn.ANCHORARRAY(OFFSET(A1, 1, 1))` should resolve OFFSET to its
+  // top-left rectangle (B2) and look up the spill anchored there. This
+  // covers the IronCalc `I2` case (`=SUM(_xlfn.ANCHORARRAY(OFFSET(A1,1,1)))`)
+  // which the plain Ref shape does not exercise.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  ASSERT_TRUE(sheet.commit_spill(
+      1U, 1U, 4U, 1U,
+      std::vector<Value>{Value::number(12.0), Value::number(24.0), Value::number(34.0), Value::number(1245.0)}));
+
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=SUM(_xlfn.ANCHORARRAY(OFFSET(A1, 1, 1)))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1315.0);
+}
+
+TEST(AnchorArrayLazy, WrongArityIsValueError) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value zero = EvalUnder("=_xlfn.ANCHORARRAY()", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(zero.is_error());
+  EXPECT_EQ(zero.as_error(), ErrorCode::Value);
+
+  Arena parse_arena2;
+  Arena eval_arena2;
+  const Value two = EvalUnder("=_xlfn.ANCHORARRAY(A1, B2)", &parse_arena2, &eval_arena2, ctx);
+  ASSERT_TRUE(two.is_error());
+  EXPECT_EQ(two.as_error(), ErrorCode::Value);
+}
+
+TEST(AnchorArrayLazy, NonReferenceArgIsValueError) {
+  // A literal arg has no anchor cell to look up; mirrors Excel's
+  // `=_xlfn.ANCHORARRAY(1)` -> #VALUE!.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=_xlfn.ANCHORARRAY(1)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

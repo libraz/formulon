@@ -299,6 +299,27 @@ Value eval_wraprows_lazy(const parser::AstNode& call, Arena& arena, const Functi
 Value eval_wrapcols_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx);
 
+/// `_xlfn.ANCHORARRAY(ref)` — the OOXML internal encoding of the postfix
+/// spill operator `ref#`. Excel itself transparently strips the `_xlfn.`
+/// prefix on load, so callers see plain `ANCHORARRAY(ref)` here. Returns
+/// the spill region anchored at `ref` as a `Value::Array`, mirroring the
+/// `NodeKind::SpillRef` branch in `tree_walker.cpp`. Three accepted argument
+/// shapes:
+///   * Plain `Ref` (`A1`) — the dominant OOXML shape.
+///   * `SpillRef` (`A1#`) — already a spill anchor; treat the underlying
+///     reference identically.
+///   * Reference-returning `Call` (`OFFSET` / `INDIRECT`) — resolved via
+///     `resolve_reference_call`; the rectangle's top-left is the anchor.
+///
+/// Error policy:
+///   * Arity != 1 -> `#VALUE!`.
+///   * Unbound context (no current sheet) -> `#NAME?`.
+///   * Sheet-qualified reference with no workbook bound, or missing sheet,
+///     or a row/col past `Sheet::kMax{Rows,Cols}` -> `#REF!`.
+///   * No spill region anchored at the resolved cell -> `#REF!`.
+Value eval_anchorarray_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx);
+
 }  // namespace eval
 }  // namespace formulon
 

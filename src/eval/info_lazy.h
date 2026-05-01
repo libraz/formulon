@@ -76,6 +76,17 @@ Value eval_sheet_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
 Value eval_sheets_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx);
 
+/// `SINGLE(value)` — the explicit-name form of the `@` implicit
+/// intersection operator. xlsx serialises `@A1:A5` as
+/// `_xlfn.SINGLE(A1:A5)` so older Excel versions don't accidentally
+/// expand it; the `_xlfn.` prefix is stripped before dispatch reaches
+/// the registry. For a single-column range the formula cell's row
+/// projects onto the range; for a single-row range the formula cell's
+/// column projects. Other shapes surface `#VALUE!` (matching the `@`
+/// operator's documented behaviour for 2-D and out-of-axis arguments).
+Value eval_single_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx);
+
 }  // namespace eval
 }  // namespace formulon
 

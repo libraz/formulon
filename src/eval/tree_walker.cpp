@@ -145,6 +145,11 @@ struct LazyEntry {
 
 constexpr LazyEntry kLazyDispatch[] = {
     {"AGGREGATE", &eval_aggregate_lazy},
+    // ANCHORARRAY is the OOXML internal encoding of the postfix `#`
+    // spill operator. The xlsx-only `_xlfn.` prefix is stripped by
+    // `strip_future_prefix`, so callers register the canonical bare name.
+    // See `eval_anchorarray_lazy`.
+    {"ANCHORARRAY", &eval_anchorarray_lazy},
     {"AREAS", &eval_areas_lazy},
     {"AVERAGEIF", &eval_averageif_lazy},
     {"AVERAGEIFS", &eval_averageifs_lazy},
@@ -266,6 +271,13 @@ constexpr LazyEntry kLazyDispatch[] = {
     // tells them which sheet to answer for.
     {"SHEET", &eval_sheet_lazy},
     {"SHEETS", &eval_sheets_lazy},
+    // SINGLE is the explicit-name form of the `@` implicit-intersection
+    // operator; xlsx serialises `@range` as `_xlfn.SINGLE(range)` (the
+    // `_xlfn.` prefix is stripped by `strip_future_prefix`). Routes to a
+    // lazy impl so the un-evaluated RangeOp AST can be projected onto the
+    // formula cell's row / column via `EvalContext::formula_row` /
+    // `formula_col` — the same logic the `@` operator uses.
+    {"SINGLE", &eval_single_lazy},
     {"SLOPE", &eval_slope_lazy},
     {"SORT", &eval_sort_lazy},
     {"SORTBY", &eval_sortby_lazy},
@@ -978,6 +990,49 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
     Value v = eval_node(arg_node, arena, registry, ctx);
     if (def->propagate_errors && v.is_error()) {
       return v;
+    }
+    // Generic Array-result flatten for range-aware aggregators. Lazy
+    // builtins (`ANCHORARRAY`, `SEQUENCE`, `TRANSPOSE`, `MUNIT`, ...)
+    // return `Value::Array`; without this branch SUM / AVERAGE / MIN /
+    // MAX would receive the Array as a single scalar slot and fail with
+    // `#VALUE!` from `coerce_to_number`. Flattening row-major mirrors the
+    // SpillRef / RangeOp branches above, applying the same provenance
+    // filters so blank / text / bool cells are dropped or coerced
+    // consistently. Calls whose specific shape we already special-cased
+    // (OFFSET, IF, CHOOSE, INDEX, INDIRECT, ROW, COLUMN, TRANSPOSE-via-
+    // SUMPRODUCT) reach `continue` before getting here, so this branch
+    // only catches the otherwise-uncovered Array-returning calls.
+    if (def->accepts_ranges && v.is_array()) {
+      had_range_shaped_arg = true;
+      const ArrayValue* arr = v.as_array();
+      const std::size_t n = static_cast<std::size_t>(arr->rows) * static_cast<std::size_t>(arr->cols);
+      for (std::size_t flat = 0; flat < n; ++flat) {
+        const Value& cell = arr->cells[flat];
+        if (def->propagate_errors && cell.is_error()) {
+          return cell;
+        }
+        if (def->range_filter_numeric_only && cell.kind() != ValueKind::Number) {
+          continue;
+        }
+        if (def->range_filter_bool_coercible && cell.kind() != ValueKind::Number && cell.kind() != ValueKind::Bool) {
+          continue;
+        }
+        if (def->range_filter_a_coerce) {
+          if (cell.kind() == ValueKind::Blank) {
+            continue;
+          }
+          if (cell.kind() == ValueKind::Bool) {
+            values.push_back(Value::number(cell.as_boolean() ? 1.0 : 0.0));
+            continue;
+          }
+          if (cell.kind() == ValueKind::Text) {
+            values.push_back(Value::number(0.0));
+            continue;
+          }
+        }
+        values.push_back(cell);
+      }
+      continue;
     }
     // Blank-scalar policy. RangeOp / OFFSET-call / ArrayLiteral args were
     // handled above and `continue`'d, so reaching this point implies a

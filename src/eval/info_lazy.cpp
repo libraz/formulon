@@ -22,6 +22,7 @@
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/reference_lazy.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
@@ -100,32 +101,78 @@ const Sheet* resolve_ref_sheet(std::string_view ref_sheet, const EvalContext& ct
 
 }  // namespace
 
-Value eval_isformula_lazy(const parser::AstNode& call, Arena& /*arena*/, const FunctionRegistry& /*registry*/,
+Value eval_isformula_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                           const EvalContext& ctx) {
   if (call.as_call_arity() != 1U) {
     return Value::error(ErrorCode::Value);
   }
   const parser::AstNode& arg = call.as_call_arg(0);
-  if (arg.kind() != parser::NodeKind::Ref) {
-    // Excel: `ISFORMULA(1)` and `ISFORMULA("A1")` both surface `#VALUE!`.
-    // RangeOp would need array-spill to answer cell-by-cell; not in the
-    // MVP.
-    return Value::error(ErrorCode::Value);
+
+  // Static reference path: `ISFORMULA(A1)` / `ISFORMULA(Sheet2!A1)`.
+  if (arg.kind() == parser::NodeKind::Ref) {
+    const parser::Reference& r = arg.as_ref();
+    if (r.is_full_col || r.is_full_row) {
+      return Value::error(ErrorCode::Value);
+    }
+    const Sheet* target = resolve_ref_sheet(r.sheet, ctx);
+    if (target == nullptr) {
+      // Unbound context or missing qualified sheet. Excel returns `#REF!`
+      // for a broken sheet qualifier; `#NAME?` for an unbound context is
+      // consistent with our `resolve_ref` treatment.
+      return Value::error(ctx.current_sheet() == nullptr ? ErrorCode::Name : ErrorCode::Ref);
+    }
+    const Cell* cell = target->cell_at(r.row, r.col);
+    const bool is_formula = (cell != nullptr) && !cell->formula_text.empty();
+    return Value::boolean(is_formula);
   }
-  const parser::Reference& r = arg.as_ref();
-  if (r.is_full_col || r.is_full_row) {
-    return Value::error(ErrorCode::Value);
+
+  // Reference-returning calls: `=ISFORMULA(INDIRECT("C9"))` must inspect
+  // the *target* cell's formula_text rather than evaluating the call (which
+  // would recurse into the target cell's value and risk a cycle when the
+  // target is the formula-under-test itself). For INDIRECT we parse the
+  // text argument and look up the resolved cell directly. OFFSET / INDEX /
+  // CHOOSE do not currently produce a `Value::Ref` at runtime, so the
+  // generic evaluation path below catches their result and returns FALSE
+  // when the result is a non-error scalar (matching Excel's behaviour for
+  // a non-reference scrutinee).
+  if (arg.kind() == parser::NodeKind::Call && is_reference_call_name(arg.as_call_name())) {
+    if (strings::case_insensitive_eq(arg.as_call_name(), "INDIRECT")) {
+      const std::uint32_t arity = arg.as_call_arity();
+      if (arity < 1U || arity > 2U) {
+        return Value::error(ErrorCode::Value);
+      }
+      const Value text_val = eval_node(arg.as_call_arg(0), arena, registry, ctx);
+      if (text_val.is_error()) {
+        return text_val;
+      }
+      auto text_exp = coerce_to_text(text_val);
+      if (!text_exp) {
+        return Value::error(text_exp.error());
+      }
+      const refs_internal::A1Parse parsed = refs_internal::parse_a1_ref(text_exp.value());
+      if (!parsed.valid || parsed.is_range || parsed.is_full_col || parsed.is_full_row) {
+        return Value::error(ErrorCode::Ref);
+      }
+      const Sheet* target = resolve_ref_sheet(parsed.sheet, ctx);
+      if (target == nullptr) {
+        return Value::error(ctx.current_sheet() == nullptr ? ErrorCode::Name : ErrorCode::Ref);
+      }
+      const Cell* cell = target->cell_at(parsed.row, parsed.col);
+      const bool is_formula = (cell != nullptr) && !cell->formula_text.empty();
+      return Value::boolean(is_formula);
+    }
+    // OFFSET / INDEX / CHOOSE: evaluate and report based on result. Errors
+    // propagate; non-error scalar results are treated as "not a formula".
+    const Value v = eval_node(arg, arena, registry, ctx);
+    if (v.is_error()) {
+      return v;
+    }
+    return Value::boolean(false);
   }
-  const Sheet* target = resolve_ref_sheet(r.sheet, ctx);
-  if (target == nullptr) {
-    // Unbound context or missing qualified sheet. Excel returns `#REF!`
-    // for a broken sheet qualifier; `#NAME?` for an unbound context is
-    // consistent with our `resolve_ref` treatment.
-    return Value::error(ctx.current_sheet() == nullptr ? ErrorCode::Name : ErrorCode::Ref);
-  }
-  const Cell* cell = target->cell_at(r.row, r.col);
-  const bool is_formula = (cell != nullptr) && !cell->formula_text.empty();
-  return Value::boolean(is_formula);
+
+  // Excel: `ISFORMULA(1)` and `ISFORMULA("A1")` both surface `#VALUE!`.
+  // RangeOp would need array-spill to answer cell-by-cell; not in the MVP.
+  return Value::error(ErrorCode::Value);
 }
 
 Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& /*registry*/,
@@ -309,6 +356,65 @@ Value eval_sheet_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   }
   const std::size_t idx = find_sheet_index(*wb, *target);
   return idx == 0 ? Value::error(ErrorCode::NA) : Value::number(static_cast<double>(idx));
+}
+
+Value eval_single_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx) {
+  if (call.as_call_arity() != 1U) {
+    return Value::error(ErrorCode::Value);
+  }
+  const parser::AstNode& arg = call.as_call_arg(0);
+
+  // Mirror the `@`-operator (NodeKind::ImplicitIntersection) projection
+  // logic in `tree_walker.cpp`: for a static `RangeOp(Ref, Ref)` arg, project
+  // the formula cell's row (single-column range) or column (single-row range)
+  // onto the range. 2-D ranges and out-of-axis formula cells surface
+  // `#VALUE!`, matching the `@` operator's documented behaviour.
+  if (arg.kind() == parser::NodeKind::RangeOp) {
+    const parser::AstNode& lhs_ast = arg.as_range_lhs();
+    const parser::AstNode& rhs_ast = arg.as_range_rhs();
+    if (lhs_ast.kind() != parser::NodeKind::Ref || rhs_ast.kind() != parser::NodeKind::Ref) {
+      return Value::error(ErrorCode::Value);
+    }
+    if (!ctx.has_formula_cell()) {
+      // Without a bound formula cell there is no row/col to project onto.
+      return Value::error(ErrorCode::Value);
+    }
+    const parser::Reference& lhs_ref = lhs_ast.as_ref();
+    const parser::Reference& rhs_ref = rhs_ast.as_ref();
+    const std::uint32_t r1 = std::min(lhs_ref.row, rhs_ref.row);
+    const std::uint32_t r2 = std::max(lhs_ref.row, rhs_ref.row);
+    const std::uint32_t c1 = std::min(lhs_ref.col, rhs_ref.col);
+    const std::uint32_t c2 = std::max(lhs_ref.col, rhs_ref.col);
+    const std::uint32_t fr = ctx.formula_row();
+    const std::uint32_t fc = ctx.formula_col();
+    parser::Reference target{};
+    target.sheet = lhs_ref.sheet;
+    if (c1 == c2) {
+      // Single-column range: project formula row.
+      if (fr < r1 || fr > r2) {
+        return Value::error(ErrorCode::Value);
+      }
+      target.row = fr;
+      target.col = c1;
+    } else if (r1 == r2) {
+      // Single-row range: project formula column.
+      if (fc < c1 || fc > c2) {
+        return Value::error(ErrorCode::Value);
+      }
+      target.row = r1;
+      target.col = fc;
+    } else {
+      // 2-D ranges: implicit intersection requires both axes to align,
+      // mirroring the `@` operator. Conservative `#VALUE!` for now.
+      return Value::error(ErrorCode::Value);
+    }
+    return ctx.resolve_ref(target, arena, registry);
+  }
+
+  // Single-cell Ref or any non-range value: identity. Matches the `@`
+  // operator's identity behaviour for already-scalar operands.
+  return eval_node(arg, arena, registry, ctx);
 }
 
 Value eval_sheets_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
