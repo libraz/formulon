@@ -446,11 +446,14 @@ void register_aggregate_builtins(FunctionRegistry& registry) {
     registry.register_function(def);
   }
   {
-    // CONCATENATE is the legacy spelling kept by Excel for compatibility.
-    // Excel 365 also accepts ranges (unlike the original CONCATENATE, which
-    // did an implicit intersection); match the 365 behaviour.
+    // CONCATENATE is the legacy spelling and keeps legacy semantics: range
+    // arguments undergo implicit intersection (project to the caller's row /
+    // column) rather than flattening. Mac Excel 365 probe (2026-05-02)
+    // confirms `=CONCATENATE(A1:A3, "!")` at B2 with A1="Hello",A2=" ",
+    // A3="World" returns " !" (IxI to row 2 -> A2), not "Hello World!".
+    // CONCAT (above) is the modern flatten-all variant.
     FunctionDef def{"CONCATENATE", 1u, kVariadic, &Concat};
-    def.accepts_ranges = true;
+    def.accepts_ranges = false;
     registry.register_function(def);
   }
   registry.register_function(FunctionDef{"LEN", 1u, 1u, &Len});

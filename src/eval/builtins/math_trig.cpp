@@ -135,12 +135,15 @@ Value Radians(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 }
 
 // DEGREES(radians) - radians-to-degrees conversion. DEGREES(pi) == 180.
+// Order of operations matches Mac Excel 365 / IronCalc: divide first, then
+// multiply. The mathematically equivalent `x * 180.0 / kPi` form differs by
+// 1 ULP for some inputs (e.g. 12345678900); see Mac probe 2026-05-02.
 Value Degrees(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto x = coerce_to_number(args[0]);
   if (!x) {
     return Value::error(x.error());
   }
-  const double r = x.value() * 180.0 / kPi;
+  const double r = x.value() / kPi * 180.0;
   if (std::isnan(r) || std::isinf(r)) {
     return Value::error(ErrorCode::Num);
   }

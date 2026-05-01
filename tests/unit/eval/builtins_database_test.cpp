@@ -154,12 +154,21 @@ TEST(BuiltinsDatabase, DSumFieldNotFoundReturnsValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(BuiltinsDatabase, DSumBoolFieldRejected) {
+TEST(BuiltinsDatabase, DSumBoolFieldCoercesToOneAndZero) {
+  // Mac Excel coerces a Bool field selector to its numeric counterpart
+  // (TRUE -> 1, FALSE -> 0) just like CHOOSE / INDEX / DCOUNT. Field 1 is
+  // the "Fruit" column whose data cells are all Text — DSUM of a text-only
+  // column is 0, not #VALUE!. FALSE selects field 0 which doesn't exist
+  // (1-based indexing) so #VALUE! is returned.
   Workbook wb = MakeFruitWorkbook();
   SetSingleFruitCriterion(wb, "Apple");
-  const Value v = EvalIn("=DSUM(A1:C5, TRUE, E1:E2)", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  const Value v_true = EvalIn("=DSUM(A1:C5, TRUE, E1:E2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v_true.is_number()) << "TRUE should coerce to field 1 (Fruit)";
+  EXPECT_DOUBLE_EQ(v_true.as_number(), 0.0);
+
+  const Value v_false = EvalIn("=DSUM(A1:C5, FALSE, E1:E2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v_false.is_error());
+  EXPECT_EQ(v_false.as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsDatabase, DSumComparatorCriterion) {

@@ -68,10 +68,11 @@ bool resolve_table_arg(const parser::AstNode& arg_node, Arena& arena, const Func
 //
 //  * Number: truncated toward zero -> 1-based column index. Must lie in
 //    `[1, db_cols]`.
+//  * Bool  : TRUE coerces to 1 (column A); FALSE coerces to 0 and is
+//    rejected with `#VALUE!` (no zero-th column).
 //  * Text  : case-insensitive ASCII equality against each header cell's
 //    `coerce_to_text` rendering; first match wins.
-//  * Bool / Blank / Error: rejected with `#VALUE!`. (Bool in particular
-//    is NOT treated as 0 / 1 — Excel rejects it.)
+//  * Blank / Error: rejected with `#VALUE!`.
 //
 // Returns `true` on success with the 0-indexed column written to
 // `*out_col_index`. On failure writes the propagating error Value to
@@ -82,8 +83,11 @@ bool resolve_field_column(const Value& field_value, const std::vector<Value>& db
     *out_err = field_value;
     return false;
   }
-  if (field_value.is_number()) {
-    const double raw = field_value.as_number();
+  if (field_value.is_number() || field_value.is_boolean()) {
+    // Bool coerces to 0/1 just like Excel's other integer-index arguments
+    // (CHOOSE, INDEX). FALSE -> 0 falls through the `< 1` check below and
+    // is rejected with `#VALUE!`.
+    const double raw = field_value.is_boolean() ? (field_value.as_boolean() ? 1.0 : 0.0) : field_value.as_number();
     // Excel truncates (not rounds) toward zero, matching every other
     // integer-index argument (e.g. CHOOSE, INDEX).
     const long long idx = static_cast<long long>(raw);
@@ -125,7 +129,7 @@ bool resolve_field_column(const Value& field_value, const std::vector<Value>& db
     *out_err = Value::error(ErrorCode::Value);
     return false;
   }
-  // Bool, Blank, anything else: Excel rejects as #VALUE!.
+  // Blank, Array, Ref, Lambda, etc.: Excel rejects as #VALUE!.
   *out_err = Value::error(ErrorCode::Value);
   return false;
 }
