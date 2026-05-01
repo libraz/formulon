@@ -36,23 +36,19 @@
 //   * GETPIVOTDATA    -> fixed #REF!   (no pivot tables yet, so no
 //                        field/item lookup can ever resolve; #REF!
 //                        matches Mac when the lookup target is invalid).
-//   * ISOMITTED       -> fixed FALSE   (LAMBDA isn't implemented yet, so
-//                        no argument can ever be "the omitted slot of a
-//                        lambda call"; outside a lambda Mac returns
-//                        FALSE because the argument is, by definition,
-//                        present). Registered with
-//                        `propagate_errors = false` so even an error
-//                        argument is reported as "present, not omitted".
 //
 // All host-service stubs and PHONETIC / GETPIVOTDATA ride the eager dispatch
 // path (`accepts_ranges = false`, default `propagate_errors = true`) so an
 // error argument short-circuits before the fixed return fires -- this matches
 // the WEBSERVICE / PY stubs in `src/eval/builtins/web.cpp` and keeps the
 // surface consistent with real functions for formulas that propagate errors
-// through service calls. ISOMITTED is the deliberate exception:
-// `propagate_errors = false`, because its job is to detect the absence of a
-// value and so it must accept any value (including errors) without
-// short-circuiting.
+// through service calls.
+//
+// ISOMITTED is NOT a stub. It is a real lazy special form implemented in
+// `eval_isomitted_lazy` (see `special_forms_lazy.cpp`) and registered through
+// `tree_walker.cpp`'s lazy dispatch table. The eager registry cannot see the
+// argument's AST shape or the active `NameEnv`'s omitted flag, both of which
+// the implementation needs.
 
 #include "eval/builtins/service_stubs.h"
 

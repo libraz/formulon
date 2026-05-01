@@ -18,21 +18,22 @@
 //                                                                  #N/A on
 //                                                                  non-text
 //     * GETPIVOTDATA(data_field, pivot_table, [field1, item1, ...]) -> #REF!
-//     * ISOMITTED(argument)                                     -> FALSE
 //
 // The host-service stubs each require a runtime capability a pure
 // calculation engine does not provide — image rendering, an RTD server,
 // a translation service, or a Copilot backend. The no-infrastructure
 // stubs each require a Formulon subsystem that is not yet built out —
-// OOXML <rPh> annotation parsing for PHONETIC, pivot tables for
-// GETPIVOTDATA, LAMBDA closures for ISOMITTED. All stubs except
-// ISOMITTED ride the eager dispatcher (so error args short-circuit
-// before the fixed return fires); ISOMITTED is registered with
-// `propagate_errors = false` because its purpose is to detect the
-// absence of a value and so it must accept any argument shape. Their
-// presence keeps the catalog complete and surfaces a deterministic
-// Excel-visible result rather than `#NAME?` from an unknown-function
-// lookup.
+// OOXML <rPh> annotation parsing for PHONETIC and pivot tables for
+// GETPIVOTDATA. All stubs ride the eager dispatcher (so error args
+// short-circuit before the fixed return fires). Their presence keeps
+// the catalog complete and surfaces a deterministic Excel-visible
+// result rather than `#NAME?` from an unknown-function lookup.
+//
+// ISOMITTED is intentionally NOT registered here. It is a real lazy
+// special form (see `eval_isomitted_lazy` in `special_forms_lazy.cpp`)
+// that inspects the argument's AST shape and the active `NameEnv`'s
+// omitted flag. The eager registry cannot see either, so ISOMITTED is
+// wired through `tree_walker.cpp`'s lazy dispatch table.
 
 #ifndef FORMULON_EVAL_BUILTINS_SERVICE_STUBS_H_
 #define FORMULON_EVAL_BUILTINS_SERVICE_STUBS_H_
@@ -43,8 +44,10 @@ namespace eval {
 class FunctionRegistry;
 
 /// Registers the service-stub and no-infrastructure built-ins (IMAGE, RTD,
-/// TRANSLATE, DETECTLANGUAGE, COPILOT, PHONETIC, GETPIVOTDATA, ISOMITTED)
-/// into `registry`. Intended to be invoked from `register_builtins`.
+/// TRANSLATE, DETECTLANGUAGE, COPILOT, PHONETIC, GETPIVOTDATA) into
+/// `registry`. Intended to be invoked from `register_builtins`. ISOMITTED
+/// is registered separately as a lazy special form; see the file-level
+/// comment.
 void register_service_stub_builtins(FunctionRegistry& registry);
 
 }  // namespace eval
