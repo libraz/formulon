@@ -135,15 +135,54 @@ TEST(BuiltinsWebFilterXml, ReturnsSingleNodeText) {
   EXPECT_EQ(v.as_text(), "hello");
 }
 
-TEST(BuiltinsWebFilterXml, MultiNodeSetReturnsFirst) {
-  // Mac Excel 365 spills the full node set to adjacent cells via dynamic-
-  // array spill, which Formulon does not yet implement at the cell level.
-  // Returning a Value::Array here without spill plumbing would be worse
-  // than the current scalar fallback, so we return the first node's text.
-  // See TODO(filterxml-spill) in src/eval/builtins/web.cpp.
-  const Value v = EvalSource("=FILTERXML(\"<r><a>1</a><a>2</a></r>\",\"//a\")");
+TEST(BuiltinsWebFilterXml, SingleNodeMatchStillReturnsScalar) {
+  // Single match returns plain text (matches Mac Excel's anchor read-back
+  // and pins the historical scalar contract for one-node node sets).
+  const Value v = EvalSource("=FILTERXML(\"<r><a>only</a></r>\",\"//a\")");
   ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "1");
+  EXPECT_EQ(v.as_text(), "only");
+}
+
+TEST(BuiltinsWebFilterXml, MultiNodeSetReturnsArray) {
+  // Mac Excel 365 spills the full node set into a vertical N x 1 region
+  // via dynamic-array spill. Formulon now returns the spill payload as
+  // a Value::Array; sheet contexts commit it through
+  // dispatch_array_result, non-sheet contexts (here) see the Array
+  // directly.
+  const Value v = EvalSource("=FILTERXML(\"<r><a>1</a><a>2</a><a>3</a></r>\",\"//a\")");
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 3U);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  ASSERT_TRUE(v.as_array_cells()[0].is_text());
+  ASSERT_TRUE(v.as_array_cells()[1].is_text());
+  ASSERT_TRUE(v.as_array_cells()[2].is_text());
+  EXPECT_EQ(v.as_array_cells()[0].as_text(), "1");
+  EXPECT_EQ(v.as_array_cells()[1].as_text(), "2");
+  EXPECT_EQ(v.as_array_cells()[2].as_text(), "3");
+}
+
+TEST(BuiltinsWebFilterXml, MultiNodeSetSpillAnchorMatchesFirstNode) {
+  // Anchor unwrap: the comparator-side projection landed in commit 779b028.
+  // Mirror that here at the value layer so callers that intentionally
+  // collapse an Array result (e.g., scalar consumers) see the first node.
+  const Value v = EvalSource("=FILTERXML(\"<r><a>1</a><a>2</a></r>\",\"//a\")");
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 2U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  EXPECT_EQ(v.as_array_cells()[0].as_text(), "1");
+  EXPECT_EQ(v.as_array_cells()[1].as_text(), "2");
+}
+
+TEST(BuiltinsWebFilterXml, AttributeAxisSpillsAcrossMatches) {
+  // Attribute-axis multi-match: each `xpath_node` carries an attribute
+  // rather than an element node. `node_text` reads the attribute's
+  // value, and the spill shape is identical to element-axis multi-match.
+  const Value v = EvalSource("=FILTERXML(\"<r><a id='x'/><a id='y'/></r>\",\"//a/@id\")");
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 2U);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  EXPECT_EQ(v.as_array_cells()[0].as_text(), "x");
+  EXPECT_EQ(v.as_array_cells()[1].as_text(), "y");
 }
 
 TEST(BuiltinsWebFilterXml, EmptyNodeSetReturnsNotAvailable) {

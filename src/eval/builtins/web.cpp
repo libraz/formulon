@@ -20,6 +20,7 @@
 
 #include "eval/builtins/web.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -103,16 +104,18 @@ Value EncodeUrl(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 //   * XML parse failure   -> #VALUE!
 //   * XPath parse failure -> #VALUE!
 //   * Empty node set      -> #N/A  (Excel's documented no-match code)
-//   * Parse / select OK   -> first node's text content.
+//   * Single-node match   -> scalar text (the node's inner text).
+//   * Multi-node match    -> N x 1 vertical `Value::Array` of node texts.
 //
-// TODO(filterxml-spill): Excel 365's dynamic-array engine spills the entire
-// node set into a vertical array on the worksheet. Formulon now has
-// `Value::Array` (used by SUMPRODUCT operator broadcasting), but a bare
-// `=FILTERXML(...)` cell still has no spill plumbing through OOXML
-// serialization, the C-API, or downstream consumers. Returning a
-// `Value::Array` cell value here without spill would worsen the user
-// experience vs. the current "first node's text" fallback. Revisit once
-// dynamic-array spill semantics land at the cell level.
+// Spill model: in a sheet context, `EvalContext::dispatch_array_result`
+// commits the N x 1 region to adjacent cells (Excel 365's documented
+// dynamic-array spill behaviour) and the anchor cell reads back as the
+// first node's text. In non-sheet contexts (oracle harness, CLI eval,
+// nested sub-expressions), the `Value::Array` flows through the
+// broadcaster or the anchor-unwrap helper as appropriate; no caller has
+// to special-case FILTERXML. The single-match scalar contract is
+// preserved because Mac Excel 365 (and the unit suite that pins it)
+// observes a 1 x 1 spill as a plain text value through anchor read-back.
 //
 // pugixml quirks worth noting:
 //   * Its XPath engine implements XPath 1.0 only. XPath 2.0+ features (`for`,
@@ -175,9 +178,34 @@ Value FilterXml(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
     return Value::error(ErrorCode::NA);
   }
 
-  // Multi-node spill is deferred until dynamic-array spill semantics land
-  // at the cell level (see TODO above); for now return the first node's text.
-  return Value::text(arena.intern(node_text(nodes.first())));
+  const std::size_t n = nodes.size();
+  if (n == 1U) {
+    // Single match keeps the scalar contract historically asserted by the
+    // unit suite and matches Mac Excel's anchor read-back identically.
+    return Value::text(arena.intern(node_text(nodes.first())));
+  }
+
+  // Multi-match: build an N x 1 vertical Array. In a sheet context Excel
+  // spills this into adjacent cells; in non-sheet contexts (oracle, CLI,
+  // nested sub-expressions) the Value::Array flows through the broadcaster
+  // or the anchor-unwrap helper as appropriate. pugixml's xpath_node_set
+  // exposes O(1) `size()` and indexed access (private storage is a pair
+  // of `xpath_node*` pointers), so a single pass is sufficient.
+  Value* cells = arena.create_array<Value>(n);
+  if (cells == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  for (std::size_t i = 0; i < n; ++i) {
+    cells[i] = Value::text(arena.intern(node_text(nodes[i])));
+  }
+  ArrayValue* arr = arena.create<ArrayValue>();
+  if (arr == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  arr->rows = static_cast<std::uint32_t>(n);
+  arr->cols = 1U;
+  arr->cells = cells;
+  return Value::array(arr);
 }
 
 // ---------------------------------------------------------------------------
