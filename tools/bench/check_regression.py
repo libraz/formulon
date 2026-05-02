@@ -106,11 +106,18 @@ def run_driver(runner: Path, results: Path) -> None:
 
 
 def load_results(results_dir: Path) -> dict[str, dict[str, float]]:
-    """Loads every `*.json` file under `results_dir` and indexes the
-    median elapsed times by `(stem, scenario_name)`. Returns the dict.
+    """Loads every `bench_*.json` file under `results_dir` and indexes
+    the median elapsed times by `(stem, scenario_name)`. Returns the
+    dict.
+
+    The glob is restricted to the `bench_` prefix because the bench
+    results directory is a shared scratch location (oracle harness
+    drops `mac_probes.json` / `probes_full.json` here too); a broader
+    `*.json` glob would crash when those non-nanobench documents are
+    parsed.
     """
     out: dict[str, dict[str, float]] = {}
-    for path in sorted(results_dir.glob("*.json")):
+    for path in sorted(results_dir.glob("bench_*.json")):
         try:
             doc = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
