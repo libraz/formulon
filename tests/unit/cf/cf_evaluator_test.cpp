@@ -1258,5 +1258,250 @@ TEST(CFEvaluator, Top10ValueOnlyOverloadStillReturnsFalse) {
   EXPECT_FALSE(match_rule(r, Value::number(50.0)));
 }
 
+// ---------------------------------------------------------------------------
+// ColorScale
+// ---------------------------------------------------------------------------
+
+Color RGB(std::uint8_t red, std::uint8_t green, std::uint8_t blue) {
+  Color color{};
+  color.r = red;
+  color.g = green;
+  color.b = blue;
+  color.a = 255;
+  return color;
+}
+
+CfValueObject Cfvo(CfvoType type, std::string value = "") {
+  CfValueObject cfvo;
+  cfvo.type = type;
+  cfvo.value = std::move(value);
+  return cfvo;
+}
+
+ColorScaleSpec TwoStopMinMax(Color lo, Color hi) {
+  ColorScaleSpec spec;
+  spec.thresholds = {Cfvo(CfvoType::Min), Cfvo(CfvoType::Max)};
+  spec.colors = {lo, hi};
+  return spec;
+}
+
+ColorScaleSpec ThreeStopMinMidMax(Color lo, Color mid, Color hi, std::string mid_percent = "50") {
+  ColorScaleSpec spec;
+  spec.thresholds = {Cfvo(CfvoType::Min), Cfvo(CfvoType::Percentile, std::move(mid_percent)), Cfvo(CfvoType::Max)};
+  spec.colors = {lo, mid, hi};
+  return spec;
+}
+
+TEST(CFEvaluator, ColorScaleWithoutSqrefDoesNotMatch) {
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  CFRule r = MakeRule(RuleType::ColorScale);
+  r.color_scale = TwoStopMinMax(RGB(255, 0, 0), RGB(0, 255, 0));
+  EXPECT_FALSE(match_rule(r, Value::number(30.0), harness.context(At(0, 0), At(0, 0))));
+}
+
+TEST(CFEvaluator, ColorScaleTwoStopMinMaxInterpolatesBetweenStops) {
+  // Population [10, 20, 30, 40, 50]; min = 10 (red), max = 50 (green).
+  // Cell 30 is the midpoint → R=128, G=128, B=0 (linear RGB blend).
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::ColorScale);
+  r.color_scale = TwoStopMinMax(RGB(255, 0, 0), RGB(0, 255, 0));
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch match = make_match(r, Value::number(30.0), ctx);
+  EXPECT_EQ(match.kind, CFMatchKind::ColorScale);
+  ASSERT_TRUE(match.resolved_fill_color.has_value());
+  EXPECT_EQ(match.resolved_fill_color->r, 128);
+  EXPECT_EQ(match.resolved_fill_color->g, 128);
+  EXPECT_EQ(match.resolved_fill_color->b, 0);
+}
+
+TEST(CFEvaluator, ColorScaleClampsToOuterStops) {
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::ColorScale);
+  r.color_scale = TwoStopMinMax(RGB(255, 0, 0), RGB(0, 255, 0));
+  const auto ctx = SqrefContext(harness, sqref);
+
+  // Below min: clamps to red.
+  CFMatch lo = make_match(r, Value::number(-100.0), ctx);
+  ASSERT_TRUE(lo.resolved_fill_color.has_value());
+  EXPECT_EQ(*lo.resolved_fill_color, RGB(255, 0, 0));
+  // Above max: clamps to green.
+  CFMatch hi = make_match(r, Value::number(1000.0), ctx);
+  ASSERT_TRUE(hi.resolved_fill_color.has_value());
+  EXPECT_EQ(*hi.resolved_fill_color, RGB(0, 255, 0));
+}
+
+TEST(CFEvaluator, ColorScaleAtMinAndMaxReturnsExactStopColors) {
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::ColorScale);
+  r.color_scale = TwoStopMinMax(RGB(255, 0, 0), RGB(0, 255, 0));
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch low = make_match(r, Value::number(10.0), ctx);
+  ASSERT_TRUE(low.resolved_fill_color.has_value());
+  EXPECT_EQ(*low.resolved_fill_color, RGB(255, 0, 0));
+  CFMatch high = make_match(r, Value::number(50.0), ctx);
+  ASSERT_TRUE(high.resolved_fill_color.has_value());
+  EXPECT_EQ(*high.resolved_fill_color, RGB(0, 255, 0));
+}
+
+TEST(CFEvaluator, ColorScaleThreeStopUsesMiddleStopAtMedian) {
+  // Population [10, 20, 30, 40, 50]; mid = percentile(50) = 30 (white).
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::ColorScale);
+  r.color_scale = ThreeStopMinMidMax(RGB(255, 0, 0), RGB(255, 255, 255), RGB(0, 255, 0));
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch mid = make_match(r, Value::number(30.0), ctx);
+  ASSERT_TRUE(mid.resolved_fill_color.has_value());
+  EXPECT_EQ(*mid.resolved_fill_color, RGB(255, 255, 255));
+}
+
+TEST(CFEvaluator, ColorScaleThreeStopInterpolatesWithinSegment) {
+  // Population [10, 20, 30, 40, 50]; segments 10..30 (red→white) and
+  // 30..50 (white→green). Cell 20 is the midpoint of the lower segment.
+  // Lower segment blend: (255, 0, 0) → (255, 255, 255), fraction 0.5
+  // → (255, 128, 128).
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::ColorScale);
+  r.color_scale = ThreeStopMinMidMax(RGB(255, 0, 0), RGB(255, 255, 255), RGB(0, 255, 0));
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch match = make_match(r, Value::number(20.0), ctx);
+  ASSERT_TRUE(match.resolved_fill_color.has_value());
+  EXPECT_EQ(match.resolved_fill_color->r, 255);
+  EXPECT_EQ(match.resolved_fill_color->g, 128);
+  EXPECT_EQ(match.resolved_fill_color->b, 128);
+}
+
+TEST(CFEvaluator, ColorScaleNumberCfvoUsesLiteralThreshold) {
+  // Force min=0, max=100 via Number CFVOs irrespective of population.
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::ColorScale);
+  ColorScaleSpec spec;
+  spec.thresholds = {Cfvo(CfvoType::Number, "0"), Cfvo(CfvoType::Number, "100")};
+  spec.colors = {RGB(0, 0, 0), RGB(255, 255, 255)};
+  r.color_scale = std::move(spec);
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch match = make_match(r, Value::number(50.0), ctx);
+  ASSERT_TRUE(match.resolved_fill_color.has_value());
+  // Halfway between black and white = (128, 128, 128).
+  EXPECT_EQ(*match.resolved_fill_color, RGB(128, 128, 128));
+}
+
+TEST(CFEvaluator, ColorScalePercentCfvoUsesPopulationRangeFraction) {
+  // Population [10, 20, 30, 40, 50]; min=10, max=50 → range=40.
+  // Percent 25 → 10 + 0.25*40 = 20. Percent 75 → 10 + 0.75*40 = 40.
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::ColorScale);
+  ColorScaleSpec spec;
+  spec.thresholds = {Cfvo(CfvoType::Percent, "25"), Cfvo(CfvoType::Percent, "75")};
+  spec.colors = {RGB(0, 0, 0), RGB(255, 255, 255)};
+  r.color_scale = std::move(spec);
+  const auto ctx = SqrefContext(harness, sqref);
+
+  // Cell at lower-stop position (20) → black.
+  CFMatch lo = make_match(r, Value::number(20.0), ctx);
+  ASSERT_TRUE(lo.resolved_fill_color.has_value());
+  EXPECT_EQ(*lo.resolved_fill_color, RGB(0, 0, 0));
+  // Cell at upper-stop position (40) → white.
+  CFMatch hi = make_match(r, Value::number(40.0), ctx);
+  ASSERT_TRUE(hi.resolved_fill_color.has_value());
+  EXPECT_EQ(*hi.resolved_fill_color, RGB(255, 255, 255));
+}
+
+TEST(CFEvaluator, ColorScaleNonNumericCellDoesNotResolve) {
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::ColorScale);
+  r.color_scale = TwoStopMinMax(RGB(255, 0, 0), RGB(0, 255, 0));
+  const auto ctx = SqrefContext(harness, sqref);
+
+  EXPECT_FALSE(match_rule(r, Value::text("middle"), ctx));
+  EXPECT_FALSE(match_rule(r, Value::error(ErrorCode::NA), ctx));
+  EXPECT_FALSE(match_rule(r, Value::blank(), ctx));
+  CFMatch match = make_match(r, Value::text("middle"), ctx);
+  EXPECT_FALSE(match.resolved_fill_color.has_value());
+}
+
+TEST(CFEvaluator, ColorScaleEmptyPopulationDoesNotResolve) {
+  CFEvalHarness harness;  // No values populated; sqref is all-blank.
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::ColorScale);
+  r.color_scale = TwoStopMinMax(RGB(255, 0, 0), RGB(0, 255, 0));
+  const auto ctx = SqrefContext(harness, sqref);
+
+  EXPECT_FALSE(match_rule(r, Value::number(0.0), ctx));
+  CFMatch match = make_match(r, Value::number(0.0), ctx);
+  EXPECT_FALSE(match.resolved_fill_color.has_value());
+}
+
+TEST(CFEvaluator, ColorScaleDegeneratePopulationCollapsesToFirstStop) {
+  // Population is [7, 7, 7, 7]; min == max. The cell value 7 hits the
+  // first stop's clamp branch → returns colors[0].
+  CFEvalHarness harness;
+  for (std::uint32_t row = 0; row < 4; ++row) {
+    harness.sheet.set_cell_value(row, 0, Value::number(7.0));
+  }
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 3, 0)};
+  CFRule r = MakeRule(RuleType::ColorScale);
+  r.color_scale = TwoStopMinMax(RGB(255, 0, 0), RGB(0, 255, 0));
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch match = make_match(r, Value::number(7.0), ctx);
+  ASSERT_TRUE(match.resolved_fill_color.has_value());
+  EXPECT_EQ(*match.resolved_fill_color, RGB(255, 0, 0));
+}
+
+TEST(CFEvaluator, ColorScaleFormulaCfvoEvaluatesAtAnchor) {
+  // CFVO formulas reference cells; value comes from the formula evaluator.
+  // A1 = 0 (min anchor), B1 = 100 (max anchor); cell 50 → mid grey.
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(0.0));
+  harness.sheet.set_cell_value(0, 1, Value::number(100.0));
+  // Population is the union: still 0..100 across [A1, B1].
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 0, 1)};
+  CFRule r = MakeRule(RuleType::ColorScale);
+  ColorScaleSpec spec;
+  spec.thresholds = {Cfvo(CfvoType::Formula, "A1"), Cfvo(CfvoType::Formula, "B1")};
+  spec.colors = {RGB(0, 0, 0), RGB(255, 255, 255)};
+  r.color_scale = std::move(spec);
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch match = make_match(r, Value::number(50.0), ctx);
+  ASSERT_TRUE(match.resolved_fill_color.has_value());
+  EXPECT_EQ(*match.resolved_fill_color, RGB(128, 128, 128));
+}
+
+TEST(CFEvaluator, ColorScaleValueOnlyOverloadStillReturnsFalse) {
+  // Pin the staging contract: ColorScale returns false on the
+  // value-only overload (no sqref / population access). The value-only
+  // make_match still returns a DifferentialFormat match.
+  CFRule r = MakeRule(RuleType::ColorScale);
+  r.color_scale = TwoStopMinMax(RGB(255, 0, 0), RGB(0, 255, 0));
+  EXPECT_FALSE(match_rule(r, Value::number(30.0)));
+
+  CFMatch match = make_match(r);
+  EXPECT_EQ(match.kind, CFMatchKind::DifferentialFormat);
+  EXPECT_FALSE(match.resolved_fill_color.has_value());
+}
+
 }  // namespace
 }  // namespace formulon::cf

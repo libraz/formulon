@@ -42,10 +42,17 @@
 //     as a threshold, and match cells with value >= threshold (top)
 //     or <= threshold (bottom) so ties are included. `rule.percent`
 //     interprets `rule.rank` as a percent of the population count.
+//   * `ColorScale` — resolves each `<cfvo>` threshold against the
+//     `CFEvalContext::sqref` population (Number / Percent / Percentile
+//     / Min / Max / AutoMin / AutoMax / Formula), then linearly
+//     interpolates between the bounding stop colours in RGB space.
+//     The context-aware `make_match` overload produces a `CFMatch`
+//     with `resolved_fill_color` engaged; the boolean overload is
+//     consumed only as a "rule applies" gate.
 //
 // Deferred to subsequent staging steps:
 //
-//   * `ColorScale` / `DataBar` / `IconSet` visual computation
+//   * `DataBar` / `IconSet` visual computation
 //   * Priority chain + stopIfTrue + lazy viewport API
 //
 // Each step extends `match_rule` and the public `evaluate_*` helpers
@@ -107,9 +114,10 @@ bool match_rule(const CFRule& rule, const Value& cell_value);
 
 /// Returns the `CFMatch` payload for a rule that has been determined
 /// to match. Used by the integration helpers to convert a positive
-/// match into the result list. The skeleton landing covered only
-/// `DifferentialFormat`; visual kinds (ColorScale / DataBar / IconSet)
-/// are introduced by later steps.
+/// match into the result list. The value-only overload covers
+/// `DifferentialFormat` rules; visual kinds (ColorScale / DataBar /
+/// IconSet) need the cell value and `CFEvalContext` to resolve their
+/// render payloads — use the context-aware overload below.
 CFMatch make_match(const CFRule& rule);
 
 /// Per-cell evaluation context for rule kinds that require formula
@@ -176,6 +184,22 @@ struct CFEvalContext {
 ///
 /// All other rule types delegate to the simple overload.
 bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx);
+
+/// Context-aware `make_match` overload. Identical to the value-only
+/// overload for `DifferentialFormat` rules; for visual rules it
+/// computes the resolved render payload:
+///
+///   * `ColorScale` — resolves `rule.color_scale` thresholds against
+///     the sqref population, locates the segment containing the cell
+///     value, and linearly interpolates the bounding stop colours in
+///     RGB space. Engages `CFMatch::resolved_fill_color`.
+///   * `DataBar` / `IconSet` — payload computation lands in subsequent
+///     PRs; until then this overload returns the dxf-only payload
+///     unchanged.
+///
+/// Callers should still gate on the boolean `match_rule` overload to
+/// decide whether to surface the resulting `CFMatch`.
+CFMatch make_match(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx);
 
 }  // namespace cf
 }  // namespace formulon

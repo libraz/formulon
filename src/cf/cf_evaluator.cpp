@@ -799,15 +799,213 @@ bool match_top10(const CFRule& rule, const Value& cell_value, const CFEvalContex
   return cell >= threshold;
 }
 
+// ---------------------------------------------------------------------------
+// ColorScale — resolve `<cfvo>` thresholds against the sqref population
+// and linearly interpolate the bounding stop colours in RGB space.
+// ---------------------------------------------------------------------------
+
+constexpr double kColorChannelMax = 255.0;
+
+// Sample mean / sorted population gathered once and reused across all
+// stops in a rule. Sorted ascending to support `Percentile` look-up
+// without re-sorting per stop.
+struct ColorScalePopulation {
+  std::vector<double> sorted;  // ascending
+  double min = 0.0;
+  double max = 0.0;
+};
+
+ColorScalePopulation gather_population(const std::vector<CFCellRange>& sqref, const Sheet& sheet) {
+  std::vector<double> values = collect_numeric_values(sqref, sheet);
+  std::sort(values.begin(), values.end());
+  ColorScalePopulation pop;
+  if (!values.empty()) {
+    pop.min = values.front();
+    pop.max = values.back();
+  }
+  pop.sorted = std::move(values);
+  return pop;
+}
+
+// PERCENTILE.INC: linear interpolation between sorted points.
+// `percentile` is 0..1. For empty populations the caller short-circuits.
+double percentile_inc(const std::vector<double>& sorted, double percentile) {
+  const std::size_t count = sorted.size();
+  if (count == 1) {
+    return sorted.front();
+  }
+  const double position = percentile * static_cast<double>(count - 1);
+  const auto lower_index = static_cast<std::size_t>(std::floor(position));
+  if (lower_index + 1 >= count) {
+    return sorted.back();
+  }
+  const double fraction = position - static_cast<double>(lower_index);
+  return sorted[lower_index] + fraction * (sorted[lower_index + 1] - sorted[lower_index]);
+}
+
+std::optional<double> parse_double(std::string_view source) {
+  if (source.empty()) {
+    return std::nullopt;
+  }
+  const std::string copy(source);
+  char* end = nullptr;
+  const double parsed = std::strtod(copy.c_str(), &end);
+  if (end != copy.c_str() && *end == '\0') {
+    return parsed;
+  }
+  return std::nullopt;
+}
+
+// Resolves a single `<cfvo>` to its threshold value. `Formula` CFVOs
+// run through the same parse-shift-evaluate path the rest of the
+// context-aware evaluator uses, anchored at the rule's anchor (the
+// formula authoring cell). Returns nullopt when the CFVO cannot be
+// resolved (e.g. malformed literal, formula evaluation error).
+std::optional<double> resolve_cfvo(const CfValueObject& cfvo, const ColorScalePopulation& pop,
+                                   const CFEvalContext& ctx) {
+  switch (cfvo.type) {
+    case CfvoType::Number:
+      return parse_double(cfvo.value);
+    case CfvoType::Percent: {
+      auto pct = parse_double(cfvo.value);
+      if (!pct.has_value()) {
+        return std::nullopt;
+      }
+      return pop.min + (*pct / kPercentDivisor) * (pop.max - pop.min);
+    }
+    case CfvoType::Percentile: {
+      auto pct = parse_double(cfvo.value);
+      if (!pct.has_value() || pop.sorted.empty()) {
+        return std::nullopt;
+      }
+      return percentile_inc(pop.sorted, *pct / kPercentDivisor);
+    }
+    case CfvoType::Min:
+    case CfvoType::AutoMin:
+      return pop.sorted.empty() ? std::optional<double>() : std::optional<double>(pop.min);
+    case CfvoType::Max:
+    case CfvoType::AutoMax:
+      return pop.sorted.empty() ? std::optional<double>() : std::optional<double>(pop.max);
+    case CfvoType::Formula: {
+      const Value evaluated = parse_shift_evaluate(cfvo.value, ctx);
+      if (evaluated.is_number()) {
+        return evaluated.as_number();
+      }
+      if (evaluated.is_boolean()) {
+        return evaluated.as_boolean() ? 1.0 : 0.0;
+      }
+      return std::nullopt;
+    }
+  }
+  return std::nullopt;
+}
+
+// Linear interpolation between two sRGB colours. `fraction` is clamped
+// to [0, 1] by the caller. Alpha is interpolated alongside RGB so
+// stops with transparent components blend correctly.
+Color interpolate_color(Color start, Color end, double fraction) {
+  const auto blend = [fraction](std::uint8_t low_channel, std::uint8_t high_channel) {
+    const double mixed = static_cast<double>(low_channel) +
+                         fraction * (static_cast<double>(high_channel) - static_cast<double>(low_channel));
+    const double clamped = std::max(0.0, std::min(kColorChannelMax, mixed));
+    return static_cast<std::uint8_t>(std::lround(clamped));
+  };
+  Color out;
+  out.r = blend(start.r, end.r);
+  out.g = blend(start.g, end.g);
+  out.b = blend(start.b, end.b);
+  out.a = blend(start.a, end.a);
+  return out;
+}
+
+// Returns the resolved cell colour for a `colorScale` rule applied to
+// a numeric `cell_value`, honouring 2-stop and 3-stop scales. Returns
+// nullopt for empty populations, malformed thresholds, or non-numeric
+// cells (the rule still "applies", but the cell renders without fill).
+std::optional<Color> resolve_color_scale(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
+  if (!rule.color_scale.has_value() || ctx.sqref == nullptr || ctx.eval_ctx == nullptr ||
+      ctx.eval_ctx->current_sheet() == nullptr) {
+    return std::nullopt;
+  }
+  if (!cell_value.is_number()) {
+    return std::nullopt;
+  }
+  const ColorScaleSpec& spec = *rule.color_scale;
+  if (spec.thresholds.size() != spec.colors.size() || spec.thresholds.size() < 2) {
+    return std::nullopt;
+  }
+
+  const ColorScalePopulation pop = gather_population(*ctx.sqref, *ctx.eval_ctx->current_sheet());
+  if (pop.sorted.empty()) {
+    return std::nullopt;
+  }
+
+  std::vector<double> resolved_thresholds;
+  resolved_thresholds.reserve(spec.thresholds.size());
+  for (const CfValueObject& cfvo : spec.thresholds) {
+    auto value = resolve_cfvo(cfvo, pop, ctx);
+    if (!value.has_value()) {
+      return std::nullopt;
+    }
+    resolved_thresholds.push_back(*value);
+  }
+
+  const double cell = cell_value.as_number();
+  // Locate the segment that contains the cell value. Cells outside the
+  // outermost stops clamp to the boundary colour.
+  if (cell <= resolved_thresholds.front()) {
+    return spec.colors.front();
+  }
+  if (cell >= resolved_thresholds.back()) {
+    return spec.colors.back();
+  }
+  for (std::size_t i = 0; i + 1 < resolved_thresholds.size(); ++i) {
+    const double lower_bound = resolved_thresholds[i];
+    const double upper_bound = resolved_thresholds[i + 1];
+    if (cell >= lower_bound && cell <= upper_bound) {
+      // When the segment collapses (lower == upper), pick the upper
+      // colour; the cell is exactly at a stop so either end is correct.
+      const double span = upper_bound - lower_bound;
+      const double fraction = span == 0.0 ? 1.0 : (cell - lower_bound) / span;
+      return interpolate_color(spec.colors[i], spec.colors[i + 1], fraction);
+    }
+  }
+  return spec.colors.back();
+}
+
+bool match_color_scale(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
+  // ColorScale "matches" any cell for which a fill colour can be
+  // computed. Non-numeric cells, empty populations, and malformed
+  // specs short-circuit upstream and return nullopt.
+  return resolve_color_scale(rule, cell_value, ctx).has_value();
+}
+
 }  // namespace
 
 CFMatch make_match(const CFRule& rule) {
   CFMatch match;
   match.rule_id = rule.id;
   match.priority = rule.priority;
-  // The skeleton landing covers only dxf-driven rule types; later PRs
-  // widen this dispatch to assign `kind = ColorScale / DataBar /
-  // IconSet` and populate the corresponding render payload.
+  // Value-only overload covers dxf-driven rules. Visual rule kinds
+  // need the cell value and `CFEvalContext` to resolve their render
+  // payload; callers should use the context-aware overload below.
+  match.kind = CFMatchKind::DifferentialFormat;
+  match.dxf_id = rule.dxf_id;
+  return match;
+}
+
+CFMatch make_match(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
+  CFMatch match;
+  match.rule_id = rule.id;
+  match.priority = rule.priority;
+  if (rule.type == RuleType::ColorScale) {
+    match.kind = CFMatchKind::ColorScale;
+    match.resolved_fill_color = resolve_color_scale(rule, cell_value, ctx);
+    return match;
+  }
+  // DataBar / IconSet payloads land in subsequent PRs. Until then the
+  // context-aware overload behaves like the value-only one for those
+  // kinds — and identically for every dxf-driven kind.
   match.kind = CFMatchKind::DifferentialFormat;
   match.dxf_id = rule.dxf_id;
   return match;
@@ -828,6 +1026,8 @@ bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext
       return match_above_average(rule, cell_value, ctx);
     case RuleType::Top10:
       return match_top10(rule, cell_value, ctx);
+    case RuleType::ColorScale:
+      return match_color_scale(rule, cell_value, ctx);
     case RuleType::ContainsBlanks:
     case RuleType::NotContainsBlanks:
     case RuleType::ContainsErrors:
@@ -836,7 +1036,6 @@ bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext
     case RuleType::NotContainsText:
     case RuleType::BeginsWith:
     case RuleType::EndsWith:
-    case RuleType::ColorScale:
     case RuleType::DataBar:
     case RuleType::IconSet:
       // Value-only and not-yet-implemented rule types delegate to the
