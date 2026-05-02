@@ -14,7 +14,6 @@
 #include <optional>
 #include <string>
 #include <string_view>
-
 #include <vector>
 
 #include "cf/cf_match.h"
@@ -32,6 +31,16 @@
 #include "value.h"
 
 namespace formulon::cf {
+
+// File-scope (non-anonymous) so the type matches the forward
+// declaration in `cf_evaluator.h` and `CFEvalContext::cached_population`
+// can carry a pointer to it. Layout is private to this translation
+// unit; external callers see only the forward decl.
+struct ColorScalePopulation {
+  std::vector<double> sorted;  // ascending
+  double min = 0.0;
+  double max = 0.0;
+};
 
 namespace {
 
@@ -675,6 +684,13 @@ bool match_duplicate_or_unique(const CFRule& rule, const Value& cell_value, cons
 constexpr double kPercentDivisor = 100.0;
 constexpr std::int32_t kDefaultTop10Rank = 10;
 
+// Forward declarations: `ensure_population` and `gather_population` are
+// defined alongside `ColorScalePopulation` in the ColorScale section
+// below, but the AboveAverage / Top10 helpers above them want to share
+// the same cached-or-compute path.
+ColorScalePopulation gather_population(const std::vector<CFCellRange>& sqref, const Sheet& sheet);
+const ColorScalePopulation& ensure_population(const CFEvalContext& ctx, ColorScalePopulation& fallback);
+
 // Collects every numeric value in `sqref` (read spill-aware via
 // `Sheet::resolve_cell_value`). Booleans and text are skipped — Excel's
 // AboveAverage / Top10 use the numeric-only population; a closure-driven
@@ -724,15 +740,16 @@ bool match_above_average(const CFRule& rule, const Value& cell_value, const CFEv
   if (!cell_value.is_number()) {
     return false;
   }
-  const std::vector<double> values = collect_numeric_values(*ctx.sqref, *ctx.eval_ctx->current_sheet());
-  if (values.empty()) {
+  ColorScalePopulation fallback;
+  const ColorScalePopulation& pop = ensure_population(ctx, fallback);
+  if (pop.sorted.empty()) {
     return false;
   }
-  const double mean = mean_of(values);
+  const double mean = mean_of(pop.sorted);
 
   double threshold = mean;
   if (rule.std_dev.has_value() && *rule.std_dev > 0.0) {
-    const double sigma = sample_stddev(values, mean);
+    const double sigma = sample_stddev(pop.sorted, mean);
     const double offset = *rule.std_dev * sigma;
     threshold = rule.above_average ? mean + offset : mean - offset;
   }
@@ -774,28 +791,26 @@ bool match_top10(const CFRule& rule, const Value& cell_value, const CFEvalContex
   if (!cell_value.is_number()) {
     return false;
   }
-  std::vector<double> values = collect_numeric_values(*ctx.sqref, *ctx.eval_ctx->current_sheet());
-  if (values.empty()) {
+  ColorScalePopulation fallback;
+  const ColorScalePopulation& pop = ensure_population(ctx, fallback);
+  if (pop.sorted.empty()) {
     return false;
   }
-  const std::size_t rank_n = resolve_top10_rank(rule, values.size());
+  const std::size_t rank_n = resolve_top10_rank(rule, pop.sorted.size());
   if (rank_n == 0) {
     return false;
   }
 
-  // `nth_element` partitions in O(N): for top-N, partition so the
-  // (rank_n-1)-th element is the smallest of the top group; for
-  // bottom-N, partition so it is the largest of the bottom group.
-  // Tie inclusion is handled at the comparison step below.
+  // Sorted ascending: bottom-N threshold is `sorted[rank_n - 1]` (the
+  // n-th smallest); top-N threshold is `sorted[count - rank_n]` (the
+  // n-th largest). Tie inclusion comes from `<=` / `>=` against the
+  // threshold so cells equal to the rank cutoff still match.
   const double cell = cell_value.as_number();
   if (rule.bottom) {
-    std::nth_element(values.begin(), values.begin() + static_cast<std::ptrdiff_t>(rank_n - 1), values.end());
-    const double threshold = values[rank_n - 1];
+    const double threshold = pop.sorted[rank_n - 1];
     return cell <= threshold;
   }
-  std::nth_element(values.begin(), values.begin() + static_cast<std::ptrdiff_t>(rank_n - 1), values.end(),
-                   std::greater<>());
-  const double threshold = values[rank_n - 1];
+  const double threshold = pop.sorted[pop.sorted.size() - rank_n];
   return cell >= threshold;
 }
 
@@ -805,15 +820,6 @@ bool match_top10(const CFRule& rule, const Value& cell_value, const CFEvalContex
 // ---------------------------------------------------------------------------
 
 constexpr double kColorChannelMax = 255.0;
-
-// Sample mean / sorted population gathered once and reused across all
-// stops in a rule. Sorted ascending to support `Percentile` look-up
-// without re-sorting per stop.
-struct ColorScalePopulation {
-  std::vector<double> sorted;  // ascending
-  double min = 0.0;
-  double max = 0.0;
-};
 
 ColorScalePopulation gather_population(const std::vector<CFCellRange>& sqref, const Sheet& sheet) {
   std::vector<double> values = collect_numeric_values(sqref, sheet);
@@ -825,6 +831,18 @@ ColorScalePopulation gather_population(const std::vector<CFCellRange>& sqref, co
   }
   pop.sorted = std::move(values);
   return pop;
+}
+
+// Returns the cached population from `ctx` when present; otherwise
+// gathers from the sheet into `fallback` and returns it. The returned
+// reference is valid for as long as `fallback` (or the cache pointer)
+// outlives the call site. Callers stack-allocate `fallback`.
+const ColorScalePopulation& ensure_population(const CFEvalContext& ctx, ColorScalePopulation& fallback) {
+  if (ctx.cached_population != nullptr) {
+    return *ctx.cached_population;
+  }
+  fallback = gather_population(*ctx.sqref, *ctx.eval_ctx->current_sheet());
+  return fallback;
 }
 
 // PERCENTILE.INC: linear interpolation between sorted points.
@@ -935,7 +953,8 @@ std::optional<Color> resolve_color_scale(const CFRule& rule, const Value& cell_v
     return std::nullopt;
   }
 
-  const ColorScalePopulation pop = gather_population(*ctx.sqref, *ctx.eval_ctx->current_sheet());
+  ColorScalePopulation fallback;
+  const ColorScalePopulation& pop = ensure_population(ctx, fallback);
   if (pop.sorted.empty()) {
     return std::nullopt;
   }
@@ -1025,7 +1044,8 @@ std::optional<DataBarRender> resolve_data_bar(const CFRule& rule, const Value& c
   }
   const DataBarSpec& spec = *rule.data_bar;
 
-  const ColorScalePopulation pop = gather_population(*ctx.sqref, *ctx.eval_ctx->current_sheet());
+  ColorScalePopulation fallback;
+  const ColorScalePopulation& pop = ensure_population(ctx, fallback);
   if (pop.sorted.empty()) {
     return std::nullopt;
   }
@@ -1098,7 +1118,8 @@ std::optional<IconRender> resolve_icon_set(const CFRule& rule, const Value& cell
     return std::nullopt;  // A 1-icon "set" has no boundaries to match against.
   }
 
-  const ColorScalePopulation pop = gather_population(*ctx.sqref, *ctx.eval_ctx->current_sheet());
+  ColorScalePopulation fallback;
+  const ColorScalePopulation& pop = ensure_population(ctx, fallback);
   if (pop.sorted.empty()) {
     return std::nullopt;
   }
@@ -1234,34 +1255,37 @@ bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext
   return false;
 }
 
-std::vector<CFRangeCellMatches> evaluate_cf_for_range(const Sheet& sheet, CFCellRange range, const CFHost& host) {
-  std::vector<CFRangeCellMatches> results;
-  if (host.arena == nullptr || host.registry == nullptr || host.eval_ctx == nullptr) {
-    return results;
+namespace {
+
+// Per-block lazy population cache used by `evaluate_cf_for_range`.
+// Indexed by block index inside `Sheet::conditional_formats()`. Slots
+// stay empty until a rule that consumes the population first runs,
+// then the slot is populated and reused across every cell in the range.
+using PopulationCache = std::vector<std::optional<ColorScalePopulation>>;
+
+// Whether `type` is a range-aware rule kind that benefits from a
+// cached population. CellIs / Expression / TimePeriod / text-family /
+// blanks-family / errors-family rules don't need it.
+bool rule_uses_population(RuleType type) {
+  switch (type) {
+    case RuleType::ColorScale:
+    case RuleType::DataBar:
+    case RuleType::IconSet:
+    case RuleType::AboveAverage:
+    case RuleType::Top10:
+      return true;
+    default:
+      return false;
   }
-  // Iterate row-major over the inclusive range. The boundary check is
-  // `<=` so a single-cell range (first == last) still produces one
-  // visit. Callers who need to evaluate one cell should prefer the
-  // direct `evaluate_cf_at`; this helper exists for the viewport case.
-  for (std::uint32_t row = range.first.row; row <= range.last.row; ++row) {
-    for (std::uint32_t col = range.first.col; col <= range.last.col; ++col) {
-      CellAddress cell{};
-      cell.row = row;
-      cell.col = col;
-      std::vector<CFMatch> matches = evaluate_cf_at(sheet, cell, host);
-      if (matches.empty()) {
-        continue;
-      }
-      CFRangeCellMatches entry;
-      entry.cell = cell;
-      entry.matches = std::move(matches);
-      results.push_back(std::move(entry));
-    }
-  }
-  return results;
 }
 
-std::vector<CFMatch> evaluate_cf_at(const Sheet& sheet, CellAddress target, const CFHost& host) {
+// Shared body for `evaluate_cf_at` and the viewport walker. When
+// `cache` is non-null, the function lazily populates per-block slots
+// the first time a rule needs the population and reuses them on
+// subsequent calls. When null, every range-aware rule re-walks the
+// sheet (the public single-cell behaviour).
+std::vector<CFMatch> evaluate_cf_at_impl(const Sheet& sheet, CellAddress target, const CFHost& host,
+                                         PopulationCache* cache) {
   std::vector<CFMatch> matches;
   if (host.arena == nullptr || host.registry == nullptr || host.eval_ctx == nullptr) {
     return matches;
@@ -1278,12 +1302,12 @@ std::vector<CFMatch> evaluate_cf_at(const Sheet& sheet, CellAddress target, cons
   std::vector<Candidate> candidates;
 
   const std::vector<ConditionalFormat>& blocks = sheet.conditional_formats();
-  for (std::size_t b = 0; b < blocks.size(); ++b) {
-    if (!sqref_contains(blocks[b].sqref, target)) {
+  for (std::size_t block_idx = 0; block_idx < blocks.size(); ++block_idx) {
+    if (!sqref_contains(blocks[block_idx].sqref, target)) {
       continue;
     }
-    for (std::size_t r = 0; r < blocks[b].rules.size(); ++r) {
-      candidates.push_back({b, r, blocks[b].rules[r].priority});
+    for (std::size_t rule_idx = 0; rule_idx < blocks[block_idx].rules.size(); ++rule_idx) {
+      candidates.push_back({block_idx, rule_idx, blocks[block_idx].rules[rule_idx].priority});
     }
   }
   std::stable_sort(candidates.begin(), candidates.end(),
@@ -1303,6 +1327,18 @@ std::vector<CFMatch> evaluate_cf_at(const Sheet& sheet, CellAddress target, cons
     ctx.today_serial = host.today_serial;
     ctx.sqref = &block.sqref;
 
+    // Lazy-populate the cache slot for this block when the rule needs
+    // a numeric population. Non-cache callers (`cache == nullptr`)
+    // keep `ctx.cached_population` null and the helpers gather on
+    // demand.
+    if (cache != nullptr && rule_uses_population(rule.type)) {
+      std::optional<ColorScalePopulation>& slot = (*cache)[candidate.block_index];
+      if (!slot.has_value()) {
+        slot = gather_population(block.sqref, sheet);
+      }
+      ctx.cached_population = &*slot;
+    }
+
     if (!match_rule(rule, cell_value, ctx)) {
       continue;
     }
@@ -1312,6 +1348,44 @@ std::vector<CFMatch> evaluate_cf_at(const Sheet& sheet, CellAddress target, cons
     }
   }
   return matches;
+}
+
+}  // namespace
+
+std::vector<CFMatch> evaluate_cf_at(const Sheet& sheet, CellAddress target, const CFHost& host) {
+  return evaluate_cf_at_impl(sheet, target, host, /*cache=*/nullptr);
+}
+
+std::vector<CFRangeCellMatches> evaluate_cf_for_range(const Sheet& sheet, CFCellRange range, const CFHost& host) {
+  std::vector<CFRangeCellMatches> results;
+  if (host.arena == nullptr || host.registry == nullptr || host.eval_ctx == nullptr) {
+    return results;
+  }
+  // One cache for the whole range. Slots are sized to match the
+  // sheet's block count; each slot is populated lazily the first time
+  // a range-aware rule needs it, then reused across every subsequent
+  // cell in the same block.
+  PopulationCache cache(sheet.conditional_formats().size());
+  // Iterate row-major over the inclusive range. The boundary check is
+  // `<=` so a single-cell range (first == last) still produces one
+  // visit. Callers who need to evaluate one cell should prefer the
+  // direct `evaluate_cf_at`; this helper exists for the viewport case.
+  for (std::uint32_t row = range.first.row; row <= range.last.row; ++row) {
+    for (std::uint32_t col = range.first.col; col <= range.last.col; ++col) {
+      CellAddress cell{};
+      cell.row = row;
+      cell.col = col;
+      std::vector<CFMatch> matches = evaluate_cf_at_impl(sheet, cell, host, &cache);
+      if (matches.empty()) {
+        continue;
+      }
+      CFRangeCellMatches entry;
+      entry.cell = cell;
+      entry.matches = std::move(matches);
+      results.push_back(std::move(entry));
+    }
+  }
+  return results;
 }
 
 }  // namespace formulon::cf

@@ -108,6 +108,14 @@ class FunctionRegistry;
 
 namespace cf {
 
+/// Sorted ascending numeric population of a sqref. Defined in
+/// `cf_evaluator.cpp`; only forward-declared here so `CFEvalContext` can
+/// carry an opaque pointer that the viewport API uses to share a
+/// per-block population across cells. Callers outside the cf module
+/// neither see the layout nor populate the field — they pass `nullptr`
+/// (the default), and the evaluator gathers populations on demand.
+struct ColorScalePopulation;
+
 /// Returns `true` when `rule` matches the cell carrying `cell_value`.
 ///
 /// Value-only overload. Resolves rule kinds whose decision depends
@@ -174,6 +182,15 @@ CFMatch make_match(const CFRule& rule);
 /// sqref. `nullptr` means the host has not provided one; range-aware
 /// rules then never match. Other rule kinds ignore this field. The
 /// pointee is borrowed and must outlive the `match_rule` call.
+///
+/// `cached_population` is an optimisation hint for the viewport API.
+/// When set, range-aware rule kinds (ColorScale, DataBar, IconSet,
+/// AboveAverage, Top10) read the sqref's numeric population from this
+/// pointer instead of re-walking the sheet. The viewport walker
+/// computes one population per `<conditionalFormatting>` block at the
+/// top of `evaluate_cf_for_range` and reuses it across every cell in
+/// the range; per-cell `evaluate_cf_at` callers leave this `nullptr`
+/// and the helpers compute on demand.
 struct CFEvalContext {
   CellAddress anchor{};
   CellAddress target{};
@@ -182,6 +199,7 @@ struct CFEvalContext {
   const eval::EvalContext* eval_ctx = nullptr;
   std::optional<double> today_serial;
   const std::vector<CFCellRange>* sqref = nullptr;
+  const ColorScalePopulation* cached_population = nullptr;
 };
 
 /// Context-aware overload that handles every rule type the value-only
@@ -254,9 +272,12 @@ struct CFRangeCellMatches {
 /// failed to match, do not appear. Order is row-major over `range`.
 ///
 /// Equivalent to calling `evaluate_cf_at` once per cell in `range` and
-/// dropping cells with empty match lists. The implementation reuses
-/// the per-cell walker; future revisions may cache rule-population
-/// statistics across cells in the same sqref.
+/// dropping cells with empty match lists, but the implementation
+/// computes each block's numeric population once and reuses it across
+/// every cell in `range`. Range-aware rule kinds (ColorScale, DataBar,
+/// IconSet, AboveAverage, Top10) consume the cached population through
+/// `CFEvalContext::cached_population`; cells inside the same block see
+/// identical statistics regardless of where they sit in the viewport.
 std::vector<CFRangeCellMatches> evaluate_cf_for_range(const Sheet& sheet, CFCellRange range, const CFHost& host);
 
 /// Context-aware `make_match` overload. Identical to the value-only

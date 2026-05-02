@@ -737,9 +737,9 @@ TEST(CFEvaluator, TimePeriodThisWeekIsSundayThroughSaturday) {
   CFRule r = MakeRule(RuleType::TimePeriod);
   r.time_period = TimePeriod::ThisWeek;
   const auto ctx = PinnedContext(harness, Serial(2024, 3, 13));
-  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 10)), ctx));  // Sun
-  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 13)), ctx));  // Wed
-  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 16)), ctx));  // Sat
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 10)), ctx));   // Sun
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 13)), ctx));   // Wed
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 16)), ctx));   // Sat
   EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 9)), ctx));   // prior Sat
   EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 17)), ctx));  // next Sun
 }
@@ -749,9 +749,9 @@ TEST(CFEvaluator, TimePeriodLastWeekIsPriorSundayThroughSaturday) {
   CFRule r = MakeRule(RuleType::TimePeriod);
   r.time_period = TimePeriod::LastWeek;
   const auto ctx = PinnedContext(harness, Serial(2024, 3, 13));
-  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 3)), ctx));   // Sun
-  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 9)), ctx));   // Sat
-  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 2)), ctx));  // 2 weeks back
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 3)), ctx));    // Sun
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 9)), ctx));    // Sat
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 2)), ctx));   // 2 weeks back
   EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 10)), ctx));  // this Sun
 }
 
@@ -2053,7 +2053,8 @@ TEST(CFEvaluator, EvaluateCfAtStopIfTrueDoesNotHaltOnNonMatch) {
   errors_rule.dxf_id = 200;
   errors_rule.id = "not-error";
 
-  harness.sheet.mutable_conditional_formats().push_back(MakeBlock({MakeRange(0, 0, 0, 0)}, {cell_is_rule, errors_rule}));
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 0, 0)}, {cell_is_rule, errors_rule}));
   const auto host = MakeHost(harness);
   std::vector<CFMatch> matches = evaluate_cf_at(harness.sheet, At(0, 0), host);
   ASSERT_EQ(matches.size(), 1u);
@@ -2170,8 +2171,7 @@ TEST(CFEvaluator, EvaluateCfForRangeAggregatesPriorityOrderPerCell) {
   // each cell's match list comes back in priority order.
   CFEvalHarness harness;
   harness.sheet.mutable_conditional_formats().push_back(
-      MakeBlock({MakeRange(0, 0, 0, 1)},
-                {MakeBlanksRule(2, 20, "later"), MakeBlanksRule(1, 10, "earlier")}));
+      MakeBlock({MakeRange(0, 0, 0, 1)}, {MakeBlanksRule(2, 20, "later"), MakeBlanksRule(1, 10, "earlier")}));
   const auto host = MakeHost(harness);
   std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 0, 1), host);
   ASSERT_EQ(matches.size(), 2u);
@@ -2179,6 +2179,85 @@ TEST(CFEvaluator, EvaluateCfForRangeAggregatesPriorityOrderPerCell) {
     ASSERT_EQ(cell.matches.size(), 2u);
     EXPECT_EQ(cell.matches[0].rule_id, "earlier");
     EXPECT_EQ(cell.matches[1].rule_id, "later");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Population caching — viewport API must produce results identical to
+// per-cell `evaluate_cf_at` calls. This pins the optimisation: caching
+// the population across cells in a range may not change rendered output.
+// ---------------------------------------------------------------------------
+
+CFRule MakeColorScaleBlock(std::int32_t priority, std::string id) {
+  CFRule rule;
+  rule.type = RuleType::ColorScale;
+  rule.priority = priority;
+  rule.id = std::move(id);
+  rule.color_scale = TwoStopMinMax(RGB(255, 0, 0), RGB(0, 255, 0));
+  return rule;
+}
+
+CFRule MakeTop10Rule(std::int32_t priority, std::string id, std::int32_t rank) {
+  CFRule rule;
+  rule.type = RuleType::Top10;
+  rule.priority = priority;
+  rule.dxf_id = 5;
+  rule.id = std::move(id);
+  rule.rank = rank;
+  rule.bottom = false;
+  rule.percent = false;
+  return rule;
+}
+
+TEST(CFEvaluator, EvaluateCfForRangeCachedPathMatchesUncached) {
+  // ColorScale over A1:A5 = [10, 20, 30, 40, 50]. Every cell is in
+  // the sqref so `evaluate_cf_at` and `evaluate_cf_for_range` must
+  // resolve identical fill colours.
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 4, 0)}, {MakeColorScaleBlock(1, "color-scale")}));
+
+  const auto host = MakeHost(harness);
+  std::vector<CFRangeCellMatches> ranged = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 4, 0), host);
+  ASSERT_EQ(ranged.size(), 5u);
+
+  for (std::uint32_t row = 0; row < 5; ++row) {
+    std::vector<CFMatch> per_cell = evaluate_cf_at(harness.sheet, At(row, 0), host);
+    ASSERT_EQ(per_cell.size(), 1u) << "row=" << row;
+    ASSERT_EQ(ranged[row].matches.size(), 1u) << "row=" << row;
+    const auto& cached = ranged[row].matches[0];
+    const auto& fresh = per_cell[0];
+    ASSERT_TRUE(cached.resolved_fill_color.has_value()) << "row=" << row;
+    ASSERT_TRUE(fresh.resolved_fill_color.has_value()) << "row=" << row;
+    EXPECT_EQ(cached.resolved_fill_color->r, fresh.resolved_fill_color->r) << "row=" << row;
+    EXPECT_EQ(cached.resolved_fill_color->g, fresh.resolved_fill_color->g) << "row=" << row;
+    EXPECT_EQ(cached.resolved_fill_color->b, fresh.resolved_fill_color->b) << "row=" << row;
+    EXPECT_EQ(cached.resolved_fill_color->a, fresh.resolved_fill_color->a) << "row=" << row;
+  }
+}
+
+TEST(CFEvaluator, EvaluateCfForRangeCachedPathPreservesTop10Behavior) {
+  // Top-2 over [10, 20, 30, 40, 50] should match rows 3 (40) and 4
+  // (50). Cached and uncached paths must agree on which cells fire.
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 4, 0)}, {MakeTop10Rule(1, "top2", 2)}));
+
+  const auto host = MakeHost(harness);
+  std::vector<CFRangeCellMatches> ranged = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 4, 0), host);
+
+  // Row-major: only rows 3 and 4 should appear.
+  ASSERT_EQ(ranged.size(), 2u);
+  EXPECT_EQ(ranged[0].cell.row, 3u);
+  EXPECT_EQ(ranged[1].cell.row, 4u);
+
+  // Cross-check by walking cell-by-cell with the uncached entry point.
+  for (std::uint32_t row = 0; row < 5; ++row) {
+    std::vector<CFMatch> per_cell = evaluate_cf_at(harness.sheet, At(row, 0), host);
+    const bool expected = row >= 3;
+    EXPECT_EQ(per_cell.size(), expected ? 1u : 0u) << "row=" << row;
   }
 }
 
