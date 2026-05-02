@@ -980,6 +980,99 @@ bool match_color_scale(const CFRule& rule, const Value& cell_value, const CFEval
   return resolve_color_scale(rule, cell_value, ctx).has_value();
 }
 
+// ---------------------------------------------------------------------------
+// DataBar — resolve `min`/`max` thresholds, then compute bar length and
+// axis position.
+//
+// `length_pct` is the bar length expressed as a 0..100 percent of the
+// cell width: cells at `min_threshold` produce `min_length_pct`; cells
+// at `max_threshold` produce `max_length_pct`; cells outside clamp.
+// `axis_position_pct` follows OOXML semantics: `Automatic` splits at the
+// proportional negative offset, `Middle` pins to 50, `None` pins to 0.
+// `is_negative` is set when the cell value is strictly negative so the
+// host can flip the fill side.
+// ---------------------------------------------------------------------------
+
+constexpr double kAxisMid = 50.0;
+constexpr double kAxisLeft = 0.0;
+constexpr double kAxisRight = 100.0;
+
+double automatic_axis_position(double threshold_min, double threshold_max) {
+  // All non-negative → bar grows from the left edge.
+  if (threshold_min >= 0.0) {
+    return kAxisLeft;
+  }
+  // All non-positive → bar grows from the right edge.
+  if (threshold_max <= 0.0) {
+    return kAxisRight;
+  }
+  // Mixed sign: split proportionally so equal-magnitude positive and
+  // negative bars meet at the same axis. Rare degenerate case
+  // (threshold_min == 0 == threshold_max) is handled by the branches
+  // above.
+  const double negative_span = -threshold_min;
+  const double total_span = negative_span + threshold_max;
+  return (negative_span / total_span) * kAxisRight;
+}
+
+std::optional<DataBarRender> resolve_data_bar(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
+  if (!rule.data_bar.has_value() || ctx.sqref == nullptr || ctx.eval_ctx == nullptr ||
+      ctx.eval_ctx->current_sheet() == nullptr) {
+    return std::nullopt;
+  }
+  if (!cell_value.is_number()) {
+    return std::nullopt;
+  }
+  const DataBarSpec& spec = *rule.data_bar;
+
+  const ColorScalePopulation pop = gather_population(*ctx.sqref, *ctx.eval_ctx->current_sheet());
+  if (pop.sorted.empty()) {
+    return std::nullopt;
+  }
+
+  auto threshold_min = resolve_cfvo(spec.min, pop, ctx);
+  auto threshold_max = resolve_cfvo(spec.max, pop, ctx);
+  if (!threshold_min.has_value() || !threshold_max.has_value()) {
+    return std::nullopt;
+  }
+  // Degenerate threshold range collapses the bar — no meaningful length
+  // can be produced. Fall through to nullopt so the caller can decide.
+  if (*threshold_min == *threshold_max) {
+    return std::nullopt;
+  }
+
+  const double cell = cell_value.as_number();
+  const double range = *threshold_max - *threshold_min;
+  const double raw_fraction = (cell - *threshold_min) / range;
+  const double clamped_fraction = std::max(0.0, std::min(1.0, raw_fraction));
+  const double min_len = static_cast<double>(spec.min_length_pct);
+  const double max_len = static_cast<double>(spec.max_length_pct);
+
+  DataBarRender render;
+  render.length_pct = min_len + clamped_fraction * (max_len - min_len);
+  render.is_negative = cell < 0.0;
+  render.fill = render.is_negative ? spec.negative_fill : spec.fill;
+  render.border = render.is_negative ? spec.negative_border : spec.border;
+  render.gradient = spec.gradient;
+
+  switch (spec.axis_position) {
+    case DataBarAxisPosition::None:
+      render.axis_position_pct = kAxisLeft;
+      break;
+    case DataBarAxisPosition::Middle:
+      render.axis_position_pct = kAxisMid;
+      break;
+    case DataBarAxisPosition::Automatic:
+      render.axis_position_pct = automatic_axis_position(*threshold_min, *threshold_max);
+      break;
+  }
+  return render;
+}
+
+bool match_data_bar(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
+  return resolve_data_bar(rule, cell_value, ctx).has_value();
+}
+
 }  // namespace
 
 CFMatch make_match(const CFRule& rule) {
@@ -1003,9 +1096,14 @@ CFMatch make_match(const CFRule& rule, const Value& cell_value, const CFEvalCont
     match.resolved_fill_color = resolve_color_scale(rule, cell_value, ctx);
     return match;
   }
-  // DataBar / IconSet payloads land in subsequent PRs. Until then the
-  // context-aware overload behaves like the value-only one for those
-  // kinds — and identically for every dxf-driven kind.
+  if (rule.type == RuleType::DataBar) {
+    match.kind = CFMatchKind::DataBar;
+    match.data_bar_render = resolve_data_bar(rule, cell_value, ctx);
+    return match;
+  }
+  // IconSet payload computation lands in a subsequent PR. Until then
+  // the context-aware overload behaves like the value-only one for
+  // that kind — and identically for every dxf-driven kind.
   match.kind = CFMatchKind::DifferentialFormat;
   match.dxf_id = rule.dxf_id;
   return match;
@@ -1028,6 +1126,8 @@ bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext
       return match_top10(rule, cell_value, ctx);
     case RuleType::ColorScale:
       return match_color_scale(rule, cell_value, ctx);
+    case RuleType::DataBar:
+      return match_data_bar(rule, cell_value, ctx);
     case RuleType::ContainsBlanks:
     case RuleType::NotContainsBlanks:
     case RuleType::ContainsErrors:
@@ -1036,7 +1136,6 @@ bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext
     case RuleType::NotContainsText:
     case RuleType::BeginsWith:
     case RuleType::EndsWith:
-    case RuleType::DataBar:
     case RuleType::IconSet:
       // Value-only and not-yet-implemented rule types delegate to the
       // simple overload, which already encodes their semantics (or

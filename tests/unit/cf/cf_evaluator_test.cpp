@@ -1503,5 +1503,246 @@ TEST(CFEvaluator, ColorScaleValueOnlyOverloadStillReturnsFalse) {
   EXPECT_FALSE(match.resolved_fill_color.has_value());
 }
 
+// ---------------------------------------------------------------------------
+// DataBar
+// ---------------------------------------------------------------------------
+
+DataBarSpec MakeDataBarSpec(CfValueObject min_cfvo, CfValueObject max_cfvo, Color fill = RGB(0, 128, 255),
+                            DataBarAxisPosition axis = DataBarAxisPosition::Automatic) {
+  DataBarSpec spec;
+  spec.min = std::move(min_cfvo);
+  spec.max = std::move(max_cfvo);
+  spec.fill = fill;
+  spec.negative_fill = RGB(255, 0, 0);
+  spec.axis_position = axis;
+  spec.min_length_pct = 0;
+  spec.max_length_pct = 100;
+  return spec;
+}
+
+TEST(CFEvaluator, DataBarWithoutSqrefDoesNotMatch) {
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  CFRule r = MakeRule(RuleType::DataBar);
+  r.data_bar = MakeDataBarSpec(Cfvo(CfvoType::Min), Cfvo(CfvoType::Max));
+  EXPECT_FALSE(match_rule(r, Value::number(30.0), harness.context(At(0, 0), At(0, 0))));
+}
+
+TEST(CFEvaluator, DataBarLengthIsLinearBetweenMinAndMax) {
+  // Population [10, 20, 30, 40, 50]; min=10, max=50 → range=40.
+  // Cell at min → length 0%. Cell at max → length 100%. Cell at 30 → 50%.
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::DataBar);
+  r.data_bar = MakeDataBarSpec(Cfvo(CfvoType::Min), Cfvo(CfvoType::Max));
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch lo = make_match(r, Value::number(10.0), ctx);
+  ASSERT_TRUE(lo.data_bar_render.has_value());
+  EXPECT_EQ(lo.kind, CFMatchKind::DataBar);
+  EXPECT_DOUBLE_EQ(lo.data_bar_render->length_pct, 0.0);
+
+  CFMatch hi = make_match(r, Value::number(50.0), ctx);
+  ASSERT_TRUE(hi.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(hi.data_bar_render->length_pct, 100.0);
+
+  CFMatch mid = make_match(r, Value::number(30.0), ctx);
+  ASSERT_TRUE(mid.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(mid.data_bar_render->length_pct, 50.0);
+}
+
+TEST(CFEvaluator, DataBarClampsValuesOutsideThresholdRange) {
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::DataBar);
+  r.data_bar = MakeDataBarSpec(Cfvo(CfvoType::Min), Cfvo(CfvoType::Max));
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch below = make_match(r, Value::number(-100.0), ctx);
+  ASSERT_TRUE(below.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(below.data_bar_render->length_pct, 0.0);
+
+  CFMatch above = make_match(r, Value::number(1000.0), ctx);
+  ASSERT_TRUE(above.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(above.data_bar_render->length_pct, 100.0);
+}
+
+TEST(CFEvaluator, DataBarMinAndMaxLengthAreApplied) {
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::DataBar);
+  DataBarSpec spec = MakeDataBarSpec(Cfvo(CfvoType::Min), Cfvo(CfvoType::Max));
+  spec.min_length_pct = 10;
+  spec.max_length_pct = 90;
+  r.data_bar = std::move(spec);
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch lo = make_match(r, Value::number(10.0), ctx);
+  ASSERT_TRUE(lo.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(lo.data_bar_render->length_pct, 10.0);
+
+  CFMatch mid = make_match(r, Value::number(30.0), ctx);
+  ASSERT_TRUE(mid.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(mid.data_bar_render->length_pct, 50.0);
+
+  CFMatch hi = make_match(r, Value::number(50.0), ctx);
+  ASSERT_TRUE(hi.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(hi.data_bar_render->length_pct, 90.0);
+}
+
+TEST(CFEvaluator, DataBarAutomaticAxisAtZeroForAllNonNegativePopulation) {
+  // Population [10, 20, 30, 40, 50] is all >= 0 → axis at left edge.
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::DataBar);
+  r.data_bar = MakeDataBarSpec(Cfvo(CfvoType::Min), Cfvo(CfvoType::Max));
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch match = make_match(r, Value::number(30.0), ctx);
+  ASSERT_TRUE(match.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(match.data_bar_render->axis_position_pct, 0.0);
+  EXPECT_FALSE(match.data_bar_render->is_negative);
+}
+
+TEST(CFEvaluator, DataBarAutomaticAxisAtHundredForAllNegativePopulation) {
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(-50.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(-30.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(-10.0));
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 2, 0)};
+  CFRule r = MakeRule(RuleType::DataBar);
+  r.data_bar = MakeDataBarSpec(Cfvo(CfvoType::Min), Cfvo(CfvoType::Max));
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch match = make_match(r, Value::number(-30.0), ctx);
+  ASSERT_TRUE(match.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(match.data_bar_render->axis_position_pct, 100.0);
+  EXPECT_TRUE(match.data_bar_render->is_negative);
+}
+
+TEST(CFEvaluator, DataBarAutomaticAxisProportionalForMixedSignPopulation) {
+  // Population [-30, 10, 70] → min = -30, max = 70. Negative span = 30,
+  // total span = 100 → axis at 30%.
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(-30.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(10.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(70.0));
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 2, 0)};
+  CFRule r = MakeRule(RuleType::DataBar);
+  r.data_bar = MakeDataBarSpec(Cfvo(CfvoType::Min), Cfvo(CfvoType::Max));
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch match = make_match(r, Value::number(10.0), ctx);
+  ASSERT_TRUE(match.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(match.data_bar_render->axis_position_pct, 30.0);
+}
+
+TEST(CFEvaluator, DataBarMiddleAxisIsAlwaysFifty) {
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::DataBar);
+  r.data_bar = MakeDataBarSpec(Cfvo(CfvoType::Min), Cfvo(CfvoType::Max), RGB(0, 0, 255), DataBarAxisPosition::Middle);
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch match = make_match(r, Value::number(30.0), ctx);
+  ASSERT_TRUE(match.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(match.data_bar_render->axis_position_pct, 50.0);
+}
+
+TEST(CFEvaluator, DataBarNoneAxisIsZero) {
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::DataBar);
+  r.data_bar = MakeDataBarSpec(Cfvo(CfvoType::Min), Cfvo(CfvoType::Max), RGB(0, 0, 255), DataBarAxisPosition::None);
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch match = make_match(r, Value::number(30.0), ctx);
+  ASSERT_TRUE(match.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(match.data_bar_render->axis_position_pct, 0.0);
+}
+
+TEST(CFEvaluator, DataBarSelectsNegativeFillForNegativeValues) {
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(-30.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(70.0));
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 1, 0)};
+  CFRule r = MakeRule(RuleType::DataBar);
+  DataBarSpec spec = MakeDataBarSpec(Cfvo(CfvoType::Min), Cfvo(CfvoType::Max));
+  spec.fill = RGB(0, 200, 0);
+  spec.negative_fill = RGB(200, 0, 0);
+  r.data_bar = std::move(spec);
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch positive = make_match(r, Value::number(70.0), ctx);
+  ASSERT_TRUE(positive.data_bar_render.has_value());
+  EXPECT_EQ(positive.data_bar_render->fill, RGB(0, 200, 0));
+  EXPECT_FALSE(positive.data_bar_render->is_negative);
+
+  CFMatch negative = make_match(r, Value::number(-30.0), ctx);
+  ASSERT_TRUE(negative.data_bar_render.has_value());
+  EXPECT_EQ(negative.data_bar_render->fill, RGB(200, 0, 0));
+  EXPECT_TRUE(negative.data_bar_render->is_negative);
+}
+
+TEST(CFEvaluator, DataBarNumberCfvosUseLiteralThresholds) {
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::DataBar);
+  // Force min=0, max=100 regardless of population.
+  r.data_bar = MakeDataBarSpec(Cfvo(CfvoType::Number, "0"), Cfvo(CfvoType::Number, "100"));
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch match = make_match(r, Value::number(50.0), ctx);
+  ASSERT_TRUE(match.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(match.data_bar_render->length_pct, 50.0);
+}
+
+TEST(CFEvaluator, DataBarNonNumericCellDoesNotResolve) {
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::DataBar);
+  r.data_bar = MakeDataBarSpec(Cfvo(CfvoType::Min), Cfvo(CfvoType::Max));
+  const auto ctx = SqrefContext(harness, sqref);
+
+  EXPECT_FALSE(match_rule(r, Value::text("30"), ctx));
+  EXPECT_FALSE(match_rule(r, Value::error(ErrorCode::NA), ctx));
+  EXPECT_FALSE(match_rule(r, Value::blank(), ctx));
+  CFMatch match = make_match(r, Value::text("30"), ctx);
+  EXPECT_FALSE(match.data_bar_render.has_value());
+}
+
+TEST(CFEvaluator, DataBarDegenerateRangeDoesNotResolve) {
+  // Population is all 7s → min == max → no meaningful bar length.
+  CFEvalHarness harness;
+  for (std::uint32_t row = 0; row < 4; ++row) {
+    harness.sheet.set_cell_value(row, 0, Value::number(7.0));
+  }
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 3, 0)};
+  CFRule r = MakeRule(RuleType::DataBar);
+  r.data_bar = MakeDataBarSpec(Cfvo(CfvoType::Min), Cfvo(CfvoType::Max));
+  const auto ctx = SqrefContext(harness, sqref);
+
+  EXPECT_FALSE(match_rule(r, Value::number(7.0), ctx));
+  CFMatch match = make_match(r, Value::number(7.0), ctx);
+  EXPECT_FALSE(match.data_bar_render.has_value());
+}
+
+TEST(CFEvaluator, DataBarValueOnlyOverloadStillReturnsFalse) {
+  CFRule r = MakeRule(RuleType::DataBar);
+  r.data_bar = MakeDataBarSpec(Cfvo(CfvoType::Min), Cfvo(CfvoType::Max));
+  EXPECT_FALSE(match_rule(r, Value::number(30.0)));
+  CFMatch match = make_match(r);
+  EXPECT_EQ(match.kind, CFMatchKind::DifferentialFormat);
+  EXPECT_FALSE(match.data_bar_render.has_value());
+}
+
 }  // namespace
 }  // namespace formulon::cf

@@ -49,10 +49,16 @@
 //     The context-aware `make_match` overload produces a `CFMatch`
 //     with `resolved_fill_color` engaged; the boolean overload is
 //     consumed only as a "rule applies" gate.
+//   * `DataBar` — resolves `rule.data_bar->min` / `max` against the
+//     same CFVO machinery, computes the bar length as a percentage of
+//     `(max - min)` scaled into `[min_length_pct, max_length_pct]`,
+//     and selects the axis position. `Automatic` axis splits at the
+//     proportional negative offset; `Middle` pins to 50; `None` pins
+//     to 0. `is_negative` is set when the cell value is < 0.
 //
 // Deferred to subsequent staging steps:
 //
-//   * `DataBar` / `IconSet` visual computation
+//   * `IconSet` visual computation
 //   * Priority chain + stopIfTrue + lazy viewport API
 //
 // Each step extends `match_rule` and the public `evaluate_*` helpers
@@ -193,8 +199,13 @@ bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext
 ///     the sqref population, locates the segment containing the cell
 ///     value, and linearly interpolates the bounding stop colours in
 ///     RGB space. Engages `CFMatch::resolved_fill_color`.
-///   * `DataBar` / `IconSet` — payload computation lands in subsequent
-///     PRs; until then this overload returns the dxf-only payload
+///   * `DataBar` — resolves the `min` / `max` CFVOs, computes the bar
+///     length as `(cell - min) / (max - min)` clamped to `[0, 1]` and
+///     scaled into `[min_length_pct, max_length_pct]`, and assigns
+///     `axis_position_pct` (`Automatic` / `Middle` / `None`). Engages
+///     `CFMatch::data_bar_render`.
+///   * `IconSet` — payload computation lands in a subsequent PR;
+///     until then this overload returns the dxf-only payload
 ///     unchanged.
 ///
 /// Callers should still gate on the boolean `match_rule` overload to
