@@ -48,6 +48,23 @@ class PivotTable {
   const std::vector<PivotField>& fields() const { return fields_; }
   std::vector<PivotField>& mutable_fields() { return fields_; }
 
+  /// Data-field entries from `<dataFields>`. Keyed by display name for
+  /// GETPIVOTDATA; one source `PivotField` may have multiple data-field
+  /// entries (e.g. Sum + Average of the same column).
+  const std::vector<PivotDataField>& data_fields() const { return data_fields_; }
+  std::vector<PivotDataField>& mutable_data_fields() { return data_fields_; }
+
+  /// Document-order indices into `fields()` of the row-axis fields,
+  /// captured from `<rowFields>`. Used by the pivot evaluator to walk
+  /// the row hierarchy.
+  const std::vector<std::uint32_t>& row_field_order() const { return row_field_order_; }
+  std::vector<std::uint32_t>& mutable_row_field_order() { return row_field_order_; }
+
+  /// Document-order indices into `fields()` of the column-axis fields,
+  /// captured from `<colFields>`.
+  const std::vector<std::uint32_t>& col_field_order() const { return col_field_order_; }
+  std::vector<std::uint32_t>& mutable_col_field_order() { return col_field_order_; }
+
   // Layout / location --------------------------------------------------------
 
   PivotLayout layout() const { return layout_; }
@@ -96,6 +113,9 @@ class PivotTable {
   std::string name_;
   std::uint32_t pivot_cache_id_ = 0;
   std::vector<PivotField> fields_;
+  std::vector<PivotDataField> data_fields_;
+  std::vector<std::uint32_t> row_field_order_;
+  std::vector<std::uint32_t> col_field_order_;
   PivotLayout layout_ = PivotLayout::Compact;
   std::uint32_t anchor_row_ = 0;
   std::uint32_t anchor_col_ = 0;

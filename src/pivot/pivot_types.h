@@ -132,6 +132,20 @@ struct SortSpec {
   std::string by_field;
 };
 
+/// One data-field entry from `<dataFields>/<dataField>`.
+///
+/// GETPIVOTDATA looks up data fields by `name` (e.g. "Sum of Amount").
+/// `field_index` is the index into `PivotTable::fields()` of the
+/// pivot-field this data-field aggregates from. A single source field
+/// can be referenced by multiple data fields (e.g. Sum + Average of the
+/// same column), each with its own display name.
+struct PivotDataField {
+  std::string name;  ///< Display name; key for GETPIVOTDATA lookup.
+  std::uint32_t field_index = 0;
+  Aggregation aggregation = Aggregation::Sum;
+  std::string number_format;
+};
+
 /// Field-level configuration as authored in the OOXML pivot definition.
 ///
 /// `aggregations` is non-empty only for fields placed on
