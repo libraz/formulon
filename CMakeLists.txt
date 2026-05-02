@@ -123,6 +123,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/sheet_writer.cpp
   src/io/xlsb/sst_writer.cpp
   src/io/xlsb/writer.cpp
+  src/cf/cf_evaluator.cpp
   src/parser/tokenizer.cpp
   src/parser/ast.cpp
   src/parser/ast_dump.cpp
