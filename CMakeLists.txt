@@ -127,6 +127,7 @@ set(FORMULON_CORE_SOURCES
   src/parser/tokenizer.cpp
   src/parser/ast.cpp
   src/parser/ast_dump.cpp
+  src/parser/ast_shift.cpp
   src/parser/parser.cpp
   src/parser/parser_atoms.cpp
   src/parser/parser_reference.cpp
