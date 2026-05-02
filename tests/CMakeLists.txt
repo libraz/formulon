@@ -23,6 +23,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/deps/miniz_smoke_test.cpp
   unit/deps/pugixml_smoke_test.cpp
   unit/io/cell_parser_test.cpp
+  unit/io/cf_reader_test.cpp
   unit/io/defined_names_test.cpp
   unit/io/ooxml_reader_test.cpp
   unit/io/ooxml_unknown_kind_test.cpp

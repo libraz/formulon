@@ -97,6 +97,7 @@ set(FORMULON_CORE_SOURCES
   src/sheet.cpp
   src/workbook.cpp
   src/io/cell_parser.cpp
+  src/io/cf_reader.cpp
   src/io/defined_names.cpp
   src/io/ooxml_reader.cpp
   src/io/ooxml_writer.cpp
