@@ -10,9 +10,14 @@
 
 #include "cf/cf_evaluator.h"
 
+#include "cell.h"
 #include "cf/cf_match.h"
 #include "cf/cf_types.h"
+#include "eval/eval_context.h"
+#include "eval/function_registry.h"
 #include "gtest/gtest.h"
+#include "sheet.h"
+#include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
 
@@ -286,6 +291,210 @@ TEST(CFEvaluator, MakeMatchPropagatesEmptyDxf) {
   r.dxf_id.reset();
   CFMatch m = make_match(r);
   EXPECT_FALSE(m.dxf_id.has_value());
+}
+
+// ---------------------------------------------------------------------------
+// Context-aware overload: Expression rules and CellIs with non-literal
+// formula1 / formula2.
+// ---------------------------------------------------------------------------
+
+CellAddress At(std::uint32_t row, std::uint32_t col) {
+  CellAddress addr{};
+  addr.row = row;
+  addr.col = col;
+  return addr;
+}
+
+struct CFEvalHarness {
+  Sheet sheet{"Sheet1"};
+  Arena arena;
+  eval::EvalContext eval_ctx{sheet};
+
+  CFEvalContext context(CellAddress anchor, CellAddress target) {
+    CFEvalContext ctx;
+    ctx.anchor = anchor;
+    ctx.target = target;
+    ctx.arena = &arena;
+    ctx.registry = &eval::default_registry();
+    ctx.eval_ctx = &eval_ctx;
+    return ctx;
+  }
+};
+
+TEST(CFEvaluator, ExpressionRuleLiteralTrueMatches) {
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::Expression);
+  r.formula1 = "TRUE";
+  EXPECT_TRUE(match_rule(r, Value::number(0.0), harness.context(At(0, 0), At(0, 0))));
+}
+
+TEST(CFEvaluator, ExpressionRuleLiteralFalseDoesNotMatch) {
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::Expression);
+  r.formula1 = "FALSE";
+  EXPECT_FALSE(match_rule(r, Value::number(0.0), harness.context(At(0, 0), At(0, 0))));
+}
+
+TEST(CFEvaluator, ExpressionRuleNonZeroNumberMatches) {
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::Expression);
+  r.formula1 = "1";
+  EXPECT_TRUE(match_rule(r, Value::number(0.0), harness.context(At(0, 0), At(0, 0))));
+}
+
+TEST(CFEvaluator, ExpressionRuleZeroNumberDoesNotMatch) {
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::Expression);
+  r.formula1 = "0";
+  EXPECT_FALSE(match_rule(r, Value::number(1.0), harness.context(At(0, 0), At(0, 0))));
+}
+
+TEST(CFEvaluator, ExpressionRuleArithmeticComparison) {
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(15.0));  // A1 = 15
+  CFRule r = MakeRule(RuleType::Expression);
+  r.formula1 = "A1>10";
+  EXPECT_TRUE(match_rule(r, Value::number(0.0), harness.context(At(0, 0), At(0, 0))));
+}
+
+TEST(CFEvaluator, ExpressionRuleRelativeReferenceShiftsToTargetRow) {
+  // Anchor at A1, target at A4. Formula `=A1>10` shifts to `=A4>10`.
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(5.0));   // A1
+  harness.sheet.set_cell_value(3, 0, Value::number(15.0));  // A4
+  CFRule r = MakeRule(RuleType::Expression);
+  r.formula1 = "A1>10";
+  EXPECT_TRUE(match_rule(r, Value::number(0.0), harness.context(At(0, 0), At(3, 0))));
+}
+
+TEST(CFEvaluator, ExpressionRuleRelativeReferenceShiftsToTargetColumn) {
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(5.0));   // A1
+  harness.sheet.set_cell_value(0, 2, Value::number(20.0));  // C1
+  CFRule r = MakeRule(RuleType::Expression);
+  r.formula1 = "A1>10";
+  EXPECT_TRUE(match_rule(r, Value::number(0.0), harness.context(At(0, 0), At(0, 2))));
+}
+
+TEST(CFEvaluator, ExpressionRuleAbsoluteReferenceLocksAtAnchor) {
+  // `$A$1>10` always reads A1, regardless of target.
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(15.0));  // A1
+  harness.sheet.set_cell_value(0, 5, Value::number(0.0));   // F1
+  CFRule r = MakeRule(RuleType::Expression);
+  r.formula1 = "$A$1>10";
+  EXPECT_TRUE(match_rule(r, Value::number(0.0), harness.context(At(0, 0), At(0, 5))));
+}
+
+TEST(CFEvaluator, ExpressionRuleErrorResultDoesNotMatch) {
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::Expression);
+  r.formula1 = "1/0";  // produces #DIV/0!
+  EXPECT_FALSE(match_rule(r, Value::number(0.0), harness.context(At(0, 0), At(0, 0))));
+}
+
+TEST(CFEvaluator, ExpressionRuleTextResultDoesNotMatch) {
+  // Excel's expression-rule truthiness rejects text — only bool / number trigger.
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::Expression);
+  r.formula1 = "\"yes\"";
+  EXPECT_FALSE(match_rule(r, Value::number(0.0), harness.context(At(0, 0), At(0, 0))));
+}
+
+TEST(CFEvaluator, ExpressionRuleParseFailureDoesNotMatch) {
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::Expression);
+  r.formula1 = "(((";
+  EXPECT_FALSE(match_rule(r, Value::number(0.0), harness.context(At(0, 0), At(0, 0))));
+}
+
+TEST(CFEvaluator, ExpressionRuleMissingFormulaDoesNotMatch) {
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::Expression);
+  // formula1 unset
+  EXPECT_FALSE(match_rule(r, Value::number(0.0), harness.context(At(0, 0), At(0, 0))));
+}
+
+TEST(CFEvaluator, ExpressionRuleOutOfBoundsShiftDoesNotMatch) {
+  // Anchor at A1, target at A1 with delta = (-1, 0) is impossible
+  // (target above anchor by one row would land on row 0 = okay).
+  // Pick a formula referencing A1 with anchor at B5 and target at A1
+  // → delta = (-4, -1). Shift A1 by (-4, -1) goes out of bounds.
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::Expression);
+  r.formula1 = "A1>10";
+  // The shifted ref becomes #REF!; comparison `(#REF!)>10` propagates
+  // an error, which is not truthy.
+  EXPECT_FALSE(match_rule(r, Value::number(0.0), harness.context(At(4, 1), At(0, 0))));
+}
+
+// ---------------------------------------------------------------------------
+// CellIs with non-literal operand
+// ---------------------------------------------------------------------------
+
+TEST(CFEvaluator, CellIsEvaluatesReferenceOperand) {
+  // CellIs Equal `=A1`, with A1 = 10. Cell value = 10 → matches.
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(10.0));  // A1
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::Equal;
+  r.formula1 = "A1";
+  EXPECT_TRUE(match_rule(r, Value::number(10.0), harness.context(At(0, 0), At(0, 0))));
+  EXPECT_FALSE(match_rule(r, Value::number(11.0), harness.context(At(0, 0), At(0, 0))));
+}
+
+TEST(CFEvaluator, CellIsEvaluatesArithmeticOperand) {
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::LessThan;
+  r.formula1 = "10*2";  // = 20
+  EXPECT_TRUE(match_rule(r, Value::number(15.0), harness.context(At(0, 0), At(0, 0))));
+  EXPECT_FALSE(match_rule(r, Value::number(25.0), harness.context(At(0, 0), At(0, 0))));
+}
+
+TEST(CFEvaluator, CellIsBetweenWithReferenceOperands) {
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(5.0));   // A1
+  harness.sheet.set_cell_value(0, 1, Value::number(10.0));  // B1
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::Between;
+  r.formula1 = "A1";
+  r.formula2 = "B1";
+  EXPECT_TRUE(match_rule(r, Value::number(7.5), harness.context(At(0, 0), At(0, 0))));
+  EXPECT_FALSE(match_rule(r, Value::number(11.0), harness.context(At(0, 0), At(0, 0))));
+}
+
+TEST(CFEvaluator, CellIsLiteralPathStillWorksThroughEvaluatorOverload) {
+  // Verify the context-aware overload doesn't regress the literal path.
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::Equal;
+  r.formula1 = "42";
+  EXPECT_TRUE(match_rule(r, Value::number(42.0), harness.context(At(0, 0), At(0, 0))));
+  EXPECT_FALSE(match_rule(r, Value::number(43.0), harness.context(At(0, 0), At(0, 0))));
+}
+
+TEST(CFEvaluator, CellIsReferenceShiftsWithTarget) {
+  // CellIs with `A1` operand, anchor at A1, target at A2 → operand is A2.
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(1, 0, Value::number(50.0));  // A2
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::Equal;
+  r.formula1 = "A1";
+  EXPECT_TRUE(match_rule(r, Value::number(50.0), harness.context(At(0, 0), At(1, 0))));
+}
+
+TEST(CFEvaluator, ContextAwareOverloadDelegatesValueOnlyKinds) {
+  // Verify the context-aware overload routes value-only rules to the
+  // simple overload. This is a regression guard: if the dispatcher
+  // ever forgets to delegate, the rule would silently return false.
+  CFEvalHarness harness;
+  CFRule blanks = MakeRule(RuleType::ContainsBlanks);
+  EXPECT_TRUE(match_rule(blanks, Value::blank(), harness.context(At(0, 0), At(0, 0))));
+  EXPECT_FALSE(match_rule(blanks, Value::number(0.0), harness.context(At(0, 0), At(0, 0))));
+
+  CFRule errors = MakeRule(RuleType::ContainsErrors);
+  EXPECT_TRUE(match_rule(errors, Value::error(ErrorCode::Div0), harness.context(At(0, 0), At(0, 0))));
 }
 
 }  // namespace

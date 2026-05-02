@@ -6,6 +6,7 @@
 #include "cf/cf_evaluator.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdlib>
 #include <optional>
 #include <string>
@@ -13,6 +14,13 @@
 
 #include "cf/cf_match.h"
 #include "cf/cf_types.h"
+#include "eval/eval_context.h"
+#include "eval/function_registry.h"
+#include "eval/tree_walker.h"
+#include "parser/ast.h"
+#include "parser/ast_shift.h"
+#include "parser/parser.h"
+#include "utils/arena.h"
 #include "value.h"
 
 namespace formulon::cf {
@@ -178,6 +186,74 @@ std::optional<int> compare_cell_to_literal(const Value& cell, const LiteralOpera
   return 0;
 }
 
+// Folds an evaluated `Value` into the literal-operand machinery so the
+// existing comparison helpers can stay the only path. Errors, blanks,
+// arrays, refs, and lambdas have no useful CellIs interpretation; they
+// produce nullopt and the caller treats the rule as not-matching.
+std::optional<LiteralOperand> value_to_operand(const Value& evaluated) {
+  if (evaluated.is_number()) {
+    LiteralOperand operand;
+    operand.kind = LiteralOperand::Kind::Number;
+    operand.number_value = evaluated.as_number();
+    return operand;
+  }
+  if (evaluated.is_boolean()) {
+    LiteralOperand operand;
+    operand.kind = LiteralOperand::Kind::Bool;
+    operand.bool_value = evaluated.as_boolean();
+    return operand;
+  }
+  if (evaluated.is_text()) {
+    LiteralOperand operand;
+    operand.kind = LiteralOperand::Kind::Text;
+    operand.text_value = std::string(evaluated.as_text());
+    return operand;
+  }
+  return std::nullopt;
+}
+
+// Parses, shifts, and evaluates `source` as the body of a CF formula
+// anchored at `ctx.anchor` and applied at `ctx.target`. Parser errors,
+// arena exhaustion, and out-of-bounds shifts surface as Excel error
+// values so the caller can decide how to interpret them.
+Value parse_shift_evaluate(const std::string& source, const CFEvalContext& ctx) {
+  if (ctx.arena == nullptr || ctx.registry == nullptr || ctx.eval_ctx == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+
+  // OOXML stores cellIs / expression `formula1` without a leading `=`;
+  // the parser is happy with that, so no stripping is required.
+  parser::Parser parser(source, *ctx.arena);
+  const parser::AstNode* root = parser.parse();
+  if (root == nullptr || !parser.errors().empty()) {
+    return Value::error(ErrorCode::Name);
+  }
+
+  const std::int32_t row_delta = static_cast<std::int32_t>(ctx.target.row) - static_cast<std::int32_t>(ctx.anchor.row);
+  const std::int32_t col_delta = static_cast<std::int32_t>(ctx.target.col) - static_cast<std::int32_t>(ctx.anchor.col);
+
+  const parser::AstNode* shifted = parser::shift_relative_refs(*root, *ctx.arena, row_delta, col_delta);
+  if (shifted == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+
+  const eval::EvalContext target_ctx = ctx.eval_ctx->with_formula_cell(ctx.target.row, ctx.target.col);
+  return eval::evaluate(*shifted, *ctx.arena, *ctx.registry, target_ctx);
+}
+
+// Returns the operand for a `cellIs` formula source, preferring the
+// literal-parser fast path (no parser instantiation, no arena traffic)
+// and falling back to the formula evaluator when the source isn't a
+// bare literal.
+std::optional<LiteralOperand> cell_is_operand(const std::string& source, const CFEvalContext& ctx) {
+  auto literal = parse_literal(source);
+  if (literal.has_value()) {
+    return literal;
+  }
+  const Value evaluated = parse_shift_evaluate(source, ctx);
+  return value_to_operand(evaluated);
+}
+
 bool match_cell_is(const CFRule& rule, const Value& cell_value) {
   if (!rule.op.has_value() || !rule.formula1.has_value()) {
     return false;
@@ -266,6 +342,85 @@ bool match_rule(const CFRule& rule, const Value& cell_value) {
   return false;
 }
 
+namespace {
+
+// Same shape as `match_cell_is`, but resolves non-literal formula1 /
+// formula2 through the formula evaluator so cellIs rules with
+// references or arithmetic operands work end-to-end.
+bool match_cell_is_via_evaluator(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
+  if (!rule.op.has_value() || !rule.formula1.has_value()) {
+    return false;
+  }
+
+  const auto operand1 = cell_is_operand(*rule.formula1, ctx);
+  if (!operand1.has_value()) {
+    return false;
+  }
+
+  const CellIsOperator cell_op = *rule.op;
+  if (cell_op == CellIsOperator::Between || cell_op == CellIsOperator::NotBetween) {
+    if (!rule.formula2.has_value()) {
+      return false;
+    }
+    const auto operand2 = cell_is_operand(*rule.formula2, ctx);
+    if (!operand2.has_value()) {
+      return false;
+    }
+    const auto lo_cmp = compare_cell_to_literal(cell_value, *operand1);
+    const auto hi_cmp = compare_cell_to_literal(cell_value, *operand2);
+    if (!lo_cmp.has_value() || !hi_cmp.has_value()) {
+      return false;
+    }
+    const bool inside = (*lo_cmp >= 0) && (*hi_cmp <= 0);
+    return cell_op == CellIsOperator::Between ? inside : !inside;
+  }
+
+  const auto cmp = compare_cell_to_literal(cell_value, *operand1);
+  if (!cmp.has_value()) {
+    return false;
+  }
+  switch (cell_op) {
+    case CellIsOperator::LessThan:
+      return *cmp < 0;
+    case CellIsOperator::LessThanOrEqual:
+      return *cmp <= 0;
+    case CellIsOperator::Equal:
+      return *cmp == 0;
+    case CellIsOperator::NotEqual:
+      return *cmp != 0;
+    case CellIsOperator::GreaterThanOrEqual:
+      return *cmp >= 0;
+    case CellIsOperator::GreaterThan:
+      return *cmp > 0;
+    case CellIsOperator::Between:
+    case CellIsOperator::NotBetween:
+      return false;  // Already handled above; here only for switch coverage.
+  }
+  return false;
+}
+
+// Excel's expression-rule truthiness: only a non-zero number or
+// `TRUE` triggers a match. Text, errors, blanks, and arrays do not.
+bool value_is_truthy(const Value& value) {
+  if (value.is_boolean()) {
+    return value.as_boolean();
+  }
+  if (value.is_number()) {
+    return value.as_number() != 0.0;
+  }
+  return false;
+}
+
+bool match_expression(const CFRule& rule, const CFEvalContext& ctx) {
+  if (!rule.formula1.has_value()) {
+    return false;
+  }
+  const Value evaluated = parse_shift_evaluate(*rule.formula1, ctx);
+  return value_is_truthy(evaluated);
+}
+
+}  // namespace
+
 CFMatch make_match(const CFRule& rule) {
   CFMatch match;
   match.rule_id = rule.id;
@@ -276,6 +431,36 @@ CFMatch make_match(const CFRule& rule) {
   match.kind = CFMatchKind::DifferentialFormat;
   match.dxf_id = rule.dxf_id;
   return match;
+}
+
+bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
+  switch (rule.type) {
+    case RuleType::Expression:
+      return match_expression(rule, ctx);
+    case RuleType::CellIs:
+      return match_cell_is_via_evaluator(rule, cell_value, ctx);
+    case RuleType::ContainsBlanks:
+    case RuleType::NotContainsBlanks:
+    case RuleType::ContainsErrors:
+    case RuleType::NotContainsErrors:
+    case RuleType::ColorScale:
+    case RuleType::DataBar:
+    case RuleType::IconSet:
+    case RuleType::Top10:
+    case RuleType::AboveAverage:
+    case RuleType::ContainsText:
+    case RuleType::NotContainsText:
+    case RuleType::BeginsWith:
+    case RuleType::EndsWith:
+    case RuleType::TimePeriod:
+    case RuleType::DuplicateValues:
+    case RuleType::UniqueValues:
+      // Value-only and not-yet-implemented rule types delegate to the
+      // simple overload, which already encodes their semantics (or
+      // false-fallthrough for the unimplemented kinds).
+      return match_rule(rule, cell_value);
+  }
+  return false;
 }
 
 }  // namespace formulon::cf
