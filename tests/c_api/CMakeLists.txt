@@ -5,6 +5,7 @@
 
 set(FORMULON_C_API_TEST_SOURCES
   formulon_c_test.cpp
+  formulon_c_cf_test.cpp
 )
 
 add_executable(formulon_c_api_tests ${FORMULON_C_API_TEST_SOURCES})

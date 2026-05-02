@@ -58,10 +58,10 @@ namespace {
 /// code dispatch on `kind`. Only the field selected by `kind` is
 /// meaningful; the others carry default-zero values.
 struct JsValue {
-  int32_t kind = 0;     ///< `fm_value_kind_t` ordinal (0..7).
-  double number = 0.0;  ///< Active when kind == FM_VAL_NUMBER.
-  int32_t boolean = 0;  ///< Active when kind == FM_VAL_BOOL (0/1).
-  std::string text;     ///< Active when kind == FM_VAL_TEXT.
+  int32_t kind = 0;       ///< `fm_value_kind_t` ordinal (0..7).
+  double number = 0.0;    ///< Active when kind == FM_VAL_NUMBER.
+  int32_t boolean = 0;    ///< Active when kind == FM_VAL_BOOL (0/1).
+  std::string text;       ///< Active when kind == FM_VAL_TEXT.
   int32_t errorCode = 0;  ///< Active when kind == FM_VAL_ERROR.
 };
 
@@ -103,8 +103,54 @@ struct JsStringResult {
   std::string value;
 };
 
+/// JS-side mirror of `fm_cf_color_t`. Channels are 0-255 (sRGB); embind
+/// tends to surface signed `int32_t` more cleanly than `uint8_t`, so
+/// the wire types here are intentionally widened.
+struct JsCfColor {
+  int32_t r = 0;
+  int32_t g = 0;
+  int32_t b = 0;
+  int32_t a = 0;
+};
+
+/// JS-side mirror of `fm_cf_match_t`. The active fields depend on
+/// `kind`; the others carry default-zero values.
+struct JsCfMatch {
+  int32_t kind = 0;
+  int32_t priority = 0;
+  int32_t dxfIdEngaged = 0;
+  uint32_t dxfId = 0;
+  JsCfColor color{};
+  double barLengthPct = 0.0;
+  double barAxisPositionPct = 0.0;
+  int32_t barIsNegative = 0;
+  JsCfColor barFill{};
+  int32_t barBorderEngaged = 0;
+  JsCfColor barBorder{};
+  int32_t barGradient = 0;
+  int32_t iconSetName = 0;
+  int32_t iconIndex = 0;
+};
+
+/// One cell's CF result: row / col plus the priority-ascending match
+/// list. Mirrors `cf::CFRangeCellMatches` flattened across the C ABI.
+struct JsCfCellResult {
+  uint32_t row = 0;
+  uint32_t col = 0;
+  std::vector<JsCfMatch> matches;
+};
+
+/// Return envelope for `Workbook.evaluateCfRange(...)`. `cells` is
+/// sparse: only cells that produced at least one match appear.
+struct JsCfRangeResult {
+  JsStatus status;
+  std::vector<JsCfCellResult> cells;
+};
+
 /// Builds an `ok` envelope with empty diagnostic strings.
-JsStatus ok_status() { return JsStatus{true, 0, std::string(), std::string()}; }
+JsStatus ok_status() {
+  return JsStatus{true, 0, std::string(), std::string()};
+}
 
 /// Builds a failure envelope, copying out the thread-local diagnostics
 /// surfaced by the most recent C-ABI call.
@@ -190,6 +236,36 @@ emscripten::val bytes_to_val(const uint8_t* data, std::size_t len) {
     u8.set(i, data[i]);
   }
   return u8;
+}
+
+/// Translates an `fm_cf_color_t` into the embind value-object mirror.
+JsCfColor translate_cf_color(const fm_cf_color_t& c) {
+  JsCfColor out;
+  out.r = static_cast<int32_t>(c.r);
+  out.g = static_cast<int32_t>(c.g);
+  out.b = static_cast<int32_t>(c.b);
+  out.a = static_cast<int32_t>(c.a);
+  return out;
+}
+
+/// Translates an `fm_cf_match_t` POD into the embind value-object mirror.
+JsCfMatch translate_cf_match(const fm_cf_match_t& m) {
+  JsCfMatch out;
+  out.kind = static_cast<int32_t>(m.kind);
+  out.priority = m.priority;
+  out.dxfIdEngaged = m.dxf_id_engaged;
+  out.dxfId = m.dxf_id;
+  out.color = translate_cf_color(m.color);
+  out.barLengthPct = m.bar_length_pct;
+  out.barAxisPositionPct = m.bar_axis_position_pct;
+  out.barIsNegative = m.bar_is_negative;
+  out.barFill = translate_cf_color(m.bar_fill);
+  out.barBorderEngaged = m.bar_border_engaged;
+  out.barBorder = translate_cf_color(m.bar_border);
+  out.barGradient = m.bar_gradient;
+  out.iconSetName = m.icon_set_name;
+  out.iconIndex = static_cast<int32_t>(m.icon_index);
+  return out;
 }
 
 /// RAII wrapper around `fm_workbook_t*`. Move-only; embind surfaces it
@@ -393,8 +469,8 @@ class JsWorkbook {
     if (handle_ == nullptr) {
       return error_status(7000);
     }
-    fm_status_t rc = fm_workbook_set_iterative(handle_, enabled ? 1 : 0, static_cast<int32_t>(max_iterations),
-                                               max_change);
+    fm_status_t rc =
+        fm_workbook_set_iterative(handle_, enabled ? 1 : 0, static_cast<int32_t>(max_iterations), max_change);
     return rc == 0 ? ok_status() : error_status(rc);
   }
 
@@ -519,6 +595,55 @@ class JsWorkbook {
     return o;
   }
 
+  /// Evaluates every CF block on `sheet` against the inclusive cell
+  /// range `[(firstRow, firstCol), (lastRow, lastCol)]`. The result is
+  /// sparse: only cells that produced at least one match appear.
+  ///
+  /// `todaySerial` pins the date reference for `TimePeriod` rules.
+  /// Pass `NaN` to disable.
+  JsCfRangeResult evaluateCfRange(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
+                                  uint32_t lastCol, double todaySerial) const {
+    JsCfRangeResult r;
+    if (handle_ == nullptr) {
+      r.status = error_status(7000);
+      return r;
+    }
+    fm_cf_results_t* results = nullptr;
+    fm_status_t rc =
+        fm_workbook_cf_evaluate_range(handle_, sheet, firstRow, firstCol, lastRow, lastCol, todaySerial, &results);
+    if (rc != 0) {
+      r.status = error_status(rc);
+      return r;
+    }
+    const std::size_t cell_count = fm_cf_results_cell_count(results);
+    r.cells.reserve(cell_count);
+    for (std::size_t i = 0; i < cell_count; ++i) {
+      JsCfCellResult cell;
+      uint32_t row = 0;
+      uint32_t col = 0;
+      std::size_t match_count = 0;
+      if (fm_cf_results_cell_at(results, i, &row, &col, &match_count) != 0) {
+        // Skip entries the C ABI declines to materialise; this is purely
+        // defensive — the index is always valid by construction.
+        continue;
+      }
+      cell.row = row;
+      cell.col = col;
+      cell.matches.reserve(match_count);
+      for (std::size_t j = 0; j < match_count; ++j) {
+        fm_cf_match_t m{};
+        if (fm_cf_results_match_at(results, i, j, &m) != 0) {
+          continue;
+        }
+        cell.matches.push_back(translate_cf_match(m));
+      }
+      r.cells.push_back(std::move(cell));
+    }
+    fm_cf_results_destroy(results);
+    r.status = ok_status();
+    return r;
+  }
+
  private:
   fm_workbook_t* handle_ = nullptr;
 };
@@ -591,6 +716,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
   using emscripten::allow_raw_pointers;
   using emscripten::class_;
   using emscripten::function;
+  using emscripten::register_vector;
   using emscripten::value_object;
 
   // ---- Value-object surface ------------------------------------------------
@@ -617,6 +743,46 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .field("status", &JsStringResult::status)
       .field("value", &JsStringResult::value);
 
+  // ---- Conditional-format value-objects ------------------------------------
+  // The vector-of-value-object classes below (`CfMatchVector`,
+  // `CfCellVector`) surface as iterable handles in JS with `.size()` and
+  // `.get(i)` accessors. They mirror how embind exposes
+  // `register_vector<T>` for any value-object payload.
+  value_object<JsCfColor>("CfColor")
+      .field("r", &JsCfColor::r)
+      .field("g", &JsCfColor::g)
+      .field("b", &JsCfColor::b)
+      .field("a", &JsCfColor::a);
+
+  value_object<JsCfMatch>("CfMatch")
+      .field("kind", &JsCfMatch::kind)
+      .field("priority", &JsCfMatch::priority)
+      .field("dxfIdEngaged", &JsCfMatch::dxfIdEngaged)
+      .field("dxfId", &JsCfMatch::dxfId)
+      .field("color", &JsCfMatch::color)
+      .field("barLengthPct", &JsCfMatch::barLengthPct)
+      .field("barAxisPositionPct", &JsCfMatch::barAxisPositionPct)
+      .field("barIsNegative", &JsCfMatch::barIsNegative)
+      .field("barFill", &JsCfMatch::barFill)
+      .field("barBorderEngaged", &JsCfMatch::barBorderEngaged)
+      .field("barBorder", &JsCfMatch::barBorder)
+      .field("barGradient", &JsCfMatch::barGradient)
+      .field("iconSetName", &JsCfMatch::iconSetName)
+      .field("iconIndex", &JsCfMatch::iconIndex);
+
+  register_vector<JsCfMatch>("CfMatchVector");
+
+  value_object<JsCfCellResult>("CfCellResult")
+      .field("row", &JsCfCellResult::row)
+      .field("col", &JsCfCellResult::col)
+      .field("matches", &JsCfCellResult::matches);
+
+  register_vector<JsCfCellResult>("CfCellVector");
+
+  value_object<JsCfRangeResult>("CfRangeResult")
+      .field("status", &JsCfRangeResult::status)
+      .field("cells", &JsCfRangeResult::cells);
+
   // ---- Workbook class ------------------------------------------------------
   class_<JsWorkbook>("Workbook")
       .class_function("createDefault", &JsWorkbook::createDefault, allow_raw_pointers())
@@ -642,7 +808,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("tableCount", &JsWorkbook::tableCount)
       .function("tableAt", &JsWorkbook::tableAt)
       .function("passthroughCount", &JsWorkbook::passthroughCount)
-      .function("passthroughAt", &JsWorkbook::passthroughAt);
+      .function("passthroughAt", &JsWorkbook::passthroughAt)
+      .function("evaluateCfRange", &JsWorkbook::evaluateCfRange);
 
   // ---- Free functions ------------------------------------------------------
   function("evalFormula", &eval_formula);

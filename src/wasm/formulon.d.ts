@@ -105,6 +105,74 @@ export interface PassthroughEntry {
   path: string;
 }
 
+/** Conditional-format match kind. Mirrors `formulon::cf::CFMatchKind`. */
+export const enum CfMatchKind {
+  DifferentialFormat = 0,
+  ColorScale = 1,
+  DataBar = 2,
+  IconSet = 3,
+}
+
+/** RGBA colour. Channels are 0-255 (sRGB). */
+export interface CfColor {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
+
+/** Resolved CF match. Active fields depend on `kind`; the others carry
+ *  default-zero values. */
+export interface CfMatch {
+  kind: CfMatchKind;
+  priority: number;
+  /** `1` when `dxfId` is meaningful; `0` otherwise. */
+  dxfIdEngaged: number;
+  dxfId: number;
+  /** Active when `kind === ColorScale`. */
+  color: CfColor;
+  /** Active when `kind === DataBar`. */
+  barLengthPct: number;
+  barAxisPositionPct: number;
+  barIsNegative: number;
+  barFill: CfColor;
+  barBorderEngaged: number;
+  barBorder: CfColor;
+  barGradient: number;
+  /** Active when `kind === IconSet`; ordinal of `formulon::cf::IconSetName`. */
+  iconSetName: number;
+  iconIndex: number;
+}
+
+/** Iterable handle backing a `std::vector<CfMatch>` on the C++ side.
+ *  Mirrors how embind surfaces `register_vector<T>`. */
+export interface CfMatchVector {
+  size(): number;
+  get(index: number): CfMatch;
+  delete(): void;
+}
+
+/** One cell's CF result inside a viewport-range evaluation. */
+export interface CfCellResult {
+  row: number;
+  col: number;
+  matches: CfMatchVector;
+}
+
+/** Iterable handle backing a `std::vector<CfCellResult>`. */
+export interface CfCellVector {
+  size(): number;
+  get(index: number): CfCellResult;
+  delete(): void;
+}
+
+/** Return type of `Workbook.evaluateCfRange(...)`. `cells` is sparse:
+ *  only cells that produced at least one match appear. */
+export interface CfRangeResult {
+  status: Status;
+  cells: CfCellVector;
+}
+
 /** Workbook handle. Always release with `delete()` when finished. */
 export interface Workbook {
   /** True when the wrapper holds a live native handle. */
@@ -139,6 +207,18 @@ export interface Workbook {
 
   passthroughCount(): number;
   passthroughAt(idx: number): PassthroughEntry;
+
+  /** Evaluates every CF block on `sheet` against the inclusive range
+   *  `[(firstRow, firstCol), (lastRow, lastCol)]`. Pass `NaN` for
+   *  `todaySerial` to disable `TimePeriod` rules. */
+  evaluateCfRange(
+    sheet: number,
+    firstRow: number,
+    firstCol: number,
+    lastRow: number,
+    lastCol: number,
+    todaySerial: number,
+  ): CfRangeResult;
 }
 
 /** Static factories on the Workbook class. */

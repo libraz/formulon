@@ -486,6 +486,138 @@ FM_API fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, int32_t enabled,
                                              double max_change);
 
 /* -------------------------------------------------------------------------- */
+/* Conditional formatting                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Conditional-format match-kind ordinal.
+ *
+ * Mirrors `formulon::cf::CFMatchKind` (`src/cf/cf_match.h`). The active
+ * payload fields on `fm_cf_match_t` are determined by this enumerator.
+ */
+/* NOLINTNEXTLINE(performance-enum-size): C11 enums cannot specify an
+ * underlying type; matching `fm_value_kind_t`'s shape keeps the C ABI
+ * uniform across enums. */
+typedef enum {
+  FM_CF_DIFFERENTIAL_FORMAT = 0,
+  FM_CF_COLOR_SCALE = 1,
+  FM_CF_DATA_BAR = 2,
+  FM_CF_ICON_SET = 3
+} fm_cf_match_kind_t;
+
+/**
+ * @brief Plain RGBA colour. Channels are 0-255 (sRGB).
+ */
+typedef struct {
+  uint8_t r;
+  uint8_t g;
+  uint8_t b;
+  uint8_t a;
+} fm_cf_color_t;
+
+/**
+ * @brief Resolved CF match for one rule on one cell.
+ *
+ * The active fields depend on `kind`:
+ *   * `FM_CF_DIFFERENTIAL_FORMAT` — `dxf_id_engaged` is `1` when the
+ *     rule carries a dxf reference, in which case `dxf_id` indexes
+ *     `styles.dxfs[]`.
+ *   * `FM_CF_COLOR_SCALE` — `color` is the interpolated cell-fill RGBA.
+ *   * `FM_CF_DATA_BAR` — `bar_length_pct`, `bar_axis_position_pct`,
+ *     `bar_is_negative`, `bar_fill`, `bar_border_engaged` (and
+ *     `bar_border` when engaged), and `bar_gradient`.
+ *   * `FM_CF_ICON_SET` — `icon_set_name` is the
+ *     `formulon::cf::IconSetName` ordinal; `icon_index` is `0..N-1`
+ *     after the rule's `reverse` flag has been applied.
+ *
+ * All non-active fields carry default-zero values. `priority` is the
+ * workbook-global priority lifted from `CFRule::priority` (smaller
+ * numbers ranked higher); per-cell match lists are returned in
+ * priority-ascending order so a UI can fold matches left-to-right.
+ */
+typedef struct {
+  fm_cf_match_kind_t kind;
+  int32_t priority;
+  int32_t dxf_id_engaged; /* 0/1 */
+  uint32_t dxf_id;
+  fm_cf_color_t color; /* ColorScale fill */
+  double bar_length_pct;
+  double bar_axis_position_pct;
+  int32_t bar_is_negative; /* 0/1 */
+  fm_cf_color_t bar_fill;
+  int32_t bar_border_engaged; /* 0/1 */
+  fm_cf_color_t bar_border;
+  int32_t bar_gradient;  /* 0/1 */
+  int32_t icon_set_name; /* formulon::cf::IconSetName ordinal */
+  uint8_t icon_index;
+  uint8_t _pad[3]; /* padding for alignment determinism */
+} fm_cf_match_t;
+
+/**
+ * @brief Opaque handle for a CF range evaluation result.
+ *
+ * Owns the per-cell match lists produced by `fm_workbook_cf_evaluate_range`.
+ * Index into it via `fm_cf_results_cell_count` /
+ * `fm_cf_results_cell_at` / `fm_cf_results_match_at`. Release with
+ * `fm_cf_results_destroy`.
+ */
+typedef struct fm_cf_results fm_cf_results_t;
+
+/**
+ * @brief Evaluates every CF block on `sheet_index` against the cells in
+ *        the inclusive range `[(first_row, first_col), (last_row,
+ *        last_col)]`.
+ *
+ * The result is sparse: only cells that produced at least one match
+ * appear. Internally constructs an `Arena`, the default function
+ * registry, and an `EvalContext` bound to the requested sheet.
+ *
+ * `today_serial` pins the date reference for `TimePeriod` rules. Pass
+ * `NaN` to disable (in which case `TimePeriod` rules will not match).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when `wb` or `out` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ *
+ * On success the caller owns `*out` and must free it with
+ * `fm_cf_results_destroy`.
+ */
+FM_API fm_status_t fm_workbook_cf_evaluate_range(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
+                                                 uint32_t first_col, uint32_t last_row, uint32_t last_col,
+                                                 double today_serial, fm_cf_results_t** out);
+
+/**
+ * @brief Releases a results handle. `results == NULL` is a no-op.
+ */
+FM_API void fm_cf_results_destroy(fm_cf_results_t* results);
+
+/**
+ * @brief Returns the number of cells in the result that produced at
+ *        least one match. Returns `0` when `results == NULL`.
+ */
+FM_API size_t fm_cf_results_cell_count(const fm_cf_results_t* results);
+
+/**
+ * @brief Reads cell `cell_idx`'s coordinates and match count.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `cell_idx >= cell_count`.
+ */
+FM_API fm_status_t fm_cf_results_cell_at(const fm_cf_results_t* results, size_t cell_idx, uint32_t* out_row,
+                                         uint32_t* out_col, size_t* out_match_count);
+
+/**
+ * @brief Reads match `match_idx` for cell `cell_idx`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when either index is out of range.
+ */
+FM_API fm_status_t fm_cf_results_match_at(const fm_cf_results_t* results, size_t cell_idx, size_t match_idx,
+                                          fm_cf_match_t* out);
+
+/* -------------------------------------------------------------------------- */
 /* Diagnostics                                                                */
 /* -------------------------------------------------------------------------- */
 
