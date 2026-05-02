@@ -178,6 +178,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/parser/spill_ref_test.cpp
   unit/parser/structured_ref_test.cpp
   unit/eval/structured_ref_eval_test.cpp
+  unit/pivot/pivot_types_test.cpp
   unit/registry_catalog_test.cpp
 )
 
