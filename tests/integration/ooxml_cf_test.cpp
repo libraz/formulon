@@ -15,6 +15,7 @@
 #include "cf/cf_types.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
+#include "io/ooxml_writer.h"
 #include "miniz.h"
 #include "sheet.h"
 #include "workbook.h"
@@ -165,6 +166,65 @@ TEST(OoxmlCF, PackageWithConditionalFormattingLoads) {
   EXPECT_EQ(b1.rules[0].color_scale->colors[0], cf::Color({255, 0, 0, 255}));
   EXPECT_EQ(b1.rules[0].color_scale->colors[1], cf::Color({255, 255, 0, 255}));
   EXPECT_EQ(b1.rules[0].color_scale->colors[2], cf::Color({0, 255, 0, 255}));
+}
+
+TEST(OoxmlCF, RoundTripThroughWriterPreservesConditionalFormats) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+
+  cf::ConditionalFormat block1{};
+  block1.sqref.push_back({{0, 0}, {9, 0}});
+  cf::CFRule r1;
+  r1.type = cf::RuleType::CellIs;
+  r1.priority = 1;
+  r1.stop_if_true = true;
+  r1.dxf_id = 0u;
+  r1.op = cf::CellIsOperator::GreaterThan;
+  r1.formula1 = "50";
+  block1.rules.push_back(std::move(r1));
+
+  cf::ConditionalFormat block2{};
+  block2.sqref.push_back({{0, 1}, {9, 1}});
+  cf::CFRule r2;
+  r2.type = cf::RuleType::ColorScale;
+  cf::ColorScaleSpec spec;
+  spec.thresholds.push_back({cf::CfvoType::Min, "", true});
+  spec.thresholds.push_back({cf::CfvoType::Percentile, "50", true});
+  spec.thresholds.push_back({cf::CfvoType::Max, "", true});
+  spec.colors.push_back({255, 0, 0, 255});
+  spec.colors.push_back({255, 255, 0, 255});
+  spec.colors.push_back({0, 255, 0, 255});
+  r2.color_scale = std::move(spec);
+  r2.priority = 2;
+  block2.rules.push_back(std::move(r2));
+
+  wb.sheet(0).mutable_conditional_formats().push_back(std::move(block1));
+  wb.sheet(0).mutable_conditional_formats().push_back(std::move(block2));
+
+  auto bytes_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << "write_ooxml: " << bytes_or.error().message;
+  auto read_or = io::read_ooxml(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << "read_ooxml: " << read_or.error().message;
+
+  const Workbook& reloaded = read_or.value().workbook;
+  ASSERT_EQ(reloaded.sheet_count(), 1U);
+  const auto& cfs = reloaded.sheet(0).conditional_formats();
+  ASSERT_EQ(cfs.size(), 2U);
+
+  ASSERT_EQ(cfs[0].rules.size(), 1U);
+  EXPECT_EQ(cfs[0].rules[0].type, cf::RuleType::CellIs);
+  EXPECT_EQ(cfs[0].rules[0].priority, 1);
+  EXPECT_TRUE(cfs[0].rules[0].stop_if_true);
+  ASSERT_TRUE(cfs[0].rules[0].op.has_value());
+  EXPECT_EQ(cfs[0].rules[0].op.value(), cf::CellIsOperator::GreaterThan);
+  EXPECT_EQ(cfs[0].rules[0].formula1.value(), "50");
+
+  ASSERT_EQ(cfs[1].rules.size(), 1U);
+  EXPECT_EQ(cfs[1].rules[0].type, cf::RuleType::ColorScale);
+  ASSERT_TRUE(cfs[1].rules[0].color_scale.has_value());
+  EXPECT_EQ(cfs[1].rules[0].color_scale->thresholds.size(), 3U);
+  EXPECT_EQ(cfs[1].rules[0].color_scale->colors[0], cf::Color({255, 0, 0, 255}));
+  EXPECT_EQ(cfs[1].rules[0].color_scale->colors[2], cf::Color({0, 255, 0, 255}));
 }
 
 TEST(OoxmlCF, EmptyWorkbookHasNoConditionalFormats) {
