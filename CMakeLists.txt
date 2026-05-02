@@ -101,6 +101,7 @@ set(FORMULON_CORE_SOURCES
   src/io/ooxml_reader.cpp
   src/io/ooxml_writer.cpp
   src/io/ooxml_writer_cell.cpp
+  src/io/pivot_cache_reader.cpp
   src/io/sax_xml_reader.cpp
   src/io/sheet_reader.cpp
   src/io/sst_reader.cpp

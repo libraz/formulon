@@ -11,6 +11,7 @@
 #define FORMULON_PIVOT_PIVOT_CACHE_H_
 
 #include <cstdint>
+#include <deque>
 #include <string>
 #include <vector>
 
@@ -60,10 +61,22 @@ class PivotCache {
   const std::vector<PivotCacheRecord>& records() const { return records_; }
   std::vector<PivotCacheRecord>& mutable_records() { return records_; }
 
+  /// Lifetime-stable backing store for any `Value::text` payload that the
+  /// reader produces (whether on a `shared_items` entry or inline on a
+  /// record cell). The reader appends one entry per decoded string and
+  /// builds the `Value` from `string_view(back())`. A `std::deque` is
+  /// chosen for pointer / iterator stability across appends; using a
+  /// `std::vector` would invalidate the views on growth. Callers that
+  /// hand-build a `PivotCache` (e.g. tests) may also append here when
+  /// they want the cache to own a literal string.
+  std::deque<std::string>& mutable_text_storage() { return text_storage_; }
+  const std::deque<std::string>& text_storage() const { return text_storage_; }
+
  private:
   std::uint32_t cache_id_ = 0;
   std::vector<PivotCacheField> fields_;
   std::vector<PivotCacheRecord> records_;
+  std::deque<std::string> text_storage_;
 };
 
 }  // namespace formulon::pivot
