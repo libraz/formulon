@@ -69,9 +69,10 @@ TEST(CFEvaluator, NotContainsErrorsIsComplementOfContainsErrors) {
 }
 
 TEST(CFEvaluator, RuleTypesNotYetImplementedReturnFalse) {
-  // Pinning the staging contract: the rule types whose evaluator logic
-  // lands in subsequent PRs must not silently match anything in the
-  // meantime. A test here catches accidental fall-through.
+  // Pinning the staging contract: the value-only overload returns
+  // false for any rule kind that needs evaluation context (formula
+  // evaluator, today_serial, sqref population) or that lands in a
+  // later PR. A test here catches accidental fall-through.
   for (auto t : {RuleType::Expression, RuleType::ColorScale, RuleType::DataBar, RuleType::IconSet, RuleType::Top10,
                  RuleType::AboveAverage, RuleType::TimePeriod, RuleType::DuplicateValues, RuleType::UniqueValues}) {
     CFRule r = MakeRule(t);
@@ -807,6 +808,156 @@ TEST(CFEvaluator, TimePeriodValueOnlyOverloadStillReturnsFalse) {
   CFRule r = MakeRule(RuleType::TimePeriod);
   r.time_period = TimePeriod::Today;
   EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 13))));
+}
+
+// ---------------------------------------------------------------------------
+// DuplicateValues / UniqueValues
+// ---------------------------------------------------------------------------
+
+CFCellRange MakeRange(std::uint32_t r1, std::uint32_t c1, std::uint32_t r2, std::uint32_t c2) {
+  CFCellRange range{};
+  range.first.row = r1;
+  range.first.col = c1;
+  range.last.row = r2;
+  range.last.col = c2;
+  return range;
+}
+
+CFEvalContext SqrefContext(CFEvalHarness& harness, const std::vector<CFCellRange>& sqref) {
+  CFEvalContext ctx = harness.context(At(0, 0), At(0, 0));
+  ctx.sqref = &sqref;
+  return ctx;
+}
+
+TEST(CFEvaluator, DuplicateValuesWithoutSqrefDoesNotMatch) {
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(7.0));
+  harness.sheet.set_cell_value(0, 1, Value::number(7.0));
+  CFRule r = MakeRule(RuleType::DuplicateValues);
+  // ctx.sqref intentionally nullptr.
+  EXPECT_FALSE(match_rule(r, Value::number(7.0), harness.context(At(0, 0), At(0, 0))));
+}
+
+TEST(CFEvaluator, DuplicateValuesMatchesNumberAppearingTwice) {
+  CFEvalHarness harness;
+  // A1:A3 = [7, 7, 9]. Value 7 appears twice → duplicate; 9 appears once.
+  harness.sheet.set_cell_value(0, 0, Value::number(7.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(7.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(9.0));
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 2, 0)};
+  CFRule r = MakeRule(RuleType::DuplicateValues);
+  const auto ctx = SqrefContext(harness, sqref);
+  EXPECT_TRUE(match_rule(r, Value::number(7.0), ctx));
+  EXPECT_FALSE(match_rule(r, Value::number(9.0), ctx));
+}
+
+TEST(CFEvaluator, DuplicateValuesNumbersUseExactEquality) {
+  // 1.0 and 1.0000000001 are distinct under IEEE-754 equality, even
+  // though they round to the same display string.
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(1.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(1.0000000001));
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 1, 0)};
+  CFRule r = MakeRule(RuleType::DuplicateValues);
+  const auto ctx = SqrefContext(harness, sqref);
+  EXPECT_FALSE(match_rule(r, Value::number(1.0), ctx));
+  EXPECT_FALSE(match_rule(r, Value::number(1.0000000001), ctx));
+}
+
+TEST(CFEvaluator, DuplicateValuesTextIsAsciiCaseInsensitive) {
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::text("apple"));
+  harness.sheet.set_cell_value(1, 0, Value::text("APPLE"));
+  harness.sheet.set_cell_value(2, 0, Value::text("orange"));
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 2, 0)};
+  CFRule r = MakeRule(RuleType::DuplicateValues);
+  const auto ctx = SqrefContext(harness, sqref);
+  EXPECT_TRUE(match_rule(r, Value::text("apple"), ctx));
+  EXPECT_TRUE(match_rule(r, Value::text("Apple"), ctx));
+  EXPECT_FALSE(match_rule(r, Value::text("orange"), ctx));
+}
+
+TEST(CFEvaluator, DuplicateValuesBooleansMatchByIdentity) {
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::boolean(true));
+  harness.sheet.set_cell_value(1, 0, Value::boolean(true));
+  harness.sheet.set_cell_value(2, 0, Value::boolean(false));
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 2, 0)};
+  CFRule r = MakeRule(RuleType::DuplicateValues);
+  const auto ctx = SqrefContext(harness, sqref);
+  EXPECT_TRUE(match_rule(r, Value::boolean(true), ctx));
+  EXPECT_FALSE(match_rule(r, Value::boolean(false), ctx));
+}
+
+TEST(CFEvaluator, DuplicateValuesIsCrossKindFalse) {
+  // Number 1 and text "1" are distinct, even though Excel coerces in
+  // some contexts. Mirroring the cellIs cross-kind=false stance.
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(1.0));
+  harness.sheet.set_cell_value(1, 0, Value::text("1"));
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 1, 0)};
+  CFRule r = MakeRule(RuleType::DuplicateValues);
+  const auto ctx = SqrefContext(harness, sqref);
+  EXPECT_FALSE(match_rule(r, Value::number(1.0), ctx));
+  EXPECT_FALSE(match_rule(r, Value::text("1"), ctx));
+}
+
+TEST(CFEvaluator, DuplicateValuesErrorsAndBlanksDoNotMatch) {
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::error(ErrorCode::NA));
+  harness.sheet.set_cell_value(1, 0, Value::error(ErrorCode::NA));
+  // A3 left blank.
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 2, 0)};
+  CFRule r = MakeRule(RuleType::DuplicateValues);
+  const auto ctx = SqrefContext(harness, sqref);
+  EXPECT_FALSE(match_rule(r, Value::error(ErrorCode::NA), ctx));
+  EXPECT_FALSE(match_rule(r, Value::blank(), ctx));
+}
+
+TEST(CFEvaluator, DuplicateValuesAcrossMultipleSqrefRanges) {
+  // sqref unions A1:A2 and C1:C2. Value 5 appears in A1 and C2 → dup.
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(5.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(99.0));
+  harness.sheet.set_cell_value(0, 2, Value::number(11.0));
+  harness.sheet.set_cell_value(1, 2, Value::number(5.0));
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 1, 0), MakeRange(0, 2, 1, 2)};
+  CFRule r = MakeRule(RuleType::DuplicateValues);
+  const auto ctx = SqrefContext(harness, sqref);
+  EXPECT_TRUE(match_rule(r, Value::number(5.0), ctx));
+  EXPECT_FALSE(match_rule(r, Value::number(99.0), ctx));
+}
+
+TEST(CFEvaluator, UniqueValuesMatchesValueAppearingExactlyOnce) {
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(7.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(7.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(9.0));
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 2, 0)};
+  CFRule r = MakeRule(RuleType::UniqueValues);
+  const auto ctx = SqrefContext(harness, sqref);
+  EXPECT_TRUE(match_rule(r, Value::number(9.0), ctx));
+  EXPECT_FALSE(match_rule(r, Value::number(7.0), ctx));
+}
+
+TEST(CFEvaluator, UniqueValuesNonStorableValueKindDoesNotMatch) {
+  // Errors and blanks never match either rule.
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(1.0));
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 0, 0)};
+  CFRule r = MakeRule(RuleType::UniqueValues);
+  const auto ctx = SqrefContext(harness, sqref);
+  EXPECT_FALSE(match_rule(r, Value::error(ErrorCode::NA), ctx));
+  EXPECT_FALSE(match_rule(r, Value::blank(), ctx));
+}
+
+TEST(CFEvaluator, DuplicateUniqueValueOnlyOverloadStillReturnsFalse) {
+  // Pin the staging contract: value-only overload has no sqref access,
+  // so DuplicateValues / UniqueValues continue to return false there.
+  CFRule dup = MakeRule(RuleType::DuplicateValues);
+  EXPECT_FALSE(match_rule(dup, Value::number(1.0)));
+  CFRule uniq = MakeRule(RuleType::UniqueValues);
+  EXPECT_FALSE(match_rule(uniq, Value::number(1.0)));
 }
 
 }  // namespace

@@ -26,12 +26,15 @@
 //     Tomorrow / Last7Days / ThisWeek / LastWeek / NextWeek /
 //     ThisMonth / LastMonth / NextMonth). Sunday-start weeks. Only
 //     reachable through the context-aware overload.
+//   * `DuplicateValues` / `UniqueValues` — count occurrences of the
+//     cell's value across `CFEvalContext::sqref` and match when the
+//     count is >= 2 (Duplicate) or == 1 (Unique). Cross-kind equality
+//     is `false`; errors and blanks never match.
 //
 // Deferred to subsequent staging steps:
 //
-//   * `Top10` / `AboveAverage` / `DuplicateValues` / `UniqueValues`
-//     (range-aware rules — need access to all values in the rule's
-//     sqref to compute rank / mean / value-counts)
+//   * `Top10` / `AboveAverage` (range-aware rules — need access to
+//     all values in the rule's sqref to compute rank and mean)
 //   * `ColorScale` / `DataBar` / `IconSet` visual computation
 //   * Priority chain + stopIfTrue + lazy viewport API
 //
@@ -46,6 +49,7 @@
 #define FORMULON_CF_CF_EVALUATOR_H_
 
 #include <optional>
+#include <vector>
 
 #include "cell.h"
 #include "cf/cf_match.h"
@@ -120,6 +124,14 @@ CFMatch make_match(const CFRule& rule);
 /// at recalc start so all CF cells in a recalc see a consistent date.
 /// `nullopt` means the host has not provided one; `TimePeriod` rules
 /// then never match. Other rule kinds ignore this field.
+///
+/// `sqref` points to the rule's owning sqref (the union of cell ranges
+/// the rule applies to). Range-aware rules — `DuplicateValues`,
+/// `UniqueValues`, and forthcoming `Top10` / `AboveAverage` — iterate
+/// this list to compute population statistics over all values in the
+/// sqref. `nullptr` means the host has not provided one; range-aware
+/// rules then never match. Other rule kinds ignore this field. The
+/// pointee is borrowed and must outlive the `match_rule` call.
 struct CFEvalContext {
   CellAddress anchor{};
   CellAddress target{};
@@ -127,6 +139,7 @@ struct CFEvalContext {
   const eval::FunctionRegistry* registry = nullptr;
   const eval::EvalContext* eval_ctx = nullptr;
   std::optional<double> today_serial;
+  const std::vector<CFCellRange>* sqref = nullptr;
 };
 
 /// Context-aware overload that handles every rule type the value-only
@@ -142,6 +155,14 @@ struct CFEvalContext {
 ///   * `TimePeriod` rules — the cell value (a date serial) is bucketed
 ///     against `ctx.today_serial`. Buckets follow Excel's Sunday-start
 ///     week convention. Cells that are not numeric do not match.
+///   * `DuplicateValues` / `UniqueValues` — the evaluator counts how
+///     many cells in `ctx.sqref` carry a value equal to `cell_value`
+///     under cross-kind=false equality (numbers compared by exact
+///     IEEE-754 equality, text by ASCII case-insensitive equality,
+///     booleans by identity; errors and blanks never match anything).
+///     `DuplicateValues` matches when the count is 2 or more,
+///     `UniqueValues` when the count is exactly 1. Cells whose value
+///     is not number / boolean / text never match.
 ///
 /// All other rule types delegate to the simple overload.
 bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx);

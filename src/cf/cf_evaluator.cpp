@@ -14,6 +14,8 @@
 #include <string>
 #include <string_view>
 
+#include <vector>
+
 #include "cf/cf_match.h"
 #include "cf/cf_types.h"
 #include "eval/date_time.h"
@@ -23,6 +25,7 @@
 #include "parser/ast.h"
 #include "parser/ast_shift.h"
 #include "parser/parser.h"
+#include "sheet.h"
 #include "utils/arena.h"
 #include "utils/strings.h"
 #include "value.h"
@@ -595,6 +598,70 @@ bool match_time_period(const CFRule& rule, const Value& cell_value, const CFEval
   return false;
 }
 
+// ---------------------------------------------------------------------------
+// DuplicateValues / UniqueValues — population statistics over the sqref.
+// ---------------------------------------------------------------------------
+
+// Cross-kind=false equality used for duplicate detection. Numbers
+// compare by exact IEEE-754 equality (Excel does not deduplicate by an
+// epsilon — values that round to the same display string but differ in
+// the binary representation count as distinct). Text uses ASCII
+// case-insensitive equality, mirroring the cellIs / containsText
+// stance. Booleans compare by identity. Errors and blanks never
+// participate in deduplication: any pairing involving them is
+// considered unequal so a sqref full of `#N/A` produces no
+// `DuplicateValues` matches.
+bool cf_values_equal(const Value& lhs, const Value& rhs) {
+  if (lhs.is_number() && rhs.is_number()) {
+    return lhs.as_number() == rhs.as_number();
+  }
+  if (lhs.is_boolean() && rhs.is_boolean()) {
+    return lhs.as_boolean() == rhs.as_boolean();
+  }
+  if (lhs.is_text() && rhs.is_text()) {
+    return strings::case_insensitive_eq(lhs.as_text(), rhs.as_text());
+  }
+  return false;
+}
+
+// Counts how many cells inside `sqref` (read spill-aware via
+// `Sheet::resolve_cell_value`) carry a value equal to `target` under
+// `cf_values_equal`. Cells whose value is not number / boolean / text
+// are skipped at the equality layer — they cannot match `target` (and
+// `target` itself is rejected upstream when its kind is unsupported).
+std::size_t count_matches_in_sqref(const Value& target, const std::vector<CFCellRange>& sqref, const Sheet& sheet) {
+  std::size_t count = 0;
+  for (const CFCellRange& range : sqref) {
+    for (std::uint32_t row = range.first.row; row <= range.last.row; ++row) {
+      for (std::uint32_t col = range.first.col; col <= range.last.col; ++col) {
+        const Value cell = sheet.resolve_cell_value(row, col);
+        if (cf_values_equal(target, cell)) {
+          ++count;
+        }
+      }
+    }
+  }
+  return count;
+}
+
+bool match_duplicate_or_unique(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
+  if (ctx.sqref == nullptr || ctx.eval_ctx == nullptr || ctx.eval_ctx->current_sheet() == nullptr) {
+    return false;
+  }
+  if (!cell_value.is_number() && !cell_value.is_boolean() && !cell_value.is_text()) {
+    return false;
+  }
+  const std::size_t count = count_matches_in_sqref(cell_value, *ctx.sqref, *ctx.eval_ctx->current_sheet());
+  switch (rule.type) {
+    case RuleType::DuplicateValues:
+      return count >= 2;
+    case RuleType::UniqueValues:
+      return count == 1;
+    default:
+      return false;
+  }
+}
+
 }  // namespace
 
 CFMatch make_match(const CFRule& rule) {
@@ -617,6 +684,9 @@ bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext
       return match_cell_is_via_evaluator(rule, cell_value, ctx);
     case RuleType::TimePeriod:
       return match_time_period(rule, cell_value, ctx);
+    case RuleType::DuplicateValues:
+    case RuleType::UniqueValues:
+      return match_duplicate_or_unique(rule, cell_value, ctx);
     case RuleType::ContainsBlanks:
     case RuleType::NotContainsBlanks:
     case RuleType::ContainsErrors:
@@ -630,8 +700,6 @@ bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext
     case RuleType::IconSet:
     case RuleType::Top10:
     case RuleType::AboveAverage:
-    case RuleType::DuplicateValues:
-    case RuleType::UniqueValues:
       // Value-only and not-yet-implemented rule types delegate to the
       // simple overload, which already encodes their semantics (or
       // false-fallthrough for the unimplemented kinds).
