@@ -6,6 +6,7 @@
 #include "cf/cf_evaluator.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -15,6 +16,7 @@
 
 #include "cf/cf_match.h"
 #include "cf/cf_types.h"
+#include "eval/date_time.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
@@ -488,6 +490,111 @@ bool match_expression(const CFRule& rule, const CFEvalContext& ctx) {
   return value_is_truthy(evaluated);
 }
 
+// ---------------------------------------------------------------------------
+// TimePeriod — bucket a date serial against `today_serial`.
+//
+// Excel's TimePeriod buckets are inclusive day-aligned ranges. The
+// helpers below floor to the integer serial (drop time-of-day) before
+// any bucket comparison so a cell carrying `2024-03-15 13:30` matches
+// the bucket for `2024-03-15` regardless of fractional time.
+// ---------------------------------------------------------------------------
+
+constexpr int kMonthsPerYear = 12;
+constexpr int kDaysPerWeek = 7;
+constexpr double kLast7DaysSpan = 6.0;       // today - 6 ... today inclusive
+constexpr double kWeekLastDayOffset = 6.0;   // Sunday + 6 = Saturday
+constexpr double kPriorWeekDayOffset = 1.0;  // Sunday - 1 = prior Saturday
+
+// Excel weekday with `WEEKDAY(date, 1)` semantics: Sunday = 1, Saturday
+// = 7. Computed from the proleptic-Gregorian day count produced by
+// `days_from_civil`, which is bug-free; the 1900 leap-year ghost day
+// is absorbed by `ymd_from_serial` upstream.
+int weekday_sunday_one(double serial_floor) {
+  const eval::date_time::YMD ymd = eval::date_time::ymd_from_serial(serial_floor);
+  const std::int64_t days = eval::date_time::days_from_civil(ymd.y, ymd.m, ymd.d);
+  // 1970-01-01 was a Thursday → Excel weekday 5. Adjust so days = 0
+  // maps to 5, then take mod 7 and shift to the 1..7 range.
+  const std::int64_t adjusted = ((days % kDaysPerWeek) + kDaysPerWeek + 4) % kDaysPerWeek;
+  return static_cast<int>(adjusted) + 1;
+}
+
+// Serial of the Sunday opening the week that contains `serial_floor`.
+double sunday_of_week(double serial_floor) {
+  const int weekday = weekday_sunday_one(serial_floor);
+  return serial_floor - (weekday - 1);
+}
+
+struct YearMonth {
+  int year;
+  unsigned month;  // 1..12
+
+  friend bool operator==(YearMonth lhs, YearMonth rhs) noexcept {
+    return lhs.year == rhs.year && lhs.month == rhs.month;
+  }
+};
+
+YearMonth year_month_from_serial(double serial_floor) {
+  const eval::date_time::YMD ymd = eval::date_time::ymd_from_serial(serial_floor);
+  return {ymd.y, ymd.m};
+}
+
+YearMonth shift_year_month(YearMonth anchor, int delta_months) {
+  const int month_index = static_cast<int>(anchor.month) - 1 + delta_months;
+  // Floor-divide month_index by 12 so negative offsets borrow a year
+  // correctly (e.g. month_index = -1 → year - 1, month = 12).
+  int year_delta = month_index / kMonthsPerYear;
+  int normalised_index = month_index % kMonthsPerYear;
+  if (normalised_index < 0) {
+    normalised_index += kMonthsPerYear;
+    --year_delta;
+  }
+  return {anchor.year + year_delta, static_cast<unsigned>(normalised_index + 1)};
+}
+
+bool match_time_period(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
+  if (!rule.time_period.has_value() || !ctx.today_serial.has_value()) {
+    return false;
+  }
+  if (!cell_value.is_number()) {
+    return false;
+  }
+  const double cell_serial = std::floor(cell_value.as_number());
+  if (cell_serial < 0.0) {
+    return false;
+  }
+  const double today = std::floor(*ctx.today_serial);
+
+  switch (*rule.time_period) {
+    case TimePeriod::Today:
+      return cell_serial == today;
+    case TimePeriod::Yesterday:
+      return cell_serial == today - 1.0;
+    case TimePeriod::Tomorrow:
+      return cell_serial == today + 1.0;
+    case TimePeriod::Last7Days:
+      return cell_serial >= today - kLast7DaysSpan && cell_serial <= today;
+    case TimePeriod::ThisWeek: {
+      const double sunday = sunday_of_week(today);
+      return cell_serial >= sunday && cell_serial <= sunday + kWeekLastDayOffset;
+    }
+    case TimePeriod::LastWeek: {
+      const double sunday = sunday_of_week(today);
+      return cell_serial >= sunday - kDaysPerWeek && cell_serial <= sunday - kPriorWeekDayOffset;
+    }
+    case TimePeriod::NextWeek: {
+      const double sunday = sunday_of_week(today);
+      return cell_serial >= sunday + kDaysPerWeek && cell_serial <= sunday + kDaysPerWeek + kWeekLastDayOffset;
+    }
+    case TimePeriod::ThisMonth:
+      return year_month_from_serial(cell_serial) == year_month_from_serial(today);
+    case TimePeriod::LastMonth:
+      return year_month_from_serial(cell_serial) == shift_year_month(year_month_from_serial(today), -1);
+    case TimePeriod::NextMonth:
+      return year_month_from_serial(cell_serial) == shift_year_month(year_month_from_serial(today), 1);
+  }
+  return false;
+}
+
 }  // namespace
 
 CFMatch make_match(const CFRule& rule) {
@@ -508,6 +615,8 @@ bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext
       return match_expression(rule, ctx);
     case RuleType::CellIs:
       return match_cell_is_via_evaluator(rule, cell_value, ctx);
+    case RuleType::TimePeriod:
+      return match_time_period(rule, cell_value, ctx);
     case RuleType::ContainsBlanks:
     case RuleType::NotContainsBlanks:
     case RuleType::ContainsErrors:
@@ -521,7 +630,6 @@ bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext
     case RuleType::IconSet:
     case RuleType::Top10:
     case RuleType::AboveAverage:
-    case RuleType::TimePeriod:
     case RuleType::DuplicateValues:
     case RuleType::UniqueValues:
       // Value-only and not-yet-implemented rule types delegate to the

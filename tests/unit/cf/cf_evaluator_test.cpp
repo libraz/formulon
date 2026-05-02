@@ -13,6 +13,7 @@
 #include "cell.h"
 #include "cf/cf_match.h"
 #include "cf/cf_types.h"
+#include "eval/date_time.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "gtest/gtest.h"
@@ -633,6 +634,179 @@ TEST(CFEvaluator, ContextAwareOverloadDelegatesValueOnlyKinds) {
   contains.text = "foo";
   EXPECT_TRUE(match_rule(contains, Value::text("foobar"), harness.context(At(0, 0), At(0, 0))));
   EXPECT_FALSE(match_rule(contains, Value::text("bar"), harness.context(At(0, 0), At(0, 0))));
+}
+
+// ---------------------------------------------------------------------------
+// TimePeriod
+//
+// Anchored at Wednesday 2024-03-13 throughout. Excel weekday semantics
+// place that day at WEEKDAY=4 (Sun=1). The week therefore spans
+// 2024-03-10 (Sun) through 2024-03-16 (Sat).
+// ---------------------------------------------------------------------------
+
+CFEvalContext PinnedContext(CFEvalHarness& harness, double today_serial) {
+  CFEvalContext ctx = harness.context(At(0, 0), At(0, 0));
+  ctx.today_serial = today_serial;
+  return ctx;
+}
+
+double Serial(int year, unsigned month, unsigned day) {
+  return eval::date_time::serial_from_ymd(year, month, day);
+}
+
+TEST(CFEvaluator, TimePeriodWithoutTodaySerialDoesNotMatch) {
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::TimePeriod);
+  r.time_period = TimePeriod::Today;
+  // ctx.today_serial intentionally left as nullopt.
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 13)), harness.context(At(0, 0), At(0, 0))));
+}
+
+TEST(CFEvaluator, TimePeriodMissingBucketDoesNotMatch) {
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::TimePeriod);
+  // r.time_period not set
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 13)), PinnedContext(harness, Serial(2024, 3, 13))));
+}
+
+TEST(CFEvaluator, TimePeriodNonNumericCellDoesNotMatch) {
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::TimePeriod);
+  r.time_period = TimePeriod::Today;
+  const auto ctx = PinnedContext(harness, Serial(2024, 3, 13));
+  EXPECT_FALSE(match_rule(r, Value::text("2024-03-13"), ctx));
+  EXPECT_FALSE(match_rule(r, Value::boolean(true), ctx));
+  EXPECT_FALSE(match_rule(r, Value::error(ErrorCode::NA), ctx));
+  EXPECT_FALSE(match_rule(r, Value::blank(), ctx));
+}
+
+TEST(CFEvaluator, TimePeriodTodayMatchesSameDay) {
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::TimePeriod);
+  r.time_period = TimePeriod::Today;
+  const auto ctx = PinnedContext(harness, Serial(2024, 3, 13));
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 13)), ctx));
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 12)), ctx));
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 14)), ctx));
+}
+
+TEST(CFEvaluator, TimePeriodTodayDropsTimeOfDayFraction) {
+  // Cell carrying date + 0.75 (= 18:00) still matches Today.
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::TimePeriod);
+  r.time_period = TimePeriod::Today;
+  const auto ctx = PinnedContext(harness, Serial(2024, 3, 13));
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 13) + 0.75), ctx));
+}
+
+TEST(CFEvaluator, TimePeriodYesterdayMatchesPreviousDay) {
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::TimePeriod);
+  r.time_period = TimePeriod::Yesterday;
+  const auto ctx = PinnedContext(harness, Serial(2024, 3, 13));
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 12)), ctx));
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 11)), ctx));
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 13)), ctx));
+}
+
+TEST(CFEvaluator, TimePeriodTomorrowMatchesNextDay) {
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::TimePeriod);
+  r.time_period = TimePeriod::Tomorrow;
+  const auto ctx = PinnedContext(harness, Serial(2024, 3, 13));
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 14)), ctx));
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 13)), ctx));
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 15)), ctx));
+}
+
+TEST(CFEvaluator, TimePeriodLast7DaysSpansSixDaysBackThroughToday) {
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::TimePeriod);
+  r.time_period = TimePeriod::Last7Days;
+  const auto ctx = PinnedContext(harness, Serial(2024, 3, 13));
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 13)), ctx));
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 7)), ctx));   // today - 6
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 6)), ctx));  // today - 7
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 14)), ctx));
+}
+
+TEST(CFEvaluator, TimePeriodThisWeekIsSundayThroughSaturday) {
+  // 2024-03-13 is Wed. Week = 2024-03-10 (Sun) .. 2024-03-16 (Sat).
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::TimePeriod);
+  r.time_period = TimePeriod::ThisWeek;
+  const auto ctx = PinnedContext(harness, Serial(2024, 3, 13));
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 10)), ctx));  // Sun
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 13)), ctx));  // Wed
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 16)), ctx));  // Sat
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 9)), ctx));   // prior Sat
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 17)), ctx));  // next Sun
+}
+
+TEST(CFEvaluator, TimePeriodLastWeekIsPriorSundayThroughSaturday) {
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::TimePeriod);
+  r.time_period = TimePeriod::LastWeek;
+  const auto ctx = PinnedContext(harness, Serial(2024, 3, 13));
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 3)), ctx));   // Sun
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 9)), ctx));   // Sat
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 2)), ctx));  // 2 weeks back
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 10)), ctx));  // this Sun
+}
+
+TEST(CFEvaluator, TimePeriodNextWeekIsFollowingSundayThroughSaturday) {
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::TimePeriod);
+  r.time_period = TimePeriod::NextWeek;
+  const auto ctx = PinnedContext(harness, Serial(2024, 3, 13));
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 17)), ctx));   // Sun
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 23)), ctx));   // Sat
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 16)), ctx));  // this Sat
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 24)), ctx));  // 2 weeks ahead
+}
+
+TEST(CFEvaluator, TimePeriodThisMonthMatchesSameYearAndMonth) {
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::TimePeriod);
+  r.time_period = TimePeriod::ThisMonth;
+  const auto ctx = PinnedContext(harness, Serial(2024, 3, 13));
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 1)), ctx));
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2024, 3, 31)), ctx));
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 2, 29)), ctx));
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 4, 1)), ctx));
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2023, 3, 13)), ctx));  // same month, prior year
+}
+
+TEST(CFEvaluator, TimePeriodLastMonthHandlesYearBoundary) {
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::TimePeriod);
+  r.time_period = TimePeriod::LastMonth;
+  // today = 2024-01-15 → last month = 2023-12.
+  const auto ctx = PinnedContext(harness, Serial(2024, 1, 15));
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2023, 12, 1)), ctx));
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2023, 12, 31)), ctx));
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 1, 1)), ctx));
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2023, 11, 30)), ctx));
+}
+
+TEST(CFEvaluator, TimePeriodNextMonthHandlesYearBoundary) {
+  CFEvalHarness harness;
+  CFRule r = MakeRule(RuleType::TimePeriod);
+  r.time_period = TimePeriod::NextMonth;
+  // today = 2024-12-15 → next month = 2025-01.
+  const auto ctx = PinnedContext(harness, Serial(2024, 12, 15));
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2025, 1, 1)), ctx));
+  EXPECT_TRUE(match_rule(r, Value::number(Serial(2025, 1, 31)), ctx));
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 12, 31)), ctx));
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2025, 2, 1)), ctx));
+}
+
+TEST(CFEvaluator, TimePeriodValueOnlyOverloadStillReturnsFalse) {
+  // The value-only overload has no today reference, so TimePeriod
+  // continues to return false there. Pin the contract.
+  CFRule r = MakeRule(RuleType::TimePeriod);
+  r.time_period = TimePeriod::Today;
+  EXPECT_FALSE(match_rule(r, Value::number(Serial(2024, 3, 13))));
 }
 
 }  // namespace

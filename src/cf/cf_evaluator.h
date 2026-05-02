@@ -21,10 +21,17 @@
 //   * `Expression` rules whose `formula1` evaluates to a truthy
 //     scalar, with relative references shifted from the rule's anchor
 //     to the target cell.
+//   * `TimePeriod` — bucket-tests the cell's date serial against the
+//     `today_serial` carried by `CFEvalContext` (Today / Yesterday /
+//     Tomorrow / Last7Days / ThisWeek / LastWeek / NextWeek /
+//     ThisMonth / LastMonth / NextMonth). Sunday-start weeks. Only
+//     reachable through the context-aware overload.
 //
 // Deferred to subsequent staging steps:
 //
-//   * `Top10` / `AboveAverage` / `TimePeriod` (range-aware rules)
+//   * `Top10` / `AboveAverage` / `DuplicateValues` / `UniqueValues`
+//     (range-aware rules — need access to all values in the rule's
+//     sqref to compute rank / mean / value-counts)
 //   * `ColorScale` / `DataBar` / `IconSet` visual computation
 //   * Priority chain + stopIfTrue + lazy viewport API
 //
@@ -37,6 +44,8 @@
 
 #ifndef FORMULON_CF_CF_EVALUATOR_H_
 #define FORMULON_CF_CF_EVALUATOR_H_
+
+#include <optional>
 
 #include "cell.h"
 #include "cf/cf_match.h"
@@ -104,12 +113,20 @@ CFMatch make_match(const CFRule& rule);
 /// parser and tree-walk evaluator. `eval_ctx` is typically bound to
 /// the same sheet (and workbook, for cross-sheet references) that the
 /// CF block lives on; it must outlive every call.
+///
+/// `today_serial` pins the "today" reference for `TimePeriod` rules.
+/// It is a date serial (Excel epoch, integer days since 1899-12-30
+/// with the 1900 leap-year bug) — typically `floor(NOW())` taken once
+/// at recalc start so all CF cells in a recalc see a consistent date.
+/// `nullopt` means the host has not provided one; `TimePeriod` rules
+/// then never match. Other rule kinds ignore this field.
 struct CFEvalContext {
   CellAddress anchor{};
   CellAddress target{};
   Arena* arena = nullptr;
   const eval::FunctionRegistry* registry = nullptr;
   const eval::EvalContext* eval_ctx = nullptr;
+  std::optional<double> today_serial;
 };
 
 /// Context-aware overload that handles every rule type the value-only
@@ -122,6 +139,9 @@ struct CFEvalContext {
 ///   * `CellIs` rules whose `formula1` / `formula2` are not bare
 ///     literals — the evaluated value is folded into the same
 ///     comparison machinery the literal-only overload uses.
+///   * `TimePeriod` rules — the cell value (a date serial) is bucketed
+///     against `ctx.today_serial`. Buckets follow Excel's Sunday-start
+///     week convention. Cells that are not numeric do not match.
 ///
 /// All other rule types delegate to the simple overload.
 bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx);
