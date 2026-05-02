@@ -30,6 +30,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/cf_reader.h"
 #include "io/defined_names.h"
 #include "io/pivot_cache_reader.h"
 #include "io/pivot_table_reader.h"
@@ -897,6 +898,19 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
       if (!rs) {
         return rs.error();
       }
+      // Conditional-format blocks live at the top level of <worksheet>
+      // (siblings to <sheetData>), so they ride the same DOM the cell
+      // reader just consumed. The SAX path skips this scan; loading a
+      // second DOM purely for CF on multi-MB sheets would defeat the
+      // SAX optimisation, so SAX-side CF reading is deferred to a
+      // follow-up PR. In practice the sheets that exercise the SAX
+      // threshold (>256 KiB) are dominated by row data, not CF blocks,
+      // so the missed coverage is small.
+      auto cfs_or = read_conditional_formats(sheet_doc.child("worksheet"));
+      if (!cfs_or) {
+        return cfs_or.error();
+      }
+      wb.sheet(i).mutable_conditional_formats() = std::move(cfs_or.value());
     }
 
     // Sheet rels file (`xl/worksheets/_rels/sheetN.xml.rels`) — drives

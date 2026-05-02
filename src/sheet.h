@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "cf/cf_types.h"
 #include "value.h"
 
 namespace formulon {
@@ -324,6 +325,28 @@ class Sheet {
   /// inside the sheet bounds and references a valid cache id.
   void add_pivot_table(std::unique_ptr<pivot::PivotTable> table);
 
+  // ---------------------------------------------------------------------------
+  // Conditional formats attached to this sheet
+  // ---------------------------------------------------------------------------
+  //
+  // Each entry is one `<conditionalFormatting>` block from the OOXML sheet
+  // part: an sqref union plus a list of rules. Stored by value (the model
+  // is plain POD; no result cache, no stable-address requirement). The
+  // OOXML reader populates this list at workbook-load time; the writer
+  // round-trips it; the evaluator (future PR) walks it per-cell or per-
+  // viewport to compute matches.
+
+  /// Read-only access to the conditional-format blocks attached to this
+  /// sheet, in document-discovery (insertion) order. Across blocks the
+  /// rules' `priority` is workbook-global; consumers that need
+  /// priority-ordered evaluation must merge across blocks themselves.
+  const std::vector<cf::ConditionalFormat>& conditional_formats() const noexcept { return conditional_formats_; }
+
+  /// Mutable access to the conditional-format list. Exposed so the OOXML
+  /// reader (and the future editing API) can append, replace, or
+  /// reorder blocks without an extra accessor pair per field.
+  std::vector<cf::ConditionalFormat>& mutable_conditional_formats() noexcept { return conditional_formats_; }
+
  private:
   std::string name_;
   std::unordered_map<std::uint32_t, std::vector<Cell>> rows_;
@@ -334,6 +357,9 @@ class Sheet {
   // the OOXML reader at workbook-load time. Heap-owned so addresses stay
   // stable across vector reallocations.
   std::vector<std::unique_ptr<pivot::PivotTable>> pivot_tables_;
+  // Conditional-format blocks attached to this sheet. Empty by default;
+  // populated by the OOXML reader from `<conditionalFormatting>` blocks.
+  std::vector<cf::ConditionalFormat> conditional_formats_;
 };
 
 }  // namespace formulon
