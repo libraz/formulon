@@ -1,0 +1,106 @@
+suite: valuetotext_general_threshold_probes2
+description: >
+  Round-2 probes: pin the exact threshold transitions.
+  Boundary 1: between 1E+17 and 1E+20 - find the integer-decimal -> sci switch.
+  Boundary 2: between 1E-15 and 1E-20 - find the small-decimal -> sci switch.
+  Boundary 3: mantissa-width effect - vary sig digits from 1..15 at fixed
+    exponent (e.g. ?E-9) to determine whether the rule is "decimal width <=
+    N chars" or "leading-zero count + sig digits <= N".
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  # ---- Boundary 1: positive integer 1e17 .. 1e20 ------------------------
+  - id: vtt2_pos_1e17
+    description: "1E17 (re-probe)"
+    formula: "=VALUETOTEXT(1E17)"
+  - id: vtt2_pos_1e18
+    description: "1E18"
+    formula: "=VALUETOTEXT(1E18)"
+  - id: vtt2_pos_1e19
+    description: "1E19"
+    formula: "=VALUETOTEXT(1E19)"
+  - id: vtt2_pos_1e20
+    description: "1E20 (re-probe)"
+    formula: "=VALUETOTEXT(1E20)"
+  - id: vtt2_pos_99999999999999990000
+    description: "9.999E19 (just below 1E20)"
+    formula: "=VALUETOTEXT(99999999999999990000)"
+
+  # ---- Boundary 2: small magnitudes 1E-15 .. 1E-20 ----------------------
+  - id: vtt2_neg_1em15
+    description: "1E-15 (re-probe)"
+    formula: "=VALUETOTEXT(1E-15)"
+  - id: vtt2_neg_1em16
+    description: "1E-16"
+    formula: "=VALUETOTEXT(1E-16)"
+  - id: vtt2_neg_1em17
+    description: "1E-17"
+    formula: "=VALUETOTEXT(1E-17)"
+  - id: vtt2_neg_1em18
+    description: "1E-18"
+    formula: "=VALUETOTEXT(1E-18)"
+  - id: vtt2_neg_1em19
+    description: "1E-19"
+    formula: "=VALUETOTEXT(1E-19)"
+  - id: vtt2_neg_1em20
+    description: "1E-20 (re-probe)"
+    formula: "=VALUETOTEXT(1E-20)"
+
+  # ---- Boundary 3: mantissa-width effect at fixed exponent -------------
+  # All at ?E-9: 1 leading zero, varying sig digits.
+  - id: vtt2_mant_1d_em9
+    description: "1E-9: 1 sig digit"
+    formula: "=VALUETOTEXT(1E-9)"
+  - id: vtt2_mant_2d_em9
+    description: "1.2E-9: 2 sig digits"
+    formula: "=VALUETOTEXT(1.2E-9)"
+  - id: vtt2_mant_5d_em9
+    description: "1.2345E-9: 5 sig digits"
+    formula: "=VALUETOTEXT(1.2345E-9)"
+  - id: vtt2_mant_8d_em9
+    description: "1.2345678E-9: 8 sig digits"
+    formula: "=VALUETOTEXT(1.2345678E-9)"
+  - id: vtt2_mant_10d_em9
+    description: "1.234567890E-9: 10 sig digits"
+    formula: "=VALUETOTEXT(1.234567890123E-9)"
+  - id: vtt2_mant_15d_em9
+    description: "1.23456789012345E-9: 15 sig digits (max precision)"
+    formula: "=VALUETOTEXT(1.23456789012345E-9)"
+
+  # ---- Boundary 3b: mantissa-width effect at smaller exponent ----------
+  # All at ?E-12: 11 leading zeros (border-ish).
+  - id: vtt2_mant_1d_em12
+    description: "1E-12: 1 sig digit"
+    formula: "=VALUETOTEXT(1E-12)"
+  - id: vtt2_mant_3d_em12
+    description: "1.23E-12: 3 sig digits"
+    formula: "=VALUETOTEXT(1.23E-12)"
+  - id: vtt2_mant_5d_em12
+    description: "1.2345E-12: 5 sig digits"
+    formula: "=VALUETOTEXT(1.2345E-12)"
+  - id: vtt2_mant_15d_em12
+    description: "1.23456789012345E-12: 15 sig digits"
+    formula: "=VALUETOTEXT(1.23456789012345E-12)"
+
+  # ---- Boundary 3c: large positive mantissa-width effect ---------------
+  # Vary sig digits at fixed ?E+15 to find when scientific kicks in.
+  - id: vtt2_mant_1d_e15
+    description: "1E15: 1 sig digit (boundary case from before)"
+    formula: "=VALUETOTEXT(1E15)"
+  - id: vtt2_mant_5d_e15
+    description: "1.2345E15: 5 sig digits"
+    formula: "=VALUETOTEXT(1.2345E15)"
+  - id: vtt2_mant_15d_e15
+    description: "1.23456789012345E15: 15 sig digits"
+    formula: "=VALUETOTEXT(1.23456789012345E15)"
+
+  # ---- Boundary 3d: huge mantissa near scientific switch ---------------
+  - id: vtt2_mant_1d_e16
+    description: "1E16: 1 sig digit"
+    formula: "=VALUETOTEXT(1E16)"
+  - id: vtt2_mant_2d_e16
+    description: "1.2E16: 2 sig digits"
+    formula: "=VALUETOTEXT(1.2E16)"
+  - id: vtt2_mant_15d_e16
+    description: "1.23456789012345E16: 15 sig digits at 1e16"
+    formula: "=VALUETOTEXT(1.23456789012345E16)"

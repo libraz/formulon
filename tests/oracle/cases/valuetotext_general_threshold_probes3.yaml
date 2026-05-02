@@ -1,0 +1,65 @@
+suite: valuetotext_general_threshold_probes3
+description: >
+  Round-3 probes: confirm the 20-char threshold and verify whether the
+  negative sign counts toward the limit. Also pin a few mantissa-precision
+  edge cases.
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  # ---- Sign-counts-toward-limit verification ---------------------------
+  # 1E-18 unsigned form is 20 chars: "0.000000000000000001"
+  # If sign counts: negated form would be 21 chars; should switch to sci.
+  - id: vtt3_neg_1em18
+    description: "-1E-18 (unsigned form is exactly 20 chars)"
+    formula: "=VALUETOTEXT(-1E-18)"
+  - id: vtt3_neg_1em17
+    description: "-1E-17 (unsigned form is 19 chars)"
+    formula: "=VALUETOTEXT(-1E-17)"
+  # 1E19 unsigned form is 20 chars: "10000000000000000000"
+  # If sign counts: negated would be 21 chars; should switch to sci.
+  - id: vtt3_neg_1e19
+    description: "-1E19 (unsigned form is 20 chars)"
+    formula: "=VALUETOTEXT(-1E19)"
+  - id: vtt3_neg_1e18
+    description: "-1E18 (unsigned form is 19 chars)"
+    formula: "=VALUETOTEXT(-1E18)"
+
+  # ---- Mantissa boundary at 1E-9 with various precisions ---------------
+  # Pinning where the decimal-form total length tips past 20.
+  - id: vtt3_mant_9d_em9
+    description: "1.23456789E-9 (9 sig digits)"
+    formula: "=VALUETOTEXT(1.23456789E-9)"
+  - id: vtt3_mant_11d_em9
+    description: "1.23456789012E-9 (11 sig digits)"
+    formula: "=VALUETOTEXT(1.23456789012E-9)"
+
+  # ---- Boundary cases at 1E15 with mantissa precision -----------------
+  - id: vtt3_mant_5d_e14
+    description: "1.2345E14 (5 sig digits, exp 14)"
+    formula: "=VALUETOTEXT(1.2345E14)"
+  - id: vtt3_mant_15d_e14
+    description: "1.23456789012345E14 (15 sig digits, exp 14)"
+    formula: "=VALUETOTEXT(1.23456789012345E14)"
+
+  # ---- Negative sign with very-small magnitude -------------------------
+  # 7.123456E-9 unsigned form is 17 chars; negated is 18 chars.
+  - id: vtt3_neg_7p123_em9
+    description: "Negative 7.123456E-9 (unsigned 17 chars; signed 18)"
+    formula: "=VALUETOTEXT(-7.123456E-9)"
+
+  # ---- Boundary case: mantissa renders to exactly 20 chars unsigned ----
+  # 1.23456789012345E-4 = 0.000123456789012345 (20 chars)
+  - id: vtt3_15d_em4_unsigned
+    description: "1.23456789012345E-4 (decimal exactly 20 chars unsigned)"
+    formula: "=VALUETOTEXT(1.23456789012345E-4)"
+  - id: vtt3_15d_em4_signed
+    description: "-1.23456789012345E-4 (decimal would be 21 chars signed)"
+    formula: "=VALUETOTEXT(-1.23456789012345E-4)"
+
+  # ---- Round-down precision behavior at 16+ sig digits ----------------
+  - id: vtt3_16sig_int
+    description: "12345678901234567 (17 sig digits, beyond 15-digit precision)"
+    formula: "=VALUETOTEXT(12345678901234567)"
+  - id: vtt3_17sig_decimal
+    description: "1.23456789012345678 (18 sig digits decimal)"
+    formula: "=VALUETOTEXT(1.23456789012345678)"

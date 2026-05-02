@@ -662,15 +662,3 @@ entries:
     prefer: mac
     first_noted: 2026-05-02
 
-  # -- VALUETOTEXT General-format scientific-notation threshold -----------
-  # =VALUETOTEXT(7.123456E-9): Mac/IronCalc="0.000000007123456" (decimal);
-  # Formulon="7.123456E-09" (scientific). Excel's General format uses
-  # decimal notation for |exponent| < ~12; Formulon's format_double uses
-  # %.15g which switches at |exponent| > 4. Future fix: tune format_double
-  # threshold to match Excel General. Deferred this pass because the change
-  # ripples across CLI JSON output, parity gates, AST dump, and complex-
-  # number formatting; pinning the exact threshold needs additional probes.
-  - id: ironcalc_calc_tests_T_VALUE_VALUETOTEXT_Sheet1.D11
-    reason: "VALUETOTEXT(7.123456E-9); Mac=\"0.000000007123456\" (decimal), Formulon=\"7.123456E-09\" (scientific). General-format threshold gap in format_double; deferred pending threshold-pinning probes."
-    prefer: mac
-    first_noted: 2026-05-02
