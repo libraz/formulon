@@ -72,8 +72,7 @@ TEST(CFEvaluator, RuleTypesNotYetImplementedReturnFalse) {
   // lands in subsequent PRs must not silently match anything in the
   // meantime. A test here catches accidental fall-through.
   for (auto t : {RuleType::Expression, RuleType::ColorScale, RuleType::DataBar, RuleType::IconSet, RuleType::Top10,
-                 RuleType::AboveAverage, RuleType::ContainsText, RuleType::NotContainsText, RuleType::BeginsWith,
-                 RuleType::EndsWith, RuleType::TimePeriod, RuleType::DuplicateValues, RuleType::UniqueValues}) {
+                 RuleType::AboveAverage, RuleType::TimePeriod, RuleType::DuplicateValues, RuleType::UniqueValues}) {
     CFRule r = MakeRule(t);
     EXPECT_FALSE(match_rule(r, Value::number(1.0))) << "type=" << static_cast<int>(t);
     EXPECT_FALSE(match_rule(r, Value::blank())) << "type=" << static_cast<int>(t);
@@ -271,6 +270,140 @@ TEST(CFEvaluator, CellIsNonLiteralFormulaReturnsFalse) {
 
   r.formula1 = "AVERAGE(A1:A10)";
   EXPECT_FALSE(match_rule(r, Value::number(5.0)));
+}
+
+// ---------------------------------------------------------------------------
+// ContainsText / NotContainsText / BeginsWith / EndsWith
+// ---------------------------------------------------------------------------
+
+TEST(CFEvaluator, ContainsTextMatchesSubstring) {
+  CFRule r = MakeRule(RuleType::ContainsText);
+  r.text = "foo";
+  EXPECT_TRUE(match_rule(r, Value::text("foobar")));
+  EXPECT_TRUE(match_rule(r, Value::text("hello foo world")));
+  EXPECT_TRUE(match_rule(r, Value::text("barfoo")));
+  EXPECT_FALSE(match_rule(r, Value::text("bar")));
+  EXPECT_FALSE(match_rule(r, Value::text("")));
+}
+
+TEST(CFEvaluator, ContainsTextIsAsciiCaseInsensitive) {
+  CFRule r = MakeRule(RuleType::ContainsText);
+  r.text = "FOO";
+  EXPECT_TRUE(match_rule(r, Value::text("foobar")));
+  EXPECT_TRUE(match_rule(r, Value::text("FoObAr")));
+  EXPECT_TRUE(match_rule(r, Value::text("XfOoY")));
+}
+
+TEST(CFEvaluator, ContainsTextEmptyNeedleMatchesAnyText) {
+  // Every text contains the empty string; matches Excel's SEARCH-based
+  // generated formula.
+  CFRule r = MakeRule(RuleType::ContainsText);
+  r.text = "";
+  EXPECT_TRUE(match_rule(r, Value::text("anything")));
+  EXPECT_TRUE(match_rule(r, Value::text("")));
+}
+
+TEST(CFEvaluator, ContainsTextMissingTextFieldReturnsFalse) {
+  CFRule r = MakeRule(RuleType::ContainsText);
+  // r.text not set
+  EXPECT_FALSE(match_rule(r, Value::text("foobar")));
+}
+
+TEST(CFEvaluator, ContainsTextNonTextCellDoesNotMatch) {
+  // Conservative cross-kind stance, mirroring cellIs. Documented in
+  // cf_evaluator.h.
+  CFRule r = MakeRule(RuleType::ContainsText);
+  r.text = "foo";
+  EXPECT_FALSE(match_rule(r, Value::number(42.0)));
+  EXPECT_FALSE(match_rule(r, Value::boolean(true)));
+  EXPECT_FALSE(match_rule(r, Value::error(ErrorCode::NA)));
+  EXPECT_FALSE(match_rule(r, Value::blank()));
+}
+
+TEST(CFEvaluator, NotContainsTextIsComplementOnTextCells) {
+  CFRule r = MakeRule(RuleType::NotContainsText);
+  r.text = "foo";
+  EXPECT_TRUE(match_rule(r, Value::text("bar")));
+  EXPECT_TRUE(match_rule(r, Value::text("")));
+  EXPECT_FALSE(match_rule(r, Value::text("foobar")));
+  EXPECT_FALSE(match_rule(r, Value::text("FOO")));  // case-insensitive
+}
+
+TEST(CFEvaluator, NotContainsTextEmptyNeedleNeverMatchesTextCell) {
+  // Every text "contains" the empty string, so its complement never
+  // matches.
+  CFRule r = MakeRule(RuleType::NotContainsText);
+  r.text = "";
+  EXPECT_FALSE(match_rule(r, Value::text("anything")));
+  EXPECT_FALSE(match_rule(r, Value::text("")));
+}
+
+TEST(CFEvaluator, NotContainsTextNonTextCellDoesNotMatch) {
+  // Symmetric with the positive form: non-text cells never match
+  // either variant. Documented in cf_evaluator.h.
+  CFRule r = MakeRule(RuleType::NotContainsText);
+  r.text = "foo";
+  EXPECT_FALSE(match_rule(r, Value::number(42.0)));
+  EXPECT_FALSE(match_rule(r, Value::blank()));
+  EXPECT_FALSE(match_rule(r, Value::error(ErrorCode::NA)));
+}
+
+TEST(CFEvaluator, BeginsWithMatchesPrefix) {
+  CFRule r = MakeRule(RuleType::BeginsWith);
+  r.text = "Hello";
+  EXPECT_TRUE(match_rule(r, Value::text("Hello, World")));
+  EXPECT_TRUE(match_rule(r, Value::text("hello world")));  // case-insensitive
+  EXPECT_FALSE(match_rule(r, Value::text("World, Hello")));
+  EXPECT_FALSE(match_rule(r, Value::text("xHello")));
+}
+
+TEST(CFEvaluator, BeginsWithEmptyPrefixMatchesAnyText) {
+  CFRule r = MakeRule(RuleType::BeginsWith);
+  r.text = "";
+  EXPECT_TRUE(match_rule(r, Value::text("anything")));
+  EXPECT_TRUE(match_rule(r, Value::text("")));
+}
+
+TEST(CFEvaluator, BeginsWithLongerPrefixDoesNotMatch) {
+  CFRule r = MakeRule(RuleType::BeginsWith);
+  r.text = "longerthancell";
+  EXPECT_FALSE(match_rule(r, Value::text("short")));
+}
+
+TEST(CFEvaluator, BeginsWithNonTextCellDoesNotMatch) {
+  CFRule r = MakeRule(RuleType::BeginsWith);
+  r.text = "foo";
+  EXPECT_FALSE(match_rule(r, Value::number(42.0)));
+  EXPECT_FALSE(match_rule(r, Value::blank()));
+}
+
+TEST(CFEvaluator, EndsWithMatchesSuffix) {
+  CFRule r = MakeRule(RuleType::EndsWith);
+  r.text = "World";
+  EXPECT_TRUE(match_rule(r, Value::text("Hello, World")));
+  EXPECT_TRUE(match_rule(r, Value::text("hello world")));  // case-insensitive
+  EXPECT_FALSE(match_rule(r, Value::text("World, Hello")));
+  EXPECT_FALSE(match_rule(r, Value::text("Worldx")));
+}
+
+TEST(CFEvaluator, EndsWithEmptySuffixMatchesAnyText) {
+  CFRule r = MakeRule(RuleType::EndsWith);
+  r.text = "";
+  EXPECT_TRUE(match_rule(r, Value::text("anything")));
+  EXPECT_TRUE(match_rule(r, Value::text("")));
+}
+
+TEST(CFEvaluator, EndsWithLongerSuffixDoesNotMatch) {
+  CFRule r = MakeRule(RuleType::EndsWith);
+  r.text = "longerthancell";
+  EXPECT_FALSE(match_rule(r, Value::text("short")));
+}
+
+TEST(CFEvaluator, EndsWithNonTextCellDoesNotMatch) {
+  CFRule r = MakeRule(RuleType::EndsWith);
+  r.text = "foo";
+  EXPECT_FALSE(match_rule(r, Value::number(42.0)));
+  EXPECT_FALSE(match_rule(r, Value::error(ErrorCode::NA)));
 }
 
 TEST(CFEvaluator, MakeMatchPopulatesIdentityFields) {
@@ -495,6 +628,11 @@ TEST(CFEvaluator, ContextAwareOverloadDelegatesValueOnlyKinds) {
 
   CFRule errors = MakeRule(RuleType::ContainsErrors);
   EXPECT_TRUE(match_rule(errors, Value::error(ErrorCode::Div0), harness.context(At(0, 0), At(0, 0))));
+
+  CFRule contains = MakeRule(RuleType::ContainsText);
+  contains.text = "foo";
+  EXPECT_TRUE(match_rule(contains, Value::text("foobar"), harness.context(At(0, 0), At(0, 0))));
+  EXPECT_FALSE(match_rule(contains, Value::text("bar"), harness.context(At(0, 0), At(0, 0))));
 }
 
 }  // namespace

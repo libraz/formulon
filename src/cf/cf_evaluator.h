@@ -7,6 +7,13 @@
 //
 //   * `ContainsBlanks` / `NotContainsBlanks`
 //   * `ContainsErrors` / `NotContainsErrors`
+//   * `ContainsText` / `NotContainsText` / `BeginsWith` / `EndsWith` —
+//     ASCII case-insensitive substring / prefix / suffix matching of
+//     `rule.text` against the cell's text. Non-text cells (numbers,
+//     booleans, errors, blanks) do not match either the positive or
+//     negative variants; the conservative cross-kind stance mirrors
+//     `cellIs`. Empty `rule.text` matches every text cell for the
+//     positive variants and never matches for `NotContainsText`.
 //   * `CellIs` against a literal `formula1` / `formula2` (the value-
 //     only `match_rule(rule, cell_value)` overload), and against an
 //     evaluated formula expression (the context-aware
@@ -17,7 +24,6 @@
 //
 // Deferred to subsequent staging steps:
 //
-//   * `ContainsText` family (text-prefix / suffix / substring rules)
 //   * `Top10` / `AboveAverage` / `TimePeriod` (range-aware rules)
 //   * `ColorScale` / `DataBar` / `IconSet` visual computation
 //   * Priority chain + stopIfTrue + lazy viewport API
@@ -64,6 +70,11 @@ namespace cf {
 ///                            arithmetic, function calls) fall through
 ///                            to `false`; use the context-aware
 ///                            overload below to evaluate them.
+///   * `ContainsText` / `NotContainsText` / `BeginsWith` / `EndsWith`
+///                          — ASCII case-insensitive substring /
+///                            prefix / suffix match of `rule.text`
+///                            against the cell's text. Non-text cells
+///                            never match.
 ///
 /// All other rule types currently return `false` (their evaluation
 /// logic lands in subsequent staging steps). Callers that want to opt

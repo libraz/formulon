@@ -6,6 +6,7 @@
 #include "cf/cf_evaluator.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <optional>
@@ -21,6 +22,7 @@
 #include "parser/ast_shift.h"
 #include "parser/parser.h"
 #include "utils/arena.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon::cf {
@@ -306,6 +308,72 @@ bool match_cell_is(const CFRule& rule, const Value& cell_value) {
   return false;
 }
 
+// ASCII case-insensitive substring containment. Returns `true` for an
+// empty needle (every text contains the empty string), matching the
+// SEARCH/`<containsText>` convention Excel uses to compile these rules.
+bool icase_contains(std::string_view haystack, std::string_view needle) {
+  if (needle.empty()) {
+    return true;
+  }
+  if (needle.size() > haystack.size()) {
+    return false;
+  }
+  const std::size_t span = haystack.size() - needle.size();
+  for (std::size_t i = 0; i <= span; ++i) {
+    bool matched = true;
+    for (std::size_t j = 0; j < needle.size(); ++j) {
+      if (strings::ascii_to_lower(haystack[i + j]) != strings::ascii_to_lower(needle[j])) {
+        matched = false;
+        break;
+      }
+    }
+    if (matched) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool icase_starts_with(std::string_view text, std::string_view prefix) {
+  if (prefix.size() > text.size()) {
+    return false;
+  }
+  return strings::case_insensitive_eq(text.substr(0, prefix.size()), prefix);
+}
+
+bool icase_ends_with(std::string_view text, std::string_view suffix) {
+  if (suffix.size() > text.size()) {
+    return false;
+  }
+  return strings::case_insensitive_eq(text.substr(text.size() - suffix.size()), suffix);
+}
+
+// Evaluates the `containsText` / `notContainsText` / `beginsWith` /
+// `endsWith` family. Conservative cross-kind stance: if the cell isn't
+// text, no rule in the family matches (including the negative
+// `NotContainsText`). Excel implicitly coerces non-text cells via the
+// generated SEARCH-based formula, but folding that in needs oracle
+// data; the closure harness will refine when it lands.
+bool match_text_rule(const CFRule& rule, const Value& cell_value) {
+  if (!rule.text.has_value() || !cell_value.is_text()) {
+    return false;
+  }
+  const std::string_view cell_text = cell_value.as_text();
+  const std::string_view needle = *rule.text;
+  switch (rule.type) {
+    case RuleType::ContainsText:
+      return icase_contains(cell_text, needle);
+    case RuleType::NotContainsText:
+      return !icase_contains(cell_text, needle);
+    case RuleType::BeginsWith:
+      return icase_starts_with(cell_text, needle);
+    case RuleType::EndsWith:
+      return icase_ends_with(cell_text, needle);
+    default:
+      return false;
+  }
+}
+
 }  // namespace
 
 bool match_rule(const CFRule& rule, const Value& cell_value) {
@@ -320,6 +388,11 @@ bool match_rule(const CFRule& rule, const Value& cell_value) {
       return !cell_value.is_error();
     case RuleType::CellIs:
       return match_cell_is(rule, cell_value);
+    case RuleType::ContainsText:
+    case RuleType::NotContainsText:
+    case RuleType::BeginsWith:
+    case RuleType::EndsWith:
+      return match_text_rule(rule, cell_value);
     // Rule types whose evaluator lands in subsequent PRs return false
     // here so a caller that walks the full rule list does not mis-fire
     // on a partially-implemented engine. The UI is expected to gate on
@@ -330,10 +403,6 @@ bool match_rule(const CFRule& rule, const Value& cell_value) {
     case RuleType::IconSet:
     case RuleType::Top10:
     case RuleType::AboveAverage:
-    case RuleType::ContainsText:
-    case RuleType::NotContainsText:
-    case RuleType::BeginsWith:
-    case RuleType::EndsWith:
     case RuleType::TimePeriod:
     case RuleType::DuplicateValues:
     case RuleType::UniqueValues:
@@ -443,15 +512,15 @@ bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext
     case RuleType::NotContainsBlanks:
     case RuleType::ContainsErrors:
     case RuleType::NotContainsErrors:
+    case RuleType::ContainsText:
+    case RuleType::NotContainsText:
+    case RuleType::BeginsWith:
+    case RuleType::EndsWith:
     case RuleType::ColorScale:
     case RuleType::DataBar:
     case RuleType::IconSet:
     case RuleType::Top10:
     case RuleType::AboveAverage:
-    case RuleType::ContainsText:
-    case RuleType::NotContainsText:
-    case RuleType::BeginsWith:
-    case RuleType::EndsWith:
     case RuleType::TimePeriod:
     case RuleType::DuplicateValues:
     case RuleType::UniqueValues:
