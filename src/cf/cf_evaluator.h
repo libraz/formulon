@@ -30,11 +30,21 @@
 //     cell's value across `CFEvalContext::sqref` and match when the
 //     count is >= 2 (Duplicate) or == 1 (Unique). Cross-kind equality
 //     is `false`; errors and blanks never match.
+//   * `AboveAverage` — collect numeric values from
+//     `CFEvalContext::sqref`, compute the sample mean (and sample
+//     standard deviation when `rule.std_dev` is set), then test the
+//     cell's number against the resulting threshold honouring
+//     `rule.above_average` (top vs. bottom side) and
+//     `rule.equal_average` (strict vs. inclusive). Non-numeric cells
+//     do not match.
+//   * `Top10` — collect numeric values from `CFEvalContext::sqref`,
+//     pick the rank-th largest (or smallest when `rule.bottom`) value
+//     as a threshold, and match cells with value >= threshold (top)
+//     or <= threshold (bottom) so ties are included. `rule.percent`
+//     interprets `rule.rank` as a percent of the population count.
 //
 // Deferred to subsequent staging steps:
 //
-//   * `Top10` / `AboveAverage` (range-aware rules — need access to
-//     all values in the rule's sqref to compute rank and mean)
 //   * `ColorScale` / `DataBar` / `IconSet` visual computation
 //   * Priority chain + stopIfTrue + lazy viewport API
 //

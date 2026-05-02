@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -662,6 +663,142 @@ bool match_duplicate_or_unique(const CFRule& rule, const Value& cell_value, cons
   }
 }
 
+// ---------------------------------------------------------------------------
+// AboveAverage / Top10 — population statistics over the sqref.
+//
+// Both rules collect the numeric population from `ctx.sqref` (booleans
+// and text are excluded — Excel folds them into the rule via SUMPRODUCT
+// in the generated formula, but the closure harness will refine the
+// stance when oracle data lands). Errors and blanks never participate.
+// ---------------------------------------------------------------------------
+
+constexpr double kPercentDivisor = 100.0;
+constexpr std::int32_t kDefaultTop10Rank = 10;
+
+// Collects every numeric value in `sqref` (read spill-aware via
+// `Sheet::resolve_cell_value`). Booleans and text are skipped — Excel's
+// AboveAverage / Top10 use the numeric-only population; a closure-driven
+// refinement may widen this if oracle data shows otherwise.
+std::vector<double> collect_numeric_values(const std::vector<CFCellRange>& sqref, const Sheet& sheet) {
+  std::vector<double> values;
+  for (const CFCellRange& range : sqref) {
+    for (std::uint32_t row = range.first.row; row <= range.last.row; ++row) {
+      for (std::uint32_t col = range.first.col; col <= range.last.col; ++col) {
+        const Value cell = sheet.resolve_cell_value(row, col);
+        if (cell.is_number()) {
+          values.push_back(cell.as_number());
+        }
+      }
+    }
+  }
+  return values;
+}
+
+double mean_of(const std::vector<double>& values) {
+  double sum = 0.0;
+  for (double sample : values) {
+    sum += sample;
+  }
+  return sum / static_cast<double>(values.size());
+}
+
+// Sample standard deviation (Bessel-corrected, n-1). Returns 0 when
+// fewer than 2 numeric values are present so the threshold collapses
+// to the mean and the rule still produces a well-defined match.
+double sample_stddev(const std::vector<double>& values, double mean) {
+  if (values.size() < 2) {
+    return 0.0;
+  }
+  double sumsq = 0.0;
+  for (double sample : values) {
+    const double delta = sample - mean;
+    sumsq += delta * delta;
+  }
+  return std::sqrt(sumsq / static_cast<double>(values.size() - 1));
+}
+
+bool match_above_average(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
+  if (ctx.sqref == nullptr || ctx.eval_ctx == nullptr || ctx.eval_ctx->current_sheet() == nullptr) {
+    return false;
+  }
+  if (!cell_value.is_number()) {
+    return false;
+  }
+  const std::vector<double> values = collect_numeric_values(*ctx.sqref, *ctx.eval_ctx->current_sheet());
+  if (values.empty()) {
+    return false;
+  }
+  const double mean = mean_of(values);
+
+  double threshold = mean;
+  if (rule.std_dev.has_value() && *rule.std_dev > 0.0) {
+    const double sigma = sample_stddev(values, mean);
+    const double offset = *rule.std_dev * sigma;
+    threshold = rule.above_average ? mean + offset : mean - offset;
+  }
+
+  const double cell = cell_value.as_number();
+  if (rule.above_average) {
+    return rule.equal_average ? cell >= threshold : cell > threshold;
+  }
+  return rule.equal_average ? cell <= threshold : cell < threshold;
+}
+
+// Resolves the rank index `n` for Top10 — the cell-count to highlight
+// before tie-inclusion expands the matched set. Excel clamps to
+// `[1, count]` and uses floor-truncation when interpreting `rank` as a
+// percent of the population.
+std::size_t resolve_top10_rank(const CFRule& rule, std::size_t population) {
+  const std::int32_t raw_rank = rule.rank.value_or(kDefaultTop10Rank);
+  if (raw_rank <= 0 || population == 0) {
+    return 0;
+  }
+  std::int64_t resolved = raw_rank;
+  if (rule.percent) {
+    resolved = static_cast<std::int64_t>(
+        std::floor(static_cast<double>(population) * static_cast<double>(raw_rank) / kPercentDivisor));
+  }
+  if (resolved < 1) {
+    resolved = 1;
+  }
+  if (resolved > static_cast<std::int64_t>(population)) {
+    resolved = static_cast<std::int64_t>(population);
+  }
+  return static_cast<std::size_t>(resolved);
+}
+
+bool match_top10(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
+  if (ctx.sqref == nullptr || ctx.eval_ctx == nullptr || ctx.eval_ctx->current_sheet() == nullptr) {
+    return false;
+  }
+  if (!cell_value.is_number()) {
+    return false;
+  }
+  std::vector<double> values = collect_numeric_values(*ctx.sqref, *ctx.eval_ctx->current_sheet());
+  if (values.empty()) {
+    return false;
+  }
+  const std::size_t rank_n = resolve_top10_rank(rule, values.size());
+  if (rank_n == 0) {
+    return false;
+  }
+
+  // `nth_element` partitions in O(N): for top-N, partition so the
+  // (rank_n-1)-th element is the smallest of the top group; for
+  // bottom-N, partition so it is the largest of the bottom group.
+  // Tie inclusion is handled at the comparison step below.
+  const double cell = cell_value.as_number();
+  if (rule.bottom) {
+    std::nth_element(values.begin(), values.begin() + static_cast<std::ptrdiff_t>(rank_n - 1), values.end());
+    const double threshold = values[rank_n - 1];
+    return cell <= threshold;
+  }
+  std::nth_element(values.begin(), values.begin() + static_cast<std::ptrdiff_t>(rank_n - 1), values.end(),
+                   std::greater<>());
+  const double threshold = values[rank_n - 1];
+  return cell >= threshold;
+}
+
 }  // namespace
 
 CFMatch make_match(const CFRule& rule) {
@@ -687,6 +824,10 @@ bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext
     case RuleType::DuplicateValues:
     case RuleType::UniqueValues:
       return match_duplicate_or_unique(rule, cell_value, ctx);
+    case RuleType::AboveAverage:
+      return match_above_average(rule, cell_value, ctx);
+    case RuleType::Top10:
+      return match_top10(rule, cell_value, ctx);
     case RuleType::ContainsBlanks:
     case RuleType::NotContainsBlanks:
     case RuleType::ContainsErrors:
@@ -698,8 +839,6 @@ bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext
     case RuleType::ColorScale:
     case RuleType::DataBar:
     case RuleType::IconSet:
-    case RuleType::Top10:
-    case RuleType::AboveAverage:
       // Value-only and not-yet-implemented rule types delegate to the
       // simple overload, which already encodes their semantics (or
       // false-fallthrough for the unimplemented kinds).
