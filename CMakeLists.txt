@@ -125,6 +125,7 @@ set(FORMULON_CORE_SOURCES
   src/parser/parser.cpp
   src/parser/parser_atoms.cpp
   src/parser/parser_reference.cpp
+  src/pivot/pivot_evaluator.cpp
   src/eval/coerce.cpp
   src/eval/compiler.cpp
   src/eval/optimizer.cpp

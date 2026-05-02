@@ -8,6 +8,7 @@
 #ifndef FORMULON_PIVOT_PIVOT_RESULT_H_
 #define FORMULON_PIVOT_PIVOT_RESULT_H_
 
+#include <deque>
 #include <string>
 #include <vector>
 
@@ -57,6 +58,18 @@ struct PivotResult {
 
   /// Grand total across every aggregation. Defaults to `Blank`.
   Value grand_total = Value::blank();
+
+  /// Lifetime-stable backing store for any `Value::text` payload appearing
+  /// in `values`, `subtotals`, or `grand_total`. The evaluator may need to
+  /// surface text values from the source cache (e.g. when MAX-ing over a
+  /// pure-text column); copying the underlying bytes here decouples the
+  /// result's lifetime from the cache it was computed against, satisfying
+  /// the contract spelled out on this struct's docstring.
+  ///
+  /// `std::deque` gives pointer/iterator stability across appends so
+  /// `string_view`s into earlier entries remain valid as later entries are
+  /// pushed.
+  std::deque<std::string> text_storage;
 };
 
 }  // namespace formulon::pivot

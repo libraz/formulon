@@ -62,6 +62,14 @@ enum class FormulonErrorCode : int32_t {
   kEvalInvalidReference = 2006,
   kEvalLambdaNotFound = 2007,
   kEvalSpillCollision = 2008,
+  /// Pivot evaluator was handed a `PivotTable` whose `pivot_cache_id` does
+  /// not match the supplied `PivotCache`. Indicates an unresolved cache
+  /// binding at evaluation time.
+  kEvalPivotMissing = 2009,
+  /// Pivot evaluator detected a structurally invalid table — most commonly
+  /// a `PivotDataField::field_index` that points outside
+  /// `PivotCache::fields()`.
+  kEvalPivotInvalid = 2010,
   // --- AST -> ByteCode compiler (2050-2069) -------------------------------
   /// Generic compile failure that does not match a more specific code below.
   kVmCompileFailed = 2050,
@@ -305,6 +313,10 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kEvalLambdaNotFound";
     case FormulonErrorCode::kEvalSpillCollision:
       return "kEvalSpillCollision";
+    case FormulonErrorCode::kEvalPivotMissing:
+      return "kEvalPivotMissing";
+    case FormulonErrorCode::kEvalPivotInvalid:
+      return "kEvalPivotInvalid";
     case FormulonErrorCode::kVmCompileFailed:
       return "kVmCompileFailed";
     case FormulonErrorCode::kVmUnsupportedNode:
