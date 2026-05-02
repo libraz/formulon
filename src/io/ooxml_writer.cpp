@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -28,10 +29,14 @@
 #include "io/defined_names.h"
 #include "io/ooxml_writer_cell.h"
 #include "io/passthrough_part.h"
+#include "io/pivot_cache_writer.h"
+#include "io/pivot_table_writer.h"
 #include "io/tables_reader.h"
 #include "io/workbook_kind.h"
 #include "io/xml_escape.h"
 #include "miniz.h"
+#include "pivot/pivot_cache.h"
+#include "pivot/pivot_table.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -56,8 +61,19 @@ constexpr std::string_view kCtXml = "application/xml";
 constexpr std::string_view kCtWorksheet = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
 constexpr std::string_view kCtStyles = "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
 constexpr std::string_view kCtTable = "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml";
+constexpr std::string_view kCtPivotCacheDefinition =
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml";
+constexpr std::string_view kCtPivotCacheRecords =
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml";
+constexpr std::string_view kCtPivotTable = "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml";
 
 constexpr std::string_view kRelTable = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table";
+constexpr std::string_view kRelPivotCacheDefinition =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition";
+constexpr std::string_view kRelPivotCacheRecords =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords";
+constexpr std::string_view kRelPivotTable =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
 
 // ---------------------------------------------------------------------------
 // Per-package emission plan
@@ -79,6 +95,30 @@ struct EmissionPlan {
     std::uint32_t numeric_id = 0;  // matches the path's `tableN.xml` suffix
   };
   std::vector<std::vector<PerSheetTable>> tables_by_sheet;
+  // Workbook-level pivot caches. One entry per `wb.pivot_caches()` in
+  // document order. `numeric_id` drives the package paths; `cache_id`
+  // is the workbook-level identifier consumers see (PivotTable refers
+  // to it via `pivot_cache_id()`); `workbook_rid` is the rId integer
+  // the workbook-rels file assigns to this cache definition.
+  struct PivotCachePlan {
+    const pivot::PivotCache* cache = nullptr;
+    std::uint32_t numeric_id = 0;      // 1-based, package-wide
+    std::string definition_path;       // "xl/pivotCache/pivotCacheDefinition1.xml"
+    std::string records_path;          // "xl/pivotCache/pivotCacheRecords1.xml"
+    std::string definition_rels_path;  // "xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels"
+    std::uint32_t workbook_rid = 0;    // workbook-rels rId number for this cache definition
+    std::uint32_t cache_id = 0;        // PivotCache::cache_id(); used by <pivotCaches> entry
+  };
+  std::vector<PivotCachePlan> pivot_caches;
+  // Pivot tables grouped by owning sheet. Each `numeric_id` is a
+  // package-wide 1-based counter (independent of cache numbering); the
+  // path is `xl/pivotTables/pivotTable<N>.xml`.
+  struct PivotTablePlan {
+    const pivot::PivotTable* table = nullptr;
+    std::uint32_t numeric_id = 0;  // 1-based, package-wide
+    std::string path;              // "xl/pivotTables/pivotTable1.xml"
+  };
+  std::vector<std::vector<PivotTablePlan>> pivot_tables_by_sheet;
   // Passthrough parts we will keep. Entries that collide with a
   // generated path are dropped here (with a warning) so downstream
   // emission can blindly write everything in the list.
@@ -87,8 +127,10 @@ struct EmissionPlan {
 
 /// Returns the set of paths the writer always generates, regardless of
 /// metadata. Used to detect passthrough collisions.
-std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb,
-                                                      const std::vector<EmissionPlan::PerSheetTable>& flat_tables) {
+std::unordered_set<std::string> BuildGeneratedPathSet(
+    const Workbook& wb, const std::vector<EmissionPlan::PerSheetTable>& flat_tables,
+    const std::vector<EmissionPlan::PivotCachePlan>& pivot_caches,
+    const std::vector<std::vector<EmissionPlan::PivotTablePlan>>& pivot_tables_by_sheet) {
   std::unordered_set<std::string> paths;
   paths.insert("[Content_Types].xml");
   paths.insert("_rels/.rels");
@@ -102,7 +144,19 @@ std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb,
     paths.insert(t.path);
     // Sheet rels for sheets that own tables are also generated.
   }
-  // Sheet rels: any sheet that owns at least one table.
+  // Pivot-cache parts: definition, records, and definition rels.
+  for (const EmissionPlan::PivotCachePlan& c : pivot_caches) {
+    paths.insert(c.definition_path);
+    paths.insert(c.records_path);
+    paths.insert(c.definition_rels_path);
+  }
+  // Pivot-table parts (one per pivot table, package-wide).
+  for (const auto& per_sheet : pivot_tables_by_sheet) {
+    for (const EmissionPlan::PivotTablePlan& t : per_sheet) {
+      paths.insert(t.path);
+    }
+  }
+  // Sheet rels: any sheet that owns at least one table or pivot table.
   // Computed by callers; we enumerate them here for completeness.
   return paths;
 }
@@ -157,12 +211,59 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb) {
     flat_tables.push_back(entry);
   }
 
+  // Pivot caches in document order. The workbook-rels rId integer for
+  // each cache definition starts after the styles relationship: sheets
+  // occupy rId1..rId(N), styles uses rId(N+1), pivot caches use
+  // rId(N+2)+. The numeric_id drives the package-relative path.
+  plan.pivot_caches.reserve(wb.pivot_caches().size());
+  for (std::size_t i = 0; i < wb.pivot_caches().size(); ++i) {
+    const pivot::PivotCache* cache = wb.pivot_caches()[i].get();
+    if (cache == nullptr) {
+      continue;
+    }
+    EmissionPlan::PivotCachePlan entry;
+    entry.cache = cache;
+    entry.numeric_id = static_cast<std::uint32_t>(i + 1);
+    entry.cache_id = cache->cache_id();
+    const std::string n_str = std::to_string(entry.numeric_id);
+    entry.definition_path = "xl/pivotCache/pivotCacheDefinition" + n_str + ".xml";
+    entry.records_path = "xl/pivotCache/pivotCacheRecords" + n_str + ".xml";
+    entry.definition_rels_path = "xl/pivotCache/_rels/pivotCacheDefinition" + n_str + ".xml.rels";
+    // sheets rId1..rId(sheet_count), styles rId(sheet_count+1),
+    // first cache rId(sheet_count+2). Cast safe: workbook size is
+    // bounded well within uint32 range.
+    entry.workbook_rid = static_cast<std::uint32_t>(wb.sheet_count() + 2 + i);
+    plan.pivot_caches.push_back(std::move(entry));
+  }
+
+  // Pivot tables grouped by sheet, with a package-wide numeric counter.
+  plan.pivot_tables_by_sheet.assign(wb.sheet_count(), {});
+  std::uint32_t next_pivot_table_id = 1;
+  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+    const auto& sheet_pivots = wb.sheet(s).pivot_tables();
+    for (const std::unique_ptr<pivot::PivotTable>& uptr : sheet_pivots) {
+      const pivot::PivotTable* tbl = uptr.get();
+      if (tbl == nullptr) {
+        continue;
+      }
+      EmissionPlan::PivotTablePlan entry;
+      entry.table = tbl;
+      entry.numeric_id = next_pivot_table_id++;
+      entry.path = "xl/pivotTables/pivotTable" + std::to_string(entry.numeric_id) + ".xml";
+      plan.pivot_tables_by_sheet[s].push_back(std::move(entry));
+    }
+  }
+
   // Collision detection between generated paths and passthrough paths.
   // Generated paths win; passthrough copy is dropped with a warning.
-  std::unordered_set<std::string> generated = BuildGeneratedPathSet(wb, flat_tables);
-  // Sheet rels for table-owning sheets are also generated.
+  std::unordered_set<std::string> generated =
+      BuildGeneratedPathSet(wb, flat_tables, plan.pivot_caches, plan.pivot_tables_by_sheet);
+  // Sheet rels for sheets that own tables OR pivot tables are also
+  // generated.
   for (std::size_t i = 0; i < plan.tables_by_sheet.size(); ++i) {
-    if (!plan.tables_by_sheet[i].empty()) {
+    const bool has_tables = !plan.tables_by_sheet[i].empty();
+    const bool has_pivots = i < plan.pivot_tables_by_sheet.size() && !plan.pivot_tables_by_sheet[i].empty();
+    if (has_tables || has_pivots) {
       generated.insert("xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels");
     }
   }
@@ -230,6 +331,29 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
       out.append("\"/>\n");
     }
   }
+  // Pivot caches: one Override per definition + one per records part.
+  for (const EmissionPlan::PivotCachePlan& c : plan.pivot_caches) {
+    out.append("  <Override PartName=\"/");
+    out.append(c.definition_path);
+    out.append("\" ContentType=\"");
+    out.append(kCtPivotCacheDefinition);
+    out.append("\"/>\n");
+    out.append("  <Override PartName=\"/");
+    out.append(c.records_path);
+    out.append("\" ContentType=\"");
+    out.append(kCtPivotCacheRecords);
+    out.append("\"/>\n");
+  }
+  // Pivot tables: one Override per part.
+  for (const auto& per_sheet : plan.pivot_tables_by_sheet) {
+    for (const EmissionPlan::PivotTablePlan& t : per_sheet) {
+      out.append("  <Override PartName=\"/");
+      out.append(t.path);
+      out.append("\" ContentType=\"");
+      out.append(kCtPivotTable);
+      out.append("\"/>\n");
+    }
+  }
   // Passthrough overrides: only for entries that carried an explicit
   // ContentType in the source archive. Default-typed parts (empty
   // content_type) must NOT appear as Overrides — the package's
@@ -290,9 +414,9 @@ void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& n
   out.append("  </definedNames>\n");
 }
 
-std::string BuildWorkbookXml(const Workbook& wb) {
+std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   std::string out;
-  out.reserve(512 + wb.sheet_count() * 96 + wb.defined_names().size() * 96);
+  out.reserve(512 + wb.sheet_count() * 96 + wb.defined_names().size() * 96 + plan.pivot_caches.size() * 64);
   out.append(kXmlDecl);
   out.append(
       "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
@@ -311,13 +435,27 @@ std::string BuildWorkbookXml(const Workbook& wb) {
   // <definedNames> sits between <sheets> and <calcPr>/end-of-workbook
   // per OOXML schema (cf. ECMA-376 sheet ordering).
   AppendDefinedNamesBlock(out, wb.defined_names());
+  // <pivotCaches> follows <definedNames> in the ECMA-376 schema element
+  // order: sheets, functionGroups, externalReferences, definedNames,
+  // calcPr, oleSize, customWorkbookViews, pivotCaches, ...
+  if (!plan.pivot_caches.empty()) {
+    out.append("  <pivotCaches>\n");
+    for (const EmissionPlan::PivotCachePlan& c : plan.pivot_caches) {
+      out.append("    <pivotCache cacheId=\"");
+      out.append(std::to_string(c.cache_id));
+      out.append("\" r:id=\"rId");
+      out.append(std::to_string(c.workbook_rid));
+      out.append("\"/>\n");
+    }
+    out.append("  </pivotCaches>\n");
+  }
   out.append("</workbook>\n");
   return out;
 }
 
-std::string BuildWorkbookRels(std::size_t sheet_count) {
+std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan) {
   std::string out;
-  out.reserve(256 + sheet_count * 192);
+  out.reserve(256 + sheet_count * 192 + plan.pivot_caches.size() * 192);
   out.append(kXmlDecl);
   out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
   for (std::size_t i = 0; i < sheet_count; ++i) {
@@ -336,6 +474,24 @@ std::string BuildWorkbookRels(std::size_t sheet_count) {
   out.append(
       "\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" "
       "Target=\"styles.xml\"/>\n");
+  // Pivot-cache definition relationships, one per planned cache. Targets
+  // are relative to the workbook directory (`xl/`); we strip the `xl/`
+  // prefix from `definition_path` so the form matches what Excel emits
+  // (e.g. `Target="pivotCache/pivotCacheDefinition1.xml"`).
+  constexpr std::string_view kXlPrefix = "xl/";
+  for (const EmissionPlan::PivotCachePlan& c : plan.pivot_caches) {
+    std::string_view target = c.definition_path;
+    if (target.size() >= kXlPrefix.size() && target.substr(0, kXlPrefix.size()) == kXlPrefix) {
+      target.remove_prefix(kXlPrefix.size());
+    }
+    out.append("  <Relationship Id=\"rId");
+    out.append(std::to_string(c.workbook_rid));
+    out.append("\" Type=\"");
+    out.append(kRelPivotCacheDefinition);
+    out.append("\" Target=\"");
+    out.append(target);
+    out.append("\"/>\n");
+  }
   out.append("</Relationships>\n");
   return out;
 }
@@ -366,9 +522,10 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   return out;
 }
 
-std::string BuildSheetRels(const std::vector<EmissionPlan::PerSheetTable>& sheet_tables) {
+std::string BuildSheetRels(const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
+                           const std::vector<EmissionPlan::PivotTablePlan>& sheet_pivot_tables) {
   std::string out;
-  out.reserve(256 + sheet_tables.size() * 160);
+  out.reserve(256 + (sheet_tables.size() + sheet_pivot_tables.size()) * 192);
   out.append(kXmlDecl);
   out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
   for (std::size_t i = 0; i < sheet_tables.size(); ++i) {
@@ -380,6 +537,37 @@ std::string BuildSheetRels(const std::vector<EmissionPlan::PerSheetTable>& sheet
     out.append(std::to_string(sheet_tables[i].numeric_id));
     out.append(".xml\"/>\n");
   }
+  // Pivot-table relationships follow the table relationships, with rId
+  // numbering continuing in sequence so each rel id is unique within
+  // the sheet rels file.
+  for (std::size_t i = 0; i < sheet_pivot_tables.size(); ++i) {
+    out.append("  <Relationship Id=\"rId");
+    out.append(std::to_string(sheet_tables.size() + i + 1));
+    out.append("\" Type=\"");
+    out.append(kRelPivotTable);
+    out.append("\" Target=\"../pivotTables/pivotTable");
+    out.append(std::to_string(sheet_pivot_tables[i].numeric_id));
+    out.append(".xml\"/>\n");
+  }
+  out.append("</Relationships>\n");
+  return out;
+}
+
+/// Emits the `_rels` document for a pivotCacheDefinition part: a single
+/// relationship of type `pivotCacheRecords` pointing at the matching
+/// records part. The records target lives in the same directory as the
+/// definition, so the `Target` is just the basename (e.g.
+/// `"pivotCacheRecords1.xml"`).
+std::string BuildPivotCacheDefinitionRels(std::string_view records_filename) {
+  std::string out;
+  out.reserve(256 + records_filename.size());
+  out.append(kXmlDecl);
+  out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
+  out.append("  <Relationship Id=\"rId1\" Type=\"");
+  out.append(kRelPivotCacheRecords);
+  out.append("\" Target=\"");
+  out.append(records_filename);
+  out.append("\"/>\n");
   out.append("</Relationships>\n");
   return out;
 }
@@ -563,7 +751,7 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
 
   // 3. xl/workbook.xml
   {
-    auto result = AddPart(writer.get(), "xl/workbook.xml", BuildWorkbookXml(wb));
+    auto result = AddPart(writer.get(), "xl/workbook.xml", BuildWorkbookXml(wb, plan));
     if (!result) {
       return result.error();
     }
@@ -571,15 +759,17 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
 
   // 4. xl/_rels/workbook.xml.rels
   {
-    auto result = AddPart(writer.get(), "xl/_rels/workbook.xml.rels", BuildWorkbookRels(sheet_count));
+    auto result = AddPart(writer.get(), "xl/_rels/workbook.xml.rels", BuildWorkbookRels(sheet_count, plan));
     if (!result) {
       return result.error();
     }
   }
 
-  // 5. Per-sheet: worksheet, sheet rels (when the sheet owns tables).
+  // 5. Per-sheet: worksheet, sheet rels (when the sheet owns tables or
+  // pivot tables).
   for (std::size_t i = 0; i < sheet_count; ++i) {
     const auto& sheet_tables = plan.tables_by_sheet[i];
+    const auto& sheet_pivot_tables = plan.pivot_tables_by_sheet[i];
     std::string part_path("xl/worksheets/sheet");
     part_path.append(std::to_string(i + 1));
     part_path.append(".xml");
@@ -587,11 +777,11 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
     if (!result) {
       return result.error();
     }
-    if (!sheet_tables.empty()) {
+    if (!sheet_tables.empty() || !sheet_pivot_tables.empty()) {
       std::string rels_path("xl/worksheets/_rels/sheet");
       rels_path.append(std::to_string(i + 1));
       rels_path.append(".xml.rels");
-      auto rels_result = AddPart(writer.get(), rels_path, BuildSheetRels(sheet_tables));
+      auto rels_result = AddPart(writer.get(), rels_path, BuildSheetRels(sheet_tables, sheet_pivot_tables));
       if (!rels_result) {
         return rels_result.error();
       }
@@ -616,7 +806,52 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
     }
   }
 
-  // 8. Passthrough parts — bytes from the original archive, written
+  // 8. Pivot caches — for each planned cache, emit the definition, the
+  // records, and the definition's own rels file (which points at the
+  // matching records part). The records target stored on the rels file
+  // is just the basename because both parts live in the same package
+  // directory (`xl/pivotCache/`).
+  for (const EmissionPlan::PivotCachePlan& c : plan.pivot_caches) {
+    {
+      auto result = AddPart(writer.get(), c.definition_path, write_pivot_cache_definition(*c.cache));
+      if (!result) {
+        return result.error();
+      }
+    }
+    {
+      auto result = AddPart(writer.get(), c.records_path, write_pivot_cache_records(*c.cache));
+      if (!result) {
+        return result.error();
+      }
+    }
+    {
+      // Records target is relative to the definition's directory, so
+      // pass the basename of `records_path` (everything after the last
+      // `/`). The basename is guaranteed to be present given the path
+      // template, but defend against unexpected reshapes anyway.
+      const std::size_t slash = c.records_path.find_last_of('/');
+      const std::string_view records_filename = slash == std::string::npos
+                                                    ? std::string_view(c.records_path)
+                                                    : std::string_view(c.records_path).substr(slash + 1);
+      auto result = AddPart(writer.get(), c.definition_rels_path, BuildPivotCacheDefinitionRels(records_filename));
+      if (!result) {
+        return result.error();
+      }
+    }
+  }
+
+  // 9. Pivot tables — one per planned pivot-table entry, package-wide.
+  // Sheet-rels emission in step 5 already wired a rId to each part.
+  for (const auto& per_sheet : plan.pivot_tables_by_sheet) {
+    for (const EmissionPlan::PivotTablePlan& t : per_sheet) {
+      auto result = AddPart(writer.get(), t.path, write_pivot_table_definition(*t.table));
+      if (!result) {
+        return result.error();
+      }
+    }
+  }
+
+  // 10. Passthrough parts — bytes from the original archive, written
   // verbatim. Their `<Override>` registration was already emitted in
   // step 1 (when content_type was non-empty).
   for (const PassthroughPart* part : plan.passthrough_kept) {
