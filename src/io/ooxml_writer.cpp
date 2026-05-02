@@ -26,6 +26,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/cf_writer.h"
 #include "io/defined_names.h"
 #include "io/ooxml_writer_cell.h"
 #include "io/passthrough_part.h"
@@ -498,8 +499,12 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan)
 
 std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables) {
   const std::string sheet_data = BuildSheetDataXml(sheet);
+  // Conditional-format blocks live between <sheetData> and <tableParts>
+  // in ECMA-376 document order. Empty list => empty string, no
+  // wrapper.
+  const std::string cf_xml = write_conditional_formattings(sheet.conditional_formats());
   std::string out;
-  out.reserve(192U + sheet_data.size() + sheet_tables.size() * 96);
+  out.reserve(192U + sheet_data.size() + cf_xml.size() + sheet_tables.size() * 96);
   out.append(kXmlDecl);
   out.append(
       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
@@ -507,6 +512,11 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   out.append("  ");
   out.append(sheet_data);
   out.push_back('\n');
+  if (!cf_xml.empty()) {
+    out.append("  ");
+    out.append(cf_xml);
+    out.push_back('\n');
+  }
   if (!sheet_tables.empty()) {
     out.append("  <tableParts count=\"");
     out.append(std::to_string(sheet_tables.size()));
