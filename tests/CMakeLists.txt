@@ -185,6 +185,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/structured_ref_eval_test.cpp
   unit/pivot/pivot_evaluator_test.cpp
   unit/pivot/pivot_types_test.cpp
+  unit/cf/cf_types_test.cpp
   unit/registry_catalog_test.cpp
 )
 
