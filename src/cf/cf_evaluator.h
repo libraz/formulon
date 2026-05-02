@@ -63,7 +63,19 @@
 //     so the host can look up the glyph.
 //
 // All visual rule kinds are now covered.
-//   * Priority chain + stopIfTrue + lazy viewport API
+//
+// Cross-block evaluation:
+//
+//   * `evaluate_cf_at(sheet, target, host)` — walks every
+//     `<conditionalFormatting>` block on `sheet` whose sqref contains
+//     `target`, collects each rule, sorts by workbook-global priority
+//     (ascending), and consults `match_rule` for each in order. Every
+//     positive match yields a `CFMatch`; `stop_if_true` halts the
+//     walk early. The result list is priority-ascending.
+//
+// Deferred to subsequent staging steps:
+//
+//   * Lazy viewport API for evaluating an entire range in one call.
 //
 // Each step extends `match_rule` and the public `evaluate_*` helpers
 // without changing the existing call signatures.
@@ -86,6 +98,7 @@
 namespace formulon {
 
 class Arena;
+class Sheet;
 
 namespace eval {
 class EvalContext;
@@ -194,6 +207,36 @@ struct CFEvalContext {
 ///
 /// All other rule types delegate to the simple overload.
 bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx);
+
+/// Stable inputs for the `evaluate_cf_at` cross-block walker. Every
+/// rule on a sheet shares the same arena, function registry,
+/// evaluation context, and `today_serial` pin; the walker provides
+/// the per-rule anchor / target / sqref itself by reading the
+/// owning `<conditionalFormatting>` block. All pointee references
+/// must outlive the `evaluate_cf_at` call.
+struct CFHost {
+  Arena* arena = nullptr;
+  const eval::FunctionRegistry* registry = nullptr;
+  const eval::EvalContext* eval_ctx = nullptr;
+  std::optional<double> today_serial;
+};
+
+/// Walks every `<conditionalFormatting>` block on `sheet` whose sqref
+/// contains `target`, collects each rule, sorts by workbook-global
+/// `priority` (ascending), and calls `match_rule(rule, cell_value,
+/// ctx)` on each in order. Every positive match yields a `CFMatch`
+/// produced by the context-aware `make_match`. When a matched rule's
+/// `stop_if_true` is set, the walk halts immediately and later rules
+/// (across the same or sibling blocks) are not consulted.
+///
+/// The returned list is priority-ascending; consumers fold matches in
+/// order, so a higher-priority `DifferentialFormat` overlays a
+/// lower-priority one. Visual rules render alongside dxf-driven ones.
+///
+/// `host.arena` / `host.registry` / `host.eval_ctx` are required;
+/// `host.today_serial` is forwarded to `TimePeriod` rules and may be
+/// `nullopt`.
+std::vector<CFMatch> evaluate_cf_at(const Sheet& sheet, CellAddress target, const CFHost& host);
 
 /// Context-aware `make_match` overload. Identical to the value-only
 /// overload for `DifferentialFormat` rules; for visual rules it

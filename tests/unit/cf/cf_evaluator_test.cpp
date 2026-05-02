@@ -1927,5 +1927,167 @@ TEST(CFEvaluator, IconSetValueOnlyOverloadStillReturnsFalse) {
   EXPECT_FALSE(match.icon_render.has_value());
 }
 
+// ---------------------------------------------------------------------------
+// evaluate_cf_at — cross-block priority chain + stopIfTrue
+// ---------------------------------------------------------------------------
+
+CFHost MakeHost(CFEvalHarness& harness) {
+  CFHost host;
+  host.arena = &harness.arena;
+  host.registry = &eval::default_registry();
+  host.eval_ctx = &harness.eval_ctx;
+  return host;
+}
+
+ConditionalFormat MakeBlock(std::vector<CFCellRange> sqref, std::vector<CFRule> rules) {
+  ConditionalFormat block;
+  block.sqref = std::move(sqref);
+  block.rules = std::move(rules);
+  return block;
+}
+
+CFRule MakeBlanksRule(std::int32_t priority, std::uint32_t dxf_id, std::string id, bool stop_if_true = false) {
+  CFRule rule;
+  rule.type = RuleType::ContainsBlanks;
+  rule.priority = priority;
+  rule.dxf_id = dxf_id;
+  rule.id = std::move(id);
+  rule.stop_if_true = stop_if_true;
+  return rule;
+}
+
+TEST(CFEvaluator, EvaluateCfAtWithoutBlocksReturnsEmpty) {
+  CFEvalHarness harness;
+  const auto host = MakeHost(harness);
+  std::vector<CFMatch> matches = evaluate_cf_at(harness.sheet, At(0, 0), host);
+  EXPECT_TRUE(matches.empty());
+}
+
+TEST(CFEvaluator, EvaluateCfAtIgnoresBlocksWhoseSqrefExcludesTarget) {
+  CFEvalHarness harness;
+  // A1 is blank; block sqref is C1:D2 → does not contain A1.
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 2, 1, 3)}, {MakeBlanksRule(1, 7, "rule-1")}));
+  const auto host = MakeHost(harness);
+  std::vector<CFMatch> matches = evaluate_cf_at(harness.sheet, At(0, 0), host);
+  EXPECT_TRUE(matches.empty());
+}
+
+TEST(CFEvaluator, EvaluateCfAtReturnsMatchingDifferentialFormat) {
+  CFEvalHarness harness;
+  // A1 is blank by default; ContainsBlanks rule should fire.
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 1, 1)}, {MakeBlanksRule(1, 7, "rule-1")}));
+  const auto host = MakeHost(harness);
+  std::vector<CFMatch> matches = evaluate_cf_at(harness.sheet, At(0, 0), host);
+  ASSERT_EQ(matches.size(), 1u);
+  EXPECT_EQ(matches[0].rule_id, "rule-1");
+  EXPECT_EQ(matches[0].priority, 1);
+  EXPECT_EQ(matches[0].kind, CFMatchKind::DifferentialFormat);
+  ASSERT_TRUE(matches[0].dxf_id.has_value());
+  EXPECT_EQ(*matches[0].dxf_id, 7u);
+}
+
+TEST(CFEvaluator, EvaluateCfAtSortsByPriorityAscending) {
+  CFEvalHarness harness;
+  // Two rules in the same block, declared in reverse priority order.
+  // Both fire (cell A1 is blank); evaluator must sort priority=1 first.
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 1, 1)},
+                {MakeBlanksRule(5, 50, "rule-low-priority"), MakeBlanksRule(1, 10, "rule-high-priority")}));
+  const auto host = MakeHost(harness);
+  std::vector<CFMatch> matches = evaluate_cf_at(harness.sheet, At(0, 0), host);
+  ASSERT_EQ(matches.size(), 2u);
+  EXPECT_EQ(matches[0].rule_id, "rule-high-priority");
+  EXPECT_EQ(matches[0].priority, 1);
+  EXPECT_EQ(matches[1].rule_id, "rule-low-priority");
+  EXPECT_EQ(matches[1].priority, 5);
+}
+
+TEST(CFEvaluator, EvaluateCfAtSortsAcrossBlocks) {
+  CFEvalHarness harness;
+  // Two separate blocks — priority is workbook-global so the
+  // priority-2 rule from the second block evaluates between the
+  // priority-1 and priority-3 rules of the first block.
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 1, 1)}, {MakeBlanksRule(1, 11, "p1"), MakeBlanksRule(3, 13, "p3")}));
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 0, 0)}, {MakeBlanksRule(2, 12, "p2")}));
+  const auto host = MakeHost(harness);
+  std::vector<CFMatch> matches = evaluate_cf_at(harness.sheet, At(0, 0), host);
+  ASSERT_EQ(matches.size(), 3u);
+  EXPECT_EQ(matches[0].rule_id, "p1");
+  EXPECT_EQ(matches[1].rule_id, "p2");
+  EXPECT_EQ(matches[2].rule_id, "p3");
+}
+
+TEST(CFEvaluator, EvaluateCfAtStopIfTrueHaltsEvaluation) {
+  CFEvalHarness harness;
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 1, 1)},
+                {MakeBlanksRule(1, 10, "first", /*stop_if_true=*/true), MakeBlanksRule(2, 20, "second")}));
+  const auto host = MakeHost(harness);
+  std::vector<CFMatch> matches = evaluate_cf_at(harness.sheet, At(0, 0), host);
+  ASSERT_EQ(matches.size(), 1u);
+  EXPECT_EQ(matches[0].rule_id, "first");
+}
+
+TEST(CFEvaluator, EvaluateCfAtStopIfTrueDoesNotHaltOnNonMatch) {
+  // First rule does not match (cell is non-blank), so stop_if_true is
+  // never triggered; the second rule still evaluates.
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(7.0));
+
+  CFRule cell_is_rule;
+  cell_is_rule.type = RuleType::CellIs;
+  cell_is_rule.priority = 1;
+  cell_is_rule.dxf_id = 100;
+  cell_is_rule.id = "cell-is-zero";
+  cell_is_rule.op = CellIsOperator::Equal;
+  cell_is_rule.formula1 = "0";
+  cell_is_rule.stop_if_true = true;
+
+  CFRule errors_rule;
+  errors_rule.type = RuleType::NotContainsErrors;
+  errors_rule.priority = 2;
+  errors_rule.dxf_id = 200;
+  errors_rule.id = "not-error";
+
+  harness.sheet.mutable_conditional_formats().push_back(MakeBlock({MakeRange(0, 0, 0, 0)}, {cell_is_rule, errors_rule}));
+  const auto host = MakeHost(harness);
+  std::vector<CFMatch> matches = evaluate_cf_at(harness.sheet, At(0, 0), host);
+  ASSERT_EQ(matches.size(), 1u);
+  EXPECT_EQ(matches[0].rule_id, "not-error");
+}
+
+TEST(CFEvaluator, EvaluateCfAtVisualRulePopulatesRenderPayload) {
+  // ColorScale rule on A1:A5; cell A3 is the population midpoint.
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  CFRule color_rule = MakeRule(RuleType::ColorScale);
+  color_rule.priority = 1;
+  color_rule.id = "color-1";
+  color_rule.color_scale = TwoStopMinMax(RGB(255, 0, 0), RGB(0, 255, 0));
+  harness.sheet.mutable_conditional_formats().push_back(MakeBlock({MakeRange(0, 0, 4, 0)}, {color_rule}));
+
+  const auto host = MakeHost(harness);
+  std::vector<CFMatch> matches = evaluate_cf_at(harness.sheet, At(2, 0), host);
+  ASSERT_EQ(matches.size(), 1u);
+  EXPECT_EQ(matches[0].kind, CFMatchKind::ColorScale);
+  ASSERT_TRUE(matches[0].resolved_fill_color.has_value());
+  EXPECT_EQ(matches[0].resolved_fill_color->r, 128);
+  EXPECT_EQ(matches[0].resolved_fill_color->g, 128);
+  EXPECT_EQ(matches[0].resolved_fill_color->b, 0);
+}
+
+TEST(CFEvaluator, EvaluateCfAtMissingHostFieldsReturnsEmpty) {
+  CFEvalHarness harness;
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 0, 0)}, {MakeBlanksRule(1, 7, "rule-1")}));
+  CFHost host;  // arena/registry/eval_ctx all null.
+  std::vector<CFMatch> matches = evaluate_cf_at(harness.sheet, At(0, 0), host);
+  EXPECT_TRUE(matches.empty());
+}
+
 }  // namespace
 }  // namespace formulon::cf

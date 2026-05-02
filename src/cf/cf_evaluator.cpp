@@ -1151,6 +1151,26 @@ CFMatch make_match(const CFRule& rule) {
   return match;
 }
 
+namespace {
+
+bool sqref_contains(const std::vector<CFCellRange>& sqref, CellAddress target) {
+  for (const CFCellRange& range : sqref) {
+    if (target.row >= range.first.row && target.row <= range.last.row && target.col >= range.first.col &&
+        target.col <= range.last.col) {
+      return true;
+    }
+  }
+  return false;
+}
+
+CellAddress sqref_anchor(const std::vector<CFCellRange>& sqref) {
+  // Excel authors CF formulas at the first cell of the first sqref
+  // range; the shifter rebases relative refs from there.
+  return sqref.empty() ? CellAddress{} : sqref.front().first;
+}
+
+}  // namespace
+
 CFMatch make_match(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
   CFMatch match;
   match.rule_id = rule.id;
@@ -1212,6 +1232,59 @@ bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext
       return match_rule(rule, cell_value);
   }
   return false;
+}
+
+std::vector<CFMatch> evaluate_cf_at(const Sheet& sheet, CellAddress target, const CFHost& host) {
+  std::vector<CFMatch> matches;
+  if (host.arena == nullptr || host.registry == nullptr || host.eval_ctx == nullptr) {
+    return matches;
+  }
+
+  // Collect (block_index, rule_index, priority) for every rule whose
+  // sqref contains `target`. Indices instead of pointers keeps the
+  // collection trivially copyable; sorting by priority is stable.
+  struct Candidate {
+    std::size_t block_index;
+    std::size_t rule_index;
+    std::int32_t priority;
+  };
+  std::vector<Candidate> candidates;
+
+  const std::vector<ConditionalFormat>& blocks = sheet.conditional_formats();
+  for (std::size_t b = 0; b < blocks.size(); ++b) {
+    if (!sqref_contains(blocks[b].sqref, target)) {
+      continue;
+    }
+    for (std::size_t r = 0; r < blocks[b].rules.size(); ++r) {
+      candidates.push_back({b, r, blocks[b].rules[r].priority});
+    }
+  }
+  std::stable_sort(candidates.begin(), candidates.end(),
+                   [](const Candidate& lhs, const Candidate& rhs) { return lhs.priority < rhs.priority; });
+
+  const Value cell_value = sheet.resolve_cell_value(target.row, target.col);
+  for (const Candidate& candidate : candidates) {
+    const ConditionalFormat& block = blocks[candidate.block_index];
+    const CFRule& rule = block.rules[candidate.rule_index];
+
+    CFEvalContext ctx;
+    ctx.anchor = sqref_anchor(block.sqref);
+    ctx.target = target;
+    ctx.arena = host.arena;
+    ctx.registry = host.registry;
+    ctx.eval_ctx = host.eval_ctx;
+    ctx.today_serial = host.today_serial;
+    ctx.sqref = &block.sqref;
+
+    if (!match_rule(rule, cell_value, ctx)) {
+      continue;
+    }
+    matches.push_back(make_match(rule, cell_value, ctx));
+    if (rule.stop_if_true) {
+      break;
+    }
+  }
+  return matches;
 }
 
 }  // namespace formulon::cf
