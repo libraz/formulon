@@ -10,6 +10,7 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   ooxml_metadata_test.cpp
   ooxml_minimal_writer_test.cpp
   ooxml_phonetic_roundtrip_test.cpp
+  ooxml_pivot_test.cpp
   ooxml_roundtrip_test.cpp
   spill_collision_test.cpp
   table_boundary_test.cpp

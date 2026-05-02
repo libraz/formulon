@@ -82,7 +82,7 @@ cases:
     formula: '=CUBEVALUE("conn", "[Measures].[Sales]")'
 
   - id: external_stub_getpivotdata
-    description: "GETPIVOTDATA() requires a pivot anchor; Formulon has no pivot tables wired, returns #REF!"
+    description: "GETPIVOTDATA() over a non-pivot anchor (A1) correctly returns #REF! on both engines; pivot tables are wired but A1 has no pivot at this anchor"
     formula: '=GETPIVOTDATA("amount", A1)'
 
   - id: external_stub_phonetic

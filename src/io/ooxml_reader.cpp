@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -30,12 +31,16 @@
 #include <vector>
 
 #include "io/defined_names.h"
+#include "io/pivot_cache_reader.h"
+#include "io/pivot_table_reader.h"
 #include "io/sheet_reader.h"
 #include "io/sst_reader.h"
 #include "io/styles_reader.h"
 #include "io/tables_reader.h"
 #include "io/workbook_kind.h"
 #include "io/zip_reader.h"
+#include "pivot/pivot_cache.h"
+#include "pivot/pivot_table.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "utils/error.h"
@@ -57,6 +62,12 @@ constexpr std::string_view kRelSharedStrings =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
 constexpr std::string_view kRelStyles = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
 constexpr std::string_view kRelTable = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table";
+constexpr std::string_view kRelPivotCacheDefinition =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition";
+constexpr std::string_view kRelPivotCacheRecords =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords";
+constexpr std::string_view kRelPivotTable =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
 
 // Content types we expect to see referenced from `[Content_Types].xml`.
 // We only look up the workbook content type to verify the package is
@@ -328,10 +339,17 @@ std::string DirOf(std::string_view path) {
 /// plus optional resolved paths for the `sharedStrings` and `styles`
 /// parts. Empty `sst_path` / `styles_path` mean "no such relationship",
 /// which is legal — the package can omit either part.
+///
+/// `pivot_cache_definition_paths_by_rid` carries the resolved part path
+/// for every `<Relationship Type=".../pivotCacheDefinition">` entry,
+/// keyed by relationship id. The workbook's `<pivotCaches>` element
+/// (parsed by `read_ooxml`) joins each `cacheId` to its definition path
+/// through this map.
 struct WorkbookRels {
   std::unordered_map<std::string, std::string> sheet_targets;
   std::string sst_path;
   std::string styles_path;
+  std::unordered_map<std::string, std::string> pivot_cache_definition_paths_by_rid;
 };
 
 /// Loads `<workbook_dir>/_rels/<workbook_filename>.rels` (if present) and
@@ -401,6 +419,12 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
       rels.sst_path = ResolveRelativePath(base_dir, target);
     } else if (type == kRelStyles) {
       rels.styles_path = ResolveRelativePath(base_dir, target);
+    } else if (type == kRelPivotCacheDefinition) {
+      const std::string id = rel.attribute("Id").value();
+      if (id.empty()) {
+        continue;
+      }
+      rels.pivot_cache_definition_paths_by_rid.emplace(id, ResolveRelativePath(base_dir, target));
     }
   }
   return rels;
@@ -472,6 +496,109 @@ Expected<std::vector<std::string>, Error> LoadSheetTableTargets(const ZipReader&
     // dispatch.
   }
   return targets;
+}
+
+/// Walks `sheet_rels_path` for `kRelPivotTable` entries and returns the
+/// resolved part paths in document order. Mirrors `LoadSheetTableTargets`
+/// in shape; the two helpers stay separate so each consumer site reads
+/// linearly. Non-pivot relationships are silently ignored — the caller
+/// decides which families it cares about.
+Expected<std::vector<std::string>, Error> LoadSheetPivotTableTargets(const ZipReader& zip,
+                                                                     std::string_view sheet_rels_path,
+                                                                     std::string_view sheet_dir) {
+  std::vector<std::string> targets;
+  auto rels_bytes_or = zip.read_entry(sheet_rels_path);
+  if (!rels_bytes_or) {
+    return rels_bytes_or.error();
+  }
+  const std::vector<std::uint8_t>& rels_bytes = rels_bytes_or.value();
+
+  pugi::xml_document doc;
+  pugi::xml_parse_result parse =
+      doc.load_buffer(rels_bytes.data(), rels_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
+  if (!parse) {
+    std::string ctx("context=ooxml_reader part=");
+    ctx.append(sheet_rels_path);
+    ctx.append(" desc=");
+    ctx.append(parse.description());
+    return make_error(FormulonErrorCode::kIoXmlParse, "sheet rels: pugixml parse failed", std::move(ctx));
+  }
+  pugi::xml_node root = doc.child("Relationships");
+  if (!root) {
+    std::string ctx("context=ooxml_reader part=");
+    ctx.append(sheet_rels_path);
+    return make_error(FormulonErrorCode::kIoRelationshipBroken, "sheet rels: missing <Relationships>", std::move(ctx));
+  }
+  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+    const std::string_view type = rel.attribute("Type").value();
+    const std::string_view target = rel.attribute("Target").value();
+    if (target.empty()) {
+      continue;
+    }
+    if (type == kRelPivotTable) {
+      targets.push_back(ResolveRelativePath(sheet_dir, target));
+    }
+  }
+  return targets;
+}
+
+/// Resolves the records-part target referenced from a
+/// pivotCacheDefinition's own rels file (e.g.
+/// `xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels`). Returns the
+/// resolved path (relative to the package root) of the matching
+/// `kRelPivotCacheRecords` entry, or an empty string when the rels file
+/// is absent or carries no records relationship — both are valid OOXML
+/// states (definition-only caches are uncommon but legal).
+Expected<std::string, Error> LoadPivotCacheRecordsTarget(const ZipReader& zip, std::string_view definition_path) {
+  // Build the rels path: <dir>/_rels/<filename>.rels.
+  const std::size_t slash = definition_path.find_last_of('/');
+  std::string rels_path;
+  if (slash == std::string_view::npos) {
+    rels_path.append("_rels/").append(definition_path).append(".rels");
+  } else {
+    rels_path.append(definition_path.substr(0, slash));
+    rels_path.append("/_rels/");
+    rels_path.append(definition_path.substr(slash + 1));
+    rels_path.append(".rels");
+  }
+  if (!zip.has_entry(rels_path)) {
+    return std::string{};
+  }
+  auto rels_bytes_or = zip.read_entry(rels_path);
+  if (!rels_bytes_or) {
+    return rels_bytes_or.error();
+  }
+  const std::vector<std::uint8_t>& rels_bytes = rels_bytes_or.value();
+
+  pugi::xml_document doc;
+  pugi::xml_parse_result parse =
+      doc.load_buffer(rels_bytes.data(), rels_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
+  if (!parse) {
+    std::string ctx("context=ooxml_reader part=");
+    ctx.append(rels_path);
+    ctx.append(" desc=");
+    ctx.append(parse.description());
+    return make_error(FormulonErrorCode::kIoXmlParse, "pivotCache rels: pugixml parse failed", std::move(ctx));
+  }
+  pugi::xml_node root = doc.child("Relationships");
+  if (!root) {
+    std::string ctx("context=ooxml_reader part=");
+    ctx.append(rels_path);
+    return make_error(FormulonErrorCode::kIoRelationshipBroken, "pivotCache rels: missing <Relationships>",
+                      std::move(ctx));
+  }
+  const std::string base_dir = DirOf(definition_path);
+  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+    const std::string_view type = rel.attribute("Type").value();
+    const std::string_view target = rel.attribute("Target").value();
+    if (target.empty()) {
+      continue;
+    }
+    if (type == kRelPivotCacheRecords) {
+      return ResolveRelativePath(base_dir, target);
+    }
+  }
+  return std::string{};
 }
 
 }  // namespace
@@ -773,7 +900,10 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     }
 
     // Sheet rels file (`xl/worksheets/_rels/sheetN.xml.rels`) — drives
-    // the table-part lookup. Optional: most sheets have no rels at all.
+    // the table-part and pivot-table lookups. Optional: most sheets have
+    // no rels at all. Tables and pivot tables are read in two passes
+    // through the same rels file (separate helpers, each scoped to one
+    // relationship type) so each consumer site reads linearly.
     const std::string sheet_rels_path = SheetRelsPath(sheet_path);
     if (zip.has_entry(sheet_rels_path)) {
       const std::string sheet_dir = DirOf(sheet_path);
@@ -800,6 +930,42 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
         }
         tables_metadata.push_back(std::move(table_or.value()));
         consumed_parts.insert(table_path);
+      }
+
+      // Pivot tables anchored on this sheet. Each part feeds into the
+      // pivot-table reader and is attached to the owning sheet; the
+      // workbook-level pivot caches are loaded after the sheet loop.
+      auto pivot_targets_or = LoadSheetPivotTableTargets(zip, sheet_rels_path, sheet_dir);
+      if (!pivot_targets_or) {
+        return pivot_targets_or.error();
+      }
+      for (const std::string& pivot_table_path : pivot_targets_or.value()) {
+        if (!zip.has_entry(pivot_table_path)) {
+          std::string ctx("context=ooxml_reader sheet_index=");
+          ctx.append(std::to_string(i));
+          ctx.append(" pivot_table_path=").append(pivot_table_path);
+          return make_error(FormulonErrorCode::kIoRelationshipBroken, "pivotTable: rel target missing from package",
+                            std::move(ctx));
+        }
+        auto pt_bytes_or = zip.read_entry(pivot_table_path);
+        if (!pt_bytes_or) {
+          return pt_bytes_or.error();
+        }
+        auto pt_or = read_pivot_table_definition(pt_bytes_or.value());
+        if (!pt_or) {
+          return pt_or.error();
+        }
+        wb.sheet(i).add_pivot_table(std::make_unique<pivot::PivotTable>(std::move(pt_or.value())));
+        consumed_parts.insert(pivot_table_path);
+        // The pivot-table part may carry its own rels file pointing back
+        // at the parent cache definition. We do not need to re-resolve
+        // it (the table already carries `pivot_cache_id`), but we mark
+        // the rels file as consumed so it does not surface as an
+        // unknown part.
+        const std::string pt_rels_path = SheetRelsPath(pivot_table_path);
+        if (zip.has_entry(pt_rels_path)) {
+          consumed_parts.insert(pt_rels_path);
+        }
       }
     }
   }
@@ -870,6 +1036,94 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   // 8. Tables — already accumulated in the per-sheet loop above. Move
   // the workbook-scope vector onto the workbook for round-trip.
   wb.set_tables(std::move(tables_metadata));
+
+  // 9. Pivot caches. The workbook XML's `<pivotCaches>` element pairs
+  // each `cacheId` with a workbook-scoped relationship id; the
+  // workbook rels file resolves that id to the part path of the
+  // `pivotCacheDefinition*.xml`. Each definition's own rels file (if
+  // present) points at the matching `pivotCacheRecords*.xml`. We load
+  // both parts here so the workbook owns a fully populated
+  // `pivot::PivotCache` ready for evaluation; the per-sheet pivot-table
+  // loading above attaches `PivotTable`s that reference these caches by
+  // id.
+  pugi::xml_node pivot_caches_node = wb_root.child("pivotCaches");
+  for (pugi::xml_node pc = pivot_caches_node.child("pivotCache"); pc; pc = pc.next_sibling("pivotCache")) {
+    const std::uint32_t cache_id = pc.attribute("cacheId").as_uint(0U);
+    // Accept both "r:id" (Office-namespaced) and bare "id" — same
+    // forgiveness as the sheet relationship walk above.
+    std::string rid = pc.attribute("r:id").value();
+    if (rid.empty()) {
+      rid = pc.attribute("id").value();
+    }
+    if (rid.empty()) {
+      return make_error(FormulonErrorCode::kIoRelationshipBroken, "workbook.xml: <pivotCache> missing r:id attribute",
+                        "context=ooxml_reader part=" + workbook_path);
+    }
+    auto def_it = wb_rels.pivot_cache_definition_paths_by_rid.find(rid);
+    if (def_it == wb_rels.pivot_cache_definition_paths_by_rid.end()) {
+      std::string ctx("context=ooxml_reader part=");
+      ctx.append(workbook_path);
+      ctx.append(" rid=");
+      ctx.append(rid);
+      return make_error(FormulonErrorCode::kIoRelationshipBroken,
+                        "workbook.xml: <pivotCache> r:id has no matching workbook relationship", std::move(ctx));
+    }
+    const std::string& definition_path = def_it->second;
+    if (!zip.has_entry(definition_path)) {
+      std::string ctx("context=ooxml_reader cache_id=");
+      ctx.append(std::to_string(cache_id));
+      ctx.append(" definition_path=");
+      ctx.append(definition_path);
+      return make_error(FormulonErrorCode::kIoRelationshipBroken,
+                        "pivotCacheDefinition: rel target missing from package", std::move(ctx));
+    }
+    auto def_bytes_or = zip.read_entry(definition_path);
+    if (!def_bytes_or) {
+      return def_bytes_or.error();
+    }
+    auto cache_or = read_pivot_cache_definition(def_bytes_or.value());
+    if (!cache_or) {
+      return cache_or.error();
+    }
+    pivot::PivotCache cache = std::move(cache_or.value());
+    cache.set_cache_id(cache_id);
+    consumed_parts.insert(definition_path);
+
+    auto records_target_or = LoadPivotCacheRecordsTarget(zip, definition_path);
+    if (!records_target_or) {
+      return records_target_or.error();
+    }
+    const std::string& records_path = records_target_or.value();
+    if (!records_path.empty()) {
+      if (!zip.has_entry(records_path)) {
+        std::string ctx("context=ooxml_reader cache_id=");
+        ctx.append(std::to_string(cache_id));
+        ctx.append(" records_path=");
+        ctx.append(records_path);
+        return make_error(FormulonErrorCode::kIoRelationshipBroken,
+                          "pivotCacheRecords: rel target missing from package", std::move(ctx));
+      }
+      auto rec_bytes_or = zip.read_entry(records_path);
+      if (!rec_bytes_or) {
+        return rec_bytes_or.error();
+      }
+      auto rec_status = read_pivot_cache_records(rec_bytes_or.value(), cache);
+      if (!rec_status) {
+        return rec_status.error();
+      }
+      consumed_parts.insert(records_path);
+    }
+
+    // The cache definition may carry its own rels file (it does when
+    // there's a records part); mark it consumed so it does not surface
+    // as an unknown part.
+    const std::string def_rels_path = SheetRelsPath(definition_path);
+    if (zip.has_entry(def_rels_path)) {
+      consumed_parts.insert(def_rels_path);
+    }
+
+    wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(std::move(cache)));
+  }
 
   // Compute unknown_parts: every Override-listed part the reader did
   // not consume, captured raw so the writer can re-emit it verbatim.

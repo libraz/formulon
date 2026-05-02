@@ -1034,11 +1034,11 @@ groups:
         expected: diverged
 
   - function: "GETPIVOTDATA"
-    aspect: "pivot anchor lookup stub"
+    aspect: "pivot anchor lookup"
     behaviors:
       - name: "no pivot context -> #REF!"
         probe_regex: 'GETPIVOTDATA\("'
-        expected: diverged
+        expected: impl
 
   - function: "PHONETIC"
     aspect: "rPh-annotation lookup stub"

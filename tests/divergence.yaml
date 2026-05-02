@@ -380,12 +380,12 @@ entries:
     prefer: mac-excel-365
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"
-  - id: getpivotdata_always_ref
-    mode: skip-oracle
-    reason: "GETPIVOTDATA always returns #REF! because pivot tables are not yet implemented; pivot tables not yet implemented."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+  # Stale `getpivotdata_always_ref` removed 2026-05-02: GETPIVOTDATA now
+  # has a working pivot-anchor lookup path, and the OOXML reader wires
+  # pivot caches + pivot tables onto the workbook so anchors over real
+  # pivots resolve. The remaining external-stub case
+  # (`external_stub_getpivotdata`) verifies the no-pivot anchor path
+  # against Mac and is no longer a divergence; see external_stubs.yaml.
   # Stale `isomitted_always_false` removed 2026-04-28: LAMBDA is now wired
   # and ISOMITTED is exercised under the lambda suite below; `[optional]`
   # parameter syntax is the remaining gap, captured per-case.
@@ -1567,12 +1567,11 @@ entries:
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
-  - id: external_stub_getpivotdata
-    reason: "GETPIVOTDATA requires a pivot anchor; Formulon has no pivot-table runtime and stubs to #REF!."
-    prefer: formulon
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
+  # Stale `external_stub_getpivotdata` removed 2026-05-02: the case
+  # `=GETPIVOTDATA("amount", A1)` evaluates to #REF! on both engines
+  # because A1 has no pivot anchor — that is now correct behaviour, not
+  # a divergence. The oracle case in external_stubs.yaml is retained so
+  # the no-pivot-anchor path stays exercised.
   - id: external_stub_phonetic
     reason: "PHONETIC reads OOXML rPh annotations; Formulon's OOXML reader does not surface rPh into Value, so unannotated text passes through. Mac without rPh annotations behaves the same on text-cell input but diverges on annotated cells."
     prefer: mac-excel-365
