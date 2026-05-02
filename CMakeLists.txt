@@ -104,6 +104,7 @@ set(FORMULON_CORE_SOURCES
   src/io/pivot_cache_reader.cpp
   src/io/pivot_cache_writer.cpp
   src/io/pivot_table_reader.cpp
+  src/io/pivot_table_writer.cpp
   src/io/sax_xml_reader.cpp
   src/io/sheet_reader.cpp
   src/io/sst_reader.cpp

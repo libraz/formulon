@@ -31,6 +31,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/pivot_cache_reader_test.cpp
   unit/io/pivot_cache_writer_test.cpp
   unit/io/pivot_table_reader_test.cpp
+  unit/io/pivot_table_writer_test.cpp
   unit/io/sax_xml_reader_test.cpp
   unit/io/sheet_reader_test.cpp
   unit/io/sst_reader_test.cpp
