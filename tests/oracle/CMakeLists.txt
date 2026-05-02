@@ -186,3 +186,39 @@ if(FORMULON_ORACLE_VARIANTS)
     PROPERTIES LABELS "VARIANT"
   )
 endif()
+
+# ---------------------------------------------------------------------------
+# Conditional-formatting (CF) oracle target
+#
+# Pins Formulon's CF evaluator output for hand-authored scenarios. The
+# binary is paired with on-disk artefacts (cases_cf/<suite>.yaml +
+# cases_cf/<suite>.case.json + golden_cf/<suite>.golden.json) but does
+# not read them — cases are hardcoded as gtest fixtures so the binary
+# needs neither YAML nor JSON. The Python validator
+# `tools/oracle/cf_case_schema.py` keeps the on-disk pair in shape.
+#
+# Registered separately from `formulon_oracle_tests` because the CF
+# match data model (DifferentialFormat / ColorScale / DataBar /
+# IconSet payloads) is structurally different from the Value-result
+# schema the function oracle uses.
+# ---------------------------------------------------------------------------
+
+add_executable(formulon_cf_oracle_tests cf_oracle_test.cpp)
+
+target_link_libraries(formulon_cf_oracle_tests
+  PRIVATE
+    formulon_static
+    gtest_main
+)
+
+target_include_directories(formulon_cf_oracle_tests
+  PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}
+)
+
+formulon_apply_warnings(formulon_cf_oracle_tests)
+
+gtest_discover_tests(formulon_cf_oracle_tests
+  PROPERTIES LABELS "oracle"
+)

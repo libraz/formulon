@@ -1,0 +1,198 @@
+// Copyright 2026 libraz. Licensed under the MIT License.
+//
+// Conditional-formatting (CF) oracle smoke test. Pins Formulon's CF
+// evaluator output for a small set of hand-authored scenarios so
+// behaviour changes to `src/cf/cf_evaluator.cpp` surface as a CI
+// failure instead of as a silent rendering regression.
+//
+// This binary is *paired* with the on-disk artefacts under
+//   tests/oracle/cases_cf/<suite>.yaml
+//   tests/oracle/cases_cf/<suite>.case.json
+//   tests/oracle/golden_cf/<suite>.golden.json
+// but does NOT read them: the cases are hardcoded as gtest fixtures
+// here so the test binary needs neither YAML nor JSON. The Python
+// validator (`tools/oracle/cf_case_schema.py`) keeps the on-disk pair
+// in shape; if you change the YAML or the JSON, mirror the change in
+// this file. A future `tools/oracle/cf_oracle_gen.py` will replace the
+// hand-authored Formulon-self-baselines with Excel-actuals.
+//
+// See `tests/oracle/cases_cf/README.md` for the schema and the
+// macOS capture roadmap.
+
+#include <cstdint>
+#include <vector>
+
+#include "cell.h"
+#include "cf/cf_evaluator.h"
+#include "cf/cf_match.h"
+#include "cf/cf_types.h"
+#include "eval/eval_context.h"
+#include "eval/function_registry.h"
+#include "gtest/gtest.h"
+#include "sheet.h"
+#include "utils/arena.h"
+#include "value.h"
+
+namespace formulon::cf {
+namespace {
+
+// Tolerances mirror tests/oracle/cases_cf/README.md so the comparison
+// rules don't drift from author intent. Bumping these requires a
+// matching README update.
+constexpr int kColorChannelTolerance = 2;
+
+// Reusable harness that bundles the sheet, arena, and evaluation
+// context the CFHost needs. Mirrors the unit-test harness in
+// tests/unit/cf/cf_evaluator_test.cpp; lifted here so the oracle
+// binary stays free of test-helper headers from the unit suite.
+struct CFOracleHarness {
+  Sheet sheet{"Sheet1"};
+  Arena arena;
+  eval::EvalContext eval_ctx{sheet};
+
+  CFHost MakeHost() {
+    CFHost host;
+    host.arena = &arena;
+    host.registry = &eval::default_registry();
+    host.eval_ctx = &eval_ctx;
+    return host;
+  }
+};
+
+CFCellRange MakeRange(std::uint32_t r1, std::uint32_t c1, std::uint32_t r2, std::uint32_t c2) {
+  CFCellRange range{};
+  range.first.row = r1;
+  range.first.col = c1;
+  range.last.row = r2;
+  range.last.col = c2;
+  return range;
+}
+
+// True when each channel of `actual` is within `kColorChannelTolerance`
+// of `expected`. Used for ColorScale and DataBar fill comparisons.
+testing::AssertionResult ColorMatches(const Color& expected, const Color& actual) {
+  const int dr = static_cast<int>(actual.r) - static_cast<int>(expected.r);
+  const int dg = static_cast<int>(actual.g) - static_cast<int>(expected.g);
+  const int db = static_cast<int>(actual.b) - static_cast<int>(expected.b);
+  const int da = static_cast<int>(actual.a) - static_cast<int>(expected.a);
+  const int max_delta = kColorChannelTolerance;
+  const int absdr = dr < 0 ? -dr : dr;
+  const int absdg = dg < 0 ? -dg : dg;
+  const int absdb = db < 0 ? -db : db;
+  const int absda = da < 0 ? -da : da;
+  if (absdr <= max_delta && absdg <= max_delta && absdb <= max_delta && absda <= max_delta) {
+    return testing::AssertionSuccess();
+  }
+  return testing::AssertionFailure() << "expected RGBA{" << static_cast<int>(expected.r) << ","
+                                     << static_cast<int>(expected.g) << "," << static_cast<int>(expected.b) << ","
+                                     << static_cast<int>(expected.a) << "} got RGBA{" << static_cast<int>(actual.r)
+                                     << "," << static_cast<int>(actual.g) << "," << static_cast<int>(actual.b) << ","
+                                     << static_cast<int>(actual.a) << "} (per-channel tolerance " << max_delta << ")";
+}
+
+// ---------------------------------------------------------------------------
+// Case 1: cellIs > 50 over A1:A3 = [10, 60, 90].
+// Mirrors cases_cf/cf_smoke.yaml :: cellis_greater_than_50.
+// Expected: A2 and A3 each yield one DifferentialFormat match with
+// dxf_id=7, priority=1; A1 yields no matches and is absent from the
+// (sparse) result.
+// ---------------------------------------------------------------------------
+
+TEST(CfOracleSmoke, CellIsGreaterThan50) {
+  CFOracleHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(10.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(60.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(90.0));
+
+  ConditionalFormat block{};
+  block.sqref.push_back(MakeRange(0, 0, 2, 0));
+  CFRule rule;
+  rule.type = RuleType::CellIs;
+  rule.priority = 1;
+  rule.dxf_id = 7u;
+  rule.op = CellIsOperator::GreaterThan;
+  rule.formula1 = "50";
+  block.rules.push_back(std::move(rule));
+  harness.sheet.mutable_conditional_formats().push_back(std::move(block));
+
+  const CFHost host = harness.MakeHost();
+  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+
+  ASSERT_EQ(matches.size(), 2u);
+
+  // A2 (row=1).
+  EXPECT_EQ(matches[0].cell.row, 1u);
+  EXPECT_EQ(matches[0].cell.col, 0u);
+  ASSERT_EQ(matches[0].matches.size(), 1u);
+  EXPECT_EQ(matches[0].matches[0].kind, CFMatchKind::DifferentialFormat);
+  EXPECT_EQ(matches[0].matches[0].priority, 1);
+  ASSERT_TRUE(matches[0].matches[0].dxf_id.has_value());
+  EXPECT_EQ(*matches[0].matches[0].dxf_id, 7u);
+
+  // A3 (row=2).
+  EXPECT_EQ(matches[1].cell.row, 2u);
+  EXPECT_EQ(matches[1].cell.col, 0u);
+  ASSERT_EQ(matches[1].matches.size(), 1u);
+  EXPECT_EQ(matches[1].matches[0].kind, CFMatchKind::DifferentialFormat);
+  EXPECT_EQ(matches[1].matches[0].priority, 1);
+  ASSERT_TRUE(matches[1].matches[0].dxf_id.has_value());
+  EXPECT_EQ(*matches[1].matches[0].dxf_id, 7u);
+}
+
+// ---------------------------------------------------------------------------
+// Case 2: 3-stop colour scale Min/Percentile=50/Max with red/yellow/green
+// over A1:A3 = [0, 50, 100].
+// Mirrors cases_cf/cf_smoke.yaml :: colorscale_three_stop_red_yellow_green.
+// Each cell sits exactly on a stop, so the resolved fill colour equals
+// the stop colour (no interpolation rounding); the +/- 2 channel
+// tolerance is therefore slack here, but it pins the documented
+// comparator so a future Excel-actual golden can drift up to that
+// margin without retuning the test.
+// ---------------------------------------------------------------------------
+
+TEST(CfOracleSmoke, ColorScaleThreeStop) {
+  CFOracleHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(0.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(50.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(100.0));
+
+  ConditionalFormat block{};
+  block.sqref.push_back(MakeRange(0, 0, 2, 0));
+  CFRule rule;
+  rule.type = RuleType::ColorScale;
+  rule.priority = 1;
+  ColorScaleSpec spec;
+  spec.thresholds.push_back({CfvoType::Min, "", true});
+  spec.thresholds.push_back({CfvoType::Percentile, "50", true});
+  spec.thresholds.push_back({CfvoType::Max, "", true});
+  spec.colors.push_back({255, 0, 0, 255});
+  spec.colors.push_back({255, 255, 0, 255});
+  spec.colors.push_back({0, 255, 0, 255});
+  rule.color_scale = std::move(spec);
+  block.rules.push_back(std::move(rule));
+  harness.sheet.mutable_conditional_formats().push_back(std::move(block));
+
+  const CFHost host = harness.MakeHost();
+  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+
+  ASSERT_EQ(matches.size(), 3u);
+
+  const Color expected[3] = {
+      {255, 0, 0, 255},
+      {255, 255, 0, 255},
+      {0, 255, 0, 255},
+  };
+  for (std::size_t i = 0; i < 3; ++i) {
+    SCOPED_TRACE(testing::Message() << "cell index " << i);
+    EXPECT_EQ(matches[i].cell.row, static_cast<std::uint32_t>(i));
+    EXPECT_EQ(matches[i].cell.col, 0u);
+    ASSERT_EQ(matches[i].matches.size(), 1u);
+    EXPECT_EQ(matches[i].matches[0].kind, CFMatchKind::ColorScale);
+    EXPECT_EQ(matches[i].matches[0].priority, 1);
+    ASSERT_TRUE(matches[i].matches[0].resolved_fill_color.has_value());
+    EXPECT_TRUE(ColorMatches(expected[i], *matches[i].matches[0].resolved_fill_color));
+  }
+}
+
+}  // namespace
+}  // namespace formulon::cf

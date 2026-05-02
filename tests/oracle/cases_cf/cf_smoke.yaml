@@ -1,0 +1,85 @@
+suite: cf_smoke
+description: |
+  Smoke cases for the conditional-formatting (CF) oracle pipeline.
+
+  These cases are authored in YAML for human readability, mirrored to
+  cf_smoke.case.json (consumed by the schema validator and any future
+  Mac-Excel capture tool), and pinned in cf_oracle_test.cpp as hardcoded
+  C++ fixtures so the gtest binary can run on Linux without a YAML or
+  JSON dependency.
+locale: ja-JP
+
+cases:
+  - id: cellis_greater_than_50
+    description: |
+      cellIs > 50 over A1:A3 = [10, 60, 90]. Two cells should match
+      (A2 = 60, A3 = 90); both surface a single DifferentialFormat
+      match referencing dxfId=7, priority=1.
+    sheet:
+      A1: 10
+      A2: 60
+      A3: 90
+    cf_blocks:
+      - sqref: "A1:A3"
+        rules:
+          - type: CellIs
+            priority: 1
+            operator: GreaterThan
+            dxf_id: 7
+            formula1: "50"
+    range: "A1:A3"
+    expected:
+      cells:
+        - addr: A2
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 7
+        - addr: A3
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 7
+
+  - id: colorscale_three_stop_red_yellow_green
+    description: |
+      Three-stop colour scale Min / Percentile=50 / Max with colours
+      red / yellow / green over A1:A3 = [0, 50, 100]. Each cell sits
+      exactly on a stop, so the resolved fill colour is the exact stop
+      colour with zero interpolation rounding.
+    sheet:
+      A1: 0
+      A2: 50
+      A3: 100
+    cf_blocks:
+      - sqref: "A1:A3"
+        rules:
+          - type: ColorScale
+            priority: 1
+            color_scale:
+              thresholds:
+                - { type: Min }
+                - { type: Percentile, value: "50" }
+                - { type: Max }
+              colors:
+                - { r: 255, g: 0,   b: 0,   a: 255 }
+                - { r: 255, g: 255, b: 0,   a: 255 }
+                - { r: 0,   g: 255, b: 0,   a: 255 }
+    range: "A1:A3"
+    expected:
+      cells:
+        - addr: A1
+          matches:
+            - kind: ColorScale
+              priority: 1
+              color: { r: 255, g: 0,   b: 0,   a: 255 }
+        - addr: A2
+          matches:
+            - kind: ColorScale
+              priority: 1
+              color: { r: 255, g: 255, b: 0,   a: 255 }
+        - addr: A3
+          matches:
+            - kind: ColorScale
+              priority: 1
+              color: { r: 0,   g: 255, b: 0,   a: 255 }

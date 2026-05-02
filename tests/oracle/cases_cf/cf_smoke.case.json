@@ -1,0 +1,63 @@
+{
+  "name": "cf_smoke",
+  "description": "Smoke cases for the CF oracle pipeline.",
+  "cases": [
+    {
+      "id": "cellis_greater_than_50",
+      "description": "cellIs > 50 over A1:A3 = [10, 60, 90].",
+      "sheet": [
+        {"row": 0, "col": 0, "kind": "number", "value": 10},
+        {"row": 1, "col": 0, "kind": "number", "value": 60},
+        {"row": 2, "col": 0, "kind": "number", "value": 90}
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [{"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}],
+          "rules": [
+            {
+              "type": "CellIs",
+              "priority": 1,
+              "operator": "GreaterThan",
+              "dxf_id": 7,
+              "formula1": "50"
+            }
+          ]
+        }
+      ],
+      "range": {"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}
+    },
+    {
+      "id": "colorscale_three_stop_red_yellow_green",
+      "description": "Three-stop colour scale Min/Percentile=50/Max RGY over A1:A3 = [0, 50, 100].",
+      "sheet": [
+        {"row": 0, "col": 0, "kind": "number", "value": 0},
+        {"row": 1, "col": 0, "kind": "number", "value": 50},
+        {"row": 2, "col": 0, "kind": "number", "value": 100}
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [{"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}],
+          "rules": [
+            {
+              "type": "ColorScale",
+              "priority": 1,
+              "color_scale": {
+                "thresholds": [
+                  {"type": "Min"},
+                  {"type": "Percentile", "value": "50"},
+                  {"type": "Max"}
+                ],
+                "colors": [
+                  {"r": 255, "g": 0,   "b": 0,   "a": 255},
+                  {"r": 255, "g": 255, "b": 0,   "a": 255},
+                  {"r": 0,   "g": 255, "b": 0,   "a": 255}
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "range": {"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}
+    }
+  ]
+}
