@@ -280,5 +280,335 @@ TEST(OoxmlCF, EmptyWorkbookHasNoConditionalFormats) {
   EXPECT_TRUE(result_or.value().workbook.sheet(0).conditional_formats().empty());
 }
 
+TEST(OoxmlCF, RoundTripPreservesDataBarRule) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+
+  cf::ConditionalFormat block{};
+  block.sqref.push_back({{0, 0}, {9, 0}});
+  cf::CFRule r;
+  r.type = cf::RuleType::DataBar;
+  r.priority = 1;
+  cf::DataBarSpec bar;
+  bar.min = {cf::CfvoType::Min, "", true};
+  bar.max = {cf::CfvoType::Max, "", true};
+  bar.fill = {255, 0, 0, 255};
+  bar.min_length_pct = 20;
+  bar.max_length_pct = 80;
+  bar.show_value = false;
+  r.data_bar = std::move(bar);
+  block.rules.push_back(std::move(r));
+  wb.sheet(0).mutable_conditional_formats().push_back(std::move(block));
+
+  auto bytes_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << "write_ooxml: " << bytes_or.error().message;
+  auto read_or = io::read_ooxml(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << "read_ooxml: " << read_or.error().message;
+
+  const auto& cfs = read_or.value().workbook.sheet(0).conditional_formats();
+  ASSERT_EQ(cfs.size(), 1U);
+  ASSERT_EQ(cfs[0].rules.size(), 1U);
+  const auto& rule = cfs[0].rules[0];
+  EXPECT_EQ(rule.type, cf::RuleType::DataBar);
+  EXPECT_EQ(rule.priority, 1);
+  ASSERT_TRUE(rule.data_bar.has_value());
+  EXPECT_EQ(rule.data_bar->min.type, cf::CfvoType::Min);
+  EXPECT_EQ(rule.data_bar->min.value, "");
+  EXPECT_TRUE(rule.data_bar->min.gte);
+  EXPECT_EQ(rule.data_bar->max.type, cf::CfvoType::Max);
+  EXPECT_EQ(rule.data_bar->max.value, "");
+  EXPECT_TRUE(rule.data_bar->max.gte);
+  EXPECT_EQ(rule.data_bar->fill, cf::Color({255, 0, 0, 255}));
+  EXPECT_EQ(rule.data_bar->min_length_pct, 20U);
+  EXPECT_EQ(rule.data_bar->max_length_pct, 80U);
+  EXPECT_FALSE(rule.data_bar->show_value);
+}
+
+TEST(OoxmlCF, RoundTripPreservesIconSetRule) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+
+  cf::ConditionalFormat block{};
+  block.sqref.push_back({{0, 0}, {9, 0}});
+  cf::CFRule r;
+  r.type = cf::RuleType::IconSet;
+  r.priority = 1;
+  cf::IconSetSpec iset;
+  iset.name = cf::IconSetName::Five_Arrows;
+  iset.reverse = true;
+  iset.show_value = false;
+  iset.percent = false;
+  iset.thresholds.push_back({cf::CfvoType::Number, "20", true});
+  iset.thresholds.push_back({cf::CfvoType::Number, "40", false});
+  iset.thresholds.push_back({cf::CfvoType::Percentile, "75", true});
+  iset.thresholds.push_back({cf::CfvoType::Number, "85", false});
+  r.icon_set = std::move(iset);
+  block.rules.push_back(std::move(r));
+  wb.sheet(0).mutable_conditional_formats().push_back(std::move(block));
+
+  auto bytes_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << "write_ooxml: " << bytes_or.error().message;
+  auto read_or = io::read_ooxml(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << "read_ooxml: " << read_or.error().message;
+
+  const auto& cfs = read_or.value().workbook.sheet(0).conditional_formats();
+  ASSERT_EQ(cfs.size(), 1U);
+  ASSERT_EQ(cfs[0].rules.size(), 1U);
+  const auto& rule = cfs[0].rules[0];
+  EXPECT_EQ(rule.type, cf::RuleType::IconSet);
+  ASSERT_TRUE(rule.icon_set.has_value());
+  EXPECT_EQ(rule.icon_set->name, cf::IconSetName::Five_Arrows);
+  EXPECT_TRUE(rule.icon_set->reverse);
+  EXPECT_FALSE(rule.icon_set->show_value);
+  EXPECT_FALSE(rule.icon_set->percent);
+  ASSERT_EQ(rule.icon_set->thresholds.size(), 4U);
+  EXPECT_EQ(rule.icon_set->thresholds[0].type, cf::CfvoType::Number);
+  EXPECT_EQ(rule.icon_set->thresholds[0].value, "20");
+  EXPECT_TRUE(rule.icon_set->thresholds[0].gte);
+  EXPECT_EQ(rule.icon_set->thresholds[1].type, cf::CfvoType::Number);
+  EXPECT_EQ(rule.icon_set->thresholds[1].value, "40");
+  EXPECT_FALSE(rule.icon_set->thresholds[1].gte);
+  EXPECT_EQ(rule.icon_set->thresholds[2].type, cf::CfvoType::Percentile);
+  EXPECT_EQ(rule.icon_set->thresholds[2].value, "75");
+  EXPECT_TRUE(rule.icon_set->thresholds[2].gte);
+  EXPECT_EQ(rule.icon_set->thresholds[3].type, cf::CfvoType::Number);
+  EXPECT_EQ(rule.icon_set->thresholds[3].value, "85");
+  EXPECT_FALSE(rule.icon_set->thresholds[3].gte);
+}
+
+TEST(OoxmlCF, RoundTripPreservesTop10Rule) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+
+  cf::ConditionalFormat block{};
+  block.sqref.push_back({{0, 0}, {9, 0}});
+  cf::CFRule r;
+  r.type = cf::RuleType::Top10;
+  r.priority = 1;
+  r.rank = 5;
+  r.percent = true;
+  r.bottom = true;
+  block.rules.push_back(std::move(r));
+  wb.sheet(0).mutable_conditional_formats().push_back(std::move(block));
+
+  auto bytes_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << "write_ooxml: " << bytes_or.error().message;
+  auto read_or = io::read_ooxml(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << "read_ooxml: " << read_or.error().message;
+
+  const auto& cfs = read_or.value().workbook.sheet(0).conditional_formats();
+  ASSERT_EQ(cfs.size(), 1U);
+  ASSERT_EQ(cfs[0].rules.size(), 1U);
+  const auto& rule = cfs[0].rules[0];
+  EXPECT_EQ(rule.type, cf::RuleType::Top10);
+  ASSERT_TRUE(rule.rank.has_value());
+  EXPECT_EQ(rule.rank.value(), 5);
+  EXPECT_TRUE(rule.percent);
+  EXPECT_TRUE(rule.bottom);
+}
+
+TEST(OoxmlCF, RoundTripPreservesAboveAverageRule) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+
+  cf::ConditionalFormat block{};
+  block.sqref.push_back({{0, 0}, {9, 0}});
+  cf::CFRule r;
+  r.type = cf::RuleType::AboveAverage;
+  r.priority = 1;
+  r.above_average = false;
+  r.equal_average = true;
+  r.std_dev = 1.5;
+  block.rules.push_back(std::move(r));
+  wb.sheet(0).mutable_conditional_formats().push_back(std::move(block));
+
+  auto bytes_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << "write_ooxml: " << bytes_or.error().message;
+  auto read_or = io::read_ooxml(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << "read_ooxml: " << read_or.error().message;
+
+  const auto& cfs = read_or.value().workbook.sheet(0).conditional_formats();
+  ASSERT_EQ(cfs.size(), 1U);
+  ASSERT_EQ(cfs[0].rules.size(), 1U);
+  const auto& rule = cfs[0].rules[0];
+  EXPECT_EQ(rule.type, cf::RuleType::AboveAverage);
+  EXPECT_FALSE(rule.above_average);
+  EXPECT_TRUE(rule.equal_average);
+  ASSERT_TRUE(rule.std_dev.has_value());
+  EXPECT_EQ(rule.std_dev.value(), 1.5);
+}
+
+TEST(OoxmlCF, RoundTripPreservesTextRules) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+
+  cf::ConditionalFormat block{};
+  block.sqref.push_back({{0, 0}, {9, 0}});
+  cf::CFRule r1;
+  r1.type = cf::RuleType::ContainsText;
+  r1.priority = 1;
+  r1.text = "ERROR";
+  block.rules.push_back(std::move(r1));
+  cf::CFRule r2;
+  r2.type = cf::RuleType::NotContainsText;
+  r2.priority = 2;
+  r2.text = "OK";
+  block.rules.push_back(std::move(r2));
+  cf::CFRule r3;
+  r3.type = cf::RuleType::BeginsWith;
+  r3.priority = 3;
+  r3.text = "A_";
+  block.rules.push_back(std::move(r3));
+  cf::CFRule r4;
+  r4.type = cf::RuleType::EndsWith;
+  r4.priority = 4;
+  r4.text = "_z";
+  block.rules.push_back(std::move(r4));
+  wb.sheet(0).mutable_conditional_formats().push_back(std::move(block));
+
+  auto bytes_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << "write_ooxml: " << bytes_or.error().message;
+  auto read_or = io::read_ooxml(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << "read_ooxml: " << read_or.error().message;
+
+  const auto& cfs = read_or.value().workbook.sheet(0).conditional_formats();
+  ASSERT_EQ(cfs.size(), 1U);
+  ASSERT_EQ(cfs[0].rules.size(), 4U);
+  EXPECT_EQ(cfs[0].rules[0].type, cf::RuleType::ContainsText);
+  ASSERT_TRUE(cfs[0].rules[0].text.has_value());
+  EXPECT_EQ(cfs[0].rules[0].text.value(), "ERROR");
+  EXPECT_EQ(cfs[0].rules[1].type, cf::RuleType::NotContainsText);
+  ASSERT_TRUE(cfs[0].rules[1].text.has_value());
+  EXPECT_EQ(cfs[0].rules[1].text.value(), "OK");
+  EXPECT_EQ(cfs[0].rules[2].type, cf::RuleType::BeginsWith);
+  ASSERT_TRUE(cfs[0].rules[2].text.has_value());
+  EXPECT_EQ(cfs[0].rules[2].text.value(), "A_");
+  EXPECT_EQ(cfs[0].rules[3].type, cf::RuleType::EndsWith);
+  ASSERT_TRUE(cfs[0].rules[3].text.has_value());
+  EXPECT_EQ(cfs[0].rules[3].text.value(), "_z");
+}
+
+TEST(OoxmlCF, RoundTripPreservesBlanksAndErrorsRules) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+
+  cf::ConditionalFormat block{};
+  block.sqref.push_back({{0, 0}, {9, 0}});
+  cf::CFRule r1;
+  r1.type = cf::RuleType::ContainsBlanks;
+  r1.priority = 1;
+  block.rules.push_back(std::move(r1));
+  cf::CFRule r2;
+  r2.type = cf::RuleType::NotContainsBlanks;
+  r2.priority = 2;
+  block.rules.push_back(std::move(r2));
+  cf::CFRule r3;
+  r3.type = cf::RuleType::ContainsErrors;
+  r3.priority = 3;
+  block.rules.push_back(std::move(r3));
+  cf::CFRule r4;
+  r4.type = cf::RuleType::NotContainsErrors;
+  r4.priority = 4;
+  block.rules.push_back(std::move(r4));
+  wb.sheet(0).mutable_conditional_formats().push_back(std::move(block));
+
+  auto bytes_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << "write_ooxml: " << bytes_or.error().message;
+  auto read_or = io::read_ooxml(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << "read_ooxml: " << read_or.error().message;
+
+  const auto& cfs = read_or.value().workbook.sheet(0).conditional_formats();
+  ASSERT_EQ(cfs.size(), 1U);
+  ASSERT_EQ(cfs[0].rules.size(), 4U);
+  EXPECT_EQ(cfs[0].rules[0].type, cf::RuleType::ContainsBlanks);
+  EXPECT_EQ(cfs[0].rules[1].type, cf::RuleType::NotContainsBlanks);
+  EXPECT_EQ(cfs[0].rules[2].type, cf::RuleType::ContainsErrors);
+  EXPECT_EQ(cfs[0].rules[3].type, cf::RuleType::NotContainsErrors);
+}
+
+TEST(OoxmlCF, RoundTripPreservesTimePeriodRule) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+
+  cf::ConditionalFormat block{};
+  block.sqref.push_back({{0, 0}, {9, 0}});
+  cf::CFRule r;
+  r.type = cf::RuleType::TimePeriod;
+  r.priority = 1;
+  r.time_period = cf::TimePeriod::Last7Days;
+  block.rules.push_back(std::move(r));
+  wb.sheet(0).mutable_conditional_formats().push_back(std::move(block));
+
+  auto bytes_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << "write_ooxml: " << bytes_or.error().message;
+  auto read_or = io::read_ooxml(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << "read_ooxml: " << read_or.error().message;
+
+  const auto& cfs = read_or.value().workbook.sheet(0).conditional_formats();
+  ASSERT_EQ(cfs.size(), 1U);
+  ASSERT_EQ(cfs[0].rules.size(), 1U);
+  const auto& rule = cfs[0].rules[0];
+  EXPECT_EQ(rule.type, cf::RuleType::TimePeriod);
+  ASSERT_TRUE(rule.time_period.has_value());
+  EXPECT_EQ(rule.time_period.value(), cf::TimePeriod::Last7Days);
+}
+
+TEST(OoxmlCF, RoundTripPreservesDuplicateAndUniqueRules) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+
+  cf::ConditionalFormat block{};
+  block.sqref.push_back({{0, 0}, {9, 0}});
+  cf::CFRule r1;
+  r1.type = cf::RuleType::DuplicateValues;
+  r1.priority = 1;
+  block.rules.push_back(std::move(r1));
+  cf::CFRule r2;
+  r2.type = cf::RuleType::UniqueValues;
+  r2.priority = 2;
+  block.rules.push_back(std::move(r2));
+  wb.sheet(0).mutable_conditional_formats().push_back(std::move(block));
+
+  auto bytes_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << "write_ooxml: " << bytes_or.error().message;
+  auto read_or = io::read_ooxml(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << "read_ooxml: " << read_or.error().message;
+
+  const auto& cfs = read_or.value().workbook.sheet(0).conditional_formats();
+  ASSERT_EQ(cfs.size(), 1U);
+  ASSERT_EQ(cfs[0].rules.size(), 2U);
+  EXPECT_EQ(cfs[0].rules[0].type, cf::RuleType::DuplicateValues);
+  EXPECT_EQ(cfs[0].rules[0].priority, 1);
+  EXPECT_EQ(cfs[0].rules[1].type, cf::RuleType::UniqueValues);
+  EXPECT_EQ(cfs[0].rules[1].priority, 2);
+}
+
+TEST(OoxmlCF, RoundTripPreservesExpressionRule) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+
+  cf::ConditionalFormat block{};
+  block.sqref.push_back({{0, 0}, {9, 0}});
+  cf::CFRule r;
+  r.type = cf::RuleType::Expression;
+  r.priority = 1;
+  r.formula1 = "A1>10";
+  block.rules.push_back(std::move(r));
+  wb.sheet(0).mutable_conditional_formats().push_back(std::move(block));
+
+  auto bytes_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << "write_ooxml: " << bytes_or.error().message;
+  auto read_or = io::read_ooxml(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << "read_ooxml: " << read_or.error().message;
+
+  const auto& cfs = read_or.value().workbook.sheet(0).conditional_formats();
+  ASSERT_EQ(cfs.size(), 1U);
+  ASSERT_EQ(cfs[0].rules.size(), 1U);
+  const auto& rule = cfs[0].rules[0];
+  EXPECT_EQ(rule.type, cf::RuleType::Expression);
+  ASSERT_TRUE(rule.formula1.has_value());
+  EXPECT_EQ(rule.formula1.value(), "A1>10");
+}
+
 }  // namespace
 }  // namespace formulon
