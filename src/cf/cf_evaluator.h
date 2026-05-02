@@ -72,10 +72,11 @@
 //     (ascending), and consults `match_rule` for each in order. Every
 //     positive match yields a `CFMatch`; `stop_if_true` halts the
 //     walk early. The result list is priority-ascending.
-//
-// Deferred to subsequent staging steps:
-//
-//   * Lazy viewport API for evaluating an entire range in one call.
+//   * `evaluate_cf_for_range(sheet, range, host)` — runs the same
+//     walk for every cell in `range` and returns one
+//     `CFRangeCellMatches` entry per cell that produced at least one
+//     match. Sparse-by-default: cells outside any block's sqref do
+//     not appear in the result.
 //
 // Each step extends `match_rule` and the public `evaluate_*` helpers
 // without changing the existing call signatures.
@@ -237,6 +238,26 @@ struct CFHost {
 /// `host.today_serial` is forwarded to `TimePeriod` rules and may be
 /// `nullopt`.
 std::vector<CFMatch> evaluate_cf_at(const Sheet& sheet, CellAddress target, const CFHost& host);
+
+/// One cell's CF result inside a viewport-range evaluation. `cell` is
+/// the cell address; `matches` is the priority-ascending list returned
+/// by `evaluate_cf_at` for that cell.
+struct CFRangeCellMatches {
+  CellAddress cell{};
+  std::vector<CFMatch> matches;
+};
+
+/// Walks every cell in `range` (inclusive on both corners) and returns
+/// one `CFRangeCellMatches` entry for each cell that produced at least
+/// one match. The result is sparse: cells outside any
+/// `<conditionalFormatting>` block's sqref, and cells whose rules all
+/// failed to match, do not appear. Order is row-major over `range`.
+///
+/// Equivalent to calling `evaluate_cf_at` once per cell in `range` and
+/// dropping cells with empty match lists. The implementation reuses
+/// the per-cell walker; future revisions may cache rule-population
+/// statistics across cells in the same sqref.
+std::vector<CFRangeCellMatches> evaluate_cf_for_range(const Sheet& sheet, CFCellRange range, const CFHost& host);
 
 /// Context-aware `make_match` overload. Identical to the value-only
 /// overload for `DifferentialFormat` rules; for visual rules it

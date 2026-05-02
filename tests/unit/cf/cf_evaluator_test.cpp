@@ -2089,5 +2089,98 @@ TEST(CFEvaluator, EvaluateCfAtMissingHostFieldsReturnsEmpty) {
   EXPECT_TRUE(matches.empty());
 }
 
+// ---------------------------------------------------------------------------
+// evaluate_cf_for_range — viewport-range API
+// ---------------------------------------------------------------------------
+
+TEST(CFEvaluator, EvaluateCfForRangeReturnsOneEntryPerMatchedCell) {
+  CFEvalHarness harness;
+  // A1 and A2 are blank → both match ContainsBlanks. A3 has a value.
+  harness.sheet.set_cell_value(2, 0, Value::number(42.0));
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 2, 0)}, {MakeBlanksRule(1, 7, "blanks")}));
+
+  const auto host = MakeHost(harness);
+  std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+  ASSERT_EQ(matches.size(), 2u);
+  EXPECT_EQ(matches[0].cell.row, 0u);
+  EXPECT_EQ(matches[0].cell.col, 0u);
+  EXPECT_EQ(matches[1].cell.row, 1u);
+  EXPECT_EQ(matches[1].cell.col, 0u);
+  ASSERT_EQ(matches[0].matches.size(), 1u);
+  EXPECT_EQ(matches[0].matches[0].rule_id, "blanks");
+}
+
+TEST(CFEvaluator, EvaluateCfForRangeEmitsRowMajorOrder) {
+  CFEvalHarness harness;
+  // 2x2 viewport, all blank → all 4 cells match.
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 1, 1)}, {MakeBlanksRule(1, 7, "blanks")}));
+
+  const auto host = MakeHost(harness);
+  std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 1, 1), host);
+  ASSERT_EQ(matches.size(), 4u);
+  // Row-major: (0,0), (0,1), (1,0), (1,1).
+  EXPECT_EQ(matches[0].cell.row, 0u);
+  EXPECT_EQ(matches[0].cell.col, 0u);
+  EXPECT_EQ(matches[1].cell.row, 0u);
+  EXPECT_EQ(matches[1].cell.col, 1u);
+  EXPECT_EQ(matches[2].cell.row, 1u);
+  EXPECT_EQ(matches[2].cell.col, 0u);
+  EXPECT_EQ(matches[3].cell.row, 1u);
+  EXPECT_EQ(matches[3].cell.col, 1u);
+}
+
+TEST(CFEvaluator, EvaluateCfForRangeSkipsCellsWithNoMatches) {
+  CFEvalHarness harness;
+  // Block applies only to A1; B1 has no rules.
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 0, 0)}, {MakeBlanksRule(1, 7, "blanks")}));
+  const auto host = MakeHost(harness);
+  // Viewport spans A1:B1 → only A1 should appear in the result.
+  std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 0, 1), host);
+  ASSERT_EQ(matches.size(), 1u);
+  EXPECT_EQ(matches[0].cell.row, 0u);
+  EXPECT_EQ(matches[0].cell.col, 0u);
+}
+
+TEST(CFEvaluator, EvaluateCfForRangeSingleCellRangeStillVisited) {
+  CFEvalHarness harness;
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 0, 0)}, {MakeBlanksRule(1, 7, "blanks")}));
+  const auto host = MakeHost(harness);
+  // first == last (A1:A1).
+  std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 0, 0), host);
+  ASSERT_EQ(matches.size(), 1u);
+  EXPECT_EQ(matches[0].cell.row, 0u);
+  EXPECT_EQ(matches[0].cell.col, 0u);
+}
+
+TEST(CFEvaluator, EvaluateCfForRangeReturnsEmptyForEmptyHost) {
+  CFEvalHarness harness;
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 0, 0)}, {MakeBlanksRule(1, 7, "blanks")}));
+  CFHost host;  // null fields.
+  std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 0, 0), host);
+  EXPECT_TRUE(matches.empty());
+}
+
+TEST(CFEvaluator, EvaluateCfForRangeAggregatesPriorityOrderPerCell) {
+  // Two rules at different priorities; both match every cell. Pin that
+  // each cell's match list comes back in priority order.
+  CFEvalHarness harness;
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 0, 1)},
+                {MakeBlanksRule(2, 20, "later"), MakeBlanksRule(1, 10, "earlier")}));
+  const auto host = MakeHost(harness);
+  std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 0, 1), host);
+  ASSERT_EQ(matches.size(), 2u);
+  for (const auto& cell : matches) {
+    ASSERT_EQ(cell.matches.size(), 2u);
+    EXPECT_EQ(cell.matches[0].rule_id, "earlier");
+    EXPECT_EQ(cell.matches[1].rule_id, "later");
+  }
+}
+
 }  // namespace
 }  // namespace formulon::cf

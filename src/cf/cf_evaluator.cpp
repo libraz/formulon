@@ -1234,6 +1234,33 @@ bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext
   return false;
 }
 
+std::vector<CFRangeCellMatches> evaluate_cf_for_range(const Sheet& sheet, CFCellRange range, const CFHost& host) {
+  std::vector<CFRangeCellMatches> results;
+  if (host.arena == nullptr || host.registry == nullptr || host.eval_ctx == nullptr) {
+    return results;
+  }
+  // Iterate row-major over the inclusive range. The boundary check is
+  // `<=` so a single-cell range (first == last) still produces one
+  // visit. Callers who need to evaluate one cell should prefer the
+  // direct `evaluate_cf_at`; this helper exists for the viewport case.
+  for (std::uint32_t row = range.first.row; row <= range.last.row; ++row) {
+    for (std::uint32_t col = range.first.col; col <= range.last.col; ++col) {
+      CellAddress cell{};
+      cell.row = row;
+      cell.col = col;
+      std::vector<CFMatch> matches = evaluate_cf_at(sheet, cell, host);
+      if (matches.empty()) {
+        continue;
+      }
+      CFRangeCellMatches entry;
+      entry.cell = cell;
+      entry.matches = std::move(matches);
+      results.push_back(std::move(entry));
+    }
+  }
+  return results;
+}
+
 std::vector<CFMatch> evaluate_cf_at(const Sheet& sheet, CellAddress target, const CFHost& host) {
   std::vector<CFMatch> matches;
   if (host.arena == nullptr || host.registry == nullptr || host.eval_ctx == nullptr) {
