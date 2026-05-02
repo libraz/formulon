@@ -39,6 +39,10 @@ struct SchedulerConfig;
 struct SchedulerStats;
 }  // namespace eval
 
+namespace pivot {
+class PivotCache;
+}  // namespace pivot
+
 /// Move-only container representing a spreadsheet workbook.
 ///
 /// Instances are constructed via the `create()` factory, which returns a
@@ -234,6 +238,31 @@ class Workbook {
   /// preserved parts.
   void set_passthrough_parts(std::vector<io::PassthroughPart> parts) { passthrough_parts_ = std::move(parts); }
 
+  // ---------------------------------------------------------------------------
+  // Pivot caches
+  // ---------------------------------------------------------------------------
+  //
+  // A workbook owns the pivot caches that its pivot tables reference; one
+  // cache may back multiple pivot tables (multiple `<pivotTable>` parts can
+  // share a `<pivotCacheDefinition>`). Caches are heap-owned via
+  // `unique_ptr` so their addresses are stable and the OOXML reader can
+  // hand pointers into the workbook's pivot evaluator without worrying
+  // about vector reallocations.
+
+  /// Read-only access to the workbook's pivot caches in
+  /// document-discovery order.
+  const std::vector<std::unique_ptr<pivot::PivotCache>>& pivot_caches() const noexcept { return pivot_caches_; }
+
+  /// Appends a pivot cache to the workbook. Ownership transfers; no
+  /// validation is performed (the OOXML reader is responsible for
+  /// assigning unique cache ids).
+  void add_pivot_cache(std::unique_ptr<pivot::PivotCache> cache);
+
+  /// Looks up a pivot cache by id. Linear scan over `pivot_caches_`;
+  /// workbooks typically have fewer than ten caches so the cost is
+  /// negligible. Returns `nullptr` when no cache matches.
+  const pivot::PivotCache* find_pivot_cache(std::uint32_t cache_id) const noexcept;
+
   /// Returns the OOXML workbook variant this instance round-trips as.
   /// Defaults to `WorkbookKind::kXlsx`; the reader updates it from the
   /// workbook part's content type, and the writer consults it when
@@ -263,6 +292,9 @@ class Workbook {
   std::vector<io::DefinedName> defined_names_;
   std::vector<io::TableMetadata> tables_;
   std::vector<io::PassthroughPart> passthrough_parts_;
+  // Pivot caches owned by the workbook. One cache may be referenced by
+  // multiple pivot tables (per `Sheet::pivot_tables()`).
+  std::vector<std::unique_ptr<pivot::PivotCache>> pivot_caches_;
   // OOXML workbook variant. Defaults to plain `.xlsx`; the reader sets
   // this from `[Content_Types].xml` and the writer consults it when
   // emitting the workbook content-type Override. Plain data; no

@@ -1,8 +1,8 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// Implementation of Formulon's host-service and no-infrastructure built-in
-// stubs. Two groups live together because both classes return a deterministic
-// Excel-visible surface in lieu of a feature the engine does not yet provide:
+// Implementation of Formulon's host-service built-in stubs. Each member
+// of this family returns a deterministic Excel-visible surface in lieu
+// of a feature the engine does not yet provide:
 //
 // Host-service stubs (require an external runtime Formulon does not embed):
 //
@@ -21,19 +21,20 @@
 //                        external API; #NAME? matches the offline-service
 //                        surface).
 //
-// No-infrastructure stubs (the supporting Formulon subsystem isn't built
-// out yet, so any answer the function might give is structurally absent):
+// All host-service stubs ride the eager dispatch path
+// (`accepts_ranges = false`, default `propagate_errors = true`) so an
+// error argument short-circuits before the fixed return fires -- this
+// matches the WEBSERVICE / PY stubs in `src/eval/builtins/web.cpp` and
+// keeps the surface consistent with real functions for formulas that
+// propagate errors through service calls.
 //
-//   * GETPIVOTDATA    -> fixed #REF!   (no pivot tables yet, so no
-//                        field/item lookup can ever resolve; #REF!
-//                        matches Mac when the lookup target is invalid).
-//
-// All host-service stubs and GETPIVOTDATA ride the eager dispatch
-// path (`accepts_ranges = false`, default `propagate_errors = true`) so an
-// error argument short-circuits before the fixed return fires -- this matches
-// the WEBSERVICE / PY stubs in `src/eval/builtins/web.cpp` and keeps the
-// surface consistent with real functions for formulas that propagate errors
-// through service calls.
+// GETPIVOTDATA is NOT a stub. It is a real lazy form implemented in
+// `eval_getpivotdata_lazy` (see `getpivotdata_lazy.cpp`) and wired
+// through `tree_walker.cpp`'s lazy dispatch table. Its second argument
+// must reach the impl as an un-evaluated `Ref` AST so the resolver can
+// recover the (sheet, row, col) anchor; the eager dispatcher would
+// flatten the argument to a Value before that happened. Mirrors the
+// PHONETIC pattern.
 //
 // PHONETIC is NOT a stub. It is a real lazy form implemented in
 // `eval_phonetic_lazy` (see `phonetic_lazy.cpp`) and wired through
@@ -96,17 +97,6 @@ Value Copilot(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) 
   return Value::error(ErrorCode::Name);
 }
 
-// GETPIVOTDATA looks up a measure value inside a pivot table by
-// field/item key. Formulon does not yet implement pivot tables, so no
-// lookup can ever resolve, and #REF! is the surface Mac Excel returns
-// when the field/item path doesn't address a valid pivot cell. The
-// dispatcher's eager error propagation means an error in any argument
-// (data field, pivot anchor, field/item slots) short-circuits before
-// this body runs.
-Value GetPivotData(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return Value::error(ErrorCode::Ref);
-}
-
 }  // namespace
 
 void register_service_stub_builtins(FunctionRegistry& registry) {
@@ -122,11 +112,12 @@ void register_service_stub_builtins(FunctionRegistry& registry) {
   registry.register_function(FunctionDef{"DETECTLANGUAGE", 1u, 1u, &DetectLanguage});
   // COPILOT(prompt, [context...]) -- variadic context cells.
   registry.register_function(FunctionDef{"COPILOT", 1u, 255u, &Copilot});
-  // GETPIVOTDATA(data_field, pivot_table, [field1, item1, ...]) -- min 2
-  // (data_field + pivot anchor required), max kVariadic (field/item pairs
-  // are optional and arbitrary in count). Default `propagate_errors = true`
-  // so an error in any argument surfaces instead of the fixed #REF!.
-  registry.register_function(FunctionDef{"GETPIVOTDATA", 2u, kVariadic, &GetPivotData});
+  // GETPIVOTDATA(data_field, pivot_anchor, [field, item, ...]) is
+  // registered through the lazy dispatch table in `tree_walker.cpp`
+  // (entry: GETPIVOTDATA -> eval_getpivotdata_lazy). The lazy path
+  // recovers the anchor cell's (sheet, row, col) coordinates from the
+  // un-evaluated Reference AST; the eager registry would flatten the
+  // argument to a Value before the impl could resolve the pivot table.
   // PHONETIC(reference) is registered through the lazy dispatch table in
   // `tree_walker.cpp` (entry: PHONETIC -> eval_phonetic_lazy). The lazy
   // path reads the referenced cell's `<rPh>` annotation off the

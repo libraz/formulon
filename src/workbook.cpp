@@ -22,6 +22,7 @@
 #include "io/ooxml_writer.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "pivot/pivot_cache.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -68,6 +69,22 @@ std::size_t Workbook::sheet_index_by_name(std::string_view name) const noexcept 
     }
   }
   return static_cast<std::size_t>(-1);
+}
+
+void Workbook::add_pivot_cache(std::unique_ptr<pivot::PivotCache> cache) {
+  if (cache == nullptr) {
+    return;
+  }
+  pivot_caches_.push_back(std::move(cache));
+}
+
+const pivot::PivotCache* Workbook::find_pivot_cache(std::uint32_t cache_id) const noexcept {
+  for (const std::unique_ptr<pivot::PivotCache>& c : pivot_caches_) {
+    if (c != nullptr && c->cache_id() == cache_id) {
+      return c.get();
+    }
+  }
+  return nullptr;
 }
 
 Expected<std::vector<std::uint8_t>, Error> Workbook::save() const {

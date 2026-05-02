@@ -126,6 +126,7 @@ set(FORMULON_CORE_SOURCES
   src/parser/parser_atoms.cpp
   src/parser/parser_reference.cpp
   src/pivot/pivot_evaluator.cpp
+  src/pivot/pivot_index.cpp
   src/eval/coerce.cpp
   src/eval/compiler.cpp
   src/eval/optimizer.cpp
@@ -217,6 +218,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/workdays_lazy.cpp
   src/eval/financial_lazy.cpp
   src/eval/forecast_ets_lazy.cpp
+  src/eval/getpivotdata_lazy.cpp
   src/eval/linest_lazy.cpp
   src/eval/textsplit_lazy.cpp
   src/eval/trimrange_lazy.cpp

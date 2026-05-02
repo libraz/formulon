@@ -96,9 +96,21 @@ class PivotTable {
   std::vector<PivotFilter>& mutable_active_filters() { return active_filters_; }
 
   // Most-recent evaluation result -------------------------------------------
+  //
+  // `last_result_` is `mutable` because it is a logical-const memoisation
+  // slot: GETPIVOTDATA observes a `PivotTable` through a `const Workbook&`
+  // (`EvalContext::workbook()`) but still needs to refresh the result
+  // cache on demand if the OOXML reader did not pre-compute it. Marking
+  // the field `mutable` lets the lazy form refresh through the const
+  // accessor without `const_cast` gymnastics; the public surface remains
+  // const-correct because callers can only read the result through the
+  // `last_result()` accessor.
 
   const std::optional<PivotResult>& last_result() const { return last_result_; }
-  std::optional<PivotResult>& mutable_last_result() { return last_result_; }
+  /// Returns the underlying `optional` for mutation. Callable through a
+  /// const reference because the result cache is logical-const
+  /// memoisation (see the `mutable` rationale on `last_result_`).
+  std::optional<PivotResult>& mutable_last_result() const { return last_result_; }
 
   // Grand totals layout flags -----------------------------------------------
 
@@ -124,7 +136,11 @@ class PivotTable {
   bool grand_totals_rows_ = true;
   bool grand_totals_cols_ = true;
   std::vector<PivotFilter> active_filters_;
-  std::optional<PivotResult> last_result_;
+  // Logical-const memoisation slot for the most recent evaluation result.
+  // GETPIVOTDATA refreshes this through `const PivotTable&` so the field
+  // must be `mutable`; see the docstring on `last_result()` /
+  // `mutable_last_result()` above.
+  mutable std::optional<PivotResult> last_result_;
 };
 
 }  // namespace formulon::pivot

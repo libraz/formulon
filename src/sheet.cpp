@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "pivot/pivot_table.h"
 #include "value.h"
 
 namespace formulon {
@@ -47,6 +48,13 @@ Sheet::Sheet(std::string name) : name_(std::move(name)) {}
 Sheet::Sheet(Sheet&&) noexcept = default;
 Sheet& Sheet::operator=(Sheet&&) noexcept = default;
 Sheet::~Sheet() = default;
+
+void Sheet::add_pivot_table(std::unique_ptr<pivot::PivotTable> table) {
+  if (table == nullptr) {
+    return;
+  }
+  pivot_tables_.push_back(std::move(table));
+}
 
 namespace {
 

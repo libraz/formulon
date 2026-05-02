@@ -23,6 +23,7 @@
 #include "eval/financial_lazy.h"
 #include "eval/forecast_ets_lazy.h"
 #include "eval/function_registry.h"
+#include "eval/getpivotdata_lazy.h"
 #include "eval/groupby_pivotby_lazy.h"
 #include "eval/hypothesis_lazy.h"
 #include "eval/info_lazy.h"
@@ -208,6 +209,12 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"FREQUENCY", &eval_frequency_lazy},
     // FTEST is the pre-2010 legacy spelling of F.TEST; same impl.
     {"FTEST", &eval_f_test_lazy},
+    // GETPIVOTDATA recovers the (sheet, row, col) anchor of its second
+    // argument from the un-evaluated Reference AST and reads the
+    // freshest `PivotResult` off the bound Workbook on EvalContext;
+    // the eager dispatcher would flatten the anchor to a Value before
+    // the impl could see the reference.
+    {"GETPIVOTDATA", &eval_getpivotdata_lazy},
     {"GROUPBY", &eval_groupby_lazy},
     {"GROWTH", &eval_growth_lazy},
     {"HLOOKUP", &eval_hlookup_lazy},

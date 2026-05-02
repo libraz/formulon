@@ -87,6 +87,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_info_extra_test.cpp
   unit/eval/info_lazy_test.cpp
   unit/eval/phonetic_lazy_test.cpp
+  unit/eval/getpivotdata_lazy_test.cpp
   unit/eval/builtins_count_test.cpp
   unit/eval/builtins_shape_test.cpp
   unit/eval/array_producer_test.cpp

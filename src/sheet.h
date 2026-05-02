@@ -31,6 +31,10 @@
 
 namespace formulon {
 
+namespace pivot {
+class PivotTable;
+}  // namespace pivot
+
 /// A registered spill region produced by a dynamic-array formula.
 ///
 /// `cells` is row-major (size = `rows * cols`) and holds heap-owned `Value`
@@ -293,12 +297,43 @@ class Sheet {
   /// No-op when no region is anchored at `(anchor_row, anchor_col)`.
   void clear_spill(std::uint32_t anchor_row, std::uint32_t anchor_col) noexcept;
 
+  // ---------------------------------------------------------------------------
+  // Pivot tables anchored on this sheet
+  // ---------------------------------------------------------------------------
+  //
+  // A worksheet may host any number of pivot tables; each is owned via
+  // `unique_ptr` so its address is stable for the lifetime of the sheet.
+  // The OOXML reader populates this list at workbook-load time; the pivot
+  // evaluator reads from it (anchor lookup, result-cache refresh) and
+  // GETPIVOTDATA's lazy form drives an on-demand evaluation through it.
+
+  /// Read-only access to the pivot tables anchored on this sheet, in
+  /// document-discovery (insertion) order.
+  const std::vector<std::unique_ptr<pivot::PivotTable>>& pivot_tables() const noexcept { return pivot_tables_; }
+
+  /// Mutable access to the pivot table list. Exposed so the evaluator (or
+  /// GETPIVOTDATA's on-demand refresh path) can reach the underlying
+  /// `PivotTable` and refresh its cached `last_result_`. The list itself
+  /// is rarely mutated post-load.
+  std::vector<std::unique_ptr<pivot::PivotTable>>& mutable_pivot_tables() noexcept { return pivot_tables_; }
+
+  /// Appends a pivot table anchored on this sheet. Ownership transfers to
+  /// the sheet; the returned reference (via the unique_ptr) is stable
+  /// because each table is heap-allocated. No validation is performed
+  /// here; callers are responsible for ensuring the table's anchor is
+  /// inside the sheet bounds and references a valid cache id.
+  void add_pivot_table(std::unique_ptr<pivot::PivotTable> table);
+
  private:
   std::string name_;
   std::unordered_map<std::uint32_t, std::vector<Cell>> rows_;
   // Lazily allocated: most sheets do not host any spill regions, so the
   // table is only materialised on the first `commit_spill` call.
   std::unique_ptr<SpillTable> spill_table_;
+  // Pivot tables anchored on this sheet. Empty by default; populated by
+  // the OOXML reader at workbook-load time. Heap-owned so addresses stay
+  // stable across vector reallocations.
+  std::vector<std::unique_ptr<pivot::PivotTable>> pivot_tables_;
 };
 
 }  // namespace formulon

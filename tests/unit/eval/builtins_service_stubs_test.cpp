@@ -1,17 +1,24 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// Tests for the service-stub and no-infrastructure stub family:
-// IMAGE, RTD, TRANSLATE, DETECTLANGUAGE, COPILOT, GETPIVOTDATA,
-// PHONETIC (lazy), ISOMITTED (lazy). Each returns a deterministic
-// Excel-visible surface (see `src/eval/builtins/service_stubs.cpp` for
-// the rationale on the eager stubs; `phonetic_lazy.cpp` for the lazy
-// PHONETIC contract). The eager stubs ride `propagate_errors = true`
-// so an error argument short-circuits before the fixed return fires.
-// PHONETIC is a lazy form that reads `Cell::phonetic_text` off the
-// un-evaluated Reference AST and falls through to a value-based
-// passthrough surface (text -> text, blank -> "", non-text -> #N/A,
-// errors propagate). ISOMITTED is registered as a lazy form so it can
-// inspect any argument shape (including errors) and report "present".
+// Tests for the service-stub family: IMAGE, RTD, TRANSLATE,
+// DETECTLANGUAGE, COPILOT, plus PHONETIC (lazy) and ISOMITTED (lazy).
+// Each returns a deterministic Excel-visible surface (see
+// `src/eval/builtins/service_stubs.cpp` for the rationale on the eager
+// stubs; `phonetic_lazy.cpp` for the lazy PHONETIC contract). The
+// eager stubs ride `propagate_errors = true` so an error argument
+// short-circuits before the fixed return fires. PHONETIC is a lazy
+// form that reads `Cell::phonetic_text` off the un-evaluated Reference
+// AST and falls through to a value-based passthrough surface (text ->
+// text, blank -> "", non-text -> #N/A, errors propagate). ISOMITTED is
+// registered as a lazy form so it can inspect any argument shape
+// (including errors) and report "present".
+//
+// GETPIVOTDATA is no longer a stub; it is wired through
+// `eval_getpivotdata_lazy` and exercised in `getpivotdata_lazy_test.cpp`
+// where the workbook fixture lets the Ref-anchor lookup resolve a real
+// pivot table. The registry-pin check below still confirms that the
+// name is wired.
+//
 // The tests here pin:
 //
 //   * the nominal registry entries exist for every eager stub;
@@ -62,7 +69,11 @@ TEST(BuiltinsServiceStubRegistry, NamesRegistered) {
   EXPECT_NE(reg.lookup("TRANSLATE"), nullptr);
   EXPECT_NE(reg.lookup("DETECTLANGUAGE"), nullptr);
   EXPECT_NE(reg.lookup("COPILOT"), nullptr);
-  EXPECT_NE(reg.lookup("GETPIVOTDATA"), nullptr);
+  // GETPIVOTDATA is intentionally not in the eager registry: it is a
+  // lazy form (see `eval_getpivotdata_lazy`) so it can recover the
+  // anchor's (sheet, row, col) from the un-evaluated Reference AST and
+  // resolve a pivot table on the bound workbook.
+  EXPECT_EQ(reg.lookup("GETPIVOTDATA"), nullptr);
   // PHONETIC is intentionally not in the eager registry: it is a lazy
   // form (see `eval_phonetic_lazy`) so it can read the referenced
   // cell's `<rPh>` annotation off the un-evaluated Reference AST.
@@ -205,40 +216,39 @@ TEST(BuiltinsServiceStubPhonetic, ArgumentErrorPropagates) {
 }
 
 // ---------------------------------------------------------------------------
-// GETPIVOTDATA - #REF!
+// GETPIVOTDATA - the full lazy-form contract is exercised in
+// `getpivotdata_lazy_test.cpp` where a workbook + pivot fixture lets
+// the Ref-anchor lookup resolve a real pivot table. Only the
+// fixtureless / no-workbook surface is pinned here: any GETPIVOTDATA
+// call evaluated through `EvalSource` runs against a default
+// `EvalContext` with no bound workbook, so anchor resolution always
+// fails with `#REF!`. Errors in argument 0 propagate before the
+// anchor check fires.
 // ---------------------------------------------------------------------------
-//
-// Pivot tables aren't implemented yet, so every field/item lookup is
-// unresolvable; #REF! matches Mac's surface for an invalid pivot
-// reference. Errors in any argument propagate.
 
-TEST(BuiltinsServiceStubGetPivotData, TwoArgFormReturnsRef) {
+TEST(BuiltinsGetPivotDataNoWorkbook, AnchorWithoutWorkbookReturnsRef) {
+  // No workbook bound -> find_pivot_at_anchor cannot run -> #REF!.
+  // Arg 1 is a string here (not a Ref) so the lazy form falls through
+  // its non-Ref path and surfaces #REF! after eager-evaluating the
+  // expression for error propagation.
   const Value v = EvalSource("=GETPIVOTDATA(\"Sales\", \"PivotTable1\")");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
-TEST(BuiltinsServiceStubGetPivotData, FourArgFormReturnsRef) {
-  // One field/item pair after the two required slots.
-  const Value v = EvalSource("=GETPIVOTDATA(\"Sales\", \"PivotTable1\", \"Region\", \"East\")");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
-}
-
-TEST(BuiltinsServiceStubGetPivotData, FirstArgErrorPropagates) {
+TEST(BuiltinsGetPivotDataNoWorkbook, FirstArgErrorPropagates) {
+  // The lazy form evaluates arg 0 first; an error there propagates
+  // before any structural check on arg 1.
   const Value v = EvalSource("=GETPIVOTDATA(1/0, \"PivotTable1\")");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
-TEST(BuiltinsServiceStubGetPivotData, SecondArgErrorPropagates) {
+TEST(BuiltinsGetPivotDataNoWorkbook, SecondArgErrorPropagates) {
+  // A non-Ref second argument is eagerly evaluated for error
+  // propagation; the embedded #DIV/0! surfaces before the structural
+  // #REF! reject fires.
   const Value v = EvalSource("=GETPIVOTDATA(\"Sales\", 1/0)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
-}
-
-TEST(BuiltinsServiceStubGetPivotData, FieldItemArgErrorPropagates) {
-  const Value v = EvalSource("=GETPIVOTDATA(\"Sales\", \"PivotTable1\", \"Region\", 1/0)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
