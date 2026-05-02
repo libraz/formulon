@@ -1744,5 +1744,188 @@ TEST(CFEvaluator, DataBarValueOnlyOverloadStillReturnsFalse) {
   EXPECT_FALSE(match.data_bar_render.has_value());
 }
 
+// ---------------------------------------------------------------------------
+// IconSet
+// ---------------------------------------------------------------------------
+
+CfValueObject IconCfvo(CfvoType type, std::string value, bool gte = true) {
+  CfValueObject cfvo = Cfvo(type, std::move(value));
+  cfvo.gte = gte;
+  return cfvo;
+}
+
+IconSetSpec ThreeIconNumberSet(std::string lo, std::string hi, IconSetName name = IconSetName::Three_TrafficLights1) {
+  IconSetSpec spec;
+  spec.name = name;
+  spec.thresholds = {IconCfvo(CfvoType::Number, std::move(lo)), IconCfvo(CfvoType::Number, std::move(hi))};
+  return spec;
+}
+
+TEST(CFEvaluator, IconSetWithoutSqrefDoesNotMatch) {
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  CFRule r = MakeRule(RuleType::IconSet);
+  r.icon_set = ThreeIconNumberSet("20", "40");
+  EXPECT_FALSE(match_rule(r, Value::number(30.0), harness.context(At(0, 0), At(0, 0))));
+}
+
+TEST(CFEvaluator, IconSetThreeIconAssignsBucketByThreshold) {
+  // Thresholds 20 / 40 → bucket 0: cell < 20; bucket 1: 20 <= cell < 40;
+  // bucket 2: cell >= 40.
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::IconSet);
+  r.icon_set = ThreeIconNumberSet("20", "40");
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch low = make_match(r, Value::number(10.0), ctx);
+  ASSERT_TRUE(low.icon_render.has_value());
+  EXPECT_EQ(low.kind, CFMatchKind::IconSet);
+  EXPECT_EQ(low.icon_render->icon_index, 0);
+  EXPECT_EQ(low.icon_render->set_name, IconSetName::Three_TrafficLights1);
+
+  CFMatch mid = make_match(r, Value::number(30.0), ctx);
+  ASSERT_TRUE(mid.icon_render.has_value());
+  EXPECT_EQ(mid.icon_render->icon_index, 1);
+
+  CFMatch high = make_match(r, Value::number(50.0), ctx);
+  ASSERT_TRUE(high.icon_render.has_value());
+  EXPECT_EQ(high.icon_render->icon_index, 2);
+}
+
+TEST(CFEvaluator, IconSetExactlyAtThresholdHonoursGteFlag) {
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::IconSet);
+  // gte=true on threshold 20: cell == 20 belongs to the upper bucket.
+  IconSetSpec spec_gte;
+  spec_gte.name = IconSetName::Three_TrafficLights1;
+  spec_gte.thresholds = {IconCfvo(CfvoType::Number, "20", true), IconCfvo(CfvoType::Number, "40", true)};
+  r.icon_set = spec_gte;
+  const auto ctx_gte = SqrefContext(harness, sqref);
+  CFMatch at_threshold_gte = make_match(r, Value::number(20.0), ctx_gte);
+  ASSERT_TRUE(at_threshold_gte.icon_render.has_value());
+  EXPECT_EQ(at_threshold_gte.icon_render->icon_index, 1);
+
+  // gte=false on threshold 20: cell == 20 belongs to the lower bucket.
+  IconSetSpec spec_gt;
+  spec_gt.name = IconSetName::Three_TrafficLights1;
+  spec_gt.thresholds = {IconCfvo(CfvoType::Number, "20", false), IconCfvo(CfvoType::Number, "40", false)};
+  r.icon_set = spec_gt;
+  const auto ctx_gt = SqrefContext(harness, sqref);
+  CFMatch at_threshold_gt = make_match(r, Value::number(20.0), ctx_gt);
+  ASSERT_TRUE(at_threshold_gt.icon_render.has_value());
+  EXPECT_EQ(at_threshold_gt.icon_render->icon_index, 0);
+}
+
+TEST(CFEvaluator, IconSetReverseFlipsBucketIndex) {
+  // Without reverse: 10 → 0, 50 → 2. With reverse: 10 → 2, 50 → 0.
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::IconSet);
+  IconSetSpec spec = ThreeIconNumberSet("20", "40");
+  spec.reverse = true;
+  r.icon_set = spec;
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch low = make_match(r, Value::number(10.0), ctx);
+  ASSERT_TRUE(low.icon_render.has_value());
+  EXPECT_EQ(low.icon_render->icon_index, 2);
+
+  CFMatch high = make_match(r, Value::number(50.0), ctx);
+  ASSERT_TRUE(high.icon_render.has_value());
+  EXPECT_EQ(high.icon_render->icon_index, 0);
+}
+
+TEST(CFEvaluator, IconSetFiveIconAssignsAcrossFourThresholds) {
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::IconSet);
+  IconSetSpec spec;
+  spec.name = IconSetName::Five_Arrows;
+  spec.thresholds = {IconCfvo(CfvoType::Number, "15"), IconCfvo(CfvoType::Number, "25"),
+                     IconCfvo(CfvoType::Number, "35"), IconCfvo(CfvoType::Number, "45")};
+  r.icon_set = spec;
+  const auto ctx = SqrefContext(harness, sqref);
+
+  EXPECT_EQ(make_match(r, Value::number(10.0), ctx).icon_render->icon_index, 0);
+  EXPECT_EQ(make_match(r, Value::number(20.0), ctx).icon_render->icon_index, 1);
+  EXPECT_EQ(make_match(r, Value::number(30.0), ctx).icon_render->icon_index, 2);
+  EXPECT_EQ(make_match(r, Value::number(40.0), ctx).icon_render->icon_index, 3);
+  EXPECT_EQ(make_match(r, Value::number(50.0), ctx).icon_render->icon_index, 4);
+}
+
+TEST(CFEvaluator, IconSetPercentCfvoUsesPopulationRangeFraction) {
+  // Population [10, 20, 30, 40, 50]; min=10, max=50 → range=40.
+  // Thresholds at 25% (=20) and 75% (=40).
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::IconSet);
+  IconSetSpec spec;
+  spec.name = IconSetName::Three_TrafficLights1;
+  spec.thresholds = {IconCfvo(CfvoType::Percent, "25"), IconCfvo(CfvoType::Percent, "75")};
+  r.icon_set = spec;
+  const auto ctx = SqrefContext(harness, sqref);
+
+  EXPECT_EQ(make_match(r, Value::number(10.0), ctx).icon_render->icon_index, 0);
+  EXPECT_EQ(make_match(r, Value::number(30.0), ctx).icon_render->icon_index, 1);
+  EXPECT_EQ(make_match(r, Value::number(50.0), ctx).icon_render->icon_index, 2);
+}
+
+TEST(CFEvaluator, IconSetNonNumericCellDoesNotResolve) {
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::IconSet);
+  r.icon_set = ThreeIconNumberSet("20", "40");
+  const auto ctx = SqrefContext(harness, sqref);
+
+  EXPECT_FALSE(match_rule(r, Value::text("30"), ctx));
+  EXPECT_FALSE(match_rule(r, Value::error(ErrorCode::NA), ctx));
+  EXPECT_FALSE(match_rule(r, Value::blank(), ctx));
+  CFMatch match = make_match(r, Value::text("30"), ctx);
+  EXPECT_FALSE(match.icon_render.has_value());
+}
+
+TEST(CFEvaluator, IconSetEmptyPopulationDoesNotResolve) {
+  CFEvalHarness harness;
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::IconSet);
+  r.icon_set = ThreeIconNumberSet("20", "40");
+  const auto ctx = SqrefContext(harness, sqref);
+
+  EXPECT_FALSE(match_rule(r, Value::number(30.0), ctx));
+  CFMatch match = make_match(r, Value::number(30.0), ctx);
+  EXPECT_FALSE(match.icon_render.has_value());
+}
+
+TEST(CFEvaluator, IconSetEmptyThresholdsDoesNotResolve) {
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::IconSet);
+  IconSetSpec spec;
+  spec.name = IconSetName::Three_TrafficLights1;
+  // No thresholds.
+  r.icon_set = spec;
+  const auto ctx = SqrefContext(harness, sqref);
+
+  EXPECT_FALSE(match_rule(r, Value::number(30.0), ctx));
+}
+
+TEST(CFEvaluator, IconSetValueOnlyOverloadStillReturnsFalse) {
+  CFRule r = MakeRule(RuleType::IconSet);
+  r.icon_set = ThreeIconNumberSet("20", "40");
+  EXPECT_FALSE(match_rule(r, Value::number(30.0)));
+  CFMatch match = make_match(r);
+  EXPECT_EQ(match.kind, CFMatchKind::DifferentialFormat);
+  EXPECT_FALSE(match.icon_render.has_value());
+}
+
 }  // namespace
 }  // namespace formulon::cf

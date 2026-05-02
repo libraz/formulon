@@ -1045,8 +1045,8 @@ std::optional<DataBarRender> resolve_data_bar(const CFRule& rule, const Value& c
   const double range = *threshold_max - *threshold_min;
   const double raw_fraction = (cell - *threshold_min) / range;
   const double clamped_fraction = std::max(0.0, std::min(1.0, raw_fraction));
-  const double min_len = static_cast<double>(spec.min_length_pct);
-  const double max_len = static_cast<double>(spec.max_length_pct);
+  const auto min_len = static_cast<double>(spec.min_length_pct);
+  const auto max_len = static_cast<double>(spec.max_length_pct);
 
   DataBarRender render;
   render.length_pct = min_len + clamped_fraction * (max_len - min_len);
@@ -1071,6 +1071,70 @@ std::optional<DataBarRender> resolve_data_bar(const CFRule& rule, const Value& c
 
 bool match_data_bar(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
   return resolve_data_bar(rule, cell_value, ctx).has_value();
+}
+
+// ---------------------------------------------------------------------------
+// IconSet — bucket the cell value across `N - 1` thresholds and assign
+// an icon index in `[0, N - 1]` for an N-icon set.
+//
+// Each threshold's `gte` flag toggles `>=` vs. `>` at that boundary. The
+// loop walks every threshold and bumps the index for each one the cell
+// passes — assuming the OOXML reader populated thresholds in ascending
+// order, which Excel always emits. `reverse` flips the index so the
+// default-up direction can be inverted without re-sorting the colour /
+// icon resources.
+// ---------------------------------------------------------------------------
+
+std::optional<IconRender> resolve_icon_set(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
+  if (!rule.icon_set.has_value() || ctx.sqref == nullptr || ctx.eval_ctx == nullptr ||
+      ctx.eval_ctx->current_sheet() == nullptr) {
+    return std::nullopt;
+  }
+  if (!cell_value.is_number()) {
+    return std::nullopt;
+  }
+  const IconSetSpec& spec = *rule.icon_set;
+  if (spec.thresholds.empty()) {
+    return std::nullopt;  // A 1-icon "set" has no boundaries to match against.
+  }
+
+  const ColorScalePopulation pop = gather_population(*ctx.sqref, *ctx.eval_ctx->current_sheet());
+  if (pop.sorted.empty()) {
+    return std::nullopt;
+  }
+
+  std::vector<double> resolved;
+  resolved.reserve(spec.thresholds.size());
+  for (const CfValueObject& cfvo : spec.thresholds) {
+    auto value = resolve_cfvo(cfvo, pop, ctx);
+    if (!value.has_value()) {
+      return std::nullopt;
+    }
+    resolved.push_back(*value);
+  }
+
+  const double cell = cell_value.as_number();
+  std::uint8_t icon_index = 0;
+  for (std::size_t i = 0; i < resolved.size(); ++i) {
+    const bool above = spec.thresholds[i].gte ? (cell >= resolved[i]) : (cell > resolved[i]);
+    if (above) {
+      icon_index = static_cast<std::uint8_t>(i + 1);
+    }
+  }
+
+  if (spec.reverse) {
+    const auto bucket_count = static_cast<std::uint8_t>(resolved.size() + 1);
+    icon_index = static_cast<std::uint8_t>(bucket_count - 1 - icon_index);
+  }
+
+  IconRender render;
+  render.set_name = spec.name;
+  render.icon_index = icon_index;
+  return render;
+}
+
+bool match_icon_set(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
+  return resolve_icon_set(rule, cell_value, ctx).has_value();
 }
 
 }  // namespace
@@ -1101,9 +1165,13 @@ CFMatch make_match(const CFRule& rule, const Value& cell_value, const CFEvalCont
     match.data_bar_render = resolve_data_bar(rule, cell_value, ctx);
     return match;
   }
-  // IconSet payload computation lands in a subsequent PR. Until then
-  // the context-aware overload behaves like the value-only one for
-  // that kind — and identically for every dxf-driven kind.
+  if (rule.type == RuleType::IconSet) {
+    match.kind = CFMatchKind::IconSet;
+    match.icon_render = resolve_icon_set(rule, cell_value, ctx);
+    return match;
+  }
+  // Every other kind is dxf-driven; the context-aware overload behaves
+  // identically to the value-only one for those.
   match.kind = CFMatchKind::DifferentialFormat;
   match.dxf_id = rule.dxf_id;
   return match;
@@ -1128,6 +1196,8 @@ bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext
       return match_color_scale(rule, cell_value, ctx);
     case RuleType::DataBar:
       return match_data_bar(rule, cell_value, ctx);
+    case RuleType::IconSet:
+      return match_icon_set(rule, cell_value, ctx);
     case RuleType::ContainsBlanks:
     case RuleType::NotContainsBlanks:
     case RuleType::ContainsErrors:
@@ -1136,7 +1206,6 @@ bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext
     case RuleType::NotContainsText:
     case RuleType::BeginsWith:
     case RuleType::EndsWith:
-    case RuleType::IconSet:
       // Value-only and not-yet-implemented rule types delegate to the
       // simple overload, which already encodes their semantics (or
       // false-fallthrough for the unimplemented kinds).

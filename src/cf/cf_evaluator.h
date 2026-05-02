@@ -55,10 +55,14 @@
 //     and selects the axis position. `Automatic` axis splits at the
 //     proportional negative offset; `Middle` pins to 50; `None` pins
 //     to 0. `is_negative` is set when the cell value is < 0.
+//   * `IconSet` — resolves each `<cfvo>` threshold against the
+//     population, walks them in ascending order honouring each CFVO's
+//     `gte` flag (`>=` vs. `>`), and assigns an `icon_index` between
+//     `0` and `N-1` for an N-icon set. `rule.icon_set->reverse` flips
+//     the index. The resolved `IconRender` carries the icon set name
+//     so the host can look up the glyph.
 //
-// Deferred to subsequent staging steps:
-//
-//   * `IconSet` visual computation
+// All visual rule kinds are now covered.
 //   * Priority chain + stopIfTrue + lazy viewport API
 //
 // Each step extends `match_rule` and the public `evaluate_*` helpers
@@ -204,9 +208,10 @@ bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext
 ///     scaled into `[min_length_pct, max_length_pct]`, and assigns
 ///     `axis_position_pct` (`Automatic` / `Middle` / `None`). Engages
 ///     `CFMatch::data_bar_render`.
-///   * `IconSet` — payload computation lands in a subsequent PR;
-///     until then this overload returns the dxf-only payload
-///     unchanged.
+///   * `IconSet` — resolves each threshold CFVO, walks them in
+///     ascending order, and assigns the cell's bucket index honouring
+///     each CFVO's `gte` flag and the spec's `reverse` flag. Engages
+///     `CFMatch::icon_render`.
 ///
 /// Callers should still gate on the boolean `match_rule` overload to
 /// decide whether to surface the resulting `CFMatch`.
