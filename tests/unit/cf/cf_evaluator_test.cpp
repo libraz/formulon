@@ -1,11 +1,12 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// Unit tests for the conditional-format evaluator. PR6 covers the
-// value-only rule types (ContainsBlanks / NotContainsBlanks /
-// ContainsErrors / NotContainsErrors); later PRs add cellIs, expression,
-// containsText, top10/aboveAverage/timePeriod, and the visual rule
-// kinds. The "other rule types fall through to false" guarantee is
-// pinned here so the staging strategy stays observable.
+// Unit tests for the conditional-format evaluator. Coverage so far:
+// the value-only rule types (ContainsBlanks / NotContainsBlanks /
+// ContainsErrors / NotContainsErrors) and `cellIs` against literal
+// formula1/formula2. Later PRs add expression, containsText, top10/
+// aboveAverage/timePeriod, and the visual rule kinds. The "other rule
+// types fall through to false" guarantee is pinned here so the staging
+// strategy stays observable.
 
 #include "cf/cf_evaluator.h"
 
@@ -62,18 +63,209 @@ TEST(CFEvaluator, NotContainsErrorsIsComplementOfContainsErrors) {
 }
 
 TEST(CFEvaluator, RuleTypesNotYetImplementedReturnFalse) {
-  // Pinning the staging contract: the sixteen rule types whose evaluator
-  // logic lands in subsequent PRs must not silently match anything in
-  // the meantime. A test here catches accidental fall-through.
-  for (auto t : {RuleType::Expression, RuleType::CellIs, RuleType::ColorScale, RuleType::DataBar, RuleType::IconSet,
-                 RuleType::Top10, RuleType::AboveAverage, RuleType::ContainsText, RuleType::NotContainsText,
-                 RuleType::BeginsWith, RuleType::EndsWith, RuleType::TimePeriod, RuleType::DuplicateValues,
-                 RuleType::UniqueValues}) {
+  // Pinning the staging contract: the rule types whose evaluator logic
+  // lands in subsequent PRs must not silently match anything in the
+  // meantime. A test here catches accidental fall-through.
+  for (auto t : {RuleType::Expression, RuleType::ColorScale, RuleType::DataBar, RuleType::IconSet, RuleType::Top10,
+                 RuleType::AboveAverage, RuleType::ContainsText, RuleType::NotContainsText, RuleType::BeginsWith,
+                 RuleType::EndsWith, RuleType::TimePeriod, RuleType::DuplicateValues, RuleType::UniqueValues}) {
     CFRule r = MakeRule(t);
     EXPECT_FALSE(match_rule(r, Value::number(1.0))) << "type=" << static_cast<int>(t);
     EXPECT_FALSE(match_rule(r, Value::blank())) << "type=" << static_cast<int>(t);
     EXPECT_FALSE(match_rule(r, Value::text("x"))) << "type=" << static_cast<int>(t);
   }
+}
+
+TEST(CFEvaluator, CellIsLessThanNumeric) {
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::LessThan;
+  r.formula1 = "10";
+  EXPECT_TRUE(match_rule(r, Value::number(5.0)));
+  EXPECT_FALSE(match_rule(r, Value::number(10.0)));
+  EXPECT_FALSE(match_rule(r, Value::number(15.0)));
+}
+
+TEST(CFEvaluator, CellIsLessThanOrEqualNumeric) {
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::LessThanOrEqual;
+  r.formula1 = "10";
+  EXPECT_TRUE(match_rule(r, Value::number(5.0)));
+  EXPECT_TRUE(match_rule(r, Value::number(10.0)));
+  EXPECT_FALSE(match_rule(r, Value::number(15.0)));
+}
+
+TEST(CFEvaluator, CellIsEqualNumeric) {
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::Equal;
+  r.formula1 = "42";
+  EXPECT_TRUE(match_rule(r, Value::number(42.0)));
+  EXPECT_FALSE(match_rule(r, Value::number(41.0)));
+  EXPECT_FALSE(match_rule(r, Value::number(43.0)));
+}
+
+TEST(CFEvaluator, CellIsNotEqualNumeric) {
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::NotEqual;
+  r.formula1 = "42";
+  EXPECT_FALSE(match_rule(r, Value::number(42.0)));
+  EXPECT_TRUE(match_rule(r, Value::number(41.0)));
+  EXPECT_TRUE(match_rule(r, Value::number(43.0)));
+}
+
+TEST(CFEvaluator, CellIsGreaterThanOrEqualNumeric) {
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::GreaterThanOrEqual;
+  r.formula1 = "10";
+  EXPECT_FALSE(match_rule(r, Value::number(5.0)));
+  EXPECT_TRUE(match_rule(r, Value::number(10.0)));
+  EXPECT_TRUE(match_rule(r, Value::number(15.0)));
+}
+
+TEST(CFEvaluator, CellIsGreaterThanNumeric) {
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::GreaterThan;
+  r.formula1 = "10";
+  EXPECT_FALSE(match_rule(r, Value::number(5.0)));
+  EXPECT_FALSE(match_rule(r, Value::number(10.0)));
+  EXPECT_TRUE(match_rule(r, Value::number(15.0)));
+}
+
+TEST(CFEvaluator, CellIsBetweenNumericIsInclusive) {
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::Between;
+  r.formula1 = "5";
+  r.formula2 = "10";
+  EXPECT_FALSE(match_rule(r, Value::number(4.999)));
+  EXPECT_TRUE(match_rule(r, Value::number(5.0)));
+  EXPECT_TRUE(match_rule(r, Value::number(7.5)));
+  EXPECT_TRUE(match_rule(r, Value::number(10.0)));
+  EXPECT_FALSE(match_rule(r, Value::number(10.001)));
+}
+
+TEST(CFEvaluator, CellIsNotBetweenNumericIsExclusive) {
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::NotBetween;
+  r.formula1 = "5";
+  r.formula2 = "10";
+  EXPECT_TRUE(match_rule(r, Value::number(4.999)));
+  EXPECT_FALSE(match_rule(r, Value::number(5.0)));
+  EXPECT_FALSE(match_rule(r, Value::number(7.5)));
+  EXPECT_FALSE(match_rule(r, Value::number(10.0)));
+  EXPECT_TRUE(match_rule(r, Value::number(10.001)));
+}
+
+TEST(CFEvaluator, CellIsAcceptsSignedAndDecimalLiterals) {
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::LessThan;
+  r.formula1 = "-1.5";
+  EXPECT_TRUE(match_rule(r, Value::number(-2.0)));
+  EXPECT_FALSE(match_rule(r, Value::number(-1.5)));
+  EXPECT_FALSE(match_rule(r, Value::number(0.0)));
+}
+
+TEST(CFEvaluator, CellIsEqualTextIsCaseInsensitive) {
+  // Excel CF cellIs equality on text is case-insensitive (verified
+  // against Mac Excel 365). The fold here is ASCII-only; full Unicode
+  // case-folding is the broader text-comparison story's problem.
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::Equal;
+  r.formula1 = "\"hello\"";
+  EXPECT_TRUE(match_rule(r, Value::text("hello")));
+  EXPECT_TRUE(match_rule(r, Value::text("HELLO")));
+  EXPECT_TRUE(match_rule(r, Value::text("HeLLo")));
+  EXPECT_FALSE(match_rule(r, Value::text("world")));
+}
+
+TEST(CFEvaluator, CellIsTextLiteralUnescapesDoubledQuotes) {
+  // OOXML escapes embedded `"` as `""` inside the formula text. Verify
+  // the parser unescapes it before comparison.
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::Equal;
+  r.formula1 = "\"say \"\"hi\"\"\"";  // source = "say ""hi"""  →  say "hi"
+  EXPECT_TRUE(match_rule(r, Value::text("say \"hi\"")));
+  EXPECT_FALSE(match_rule(r, Value::text("say hi")));
+}
+
+TEST(CFEvaluator, CellIsBooleanLiteral) {
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::Equal;
+  r.formula1 = "TRUE";
+  EXPECT_TRUE(match_rule(r, Value::boolean(true)));
+  EXPECT_FALSE(match_rule(r, Value::boolean(false)));
+
+  r.formula1 = "false";  // Excel emits uppercase, but be lenient.
+  EXPECT_FALSE(match_rule(r, Value::boolean(true)));
+  EXPECT_TRUE(match_rule(r, Value::boolean(false)));
+}
+
+TEST(CFEvaluator, CellIsBoolAgainstNumberLiteralCoercesToZeroOne) {
+  // Excel treats BOOLs as 1/0 in cellIs numeric comparisons.
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::Equal;
+  r.formula1 = "1";
+  EXPECT_TRUE(match_rule(r, Value::boolean(true)));
+  EXPECT_FALSE(match_rule(r, Value::boolean(false)));
+
+  r.formula1 = "0";
+  EXPECT_FALSE(match_rule(r, Value::boolean(true)));
+  EXPECT_TRUE(match_rule(r, Value::boolean(false)));
+}
+
+TEST(CFEvaluator, CellIsCrossKindReturnsFalse) {
+  // PR7 takes the conservative stance that cross-kind comparisons
+  // don't fire. Number rule against text/error/blank cells, and text
+  // rule against numeric cells, all return false.
+  CFRule num_rule = MakeRule(RuleType::CellIs);
+  num_rule.op = CellIsOperator::Equal;
+  num_rule.formula1 = "10";
+  EXPECT_FALSE(match_rule(num_rule, Value::text("10")));
+  EXPECT_FALSE(match_rule(num_rule, Value::error(ErrorCode::Div0)));
+  EXPECT_FALSE(match_rule(num_rule, Value::blank()));
+
+  CFRule text_rule = MakeRule(RuleType::CellIs);
+  text_rule.op = CellIsOperator::Equal;
+  text_rule.formula1 = "\"hello\"";
+  EXPECT_FALSE(match_rule(text_rule, Value::number(0.0)));
+  EXPECT_FALSE(match_rule(text_rule, Value::error(ErrorCode::Value)));
+  EXPECT_FALSE(match_rule(text_rule, Value::blank()));
+}
+
+TEST(CFEvaluator, CellIsMissingOperatorReturnsFalse) {
+  CFRule r = MakeRule(RuleType::CellIs);
+  // op is left unset
+  r.formula1 = "10";
+  EXPECT_FALSE(match_rule(r, Value::number(5.0)));
+}
+
+TEST(CFEvaluator, CellIsMissingFormula1ReturnsFalse) {
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::Equal;
+  // formula1 absent
+  EXPECT_FALSE(match_rule(r, Value::number(0.0)));
+}
+
+TEST(CFEvaluator, CellIsBetweenMissingFormula2ReturnsFalse) {
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::Between;
+  r.formula1 = "1";
+  // formula2 absent
+  EXPECT_FALSE(match_rule(r, Value::number(0.5)));
+}
+
+TEST(CFEvaluator, CellIsNonLiteralFormulaReturnsFalse) {
+  // PR7 only handles literal operands. Anything that needs the formula
+  // evaluator (references, arithmetic) lands with PR8 and silently
+  // does not match for now.
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::Equal;
+  r.formula1 = "$A$1";
+  EXPECT_FALSE(match_rule(r, Value::number(0.0)));
+
+  r.formula1 = "5+5";
+  EXPECT_FALSE(match_rule(r, Value::number(10.0)));
+
+  r.formula1 = "AVERAGE(A1:A10)";
+  EXPECT_FALSE(match_rule(r, Value::number(5.0)));
 }
 
 TEST(CFEvaluator, MakeMatchPopulatesIdentityFields) {

@@ -3,18 +3,18 @@
 // Conditional-format rule evaluator. Drives a single `cf::CFRule`
 // against a cell's `Value` and returns whether the rule matches.
 //
-// This skeleton landing covers the value-only rule types — those that
-// can be decided by inspecting the target cell's `Value` alone, with
-// no formula evaluation, no relative-reference shifting, and no range
-// statistics:
+// Current coverage:
 //
 //   * `ContainsBlanks` / `NotContainsBlanks`
 //   * `ContainsErrors` / `NotContainsErrors`
+//   * `CellIs` against a literal `formula1` / `formula2` (number,
+//     boolean, or quoted text). Operands that contain a reference or
+//     arithmetic expression land with PR8.
 //
 // Subsequent PRs layer in:
 //
-//   * `CellIs` literal-comparison rules (PR7)
-//   * `Expression` rules with relative-reference shift (PR8)
+//   * `Expression` rules with relative-reference shift (PR8) — also
+//     extends `cellIs` to evaluate non-literal `formula1` / `formula2`
 //   * `ContainsText` family (PR9)
 //   * `Top10` / `AboveAverage` / `TimePeriod` (PR10)
 //   * `ColorScale` / `DataBar` / `IconSet` visual computation (PR11)
@@ -38,11 +38,18 @@ namespace formulon::cf {
 
 /// Returns `true` when `rule` matches the cell carrying `cell_value`.
 ///
-/// PR6 coverage:
+/// Implemented coverage:
 ///   * `ContainsBlanks`     — `cell_value.is_blank()`
 ///   * `NotContainsBlanks`  — `!cell_value.is_blank()`
 ///   * `ContainsErrors`     — `cell_value.is_error()`
 ///   * `NotContainsErrors`  — `!cell_value.is_error()`
+///   * `CellIs`             — compares `cell_value` against the literal
+///                            parsed from `rule.formula1` (and
+///                            `rule.formula2` for `Between` /
+///                            `NotBetween`) using `rule.op`. Operands
+///                            that aren't a literal number, boolean,
+///                            or quoted string fall through to `false`
+///                            until PR8 wires the formula evaluator.
 ///
 /// All other rule types currently return `false` (their evaluation
 /// logic lands in subsequent PRs). Callers that want to opt out of
