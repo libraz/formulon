@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for Excel's hypothesis-test / probability family:
 // T.TEST (TTEST), F.TEST (FTEST), CHISQ.TEST (CHITEST), Z.TEST (ZTEST),

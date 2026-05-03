@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end round-trip tests for the XLSB package writer.
 // `read_xlsb(write_xlsb(wb))` must reproduce every cell value `wb`

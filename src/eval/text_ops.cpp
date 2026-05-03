@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the UTF-8 / UTF-16 helpers declared in `text_ops.h`.
 // The codepoint walker mirrors `utf8_length.cpp`: we read the leading byte,

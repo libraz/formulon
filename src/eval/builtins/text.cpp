@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of Formulon's text built-in functions: UPPER, LOWER, TRIM,
 // LEFT, RIGHT, MID, REPT, SUBSTITUTE, FIND, SEARCH, EXACT, TEXTJOIN,

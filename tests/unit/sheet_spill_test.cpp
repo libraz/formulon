@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the cell-level dynamic-array spill API on `Sheet`. The
 // tests cover registration, collision detection, deep-copy semantics for

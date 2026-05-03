@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `fold_jp_text`. See `jp_fold.h` for the full mapping
 // contract; this file performs a single forward pass over `input`, decoding

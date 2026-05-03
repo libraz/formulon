@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Public entry point for the Excel TEXT() format-string engine declared in
 // `number_format.h`. The design follows the two-phase approach described

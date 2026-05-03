@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Abseil-style status propagation macros built on top of `Expected<T, E>`.
 // The macros bail out of the enclosing function on the first failure while

@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Per-sheet `<sheetData>` reader. Walks the rows / cells of a parsed
 // `sheet*.xml` document, decodes each `<c>` via `cell_parser`, and

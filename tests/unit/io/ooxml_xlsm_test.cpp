@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end detection + passthrough tests for `.xlsm` / `.xltx` /
 // `.xltm` workbook variants. Each test builds an in-memory OOXML

@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // MS-XLSB per-cell record emitter. The sheet writer walks each
 // populated row and calls `emit_cell` for every column slot, which

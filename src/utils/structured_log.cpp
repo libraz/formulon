@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the StructuredLog emitter. The output format is a single
 // line of JSON written to stderr; we hand-roll the escaping to avoid pulling

@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // MS-XLSB per-sheet record-stream emitter. Wraps the cells of a
 // `Sheet` in the standard `BrtBeginSheet | BrtBeginSheetData |

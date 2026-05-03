@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy impls and shared helpers for Excel's reference-manipulation
 // builtins `INDIRECT` and `OFFSET`. Both need AST-level inspection of

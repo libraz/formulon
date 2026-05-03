@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Structured-reference resolver. Translates the bracket payload of an Excel
 // table reference (`Table[Col]`, `Table[@Col]`, `Table[#All]`,

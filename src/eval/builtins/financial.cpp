@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the eager financial built-ins: PV, FV, PMT, NPER,
 // NPV, RATE, IPMT, PPMT, CUMIPMT, CUMPRINC. The depreciation family

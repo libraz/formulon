@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy impls for the workday-arithmetic family: `NETWORKDAYS`,
 // `NETWORKDAYS.INTL`, `WORKDAY`, and `WORKDAY.INTL`. All four accept an

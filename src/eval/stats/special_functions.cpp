@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the regularized incomplete gamma functions
 // `P(a, x)` / `Q(a, x) = 1 - P(a, x)` and the regularized incomplete beta

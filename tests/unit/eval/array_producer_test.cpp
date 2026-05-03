@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Direct unit tests for the array-context evaluator helpers
 // `eval_node_as_array` and `eval_binop_array_ctx`. Both functions are

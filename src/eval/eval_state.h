@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `EvalState` is the mutable per-`evaluate()` state threaded through
 // `EvalContext` to support recursive evaluation of formula cells. It carries

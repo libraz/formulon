@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // LINEST implementation. See linest_lazy.h for the user-facing
 // contract; this file owns the numerical recipe (build the design

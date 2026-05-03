@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for `=SUMPRODUCT(...)` once `eval_sumproduct_lazy`
 // consumes BinaryOp / UnaryOp arguments through `eval_node_as_array`

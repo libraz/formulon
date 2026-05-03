@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the date/time side of the TEXT() format-string engine.
 // Serials used below match the Excel 1900 epoch (see `eval/date_time.cpp`):

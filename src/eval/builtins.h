@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Built-in function registration entry point. The set of functions wired in
 // here is the canonical Formulon function library; host extensions may add

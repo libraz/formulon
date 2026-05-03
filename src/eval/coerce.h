@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Scalar coercion helpers shared by the tree-walk evaluator and the built-in
 // function implementations. Each helper returns an `Expected<T, ErrorCode>`

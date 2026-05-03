@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the paired sum-of-products family:
 // SUMX2PY2, SUMX2MY2, and SUMXMY2. These share the pairwise shape /

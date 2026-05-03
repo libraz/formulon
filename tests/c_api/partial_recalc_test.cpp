@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Smoke tests for `fm_workbook_partial_recalc` and
 // `fm_workbook_set_iterative_progress`. The tests exercise the C ABI

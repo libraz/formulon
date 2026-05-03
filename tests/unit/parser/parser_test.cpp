@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Happy-path golden tests for the Pratt parser. Each test parses a
 // formula string and compares the S-expression dump of the resulting AST

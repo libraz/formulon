@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `ADDRESS`. The function is a pure scalar text
 // builder: given row/column coordinates plus optional absoluteness

@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `formulon::io::read_defined_names`. The reader takes a
 // pre-parsed `xl/workbook.xml` document, so each test builds the XML

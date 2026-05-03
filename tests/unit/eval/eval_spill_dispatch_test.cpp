@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `EvalContext::dispatch_array_result` and the recursive-
 // resolver wiring that calls it. These tests pin the cell-level dynamic-

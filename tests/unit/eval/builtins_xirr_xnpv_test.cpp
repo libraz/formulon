@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for XIRR and XNPV. Both ride the lazy dispatch seam in
 // `src/eval/financial_lazy.cpp` because each needs the un-flattened AST

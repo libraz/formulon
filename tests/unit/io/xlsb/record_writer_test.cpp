@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Symmetry tests for the MS-XLSB record-emission primitives. Each
 // case round-trips the writer output through the reader (`io/xlsb/

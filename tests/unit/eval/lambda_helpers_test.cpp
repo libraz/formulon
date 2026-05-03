@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for Excel 365's six LAMBDA-helper builtins: BYROW, BYCOL, MAP,
 // REDUCE, SCAN, MAKEARRAY. Each consumes a `Lambda` value and applies it

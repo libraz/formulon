@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration test for the OOXML writer's pivot wiring. Builds a
 // `Workbook` in memory, drives it through `io::write_ooxml`, then pipes

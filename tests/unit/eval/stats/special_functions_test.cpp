@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Direct unit tests for the regularized incomplete gamma helpers
 // `p_gamma(a, x)` and `q_gamma(a, x)`. The CHISQ.* builtins lean on

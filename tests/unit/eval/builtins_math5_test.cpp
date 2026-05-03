@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the PERMUT / PERMUTATIONA combinatorial builtins.
 // Both are scalar-only, float-truncation inputs, with `#NUM!` on the

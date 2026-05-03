@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `LambdaValue` is the closure backing-type for `Value::Lambda`. It is the
 // runtime payload produced by evaluating a `parser::NodeKind::Lambda` AST

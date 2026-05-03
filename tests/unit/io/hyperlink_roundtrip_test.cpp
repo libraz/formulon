@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Reader-side tests for `<hyperlinks>` and the rid-to-target join. The
 // writer side is exercised by `tests/integration/sheet_features_roundtrip_test.cpp`.

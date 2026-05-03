@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the MS-XLSB record framing primitives. See
 // `io/xlsb/record.h` for the wire-format reference.

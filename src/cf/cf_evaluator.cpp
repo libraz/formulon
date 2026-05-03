@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the CF evaluator. See cf_evaluator.h for the
 // scoped contract and the staged-PR roadmap.

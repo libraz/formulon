@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `xl/styles.xml` reader. Decodes the OOXML styles part into a flat
 // in-memory `StylesTable` carrying every record kind the engine needs

@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end integration tests for the workbook recalc loop. These tests
 // drive the public Workbook API (`set_cell_value`, `set_cell_formula`,

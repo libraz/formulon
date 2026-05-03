@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Auxiliary probability-distribution builtins split out of
 // `stats_distributions.cpp` to keep that TU focused on the NORM / BINOM /

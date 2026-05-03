@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Dependency graph used by the recalc engine. Tracks "this cell reads that
 // cell" relationships across an entire workbook (i.e. the edges may span

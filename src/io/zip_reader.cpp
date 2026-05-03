@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `ZipReader` implementation. Wraps the miniz `mz_zip_reader_*` API in a
 // PIMPL so the header is miniz-free. All methods are non-throwing and

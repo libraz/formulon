@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the regular-period bond-pricing builtin: PRICE.
 // The implementation lives in `eval/builtins/financial_price.cpp` and

@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `formulon eval <formula>` — evaluate a single formula on a fresh,
 // empty workbook and print the result.

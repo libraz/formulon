@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for RETURN_IF_ERROR / ASSIGN_OR_RETURN.
 

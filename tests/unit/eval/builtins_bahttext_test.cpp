@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the BAHTTEXT builtin: spells out a number as Thai-baht
 // text. Covers each of the special Thai reading rules (the `เอ็ด` ones digit

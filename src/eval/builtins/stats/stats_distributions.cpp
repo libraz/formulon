@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of Excel's probability-distribution builtins that share the
 // MEDIAN / STDEV argument-coercion conventions: NORM.DIST / NORM.S.DIST /

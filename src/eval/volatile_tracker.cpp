@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `VolatileTracker::is_volatile_function`. The set of
 // volatile functions is fixed by Excel's contract — see

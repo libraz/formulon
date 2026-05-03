@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the Excel formula tokenizer. Each group exercises a
 // specific syntactic family; see `backup/plans/02-calc-engine.md` §2.2

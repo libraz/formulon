@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // OOXML reader implementation. Walks the in-memory package via
 // `ZipReader`, parses the four package-structure parts with pugixml,

@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tokenizer and classifier for the Excel TEXT() format-string engine.
 // The types consumed and produced here are declared in

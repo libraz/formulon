@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the styles writer plus the single owning copy of
 // the built-in number-format table. `builtin_num_fmt(id)` is exported

@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the PERCENTOF aggregate. PERCENTOF is implemented
 // as a lazy impl (see `eval/builtins/aggregate.cpp` and

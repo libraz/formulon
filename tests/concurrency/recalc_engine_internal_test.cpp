@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // ThreadSanitizer-targeted tests for `RecalcEngine`'s internal mutable
 // state and the "dep graph is effectively immutable during recalc"

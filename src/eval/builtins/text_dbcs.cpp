@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Byte-oriented text family (ja-JP DBCS): LENB, LEFTB, RIGHTB, MIDB,
 // REPLACEB, FINDB, SEARCHB. See `text.cpp` for the UTF-16-unit-based core

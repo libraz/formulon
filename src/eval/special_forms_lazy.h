@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy impls for the short-circuit "special form" family: `IF`,
 // `IFERROR`, and `IFNA`. Each impl owns its own arity check and decides

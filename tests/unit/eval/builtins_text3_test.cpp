@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the third batch of text built-ins: REPLACE,
 // REPLACEB, FINDB, SEARCHB, TEXTBEFORE, TEXTAFTER, FIXED, DOLLAR. Each

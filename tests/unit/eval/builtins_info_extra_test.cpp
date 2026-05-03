@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for the INFO(type_text) environment-string function. Formulon
 // intentionally returns host-agnostic, build-time-stable strings (see the

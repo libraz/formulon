@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Pivot evaluator implementation. See header / §15.1.3 of the design
 // corpus for the algorithm overview. The MVP path implemented here

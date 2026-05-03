@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Conditional-formatting (CF) oracle smoke test. Pins Formulon's CF
 // evaluator output for a small set of hand-authored scenarios so

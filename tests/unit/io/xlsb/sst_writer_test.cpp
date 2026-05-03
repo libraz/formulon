@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the XLSB shared-string-table builder + emitter.
 // Symmetry with `read_xlsb`'s SST decoder is checked by re-walking the

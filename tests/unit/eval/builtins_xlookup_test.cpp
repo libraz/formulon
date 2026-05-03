@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the lazy-dispatched XLOOKUP and XMATCH functions.
 // Both share the `xlookup_scan` helper in `tree_walker.cpp` that linearly

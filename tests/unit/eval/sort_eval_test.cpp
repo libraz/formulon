@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for the lazy `SORT(array, [sort_index], [sort_order], [by_col])`
 // builtin. Shares its TU with FILTER / UNIQUE; uses the same array-context

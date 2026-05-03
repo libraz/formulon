@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the tree-walk evaluator. Tests parse a formula source and
 // evaluate the AST end-to-end, except where the tested NodeKind is not easy

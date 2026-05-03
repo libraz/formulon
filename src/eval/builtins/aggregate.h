@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Registers Excel's aggregate built-ins (SUM/SUMSQ/MIN/MAX/AVERAGE/PRODUCT,
 // COUNT/COUNTA/COUNTBLANK, CONCAT/CONCATENATE, LEN) into a FunctionRegistry.

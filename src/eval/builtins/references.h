@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Registers Excel's reference-manipulation builtins whose impls do not need
 // to inspect their arguments' AST shape: currently `ADDRESS`. The lazy

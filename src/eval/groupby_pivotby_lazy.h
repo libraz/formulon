@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy impls for Excel 365's GROUPBY (and, in a follow-up, PIVOTBY) dynamic-
 // array functions. Both produce a 2D spilled result that summarises a tabular

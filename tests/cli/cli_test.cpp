@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `formulon_cli` end-to-end tests. Each test spawns the binary at the
 // CMake-injected `FORMULON_CLI_PATH` and asserts on (exit_code, stdout,

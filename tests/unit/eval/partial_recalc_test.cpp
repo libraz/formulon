@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `RecalcEngine::partial_recalc`. The tests drive the
 // engine through the workbook public API so the dep graph state is

@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `PivotTable` is the workbook-level pivot definition: identity, cache
 // binding, field configuration, layout, anchor location, transient slicer

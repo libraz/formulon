@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // C ABI smoke tests for the workbook structural mutation surface added
 // in the sheet-rename / move / remove + defined-name editing bundle.

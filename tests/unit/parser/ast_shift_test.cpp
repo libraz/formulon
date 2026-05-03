@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for `shift_refs` (generic walker), `shift_relative_refs` (the
 // historical relative-shift wrapper), and the integration with

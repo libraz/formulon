@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Stable C ABI tests for the styles surface
 // (`fm_cell_get_xf_index`, `fm_cell_set_xf_index`,

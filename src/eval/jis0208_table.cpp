@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // GENERATED FILE — do not edit by hand. Regenerate via:
 //   python3 tools/jis0208/generate_table.py > src/eval/jis0208_table.cpp

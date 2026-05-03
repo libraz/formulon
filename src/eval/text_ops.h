@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Pure UTF-8 / UTF-16 helpers used by Formulon's text built-ins. Excel
 // measures every text position and length in UTF-16 code units, while we

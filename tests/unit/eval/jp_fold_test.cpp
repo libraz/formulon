@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `fold_jp_text`. Each case fixes a single fold rule against
 // its exact UTF-8 byte sequence so a future regression in either the

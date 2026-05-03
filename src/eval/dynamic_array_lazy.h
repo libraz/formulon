@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy impls for dynamic-array spilling builtins that need per-argument AST
 // shape inspection: `FILTER`, `UNIQUE`, `SORT`, `SORTBY`, `HSTACK`, `VSTACK`,

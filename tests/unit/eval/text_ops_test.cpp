@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the pure UTF-8 / UTF-16 helpers in `text_ops.{h,cpp}`.
 // These cover the two converters (`utf16_to_byte_offset`, `utf16_substring`)

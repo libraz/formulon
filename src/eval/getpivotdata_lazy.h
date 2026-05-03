@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy impl for GETPIVOTDATA. The function takes a data-field name + a
 // pivot-anchor cell reference + zero or more (field, item) pairs, and

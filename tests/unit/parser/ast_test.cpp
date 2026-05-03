@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `AstNode`: factory invocation, accessor round-trips, and
 // the storage policy that strings and child arrays are arena-owned.

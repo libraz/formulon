@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Workbook implementation. Wires the OOXML save path and the embedded
 // recalc engine. The `RecalcEngine` is held via `unique_ptr` (PIMPL-style)

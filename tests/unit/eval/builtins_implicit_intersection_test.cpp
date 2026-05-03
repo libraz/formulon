@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for Excel 365 dynamic-array spill semantics on bare ranges
 // (`=A1:A5`) and implicit intersection on `@`-prefixed ranges

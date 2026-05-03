@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Top-level workbook model. The current surface owns a vector of `Sheet`
 // instances and exposes a `save()` method that serialises the workbook to

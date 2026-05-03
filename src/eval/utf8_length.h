@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tiny standalone helper that walks a UTF-8 byte sequence and returns the
 // equivalent UTF-16 code-unit count. Used by `LEN` and other text functions

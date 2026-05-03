@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the `AREAS` lazy impl. The structural count of
 // rectangles in a reference argument is computed by recursing over the

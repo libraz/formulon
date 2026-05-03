@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the reference-manipulation lazy builtins `INDIRECT`
 // and `OFFSET`, plus the shared `parse_a1_ref` / `column_letters`

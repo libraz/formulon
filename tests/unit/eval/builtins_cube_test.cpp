@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for the Cube-category built-in stubs. All seven CUBE* functions
 // return #NAME? (Formulon has no OLAP connection infrastructure) once

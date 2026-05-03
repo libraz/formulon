@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `formulon::pivot::evaluate`. Each test hand-builds a
 // `PivotCache` + `PivotTable` (no XML, no xlsx) and checks the produced

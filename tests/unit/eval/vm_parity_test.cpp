@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tree-walker / bytecode-VM parity sweep. Each test parses a small formula,
 // evaluates it through both paths, and asserts the results are bit-exact.

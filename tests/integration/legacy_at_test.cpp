@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration tests for legacy `@` auto-insertion (a.k.a. explicit
 // implicit-intersection). When Excel 365 opens a workbook authored by

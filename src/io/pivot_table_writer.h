@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Writer for one OOXML `xl/pivotTables/pivotTable*.xml` part. Symmetric
 // counterpart of `src/io/pivot_table_reader.{h,cpp}`. Round-trip target:

@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Structured logging for Formulon. Every log record is a single line of JSON
 // emitted on stderr, which keeps the dependency footprint zero (no spdlog,

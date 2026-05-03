@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `EvalContext` is the abstraction through which the tree-walk evaluator
 // resolves cell references. It carries the sheet-binding that anchors local

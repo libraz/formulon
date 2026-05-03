@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of Excel's BAHTTEXT function: spells out a numeric value in
 // Thai script as Thai baht and satang. The output is locale-independent: Excel

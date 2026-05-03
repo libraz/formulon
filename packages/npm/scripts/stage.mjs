@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Stages WASM build artefacts into packages/npm/dist/ for publication.
 //

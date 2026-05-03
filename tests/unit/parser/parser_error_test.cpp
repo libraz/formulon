@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Error-path tests for the Pratt parser. Covers single-error reporting on
 // the happy-failure cases as well as panic-mode recovery, parse-depth

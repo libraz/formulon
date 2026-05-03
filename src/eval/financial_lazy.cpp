@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the IRR / MIRR / XIRR / XNPV lazy impls. See
 // `eval/financial_lazy.h` for the dispatch-table contract and

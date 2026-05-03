@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the exclusive percentile / quartile variants:
 // PERCENTILE.EXC and QUARTILE.EXC. Both share the `accepts_ranges = true`

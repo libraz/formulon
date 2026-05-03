@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Drift detection: every function name reachable through `default_registry()`,
 // the tree walker's lazy-dispatch table, or `parser_special_form_names()`

@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `WorkbookKind`: discriminator for the four OOXML workbook variants the
 // reader/writer pipeline rounds-trips end-to-end. The engine treats all

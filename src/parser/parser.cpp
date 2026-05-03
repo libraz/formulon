@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the Pratt parser. Driven by a single `Tokenizer` pass;
 // whitespace tokens are stripped during ingest. A leading `=` (Excel

@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the eager security-rate / T-Bill built-ins:
 // DISC, INTRATE, RECEIVED, TBILLPRICE, TBILLYIELD, TBILLEQ. Registered

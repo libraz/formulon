@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Sheet view / layout round-trip integration test. Builds a workbook
 // with mixed column widths, row heights, frozen panes, hidden tabs and

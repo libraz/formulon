@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the hyperbolic / reciprocal-trig / parity-rounding
 // math built-ins: SINH, COSH, TANH, ASINH, ACOSH, ATANH, SEC, CSC, COT,

@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the shared date / time text parser declared in
 // `date_text_parse.h`. The logic matches the grammar previously embedded in

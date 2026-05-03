@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Direct unit tests for the regularized incomplete beta helper
 // `regularized_incomplete_beta(a, b, x)`. The T / F Excel distribution

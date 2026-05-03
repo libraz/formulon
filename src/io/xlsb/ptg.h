@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // MS-XLSB Ptg (Parse Tag) dispatch table. The XLSB binary formula stream
 // is a sequence of single-byte-tagged tokens; this module provides the

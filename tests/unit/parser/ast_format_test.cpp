@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Round-trip golden tests for `format_formula`. Each case formats a
 // hand-built or parsed AST, re-parses the result, and asserts that the

@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared-strings (`xl/sharedStrings.xml`) reader. The OOXML SST is a flat
 // list of `<si>` (string item) entries. Each entry is either a single

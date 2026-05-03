@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Registers Excel's info-style built-ins (ISNUMBER, ISTEXT, ISBLANK,
 // ISLOGICAL, ISERROR, ISERR, ISNA, N, T) into a FunctionRegistry. Kept in

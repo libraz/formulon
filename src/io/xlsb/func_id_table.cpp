@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the MS-XLSB function-id mapping. The table is a
 // flat `constexpr` array sorted by id, so a binary search lands the row

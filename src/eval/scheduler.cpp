@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the parallel SCC-layered recalc scheduler. See
 // `scheduler.h` for the public contract; this TU owns the layering

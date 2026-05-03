@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tiny set-of-cells helper used by the recalc engine to hold the dirty
 // closure of a recalculation pass. The recalc loop seeds the set with the

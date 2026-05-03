@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration test for the OOXML pivot wiring. Constructs a minimal in-memory
 // `.xlsx` package whose workbook references a single pivot cache with two

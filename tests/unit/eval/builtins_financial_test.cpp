@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the financial built-ins: PV, FV, PMT, NPER, NPV,
 // IRR, RATE, IPMT, PPMT, CUMIPMT, and CUMPRINC. All but IRR run through

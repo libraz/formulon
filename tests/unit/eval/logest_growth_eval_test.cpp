@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for the LOGEST and GROWTH exponential-regression lazy builtins
 // (`linest_lazy.{h,cpp}`). Both fit `y = b * m_1^x_1 * ...` by running

@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy impl for `SERIESSUM(x, n, m, coefficients)`. The final argument
 // is an array of coefficients, so this function rides the lazy-dispatch

@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Renderer for the Excel TEXT() format-string engine. The tokenizer lives
 // in `number_format_tokenizer.cpp`; the public entry point `apply_format`

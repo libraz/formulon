@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `SERIESSUM(x, n, m, coefficients)`. Strict arity 4:
 // three scalar numeric arguments followed by an array of coefficients.

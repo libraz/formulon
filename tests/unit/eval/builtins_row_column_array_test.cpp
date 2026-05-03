@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Aggregator-context tests for ROW / COLUMN. The standalone scalar form
 // (`=ROW(A1:A5)` -> 1) is pinned in `builtins_shape_test.cpp`; this file

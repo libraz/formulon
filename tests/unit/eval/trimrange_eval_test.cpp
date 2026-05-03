@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for the lazy `TRIMRANGE(range, [trim_rows]=3, [trim_cols]=3)`
 // builtin. Trim modes: 0 = none, 1 = leading, 2 = trailing, 3 = both. Only

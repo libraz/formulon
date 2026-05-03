@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `Reference` is the parser's structural representation of an A1-style cell
 // reference. It is shared by every node kind that needs to talk about a cell

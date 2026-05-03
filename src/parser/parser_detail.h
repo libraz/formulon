@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Internal helpers shared between parser.cpp, parser_atoms.cpp, and
 // parser_reference.cpp. Not a public header; do not include from outside

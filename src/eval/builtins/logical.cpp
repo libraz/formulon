@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of Formulon's logical built-in functions: TRUE, FALSE, NOT,
 // AND, OR, and XOR. Each impl follows the same recipe as the rest of the

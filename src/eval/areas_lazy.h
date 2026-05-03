@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy impl for the `AREAS` built-in. `AREAS(reference)` counts the number
 // of disjoint rectangles in its single reference argument. The count is an

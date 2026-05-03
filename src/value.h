@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `Value` is Formulon's scalar atom: the tagged union that the parser,
 // evaluator, and Excel error model all sit on top of. See

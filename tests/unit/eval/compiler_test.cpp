@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lowering tests for `eval::compile()`. Each test parses a small formula
 // string, runs it through the compiler, and asserts the emitted opcode

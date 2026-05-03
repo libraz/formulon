@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Hand-written lookup helpers backing the JIS X 0208 reverse table generated
 // into `jis0208_table.cpp`. Kept in a separate translation unit so that the

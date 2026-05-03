@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the statistical "A"-family aggregators:
 // AVERAGEA / MAXA / MINA / VARA / VARPA / STDEVA / STDEVPA.

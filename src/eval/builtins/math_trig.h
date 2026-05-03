@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Registers Excel's transcendental math built-ins (EXP/LN/LOG/LOG10/PI/
 // RADIANS/DEGREES/SIN/COS/TAN/ASIN/ACOS/ATAN/ATAN2) into a FunctionRegistry.

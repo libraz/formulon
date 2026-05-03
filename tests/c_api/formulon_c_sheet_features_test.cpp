@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // C ABI smoke tests for the sheet UI feature surface (merges,
 // hyperlinks, comments). Each test creates a default workbook,

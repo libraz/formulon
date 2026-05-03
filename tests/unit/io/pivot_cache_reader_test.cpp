@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `formulon::io::read_pivot_cache_definition` and
 // `formulon::io::read_pivot_cache_records`. Each test feeds a hand-rolled

@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Workbook sheet model. A `Sheet` owns a display name and a row-sparse,
 // column-dense cell store keyed by 0-based row index. Excel sheets reach

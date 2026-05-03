@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration tests for Bundle 2.4 metadata (defined names + tables).
 // We assemble synthetic in-memory `.xlsx` packages via miniz and feed

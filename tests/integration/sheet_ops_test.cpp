@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the workbook-level structural mutation surface:
 // `Workbook::rename_sheet`, `remove_sheet`, `move_sheet`, and

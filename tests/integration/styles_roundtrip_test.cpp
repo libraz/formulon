@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration test: a workbook carrying a populated `StylesTable` and
 // per-cell `xf_index` references must survive a full

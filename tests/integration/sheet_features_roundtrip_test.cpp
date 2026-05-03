@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration test for sheet-level UI features (merges, hyperlinks,
 // comments, data validations). The flow is the same for all four:

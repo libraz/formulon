@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Parser-level tests for structured (table) references. The parser captures
 // the bracket payload verbatim into the `column` slot of the AST node; the

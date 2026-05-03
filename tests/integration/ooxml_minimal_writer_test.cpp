@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration tests for the OOXML writer empty-workbook slice. Each test
 // round-trips the byte stream produced by `Workbook::save()` through miniz

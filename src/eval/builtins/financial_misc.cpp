@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the remaining eager financial built-ins:
 // DOLLARDE / DOLLARFR, EFFECT / NOMINAL, FVSCHEDULE, PDURATION, RRI, ISPMT.

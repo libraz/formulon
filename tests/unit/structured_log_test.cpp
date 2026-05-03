@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for StructuredLog. The emitter writes to stderr, so each test
 // redirects the stderr file descriptor (fd 2) through a pipe, runs the log

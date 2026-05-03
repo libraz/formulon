@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // MS-XLSB (.xlsb) package writer. The write-side counterpart to
 // `io/xlsb/reader.h`: walks a `Workbook` and produces a complete OPC

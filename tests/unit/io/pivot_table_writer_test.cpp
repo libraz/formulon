@@ -1,4 +1,4 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `formulon::io::write_pivot_table_definition`. Each test
 // builds a hand-rolled `pivot::PivotTable`, writes the XML, and (where
