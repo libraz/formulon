@@ -134,6 +134,46 @@ TEST(WorkbookSheetOps, RenameUpdatesQuotedSheetReferences) {
   EXPECT_EQ(wb.defined_names()[0].formula, "Plain!$A$1");
 }
 
+TEST(WorkbookSheetOps, RenameToNameRequiringQuotesAddsQuotes) {
+  // Renaming a bare-identifier sheet to a name with whitespace forces
+  // the formatter to emit the canonical quoted form.
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Beta");
+
+  std::vector<io::DefinedName> names;
+  io::DefinedName dn;
+  dn.name = "X";
+  dn.formula = "Beta!$A$1";
+  dn.local_sheet_id = -1;
+  names.push_back(dn);
+  wb.set_defined_names(std::move(names));
+
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(0, "New Beta")));
+  EXPECT_EQ(wb.defined_names()[0].formula, "'New Beta'!$A$1");
+}
+
+TEST(WorkbookSheetOps, RenameAcrossExpressionAndCallArgs) {
+  // The AST-based rewriter must catch references that sit inside
+  // function calls, range endpoints, and arithmetic — not just bare
+  // sheet-prefixed identifiers.
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Beta");
+  wb.add_sheet("Other");
+
+  std::vector<io::DefinedName> names;
+  io::DefinedName dn;
+  dn.name = "Total";
+  dn.formula = "SUM(Beta!$A$1:$A$10)+Beta!B2";
+  dn.local_sheet_id = -1;
+  names.push_back(dn);
+  wb.set_defined_names(std::move(names));
+
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(0, "Banana")));
+  // Range endpoints with the same sheet collapse the sheet qualifier on
+  // the right-hand side — Excel's canonical form for `Sheet!A1:A10`.
+  EXPECT_EQ(wb.defined_names()[0].formula, "SUM(Banana!$A$1:$A$10)+Banana!B2");
+}
+
 TEST(WorkbookSheetOps, RenameDoesNotMatchIdentifierSubstrings) {
   // `OtherSheet1` should not match a rename of `Sheet1`.
   Workbook wb = Workbook::create_empty();

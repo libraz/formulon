@@ -1,301 +1,417 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
-// Implementation of the relative-reference shifter. See ast_shift.h
-// for the contract; this file is the recursive walk over every AST
-// kind that may contain a Reference.
+// Generic reference-transform walker over the parser AST.
+//
+// The walker rebuilds nodes only on the path that actually changes:
+// identity walks return the original pointer. This keeps the relative-
+// shift fast path (used per CF rule, per candidate cell) allocation-free
+// when no reference is rewritten.
 
 #include "parser/ast_shift.h"
 
 #include <cstdint>
 #include <optional>
+#include <string_view>
+#include <vector>
 
 #include "parser/ast.h"
 #include "parser/reference.h"
-#include "sheet.h"
 #include "utils/arena.h"
-#include "value.h"
 
 namespace formulon {
 namespace parser {
 
+// ---------------------------------------------------------------------------
+// RefTransform default hooks
+// ---------------------------------------------------------------------------
+
+std::optional<Reference> RefTransform::apply_external(std::uint32_t /*book_id*/, std::string_view /*sheet*/,
+                                                      const Reference& cell) const {
+  return apply(cell);
+}
+
+std::optional<std::string_view> RefTransform::transform_external_sheet(std::uint32_t /*book_id*/,
+                                                                       std::string_view /*sheet*/) const {
+  return std::nullopt;
+}
+
 namespace {
 
-// Apply `(row_delta, col_delta)` to a Reference. Returns nullopt when
-// the shifted address is out of Sheet bounds along an axis that is
-// meaningful for this reference shape.
-std::optional<Reference> shift_reference(const Reference& ref, std::int32_t row_delta, std::int32_t col_delta) {
-  Reference shifted = ref;
+// Excel's coordinate ceilings. Used by the relative-shift transform to
+// detect out-of-bounds rewrites.
+constexpr std::uint32_t kMaxColumn = 16384;  // XFD
+constexpr std::uint32_t kMaxRow = 1048576;   // 2^20
 
-  // Whole-column (`A:A`): only the column axis is meaningful.
-  if (ref.is_full_col) {
-    if (!ref.col_abs) {
-      const std::int64_t new_col = static_cast<std::int64_t>(ref.col) + col_delta;
-      if (new_col < 0 || new_col >= static_cast<std::int64_t>(Sheet::kMaxCols)) {
-        return std::nullopt;
-      }
-      shifted.col = static_cast<std::uint32_t>(new_col);
-    }
-    return shifted;
-  }
-
-  // Whole-row (`1:1`): only the row axis is meaningful.
-  if (ref.is_full_row) {
-    if (!ref.row_abs) {
-      const std::int64_t new_row = static_cast<std::int64_t>(ref.row) + row_delta;
-      if (new_row < 0 || new_row >= static_cast<std::int64_t>(Sheet::kMaxRows)) {
-        return std::nullopt;
-      }
-      shifted.row = static_cast<std::uint32_t>(new_row);
-    }
-    return shifted;
-  }
-
-  // Regular A1 cell reference.
-  if (!ref.col_abs) {
-    const std::int64_t new_col = static_cast<std::int64_t>(ref.col) + col_delta;
-    if (new_col < 0 || new_col >= static_cast<std::int64_t>(Sheet::kMaxCols)) {
-      return std::nullopt;
-    }
-    shifted.col = static_cast<std::uint32_t>(new_col);
-  }
-  if (!ref.row_abs) {
-    const std::int64_t new_row = static_cast<std::int64_t>(ref.row) + row_delta;
-    if (new_row < 0 || new_row >= static_cast<std::int64_t>(Sheet::kMaxRows)) {
-      return std::nullopt;
-    }
-    shifted.row = static_cast<std::uint32_t>(new_row);
-  }
-  return shifted;
+// Builds a `#REF!` error literal node. Returns nullptr on arena failure.
+AstNode* MakeRefError(Arena& arena) {
+  return make_error_literal(arena, ErrorCode::Ref);
 }
 
-AstNode* shift_node(const AstNode& node, Arena& arena, std::int32_t row_delta, std::int32_t col_delta);
+// Forward declaration: the recursive worker. Returns the rewritten node;
+// when nothing changed it returns `&node` directly so the caller can skip
+// allocation.
+const AstNode* TransformNode(const AstNode& node, Arena& arena, const RefTransform& transform);
 
-// Convenience: shift a child and propagate nullptr (arena exhaustion)
-// up to the caller.
-AstNode* shift_child(const AstNode& child, Arena& arena, std::int32_t row_delta, std::int32_t col_delta) {
-  return shift_node(child, arena, row_delta, col_delta);
+const AstNode* TransformRef(const AstNode& node, Arena& arena, const RefTransform& transform) {
+  std::optional<Reference> rewritten = transform.apply(node.as_ref());
+  if (!rewritten.has_value()) {
+    return MakeRefError(arena);
+  }
+  // Identity short-circuit: avoid an allocation when the transform was a
+  // no-op for this reference.
+  const Reference& orig = node.as_ref();
+  const Reference& nr = *rewritten;
+  if (orig.sheet.data() == nr.sheet.data() && orig.sheet.size() == nr.sheet.size() &&
+      orig.sheet_quoted == nr.sheet_quoted && orig.col == nr.col && orig.row == nr.row && orig.col_abs == nr.col_abs &&
+      orig.row_abs == nr.row_abs && orig.is_full_col == nr.is_full_col && orig.is_full_row == nr.is_full_row) {
+    return &node;
+  }
+  return make_ref(arena, nr);
 }
 
-AstNode* shift_node(const AstNode& node, Arena& arena, std::int32_t row_delta, std::int32_t col_delta) {
+const AstNode* TransformSpillRef(const AstNode& node, Arena& arena, const RefTransform& transform) {
+  std::optional<Reference> rewritten = transform.apply(node.as_spill_ref());
+  if (!rewritten.has_value()) {
+    return MakeRefError(arena);
+  }
+  const Reference& orig = node.as_spill_ref();
+  const Reference& nr = *rewritten;
+  if (orig.sheet.data() == nr.sheet.data() && orig.sheet.size() == nr.sheet.size() &&
+      orig.sheet_quoted == nr.sheet_quoted && orig.col == nr.col && orig.row == nr.row && orig.col_abs == nr.col_abs &&
+      orig.row_abs == nr.row_abs && orig.is_full_col == nr.is_full_col && orig.is_full_row == nr.is_full_row) {
+    return &node;
+  }
+  return make_spill_ref(arena, nr);
+}
+
+const AstNode* TransformExternalRef(const AstNode& node, Arena& arena, const RefTransform& transform) {
+  const std::uint32_t book_id = node.as_external_ref_book_id();
+  const std::string_view sheet = node.as_external_ref_sheet();
+  std::optional<Reference> rewritten = transform.apply_external(book_id, sheet, node.as_external_ref_cell());
+  if (!rewritten.has_value()) {
+    return MakeRefError(arena);
+  }
+  // Sheet rename hook: when the transform supplies a new sheet name we
+  // intern it into the arena so the rebuilt node owns its bytes.
+  std::optional<std::string_view> new_sheet = transform.transform_external_sheet(book_id, sheet);
+  const Reference& orig_cell = node.as_external_ref_cell();
+  const Reference& nr = *rewritten;
+  const bool cell_unchanged = orig_cell.sheet.data() == nr.sheet.data() && orig_cell.sheet.size() == nr.sheet.size() &&
+                              orig_cell.sheet_quoted == nr.sheet_quoted && orig_cell.col == nr.col &&
+                              orig_cell.row == nr.row && orig_cell.col_abs == nr.col_abs &&
+                              orig_cell.row_abs == nr.row_abs && orig_cell.is_full_col == nr.is_full_col &&
+                              orig_cell.is_full_row == nr.is_full_row;
+  if (!new_sheet.has_value() && cell_unchanged) {
+    return &node;
+  }
+  const std::string_view final_sheet = new_sheet.has_value() ? *new_sheet : sheet;
+  return make_external_ref(arena, book_id, final_sheet, nr);
+}
+
+const AstNode* TransformUnary(const AstNode& node, Arena& arena, const RefTransform& transform) {
+  const AstNode* operand = TransformNode(node.as_unary_operand(), arena, transform);
+  if (operand == nullptr) {
+    return nullptr;
+  }
+  if (operand == &node.as_unary_operand()) {
+    return &node;
+  }
+  return make_unary_op(arena, node.as_unary_op(), const_cast<AstNode*>(operand));
+}
+
+const AstNode* TransformBinary(const AstNode& node, Arena& arena, const RefTransform& transform) {
+  const AstNode* lhs = TransformNode(node.as_binary_lhs(), arena, transform);
+  if (lhs == nullptr) {
+    return nullptr;
+  }
+  const AstNode* rhs = TransformNode(node.as_binary_rhs(), arena, transform);
+  if (rhs == nullptr) {
+    return nullptr;
+  }
+  if (lhs == &node.as_binary_lhs() && rhs == &node.as_binary_rhs()) {
+    return &node;
+  }
+  return make_binary_op(arena, node.as_binary_op(), const_cast<AstNode*>(lhs), const_cast<AstNode*>(rhs));
+}
+
+const AstNode* TransformRange(const AstNode& node, Arena& arena, const RefTransform& transform) {
+  const AstNode* lhs = TransformNode(node.as_range_lhs(), arena, transform);
+  if (lhs == nullptr) {
+    return nullptr;
+  }
+  const AstNode* rhs = TransformNode(node.as_range_rhs(), arena, transform);
+  if (rhs == nullptr) {
+    return nullptr;
+  }
+  // A range endpoint that collapsed to `#REF!` poisons the whole range
+  // expression — this matches Excel's behaviour for `#REF!:#REF!` shapes.
+  if (lhs->kind() == NodeKind::ErrorLiteral && lhs->as_error_literal() == ErrorCode::Ref) {
+    return MakeRefError(arena);
+  }
+  if (rhs->kind() == NodeKind::ErrorLiteral && rhs->as_error_literal() == ErrorCode::Ref) {
+    return MakeRefError(arena);
+  }
+  if (lhs == &node.as_range_lhs() && rhs == &node.as_range_rhs()) {
+    return &node;
+  }
+  return make_range_op(arena, const_cast<AstNode*>(lhs), const_cast<AstNode*>(rhs));
+}
+
+const AstNode* TransformIntersect(const AstNode& node, Arena& arena, const RefTransform& transform) {
+  const AstNode* lhs = TransformNode(node.as_intersect_lhs(), arena, transform);
+  if (lhs == nullptr) {
+    return nullptr;
+  }
+  const AstNode* rhs = TransformNode(node.as_intersect_rhs(), arena, transform);
+  if (rhs == nullptr) {
+    return nullptr;
+  }
+  if (lhs == &node.as_intersect_lhs() && rhs == &node.as_intersect_rhs()) {
+    return &node;
+  }
+  return make_intersect_op(arena, const_cast<AstNode*>(lhs), const_cast<AstNode*>(rhs));
+}
+
+const AstNode* TransformImplicitIntersection(const AstNode& node, Arena& arena, const RefTransform& transform) {
+  const AstNode* operand = TransformNode(node.as_implicit_intersection_operand(), arena, transform);
+  if (operand == nullptr) {
+    return nullptr;
+  }
+  if (operand == &node.as_implicit_intersection_operand()) {
+    return &node;
+  }
+  return make_implicit_intersection(arena, const_cast<AstNode*>(operand));
+}
+
+const AstNode* TransformUnion(const AstNode& node, Arena& arena, const RefTransform& transform) {
+  const std::uint32_t n = node.as_union_arity();
+  std::vector<const AstNode*> kids;
+  kids.reserve(n);
+  bool changed = false;
+  for (std::uint32_t i = 0; i < n; ++i) {
+    const AstNode& child = node.as_union_child(i);
+    const AstNode* updated = TransformNode(child, arena, transform);
+    if (updated == nullptr) {
+      return nullptr;
+    }
+    if (updated != &child) {
+      changed = true;
+    }
+    kids.push_back(updated);
+  }
+  if (!changed) {
+    return &node;
+  }
+  return make_union_op(arena, kids.data(), n);
+}
+
+const AstNode* TransformCall(const AstNode& node, Arena& arena, const RefTransform& transform) {
+  const std::uint32_t n = node.as_call_arity();
+  std::vector<const AstNode*> args;
+  args.reserve(n);
+  bool changed = false;
+  for (std::uint32_t i = 0; i < n; ++i) {
+    const AstNode& child = node.as_call_arg(i);
+    const AstNode* updated = TransformNode(child, arena, transform);
+    if (updated == nullptr) {
+      return nullptr;
+    }
+    if (updated != &child) {
+      changed = true;
+    }
+    args.push_back(updated);
+  }
+  if (!changed) {
+    return &node;
+  }
+  return make_call(arena, node.as_call_name(), n == 0 ? nullptr : args.data(), n);
+}
+
+const AstNode* TransformArrayLiteral(const AstNode& node, Arena& arena, const RefTransform& transform) {
+  const std::uint32_t rows = node.as_array_rows();
+  const std::uint32_t cols = node.as_array_cols();
+  const std::uint32_t total = rows * cols;
+  std::vector<const AstNode*> elems;
+  elems.reserve(total);
+  bool changed = false;
+  for (std::uint32_t r = 0; r < rows; ++r) {
+    for (std::uint32_t c = 0; c < cols; ++c) {
+      const AstNode& child = node.as_array_element(r, c);
+      const AstNode* updated = TransformNode(child, arena, transform);
+      if (updated == nullptr) {
+        return nullptr;
+      }
+      if (updated != &child) {
+        changed = true;
+      }
+      elems.push_back(updated);
+    }
+  }
+  if (!changed) {
+    return &node;
+  }
+  return make_array_literal(arena, rows, cols, elems.data());
+}
+
+const AstNode* TransformLambda(const AstNode& node, Arena& arena, const RefTransform& transform) {
+  const AstNode* body = TransformNode(node.as_lambda_body(), arena, transform);
+  if (body == nullptr) {
+    return nullptr;
+  }
+  if (body == &node.as_lambda_body()) {
+    return &node;
+  }
+  // Re-collect parameter names from the original; the lambda factory copies
+  // them into the destination arena.
+  const std::uint32_t pn = node.as_lambda_param_count();
+  std::vector<std::string_view> params;
+  params.reserve(pn);
+  for (std::uint32_t i = 0; i < pn; ++i) {
+    params.push_back(node.as_lambda_param(i));
+  }
+  return make_lambda(arena, pn == 0 ? nullptr : params.data(), pn, node.as_lambda_optional_count(),
+                     const_cast<AstNode*>(body));
+}
+
+const AstNode* TransformLet(const AstNode& node, Arena& arena, const RefTransform& transform) {
+  const std::uint32_t n = node.as_let_binding_count();
+  std::vector<std::string_view> names;
+  names.reserve(n);
+  std::vector<const AstNode*> exprs;
+  exprs.reserve(n);
+  bool changed = false;
+  for (std::uint32_t i = 0; i < n; ++i) {
+    const AstNode& expr = node.as_let_binding_expr(i);
+    const AstNode* updated = TransformNode(expr, arena, transform);
+    if (updated == nullptr) {
+      return nullptr;
+    }
+    if (updated != &expr) {
+      changed = true;
+    }
+    names.push_back(node.as_let_binding_name(i));
+    exprs.push_back(updated);
+  }
+  const AstNode* body = TransformNode(node.as_let_body(), arena, transform);
+  if (body == nullptr) {
+    return nullptr;
+  }
+  if (!changed && body == &node.as_let_body()) {
+    return &node;
+  }
+  return make_let_binding(arena, names.data(), exprs.data(), n, const_cast<AstNode*>(body));
+}
+
+const AstNode* TransformLambdaCall(const AstNode& node, Arena& arena, const RefTransform& transform) {
+  const AstNode* callee = TransformNode(node.as_lambda_call_callee(), arena, transform);
+  if (callee == nullptr) {
+    return nullptr;
+  }
+  const std::uint32_t n = node.as_lambda_call_arity();
+  std::vector<const AstNode*> args;
+  args.reserve(n);
+  bool changed = (callee != &node.as_lambda_call_callee());
+  for (std::uint32_t i = 0; i < n; ++i) {
+    const AstNode& child = node.as_lambda_call_arg(i);
+    const AstNode* updated = TransformNode(child, arena, transform);
+    if (updated == nullptr) {
+      return nullptr;
+    }
+    if (updated != &child) {
+      changed = true;
+    }
+    args.push_back(updated);
+  }
+  if (!changed) {
+    return &node;
+  }
+  return make_lambda_call(arena, const_cast<AstNode*>(callee), n == 0 ? nullptr : args.data(), n);
+}
+
+const AstNode* TransformNode(const AstNode& node, Arena& arena, const RefTransform& transform) {
   switch (node.kind()) {
     case NodeKind::Literal:
-      return make_literal(arena, node.as_literal());
-
-    case NodeKind::Ref: {
-      const auto shifted = shift_reference(node.as_ref(), row_delta, col_delta);
-      if (!shifted.has_value()) {
-        return make_error_literal(arena, ErrorCode::Ref);
-      }
-      return make_ref(arena, *shifted);
-    }
-
-    case NodeKind::SpillRef: {
-      const auto shifted = shift_reference(node.as_spill_ref(), row_delta, col_delta);
-      if (!shifted.has_value()) {
-        return make_error_literal(arena, ErrorCode::Ref);
-      }
-      return make_spill_ref(arena, *shifted);
-    }
-
-    case NodeKind::ExternalRef: {
-      // External-workbook refs may also carry relative coordinates;
-      // Excel shifts them by the same rule. Workbook id and sheet
-      // string are preserved verbatim.
-      const auto shifted = shift_reference(node.as_external_ref_cell(), row_delta, col_delta);
-      if (!shifted.has_value()) {
-        return make_error_literal(arena, ErrorCode::Ref);
-      }
-      return make_external_ref(arena, node.as_external_ref_book_id(), node.as_external_ref_sheet(), *shifted);
-    }
-
-    case NodeKind::StructuredRef:
-      // Table references are addressed by name; relative shifting does
-      // not apply.
-      return make_structured_ref(arena, node.as_structured_ref_table(), node.as_structured_ref_column(),
-                                 node.as_structured_ref_modifier());
-
-    case NodeKind::NameRef:
-      return make_name_ref(arena, node.as_name());
-
-    case NodeKind::UnaryOp: {
-      AstNode* operand = shift_child(node.as_unary_operand(), arena, row_delta, col_delta);
-      if (operand == nullptr) {
-        return nullptr;
-      }
-      return make_unary_op(arena, node.as_unary_op(), operand);
-    }
-
-    case NodeKind::BinaryOp: {
-      AstNode* lhs = shift_child(node.as_binary_lhs(), arena, row_delta, col_delta);
-      if (lhs == nullptr) {
-        return nullptr;
-      }
-      AstNode* rhs = shift_child(node.as_binary_rhs(), arena, row_delta, col_delta);
-      if (rhs == nullptr) {
-        return nullptr;
-      }
-      return make_binary_op(arena, node.as_binary_op(), lhs, rhs);
-    }
-
-    case NodeKind::RangeOp: {
-      AstNode* lhs = shift_child(node.as_range_lhs(), arena, row_delta, col_delta);
-      if (lhs == nullptr) {
-        return nullptr;
-      }
-      AstNode* rhs = shift_child(node.as_range_rhs(), arena, row_delta, col_delta);
-      if (rhs == nullptr) {
-        return nullptr;
-      }
-      return make_range_op(arena, lhs, rhs);
-    }
-
-    case NodeKind::UnionOp: {
-      const std::uint32_t arity = node.as_union_arity();
-      AstNode** children = arena.create_array<AstNode*>(arity);
-      if (children == nullptr) {
-        return nullptr;
-      }
-      for (std::uint32_t i = 0; i < arity; ++i) {
-        children[i] = shift_child(node.as_union_child(i), arena, row_delta, col_delta);
-        if (children[i] == nullptr) {
-          return nullptr;
-        }
-      }
-      return make_union_op(arena, const_cast<const AstNode* const*>(children), arity);
-    }
-
-    case NodeKind::IntersectOp: {
-      AstNode* lhs = shift_child(node.as_intersect_lhs(), arena, row_delta, col_delta);
-      if (lhs == nullptr) {
-        return nullptr;
-      }
-      AstNode* rhs = shift_child(node.as_intersect_rhs(), arena, row_delta, col_delta);
-      if (rhs == nullptr) {
-        return nullptr;
-      }
-      return make_intersect_op(arena, lhs, rhs);
-    }
-
-    case NodeKind::ImplicitIntersection: {
-      AstNode* operand = shift_child(node.as_implicit_intersection_operand(), arena, row_delta, col_delta);
-      if (operand == nullptr) {
-        return nullptr;
-      }
-      return make_implicit_intersection(arena, operand);
-    }
-
-    case NodeKind::Call: {
-      const std::uint32_t arity = node.as_call_arity();
-      AstNode** args = nullptr;
-      if (arity > 0) {
-        args = arena.create_array<AstNode*>(arity);
-        if (args == nullptr) {
-          return nullptr;
-        }
-        for (std::uint32_t i = 0; i < arity; ++i) {
-          args[i] = shift_child(node.as_call_arg(i), arena, row_delta, col_delta);
-          if (args[i] == nullptr) {
-            return nullptr;
-          }
-        }
-      }
-      return make_call(arena, node.as_call_name(), const_cast<const AstNode* const*>(args), arity);
-    }
-
-    case NodeKind::ArrayLiteral: {
-      const std::uint32_t rows = node.as_array_rows();
-      const std::uint32_t cols = node.as_array_cols();
-      const std::uint32_t total = rows * cols;
-      AstNode** elems = arena.create_array<AstNode*>(total);
-      if (elems == nullptr) {
-        return nullptr;
-      }
-      for (std::uint32_t r = 0; r < rows; ++r) {
-        for (std::uint32_t c = 0; c < cols; ++c) {
-          elems[r * cols + c] = shift_child(node.as_array_element(r, c), arena, row_delta, col_delta);
-          if (elems[r * cols + c] == nullptr) {
-            return nullptr;
-          }
-        }
-      }
-      return make_array_literal(arena, rows, cols, const_cast<const AstNode* const*>(elems));
-    }
-
-    case NodeKind::Lambda: {
-      const std::uint32_t param_count = node.as_lambda_param_count();
-      std::string_view* params = nullptr;
-      if (param_count > 0) {
-        params = arena.create_array<std::string_view>(param_count);
-        if (params == nullptr) {
-          return nullptr;
-        }
-        for (std::uint32_t i = 0; i < param_count; ++i) {
-          params[i] = node.as_lambda_param(i);
-        }
-      }
-      AstNode* body = shift_child(node.as_lambda_body(), arena, row_delta, col_delta);
-      if (body == nullptr) {
-        return nullptr;
-      }
-      return make_lambda(arena, params, param_count, node.as_lambda_optional_count(), body);
-    }
-
-    case NodeKind::LetBinding: {
-      const std::uint32_t binding_count = node.as_let_binding_count();
-      std::string_view* names = arena.create_array<std::string_view>(binding_count);
-      AstNode** exprs = arena.create_array<AstNode*>(binding_count);
-      if (names == nullptr || exprs == nullptr) {
-        return nullptr;
-      }
-      for (std::uint32_t i = 0; i < binding_count; ++i) {
-        names[i] = node.as_let_binding_name(i);
-        exprs[i] = shift_child(node.as_let_binding_expr(i), arena, row_delta, col_delta);
-        if (exprs[i] == nullptr) {
-          return nullptr;
-        }
-      }
-      AstNode* body = shift_child(node.as_let_body(), arena, row_delta, col_delta);
-      if (body == nullptr) {
-        return nullptr;
-      }
-      return make_let_binding(arena, names, const_cast<const AstNode* const*>(exprs), binding_count, body);
-    }
-
-    case NodeKind::LambdaCall: {
-      AstNode* callee = shift_child(node.as_lambda_call_callee(), arena, row_delta, col_delta);
-      if (callee == nullptr) {
-        return nullptr;
-      }
-      const std::uint32_t arity = node.as_lambda_call_arity();
-      AstNode** args = nullptr;
-      if (arity > 0) {
-        args = arena.create_array<AstNode*>(arity);
-        if (args == nullptr) {
-          return nullptr;
-        }
-        for (std::uint32_t i = 0; i < arity; ++i) {
-          args[i] = shift_child(node.as_lambda_call_arg(i), arena, row_delta, col_delta);
-          if (args[i] == nullptr) {
-            return nullptr;
-          }
-        }
-      }
-      return make_lambda_call(arena, callee, const_cast<const AstNode* const*>(args), arity);
-    }
-
     case NodeKind::ErrorLiteral:
-      return make_error_literal(arena, node.as_error_literal());
-
     case NodeKind::ErrorPlaceholder:
-      return make_error_placeholder(arena);
+    case NodeKind::NameRef:
+    case NodeKind::StructuredRef:
+      return &node;
+    case NodeKind::Ref:
+      return TransformRef(node, arena, transform);
+    case NodeKind::SpillRef:
+      return TransformSpillRef(node, arena, transform);
+    case NodeKind::ExternalRef:
+      return TransformExternalRef(node, arena, transform);
+    case NodeKind::UnaryOp:
+      return TransformUnary(node, arena, transform);
+    case NodeKind::BinaryOp:
+      return TransformBinary(node, arena, transform);
+    case NodeKind::RangeOp:
+      return TransformRange(node, arena, transform);
+    case NodeKind::UnionOp:
+      return TransformUnion(node, arena, transform);
+    case NodeKind::IntersectOp:
+      return TransformIntersect(node, arena, transform);
+    case NodeKind::ImplicitIntersection:
+      return TransformImplicitIntersection(node, arena, transform);
+    case NodeKind::Call:
+      return TransformCall(node, arena, transform);
+    case NodeKind::ArrayLiteral:
+      return TransformArrayLiteral(node, arena, transform);
+    case NodeKind::Lambda:
+      return TransformLambda(node, arena, transform);
+    case NodeKind::LetBinding:
+      return TransformLet(node, arena, transform);
+    case NodeKind::LambdaCall:
+      return TransformLambdaCall(node, arena, transform);
   }
-  return nullptr;
+  return &node;
 }
+
+// ---------------------------------------------------------------------------
+// RelativeShiftTransform
+// ---------------------------------------------------------------------------
+
+class RelativeShiftTransform final : public RefTransform {
+ public:
+  RelativeShiftTransform(std::int32_t row_delta, std::int32_t col_delta) noexcept
+      : row_delta_(row_delta), col_delta_(col_delta) {}
+
+  std::optional<Reference> apply(const Reference& ref) const override {
+    Reference out = ref;
+    // Whole-column / whole-row references shift only their non-absolute
+    // axis; the absent axis stays meaningless and is left untouched.
+    if (!ref.is_full_row && !ref.col_abs) {
+      const std::int64_t shifted = static_cast<std::int64_t>(ref.col) + col_delta_;
+      if (shifted < 0 || shifted >= static_cast<std::int64_t>(kMaxColumn)) {
+        return std::nullopt;
+      }
+      out.col = static_cast<std::uint32_t>(shifted);
+    }
+    if (!ref.is_full_col && !ref.row_abs) {
+      const std::int64_t shifted = static_cast<std::int64_t>(ref.row) + row_delta_;
+      if (shifted < 0 || shifted >= static_cast<std::int64_t>(kMaxRow)) {
+        return std::nullopt;
+      }
+      out.row = static_cast<std::uint32_t>(shifted);
+    }
+    return out;
+  }
+
+ private:
+  std::int32_t row_delta_;
+  std::int32_t col_delta_;
+};
 
 }  // namespace
 
+const AstNode* shift_refs(const AstNode& root, Arena& arena, const RefTransform& transform) {
+  return TransformNode(root, arena, transform);
+}
+
 const AstNode* shift_relative_refs(const AstNode& root, Arena& arena, std::int32_t row_delta, std::int32_t col_delta) {
-  return shift_node(root, arena, row_delta, col_delta);
+  RelativeShiftTransform transform(row_delta, col_delta);
+  return TransformNode(root, arena, transform);
 }
 
 }  // namespace parser

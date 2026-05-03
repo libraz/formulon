@@ -21,7 +21,10 @@
 #include "eval/scheduler.h"
 #include "io/ooxml_writer.h"
 #include "parser/ast.h"
+#include "parser/ast_format.h"
+#include "parser/ast_shift.h"
 #include "parser/parser.h"
+#include "parser/ref_transforms.h"
 #include "pivot/pivot_cache.h"
 #include "sheet.h"
 #include "utils/arena.h"
@@ -156,53 +159,39 @@ bool formula_references_sheet(std::string_view formula, std::string_view sheet_n
   return false;
 }
 
-// Replaces every reference to sheet `old_name` in `formula` with
-// `new_name`. Both bare and quoted forms are rewritten; the chosen
-// emitted form depends on whether `new_name` itself needs quoting
-// (any byte outside `[A-Za-z0-9_.]`).
+// Rewrites every reference to sheet `old_name` in `formula` to
+// `new_name` by parsing through the AST and re-formatting. Both bare
+// and quoted forms are recognised by the parser; the formatter emits
+// the canonical shape (quoted only when the new name's bytes demand
+// it). On parse failure or arena exhaustion the input is returned
+// unchanged so the caller's behaviour stays conservative — a formula
+// we cannot understand is left alone rather than corrupted.
 std::string replace_sheet_in_formula(std::string_view formula, std::string_view old_name, std::string_view new_name) {
-  // Quote `new_name` only when necessary; prefer the bare form to keep
-  // diffs minimal for the common case.
-  bool needs_quoting = new_name.empty();
-  for (char byte : new_name) {
-    const bool unquoted_ok = is_id_byte(byte) || byte == '.';
-    if (!unquoted_ok) {
-      needs_quoting = true;
-      break;
-    }
+  // Defined-name targets are typically authored without a leading `=`;
+  // tolerate either by parsing the body and prepending the marker back
+  // when the source had one.
+  std::string_view body = formula;
+  bool had_equals = false;
+  if (!body.empty() && body.front() == '=') {
+    body = body.substr(1);
+    had_equals = true;
   }
-  std::string emitted_bare(new_name);
-  std::string emitted_quoted = single_quote_sheet(new_name);
-  const std::string& replacement_for_bare = needs_quoting ? emitted_quoted : emitted_bare;
-
-  const std::string old_quoted = single_quote_sheet(old_name);
+  Arena arena;
+  parser::Parser parser(body, arena);
+  parser::AstNode* root = parser.parse();
+  if (root == nullptr || !parser.errors().empty()) {
+    return std::string(formula);
+  }
+  const parser::SheetRenameTransform transform(old_name, new_name);
+  const parser::AstNode* shifted = parser::shift_refs(*root, arena, transform);
+  if (shifted == nullptr) {
+    return std::string(formula);
+  }
   std::string out;
-  out.reserve(formula.size());
-  std::size_t pos = 0;
-  while (pos < formula.size()) {
-    // Bare-form match: identifier-boundary on the left, `!` on the right.
-    if (pos + old_name.size() < formula.size() && formula[pos + old_name.size()] == '!' &&
-        strings::case_insensitive_eq(formula.substr(pos, old_name.size()), old_name)) {
-      const bool token_start = pos == 0 || !is_id_byte(formula[pos - 1]);
-      if (token_start) {
-        out.append(replacement_for_bare);
-        pos += old_name.size();
-        continue;
-      }
-    }
-    // Quoted-form match: `'OldName'!`. Emit the canonical form for the
-    // new name — bare when the new name does not require quoting,
-    // quoted otherwise. This keeps round-trips minimal: a rename to a
-    // simple identifier strips the now-redundant quotes.
-    if (pos + old_quoted.size() < formula.size() && formula[pos + old_quoted.size()] == '!' &&
-        strings::case_insensitive_eq(formula.substr(pos, old_quoted.size()), old_quoted)) {
-      out.append(replacement_for_bare);
-      pos += old_quoted.size();
-      continue;
-    }
-    out.push_back(formula[pos]);
-    ++pos;
+  if (had_equals) {
+    out.push_back('=');
   }
+  out.append(parser::format_formula(*shifted));
   return out;
 }
 

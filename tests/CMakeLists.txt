@@ -56,10 +56,12 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/parser/tokenizer_test.cpp
   unit/parser/ast_test.cpp
   unit/parser/ast_dump_test.cpp
+  unit/parser/ast_format_test.cpp
   unit/parser/ast_shift_test.cpp
   unit/parser/parser_test.cpp
   unit/parser/parser_error_test.cpp
   unit/parser/let_test.cpp
+  unit/parser/ref_transforms_test.cpp
   unit/eval/bytecode_test.cpp
   unit/eval/compiler_test.cpp
   unit/eval/optimizer_test.cpp
