@@ -240,6 +240,200 @@ cases:
               priority: 1
               dxf_id: 16
 
+  - id: contains_blanks_a2
+    description: |
+      ContainsBlanks over A1:A3 = ["x", blank, "y"]. Only A2 (truly
+      empty) matches; A1 and A3 do not. The matching cell surfaces a
+      single DifferentialFormat match referencing dxfId=17, priority=1.
+    sheet:
+      A1: "x"
+      A3: "y"
+    cf_blocks:
+      - sqref: "A1:A3"
+        rules:
+          - type: ContainsBlanks
+            priority: 1
+            dxf_id: 17
+    range: "A1:A3"
+    expected:
+      cells:
+        - addr: A2
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 17
+
+  - id: not_contains_blanks_a1_a3
+    description: |
+      NotContainsBlanks over A1:A3 = ["x", blank, "y"]. A1 and A3
+      (non-blank) match; A2 (empty) does not. Both surface one
+      DifferentialFormat match referencing dxfId=18, priority=1.
+    sheet:
+      A1: "x"
+      A3: "y"
+    cf_blocks:
+      - sqref: "A1:A3"
+        rules:
+          - type: NotContainsBlanks
+            priority: 1
+            dxf_id: 18
+    range: "A1:A3"
+    expected:
+      cells:
+        - addr: A1
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 18
+        - addr: A3
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 18
+
+  - id: contains_errors_a2
+    description: |
+      ContainsErrors over A1:A3 where A2 evaluates to #DIV/0!. Only A2
+      matches; A1 and A3 (text values) do not. The matching cell
+      surfaces a single DifferentialFormat match referencing dxfId=19,
+      priority=1.
+    sheet:
+      A1: "x"
+      A2: { kind: error, value: "#DIV/0!" }
+      A3: "y"
+    cf_blocks:
+      - sqref: "A1:A3"
+        rules:
+          - type: ContainsErrors
+            priority: 1
+            dxf_id: 19
+    range: "A1:A3"
+    expected:
+      cells:
+        - addr: A2
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 19
+
+  - id: not_contains_errors_a1_a3
+    description: |
+      NotContainsErrors over A1:A3 where A2 evaluates to #DIV/0!. A1
+      and A3 (text values) match; A2 (error) does not. Both matching
+      cells surface a single DifferentialFormat match referencing
+      dxfId=20, priority=1.
+    sheet:
+      A1: "x"
+      A2: { kind: error, value: "#DIV/0!" }
+      A3: "y"
+    cf_blocks:
+      - sqref: "A1:A3"
+        rules:
+          - type: NotContainsErrors
+            priority: 1
+            dxf_id: 20
+    range: "A1:A3"
+    expected:
+      cells:
+        - addr: A1
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 20
+        - addr: A3
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 20
+
+  - id: duplicate_values_a1_a3
+    description: |
+      DuplicateValues over A1:A3 = [1, 2, 1]. A1 and A3 share the
+      value 1 (duplicates); A2 is unique. Both matching cells surface
+      a single DifferentialFormat match referencing dxfId=21,
+      priority=1.
+    sheet:
+      A1: 1
+      A2: 2
+      A3: 1
+    cf_blocks:
+      - sqref: "A1:A3"
+        rules:
+          - type: DuplicateValues
+            priority: 1
+            dxf_id: 21
+    range: "A1:A3"
+    expected:
+      cells:
+        - addr: A1
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 21
+        - addr: A3
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 21
+
+  - id: unique_values_a2
+    description: |
+      UniqueValues over A1:A3 = [1, 2, 1]. Only A2 (value 2) is
+      unique within the range; A1 and A3 share 1. The matching cell
+      surfaces a single DifferentialFormat match referencing dxfId=22,
+      priority=1.
+    sheet:
+      A1: 1
+      A2: 2
+      A3: 1
+    cf_blocks:
+      - sqref: "A1:A3"
+        rules:
+          - type: UniqueValues
+            priority: 1
+            dxf_id: 22
+    range: "A1:A3"
+    expected:
+      cells:
+        - addr: A2
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 22
+
+  - id: expression_even_row
+    description: |
+      Expression `MOD(ROW(),2)=0` over A1:A4 = [1, 2, 3, 4]. The
+      formula matches even-numbered rows (1-based ROW()). Sheet rows
+      A2 and A4 (0-based 1, 3) match; A1 and A3 do not. Both matching
+      cells surface a single DifferentialFormat match referencing
+      dxfId=23, priority=1.
+    sheet:
+      A1: 1
+      A2: 2
+      A3: 3
+      A4: 4
+    cf_blocks:
+      - sqref: "A1:A4"
+        rules:
+          - type: Expression
+            priority: 1
+            dxf_id: 23
+            formula1: "MOD(ROW(),2)=0"
+    range: "A1:A4"
+    expected:
+      cells:
+        - addr: A2
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 23
+        - addr: A4
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 23
+
   - id: contains_text_foo
     description: |
       Contains-text "foo" over A1:A3 = ["foobar", "bar", "foo"].

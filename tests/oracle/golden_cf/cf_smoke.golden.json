@@ -207,6 +207,162 @@
       ]
     },
     {
+      "id": "contains_blanks_a2",
+      "cells": [
+        {
+          "row": 1,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 17
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "not_contains_blanks_a1_a3",
+      "cells": [
+        {
+          "row": 0,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 18
+            }
+          ]
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 18
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "contains_errors_a2",
+      "cells": [
+        {
+          "row": 1,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 19
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "not_contains_errors_a1_a3",
+      "cells": [
+        {
+          "row": 0,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 20
+            }
+          ]
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 20
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "duplicate_values_a1_a3",
+      "cells": [
+        {
+          "row": 0,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 21
+            }
+          ]
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 21
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unique_values_a2",
+      "cells": [
+        {
+          "row": 1,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 22
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "expression_even_row",
+      "cells": [
+        {
+          "row": 1,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 23
+            }
+          ]
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 23
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "contains_text_foo",
       "cells": [
         {

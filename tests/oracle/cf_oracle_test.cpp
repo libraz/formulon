@@ -397,7 +397,241 @@ TEST(CfOracleSmoke, NotContainsQux) {
 }
 
 // ---------------------------------------------------------------------------
-// Case 8: contains-text "foo" over A1:A3 = ["foobar", "bar", "foo"].
+// Case 8: contains-blanks over A1:A3 = ["x", blank, "y"]. Only A2
+// (truly empty) matches. Mirrors cases_cf/cf_smoke.yaml ::
+// contains_blanks_a2.
+// ---------------------------------------------------------------------------
+
+TEST(CfOracleSmoke, ContainsBlanks) {
+  CFOracleHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::text("x"));
+  // A2 is blank — leave it unset.
+  harness.sheet.set_cell_value(2, 0, Value::text("y"));
+
+  ConditionalFormat block{};
+  block.sqref.push_back(MakeRange(0, 0, 2, 0));
+  CFRule rule;
+  rule.type = RuleType::ContainsBlanks;
+  rule.priority = 1;
+  rule.dxf_id = 17u;
+  block.rules.push_back(std::move(rule));
+  harness.sheet.mutable_conditional_formats().push_back(std::move(block));
+
+  const CFHost host = harness.MakeHost();
+  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+
+  ASSERT_EQ(matches.size(), 1u);
+  EXPECT_EQ(matches[0].cell.row, 1u);
+  ASSERT_EQ(matches[0].matches.size(), 1u);
+  EXPECT_EQ(matches[0].matches[0].kind, CFMatchKind::DifferentialFormat);
+  ASSERT_TRUE(matches[0].matches[0].dxf_id.has_value());
+  EXPECT_EQ(*matches[0].matches[0].dxf_id, 17u);
+}
+
+// ---------------------------------------------------------------------------
+// Case 9: not-contains-blanks over A1:A3 = ["x", blank, "y"]. A1 and
+// A3 (non-blank) match. Mirrors cases_cf/cf_smoke.yaml ::
+// not_contains_blanks_a1_a3.
+// ---------------------------------------------------------------------------
+
+TEST(CfOracleSmoke, NotContainsBlanks) {
+  CFOracleHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::text("x"));
+  harness.sheet.set_cell_value(2, 0, Value::text("y"));
+
+  ConditionalFormat block{};
+  block.sqref.push_back(MakeRange(0, 0, 2, 0));
+  CFRule rule;
+  rule.type = RuleType::NotContainsBlanks;
+  rule.priority = 1;
+  rule.dxf_id = 18u;
+  block.rules.push_back(std::move(rule));
+  harness.sheet.mutable_conditional_formats().push_back(std::move(block));
+
+  const CFHost host = harness.MakeHost();
+  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+
+  ASSERT_EQ(matches.size(), 2u);
+  EXPECT_EQ(matches[0].cell.row, 0u);
+  EXPECT_EQ(matches[1].cell.row, 2u);
+  for (const auto& cell : matches) {
+    ASSERT_EQ(cell.matches.size(), 1u);
+    EXPECT_EQ(cell.matches[0].kind, CFMatchKind::DifferentialFormat);
+    ASSERT_TRUE(cell.matches[0].dxf_id.has_value());
+    EXPECT_EQ(*cell.matches[0].dxf_id, 18u);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Case 10: contains-errors over A1:A3 where A2 = #DIV/0!. Only A2
+// matches. Mirrors cases_cf/cf_smoke.yaml :: contains_errors_a2.
+// ---------------------------------------------------------------------------
+
+TEST(CfOracleSmoke, ContainsErrors) {
+  CFOracleHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::text("x"));
+  harness.sheet.set_cell_value(1, 0, Value::error(ErrorCode::Div0));
+  harness.sheet.set_cell_value(2, 0, Value::text("y"));
+
+  ConditionalFormat block{};
+  block.sqref.push_back(MakeRange(0, 0, 2, 0));
+  CFRule rule;
+  rule.type = RuleType::ContainsErrors;
+  rule.priority = 1;
+  rule.dxf_id = 19u;
+  block.rules.push_back(std::move(rule));
+  harness.sheet.mutable_conditional_formats().push_back(std::move(block));
+
+  const CFHost host = harness.MakeHost();
+  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+
+  ASSERT_EQ(matches.size(), 1u);
+  EXPECT_EQ(matches[0].cell.row, 1u);
+  ASSERT_EQ(matches[0].matches.size(), 1u);
+  EXPECT_EQ(matches[0].matches[0].kind, CFMatchKind::DifferentialFormat);
+  ASSERT_TRUE(matches[0].matches[0].dxf_id.has_value());
+  EXPECT_EQ(*matches[0].matches[0].dxf_id, 19u);
+}
+
+// ---------------------------------------------------------------------------
+// Case 11: not-contains-errors over A1:A3 where A2 = #DIV/0!. A1 and
+// A3 (non-error) match. Mirrors cases_cf/cf_smoke.yaml ::
+// not_contains_errors_a1_a3.
+// ---------------------------------------------------------------------------
+
+TEST(CfOracleSmoke, NotContainsErrors) {
+  CFOracleHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::text("x"));
+  harness.sheet.set_cell_value(1, 0, Value::error(ErrorCode::Div0));
+  harness.sheet.set_cell_value(2, 0, Value::text("y"));
+
+  ConditionalFormat block{};
+  block.sqref.push_back(MakeRange(0, 0, 2, 0));
+  CFRule rule;
+  rule.type = RuleType::NotContainsErrors;
+  rule.priority = 1;
+  rule.dxf_id = 20u;
+  block.rules.push_back(std::move(rule));
+  harness.sheet.mutable_conditional_formats().push_back(std::move(block));
+
+  const CFHost host = harness.MakeHost();
+  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+
+  ASSERT_EQ(matches.size(), 2u);
+  EXPECT_EQ(matches[0].cell.row, 0u);
+  EXPECT_EQ(matches[1].cell.row, 2u);
+  for (const auto& cell : matches) {
+    ASSERT_EQ(cell.matches.size(), 1u);
+    EXPECT_EQ(cell.matches[0].kind, CFMatchKind::DifferentialFormat);
+    ASSERT_TRUE(cell.matches[0].dxf_id.has_value());
+    EXPECT_EQ(*cell.matches[0].dxf_id, 20u);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Case 12: duplicate-values over A1:A3 = [1, 2, 1]. A1 and A3 match.
+// Mirrors cases_cf/cf_smoke.yaml :: duplicate_values_a1_a3.
+// ---------------------------------------------------------------------------
+
+TEST(CfOracleSmoke, DuplicateValues) {
+  CFOracleHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(1.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(2.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(1.0));
+
+  ConditionalFormat block{};
+  block.sqref.push_back(MakeRange(0, 0, 2, 0));
+  CFRule rule;
+  rule.type = RuleType::DuplicateValues;
+  rule.priority = 1;
+  rule.dxf_id = 21u;
+  block.rules.push_back(std::move(rule));
+  harness.sheet.mutable_conditional_formats().push_back(std::move(block));
+
+  const CFHost host = harness.MakeHost();
+  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+
+  ASSERT_EQ(matches.size(), 2u);
+  EXPECT_EQ(matches[0].cell.row, 0u);
+  EXPECT_EQ(matches[1].cell.row, 2u);
+  for (const auto& cell : matches) {
+    ASSERT_EQ(cell.matches.size(), 1u);
+    EXPECT_EQ(cell.matches[0].kind, CFMatchKind::DifferentialFormat);
+    ASSERT_TRUE(cell.matches[0].dxf_id.has_value());
+    EXPECT_EQ(*cell.matches[0].dxf_id, 21u);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Case 13: unique-values over A1:A3 = [1, 2, 1]. Only A2 (value 2) is
+// unique. Mirrors cases_cf/cf_smoke.yaml :: unique_values_a2.
+// ---------------------------------------------------------------------------
+
+TEST(CfOracleSmoke, UniqueValues) {
+  CFOracleHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(1.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(2.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(1.0));
+
+  ConditionalFormat block{};
+  block.sqref.push_back(MakeRange(0, 0, 2, 0));
+  CFRule rule;
+  rule.type = RuleType::UniqueValues;
+  rule.priority = 1;
+  rule.dxf_id = 22u;
+  block.rules.push_back(std::move(rule));
+  harness.sheet.mutable_conditional_formats().push_back(std::move(block));
+
+  const CFHost host = harness.MakeHost();
+  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+
+  ASSERT_EQ(matches.size(), 1u);
+  EXPECT_EQ(matches[0].cell.row, 1u);
+  ASSERT_EQ(matches[0].matches.size(), 1u);
+  EXPECT_EQ(matches[0].matches[0].kind, CFMatchKind::DifferentialFormat);
+  ASSERT_TRUE(matches[0].matches[0].dxf_id.has_value());
+  EXPECT_EQ(*matches[0].matches[0].dxf_id, 22u);
+}
+
+// ---------------------------------------------------------------------------
+// Case 14: expression `MOD(ROW(),2)=0` over A1:A4 = [1, 2, 3, 4]. The
+// formula matches even-numbered rows (1-based ROW()); A2 (row=1) and
+// A4 (row=3) match. Mirrors cases_cf/cf_smoke.yaml :: expression_even_row.
+// ---------------------------------------------------------------------------
+
+TEST(CfOracleSmoke, ExpressionEvenRow) {
+  CFOracleHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(1.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(2.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(3.0));
+  harness.sheet.set_cell_value(3, 0, Value::number(4.0));
+
+  ConditionalFormat block{};
+  block.sqref.push_back(MakeRange(0, 0, 3, 0));
+  CFRule rule;
+  rule.type = RuleType::Expression;
+  rule.priority = 1;
+  rule.dxf_id = 23u;
+  rule.formula1 = "MOD(ROW(),2)=0";
+  block.rules.push_back(std::move(rule));
+  harness.sheet.mutable_conditional_formats().push_back(std::move(block));
+
+  const CFHost host = harness.MakeHost();
+  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 3, 0), host);
+
+  ASSERT_EQ(matches.size(), 2u);
+  EXPECT_EQ(matches[0].cell.row, 1u);
+  EXPECT_EQ(matches[1].cell.row, 3u);
+  for (const auto& cell : matches) {
+    ASSERT_EQ(cell.matches.size(), 1u);
+    EXPECT_EQ(cell.matches[0].kind, CFMatchKind::DifferentialFormat);
+    ASSERT_TRUE(cell.matches[0].dxf_id.has_value());
+    EXPECT_EQ(*cell.matches[0].dxf_id, 23u);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Case 15: contains-text "foo" over A1:A3 = ["foobar", "bar", "foo"].
 // "foobar" and "foo" both contain the literal "foo"; "bar" does not.
 // Mirrors cases_cf/cf_smoke.yaml :: contains_text_foo.
 // ---------------------------------------------------------------------------

@@ -18,13 +18,16 @@ self-baselines under ``tests/oracle/golden_cf/``.
 Supported rule types (matches the smoke suite):
 
   - ``CellIs``, ``Top10``, ``AboveAverage``, ``ContainsText``,
-    ``BeginsWith``, ``EndsWith``, ``NotContainsText`` ->
-    ``DifferentialFormat`` match. The rule's ``dxf`` fill is set to a
-    deterministic fingerprint colour so the generator can map the
-    captured ``DisplayFormat`` colour back to the originating rule's
-    declared ``dxf_id``. Adding another DifferentialFormat-bearing rule
-    type only requires extending ``_build_workbook`` to emit it via
-    openpyxl; the capture path is shared.
+    ``BeginsWith``, ``EndsWith``, ``NotContainsText``,
+    ``ContainsBlanks``, ``NotContainsBlanks``, ``ContainsErrors``,
+    ``NotContainsErrors``, ``DuplicateValues``, ``UniqueValues``,
+    ``Expression`` -> ``DifferentialFormat`` match. The rule's ``dxf``
+    fill is set to a deterministic fingerprint colour so the generator
+    can map the captured ``DisplayFormat`` colour back to the
+    originating rule's declared ``dxf_id``. Adding another
+    DifferentialFormat-bearing rule type only requires extending
+    ``_build_workbook`` to emit it via openpyxl; the capture path is
+    shared.
   - ``ColorScale`` -> ``ColorScale`` match. The captured fill is the
     colour Excel resolved by interpolating between stops.
 
@@ -35,11 +38,12 @@ Not yet captured (intentional gaps):
     length or the icon bucket via the public AppleScript surface), so
     they will likely stay deferred even after the other rule types
     land.
-  - ``ContainsBlanks`` / ``NotContainsBlanks``, ``ContainsErrors`` /
-    ``NotContainsErrors``, ``TimePeriod``, ``DuplicateValues``,
-    ``UniqueValues``, ``Expression`` — all DifferentialFormat-bearing.
-    They reuse the same dxf-fingerprint trick; they are deferred until
-    the smoke suite gains cases that exercise them.
+  - ``TimePeriod`` — DifferentialFormat-bearing. Capture is supported
+    in principle but pinning the case is awkward because Excel's
+    ``timePeriod`` rules read live ``TODAY()`` at evaluation time;
+    deterministic regression requires either freezing system time or
+    rewriting the rule as an ``Expression`` referencing a known serial.
+    Deferred until a smoke case formalises that contract.
 
 macOS + Excel 365 only. The generator refuses to start on any other
 platform.
@@ -208,11 +212,19 @@ def _build_workbook(case: Dict[str, Any], path: Path) -> List[Dict[str, Any]]:
                 "BeginsWith",
                 "EndsWith",
                 "NotContainsText",
+                "ContainsBlanks",
+                "NotContainsBlanks",
+                "ContainsErrors",
+                "NotContainsErrors",
+                "DuplicateValues",
+                "UniqueValues",
+                "Expression",
             ):
-                # All three are DifferentialFormat-bearing rules; the
-                # capture path uses the same dxf-fingerprint reverse
+                # All of these are DifferentialFormat-bearing rules;
+                # the capture path uses the same dxf-fingerprint reverse
                 # mapping as `CellIs`. Only the openpyxl `Rule` payload
-                # differs.
+                # differs across families (ranking, text-match, predicate,
+                # set-cardinality, free-form expression).
                 dxf_id = int(rule.get("dxf_id", rule_idx))
                 fingerprint = _hex_for_dxf_id(dxf_id)
                 fill_hex = "FF" + _hex6(fingerprint)
@@ -250,11 +262,15 @@ def _build_workbook(case: Dict[str, Any], path: Path) -> List[Dict[str, Any]]:
                     if std_dev is not None:
                         rule_kwargs["stdDev"] = int(std_dev)
                     opx_rule = Rule(**rule_kwargs)
-                else:
-                    # Text-rule family: ContainsText, BeginsWith,
-                    # EndsWith, NotContainsText. Each requires a
-                    # synthesised formula because Excel computes one at
-                    # write time but openpyxl will not supply it.
+                elif rtype in (
+                    "ContainsText",
+                    "BeginsWith",
+                    "EndsWith",
+                    "NotContainsText",
+                ):
+                    # Text-rule family. Each requires a synthesised
+                    # formula because Excel computes one at write time
+                    # but openpyxl will not supply it.
                     text = rule.get("text", "")
                     if not text:
                         raise ValueError(
@@ -288,6 +304,58 @@ def _build_workbook(case: Dict[str, Any], path: Path) -> List[Dict[str, Any]]:
                         operator=op_str,
                         text=text,
                         formula=formula,
+                        dxf=dxf,
+                        priority=priority,
+                        stopIfTrue=False,
+                    )
+                elif rtype in (
+                    "ContainsBlanks",
+                    "NotContainsBlanks",
+                    "ContainsErrors",
+                    "NotContainsErrors",
+                ):
+                    # Blanks/Errors predicates. Excel emits a synthesised
+                    # formula at write time; openpyxl wants one too.
+                    first_sqref = block["sqref"][0]
+                    anchor = _addr(first_sqref["first_row"], first_sqref["first_col"])
+                    if rtype == "ContainsBlanks":
+                        type_str = "containsBlanks"
+                        formula = [f"LEN(TRIM({anchor}))=0"]
+                    elif rtype == "NotContainsBlanks":
+                        type_str = "notContainsBlanks"
+                        formula = [f"LEN(TRIM({anchor}))>0"]
+                    elif rtype == "ContainsErrors":
+                        type_str = "containsErrors"
+                        formula = [f"ISERROR({anchor})"]
+                    else:  # NotContainsErrors
+                        type_str = "notContainsErrors"
+                        formula = [f"NOT(ISERROR({anchor}))"]
+                    opx_rule = Rule(
+                        type=type_str,
+                        formula=formula,
+                        dxf=dxf,
+                        priority=priority,
+                        stopIfTrue=False,
+                    )
+                elif rtype in ("DuplicateValues", "UniqueValues"):
+                    type_str = (
+                        "duplicateValues" if rtype == "DuplicateValues" else "uniqueValues"
+                    )
+                    opx_rule = Rule(
+                        type=type_str,
+                        dxf=dxf,
+                        priority=priority,
+                        stopIfTrue=False,
+                    )
+                else:  # Expression
+                    formula1 = rule.get("formula1")
+                    if not formula1:
+                        raise ValueError(
+                            "Expression rule requires `formula1`"
+                        )
+                    opx_rule = Rule(
+                        type="expression",
+                        formula=[formula1],
                         dxf=dxf,
                         priority=priority,
                         stopIfTrue=False,
