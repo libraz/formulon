@@ -22,7 +22,7 @@ CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 
         oracle-setup oracle-setup-mac oracle-setup-wsl \
         oracle-gen oracle-gen-cf oracle-verify oracle-contribute \
         ironcalc-import ironcalc-verify \
-        fuzz-parser fuzz-xlsx fuzz-eval bench coverage \
+        fuzz-parser fuzz-xlsx fuzz-eval bench coverage mutation \
         function-status behavior-status
 
 all: build
@@ -386,6 +386,15 @@ bench:
 # Driver: tools/dev/run_coverage.sh.
 coverage:
 	bash tools/dev/run_coverage.sh
+
+# Mutation testing report. mull-runner-cxx mutates the C++ source under
+# the configured filter, runs the test binary against each mutant, and
+# reports the kill rate. Local diagnostic only. CI does NOT gate on
+# mutation score; thresholds drift with refactors.
+# Set FORMULON_MUT_STRICT=1 for ad-hoc local enforcement (~70% target).
+# Driver: tools/dev/run_mutation.sh.
+mutation:
+	bash tools/dev/run_mutation.sh
 
 # Function implementation coverage report. Scans src/eval/ for registered
 # and lazy-dispatched function names and diffs them against the canonical
