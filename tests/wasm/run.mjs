@@ -347,6 +347,31 @@ async function run() {
     }
   });
 
+  test('removeMerge / removeMergeAt / clearMerges step-wise prune the merge list', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const a = { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 };
+      const b = { firstRow: 4, firstCol: 4, lastRow: 5, lastCol: 5 };
+      assert.ok(wb.addMerge(0, a).ok);
+      assert.ok(wb.addMerge(0, b).ok);
+      // removeMerge with an overlap that hits `a` only.
+      assert.ok(wb.removeMerge(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }).ok);
+      let list = wb.getMerges(0);
+      assert.equal(list.length, 1);
+      assert.equal(list[0].firstRow, 4);
+      // removeMergeAt drops the survivor by index.
+      assert.ok(wb.removeMergeAt(0, 0).ok);
+      assert.equal(wb.getMerges(0).length, 0);
+      // clearMerges nukes the remainder; safe on an empty list.
+      assert.ok(wb.addMerge(0, a).ok);
+      assert.ok(wb.addMerge(0, b).ok);
+      assert.ok(wb.clearMerges(0).ok);
+      assert.equal(wb.getMerges(0).length, 0);
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('hyperlinks are read after save+load', () => {
     const wb = Module.Workbook.createDefault();
     try {

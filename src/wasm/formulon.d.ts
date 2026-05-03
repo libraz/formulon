@@ -426,6 +426,12 @@ export interface Workbook {
 
   /** Adds a merge range to `sheet`. */
   addMerge(sheet: number, range: MergeRange): Status;
+  /** Removes every merge that overlaps `range` (inclusive). No-op when nothing overlaps. */
+  removeMerge(sheet: number, range: MergeRange): Status;
+  /** Removes the merge at `index`. Returns kInvalidArgument if `index` is out of range. */
+  removeMergeAt(sheet: number, index: number): Status;
+  /** Drops every merge on `sheet`. */
+  clearMerges(sheet: number): Status;
   /** Returns every merge range on `sheet` as a JS array. */
   getMerges(sheet: number): ReadonlyArray<MergeRange>;
 
