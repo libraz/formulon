@@ -354,9 +354,14 @@ bench:
 	@echo "bench: not yet implemented (planned for M9)"
 	@exit 0
 
+# Local coverage diagnostic. Builds with the gcov-instrumented preset,
+# runs fast tests, and prints a per-area report plus the list of files
+# the fast suite never touches. Targets in the report (util/value/eval
+# 95% / functions 98% / io 90%) are aspirational; this is *not* a CI
+# gate. Set FORMULON_COV_STRICT=1 for ad-hoc local enforcement.
+# Driver: tools/dev/run_coverage.sh.
 coverage:
-	@echo "coverage: not yet implemented (planned for M9)"
-	@exit 0
+	bash tools/dev/run_coverage.sh
 
 # Function implementation coverage report. Scans src/eval/ for registered
 # and lazy-dispatched function names and diffs them against the canonical
