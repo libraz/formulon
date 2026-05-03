@@ -28,12 +28,10 @@
 #   1 -- one or more tests failed OR TSan emitted a race warning
 #   2 -- build / configure error
 #
-# TODO: GitHub Actions wiring (a dedicated `tsan` job in
-# `.github/workflows/ci.yml`) is intentionally deferred to a separate
-# bundle so the wiring decision (job dependencies, runner os, caching
-# strategy) can be evaluated against the WASM and native jobs together.
-# Until then, this script is the canonical way to drive the gate locally
-# or from a custom CI runner.
+# CI: invoked by the `tsan` job in `.github/workflows/ci.yml` on every
+# push / PR to `main` (Ubuntu runner, clang++). The job uploads
+# `build-tsan/_tsan_logs/` as an artifact on failure for offline
+# inspection.
 
 set -eu
 

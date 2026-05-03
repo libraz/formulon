@@ -1,11 +1,15 @@
 # Formulon CI workflow.
 #
-# Three jobs:
+# Four jobs:
 #   - native           : build + ctest (fast labels), gated by an allowlist
 #                        of pre-existing flakes (tools/ci/expected_flakes.txt).
 #   - wasm             : build the WASM artifact, run the size report against
 #                        the 1.8 MiB hard ceiling, smoke-test under Node 20,
 #                        and upload formulon.wasm as a downloadable artifact.
+#   - tsan             : ThreadSanitizer gate. Builds the dedicated TSAN-
+#                        labelled concurrency tests under -fsanitize=thread
+#                        and fails on any race report. Driver:
+#                        tools/ci/run_tsan.sh.
 #   - format-and-lint  : clang-format dry-run + clang-tidy. Soft-fail for now
 #                        (continue-on-error: true) until the existing warnings
 #                        are drained; hard-flip is scheduled for Phase 6.
@@ -126,6 +130,40 @@ jobs:
 
       - name: WASM smoke test (Node)
         run: make test-wasm
+
+  tsan:
+    name: ThreadSanitizer (Linux, clang)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies + clang
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build clang
+
+      - name: Cache CMake build directory (TSan)
+        uses: actions/cache@v4
+        with:
+          path: build-tsan
+          key: tsan-build-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'tests/CMakeLists.txt', 'tests/concurrency/**', 'cmake/**') }}
+          restore-keys: |
+            tsan-build-${{ runner.os }}-
+
+      - name: Run TSan gate
+        env:
+          CXX_COMPILER: clang++
+        run: bash tools/ci/run_tsan.sh
+
+      - name: Upload TSan logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tsan-logs
+          path: build-tsan/_tsan_logs/
+          retention-days: 7
 
   format-and-lint:
     name: clang-format and clang-tidy
