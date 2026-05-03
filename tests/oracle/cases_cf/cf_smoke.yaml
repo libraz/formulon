@@ -83,3 +83,102 @@ cases:
             - kind: ColorScale
               priority: 1
               color: { r: 0,   g: 255, b: 0,   a: 255 }
+
+  - id: top10_top2_of_a1_to_a5
+    description: |
+      Top-2 over A1:A5 = [1, 5, 3, 4, 2]. The two largest values are
+      5 (A2) and 4 (A4); both surface a single DifferentialFormat
+      match referencing dxfId=11, priority=1. A1, A3, A5 yield no
+      matches.
+    sheet:
+      A1: 1
+      A2: 5
+      A3: 3
+      A4: 4
+      A5: 2
+    cf_blocks:
+      - sqref: "A1:A5"
+        rules:
+          - type: Top10
+            priority: 1
+            dxf_id: 11
+            rank: 2
+            percent: false
+            bottom: false
+    range: "A1:A5"
+    expected:
+      cells:
+        - addr: A2
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 11
+        - addr: A4
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 11
+
+  - id: above_average_a1_to_a5
+    description: |
+      Above-average over A1:A5 = [1, 5, 3, 4, 2]. Mean = 3; cells
+      strictly above the mean are A2 (5) and A4 (4). Both surface a
+      single DifferentialFormat match referencing dxfId=12, priority=1.
+    sheet:
+      A1: 1
+      A2: 5
+      A3: 3
+      A4: 4
+      A5: 2
+    cf_blocks:
+      - sqref: "A1:A5"
+        rules:
+          - type: AboveAverage
+            priority: 1
+            dxf_id: 12
+            above_average: true
+            equal_average: false
+    range: "A1:A5"
+    expected:
+      cells:
+        - addr: A2
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 12
+        - addr: A4
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 12
+
+  - id: contains_text_foo
+    description: |
+      Contains-text "foo" over A1:A3 = ["foobar", "bar", "foo"].
+      A1 ("foobar") and A3 ("foo") match; A2 ("bar") does not. Both
+      matching cells surface a single DifferentialFormat match
+      referencing dxfId=13, priority=1.
+    sheet:
+      A1: "foobar"
+      A2: "bar"
+      A3: "foo"
+    cf_blocks:
+      - sqref: "A1:A3"
+        rules:
+          - type: ContainsText
+            priority: 1
+            dxf_id: 13
+            text: "foo"
+    range: "A1:A3"
+    expected:
+      cells:
+        - addr: A1
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 13
+        - addr: A3
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 13

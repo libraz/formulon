@@ -81,6 +81,87 @@
           ]
         }
       ]
+    },
+    {
+      "id": "top10_top2_of_a1_to_a5",
+      "cells": [
+        {
+          "row": 1,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 11
+            }
+          ]
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 11
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "above_average_a1_to_a5",
+      "cells": [
+        {
+          "row": 1,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 12
+            }
+          ]
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 12
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "contains_text_foo",
+      "cells": [
+        {
+          "row": 0,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 13
+            }
+          ]
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 13
+            }
+          ]
+        }
+      ]
     }
   ]
 }

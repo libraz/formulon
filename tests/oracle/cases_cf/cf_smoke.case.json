@@ -58,6 +58,82 @@
         }
       ],
       "range": {"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}
+    },
+    {
+      "id": "top10_top2_of_a1_to_a5",
+      "description": "Top-2 over A1:A5 = [1, 5, 3, 4, 2].",
+      "sheet": [
+        {"row": 0, "col": 0, "kind": "number", "value": 1},
+        {"row": 1, "col": 0, "kind": "number", "value": 5},
+        {"row": 2, "col": 0, "kind": "number", "value": 3},
+        {"row": 3, "col": 0, "kind": "number", "value": 4},
+        {"row": 4, "col": 0, "kind": "number", "value": 2}
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [{"first_row": 0, "first_col": 0, "last_row": 4, "last_col": 0}],
+          "rules": [
+            {
+              "type": "Top10",
+              "priority": 1,
+              "dxf_id": 11,
+              "rank": 2,
+              "percent": false,
+              "bottom": false
+            }
+          ]
+        }
+      ],
+      "range": {"first_row": 0, "first_col": 0, "last_row": 4, "last_col": 0}
+    },
+    {
+      "id": "above_average_a1_to_a5",
+      "description": "Above-average over A1:A5 = [1, 5, 3, 4, 2]; mean=3; matches A2 and A4.",
+      "sheet": [
+        {"row": 0, "col": 0, "kind": "number", "value": 1},
+        {"row": 1, "col": 0, "kind": "number", "value": 5},
+        {"row": 2, "col": 0, "kind": "number", "value": 3},
+        {"row": 3, "col": 0, "kind": "number", "value": 4},
+        {"row": 4, "col": 0, "kind": "number", "value": 2}
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [{"first_row": 0, "first_col": 0, "last_row": 4, "last_col": 0}],
+          "rules": [
+            {
+              "type": "AboveAverage",
+              "priority": 1,
+              "dxf_id": 12,
+              "above_average": true,
+              "equal_average": false
+            }
+          ]
+        }
+      ],
+      "range": {"first_row": 0, "first_col": 0, "last_row": 4, "last_col": 0}
+    },
+    {
+      "id": "contains_text_foo",
+      "description": "Contains-text 'foo' over A1:A3 = ['foobar', 'bar', 'foo'].",
+      "sheet": [
+        {"row": 0, "col": 0, "kind": "text", "value": "foobar"},
+        {"row": 1, "col": 0, "kind": "text", "value": "bar"},
+        {"row": 2, "col": 0, "kind": "text", "value": "foo"}
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [{"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}],
+          "rules": [
+            {
+              "type": "ContainsText",
+              "priority": 1,
+              "dxf_id": 13,
+              "text": "foo"
+            }
+          ]
+        }
+      ],
+      "range": {"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}
     }
   ]
 }

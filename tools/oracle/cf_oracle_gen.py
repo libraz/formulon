@@ -17,23 +17,29 @@ self-baselines under ``tests/oracle/golden_cf/``.
 
 Supported rule types (matches the smoke suite):
 
-  - ``CellIs`` -> ``DifferentialFormat`` match. The rule's ``dxf`` fill is
-    set to a deterministic fingerprint colour so the generator can map
-    the captured ``DisplayFormat`` colour back to the originating rule's
-    declared ``dxf_id``.
+  - ``CellIs``, ``Top10``, ``AboveAverage``, ``ContainsText`` ->
+    ``DifferentialFormat`` match. The rule's ``dxf`` fill is set to a
+    deterministic fingerprint colour so the generator can map the
+    captured ``DisplayFormat`` colour back to the originating rule's
+    declared ``dxf_id``. Adding another DifferentialFormat-bearing rule
+    type only requires extending ``_build_workbook`` to emit it via
+    openpyxl; the capture path is shared.
   - ``ColorScale`` -> ``ColorScale`` match. The captured fill is the
     colour Excel resolved by interpolating between stops.
 
-Other rule types (``DataBar``, ``IconSet``, ``Top10``, ``AboveAverage``,
-text rules, blank/error rules, ``TimePeriod``, ``DuplicateValues`` /
-``UniqueValues``, ``Expression``) are not yet supported by the
-generator. ``DataBar`` and ``IconSet`` cannot be captured through
-``DisplayFormat`` alone (Excel does not expose the rendered bar length
-or the icon bucket via the public AppleScript surface), so they will
-likely stay deferred even after the other rule types land. Adding a new
-rule type is a two-step extension: emit the rule via openpyxl in
-``_build_workbook`` and decode the captured payload in
-``_classify_cell``.
+Not yet captured (intentional gaps):
+
+  - ``DataBar``, ``IconSet`` cannot be captured through
+    ``DisplayFormat`` alone (Excel does not expose the rendered bar
+    length or the icon bucket via the public AppleScript surface), so
+    they will likely stay deferred even after the other rule types
+    land.
+  - ``NotContainsText``, ``BeginsWith``, ``EndsWith``,
+    ``ContainsBlanks`` / ``NotContainsBlanks``, ``ContainsErrors`` /
+    ``NotContainsErrors``, ``TimePeriod``, ``DuplicateValues``,
+    ``UniqueValues``, ``Expression`` — all DifferentialFormat-bearing.
+    They reuse the same dxf-fingerprint trick; they are deferred until
+    the smoke suite gains cases that exercise them.
 
 macOS + Excel 365 only. The generator refuses to start on any other
 platform.
@@ -107,7 +113,7 @@ def _build_workbook(case: Dict[str, Any], path: Path) -> List[Dict[str, Any]]:
     declared ``dxf_id``).
     """
     import openpyxl
-    from openpyxl.formatting.rule import CellIsRule, ColorScaleRule
+    from openpyxl.formatting.rule import CellIsRule, ColorScaleRule, Rule
     from openpyxl.styles import PatternFill
     from openpyxl.styles.differential import DifferentialStyle
 
@@ -186,6 +192,80 @@ def _build_workbook(case: Dict[str, Any], path: Path) -> List[Dict[str, Any]]:
                 cir.dxf = dxf
                 cir.priority = priority
                 ws.conditional_formatting.add(sqref_str, cir)
+                descriptors.append(
+                    {
+                        "type": rtype,
+                        "priority": priority,
+                        "sqref": sqref_blocks,
+                        "dxf_id": dxf_id,
+                        "dxf_fingerprint": fingerprint,
+                    }
+                )
+            elif rtype in ("Top10", "AboveAverage", "ContainsText"):
+                # All three are DifferentialFormat-bearing rules; the
+                # capture path uses the same dxf-fingerprint reverse
+                # mapping as `CellIs`. Only the openpyxl `Rule` payload
+                # differs.
+                dxf_id = int(rule.get("dxf_id", rule_idx))
+                fingerprint = _hex_for_dxf_id(dxf_id)
+                fill_hex = "FF" + _hex6(fingerprint)
+                fill = PatternFill(
+                    start_color=fill_hex,
+                    end_color=fill_hex,
+                    fill_type="solid",
+                )
+                dxf = DifferentialStyle(fill=fill)
+                if rtype == "Top10":
+                    rank = int(rule.get("rank", 10))
+                    percent = bool(rule.get("percent", False))
+                    bottom = bool(rule.get("bottom", False))
+                    opx_rule = Rule(
+                        type="top10",
+                        rank=rank,
+                        percent=percent,
+                        bottom=bottom,
+                        dxf=dxf,
+                        priority=priority,
+                        stopIfTrue=False,
+                    )
+                elif rtype == "AboveAverage":
+                    above_average = bool(rule.get("above_average", True))
+                    equal_average = bool(rule.get("equal_average", False))
+                    std_dev = rule.get("std_dev")
+                    rule_kwargs: Dict[str, Any] = {
+                        "type": "aboveAverage",
+                        "aboveAverage": above_average,
+                        "equalAverage": equal_average,
+                        "dxf": dxf,
+                        "priority": priority,
+                        "stopIfTrue": False,
+                    }
+                    if std_dev is not None:
+                        rule_kwargs["stdDev"] = int(std_dev)
+                    opx_rule = Rule(**rule_kwargs)
+                else:  # ContainsText
+                    text = rule.get("text", "")
+                    if not text:
+                        raise ValueError(
+                            "ContainsText rule requires a `text` field"
+                        )
+                    # Excel synthesises a SEARCH() formula at write time;
+                    # openpyxl wants us to provide it explicitly. Use the
+                    # case range's first cell as the row anchor — Excel
+                    # rewrites the row on apply just like a relative ref.
+                    first_sqref = block["sqref"][0]
+                    anchor = _addr(first_sqref["first_row"], first_sqref["first_col"])
+                    formula = [f'NOT(ISERROR(SEARCH("{text}",{anchor})))']
+                    opx_rule = Rule(
+                        type="containsText",
+                        operator="containsText",
+                        text=text,
+                        formula=formula,
+                        dxf=dxf,
+                        priority=priority,
+                        stopIfTrue=False,
+                    )
+                ws.conditional_formatting.add(sqref_str, opx_rule)
                 descriptors.append(
                     {
                         "type": rtype,
@@ -330,7 +410,11 @@ def _classify_cell(
     for desc in sorted_descriptors:
         if not _cell_in_block(row, col, desc["sqref"]):
             continue
-        if desc["type"] == "CellIs":
+        if "dxf_fingerprint" in desc:
+            # All DifferentialFormat-bearing rule types share the same
+            # capture: if the cell's resolved fill matches the rule's
+            # dxf fingerprint, the rule fired and we emit a single
+            # DifferentialFormat match referencing the declared dxf_id.
             if _channel_close(color_list, desc["dxf_fingerprint"], tol=2):
                 return [
                     {
