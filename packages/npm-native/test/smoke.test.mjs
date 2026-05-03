@@ -129,6 +129,12 @@ test('save() returns Uint8Array; loadBytes round-trips the value', async () => {
 // binding. They are deliberately shallow: each call should round-trip
 // some observable state without crashing the Node process.
 
+test('isValid returns true for a live workbook', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.equal(wb.isValid(), true);
+});
+
 test('addMerge + getMerges round-trip a single range', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();

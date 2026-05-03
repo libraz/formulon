@@ -268,6 +268,9 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   // Cell read.
   Napi::Value GetValue(const Napi::CallbackInfo& info);
 
+  // Lifecycle.
+  Napi::Value IsValid(const Napi::CallbackInfo& info);
+
   // Recalc + save.
   Napi::Value Recalc(const Napi::CallbackInfo& info);
   Napi::Value PartialRecalc(const Napi::CallbackInfo& info);
@@ -638,6 +641,10 @@ Napi::Value Workbook::SetIterativeProgress(const Napi::CallbackInfo& info) {
   slot.installed = true;
   fm_status_t rc = fm_workbook_set_iterative_progress(handle_, &IterativeProgressTrampoline, nullptr);
   return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::IsValid(const Napi::CallbackInfo& info) {
+  return Napi::Boolean::New(info.Env(), handle_ != nullptr);
 }
 
 Napi::Value Workbook::Save(const Napi::CallbackInfo& info) {
@@ -1476,6 +1483,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
                          InstanceMethod<&Workbook::GetValue>("getValue"),
                          InstanceMethod<&Workbook::InsertCols>("insertCols"),
                          InstanceMethod<&Workbook::InsertRows>("insertRows"),
+                         InstanceMethod<&Workbook::IsValid>("isValid"),
                          InstanceMethod<&Workbook::MoveSheet>("moveSheet"),
                          InstanceMethod<&Workbook::PartialRecalc>("partialRecalc"),
                          InstanceMethod<&Workbook::PassthroughAt>("passthroughAt"),

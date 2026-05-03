@@ -304,6 +304,10 @@ export type IterativeProgressCallback = (
  *  an explicit `delete()` step. Hold the reference for the lifetime
  *  you need the workbook. */
 export interface Workbook {
+  /** True when the wrapper holds a live native handle. False when the
+   *  underlying handle has been finalised or could not be constructed. */
+  isValid(): boolean;
+
   // Cell mutation.
   setNumber(sheet: number, row: number, col: number, value: number): Status;
   setBool(sheet: number, row: number, col: number, value: boolean): Status;
