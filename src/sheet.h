@@ -294,6 +294,13 @@ class Sheet {
   /// formula, and does NOT eagerly clear any covering spill region.
   void set_cell_phonetic(std::uint32_t row, std::uint32_t col, std::string_view phonetic);
 
+  /// Stores the cellXfs index for the cell at `(row, col)`. The cell must
+  /// already exist (created via `set_cell_value` / `set_cell_formula`); on
+  /// an absent cell this method is a no-op. `xf_index = 0` references the
+  /// workbook's default cellXf and is the on-disk default Excel writes when
+  /// no `s=` attribute is present.
+  void set_cell_xf_index(std::uint32_t row, std::uint32_t col, std::uint32_t xf_index);
+
   /// Returns a non-owning pointer to the cell at `(row, col)`, or `nullptr`
   /// when the coordinate is not in storage.
   ///

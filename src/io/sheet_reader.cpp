@@ -187,23 +187,42 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
         }
       } else {
         // Literal cell. Skip blank-blank cells (e.g. <c r="A1"/>) to
-        // keep the row map sparse and avoid spurious dirty-set entries.
+        // keep the row map sparse and avoid spurious dirty-set entries
+        // — UNLESS the cell carries a non-zero `s=` style index, in
+        // which case the format itself is the load-bearing payload and
+        // we must materialise the slot below so the xf-index write
+        // lands on a real `Cell`.
         if (to_store.is_blank()) {
           // Nothing to record. Note: SST placeholders are Text("") so
           // they fall through here; the queue below still picks them up.
           if (parsed.is_sst_index) {
             ctx.pending_sst_cells.emplace_back(parsed.row, parsed.col, parsed.sst_index);
           }
-          continue;
-        }
-        auto wv = workbook.set_cell_value(sheet_index, parsed.row, parsed.col, to_store);
-        if (!wv) {
-          return wv.error();
+          if (parsed.xf_index == 0U) {
+            continue;
+          }
+          // Fall through to xf-index persistence below; the
+          // `set_cell_xf_index` call materialises the blank cell.
+        } else {
+          auto wv = workbook.set_cell_value(sheet_index, parsed.row, parsed.col, to_store);
+          if (!wv) {
+            return wv.error();
+          }
         }
       }
 
       if (parsed.is_sst_index) {
         ctx.pending_sst_cells.emplace_back(parsed.row, parsed.col, parsed.sst_index);
+      }
+
+      // Persist the cell's `s=` style index when non-zero. The default
+      // `0` is the sentinel "no explicit format"; skipping the call
+      // avoids materialising blank cells purely for style bookkeeping.
+      if (parsed.xf_index != 0U) {
+        auto sx = workbook.set_cell_xf_index(sheet_index, parsed.row, parsed.col, parsed.xf_index);
+        if (!sx) {
+          return sx.error();
+        }
       }
 
       // Inline-string cells carry any <rPh> annotation directly on the
@@ -499,6 +518,26 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   }
   if (parsed.is_sst_index) {
     ctx.pending_sst_cells.emplace_back(rec.row, rec.col, parsed.sst_index);
+  }
+  // Persist the cell's `s=` xf index when present. The SAX scanner
+  // surfaces it as a string view; parse to integer here. Empty / "0"
+  // collapses to the default sentinel and we skip the call to keep
+  // the row map sparse.
+  if (!rec.s.empty()) {
+    std::uint32_t xf = 0;
+    for (char c : rec.s) {
+      if (c < '0' || c > '9') {
+        xf = 0;
+        break;
+      }
+      xf = (xf * 10U) + static_cast<std::uint32_t>(c - '0');
+    }
+    if (xf != 0U) {
+      auto sx = workbook.set_cell_xf_index(sheet_index, rec.row, rec.col, xf);
+      if (!sx) {
+        return sx.error();
+      }
+    }
   }
   // Inline-string cells with <rPh> annotations carry their kana on the
   // SAX record. SST-referenced cells (rec.phonetic stays empty by

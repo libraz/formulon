@@ -81,6 +81,10 @@ struct ParsedCell {
   /// Backed by a fresh entry in the caller-supplied `text_storage`, with
   /// the same lifetime contract as `value`'s text payload.
   std::string_view phonetic_text;
+  /// Index into the workbook's `StylesTable::cell_xfs`, sourced from the
+  /// `s=` attribute on the `<c>` element. Defaults to `0` (the default
+  /// xf) when the attribute is absent.
+  std::uint32_t xf_index = 0;
 };
 
 /// Parses one `<c>` element. `node` must be a valid `<c>` element node;

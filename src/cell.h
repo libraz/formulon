@@ -78,9 +78,14 @@ struct Cell {
   /// on save. The annotation is stored as a single concatenated kana string
   /// (multi-block `<rPh>` runs collapse to one block on round-trip).
   std::string phonetic_text;
-  /// Index into the workbook's cellXfs table. 0 references the workbook's
-  /// default cellXf and applies for unstyled cells. Populated by the styles
-  /// reader/writer; the value is otherwise opaque to the evaluator.
+  /// Index into the workbook's `StylesTable::cell_xfs` describing this
+  /// cell's visual format (number-format id, font/fill/border indices,
+  /// alignment). `0` is the default xf and is the value Excel writes when
+  /// no `s=` attribute is present on the `<c>` element. The OOXML reader
+  /// populates this field from the `s=` attribute; the writer emits it
+  /// back when non-zero. Carried as `std::uint32_t` for parity with the
+  /// `cellXfs` index width (Excel allows up to ~65,000 entries; we leave
+  /// headroom for future widening).
   std::uint32_t xf_index = 0;
 };
 

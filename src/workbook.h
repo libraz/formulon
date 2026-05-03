@@ -21,6 +21,7 @@
 
 #include "io/defined_names.h"
 #include "io/passthrough_part.h"
+#include "io/styles_reader.h"
 #include "io/tables_reader.h"
 #include "io/workbook_kind.h"
 #include "sheet.h"
@@ -367,6 +368,34 @@ class Workbook {
   /// the part.
   void set_kind(io::WorkbookKind kind) noexcept { kind_ = kind; }
 
+  // ---------------------------------------------------------------------------
+  // Styles
+  // ---------------------------------------------------------------------------
+  //
+  // The workbook owns a single `StylesTable` populated by the OOXML
+  // reader and consumed by the OOXML writer. Cells reference an entry
+  // via `Cell::xf_index`. A fresh / `create()`-built workbook starts
+  // with a default-constructed table; `read_styles` populates it
+  // wholesale during package load.
+
+  /// Read-only access to the workbook's styles table.
+  const io::StylesTable& styles() const noexcept { return styles_; }
+
+  /// Replaces the workbook's styles table. Move-assigns to keep the
+  /// reader hand-off allocation-free.
+  void set_styles(io::StylesTable styles) { styles_ = std::move(styles); }
+
+  /// Persists the cell-level xf index without otherwise mutating cell
+  /// state. The cell at `(row, col)` is created (as a default-blank
+  /// literal) when it does not yet exist, mirroring the growth
+  /// semantics of `set_cell_value`. Returns `kInvalidArgument` for an
+  /// out-of-range `sheet_index`. Coexists with `set_cell_value` /
+  /// `set_cell_formula`: those calls leave `xf_index` untouched, so the
+  /// caller can layer a style update on top of a value or formula
+  /// write in either order.
+  Expected<void, Error> set_cell_xf_index(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
+                                          std::uint32_t xf_index);
+
  private:
   Workbook();
 
@@ -388,6 +417,12 @@ class Workbook {
   // emitting the workbook content-type Override. Plain data; no
   // lifecycle implications.
   io::WorkbookKind kind_ = io::WorkbookKind::kXlsx;
+  // Workbook-scoped style records (fonts, fills, borders, num fmts,
+  // and the cellXfs index that ties them together). The default table
+  // is empty and the writer falls back to a minimal-but-valid styles
+  // document; the OOXML reader replaces this wholesale via
+  // `set_styles(...)` when an `xl/styles.xml` part is present.
+  io::StylesTable styles_;
 };
 
 }  // namespace formulon

@@ -38,6 +38,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/sheet_reader_test.cpp
   unit/io/sst_reader_test.cpp
   unit/io/styles_reader_test.cpp
+  unit/io/styles_writer_test.cpp
   unit/io/tables_reader_test.cpp
   unit/io/workbook_kind_test.cpp
   unit/io/zip_reader_test.cpp

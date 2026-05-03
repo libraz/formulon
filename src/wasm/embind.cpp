@@ -963,6 +963,66 @@ class JsWorkbook {
     return rc == 0 ? ok_status() : error_status(rc);
   }
 
+  // ---- Styles --------------------------------------------------------------
+  // Three thin wrappers around the cell-level xf accessors plus the
+  // `fm_styles_get_cell_xf` projector. Font / num-fmt-string getters
+  // are intentionally not surfaced here: JS callers can derive those
+  // through the C API directly when needed, and skipping them keeps
+  // the embind surface small.
+
+  /// Returns `{ status, xfIndex }` for the cell at `(sheet, row, col)`.
+  emscripten::val getCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) const {
+    emscripten::val o = emscripten::val::object();
+    if (handle_ == nullptr) {
+      o.set("status", error_status(7000));
+      return o;
+    }
+    uint32_t xf = 0;
+    fm_status_t rc = fm_cell_get_xf_index(handle_, sheet, row, col, &xf);
+    if (rc != 0) {
+      o.set("status", error_status(rc));
+      return o;
+    }
+    o.set("status", ok_status());
+    o.set("xfIndex", xf);
+    return o;
+  }
+
+  /// Persists `xfIndex` on the cell at `(sheet, row, col)`.
+  JsStatus setCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col, uint32_t xf_index) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_cell_set_xf_index(handle_, sheet, row, col, xf_index);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Returns `{ status, fontIndex, fillIndex, borderIndex, numFmtId,
+  /// horizontalAlign, verticalAlign, wrapText }` for the `xfIndex`-th
+  /// xf record.
+  emscripten::val getCellXf(uint32_t xf_index) const {
+    emscripten::val o = emscripten::val::object();
+    if (handle_ == nullptr) {
+      o.set("status", error_status(7000));
+      return o;
+    }
+    fm_cell_xf xf{};
+    fm_status_t rc = fm_styles_get_cell_xf(handle_, xf_index, &xf);
+    if (rc != 0) {
+      o.set("status", error_status(rc));
+      return o;
+    }
+    o.set("status", ok_status());
+    o.set("fontIndex", xf.font_index);
+    o.set("fillIndex", xf.fill_index);
+    o.set("borderIndex", xf.border_index);
+    o.set("numFmtId", static_cast<uint32_t>(xf.num_fmt_id));
+    o.set("horizontalAlign", static_cast<uint32_t>(xf.horizontal_align));
+    o.set("verticalAlign", static_cast<uint32_t>(xf.vertical_align));
+    o.set("wrapText", xf.wrap_text != 0);
+    return o;
+  }
+
  private:
   // Holder for the currently-installed JS progress callback. Function
   // local static keeps the slot alive for the WASM module's lifetime
@@ -1188,6 +1248,9 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("cellAt", &JsWorkbook::cellAt)
       .function("definedNameCount", &JsWorkbook::definedNameCount)
       .function("definedNameAt", &JsWorkbook::definedNameAt)
+      .function("getCellXf", &JsWorkbook::getCellXf)
+      .function("getCellXfIndex", &JsWorkbook::getCellXfIndex)
+      .function("setCellXfIndex", &JsWorkbook::setCellXfIndex)
       .function("tableCount", &JsWorkbook::tableCount)
       .function("tableAt", &JsWorkbook::tableAt)
       .function("passthroughCount", &JsWorkbook::passthroughCount)

@@ -61,6 +61,7 @@
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
 #include "io/ooxml_reader.h"
+#include "io/styles_reader.h"
 #include "io/zip_reader.h"
 #include "sheet.h"
 #include "utils/arena.h"
@@ -1260,6 +1261,126 @@ extern "C" const char* fm_last_error_context(void) {
 
 extern "C" const char* fm_status_string(fm_status_t status) {
   return formulon::to_cstring(static_cast<formulon::FormulonErrorCode>(status));
+}
+
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// Validates the `(handle, sheet_index, row, col)` quad and resolves
+/// the cell's `xf_index`. On failure populates the thread-local
+/// diagnostic and returns the status. On success writes
+/// `*out_xf_index` and returns `kOk`. The `xf_index` defaults to `0`
+/// (the default xf) when no cell exists at the address.
+fm_status_t resolve_xf(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row, std::uint32_t col,
+                       std::uint32_t* out_xf_index, const char* fn) {
+  if (wb == nullptr || out_xf_index == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, fn);
+  }
+  if (sheet >= wb->workbook().sheet_count()) {
+    return set_binding_error(
+        formulon::FormulonErrorCode::kInvalidArgument, fn,
+        "sheet_index=" + std::to_string(sheet) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  }
+  const formulon::Cell* cell = wb->workbook().sheet(sheet).cell_at(row, col);
+  *out_xf_index = (cell != nullptr) ? cell->xf_index : 0U;
+  return 0;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_cell_get_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+                                            uint32_t* out_xf_index) {
+  clear_last_error();
+  return resolve_xf(wb, sheet, row, col, out_xf_index, "fm_cell_get_xf_index");
+}
+
+extern "C" fm_status_t fm_cell_set_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+                                            uint32_t xf_index) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_cell_set_xf_index: wb is NULL");
+  }
+  auto r = wb->workbook().set_cell_xf_index(sheet, row, col, xf_index);
+  if (!r) {
+    return set_last_error(r.error());
+  }
+  return 0;
+}
+
+extern "C" fm_status_t fm_styles_get_cell_xf(fm_workbook_t* wb, uint32_t xf_index, fm_cell_xf* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_get_cell_xf: NULL argument");
+  }
+  const formulon::io::StylesTable& styles = wb->workbook().styles();
+  if (xf_index >= styles.cell_xfs.size()) {
+    return set_binding_error(
+        formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_get_cell_xf: xf_index out of range",
+        "xf_index=" + std::to_string(xf_index) + " cell_xfs_count=" + std::to_string(styles.cell_xfs.size()));
+  }
+  const formulon::io::CellXf& xf = styles.cell_xfs[xf_index];
+  out->font_index = xf.font_index;
+  out->fill_index = xf.fill_index;
+  out->border_index = xf.border_index;
+  out->num_fmt_id = xf.num_fmt_id;
+  out->horizontal_align = xf.horizontal_align;
+  out->vertical_align = xf.vertical_align;
+  out->wrap_text = xf.wrap_text ? 1 : 0;
+  return 0;
+}
+
+extern "C" fm_status_t fm_styles_get_font(fm_workbook_t* wb, uint32_t font_index, fm_font_record* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_get_font: NULL argument");
+  }
+  const formulon::io::StylesTable& styles = wb->workbook().styles();
+  if (font_index >= styles.fonts.size()) {
+    return set_binding_error(
+        formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_get_font: font_index out of range",
+        "font_index=" + std::to_string(font_index) + " fonts_count=" + std::to_string(styles.fonts.size()));
+  }
+  const formulon::io::FontRecord& f = styles.fonts[font_index];
+  out->name = f.name.c_str();
+  out->size = f.size;
+  out->color_argb = f.color_argb;
+  out->bold = f.bold ? 1 : 0;
+  out->italic = f.italic ? 1 : 0;
+  out->strike = f.strike ? 1 : 0;
+  out->underline = f.underline;
+  return 0;
+}
+
+extern "C" fm_status_t fm_styles_get_num_fmt_string(fm_workbook_t* wb, uint16_t num_fmt_id, const char** out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_styles_get_num_fmt_string: NULL argument");
+  }
+  // Built-in ids (0..163) resolve through the writer's `.rodata` table.
+  if (num_fmt_id < 164U) {
+    const char* s = formulon::io::builtin_num_fmt(num_fmt_id);
+    if (s != nullptr && s[0] != '\0') {
+      *out = s;
+      return 0;
+    }
+    // Reserved-but-undocumented built-in slot. Fall through to the
+    // custom search to honour any caller-defined override; if neither
+    // is present, surface kInvalidArgument so callers know the id is
+    // not resolvable.
+  }
+  const formulon::io::StylesTable& styles = wb->workbook().styles();
+  for (const formulon::io::NumFmtRecord& n : styles.num_fmts) {
+    if (n.id == num_fmt_id && n.format_string_index < styles.num_fmt_strings.size()) {
+      *out = styles.num_fmt_strings[n.format_string_index].c_str();
+      return 0;
+    }
+  }
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_get_num_fmt_string: id not found",
+                           "num_fmt_id=" + std::to_string(num_fmt_id));
 }
 
 // ---------------------------------------------------------------------------

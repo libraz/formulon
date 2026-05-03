@@ -32,6 +32,7 @@
 #include "io/passthrough_part.h"
 #include "io/pivot_cache_writer.h"
 #include "io/pivot_table_writer.h"
+#include "io/styles_writer.h"
 #include "io/tables_reader.h"
 #include "io/workbook_kind.h"
 #include "io/xml_escape.h"
@@ -676,22 +677,6 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
   return out;
 }
 
-std::string BuildStylesXml() {
-  std::string out;
-  out.reserve(512);
-  out.append(kXmlDecl);
-  out.append("<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n");
-  out.append("  <fonts count=\"1\"><font><sz val=\"11\"/><name val=\"Calibri\"/></font></fonts>\n");
-  out.append("  <fills count=\"1\"><fill><patternFill patternType=\"none\"/></fill></fills>\n");
-  out.append("  <borders count=\"1\"><border/></borders>\n");
-  out.append(
-      "  <cellStyleXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/></cellStyleXfs>\n");
-  out.append(
-      "  <cellXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/></cellXfs>\n");
-  out.append("</styleSheet>\n");
-  return out;
-}
-
 // ---------------------------------------------------------------------------
 // miniz helpers
 // ---------------------------------------------------------------------------
@@ -927,7 +912,7 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
 
   // 6. xl/styles.xml
   {
-    auto result = AddPart(writer.get(), "xl/styles.xml", BuildStylesXml());
+    auto result = AddPart(writer.get(), "xl/styles.xml", write_styles(wb.styles()));
     if (!result) {
       return result.error();
     }

@@ -18,6 +18,7 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   sheet_layout_roundtrip_test.cpp
   sheet_ops_test.cpp
   spill_collision_test.cpp
+  styles_roundtrip_test.cpp
   table_boundary_test.cpp
   workbook_iterative_test.cpp
   workbook_recalc_test.cpp

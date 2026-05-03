@@ -553,4 +553,18 @@ void Workbook::set_iterative_progress(eval::IterativeProgressCb cb, void* user_d
   engine_->set_iterative_progress(cb, user_data);
 }
 
+Expected<void, Error> Workbook::set_cell_xf_index(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
+                                                  std::uint32_t xf_index) {
+  if (sheet_index >= sheets_.size()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "set_cell_xf_index: sheet_index out of range",
+                      "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(sheets_.size()));
+  }
+  Sheet& sheet = sheets_[sheet_index];
+  if (sheet.cell_at(row, col) == nullptr) {
+    sheet.set_cell_value(row, col, Value::blank());
+  }
+  sheet.set_cell_xf_index(row, col, xf_index);
+  return Expected<void, Error>::Ok();
+}
+
 }  // namespace formulon

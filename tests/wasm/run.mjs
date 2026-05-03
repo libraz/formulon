@@ -321,6 +321,19 @@ async function run() {
     }
   });
 
+  test('xf index round-trips through setCellXfIndex / getCellXfIndex', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.ok(wb.setNumber(0, 2, 3, 5).ok);
+      assert.ok(wb.setCellXfIndex(0, 2, 3, 9).ok);
+      const r = wb.getCellXfIndex(0, 2, 3);
+      assert.ok(r.status.ok, `status=${JSON.stringify(r.status)}`);
+      assert.equal(r.xfIndex, 9);
+    } finally {
+      wb.delete();
+    }
+  });
+
   // ---- Run --------------------------------------------------------------
   for (const c of cases) {
     try {

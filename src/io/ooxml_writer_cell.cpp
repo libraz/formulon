@@ -68,11 +68,25 @@ void AppendNumberValue(std::string& out, double v) {
 // Cell emission
 // ---------------------------------------------------------------------------
 
+// Emits an `s="N"` attribute when `xf_index` is non-zero. The default
+// xf (index 0) is omitted for byte parity with Excel's writer, which
+// emits `<c>` without `s=` for the default-formatted majority of cells.
+void AppendStyleAttr(std::string& out, std::uint32_t xf_index) {
+  if (xf_index == 0U) {
+    return;
+  }
+  out.append(" s=\"");
+  out.append(std::to_string(xf_index));
+  out.append("\"");
+}
+
 // Emits the <c> element for an Error value at `addr`.
-void AppendErrorCellXml(std::string& out, std::string_view addr, ErrorCode code) {
+void AppendErrorCellXml(std::string& out, std::string_view addr, ErrorCode code, std::uint32_t xf_index) {
   out.append("<c r=\"");
   out.append(addr);
-  out.append("\" t=\"e\"><v>");
+  out.append("\"");
+  AppendStyleAttr(out, xf_index);
+  out.append(" t=\"e\"><v>");
   out.append(display_name(code));
   out.append("</v></c>");
 }
@@ -149,7 +163,7 @@ void AppendLiteralCellBody(std::string& out, const Value& value, std::string_vie
 // this function trusts the caller and never re-checks.
 bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell) {
   const bool has_formula = !cell.formula_text.empty();
-  const bool literal_blank = !has_formula && cell.cached_value.is_blank();
+  const bool literal_blank = !has_formula && cell.cached_value.is_blank() && cell.xf_index == 0U;
   if (literal_blank) {
     return false;
   }
@@ -159,23 +173,37 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
   // the <v> is downgraded.
   if (!has_formula && cell.cached_value.is_number() && !std::isfinite(cell.cached_value.as_number())) {
     const std::string addr = EncodeA1(row, col);
-    AppendErrorCellXml(out, addr, ErrorCode::Num);
+    AppendErrorCellXml(out, addr, ErrorCode::Num, cell.xf_index);
     return true;
   }
 
   const std::string addr = EncodeA1(row, col);
 
+  // Style-only cells (blank value, formatting attached) round-trip as a
+  // bare `<c r="..." s="N"/>` shape — Excel preserves these so empty
+  // formatted cells keep their visual.
+  if (!has_formula && cell.cached_value.is_blank()) {
+    out.append("<c r=\"");
+    out.append(addr);
+    out.append("\"");
+    AppendStyleAttr(out, cell.xf_index);
+    out.append("/>");
+    return true;
+  }
+
   if (has_formula) {
     const SpillRegion* anchored = sheet.spill_region_at_anchor(row, col);
     out.append("<c r=\"");
     out.append(addr);
+    out.append("\"");
+    AppendStyleAttr(out, cell.xf_index);
 
     // If the anchor's cached value is an Error, surface it via t="e" so
     // Excel renders the error glyph rather than a number.
     if (cell.cached_value.is_error()) {
-      out.append("\" t=\"e\">");
+      out.append(" t=\"e\">");
     } else {
-      out.append("\">");
+      out.append(">");
     }
 
     // <f> with optional t="array" for spill anchors. The formula text
@@ -238,6 +266,52 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
   // the inline-string block.
   out.append("<c r=\"");
   out.append(addr);
+  // Close the `r=` attribute, optionally inject `s=`, then re-open the
+  // body without a closing quote so `AppendLiteralCellBody` can append
+  // its own type attribute prefix (`\" t="..."`). Reopening a partial
+  // attribute with a sentinel space rather than `"` lets the helper
+  // continue using its existing prefix conventions unchanged.
+  if (cell.xf_index != 0U) {
+    out.append("\"");
+    AppendStyleAttr(out, cell.xf_index);
+    // Re-prime the helper: it expects the buffer to end immediately
+    // after the address with no trailing quote (the helper writes the
+    // `\"` itself). Add a placeholder `r2=""` would be wrong; instead,
+    // emit a degenerate `r2=""`-free shape by undoing the helper's
+    // expectation. The cleanest fix is to inline the helper's prefix
+    // here.
+    if (cell.cached_value.is_number()) {
+      out.append(" ><v>");
+      AppendNumberValue(out, cell.cached_value.as_number());
+      out.append("</v></c>");
+    } else if (cell.cached_value.is_boolean()) {
+      out.append(" t=\"b\"><v>");
+      out.push_back(cell.cached_value.as_boolean() ? '1' : '0');
+      out.append("</v></c>");
+    } else if (cell.cached_value.is_text()) {
+      out.append(" t=\"inlineStr\"><is><t>");
+      AppendXmlEscaped(out, cell.cached_value.as_text());
+      out.append("</t>");
+      if (!cell.phonetic_text.empty()) {
+        const std::uint32_t eb = formulon::eval::utf16_units_in(cell.cached_value.as_text());
+        out.append("<rPh sb=\"0\" eb=\"");
+        out.append(std::to_string(eb));
+        out.append("\"><t>");
+        AppendXmlEscaped(out, cell.phonetic_text);
+        out.append("</t></rPh>");
+      }
+      out.append("</is></c>");
+    } else if (cell.cached_value.is_error()) {
+      out.append(" t=\"e\"><v>");
+      out.append(display_name(cell.cached_value.as_error()));
+      out.append("</v></c>");
+    } else {
+      out.append(" t=\"e\"><v>");
+      out.append(display_name(ErrorCode::Value));
+      out.append("</v></c>");
+    }
+    return true;
+  }
   AppendLiteralCellBody(out, cell.cached_value, cell.phonetic_text);
   return true;
 }

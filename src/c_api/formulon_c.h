@@ -973,6 +973,112 @@ FM_API const char* fm_last_error_context(void);
 FM_API const char* fm_status_string(fm_status_t status);
 
 /* -------------------------------------------------------------------------- */
+/* Styles                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Plain-data projection of a `formulon::io::CellXf` record.
+ *
+ * Mirrors the underlying record field-for-field. Bindings copy the
+ * struct out of the workbook's styles table; subsequent mutations to
+ * the workbook do not invalidate the copy.
+ */
+typedef struct {
+  uint32_t font_index;
+  uint32_t fill_index;
+  uint32_t border_index;
+  uint16_t num_fmt_id;
+  uint8_t horizontal_align;
+  uint8_t vertical_align;
+  int32_t wrap_text; /* 0=false, 1=true */
+} fm_cell_xf;
+
+/**
+ * @brief Plain-data projection of a `formulon::io::FontRecord`.
+ *
+ * `name` is a NUL-terminated UTF-8 pointer borrowed from the
+ * workbook's styles table; it is valid until the next mutation that
+ * replaces the styles table or until the handle is destroyed.
+ */
+typedef struct {
+  const char* name; /* NUL-terminated UTF-8, borrowed */
+  double size;
+  uint32_t color_argb;
+  int32_t bold;      /* 0=false, 1=true */
+  int32_t italic;    /* 0=false, 1=true */
+  int32_t strike;    /* 0=false, 1=true */
+  uint8_t underline; /* 0=none, 1=single, 2=double, 3/4=accounting variants */
+} fm_font_record;
+
+/**
+ * @brief Reads the `xf_index` (style record id) attached to the cell at
+ *        `(row, col)` on `sheet`.
+ *
+ * Returns `0` (the default xf) when the cell is absent — callers that
+ * need to distinguish "no cell" from "default-formatted cell" should
+ * combine this with `fm_workbook_cell_at` iteration.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_cell_get_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+                                        uint32_t* out_xf_index);
+
+/**
+ * @brief Stores `xf_index` on the cell at `(row, col)` on `sheet`.
+ *
+ * Materialises the cell as a default-blank slot when none exists yet,
+ * mirroring the row-vector growth semantics of
+ * `fm_workbook_set_blank`. Coexists with literal / formula writes:
+ * those calls leave `xf_index` untouched, so the caller can layer a
+ * style update on top of either order of operations.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_cell_set_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+                                        uint32_t xf_index);
+
+/**
+ * @brief Reads the `xf_index`-th `<xf>` record from the workbook's
+ *        styles table.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `xf_index >= cell_xfs.size()`.
+ */
+FM_API fm_status_t fm_styles_get_cell_xf(fm_workbook_t* wb, uint32_t xf_index, fm_cell_xf* out);
+
+/**
+ * @brief Reads the `font_index`-th font record from the workbook's
+ *        styles table.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `font_index >= fonts.size()`.
+ */
+FM_API fm_status_t fm_styles_get_font(fm_workbook_t* wb, uint32_t font_index, fm_font_record* out);
+
+/**
+ * @brief Looks up the format string for `num_fmt_id` (built-in 0..163
+ *        or custom >= 164).
+ *
+ * On success `*out` borrows a NUL-terminated UTF-8 pointer. Built-in
+ * ids resolve to a static `.rodata` string with program lifetime;
+ * custom ids resolve to storage owned by the workbook's styles table
+ * (valid until the next styles-replacing mutation or until the handle
+ * is destroyed). Returns `kInvalidArgument` when `num_fmt_id` is
+ * neither a documented built-in nor a registered custom id.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when the id is unknown.
+ */
+FM_API fm_status_t fm_styles_get_num_fmt_string(fm_workbook_t* wb, uint16_t num_fmt_id, const char** out);
+
+/* -------------------------------------------------------------------------- */
 /* Version                                                                    */
 /* -------------------------------------------------------------------------- */
 

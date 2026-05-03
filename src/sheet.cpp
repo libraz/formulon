@@ -215,6 +215,19 @@ void Sheet::set_cell_phonetic(std::uint32_t row, std::uint32_t col, std::string_
   slot.phonetic_text.assign(phonetic.begin(), phonetic.end());
 }
 
+void Sheet::set_cell_xf_index(std::uint32_t row, std::uint32_t col, std::uint32_t xf_index) {
+  assert(row < kMaxRows && col < kMaxCols);
+  const auto it = rows_.find(row);
+  if (it == rows_.end()) {
+    return;
+  }
+  std::vector<Cell>& row_cells = it->second;
+  if (col >= row_cells.size()) {
+    return;
+  }
+  row_cells[col].xf_index = xf_index;
+}
+
 const Cell* Sheet::cell_at(std::uint32_t row, std::uint32_t col) const noexcept {
   const auto it = rows_.find(row);
   if (it == rows_.end()) {

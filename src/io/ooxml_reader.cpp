@@ -830,8 +830,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     if (!styles_or) {
       return styles_or.error();
     }
-    // Result is intentionally discarded; see read_styles() docs.
-    (void)styles_or.value();
+    wb.set_styles(std::move(styles_or.value()));
     consumed_parts.insert(wb_rels.styles_path);
   }
   if (zip.has_entry("xl/styles.xml")) {

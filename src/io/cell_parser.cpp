@@ -398,6 +398,9 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
   // t= — type.
   std::string_view t = node.attribute("t").value();
 
+  // s= — style index (xf row in xl/styles.xml). Default 0 when absent.
+  const std::uint32_t xf_index = node.attribute("s").as_uint(0U);
+
   // <f>...</f> — formula text (leading '=' stripped).
   std::string formula;
   pugi::xml_node f_node = node.child("f");
@@ -441,6 +444,7 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
   out.row = row;
   out.col = col;
   out.formula = std::move(formula);
+  out.xf_index = xf_index;
 
   // Capture <rPh> phonetic kana from the inline-string block (when
   // present). SST-referenced cells (t="s") carry their phonetic on the
