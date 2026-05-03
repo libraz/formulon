@@ -16,6 +16,7 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   ooxml_writer_pivot_test.cpp
   recalc_text_lifetime_test.cpp
   sheet_layout_roundtrip_test.cpp
+  sheet_ops_test.cpp
   spill_collision_test.cpp
   table_boundary_test.cpp
   workbook_iterative_test.cpp

@@ -258,6 +258,69 @@ FM_API fm_status_t fm_workbook_sheet_name(const fm_workbook_t* wb, size_t index,
  */
 FM_API fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* utf8_name);
 
+/**
+ * @brief Moves the sheet at `from_index` to `to_index`.
+ *
+ * `to_index` is interpreted in the *post-removal* sheet list (Excel UI
+ * semantics): with three sheets, moving sheet 0 to the end uses
+ * `to_index == 2`, not `3`. A move to the same position is a successful
+ * no-op.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kSheetIndexOutOfRange` when either index is out of range.
+ */
+FM_API fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, uint32_t from_index, uint32_t to_index);
+
+/**
+ * @brief Removes the sheet at `index`.
+ *
+ * Defined names that reference the removed sheet are dropped (matches
+ * the simpler semantics chosen for this revision; a future bundle may
+ * surface `#REF!` instead). The recalc engine's dep-graph entries for
+ * cells on the removed sheet are unregistered.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kSheetIndexOutOfRange` when `index` is out of range;
+ *         `kCannotRemoveLastSheet` when the workbook has only one
+ *         sheet remaining.
+ */
+FM_API fm_status_t fm_workbook_remove_sheet(fm_workbook_t* wb, uint32_t index);
+
+/**
+ * @brief Renames the sheet at `index` to `new_name` (UTF-8).
+ *
+ * Updates the sheet's stored name and any workbook-scoped defined-name
+ * targets that mention the renamed sheet. Cell formulas inside the
+ * renamed sheet (and other sheets) are LEFT UNTOUCHED — the AST-level
+ * reference shifter handles those in a follow-up bundle.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kSheetIndexOutOfRange` when `index` is out of range;
+ *         `kInvalidSheetName` when `new_name` is empty, longer than 31
+ *         characters, contains a forbidden character (`: \ / ? * [ ]`),
+ *         or collides case-insensitively with an existing sheet.
+ */
+FM_API fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, uint32_t index, const char* new_name);
+
+/**
+ * @brief Sets (or appends, or removes) a workbook-scoped defined name.
+ *
+ * If a workbook-scoped entry with `name` already exists (case-
+ * insensitive match), its formula text is replaced. Otherwise — when
+ * `formula` is non-empty — a new entry is appended. Passing an empty
+ * `formula` removes the existing entry, or is a no-op when no such
+ * entry is present. Sheet-scoped defined names (`local_sheet_id >= 0`)
+ * are NOT addressable through this entry point.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `name` is empty.
+ */
+FM_API fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const char* name, const char* formula);
+
 /* -------------------------------------------------------------------------- */
 /* Cell mutation                                                              */
 /* -------------------------------------------------------------------------- */

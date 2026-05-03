@@ -411,6 +411,44 @@ class JsWorkbook {
     return rc == 0 ? ok_status() : error_status(rc);
   }
 
+  /// Moves the sheet at `fromIdx` to `toIdx`. `toIdx` is interpreted
+  /// in the post-removal sheet list (Excel UI semantics).
+  JsStatus moveSheet(uint32_t fromIdx, uint32_t toIdx) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_move_sheet(handle_, fromIdx, toIdx);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Removes the sheet at `index`.
+  JsStatus removeSheet(uint32_t index) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_remove_sheet(handle_, index);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Renames the sheet at `index` to `newName`.
+  JsStatus renameSheet(uint32_t index, const std::string& newName) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_rename_sheet(handle_, index, newName.c_str());
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Sets / appends / removes a workbook-scoped defined name. An empty
+  /// `formula` removes the entry.
+  JsStatus setDefinedName(const std::string& name, const std::string& formula) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_set_defined_name(handle_, name.c_str(), formula.c_str());
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
   /// Returns the number of sheets (0 when handle is invalid).
   uint32_t sheetCount() const {
     if (handle_ == nullptr) {
@@ -1042,6 +1080,10 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("isValid", &JsWorkbook::isValid)
       .function("save", &JsWorkbook::save)
       .function("addSheet", &JsWorkbook::addSheet)
+      .function("moveSheet", &JsWorkbook::moveSheet)
+      .function("removeSheet", &JsWorkbook::removeSheet)
+      .function("renameSheet", &JsWorkbook::renameSheet)
+      .function("setDefinedName", &JsWorkbook::setDefinedName)
       .function("sheetCount", &JsWorkbook::sheetCount)
       .function("sheetName", &JsWorkbook::sheetName)
       .function("setNumber", &JsWorkbook::setNumber)

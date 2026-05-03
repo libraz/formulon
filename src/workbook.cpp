@@ -53,6 +53,352 @@ Sheet& Workbook::add_sheet(std::string name) {
   return sheets_.back();
 }
 
+namespace {
+
+// Excel's structural validation for sheet names: non-empty, ≤ 31
+// characters, no `: \ / ? * [ ]`. This is a byte-level check (the
+// forbidden set is ASCII), so it works correctly on UTF-8 sheet names
+// because none of the disallowed code units appear as continuation
+// bytes (all are < 0x80).
+bool is_valid_sheet_name_chars(std::string_view name) noexcept {
+  for (char byte : name) {
+    switch (byte) {
+      case ':':
+      case '\\':
+      case '/':
+      case '?':
+      case '*':
+      case '[':
+      case ']':
+        return false;
+      default:
+        break;
+    }
+  }
+  return true;
+}
+
+// Quotes `sheet` for use in a formula reference. Excel quotes a sheet
+// name with single quotes when the name contains anything other than
+// alphanumerics, underscores or periods. We err on the side of always
+// considering both shapes (raw and quoted) when matching defined-name
+// targets so a rename catches both.
+std::string single_quote_sheet(std::string_view sheet) {
+  std::string out;
+  out.reserve(sheet.size() + 4U);
+  out.push_back('\'');
+  for (char byte : sheet) {
+    if (byte == '\'') {
+      // Embedded single quotes double up in OOXML formula syntax.
+      out.append("''");
+    } else {
+      out.push_back(byte);
+    }
+  }
+  out.push_back('\'');
+  return out;
+}
+
+// Returns true if `byte` is part of an unquoted Excel identifier
+// (letter, digit, underscore). UTF-8 continuation bytes (high bit set)
+// are deliberately excluded so a sheet name whose preceding byte is a
+// multi-byte CJK character still treats the sheet token as starting
+// fresh.
+constexpr unsigned char kAsciiHighBit = 0x80U;
+constexpr bool is_id_byte(char byte) noexcept {
+  const auto value = static_cast<unsigned char>(byte);
+  if (value >= kAsciiHighBit) {
+    return false;
+  }
+  return (byte >= 'A' && byte <= 'Z') || (byte >= 'a' && byte <= 'z') || (byte >= '0' && byte <= '9') || byte == '_';
+}
+
+// Returns true iff `formula` references the sheet `sheet_name` by name
+// (either bare `Sheet1!` or quoted `'Sheet One'!`). Strict prefix match
+// of the bang-suffixed sheet token followed by a `!`. The check is
+// case-insensitive, mirroring Excel's sheet-name resolution semantics.
+//
+// This is a textual scan deliberately kept out of the parser: the
+// AST-level reference shifter (a separate follow-up bundle) handles the
+// general case. For this bundle we only need to decide whether a
+// defined-name target string mentions the renamed sheet at all so the
+// bulk-replace helper below knows whether the entry is affected.
+bool formula_references_sheet(std::string_view formula, std::string_view sheet_name) noexcept {
+  // Exhaustive bare-token scan: walk every position and check whether a
+  // sheet token followed by `!` matches `sheet_name` (case-insensitive).
+  // Quoted-sheet matches are handled by also scanning for the
+  // single-quoted form.
+  const std::string quoted = single_quote_sheet(sheet_name);
+  for (std::size_t pos = 0; pos + sheet_name.size() < formula.size(); ++pos) {
+    if (formula[pos + sheet_name.size()] != '!') {
+      continue;
+    }
+    if (strings::case_insensitive_eq(formula.substr(pos, sheet_name.size()), sheet_name)) {
+      // Reject matches that are part of a longer identifier (e.g. the
+      // suffix of `OtherSheet1` should not match `Sheet1`). A sheet
+      // token starts at pos==0 or after a non-identifier byte.
+      const bool token_start = pos == 0 || !is_id_byte(formula[pos - 1]);
+      if (token_start) {
+        return true;
+      }
+    }
+  }
+  if (quoted.size() + 1U <= formula.size()) {
+    for (std::size_t pos = 0; pos + quoted.size() < formula.size(); ++pos) {
+      if (formula[pos + quoted.size()] != '!') {
+        continue;
+      }
+      if (strings::case_insensitive_eq(formula.substr(pos, quoted.size()), quoted)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// Replaces every reference to sheet `old_name` in `formula` with
+// `new_name`. Both bare and quoted forms are rewritten; the chosen
+// emitted form depends on whether `new_name` itself needs quoting
+// (any byte outside `[A-Za-z0-9_.]`).
+std::string replace_sheet_in_formula(std::string_view formula, std::string_view old_name, std::string_view new_name) {
+  // Quote `new_name` only when necessary; prefer the bare form to keep
+  // diffs minimal for the common case.
+  bool needs_quoting = new_name.empty();
+  for (char byte : new_name) {
+    const bool unquoted_ok = is_id_byte(byte) || byte == '.';
+    if (!unquoted_ok) {
+      needs_quoting = true;
+      break;
+    }
+  }
+  std::string emitted_bare(new_name);
+  std::string emitted_quoted = single_quote_sheet(new_name);
+  const std::string& replacement_for_bare = needs_quoting ? emitted_quoted : emitted_bare;
+
+  const std::string old_quoted = single_quote_sheet(old_name);
+  std::string out;
+  out.reserve(formula.size());
+  std::size_t pos = 0;
+  while (pos < formula.size()) {
+    // Bare-form match: identifier-boundary on the left, `!` on the right.
+    if (pos + old_name.size() < formula.size() && formula[pos + old_name.size()] == '!' &&
+        strings::case_insensitive_eq(formula.substr(pos, old_name.size()), old_name)) {
+      const bool token_start = pos == 0 || !is_id_byte(formula[pos - 1]);
+      if (token_start) {
+        out.append(replacement_for_bare);
+        pos += old_name.size();
+        continue;
+      }
+    }
+    // Quoted-form match: `'OldName'!`. Emit the canonical form for the
+    // new name — bare when the new name does not require quoting,
+    // quoted otherwise. This keeps round-trips minimal: a rename to a
+    // simple identifier strips the now-redundant quotes.
+    if (pos + old_quoted.size() < formula.size() && formula[pos + old_quoted.size()] == '!' &&
+        strings::case_insensitive_eq(formula.substr(pos, old_quoted.size()), old_quoted)) {
+      out.append(replacement_for_bare);
+      pos += old_quoted.size();
+      continue;
+    }
+    out.push_back(formula[pos]);
+    ++pos;
+  }
+  return out;
+}
+
+}  // namespace
+
+Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string new_name) {
+  if (static_cast<std::size_t>(index) >= sheets_.size()) {
+    return make_error(FormulonErrorCode::kSheetIndexOutOfRange, "rename_sheet: index out of range",
+                      "index=" + std::to_string(index) + " sheet_count=" + std::to_string(sheets_.size()));
+  }
+  // Validate the new name. Excel rejects empty, > 31 chars, or any of
+  // the forbidden ASCII separators.
+  constexpr std::size_t kMaxSheetNameLength = 31U;
+  if (new_name.empty() || new_name.size() > kMaxSheetNameLength || !is_valid_sheet_name_chars(new_name)) {
+    return make_error(FormulonErrorCode::kInvalidSheetName, "rename_sheet: invalid sheet name",
+                      "name=\"" + new_name + "\"");
+  }
+  // Collision check (case-insensitive). A no-op rename — same case-fold
+  // as the current name — bypasses the collision check so callers can
+  // change only the casing.
+  for (std::size_t idx = 0; idx < sheets_.size(); ++idx) {
+    if (idx == static_cast<std::size_t>(index)) {
+      continue;
+    }
+    if (strings::case_insensitive_eq(sheets_[idx].name(), new_name)) {
+      return make_error(FormulonErrorCode::kInvalidSheetName, "rename_sheet: name collides with another sheet",
+                        "name=\"" + new_name + "\" colliding_index=" + std::to_string(idx));
+    }
+  }
+
+  const std::string old_name = sheets_[index].name();
+
+  // Update workbook-scoped defined names whose target string mentions
+  // the renamed sheet by name. Sheet-scoped names (local_sheet_id >= 0)
+  // are unaffected: they reference sheets by ordinal index, not by
+  // name, and Excel preserves the binding across renames.
+  for (io::DefinedName& entry : defined_names_) {
+    if (entry.local_sheet_id >= 0) {
+      continue;
+    }
+    if (formula_references_sheet(entry.formula, old_name)) {
+      entry.formula = replace_sheet_in_formula(entry.formula, old_name, new_name);
+    }
+  }
+  // Move the rename into the sheet last so the loop above still has the
+  // pre-move `new_name` value to read from.
+  sheets_[index].set_name(std::move(new_name));
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
+  if (static_cast<std::size_t>(index) >= sheets_.size()) {
+    return make_error(FormulonErrorCode::kSheetIndexOutOfRange, "remove_sheet: index out of range",
+                      "index=" + std::to_string(index) + " sheet_count=" + std::to_string(sheets_.size()));
+  }
+  if (sheets_.size() <= 1U) {
+    return make_error(FormulonErrorCode::kCannotRemoveLastSheet, "remove_sheet: cannot remove the only sheet",
+                      "sheet_count=" + std::to_string(sheets_.size()));
+  }
+
+  const std::string removed_name = sheets_[index].name();
+
+  // Drop dep-graph nodes for every populated cell on the removed sheet.
+  // The graph stores reverse edges, so other sheets' formulas that read
+  // into the removed sheet keep their edges — but those edges are now
+  // dangling. The next recalc catches them naturally because the source
+  // cell is gone.
+  const Sheet& removed = sheets_[index];
+  for (const auto& [row, cells] : removed.rows()) {
+    for (std::size_t col = 0; col < cells.size(); ++col) {
+      eval::CellNodeId node{static_cast<std::uint16_t>(index), row, static_cast<std::uint32_t>(col)};
+      engine_->unregister_formula(node);
+    }
+  }
+
+  sheets_.erase(sheets_.begin() + static_cast<std::ptrdiff_t>(index));
+
+  // Drop defined names that target the removed sheet. We compare against
+  // the removed sheet's name verbatim; sheet-scoped names whose
+  // local_sheet_id matches the removed index are also dropped (the
+  // index they referenced no longer exists). Note: indices for
+  // sheet-scoped names that point at sheets *after* the removed one are
+  // shifted down by 1 to preserve the binding. This matches Excel's UI
+  // observation that sheet-scoped names stay attached to the same sheet
+  // as the workbook is rearranged.
+  std::vector<io::DefinedName> retained;
+  retained.reserve(defined_names_.size());
+  for (io::DefinedName& entry : defined_names_) {
+    if (entry.local_sheet_id == static_cast<std::int32_t>(index)) {
+      continue;
+    }
+    if (entry.local_sheet_id < 0 && formula_references_sheet(entry.formula, removed_name)) {
+      // Workbook-scoped name targeting the removed sheet: drop it.
+      continue;
+    }
+    if (entry.local_sheet_id > static_cast<std::int32_t>(index)) {
+      entry.local_sheet_id -= 1;
+    }
+    retained.push_back(std::move(entry));
+  }
+  defined_names_ = std::move(retained);
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> Workbook::move_sheet(std::uint32_t from_index, std::uint32_t to_index) {
+  if (static_cast<std::size_t>(from_index) >= sheets_.size() || static_cast<std::size_t>(to_index) >= sheets_.size()) {
+    return make_error(FormulonErrorCode::kSheetIndexOutOfRange, "move_sheet: index out of range",
+                      "from=" + std::to_string(from_index) + " to=" + std::to_string(to_index) +
+                          " sheet_count=" + std::to_string(sheets_.size()));
+  }
+  if (from_index == to_index) {
+    return Expected<void, Error>::Ok();
+  }
+
+  // `to_index` is the destination in the *post-removal* sheet list, which
+  // matches Excel's UI semantics. Implementation: lift the sheet out,
+  // then insert at the destination.
+  Sheet moving = std::move(sheets_[from_index]);
+  sheets_.erase(sheets_.begin() + static_cast<std::ptrdiff_t>(from_index));
+  sheets_.insert(sheets_.begin() + static_cast<std::ptrdiff_t>(to_index), std::move(moving));
+
+  // Patch sheet-scoped defined names so their `local_sheet_id` follows
+  // the rearrangement. Workbook-scoped names reference sheets by name,
+  // so they need no update.
+  const auto from_id = static_cast<std::int32_t>(from_index);
+  const auto to_id = static_cast<std::int32_t>(to_index);
+  for (io::DefinedName& entry : defined_names_) {
+    if (entry.local_sheet_id < 0) {
+      continue;
+    }
+    if (entry.local_sheet_id == from_id) {
+      entry.local_sheet_id = to_id;
+      continue;
+    }
+    if (from_id < to_id && entry.local_sheet_id > from_id && entry.local_sheet_id <= to_id) {
+      entry.local_sheet_id -= 1;
+    } else if (from_id > to_id && entry.local_sheet_id >= to_id && entry.local_sheet_id < from_id) {
+      entry.local_sheet_id += 1;
+    }
+  }
+
+  // The recalc engine's `CellNodeId.sheet_id` is the workbook-relative
+  // index, so a move invalidates every dep-graph edge whose endpoint
+  // sits on a moved sheet. Rather than rebuild the graph we conservatively
+  // mark every cell on every affected sheet (the whole `[min..max]`
+  // window) dirty so the next `recalc()` re-registers their edges.
+  // Cells outside the window are unaffected. This mirrors Excel's
+  // post-rearrange behaviour where downstream formulas re-evaluate.
+  const std::uint32_t window_lo = std::min(from_index, to_index);
+  const std::uint32_t window_hi = std::max(from_index, to_index);
+  for (std::uint32_t sheet_idx = window_lo; sheet_idx <= window_hi; ++sheet_idx) {
+    const Sheet& target = sheets_[sheet_idx];
+    for (const auto& [row, cells] : target.rows()) {
+      for (std::size_t col = 0; col < cells.size(); ++col) {
+        eval::CellNodeId node{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)};
+        engine_->mark_dirty(node);
+      }
+    }
+  }
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> Workbook::set_defined_name(std::string name, std::string formula) {
+  if (name.empty()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "set_defined_name: name is empty");
+  }
+  // Case-insensitive lookup: Excel resolves defined names case-folded.
+  // Restrict the search to workbook-scoped entries; sheet-scoped names
+  // are not addressable through this single-arg API.
+  for (auto it = defined_names_.begin(); it != defined_names_.end(); ++it) {
+    if (it->local_sheet_id >= 0) {
+      continue;
+    }
+    if (strings::case_insensitive_eq(it->name, name)) {
+      if (formula.empty()) {
+        defined_names_.erase(it);
+      } else {
+        it->formula = std::move(formula);
+      }
+      return Expected<void, Error>::Ok();
+    }
+  }
+  // No existing entry; appending only makes sense if a formula is
+  // supplied. An empty-formula "remove" against a non-existent name is
+  // a successful no-op.
+  if (formula.empty()) {
+    return Expected<void, Error>::Ok();
+  }
+  io::DefinedName entry;
+  entry.name = std::move(name);
+  entry.formula = std::move(formula);
+  entry.local_sheet_id = -1;
+  defined_names_.push_back(std::move(entry));
+  return Expected<void, Error>::Ok();
+}
+
 const Sheet* Workbook::sheet_by_name(std::string_view name) const noexcept {
   for (const Sheet& s : sheets_) {
     if (strings::case_insensitive_eq(s.name(), name)) {

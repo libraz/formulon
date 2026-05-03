@@ -208,6 +208,95 @@ async function run() {
     }
   });
 
+  test('renameSheet updates the sheet name', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.equal(wb.sheetCount(), 1);
+      assert.ok(wb.renameSheet(0, 'Renamed').ok);
+      const r = wb.sheetName(0);
+      assert.ok(r.status.ok);
+      assert.equal(r.value, 'Renamed');
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('renameSheet rejects forbidden characters', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const r = wb.renameSheet(0, 'Bad/Name');
+      assert.equal(r.ok, false);
+      assert.notEqual(r.status, 0);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('removeSheet drops a sheet but rejects the last one', () => {
+    const wb = Module.Workbook.createEmpty();
+    try {
+      assert.ok(wb.addSheet('A').ok);
+      assert.ok(wb.addSheet('B').ok);
+      assert.ok(wb.addSheet('C').ok);
+      assert.equal(wb.sheetCount(), 3);
+      assert.ok(wb.removeSheet(1).ok);
+      assert.equal(wb.sheetCount(), 2);
+      assert.equal(wb.sheetName(0).value, 'A');
+      assert.equal(wb.sheetName(1).value, 'C');
+    } finally {
+      wb.delete();
+    }
+
+    // Workbook with a single sheet rejects removeSheet(0).
+    const lone = Module.Workbook.createDefault();
+    try {
+      const r = lone.removeSheet(0);
+      assert.equal(r.ok, false);
+    } finally {
+      lone.delete();
+    }
+  });
+
+  test('moveSheet rearranges sheets (Excel UI semantics)', () => {
+    const wb = Module.Workbook.createEmpty();
+    try {
+      assert.ok(wb.addSheet('Alpha').ok);
+      assert.ok(wb.addSheet('Beta').ok);
+      assert.ok(wb.addSheet('Gamma').ok);
+      // Move Alpha (0) to the end. Excel semantics: to=2 (post-removal).
+      assert.ok(wb.moveSheet(0, 2).ok);
+      assert.equal(wb.sheetName(0).value, 'Beta');
+      assert.equal(wb.sheetName(1).value, 'Gamma');
+      assert.equal(wb.sheetName(2).value, 'Alpha');
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('setDefinedName adds, updates, and removes', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.equal(wb.definedNameCount(), 0);
+      assert.ok(wb.setDefinedName('Pi', '=3.14').ok);
+      assert.equal(wb.definedNameCount(), 1);
+      const a = wb.definedNameAt(0);
+      assert.ok(a.status.ok);
+      assert.equal(a.name, 'Pi');
+      assert.equal(a.formula, '=3.14');
+
+      assert.ok(wb.setDefinedName('PI', '=3.14159').ok);
+      assert.equal(wb.definedNameCount(), 1);
+      const b = wb.definedNameAt(0);
+      assert.equal(b.name, 'Pi');  // authored case preserved
+      assert.equal(b.formula, '=3.14159');
+
+      assert.ok(wb.setDefinedName('Pi', '').ok);
+      assert.equal(wb.definedNameCount(), 0);
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('cellCount + cellAt iterate populated cells in order', () => {
     const wb = Module.Workbook.createDefault();
     try {

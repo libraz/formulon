@@ -7,6 +7,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_cf_test.cpp
   formulon_c_sheet_layout_test.cpp
   formulon_c_test.cpp
+  workbook_sheet_ops_test.cpp
 )
 
 add_executable(formulon_c_api_tests ${FORMULON_C_API_TEST_SOURCES})

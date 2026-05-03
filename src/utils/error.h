@@ -201,6 +201,24 @@ enum class FormulonErrorCode : int32_t {
   kPrintInvalidArea = 9002,
   kUiViewStateInvalid = 9003,
   kUiSnapshotFailed = 9004,
+
+  // ----- Workbook structural mutation (5050-5069) -----
+  // Reuse the I/O band: sheet name validation, sheet rearrangement, and
+  // defined-name editing all sit at the workbook-level mutation surface,
+  // which is logically adjacent to the OOXML (de)serialisation that owns
+  // the same metadata.
+  /// Sheet index passed to a structural mutation (`rename_sheet`,
+  /// `remove_sheet`, `move_sheet`) is `>= sheet_count()`.
+  kSheetIndexOutOfRange = 5050,
+  /// Sheet name fails Excel's structural validation: empty, longer than
+  /// 31 characters, contains a forbidden character (`: \ / ? * [ ]`),
+  /// or collides case-insensitively with an existing sheet's name.
+  kInvalidSheetName = 5051,
+  /// `remove_sheet` was invoked on a workbook that has only one sheet
+  /// remaining. Excel's UI rejects the same operation; we mirror it so
+  /// `save()` cannot land in the empty-sheet-list state Excel itself
+  /// refuses to open.
+  kCannotRemoveLastSheet = 5052,
 };
 
 /// Structured error payload returned by every fallible internal API.
@@ -491,6 +509,14 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kUiViewStateInvalid";
     case FormulonErrorCode::kUiSnapshotFailed:
       return "kUiSnapshotFailed";
+
+    // Workbook structural mutation
+    case FormulonErrorCode::kSheetIndexOutOfRange:
+      return "kSheetIndexOutOfRange";
+    case FormulonErrorCode::kInvalidSheetName:
+      return "kInvalidSheetName";
+    case FormulonErrorCode::kCannotRemoveLastSheet:
+      return "kCannotRemoveLastSheet";
   }
   return "kUnknownError";
 }

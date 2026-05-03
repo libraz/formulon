@@ -330,6 +330,56 @@ extern "C" fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* utf8
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, uint32_t from_index, uint32_t to_index) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_move_sheet: wb is NULL");
+  }
+  auto r = wb->workbook().move_sheet(from_index, to_index);
+  if (!r) {
+    return set_last_error(r.error());
+  }
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_remove_sheet(fm_workbook_t* wb, uint32_t index) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_remove_sheet: wb is NULL");
+  }
+  auto r = wb->workbook().remove_sheet(index);
+  if (!r) {
+    return set_last_error(r.error());
+  }
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, uint32_t index, const char* new_name) {
+  clear_last_error();
+  if (wb == nullptr || new_name == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_rename_sheet: NULL argument");
+  }
+  auto r = wb->workbook().rename_sheet(index, std::string(new_name));
+  if (!r) {
+    return set_last_error(r.error());
+  }
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const char* name, const char* formula) {
+  clear_last_error();
+  if (wb == nullptr || name == nullptr || formula == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_set_defined_name: NULL argument");
+  }
+  auto r = wb->workbook().set_defined_name(std::string(name), std::string(formula));
+  if (!r) {
+    return set_last_error(r.error());
+  }
+  return 0;
+}
+
 // ---------------------------------------------------------------------------
 // Cell mutation
 // ---------------------------------------------------------------------------

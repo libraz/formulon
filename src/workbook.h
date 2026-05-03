@@ -95,6 +95,60 @@ class Workbook {
   /// OOXML-level name validation lives at the I/O boundary.
   Sheet& add_sheet(std::string name);
 
+  /// Renames the sheet at `index` to `new_name`.
+  ///
+  /// Updates the sheet's stored name and any workbook-scoped defined-name
+  /// targets that referenced the sheet by its old name. Cell formulas
+  /// inside the renamed sheet (and other sheets) are LEFT UNTOUCHED:
+  /// post-rename, cell formulas may carry stale sheet references; the
+  /// AST-level reference shifter generalisation handles those in a
+  /// separate follow-up bundle. Tables and pivot caches likewise keep
+  /// their authored sheet identifiers — they reference sheets by index,
+  /// not by name, so the rename is invisible to them.
+  ///
+  /// Errors:
+  ///   * `kSheetIndexOutOfRange` when `index >= sheet_count()`.
+  ///   * `kInvalidSheetName` when `new_name` is empty, exceeds 31
+  ///     characters, contains a forbidden character (`: \ / ? * [ ]`),
+  ///     or collides case-insensitively with another sheet's name. A
+  ///     no-op rename to the sheet's existing name (case-insensitively
+  ///     equal) is accepted: the sheet's stored name is updated to the
+  ///     new casing, no other state changes.
+  Expected<void, Error> rename_sheet(std::uint32_t index, std::string new_name);
+
+  /// Removes the sheet at `index`.
+  ///
+  /// Defined names that reference the removed sheet are dropped (after
+  /// a future ref-shifter bundle they would surface `#REF!` instead;
+  /// the simpler drop semantics are an explicit limitation of this
+  /// bundle). The recalc engine's dep-graph entries for every cell on
+  /// the removed sheet are also dropped so subsequent recalcs do not
+  /// chase dangling references; cells on remaining sheets keep their
+  /// edges, but any edges that pointed into the removed sheet are
+  /// gone.
+  ///
+  /// Errors:
+  ///   * `kSheetIndexOutOfRange` when `index >= sheet_count()`.
+  ///   * `kCannotRemoveLastSheet` when `sheet_count() == 1` (Excel's
+  ///     UI rejects the same op; we mirror it so `save()` never lands
+  ///     in the empty-sheet-list state Excel refuses to open).
+  Expected<void, Error> remove_sheet(std::uint32_t index);
+
+  /// Moves the sheet at `from_index` to `to_index`.
+  ///
+  /// `to_index` is interpreted in the post-removal sheet list (matches
+  /// Excel's UI semantics). For example, with three sheets, moving
+  /// sheet 0 to the end uses `to_index == 2`, not `3`. A move to the
+  /// same position is a successful no-op. Cell formulas and defined
+  /// names continue to reference sheets by name, so observers reading
+  /// `sheet(i)` see the new positional layout while cross-sheet
+  /// formulas remain correct.
+  ///
+  /// Errors:
+  ///   * `kSheetIndexOutOfRange` when either `from_index >=
+  ///     sheet_count()` or `to_index >= sheet_count()`.
+  Expected<void, Error> move_sheet(std::uint32_t from_index, std::uint32_t to_index);
+
   /// Case-insensitive lookup by display name. Matches using
   /// `strings::case_insensitive_eq` (ASCII-fold), so `"SHEET2"` and
   /// `"Sheet2"` locate the same sheet — consistent with Excel's
@@ -218,6 +272,22 @@ class Workbook {
   /// Replaces the workbook's defined-name list. Move-assigns to keep
   /// the I/O hand-off allocation-free for large name lists.
   void set_defined_names(std::vector<io::DefinedName> names) { defined_names_ = std::move(names); }
+
+  /// Sets the formula text of the workbook-scoped defined name `name`,
+  /// or appends it if it does not exist. An empty `formula` removes
+  /// the entry instead. Lookups are case-insensitive (mirroring
+  /// Excel's name-resolution semantics); when an existing entry is
+  /// updated, its authored casing is preserved. Newly-appended entries
+  /// adopt the supplied `name` verbatim. Sheet-scoped defined names
+  /// (`local_sheet_id >= 0`) are not addressable through this entry
+  /// point; callers wanting to mutate them should use the bulk
+  /// `set_defined_names` API.
+  ///
+  /// Returns `kOk` on success. Validation of the formula text is
+  /// deliberately deferred to evaluation time (matching how the I/O
+  /// reader carries formulas through unchanged), so this function
+  /// never surfaces a parser error.
+  Expected<void, Error> set_defined_name(std::string name, std::string formula);
 
   /// Read-only access to the workbook's table-metadata list (in
   /// archive-discovery order, which matches the per-sheet rels walk).
