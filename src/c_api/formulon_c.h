@@ -614,6 +614,39 @@ FM_API fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, uint32_t sheet, fm_
 FM_API fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, uint32_t sheet, fm_merge_range merge);
 
 /**
+ * @brief Removes every merge range on `sheet` that overlaps `range`
+ *        (inclusive rectangle intersection). No-op when nothing
+ *        overlaps. `range` corners are normalised internally so the
+ *        caller may pass either (first <= last) or transposed corners,
+ *        mirroring fm_sheet_add_merge.
+ *
+ * @return `kOk` on success (including the no-overlap case);
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet` is out of range.
+ */
+FM_API fm_status_t fm_sheet_remove_merge(fm_workbook_t* wb, uint32_t sheet, fm_merge_range range);
+
+/**
+ * @brief Removes the merge at `index` on `sheet`. Mirrors the
+ *        index domain of fm_sheet_get_merge_at.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet` or `index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_remove_merge_at(fm_workbook_t* wb, uint32_t sheet, uint32_t index);
+
+/**
+ * @brief Drops every merge range on `sheet`. No-op when the sheet
+ *        already has no merges.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet` is out of range.
+ */
+FM_API fm_status_t fm_sheet_clear_merges(fm_workbook_t* wb, uint32_t sheet);
+
+/**
  * @brief Reads `(out_row, out_col, out_author, out_text)` for the
  *        comment at `(row, col)` on `sheet`. Returns `kInvalidArgument`
  *        when no comment is anchored there.

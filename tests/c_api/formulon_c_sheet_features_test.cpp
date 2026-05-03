@@ -104,4 +104,82 @@ TEST_F(FormulonCApiSheetFeatures, SheetIndexOutOfRange) {
   EXPECT_NE(fm_sheet_get_merge_count(wb_, 999, &count), 0);
 }
 
+TEST_F(FormulonCApiSheetFeatures, RemoveMergeByRangeOverlap) {
+  fm_merge_range a{0, 0, 1, 1};
+  fm_merge_range b{0, 3, 1, 4};
+  fm_merge_range c{4, 0, 5, 1};
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, a), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, b), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, c), 0);
+  fm_merge_range q{0, 0, 1, 4};
+  ASSERT_EQ(fm_sheet_remove_merge(wb_, 0, q), 0);
+  std::uint32_t count = 0;
+  ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
+  ASSERT_EQ(count, 1U);
+  fm_merge_range got{};
+  ASSERT_EQ(fm_sheet_get_merge_at(wb_, 0, 0, &got), 0);
+  EXPECT_EQ(got.first_row, 4U);
+  EXPECT_EQ(got.first_col, 0U);
+  EXPECT_EQ(got.last_row, 5U);
+  EXPECT_EQ(got.last_col, 1U);
+}
+
+TEST_F(FormulonCApiSheetFeatures, RemoveMergeByRangeNoOverlap) {
+  fm_merge_range a{0, 0, 1, 1};
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, a), 0);
+  fm_merge_range q{4, 2, 5, 3};
+  ASSERT_EQ(fm_sheet_remove_merge(wb_, 0, q), 0);
+  std::uint32_t count = 0;
+  ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
+  EXPECT_EQ(count, 1U);
+}
+
+TEST_F(FormulonCApiSheetFeatures, RemoveMergeAtValid) {
+  fm_merge_range a{0, 0, 1, 1};
+  fm_merge_range b{4, 4, 5, 5};
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, a), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, b), 0);
+  ASSERT_EQ(fm_sheet_remove_merge_at(wb_, 0, 0), 0);
+  std::uint32_t count = 0;
+  ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
+  ASSERT_EQ(count, 1U);
+  fm_merge_range got{};
+  ASSERT_EQ(fm_sheet_get_merge_at(wb_, 0, 0, &got), 0);
+  EXPECT_EQ(got.first_row, 4U);
+  EXPECT_EQ(got.first_col, 4U);
+  EXPECT_EQ(got.last_row, 5U);
+  EXPECT_EQ(got.last_col, 5U);
+}
+
+TEST_F(FormulonCApiSheetFeatures, RemoveMergeAtOutOfRange) {
+  fm_merge_range a{0, 0, 1, 1};
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, a), 0);
+  EXPECT_NE(fm_sheet_remove_merge_at(wb_, 0, 99), 0);
+  std::uint32_t count = 0;
+  ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
+  EXPECT_EQ(count, 1U);
+}
+
+TEST_F(FormulonCApiSheetFeatures, ClearMerges) {
+  fm_merge_range a{0, 0, 1, 1};
+  fm_merge_range b{2, 2, 3, 3};
+  fm_merge_range c{4, 4, 5, 5};
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, a), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, b), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, c), 0);
+  ASSERT_EQ(fm_sheet_clear_merges(wb_, 0), 0);
+  std::uint32_t count = 0;
+  ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
+  EXPECT_EQ(count, 0U);
+  // Calling clear again is still kOk.
+  EXPECT_EQ(fm_sheet_clear_merges(wb_, 0), 0);
+}
+
+TEST_F(FormulonCApiSheetFeatures, MergeRemovalSheetIndexOutOfRange) {
+  fm_merge_range q{};
+  EXPECT_NE(fm_sheet_remove_merge(wb_, 999, q), 0);
+  EXPECT_NE(fm_sheet_remove_merge_at(wb_, 999, 0), 0);
+  EXPECT_NE(fm_sheet_clear_merges(wb_, 999), 0);
+}
+
 }  // namespace

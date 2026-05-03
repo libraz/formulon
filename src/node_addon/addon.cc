@@ -326,6 +326,9 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
 
   // Sheet UI features (merges, comments, hyperlinks, validations).
   Napi::Value AddMerge(const Napi::CallbackInfo& info);
+  Napi::Value RemoveMerge(const Napi::CallbackInfo& info);
+  Napi::Value RemoveMergeAt(const Napi::CallbackInfo& info);
+  Napi::Value ClearMerges(const Napi::CallbackInfo& info);
   Napi::Value GetMerges(const Napi::CallbackInfo& info);
   Napi::Value GetComment(const Napi::CallbackInfo& info);
   Napi::Value SetComment(const Napi::CallbackInfo& info);
@@ -1302,6 +1305,45 @@ Napi::Value Workbook::AddMerge(const Napi::CallbackInfo& info) {
   return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
 }
 
+Napi::Value Workbook::RemoveMerge(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  fm_merge_range m{};
+  if (info.Length() > 1 && info[1].IsObject()) {
+    Napi::Object range = info[1].As<Napi::Object>();
+    m.first_row = range.Get("firstRow").ToNumber().Uint32Value();
+    m.last_row = range.Get("lastRow").ToNumber().Uint32Value();
+    m.first_col = range.Get("firstCol").ToNumber().Uint32Value();
+    m.last_col = range.Get("lastCol").ToNumber().Uint32Value();
+  }
+  fm_status_t rc = fm_sheet_remove_merge(handle_, sheet, m);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::RemoveMergeAt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  const uint32_t index = ArgU32(info, 1);
+  fm_status_t rc = fm_sheet_remove_merge_at(handle_, sheet, index);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::ClearMerges(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  fm_status_t rc = fm_sheet_clear_merges(handle_, sheet);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
 Napi::Value Workbook::GetMerges(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Array arr = Napi::Array::New(env);
@@ -1416,6 +1458,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
                          InstanceMethod<&Workbook::AddSheet>("addSheet"),
                          InstanceMethod<&Workbook::CellAt>("cellAt"),
                          InstanceMethod<&Workbook::CellCount>("cellCount"),
+                         InstanceMethod<&Workbook::ClearMerges>("clearMerges"),
                          InstanceMethod<&Workbook::DefinedNameAt>("definedNameAt"),
                          InstanceMethod<&Workbook::DefinedNameCount>("definedNameCount"),
                          InstanceMethod<&Workbook::DeleteCols>("deleteCols"),
@@ -1438,6 +1481,8 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
                          InstanceMethod<&Workbook::PassthroughAt>("passthroughAt"),
                          InstanceMethod<&Workbook::PassthroughCount>("passthroughCount"),
                          InstanceMethod<&Workbook::Recalc>("recalc"),
+                         InstanceMethod<&Workbook::RemoveMerge>("removeMerge"),
+                         InstanceMethod<&Workbook::RemoveMergeAt>("removeMergeAt"),
                          InstanceMethod<&Workbook::RemoveSheet>("removeSheet"),
                          InstanceMethod<&Workbook::RenameSheet>("renameSheet"),
                          InstanceMethod<&Workbook::Save>("save"),

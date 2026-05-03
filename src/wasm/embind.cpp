@@ -1079,6 +1079,38 @@ class JsWorkbook {
     return rc == 0 ? ok_status() : error_status(rc);
   }
 
+  /// `removeMerge(sheetIdx, {firstRow, lastRow, firstCol, lastCol})`.
+  JsStatus removeMerge(uint32_t sheet, emscripten::val range) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_merge_range m;
+    m.first_row = range["firstRow"].as<uint32_t>();
+    m.last_row = range["lastRow"].as<uint32_t>();
+    m.first_col = range["firstCol"].as<uint32_t>();
+    m.last_col = range["lastCol"].as<uint32_t>();
+    fm_status_t rc = fm_sheet_remove_merge(handle_, sheet, m);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// `removeMergeAt(sheetIdx, index)`.
+  JsStatus removeMergeAt(uint32_t sheet, uint32_t index) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_sheet_remove_merge_at(handle_, sheet, index);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// `clearMerges(sheetIdx)`.
+  JsStatus clearMerges(uint32_t sheet) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_sheet_clear_merges(handle_, sheet);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
   /// `getComment(sheetIdx, row, col) -> {author, text} | null`.
   emscripten::val getComment(uint32_t sheet, uint32_t row, uint32_t col) const {
     if (handle_ == nullptr) {
@@ -1380,6 +1412,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("addSheet", &JsWorkbook::addSheet)
       .function("cellAt", &JsWorkbook::cellAt)
       .function("cellCount", &JsWorkbook::cellCount)
+      .function("clearMerges", &JsWorkbook::clearMerges)
       .function("definedNameAt", &JsWorkbook::definedNameAt)
       .function("definedNameCount", &JsWorkbook::definedNameCount)
       .function("deleteCols", &JsWorkbook::deleteCols)
@@ -1402,6 +1435,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("passthroughAt", &JsWorkbook::passthroughAt)
       .function("passthroughCount", &JsWorkbook::passthroughCount)
       .function("recalc", &JsWorkbook::recalc)
+      .function("removeMerge", &JsWorkbook::removeMerge)
+      .function("removeMergeAt", &JsWorkbook::removeMergeAt)
       .function("removeSheet", &JsWorkbook::removeSheet)
       .function("renameSheet", &JsWorkbook::renameSheet)
       .function("setBlank", &JsWorkbook::setBlank)
