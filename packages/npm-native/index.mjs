@@ -8,16 +8,36 @@
 // The JS-visible shape is intentionally kept identical to
 // `@libraz/formulon` (the WASM package) so consumers can swap binaries
 // without code changes.
+//
+// Binary lookup order at require-time:
+//   1. dist/prebuilds/<platform>-<arch>/formulon.node  (shipped artifacts)
+//   2. dist/formulon.node                              (local dev fallback)
 
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 const require_ = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-// `formulon.node` is staged alongside this file in dist/.
-const native = require_(path.join(here, 'formulon.node'));
+const prebuildSlot = path.join(here, 'prebuilds', `${process.platform}-${process.arch}`, 'formulon.node');
+const fallbackSlot = path.join(here, 'formulon.node');
+
+let nativePath;
+if (existsSync(prebuildSlot)) {
+  nativePath = prebuildSlot;
+} else if (existsSync(fallbackSlot)) {
+  nativePath = fallbackSlot;
+} else {
+  throw new Error(
+    `@libraz/formulon-native: no prebuild for ${process.platform}-${process.arch}. ` +
+      `Looked in:\n  ${prebuildSlot}\n  ${fallbackSlot}\n` +
+      'See https://github.com/libraz/formulon for supported platforms.',
+  );
+}
+
+const native = require_(nativePath);
 
 export const Workbook = native.Workbook;
 export const evalFormula = native.evalFormula;

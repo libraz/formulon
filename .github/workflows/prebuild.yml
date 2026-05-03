@@ -1,0 +1,131 @@
+# Formulon N-API addon prebuild matrix.
+#
+# Builds packages/npm-native's `formulon.node` for each supported
+# platform-arch slot and uploads the artifact under the same naming
+# convention the package's `index.mjs` looks for at require-time
+# (`dist/prebuilds/<platform>-<arch>/formulon.node`).
+#
+# Coverage:
+#   - darwin-x64   (macos-13)
+#   - darwin-arm64 (macos-14)
+#   - linux-x64    (ubuntu-latest)
+#   - linux-arm64  (ubuntu-24.04-arm)
+#
+# Windows is intentionally NOT in the matrix yet. The engine compiles
+# with `-fno-exceptions -fno-rtti -fvisibility=hidden` (GCC/Clang
+# spelling). Adding MSVC support requires plumbing the equivalent
+# `/EHs-c- /GR-` flags engine-wide, which is its own work item.
+#
+# Triggers:
+#   - PR to main         : matrix verifies each platform still builds
+#                          and `make node-test` smokes pass.
+#   - push to main       : same, plus refreshed artifacts available
+#                          via the actions UI for download.
+#   - push tag `v*`      : matrix runs, then `release-bundle` aggregates
+#                          all four `.node` files plus the JS shim and
+#                          types into a single `formulon-native-bundle`
+#                          artifact for npm publish staging.
+#
+# Per CLAUDE.md "CI vs. local development": this workflow produces
+# *artifacts*, not gates. A failed prebuild does NOT block a merge;
+# it's a signal that the platform regressed. The hard gate (build
+# pass/fail, ctest pass/fail, .wasm ceiling, TSan races) lives in
+# ci.yml.
+name: prebuild
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prebuild:
+    name: Prebuild ${{ matrix.platform-arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform-arch: darwin-x64
+            runner: macos-13
+          - platform-arch: darwin-arm64
+            runner: macos-14
+          - platform-arch: linux-x64
+            runner: ubuntu-latest
+          - platform-arch: linux-arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install build deps (Linux)
+        if: startsWith(matrix.platform-arch, 'linux-')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake
+
+      - name: Build, stage, and smoke-test addon
+        # `make node-test` drives the full chain:
+        #   node-native  -> cmake configure + build formulon_node
+        #   node-package -> stage into dist/prebuilds/<platform-arch>/
+        #   node-test    -> node:test smoke against the staged package.
+        run: make node-test
+
+      - name: Upload addon artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: formulon-${{ matrix.platform-arch }}
+          path: packages/npm-native/dist/prebuilds/${{ matrix.platform-arch }}/formulon.node
+          retention-days: 30
+          if-no-files-found: error
+
+  release-bundle:
+    name: Bundle prebuilds for release
+    needs: prebuild
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all prebuild artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: prebuilds-tmp
+          pattern: formulon-*
+
+      - name: Stage every prebuild slot into dist/
+        run: |
+          set -euo pipefail
+          for dir in prebuilds-tmp/*/; do
+            tag=$(basename "$dir" | sed 's/^formulon-//')
+            slot="packages/npm-native/dist/prebuilds/$tag"
+            mkdir -p "$slot"
+            cp "$dir/formulon.node" "$slot/formulon.node"
+            echo "  staged $tag"
+          done
+          # JS shim + types are pure source; no build artefacts needed.
+          cp packages/npm-native/index.mjs packages/npm-native/dist/
+          cp packages/npm-native/index.d.ts packages/npm-native/dist/
+          ls -la packages/npm-native/dist/
+          find packages/npm-native/dist -type f
+
+      - name: Upload bundled npm tree
+        uses: actions/upload-artifact@v4
+        with:
+          name: formulon-native-bundle
+          path: packages/npm-native/dist/
+          retention-days: 30
+          if-no-files-found: error

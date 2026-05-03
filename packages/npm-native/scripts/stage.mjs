@@ -4,14 +4,15 @@
 // Stages the Formulon N-API addon + JS shim into
 // packages/npm-native/dist/ for publication.
 //
-// Inputs (defaults; override via --build-dir / --out-dir):
-//   --build-dir build
-//   --out-dir   packages/npm-native/dist
+// Inputs (defaults; override via --build-dir / --out-dir / --platform-arch):
+//   --build-dir       build
+//   --out-dir         packages/npm-native/dist
+//   --platform-arch   <process.platform>-<process.arch>  (e.g. darwin-arm64)
 //
 // Copies:
-//   <build-dir>/bin/formulon.node            -> <out-dir>/formulon.node
-//   packages/npm-native/index.mjs            -> <out-dir>/index.mjs
-//   packages/npm-native/index.d.ts           -> <out-dir>/index.d.ts
+//   <build-dir>/bin/formulon.node   -> <out-dir>/prebuilds/<platform-arch>/formulon.node
+//   packages/npm-native/index.mjs   -> <out-dir>/index.mjs
+//   packages/npm-native/index.d.ts  -> <out-dir>/index.d.ts
 //
 // Run via `make node-package`. No npm dependencies; Node 18 stdlib only.
 
@@ -27,15 +28,21 @@ const repoRoot = path.resolve(__dirname, '..', '..', '..');
 const pkgRoot = path.resolve(__dirname, '..');
 
 function parseArgs(argv) {
-  const out = { buildDir: 'build', outDir: 'packages/npm-native/dist' };
+  const out = {
+    buildDir: 'build',
+    outDir: 'packages/npm-native/dist',
+    platformArch: `${process.platform}-${process.arch}`,
+  };
   for (let i = 0; i < argv.length; ++i) {
     const a = argv[i];
     if (a === '--build-dir') {
       out.buildDir = argv[++i];
     } else if (a === '--out-dir') {
       out.outDir = argv[++i];
+    } else if (a === '--platform-arch') {
+      out.platformArch = argv[++i];
     } else if (a === '-h' || a === '--help') {
-      console.log('Usage: stage.mjs [--build-dir <path>] [--out-dir <path>]');
+      console.log('Usage: stage.mjs [--build-dir <path>] [--out-dir <path>] [--platform-arch <tag>]');
       process.exit(0);
     } else {
       console.error(`stage.mjs: unknown argument: ${a}`);
@@ -55,9 +62,10 @@ async function fileExists(p) {
 }
 
 async function main() {
-  const { buildDir, outDir } = parseArgs(process.argv.slice(2));
+  const { buildDir, outDir, platformArch } = parseArgs(process.argv.slice(2));
   const absBuildDir = path.resolve(repoRoot, buildDir);
   const absOutDir = path.resolve(repoRoot, outDir);
+  const prebuildDir = path.join(absOutDir, 'prebuilds', platformArch);
 
   const nodeSrc = path.join(absBuildDir, 'bin', 'formulon.node');
   const mjsSrc = path.join(pkgRoot, 'index.mjs');
@@ -71,13 +79,13 @@ async function main() {
     }
   }
 
-  await mkdir(absOutDir, { recursive: true });
+  await mkdir(prebuildDir, { recursive: true });
 
-  await copyFile(nodeSrc, path.join(absOutDir, 'formulon.node'));
+  await copyFile(nodeSrc, path.join(prebuildDir, 'formulon.node'));
   await copyFile(mjsSrc, path.join(absOutDir, 'index.mjs'));
   await copyFile(dtsSrc, path.join(absOutDir, 'index.d.ts'));
 
-  console.log(`staged 3 file(s) -> ${absOutDir}`);
+  console.log(`staged 3 file(s) -> ${absOutDir} (prebuild slot: ${platformArch})`);
 }
 
 main().catch((e) => {
