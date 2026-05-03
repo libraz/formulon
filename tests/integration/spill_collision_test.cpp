@@ -20,11 +20,14 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "cell.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
+#include "io/tables_reader.h"
 #include "sheet.h"
 #include "value.h"
 #include "workbook.h"
@@ -265,6 +268,252 @@ TEST(SpillCollision, ScalarFromAnotherSpillBlocksSecondSpill) {
   EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(0U, 2U).as_number(), 3.0);  // C1
   EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(2U, 1U).as_number(), 2.0);  // B3
   EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(3U, 1U).as_number(), 3.0);  // B4
+}
+
+// ---------------------------------------------------------------------------
+// Table-footprint spill collision
+// ---------------------------------------------------------------------------
+//
+// Excel treats cells inside an existing table's data area as occupied for
+// the purposes of spill-collision detection: a dynamic-array formula whose
+// footprint would cover any non-blank table cell surfaces #SPILL! at the
+// anchor and leaves the table contents untouched. These tests lock in that
+// behaviour. They also exercise the negative case (spill landing strictly
+// outside the table) to confirm that the table's `ref` does not extend any
+// implicit no-spill zone beyond its declared rectangle.
+
+TEST(SpillCollision, SpillIntoTableHeaderRowCollides) {
+  // Sales table at A1:C3 (header row + 2 data rows). =SEQUENCE(3,2) at D1
+  // wants D1:E3. Pre-place a literal at E2 (inside the spill footprint).
+  // The literal is the explicit blocker; the test confirms that the spill
+  // surfaces #SPILL! and does NOT clobber the literal.
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0U, 0U, Value::text("Region"));
+  s.set_cell_value(0U, 1U, Value::text("Product"));
+  s.set_cell_value(0U, 2U, Value::text("Amount"));
+  s.set_cell_value(1U, 0U, Value::text("North"));
+  s.set_cell_value(1U, 1U, Value::text("Apple"));
+  s.set_cell_value(1U, 2U, Value::number(10.0));
+  s.set_cell_value(2U, 0U, Value::text("South"));
+  s.set_cell_value(2U, 1U, Value::text("Banana"));
+  s.set_cell_value(2U, 2U, Value::number(20.0));
+
+  io::TableMetadata table;
+  table.id = 1U;
+  table.name = "Sales";
+  table.display_name = "Sales";
+  table.ref = "A1:C3";
+  table.sheet_index = 0U;
+  table.header_row = true;
+  table.totals_row = false;
+  table.columns = {
+      io::TableColumn{1U, "Region", "", "", ""},
+      io::TableColumn{2U, "Product", "", "", ""},
+      io::TableColumn{3U, "Amount", "", "", ""},
+  };
+  std::vector<io::TableMetadata> tables = {std::move(table)};
+  wb.set_tables(std::move(tables));
+
+  // Literal blocker inside the spill footprint at E2 (row 1, col 4).
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 4U, Value::text("blocker"))));
+  // Anchor at D1 (row 0, col 3); footprint = D1:E3.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 3U, "=SEQUENCE(3,2)")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+
+  const Value d1 = StoredValue(wb, 0U, 0U, 3U);
+  ASSERT_TRUE(d1.is_error()) << "D1 expected #SPILL!; kind=" << static_cast<int>(d1.kind());
+  EXPECT_EQ(d1.as_error(), ErrorCode::Spill);
+
+  // The literal at E2 must be preserved.
+  const Value e2 = StoredValue(wb, 0U, 1U, 4U);
+  ASSERT_TRUE(e2.is_text()) << "E2 expected to retain literal; kind=" << static_cast<int>(e2.kind());
+  EXPECT_EQ(e2.as_text(), "blocker");
+
+  // No spill region committed at the anchor.
+  EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 3U), nullptr);
+}
+
+TEST(SpillCollision, SpillAdjacentToTableNoCollision) {
+  // Sales table at A1:C3. =SEQUENCE(2,2) at D1 wants D1:E2 -- entirely
+  // outside the table's rectangle (cols 0..2). No occupant inside the
+  // footprint. Spill must succeed; the table's `ref` does not extend a
+  // no-spill zone past its declared right edge.
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0U, 0U, Value::text("Region"));
+  s.set_cell_value(0U, 1U, Value::text("Product"));
+  s.set_cell_value(0U, 2U, Value::text("Amount"));
+  s.set_cell_value(1U, 0U, Value::text("North"));
+  s.set_cell_value(1U, 1U, Value::text("Apple"));
+  s.set_cell_value(1U, 2U, Value::number(10.0));
+  s.set_cell_value(2U, 0U, Value::text("South"));
+  s.set_cell_value(2U, 1U, Value::text("Banana"));
+  s.set_cell_value(2U, 2U, Value::number(20.0));
+
+  io::TableMetadata table;
+  table.id = 1U;
+  table.name = "Sales";
+  table.display_name = "Sales";
+  table.ref = "A1:C3";
+  table.sheet_index = 0U;
+  table.header_row = true;
+  table.totals_row = false;
+  table.columns = {
+      io::TableColumn{1U, "Region", "", "", ""},
+      io::TableColumn{2U, "Product", "", "", ""},
+      io::TableColumn{3U, "Amount", "", "", ""},
+  };
+  std::vector<io::TableMetadata> tables = {std::move(table)};
+  wb.set_tables(std::move(tables));
+
+  // Anchor at D1 (row 0, col 3); footprint = D1:E2 -> rows 0..1, cols 3..4.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 3U, "=SEQUENCE(2,2)")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+
+  // Anchor stores the first element; phantoms via resolve_cell_value.
+  const Value d1 = wb.sheet(0).resolve_cell_value(0U, 3U);
+  ASSERT_TRUE(d1.is_number()) << "D1 expected to spill cleanly; kind=" << static_cast<int>(d1.kind());
+  EXPECT_DOUBLE_EQ(d1.as_number(), 1.0);
+
+  const Value e1 = wb.sheet(0).resolve_cell_value(0U, 4U);
+  ASSERT_TRUE(e1.is_number());
+  EXPECT_DOUBLE_EQ(e1.as_number(), 2.0);
+
+  const Value d2 = wb.sheet(0).resolve_cell_value(1U, 3U);
+  ASSERT_TRUE(d2.is_number());
+  EXPECT_DOUBLE_EQ(d2.as_number(), 3.0);
+
+  const Value e2 = wb.sheet(0).resolve_cell_value(1U, 4U);
+  ASSERT_TRUE(e2.is_number());
+  EXPECT_DOUBLE_EQ(e2.as_number(), 4.0);
+
+  // Spill region must be registered.
+  EXPECT_NE(wb.sheet(0).spill_region_at_anchor(0U, 3U), nullptr);
+}
+
+TEST(SpillCollision, SpillIntoTableDataCellCollides) {
+  // Sales table at A1:C5 (header row + 4 data rows; column C holds 10/20/
+  // 30/40). =SEQUENCE(2,3) at B3 wants B3:D4. Cells B3 ("Banana") and C3
+  // (20) are inside both the table data area AND the spill footprint, so
+  // they act as literal blockers from the spill engine's perspective.
+  // Expectation: B3 -> #SPILL!; the table's existing values at C3 and C4
+  // are preserved.
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0U, 0U, Value::text("Region"));
+  s.set_cell_value(0U, 1U, Value::text("Product"));
+  s.set_cell_value(0U, 2U, Value::text("Amount"));
+  s.set_cell_value(1U, 0U, Value::text("North"));
+  s.set_cell_value(1U, 1U, Value::text("Apple"));
+  s.set_cell_value(1U, 2U, Value::number(10.0));
+  s.set_cell_value(2U, 0U, Value::text("South"));
+  s.set_cell_value(2U, 1U, Value::text("Banana"));
+  s.set_cell_value(2U, 2U, Value::number(20.0));
+  s.set_cell_value(3U, 0U, Value::text("East"));
+  s.set_cell_value(3U, 1U, Value::text("Cherry"));
+  s.set_cell_value(3U, 2U, Value::number(30.0));
+  s.set_cell_value(4U, 0U, Value::text("West"));
+  s.set_cell_value(4U, 1U, Value::text("Durian"));
+  s.set_cell_value(4U, 2U, Value::number(40.0));
+
+  io::TableMetadata table;
+  table.id = 1U;
+  table.name = "Sales";
+  table.display_name = "Sales";
+  table.ref = "A1:C5";
+  table.sheet_index = 0U;
+  table.header_row = true;
+  table.totals_row = false;
+  table.columns = {
+      io::TableColumn{1U, "Region", "", "", ""},
+      io::TableColumn{2U, "Product", "", "", ""},
+      io::TableColumn{3U, "Amount", "", "", ""},
+  };
+  std::vector<io::TableMetadata> tables = {std::move(table)};
+  wb.set_tables(std::move(tables));
+
+  // Anchor at B3 (row 2, col 1); footprint = B3:D4 -> rows 2..3, cols 1..3.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 2U, 1U, "=SEQUENCE(2,3)")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+
+  const Value b3 = StoredValue(wb, 0U, 2U, 1U);
+  ASSERT_TRUE(b3.is_error()) << "B3 expected #SPILL!; kind=" << static_cast<int>(b3.kind());
+  EXPECT_EQ(b3.as_error(), ErrorCode::Spill);
+
+  // The table's existing data at C3 and C4 must be preserved.
+  const Value c3 = StoredValue(wb, 0U, 2U, 2U);
+  ASSERT_TRUE(c3.is_number()) << "C3 expected to retain table value 20; kind=" << static_cast<int>(c3.kind());
+  EXPECT_DOUBLE_EQ(c3.as_number(), 20.0);
+
+  const Value c4 = StoredValue(wb, 0U, 3U, 2U);
+  ASSERT_TRUE(c4.is_number()) << "C4 expected to retain table value 30; kind=" << static_cast<int>(c4.kind());
+  EXPECT_DOUBLE_EQ(c4.as_number(), 30.0);
+
+  // No spill region committed at the anchor.
+  EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(2U, 1U), nullptr);
+}
+
+TEST(SpillCollision, SpillAtTableEdgeJustFitsNoCollision) {
+  // Sales table at A1:C5. =SEQUENCE(3,1) at D1 wants D1:D3 -- a single
+  // column flush against the table's right edge. No occupant in D1:D3.
+  // Spill must succeed; this locks in that table footprints do NOT extend
+  // any implicit no-spill margin past their declared `ref`.
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0U, 0U, Value::text("Region"));
+  s.set_cell_value(0U, 1U, Value::text("Product"));
+  s.set_cell_value(0U, 2U, Value::text("Amount"));
+  s.set_cell_value(1U, 0U, Value::text("North"));
+  s.set_cell_value(1U, 1U, Value::text("Apple"));
+  s.set_cell_value(1U, 2U, Value::number(10.0));
+  s.set_cell_value(2U, 0U, Value::text("South"));
+  s.set_cell_value(2U, 1U, Value::text("Banana"));
+  s.set_cell_value(2U, 2U, Value::number(20.0));
+  s.set_cell_value(3U, 0U, Value::text("East"));
+  s.set_cell_value(3U, 1U, Value::text("Cherry"));
+  s.set_cell_value(3U, 2U, Value::number(30.0));
+  s.set_cell_value(4U, 0U, Value::text("West"));
+  s.set_cell_value(4U, 1U, Value::text("Durian"));
+  s.set_cell_value(4U, 2U, Value::number(40.0));
+
+  io::TableMetadata table;
+  table.id = 1U;
+  table.name = "Sales";
+  table.display_name = "Sales";
+  table.ref = "A1:C5";
+  table.sheet_index = 0U;
+  table.header_row = true;
+  table.totals_row = false;
+  table.columns = {
+      io::TableColumn{1U, "Region", "", "", ""},
+      io::TableColumn{2U, "Product", "", "", ""},
+      io::TableColumn{3U, "Amount", "", "", ""},
+  };
+  std::vector<io::TableMetadata> tables = {std::move(table)};
+  wb.set_tables(std::move(tables));
+
+  // Anchor at D1 (row 0, col 3); footprint = D1:D3 -> rows 0..2, col 3.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 3U, "=SEQUENCE(3,1)")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+
+  const Value d1 = wb.sheet(0).resolve_cell_value(0U, 3U);
+  ASSERT_TRUE(d1.is_number()) << "D1 expected to spill cleanly; kind=" << static_cast<int>(d1.kind());
+  EXPECT_DOUBLE_EQ(d1.as_number(), 1.0);
+
+  const Value d2 = wb.sheet(0).resolve_cell_value(1U, 3U);
+  ASSERT_TRUE(d2.is_number());
+  EXPECT_DOUBLE_EQ(d2.as_number(), 2.0);
+
+  const Value d3 = wb.sheet(0).resolve_cell_value(2U, 3U);
+  ASSERT_TRUE(d3.is_number());
+  EXPECT_DOUBLE_EQ(d3.as_number(), 3.0);
+
+  EXPECT_NE(wb.sheet(0).spill_region_at_anchor(0U, 3U), nullptr);
 }
 
 }  // namespace
