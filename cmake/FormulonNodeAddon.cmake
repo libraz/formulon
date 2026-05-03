@@ -1,0 +1,102 @@
+# FormulonNodeAddon.cmake
+#
+# Configures the Node.js N-API addon target (`formulon_node`).
+#
+# Activated only when `FM_BUILD_NODE_ADDON=ON`. Produces a single
+# `formulon.node` shared module that statically links the engine
+# (`formulon_static`) and surfaces the Workbook + free-function API
+# matching the WASM/embind binding shape.
+#
+# Layout (relative to the build dir):
+#   <build>/bin/formulon.node
+#
+# Compilation policy
+# ------------------
+# * The whole engine is compiled `-fno-exceptions -fno-rtti`. node-addon-api
+#   throws C++ exceptions by default; we disable that via
+#   `NODE_ADDON_API_DISABLE_CPP_EXCEPTIONS` and `NAPI_DISABLE_CPP_EXCEPTIONS`.
+#   Status is then surfaced through `Napi::MaybeOrValue<>` /
+#   `IsExceptionPending()` checks instead of throws — exactly mirroring
+#   the embind binding's `{ ok, status, message, context }` envelope.
+#
+# * The addon TU is built with `-fno-exceptions -fno-rtti` to match the
+#   project-wide stance. (Unlike embind, node-addon-api does NOT key
+#   on `typeid()`, so RTTI can stay off.)
+#
+# Linker policy
+# -------------
+# * macOS: `-undefined dynamic_lookup` so napi symbols resolve when Node
+#   loads the .node file at runtime.
+# * Linux: napi symbols are resolved at load by Node; no extra flags.
+# * Windows: not yet wired (prebuild matrix is a follow-up bundle).
+
+if(NOT FM_BUILD_NODE_ADDON)
+  return()
+endif()
+
+include(cmake/FetchNodeApiHeaders.cmake)
+include(cmake/FetchNodeAddonApi.cmake)
+
+# INTERFACE aggregator: include dirs + macros consumers need.
+if(NOT TARGET formulon_node_addon_api_iface)
+  add_library(formulon_node_addon_api_iface INTERFACE)
+  target_link_libraries(formulon_node_addon_api_iface INTERFACE
+    formulon::node_api_headers
+    formulon::node_addon_api_headers
+  )
+  # `NAPI_DISABLE_CPP_EXCEPTIONS` is the canonical control symbol for the
+  # exception-free build mode; `napi.h` derives
+  # `NODE_ADDON_API_DISABLE_CPP_EXCEPTIONS` from it internally. Setting
+  # both with no replacement list keeps the predicate `#ifdef X` checks
+  # in node-addon-api happy without triggering `-Wmacro-redefined` if
+  # the header redefines them.
+  target_compile_definitions(formulon_node_addon_api_iface INTERFACE
+    NAPI_VERSION=8
+    NAPI_DISABLE_CPP_EXCEPTIONS
+    NODE_ADDON_API_DISABLE_CPP_EXCEPTIONS
+  )
+  add_library(formulon::node_addon_api ALIAS formulon_node_addon_api_iface)
+endif()
+
+# The .node module itself. MODULE so the linker emits a loadable shared
+# object with no `lib` prefix; we additionally force `.node` as the
+# extension and clear the prefix to match Node's loader convention.
+add_library(formulon_node MODULE
+  src/node_addon/addon.cc
+)
+
+target_include_directories(formulon_node PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(formulon_node PRIVATE
+  formulon_static
+  formulon::node_addon_api
+  Threads::Threads
+)
+
+target_compile_options(formulon_node PRIVATE
+  -fno-exceptions
+  -fno-rtti
+  -fvisibility=hidden
+  -fvisibility-inlines-hidden
+)
+
+set_target_properties(formulon_node PROPERTIES
+  PREFIX ""
+  SUFFIX ".node"
+  OUTPUT_NAME "formulon"
+  LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
+if(APPLE)
+  # On macOS, napi symbols (`napi_*`) live in the host Node binary and
+  # are resolved at dlopen time. `-undefined dynamic_lookup` defers the
+  # resolution to load time rather than failing at link.
+  target_link_options(formulon_node PRIVATE
+    "-Wl,-undefined,dynamic_lookup"
+  )
+elseif(UNIX)
+  # Linux: nothing extra. The dynamic linker resolves napi symbols at
+  # `dlopen()` time when Node loads the .node file.
+endif()

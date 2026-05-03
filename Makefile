@@ -16,6 +16,7 @@ CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 
 .PHONY: all build release test test-slow test-all fmt lint clean \
         wasm wasm-debug test-wasm test-python size-check \
         npm-package npm-test npm-pack \
+        node-native node-package node-test \
         python-package python-test python-wheel \
         parity-test \
         oracle-setup oracle-setup-mac oracle-setup-wsl \
@@ -188,6 +189,29 @@ python-wheel: python-package
 	@echo "python wheel:"
 	@ls -la $(PY_BUILD_DIR)/dist/formulon-*.whl 2>/dev/null | tail -1 || \
 	  echo "  (wheel not found; check log above)"
+
+# -- Node native (N-API) packaging targets ----------------------------
+# `make node-native`  -> build formulon.node via FM_BUILD_NODE_ADDON=ON.
+# `make node-package` -> stage build/bin/formulon.node + JS shim into
+#                        packages/npm-native/dist/.
+# `make node-test`    -> node:test smoke against the staged package.
+NODE_NATIVE_PKG_DIR := packages/npm-native
+NODE_NATIVE_BUILD_DIR ?= build
+
+node-native:
+	$(CMAKE) -B $(NODE_NATIVE_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DFM_BUILD_NODE_ADDON=ON
+	$(CMAKE) --build $(NODE_NATIVE_BUILD_DIR) --target formulon_node --parallel
+
+node-package: node-native
+	@if ! command -v node >/dev/null 2>&1; then \
+	  echo "node-package: node not found in PATH"; exit 1; \
+	fi
+	node $(NODE_NATIVE_PKG_DIR)/scripts/stage.mjs \
+	  --build-dir $(NODE_NATIVE_BUILD_DIR) \
+	  --out-dir $(NODE_NATIVE_PKG_DIR)/dist
+
+node-test: node-package
+	(cd $(NODE_NATIVE_PKG_DIR) && node --test 'test/*.test.mjs')
 
 # -- Cross-channel parity gate ------------------------------------------------
 # `make parity-test` -> evaluate fixtures.json on every available channel

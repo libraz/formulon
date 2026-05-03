@@ -36,6 +36,7 @@ option(FM_BUILD_WASM          "Build WASM target (requires emscripten)" OFF)
 option(FM_BUILD_PYTHON_SHARED "Build shared lib for Python ctypes" OFF)
 option(FM_BUILD_C_API_SHARED  "Build libformulon shared lib exporting the C ABI" OFF)
 option(FM_BUILD_CLI           "Build formulon_cli binary" ON)
+option(FM_BUILD_NODE_ADDON    "Build Node.js N-API addon (.node)" OFF)
 option(FM_BUILD_FUZZ          "Build libFuzzer harnesses (clang only)" OFF)
 option(FM_ENABLE_COVERAGE     "Enable gcov/lcov" OFF)
 option(FM_USE_SYSTEM_DEPS     "Prefer system-installed third-party deps" OFF)
@@ -355,6 +356,17 @@ endif()
 # of the build remains untouched on native CI (where emscripten is not
 # installed). The script is a no-op unless FM_BUILD_WASM=ON.
 include(cmake/FormulonWasm.cmake)
+
+# ---------------------------------------------------------------------------
+# Node.js N-API addon target
+# ---------------------------------------------------------------------------
+# The actual target wiring lives in cmake/FormulonNodeAddon.cmake; the
+# script is a no-op unless FM_BUILD_NODE_ADDON=ON. Linking happens
+# against `formulon_static`, so multithreaded recalc is inherited
+# automatically from the engine.
+if(FM_BUILD_NODE_ADDON)
+  include(cmake/FormulonNodeAddon.cmake)
+endif()
 
 # ---------------------------------------------------------------------------
 # Tests
