@@ -381,6 +381,58 @@ extern "C" fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const cha
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_insert_rows(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t count) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_insert_rows: NULL argument");
+  }
+  auto r = wb->workbook().insert_rows(sheet, row, count);
+  if (!r) {
+    return set_last_error(r.error());
+  }
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_delete_rows(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t count) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_delete_rows: NULL argument");
+  }
+  auto r = wb->workbook().delete_rows(sheet, row, count);
+  if (!r) {
+    return set_last_error(r.error());
+  }
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_insert_cols(fm_workbook_t* wb, uint32_t sheet, uint32_t col, uint32_t count) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_insert_cols: NULL argument");
+  }
+  auto r = wb->workbook().insert_cols(sheet, col, count);
+  if (!r) {
+    return set_last_error(r.error());
+  }
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_delete_cols(fm_workbook_t* wb, uint32_t sheet, uint32_t col, uint32_t count) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_delete_cols: NULL argument");
+  }
+  auto r = wb->workbook().delete_cols(sheet, col, count);
+  if (!r) {
+    return set_last_error(r.error());
+  }
+  return 0;
+}
+
 // ---------------------------------------------------------------------------
 // Cell mutation
 // ---------------------------------------------------------------------------
@@ -733,7 +785,7 @@ extern "C" fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, std::uint32_t sheet
 }
 
 extern "C" fm_status_t fm_sheet_get_comment_at(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
-                                                std::uint32_t col, fm_comment* out) {
+                                               std::uint32_t col, fm_comment* out) {
   clear_last_error();
   if (out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_comment_at: out is NULL");
@@ -755,7 +807,7 @@ extern "C" fm_status_t fm_sheet_get_comment_at(fm_workbook_t* wb, std::uint32_t 
 }
 
 extern "C" fm_status_t fm_sheet_get_hyperlink_at(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t index,
-                                                  fm_hyperlink* out) {
+                                                 fm_hyperlink* out) {
   clear_last_error();
   if (out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
@@ -794,7 +846,7 @@ extern "C" fm_status_t fm_sheet_get_hyperlink_count(fm_workbook_t* wb, std::uint
 }
 
 extern "C" fm_status_t fm_sheet_get_merge_at(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t index,
-                                              fm_merge_range* out) {
+                                             fm_merge_range* out) {
   clear_last_error();
   if (out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_merge_at: out is NULL");
@@ -804,8 +856,7 @@ extern "C" fm_status_t fm_sheet_get_merge_at(fm_workbook_t* wb, std::uint32_t sh
   }
   const auto& merges = wb->workbook().sheet(sheet).merges();
   if (static_cast<std::size_t>(index) >= merges.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_get_merge_at: index out of range",
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_get_merge_at: index out of range",
                              "index=" + std::to_string(index) + " count=" + std::to_string(merges.size()));
   }
   const formulon::MergeRange& m = merges[index];
@@ -830,7 +881,7 @@ extern "C" fm_status_t fm_sheet_get_merge_count(fm_workbook_t* wb, std::uint32_t
 }
 
 extern "C" fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
-                                             std::uint32_t col, const char* author, const char* text) {
+                                            std::uint32_t col, const char* author, const char* text) {
   clear_last_error();
   if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_set_comment"); rc != 0) {
     return rc;

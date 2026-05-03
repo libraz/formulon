@@ -366,5 +366,140 @@ TEST(WorkbookSheetOps, SetDefinedNameRejectsEmptyName) {
   EXPECT_EQ(r.error().code, FormulonErrorCode::kInvalidArgument);
 }
 
+// ---------------------------------------------------------------------------
+// Row / column insert and delete
+// ---------------------------------------------------------------------------
+
+TEST(WorkbookRowColEdits, InsertRowsShiftsCellsAndFormulas) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0, 0, Value::number(10.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 5, 0, Value::number(20.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 6, 0, "=A1+A6")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, /*row=*/3, /*count=*/2)));
+
+  // Cells at row 0 stayed put; cell at row 5 moved to row 7; the formula
+  // cell at row 6 moved to row 8 and its A6 ref shifted to A8.
+  const Sheet& s = wb.sheet(0);
+  ASSERT_NE(s.cell_at(0, 0), nullptr);
+  EXPECT_EQ(s.cell_at(0, 0)->cached_value.as_number(), 10.0);
+  EXPECT_EQ(s.cell_at(5, 0), nullptr);
+  ASSERT_NE(s.cell_at(7, 0), nullptr);
+  EXPECT_EQ(s.cell_at(7, 0)->cached_value.as_number(), 20.0);
+  ASSERT_NE(s.cell_at(8, 0), nullptr);
+  EXPECT_EQ(s.cell_at(8, 0)->formula_text, "=A1+A8");
+}
+
+TEST(WorkbookRowColEdits, DeleteRowsCollapsesReferencesInsideInterval) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 0, "=A5")));     // A5 lives inside the deletion.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 1, "=A8+A2")));  // A8 trails the deletion; A2 is below.
+
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, /*row=*/3, /*count=*/3)));
+
+  const Sheet& s = wb.sheet(0);
+  // A5 falls inside [3, 6); collapses to #REF!.
+  EXPECT_EQ(s.cell_at(0, 0)->formula_text, "=#REF!");
+  // A8 -> A5 (shifted up by 3); A2 unchanged.
+  EXPECT_EQ(s.cell_at(0, 1)->formula_text, "=A5+A2");
+}
+
+TEST(WorkbookRowColEdits, InsertColsShiftsCellsAcrossRow) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0, 0, Value::number(1.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0, 3, Value::number(4.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 1, 0, "=A1+D1")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.insert_cols(0, /*col=*/1, /*count=*/2)));
+
+  const Sheet& s = wb.sheet(0);
+  EXPECT_EQ(s.cell_at(0, 0)->cached_value.as_number(), 1.0);
+  // Slot at (0, 3) exists in the row vector but is a default Cell — the
+  // value that used to live there migrated forward.
+  ASSERT_NE(s.cell_at(0, 3), nullptr);
+  EXPECT_TRUE(s.cell_at(0, 3)->cached_value.is_blank());
+  ASSERT_NE(s.cell_at(0, 5), nullptr);
+  EXPECT_EQ(s.cell_at(0, 5)->cached_value.as_number(), 4.0);
+  // The formula cell sat at (1, 0), which is below the insert origin
+  // (col 1) and so does not move. Its references shift: D1 -> F1.
+  ASSERT_NE(s.cell_at(1, 0), nullptr);
+  EXPECT_EQ(s.cell_at(1, 0)->formula_text, "=A1+F1");
+}
+
+TEST(WorkbookRowColEdits, DeleteColsRewritesFormulaAndDropsCell) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 5, "=B1+C1+E1")));
+
+  // Delete cols B..C (col indices 1..2).
+  ASSERT_TRUE(static_cast<bool>(wb.delete_cols(0, /*col=*/1, /*count=*/2)));
+
+  const Sheet& s = wb.sheet(0);
+  // Source cell moved from F1 (col 5) to D1 (col 3).
+  ASSERT_NE(s.cell_at(0, 3), nullptr);
+  // B1 and C1 are inside the deleted span: collapse the entire formula
+  // to #REF! because every range / sum endpoint that lands inside the
+  // deletion poisons its enclosing expression.
+  EXPECT_EQ(s.cell_at(0, 3)->formula_text, "=#REF!+#REF!+C1");
+}
+
+TEST(WorkbookRowColEdits, InsertRowsShiftsMergeRanges) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.mutable_merges() = {MergeRange{0, 0, 0, 1}, MergeRange{5, 0, 7, 1}};
+
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, /*row=*/3, /*count=*/2)));
+
+  ASSERT_EQ(s.merges().size(), 2U);
+  // First merge sits entirely below the insert; unchanged.
+  EXPECT_EQ(s.merges()[0].first_row, 0U);
+  EXPECT_EQ(s.merges()[0].last_row, 0U);
+  // Second merge shifted forward by 2.
+  EXPECT_EQ(s.merges()[1].first_row, 7U);
+  EXPECT_EQ(s.merges()[1].last_row, 9U);
+}
+
+TEST(WorkbookRowColEdits, DeleteRowsClampsStraddlingMerge) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.mutable_merges() = {MergeRange{2, 0, 8, 1}};
+
+  // Delete rows 4..6.
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, /*row=*/4, /*count=*/3)));
+
+  ASSERT_EQ(s.merges().size(), 1U);
+  EXPECT_EQ(s.merges()[0].first_row, 2U);
+  // Last row was 8 (past the deletion); shifts up by 3 to 5.
+  EXPECT_EQ(s.merges()[0].last_row, 5U);
+}
+
+TEST(WorkbookRowColEdits, InsertRowsRewritesDefinedName) {
+  Workbook wb = Workbook::create();
+  std::vector<io::DefinedName> names;
+  io::DefinedName dn;
+  dn.name = "Region";
+  dn.formula = "Sheet1!$A$5:$A$10";
+  dn.local_sheet_id = -1;
+  names.push_back(dn);
+  wb.set_defined_names(std::move(names));
+
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, /*row=*/3, /*count=*/2)));
+
+  EXPECT_EQ(wb.defined_names()[0].formula, "Sheet1!$A$7:$A$12");
+}
+
+TEST(WorkbookRowColEdits, RejectsZeroCount) {
+  Workbook wb = Workbook::create();
+  auto r = wb.insert_rows(0, /*row=*/0, /*count=*/0);
+  ASSERT_FALSE(static_cast<bool>(r));
+  EXPECT_EQ(r.error().code, FormulonErrorCode::kInvalidArgument);
+}
+
+TEST(WorkbookRowColEdits, RejectsOutOfRangeSheetIndex) {
+  Workbook wb = Workbook::create();
+  auto r = wb.delete_cols(99, /*col=*/0, /*count=*/1);
+  ASSERT_FALSE(static_cast<bool>(r));
+  EXPECT_EQ(r.error().code, FormulonErrorCode::kInvalidArgument);
+}
+
 }  // namespace
 }  // namespace formulon

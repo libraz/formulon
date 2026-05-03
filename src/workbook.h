@@ -396,6 +396,50 @@ class Workbook {
   Expected<void, Error> set_cell_xf_index(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                           std::uint32_t xf_index);
 
+  // ---------------------------------------------------------------------------
+  // Row / column structural edits
+  // ---------------------------------------------------------------------------
+  //
+  // Insert and delete operations migrate cells in the affected sheet and
+  // rewrite every reference in the workbook (cell formulas across all
+  // sheets, defined names, integer-coordinate metadata) in lockstep with
+  // the move. Cell formulas pointing into the touched range follow Excel's
+  // rules: an insert pushes affected coordinates forward; a delete drops
+  // references inside the deleted interval (collapsing them to `#REF!`)
+  // and shifts trailing references back. Sheet-scoped metadata —
+  // merges, hyperlinks, validation ranges, comment anchors — receives
+  // the same shift on the affected sheet only; cross-sheet references
+  // are rewritten via the AST-based reference transform.
+  //
+  // Range clamping (Excel's behaviour where deleting only part of a
+  // range shrinks the range rather than collapsing it) is a follow-up
+  // enhancement; the current implementation collapses to `#REF!` whenever
+  // a range endpoint sits inside the deleted interval. All other Excel
+  // semantics — propagation across sheets, defined-name updates,
+  // out-of-bounds collapse for inserts that overflow the sheet — match
+  // Excel today.
+
+  /// Inserts `count` rows at `row` on `sheet_index`. Existing rows at
+  /// `row` and beyond shift down by `count`; rows that would land past
+  /// `Sheet::kMaxRows` are dropped (their cells are lost). Returns
+  /// `kInvalidArgument` for an out-of-range sheet index, a row beyond
+  /// the sheet bound, or `count == 0`.
+  Expected<void, Error> insert_rows(std::size_t sheet_index, std::uint32_t row, std::uint32_t count);
+
+  /// Deletes `count` rows starting at `row` on `sheet_index`. The deleted
+  /// rows are dropped wholesale; rows past `row + count` shift up by
+  /// `count`. Returns `kInvalidArgument` on the same error paths as
+  /// `insert_rows`.
+  Expected<void, Error> delete_rows(std::size_t sheet_index, std::uint32_t row, std::uint32_t count);
+
+  /// Inserts `count` columns at `col` on `sheet_index`. Mirrors
+  /// `insert_rows` along the column axis.
+  Expected<void, Error> insert_cols(std::size_t sheet_index, std::uint32_t col, std::uint32_t count);
+
+  /// Deletes `count` columns starting at `col` on `sheet_index`. Mirrors
+  /// `delete_rows` along the column axis.
+  Expected<void, Error> delete_cols(std::size_t sheet_index, std::uint32_t col, std::uint32_t count);
+
  private:
   Workbook();
 

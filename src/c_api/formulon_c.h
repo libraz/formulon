@@ -322,6 +322,46 @@ FM_API fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, uint32_t index, c
 FM_API fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const char* name, const char* formula);
 
 /* -------------------------------------------------------------------------- */
+/* Row / column structural edits                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Inserts `count` rows at `row` on `sheet`. Cells at `row` and
+ *        beyond shift forward; cells pushed past the sheet bound are
+ *        dropped. References across the workbook are rewritten to
+ *        track the new positions; references that would land past the
+ *        sheet bound collapse to `#REF!`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet` is out of range, `row` is
+ *         past the sheet bound, or `count == 0`.
+ */
+FM_API fm_status_t fm_workbook_insert_rows(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t count);
+
+/**
+ * @brief Deletes `count` rows starting at `row` on `sheet`. The deleted
+ *        rows are dropped wholesale; subsequent rows shift back.
+ *        References pointing inside the deleted interval collapse to
+ *        `#REF!`; references past the deletion shift back.
+ *
+ * @return Same status codes as `fm_workbook_insert_rows`.
+ */
+FM_API fm_status_t fm_workbook_delete_rows(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t count);
+
+/**
+ * @brief Inserts `count` columns at `col` on `sheet`. Mirrors
+ *        `fm_workbook_insert_rows` along the column axis.
+ */
+FM_API fm_status_t fm_workbook_insert_cols(fm_workbook_t* wb, uint32_t sheet, uint32_t col, uint32_t count);
+
+/**
+ * @brief Deletes `count` columns starting at `col` on `sheet`. Mirrors
+ *        `fm_workbook_delete_rows` along the column axis.
+ */
+FM_API fm_status_t fm_workbook_delete_cols(fm_workbook_t* wb, uint32_t sheet, uint32_t col, uint32_t count);
+
+/* -------------------------------------------------------------------------- */
 /* Cell mutation                                                              */
 /* -------------------------------------------------------------------------- */
 
@@ -662,11 +702,11 @@ FM_API fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, int32_t enabled,
  * a no-op recalc.
  */
 typedef struct {
-  uint32_t sheet;       /**< 0-based sheet index. */
-  uint32_t first_row;   /**< First row, 0-based, inclusive. */
-  uint32_t last_row;    /**< Last row, 0-based, inclusive. */
-  uint32_t first_col;   /**< First column, 0-based, inclusive. */
-  uint32_t last_col;    /**< Last column, 0-based, inclusive. */
+  uint32_t sheet;     /**< 0-based sheet index. */
+  uint32_t first_row; /**< First row, 0-based, inclusive. */
+  uint32_t last_row;  /**< Last row, 0-based, inclusive. */
+  uint32_t first_col; /**< First column, 0-based, inclusive. */
+  uint32_t last_col;  /**< Last column, 0-based, inclusive. */
 } fm_viewport;
 
 /**

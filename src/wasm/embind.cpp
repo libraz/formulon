@@ -449,6 +449,44 @@ class JsWorkbook {
     return rc == 0 ? ok_status() : error_status(rc);
   }
 
+  /// Inserts `count` rows at `row` on `sheet`. References across the
+  /// workbook are rewritten to follow the shift.
+  JsStatus insertRows(uint32_t sheet, uint32_t row, uint32_t count) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_insert_rows(handle_, sheet, row, count);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Deletes `count` rows starting at `row` on `sheet`. References that
+  /// fall inside the deleted interval collapse to `#REF!`.
+  JsStatus deleteRows(uint32_t sheet, uint32_t row, uint32_t count) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_delete_rows(handle_, sheet, row, count);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Inserts `count` columns at `col` on `sheet`.
+  JsStatus insertCols(uint32_t sheet, uint32_t col, uint32_t count) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_insert_cols(handle_, sheet, col, count);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Deletes `count` columns starting at `col` on `sheet`.
+  JsStatus deleteCols(uint32_t sheet, uint32_t col, uint32_t count) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_delete_cols(handle_, sheet, col, count);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
   /// Returns the number of sheets (0 when handle is invalid).
   uint32_t sheetCount() const {
     if (handle_ == nullptr) {
@@ -1344,6 +1382,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("cellCount", &JsWorkbook::cellCount)
       .function("definedNameAt", &JsWorkbook::definedNameAt)
       .function("definedNameCount", &JsWorkbook::definedNameCount)
+      .function("deleteCols", &JsWorkbook::deleteCols)
+      .function("deleteRows", &JsWorkbook::deleteRows)
       .function("evaluateCfRange", &JsWorkbook::evaluateCfRange)
       .function("getCellXf", &JsWorkbook::getCellXf)
       .function("getCellXfIndex", &JsWorkbook::getCellXfIndex)
@@ -1355,6 +1395,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getSheetView", &JsWorkbook::getSheetView)
       .function("getValidations", &JsWorkbook::getValidations)
       .function("getValue", &JsWorkbook::getValue)
+      .function("insertCols", &JsWorkbook::insertCols)
+      .function("insertRows", &JsWorkbook::insertRows)
       .function("moveSheet", &JsWorkbook::moveSheet)
       .function("partialRecalc", &JsWorkbook::partialRecalc)
       .function("passthroughAt", &JsWorkbook::passthroughAt)

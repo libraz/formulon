@@ -570,6 +570,39 @@ class Sheet {
   /// reorder entries without an extra accessor pair per field.
   SheetLayout& mutable_layout() noexcept { return layout_; }
 
+  // ---------------------------------------------------------------------------
+  // Row / column structural edits
+  // ---------------------------------------------------------------------------
+  //
+  // Sheet-local migration of cell storage and integer-coordinate
+  // metadata (merges, hyperlinks, comments, data-validation ranges) for
+  // a row or column insert / delete. The workbook orchestrates the wider
+  // operation: it walks every sheet and rewrites cross-sheet formula
+  // text via the AST shifter, then calls these methods on the affected
+  // sheet to migrate the local data.
+  //
+  // `row` / `col` is the 0-based index where the edit begins. `count`
+  // must be `>= 1`. Cells that would land past `kMaxRows` / `kMaxCols`
+  // on an insert are dropped wholesale; cells inside the deleted
+  // interval on a delete are dropped wholesale. Metadata anchored on
+  // dropped cells is also removed; metadata anchored on shifted cells
+  // is rewritten in place.
+
+  /// Inserts `count` rows at `row`. Cells at `row` and beyond shift down.
+  void insert_rows(std::uint32_t row, std::uint32_t count);
+
+  /// Deletes `count` rows starting at `row`. Cells in `[row, row+count)`
+  /// are dropped; cells past the deletion shift up.
+  void delete_rows(std::uint32_t row, std::uint32_t count);
+
+  /// Inserts `count` columns at `col`. Cells at `col` and beyond
+  /// (within every populated row) shift right.
+  void insert_cols(std::uint32_t col, std::uint32_t count);
+
+  /// Deletes `count` columns starting at `col`. Cells in
+  /// `[col, col+count)` are dropped; cells past the deletion shift left.
+  void delete_cols(std::uint32_t col, std::uint32_t count);
+
  private:
   std::string name_;
   std::unordered_map<std::uint32_t, std::vector<Cell>> rows_;

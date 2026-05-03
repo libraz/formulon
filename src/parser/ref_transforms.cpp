@@ -7,6 +7,7 @@
 #include <string_view>
 
 #include "parser/reference.h"
+#include "sheet.h"
 #include "utils/strings.h"
 
 namespace formulon {
@@ -54,6 +55,82 @@ std::optional<Reference> SheetRenameTransform::apply(const Reference& ref) const
 std::optional<std::string_view> SheetRenameTransform::transform_external_sheet(std::uint32_t /*book_id*/,
                                                                                std::string_view sheet) const {
   return remap_sheet(sheet);
+}
+
+RowColShiftTransform::RowColShiftTransform(std::string_view target_sheet, RowColAxis axis, RowColEdit edit,
+                                           std::uint32_t index, std::uint32_t count, bool local_means_target) noexcept
+    : target_sheet_(target_sheet),
+      axis_(axis),
+      edit_(edit),
+      index_(index),
+      count_(count),
+      local_means_target_(local_means_target) {}
+
+bool RowColShiftTransform::sheet_in_scope(std::string_view sheet) const noexcept {
+  if (sheet.empty()) {
+    // Reference is local to its formula's owning sheet. The caller
+    // controls whether that owning sheet is the target via the
+    // `local_means_target` constructor flag.
+    return local_means_target_;
+  }
+  if (target_sheet_.empty()) {
+    // Local-scope transform with no named target: a sheet-qualified
+    // reference always falls outside the local scope.
+    return false;
+  }
+  return strings::case_insensitive_eq(sheet, target_sheet_);
+}
+
+std::optional<std::uint32_t> RowColShiftTransform::shift_axis(std::uint32_t coord, std::uint32_t bound) const noexcept {
+  if (edit_ == RowColEdit::kInsert) {
+    if (coord < index_) {
+      return coord;
+    }
+    const std::uint64_t shifted = static_cast<std::uint64_t>(coord) + count_;
+    if (shifted >= bound) {
+      return std::nullopt;
+    }
+    return static_cast<std::uint32_t>(shifted);
+  }
+  // Delete.
+  if (coord < index_) {
+    return coord;
+  }
+  if (coord < index_ + count_) {
+    return std::nullopt;
+  }
+  return coord - count_;
+}
+
+std::optional<Reference> RowColShiftTransform::apply(const Reference& ref) const {
+  if (!sheet_in_scope(ref.sheet)) {
+    return ref;
+  }
+  Reference out = ref;
+  if (axis_ == RowColAxis::kRow) {
+    // Whole-column references are anchored along the column axis only;
+    // their row coordinate is meaningless and should not gate a #REF!
+    // collapse on a row edit.
+    if (ref.is_full_col) {
+      return out;
+    }
+    const std::optional<std::uint32_t> shifted = shift_axis(ref.row, Sheet::kMaxRows);
+    if (!shifted.has_value()) {
+      return std::nullopt;
+    }
+    out.row = *shifted;
+    return out;
+  }
+  // Column axis.
+  if (ref.is_full_row) {
+    return out;
+  }
+  const std::optional<std::uint32_t> shifted = shift_axis(ref.col, Sheet::kMaxCols);
+  if (!shifted.has_value()) {
+    return std::nullopt;
+  }
+  out.col = *shifted;
+  return out;
 }
 
 }  // namespace parser

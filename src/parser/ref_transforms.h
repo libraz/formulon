@@ -64,6 +64,63 @@ class SheetRenameTransform final : public RefTransform {
 /// tokenizer's bare-Ident rule rejects them at the start of a sheet name.
 bool sheet_name_needs_quoting(std::string_view name) noexcept;
 
+/// Direction of a row/column structural edit.
+enum class RowColEdit : std::uint8_t {
+  kInsert,  ///< `count` rows/cols inserted starting at `index`.
+  kDelete,  ///< `count` rows/cols deleted starting at `index`.
+};
+
+/// Axis on which a row/column structural edit operates.
+enum class RowColAxis : std::uint8_t {
+  kRow,
+  kCol,
+};
+
+/// Reference rewriter for row / column insert and delete operations.
+///
+/// The transform applies to references whose sheet field matches
+/// `target_sheet` case-insensitively. References with an empty sheet
+/// field are local to the formula's owning sheet; whether they fall in
+/// scope depends on the formula's location, which is information the
+/// per-Reference walker does not carry. The caller therefore runs the
+/// transform once per sheet, toggling `local_means_target` when the
+/// formula being rewritten lives on the target sheet itself.
+///
+/// Insert: every coordinate at or past `index` shifts by `count`.
+/// Coordinates that would land past the sheet bound (`Sheet::kMaxRows` /
+/// `kMaxCols`) collapse to `#REF!` via `std::nullopt`.
+///
+/// Delete: coordinates strictly less than `index` are unchanged; coords
+/// in `[index, index + count)` collapse to `#REF!`; coords at or past
+/// `index + count` shift down by `count`.
+///
+/// Range endpoint clamping (Excel's "shrink the range" behaviour for
+/// deletes that catch one endpoint but not the other) is a follow-up
+/// enhancement; the simple per-endpoint policy here matches Excel for
+/// every range whose endpoints are both inside or both outside the
+/// affected interval, and falls back to `#REF!` for the clamp case.
+class RowColShiftTransform final : public RefTransform {
+ public:
+  RowColShiftTransform(std::string_view target_sheet, RowColAxis axis, RowColEdit edit, std::uint32_t index,
+                       std::uint32_t count, bool local_means_target = false) noexcept;
+
+  std::optional<Reference> apply(const Reference& ref) const override;
+
+ private:
+  // Returns the rewritten coordinate, or std::nullopt for #REF!.
+  std::optional<std::uint32_t> shift_axis(std::uint32_t coord, std::uint32_t bound) const noexcept;
+
+  // True iff `ref.sheet` falls within the transform's scope.
+  bool sheet_in_scope(std::string_view sheet) const noexcept;
+
+  std::string_view target_sheet_;
+  RowColAxis axis_;
+  RowColEdit edit_;
+  std::uint32_t index_;
+  std::uint32_t count_;
+  bool local_means_target_;
+};
+
 }  // namespace parser
 }  // namespace formulon
 

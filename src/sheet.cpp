@@ -6,9 +6,11 @@
 
 #include "sheet.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -394,6 +396,315 @@ bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std
   Cell& anchor_slot = EnsureSlot(row_cells, anchor_col);
   anchor_slot.cached_value = first_cell;
   return true;
+}
+
+namespace {
+
+// Shifts every entry in `metadata` whose anchor lies on or past the
+// affected row by the row insert / delete rule encoded in `count` and
+// `is_delete`. Entries whose anchor falls inside the deleted interval
+// are removed. `Anchor` exposes a mutable `row` field.
+template <typename Anchor>
+void ShiftRowAnchored(std::vector<Anchor>& items, std::uint32_t row, std::uint32_t count, bool is_delete) {
+  std::vector<Anchor> retained;
+  retained.reserve(items.size());
+  for (Anchor& item : items) {
+    if (item.row < row) {
+      retained.push_back(std::move(item));
+      continue;
+    }
+    if (is_delete) {
+      if (item.row < row + count) {
+        continue;  // Anchor inside deleted interval; drop the entry.
+      }
+      item.row -= count;
+    } else {
+      // Insert. Anchors at or past `row` shift forward; entries pushed
+      // past the sheet bound are dropped.
+      const std::uint64_t shifted = static_cast<std::uint64_t>(item.row) + count;
+      if (shifted >= Sheet::kMaxRows) {
+        continue;
+      }
+      item.row = static_cast<std::uint32_t>(shifted);
+    }
+    retained.push_back(std::move(item));
+  }
+  items = std::move(retained);
+}
+
+template <typename Anchor>
+void ShiftColAnchored(std::vector<Anchor>& items, std::uint32_t col, std::uint32_t count, bool is_delete) {
+  std::vector<Anchor> retained;
+  retained.reserve(items.size());
+  for (Anchor& item : items) {
+    if (item.col < col) {
+      retained.push_back(std::move(item));
+      continue;
+    }
+    if (is_delete) {
+      if (item.col < col + count) {
+        continue;
+      }
+      item.col -= count;
+    } else {
+      const std::uint64_t shifted = static_cast<std::uint64_t>(item.col) + count;
+      if (shifted >= Sheet::kMaxCols) {
+        continue;
+      }
+      item.col = static_cast<std::uint32_t>(shifted);
+    }
+    retained.push_back(std::move(item));
+  }
+  items = std::move(retained);
+}
+
+// Rectangular merge / validation range shifter along the row axis.
+// Ranges that fall entirely inside the deleted interval are dropped;
+// ranges that straddle the deletion are clamped so the surviving rows
+// stay contiguous (Excel's "shrink the merge" behaviour). Inserts that
+// would push `last_row` past `kMaxRows-1` clamp to the sheet bound.
+void ShiftRowRange(MergeRange& range, std::uint32_t row, std::uint32_t count, bool is_delete, bool* out_drop) {
+  *out_drop = false;
+  if (is_delete) {
+    const std::uint32_t del_end = row + count;  // exclusive
+    // Both endpoints below the deletion: unchanged.
+    if (range.last_row < row) {
+      return;
+    }
+    // Both endpoints inside the deletion: drop the range entirely.
+    if (range.first_row >= row && range.last_row < del_end) {
+      *out_drop = true;
+      return;
+    }
+    // Split shifts depending on which endpoints fall inside.
+    if (range.first_row < row && range.last_row >= row && range.last_row < del_end) {
+      // Bottom endpoint inside the deletion; clamp to row-1.
+      range.last_row = row - 1U;
+      return;
+    }
+    if (range.first_row >= row && range.first_row < del_end && range.last_row >= del_end) {
+      // Top endpoint inside the deletion; clamp to the row after the
+      // deletion (which after shift becomes `row`).
+      range.first_row = row;
+      range.last_row -= count;
+      return;
+    }
+    if (range.first_row < row && range.last_row >= del_end) {
+      // Range straddles the entire deletion: shrink by `count`. The
+      // top endpoint stays put; the bottom shifts up.
+      range.last_row -= count;
+      return;
+    }
+    // Both endpoints past the deletion: shift up.
+    range.first_row -= count;
+    range.last_row -= count;
+    return;
+  }
+  // Insert. Endpoints at or past `row` shift forward; clamp to bound.
+  if (range.last_row < row) {
+    return;  // Both endpoints below the insert; unchanged.
+  }
+  auto shift_one = [count](std::uint32_t value) -> std::uint32_t {
+    const std::uint64_t shifted = static_cast<std::uint64_t>(value) + count;
+    if (shifted >= Sheet::kMaxRows) {
+      return Sheet::kMaxRows - 1U;
+    }
+    return static_cast<std::uint32_t>(shifted);
+  };
+  if (range.first_row >= row) {
+    range.first_row = shift_one(range.first_row);
+  }
+  range.last_row = shift_one(range.last_row);
+}
+
+void ShiftColRange(MergeRange& range, std::uint32_t col, std::uint32_t count, bool is_delete, bool* out_drop) {
+  *out_drop = false;
+  if (is_delete) {
+    const std::uint32_t del_end = col + count;
+    if (range.last_col < col) {
+      return;
+    }
+    if (range.first_col >= col && range.last_col < del_end) {
+      *out_drop = true;
+      return;
+    }
+    if (range.first_col < col && range.last_col >= col && range.last_col < del_end) {
+      range.last_col = col - 1U;
+      return;
+    }
+    if (range.first_col >= col && range.first_col < del_end && range.last_col >= del_end) {
+      range.first_col = col;
+      range.last_col -= count;
+      return;
+    }
+    if (range.first_col < col && range.last_col >= del_end) {
+      range.last_col -= count;
+      return;
+    }
+    range.first_col -= count;
+    range.last_col -= count;
+    return;
+  }
+  if (range.last_col < col) {
+    return;
+  }
+  auto shift_one = [count](std::uint32_t value) -> std::uint32_t {
+    const std::uint64_t shifted = static_cast<std::uint64_t>(value) + count;
+    if (shifted >= Sheet::kMaxCols) {
+      return Sheet::kMaxCols - 1U;
+    }
+    return static_cast<std::uint32_t>(shifted);
+  };
+  if (range.first_col >= col) {
+    range.first_col = shift_one(range.first_col);
+  }
+  range.last_col = shift_one(range.last_col);
+}
+
+void ShiftRangeList(std::vector<MergeRange>& ranges, std::uint32_t index, std::uint32_t count, bool is_delete,
+                    bool row_axis) {
+  std::vector<MergeRange> retained;
+  retained.reserve(ranges.size());
+  for (MergeRange& range : ranges) {
+    bool drop = false;
+    if (row_axis) {
+      ShiftRowRange(range, index, count, is_delete, &drop);
+    } else {
+      ShiftColRange(range, index, count, is_delete, &drop);
+    }
+    if (drop) {
+      continue;
+    }
+    retained.push_back(range);
+  }
+  ranges = std::move(retained);
+}
+
+}  // namespace
+
+void Sheet::insert_rows(std::uint32_t row, std::uint32_t count) {
+  if (count == 0U) {
+    return;
+  }
+  // Walk populated rows in descending key order so a moved row never
+  // collides with an existing row that still needs to move.
+  std::vector<std::uint32_t> keys;
+  keys.reserve(rows_.size());
+  for (const auto& kv : rows_) {
+    keys.push_back(kv.first);
+  }
+  std::sort(keys.begin(), keys.end(), std::greater<std::uint32_t>());
+  for (std::uint32_t key : keys) {
+    if (key < row) {
+      continue;
+    }
+    const std::uint64_t shifted = static_cast<std::uint64_t>(key) + count;
+    auto node = rows_.extract(key);
+    if (shifted >= kMaxRows) {
+      continue;  // Row pushed past sheet bound; drop the cells.
+    }
+    node.key() = static_cast<std::uint32_t>(shifted);
+    rows_.insert(std::move(node));
+  }
+  ShiftRowAnchored(hyperlinks_, row, count, /*is_delete=*/false);
+  ShiftRowAnchored(comments_, row, count, /*is_delete=*/false);
+  ShiftRangeList(merges_, row, count, /*is_delete=*/false, /*row_axis=*/true);
+  for (DataValidation& dv : validations_) {
+    ShiftRangeList(dv.ranges, row, count, /*is_delete=*/false, /*row_axis=*/true);
+  }
+}
+
+void Sheet::delete_rows(std::uint32_t row, std::uint32_t count) {
+  if (count == 0U) {
+    return;
+  }
+  // Drop cells inside the deletion interval, then shift trailing rows
+  // up. Walk in ascending key order — every shifted destination key is
+  // strictly less than its source so no collision can occur.
+  std::vector<std::uint32_t> keys;
+  keys.reserve(rows_.size());
+  for (const auto& kv : rows_) {
+    keys.push_back(kv.first);
+  }
+  std::sort(keys.begin(), keys.end());
+  for (std::uint32_t key : keys) {
+    if (key < row) {
+      continue;
+    }
+    auto node = rows_.extract(key);
+    if (key < row + count) {
+      continue;  // Deleted row; drop the node.
+    }
+    node.key() = key - count;
+    rows_.insert(std::move(node));
+  }
+  ShiftRowAnchored(hyperlinks_, row, count, /*is_delete=*/true);
+  ShiftRowAnchored(comments_, row, count, /*is_delete=*/true);
+  ShiftRangeList(merges_, row, count, /*is_delete=*/true, /*row_axis=*/true);
+  for (DataValidation& dv : validations_) {
+    ShiftRangeList(dv.ranges, row, count, /*is_delete=*/true, /*row_axis=*/true);
+  }
+}
+
+void Sheet::insert_cols(std::uint32_t col, std::uint32_t count) {
+  if (count == 0U) {
+    return;
+  }
+  for (auto& kv : rows_) {
+    std::vector<Cell>& cells = kv.second;
+    if (col >= cells.size()) {
+      continue;
+    }
+    // Insertion point sits inside this row's populated span. Pad with
+    // default Cells starting at `col`. Cells past `kMaxCols` are
+    // dropped wholesale.
+    const std::size_t old_size = cells.size();
+    const std::uint64_t new_size_unbounded = static_cast<std::uint64_t>(old_size) + count;
+    const std::size_t new_size = static_cast<std::size_t>(std::min<std::uint64_t>(new_size_unbounded, kMaxCols));
+    cells.resize(new_size);
+    // Move the tail to its new position. Walk from the back so source
+    // and destination never overlap during the swap.
+    const std::size_t tail_count = old_size - col;
+    for (std::size_t i = 0; i < tail_count; ++i) {
+      const std::size_t src = old_size - 1U - i;
+      const std::size_t dst = src + count;
+      if (dst >= new_size) {
+        continue;  // Cell pushed past sheet bound; drop it.
+      }
+      cells[dst] = std::move(cells[src]);
+    }
+    // Clear the inserted slots so they read as default-blank.
+    const std::size_t clear_end = std::min<std::size_t>(col + count, new_size);
+    for (std::size_t i = col; i < clear_end; ++i) {
+      cells[i] = Cell{};
+    }
+  }
+  ShiftColAnchored(hyperlinks_, col, count, /*is_delete=*/false);
+  ShiftColAnchored(comments_, col, count, /*is_delete=*/false);
+  ShiftRangeList(merges_, col, count, /*is_delete=*/false, /*row_axis=*/false);
+  for (DataValidation& dv : validations_) {
+    ShiftRangeList(dv.ranges, col, count, /*is_delete=*/false, /*row_axis=*/false);
+  }
+}
+
+void Sheet::delete_cols(std::uint32_t col, std::uint32_t count) {
+  if (count == 0U) {
+    return;
+  }
+  for (auto& kv : rows_) {
+    std::vector<Cell>& cells = kv.second;
+    if (col >= cells.size()) {
+      continue;
+    }
+    const std::size_t del_end = std::min<std::size_t>(col + count, cells.size());
+    cells.erase(cells.begin() + static_cast<std::ptrdiff_t>(col), cells.begin() + static_cast<std::ptrdiff_t>(del_end));
+  }
+  ShiftColAnchored(hyperlinks_, col, count, /*is_delete=*/true);
+  ShiftColAnchored(comments_, col, count, /*is_delete=*/true);
+  ShiftRangeList(merges_, col, count, /*is_delete=*/true, /*row_axis=*/false);
+  for (DataValidation& dv : validations_) {
+    ShiftRangeList(dv.ranges, col, count, /*is_delete=*/true, /*row_axis=*/false);
+  }
 }
 
 void Sheet::clear_spill(std::uint32_t anchor_row, std::uint32_t anchor_col) noexcept {

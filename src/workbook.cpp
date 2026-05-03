@@ -30,6 +30,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "value.h"
 
@@ -540,6 +541,205 @@ Expected<eval::RecalcStats, Error> Workbook::partial_recalc(const eval::Function
 
 void Workbook::set_iterative_progress(eval::IterativeProgressCb cb, void* user_data) noexcept {
   engine_->set_iterative_progress(cb, user_data);
+}
+
+namespace {
+
+// Rewrites a single formula text through `transform`. Returns the
+// rewritten body alongside a flag indicating whether any reference was
+// actually changed; an unchanged body lets the caller skip the
+// dep-graph re-register and avoid touching the cell.
+struct FormulaRewriteResult {
+  std::string text;
+  bool changed = false;
+  bool error = false;  // Parse failure or arena exhaustion.
+};
+
+FormulaRewriteResult rewrite_formula(std::string_view formula, const parser::RefTransform& transform) {
+  FormulaRewriteResult out;
+  out.text.assign(formula);
+  std::string_view body = formula;
+  bool had_equals = false;
+  if (!body.empty() && body.front() == '=') {
+    body = body.substr(1);
+    had_equals = true;
+  }
+  if (body.empty()) {
+    return out;
+  }
+  Arena arena;
+  parser::Parser parser(body, arena);
+  parser::AstNode* root = parser.parse();
+  if (root == nullptr || !parser.errors().empty()) {
+    out.error = true;
+    return out;
+  }
+  const parser::AstNode* shifted = parser::shift_refs(*root, arena, transform);
+  if (shifted == nullptr) {
+    out.error = true;
+    return out;
+  }
+  if (shifted == root) {
+    return out;  // Identity walk; no change required.
+  }
+  std::string rewritten;
+  if (had_equals) {
+    rewritten.push_back('=');
+  }
+  rewritten.append(parser::format_formula(*shifted));
+  out.text = std::move(rewritten);
+  out.changed = true;
+  return out;
+}
+
+// Walks every formula cell in `sheets`, applying a row/col shift
+// transform. The transform is rebuilt per sheet so its
+// `local_means_target` flag tracks whether the current sheet's
+// unqualified references should be rewritten — a local reference on
+// the target sheet is in scope, but a local reference on any other
+// sheet refers to that other sheet and must be left alone.
+//
+// The transformed AST drives both the rewritten formula text and the
+// dep-graph re-registration; we keep the arena alive across both
+// operations so `register_formula` can read the same nodes the
+// formatter just emitted, instead of re-parsing the formatted output.
+void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, eval::RecalcEngine& engine, const Workbook& workbook,
+                                       std::string_view target_sheet, parser::RowColAxis axis, parser::RowColEdit edit,
+                                       std::uint32_t index, std::uint32_t count) {
+  for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
+    Sheet& sheet = sheets[sheet_idx];
+    const bool local_means_target = strings::case_insensitive_eq(sheet.name(), target_sheet);
+    const parser::RowColShiftTransform transform(target_sheet, axis, edit, index, count, local_means_target);
+
+    std::vector<std::uint32_t> row_keys;
+    row_keys.reserve(sheet.rows().size());
+    for (const auto& kv : sheet.rows()) {
+      row_keys.push_back(kv.first);
+    }
+    for (std::uint32_t row : row_keys) {
+      const auto it = sheet.rows().find(row);
+      if (it == sheet.rows().end()) {
+        continue;
+      }
+      const std::vector<Cell>& cells = it->second;
+      for (std::size_t col = 0; col < cells.size(); ++col) {
+        const Cell& cell = cells[col];
+        if (cell.formula_text.empty()) {
+          continue;
+        }
+        std::string_view body = cell.formula_text;
+        bool had_equals = false;
+        if (!body.empty() && body.front() == '=') {
+          body = body.substr(1);
+          had_equals = true;
+        }
+        if (body.empty()) {
+          continue;
+        }
+        Arena arena;
+        parser::Parser parser(body, arena);
+        parser::AstNode* root = parser.parse();
+        if (root == nullptr || !parser.errors().empty()) {
+          continue;  // Unparseable formula; leave alone (matches Excel "carry through unchanged").
+        }
+        const parser::AstNode* shifted = parser::shift_refs(*root, arena, transform);
+        if (shifted == nullptr || shifted == root) {
+          continue;  // Identity walk; nothing to rewrite.
+        }
+        std::string rewritten;
+        if (had_equals) {
+          rewritten.push_back('=');
+        }
+        rewritten.append(parser::format_formula(*shifted));
+        sheet.set_cell_formula(row, static_cast<std::uint32_t>(col), std::move(rewritten));
+        // Reuse the post-transform AST for dep-graph registration; no
+        // need to round-trip back through `parse_formula`.
+        eval::CellNodeId node{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)};
+        engine.register_formula(node, *shifted, workbook);
+        engine.mark_dirty(node);
+      }
+    }
+  }
+}
+
+void rewrite_defined_names(std::vector<io::DefinedName>& names, const parser::RefTransform& transform) {
+  for (io::DefinedName& entry : names) {
+    FormulaRewriteResult result = rewrite_formula(entry.formula, transform);
+    if (result.changed) {
+      entry.formula = std::move(result.text);
+    }
+  }
+}
+
+Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, parser::RowColAxis axis,
+                                         std::uint32_t origin, std::uint32_t count, const char* op_name) {
+  if (sheet_index >= wb.sheet_count()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, std::string(op_name) + ": sheet_index out of range",
+                      "sheet_index=" + std::to_string(sheet_index));
+  }
+  if (count == 0U) {
+    return make_error(FormulonErrorCode::kInvalidArgument, std::string(op_name) + ": count must be >= 1");
+  }
+  const std::uint32_t bound = (axis == parser::RowColAxis::kRow) ? Sheet::kMaxRows : Sheet::kMaxCols;
+  if (origin >= bound) {
+    return make_error(FormulonErrorCode::kInvalidArgument, std::string(op_name) + ": origin out of bounds",
+                      "origin=" + std::to_string(origin));
+  }
+  return Expected<void, Error>::Ok();
+}
+
+}  // namespace
+
+Expected<void, Error> Workbook::insert_rows(std::size_t sheet_index, std::uint32_t row, std::uint32_t count) {
+  RETURN_IF_ERROR(apply_row_col_edit(*this, sheet_index, parser::RowColAxis::kRow, row, count, "insert_rows"));
+  const std::string target_sheet_name = sheets_[sheet_index].name();
+  rewrite_formulas_for_row_col_edit(sheets_, *engine_, *this, target_sheet_name, parser::RowColAxis::kRow,
+                                    parser::RowColEdit::kInsert, row, count);
+  // Defined-name formulas resolve sheet-qualified by their stored text;
+  // the target_sheet must be matched by name only (no local-means-target
+  // shortcut applies because defined names have no "owning sheet" by
+  // convention).
+  const parser::RowColShiftTransform name_transform(target_sheet_name, parser::RowColAxis::kRow,
+                                                    parser::RowColEdit::kInsert, row, count);
+  rewrite_defined_names(defined_names_, name_transform);
+  sheets_[sheet_index].insert_rows(row, count);
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> Workbook::delete_rows(std::size_t sheet_index, std::uint32_t row, std::uint32_t count) {
+  RETURN_IF_ERROR(apply_row_col_edit(*this, sheet_index, parser::RowColAxis::kRow, row, count, "delete_rows"));
+  const std::string target_sheet_name = sheets_[sheet_index].name();
+  rewrite_formulas_for_row_col_edit(sheets_, *engine_, *this, target_sheet_name, parser::RowColAxis::kRow,
+                                    parser::RowColEdit::kDelete, row, count);
+  const parser::RowColShiftTransform name_transform(target_sheet_name, parser::RowColAxis::kRow,
+                                                    parser::RowColEdit::kDelete, row, count);
+  rewrite_defined_names(defined_names_, name_transform);
+  sheets_[sheet_index].delete_rows(row, count);
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> Workbook::insert_cols(std::size_t sheet_index, std::uint32_t col, std::uint32_t count) {
+  RETURN_IF_ERROR(apply_row_col_edit(*this, sheet_index, parser::RowColAxis::kCol, col, count, "insert_cols"));
+  const std::string target_sheet_name = sheets_[sheet_index].name();
+  rewrite_formulas_for_row_col_edit(sheets_, *engine_, *this, target_sheet_name, parser::RowColAxis::kCol,
+                                    parser::RowColEdit::kInsert, col, count);
+  const parser::RowColShiftTransform name_transform(target_sheet_name, parser::RowColAxis::kCol,
+                                                    parser::RowColEdit::kInsert, col, count);
+  rewrite_defined_names(defined_names_, name_transform);
+  sheets_[sheet_index].insert_cols(col, count);
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> Workbook::delete_cols(std::size_t sheet_index, std::uint32_t col, std::uint32_t count) {
+  RETURN_IF_ERROR(apply_row_col_edit(*this, sheet_index, parser::RowColAxis::kCol, col, count, "delete_cols"));
+  const std::string target_sheet_name = sheets_[sheet_index].name();
+  rewrite_formulas_for_row_col_edit(sheets_, *engine_, *this, target_sheet_name, parser::RowColAxis::kCol,
+                                    parser::RowColEdit::kDelete, col, count);
+  const parser::RowColShiftTransform name_transform(target_sheet_name, parser::RowColAxis::kCol,
+                                                    parser::RowColEdit::kDelete, col, count);
+  rewrite_defined_names(defined_names_, name_transform);
+  sheets_[sheet_index].delete_cols(col, count);
+  return Expected<void, Error>::Ok();
 }
 
 Expected<void, Error> Workbook::set_cell_xf_index(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,

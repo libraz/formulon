@@ -135,13 +135,57 @@ const AstNode* TransformBinary(const AstNode& node, Arena& arena, const RefTrans
 }
 
 const AstNode* TransformRange(const AstNode& node, Arena& arena, const RefTransform& transform) {
-  const AstNode* lhs = TransformNode(node.as_range_lhs(), arena, transform);
+  // Excel parses `Sheet1!A1:A10` with the sheet qualifier on the lhs
+  // only — the rhs ends up as a sheet-less Ref but evaluates as if it
+  // shared the lhs sheet. Transforms that key on `ref.sheet` would miss
+  // the rhs without help, so synthesise the implicit sheet on the rhs
+  // before walking it. A pre-transform clone keeps the input AST
+  // immutable; downstream code is allowed to assume the original tree
+  // is untouched.
+  const AstNode& lhs_node = node.as_range_lhs();
+  const AstNode& rhs_node = node.as_range_rhs();
+  const AstNode* lhs = TransformNode(lhs_node, arena, transform);
   if (lhs == nullptr) {
     return nullptr;
   }
-  const AstNode* rhs = TransformNode(node.as_range_rhs(), arena, transform);
-  if (rhs == nullptr) {
-    return nullptr;
+  const AstNode* rhs = nullptr;
+  if (lhs_node.kind() == NodeKind::Ref && rhs_node.kind() == NodeKind::Ref && !lhs_node.as_ref().sheet.empty() &&
+      rhs_node.as_ref().sheet.empty()) {
+    Reference inherited = rhs_node.as_ref();
+    inherited.sheet = lhs_node.as_ref().sheet;
+    inherited.sheet_quoted = lhs_node.as_ref().sheet_quoted;
+    AstNode* synthetic = make_ref(arena, inherited);
+    if (synthetic == nullptr) {
+      return nullptr;
+    }
+    rhs = TransformNode(*synthetic, arena, transform);
+    if (rhs == nullptr) {
+      return nullptr;
+    }
+    // Strip the synthesised sheet back off when both endpoints
+    // ultimately wear the same sheet, so the formatted output keeps
+    // Excel's canonical `Sheet1!A1:A10` shape (sheet on lhs only). The
+    // post-transform lhs is what counts here — sheet rename rewrites
+    // the sheet field, and the rhs would otherwise re-emit it
+    // redundantly.
+    if (rhs->kind() == NodeKind::Ref && lhs->kind() == NodeKind::Ref) {
+      const Reference& lhs_ref_after = lhs->as_ref();
+      Reference cleaned = rhs->as_ref();
+      if (cleaned.sheet == lhs_ref_after.sheet) {
+        cleaned.sheet = {};
+        cleaned.sheet_quoted = false;
+        AstNode* stripped = make_ref(arena, cleaned);
+        if (stripped == nullptr) {
+          return nullptr;
+        }
+        rhs = stripped;
+      }
+    }
+  } else {
+    rhs = TransformNode(rhs_node, arena, transform);
+    if (rhs == nullptr) {
+      return nullptr;
+    }
   }
   // A range endpoint that collapsed to `#REF!` poisons the whole range
   // expression — this matches Excel's behaviour for `#REF!:#REF!` shapes.
@@ -151,7 +195,7 @@ const AstNode* TransformRange(const AstNode& node, Arena& arena, const RefTransf
   if (rhs->kind() == NodeKind::ErrorLiteral && rhs->as_error_literal() == ErrorCode::Ref) {
     return MakeRefError(arena);
   }
-  if (lhs == &node.as_range_lhs() && rhs == &node.as_range_rhs()) {
+  if (lhs == &lhs_node && rhs == &rhs_node) {
     return &node;
   }
   return make_range_op(arena, const_cast<AstNode*>(lhs), const_cast<AstNode*>(rhs));

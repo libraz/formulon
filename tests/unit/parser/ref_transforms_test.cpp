@@ -11,6 +11,7 @@
 
 #include "gtest/gtest.h"
 #include "parser/reference.h"
+#include "sheet.h"
 
 namespace formulon {
 namespace parser {
@@ -138,6 +139,103 @@ TEST(SheetRenameTransform, RemapSheetHelper) {
   std::optional<std::string_view> match = t.remap_sheet("Sheet1");
   ASSERT_TRUE(match.has_value());
   EXPECT_EQ(*match, "Renamed");
+}
+
+namespace {
+Reference MakeRef(std::string_view sheet, std::uint32_t row, std::uint32_t col, bool col_abs = false,
+                  bool row_abs = false) {
+  Reference r;
+  r.sheet = sheet;
+  r.row = row;
+  r.col = col;
+  r.col_abs = col_abs;
+  r.row_abs = row_abs;
+  return r;
+}
+}  // namespace
+
+TEST(RowColShiftTransform, RowInsertShiftsForward) {
+  RowColShiftTransform t("Sheet1", RowColAxis::kRow, RowColEdit::kInsert, /*index=*/4, /*count=*/2);
+  // Row 0 (A1) is below the insert; unchanged.
+  std::optional<Reference> below = t.apply(MakeRef("Sheet1", 0, 0));
+  ASSERT_TRUE(below.has_value());
+  EXPECT_EQ(below->row, 0U);
+  // Row 4 (the insert origin) shifts forward by 2.
+  std::optional<Reference> at = t.apply(MakeRef("Sheet1", 4, 0));
+  ASSERT_TRUE(at.has_value());
+  EXPECT_EQ(at->row, 6U);
+  // Row 10 also shifts forward.
+  std::optional<Reference> past = t.apply(MakeRef("Sheet1", 10, 0));
+  ASSERT_TRUE(past.has_value());
+  EXPECT_EQ(past->row, 12U);
+}
+
+TEST(RowColShiftTransform, RowInsertOverflowCollapsesToRef) {
+  RowColShiftTransform t("Sheet1", RowColAxis::kRow, RowColEdit::kInsert,
+                         /*index=*/0, /*count=*/Sheet::kMaxRows - 1U);
+  std::optional<Reference> overflowed = t.apply(MakeRef("Sheet1", 1, 0));
+  EXPECT_FALSE(overflowed.has_value());
+}
+
+TEST(RowColShiftTransform, RowDeleteCollapsesInsideInterval) {
+  RowColShiftTransform t("Sheet1", RowColAxis::kRow, RowColEdit::kDelete, /*index=*/4, /*count=*/3);
+  // Row 5 inside [4,7) collapses.
+  EXPECT_FALSE(t.apply(MakeRef("Sheet1", 5, 0)).has_value());
+  // Row 7 (just past the deletion) shifts to 4.
+  std::optional<Reference> trailing = t.apply(MakeRef("Sheet1", 7, 0));
+  ASSERT_TRUE(trailing.has_value());
+  EXPECT_EQ(trailing->row, 4U);
+  // Row 2 (before the deletion) is unchanged.
+  std::optional<Reference> before = t.apply(MakeRef("Sheet1", 2, 0));
+  ASSERT_TRUE(before.has_value());
+  EXPECT_EQ(before->row, 2U);
+}
+
+TEST(RowColShiftTransform, ColInsertSkipsFullRowReferences) {
+  RowColShiftTransform t("Sheet1", RowColAxis::kCol, RowColEdit::kInsert, /*index=*/2, /*count=*/3);
+  Reference full_row = MakeRef("Sheet1", 5, 0);
+  full_row.is_full_row = true;
+  std::optional<Reference> result = t.apply(full_row);
+  ASSERT_TRUE(result.has_value());
+  // Full-row references ignore the column-axis edit entirely.
+  EXPECT_EQ(result->col, 0U);
+}
+
+TEST(RowColShiftTransform, RowEditPreservesAbsoluteFlags) {
+  // Excel shifts absolute references on insert / delete just like
+  // relative ones — the dollar marker only matters during fill / paste,
+  // not during structural edits. The transform mirrors that.
+  RowColShiftTransform t("Sheet1", RowColAxis::kRow, RowColEdit::kInsert, /*index=*/0, /*count=*/2);
+  Reference abs = MakeRef("Sheet1", 5, 1, /*col_abs=*/true, /*row_abs=*/true);
+  std::optional<Reference> shifted = t.apply(abs);
+  ASSERT_TRUE(shifted.has_value());
+  EXPECT_EQ(shifted->row, 7U);
+  EXPECT_TRUE(shifted->row_abs);
+  EXPECT_TRUE(shifted->col_abs);
+}
+
+TEST(RowColShiftTransform, OutOfScopeSheetIsUntouched) {
+  RowColShiftTransform t("Sheet1", RowColAxis::kRow, RowColEdit::kInsert, /*index=*/4, /*count=*/2);
+  std::optional<Reference> other = t.apply(MakeRef("Other", 5, 0));
+  ASSERT_TRUE(other.has_value());
+  EXPECT_EQ(other->row, 5U);
+}
+
+TEST(RowColShiftTransform, LocalMeansTargetGatesUnqualifiedRefs) {
+  // Default: local refs (sheet="") are out of scope unless the caller
+  // sets `local_means_target=true`. The flag exists because the per-
+  // Reference walker cannot know which sheet owns the formula it is
+  // walking; the caller toggles the flag per sheet.
+  RowColShiftTransform t_off("Sheet1", RowColAxis::kRow, RowColEdit::kInsert, /*index=*/0, /*count=*/3);
+  std::optional<Reference> off = t_off.apply(MakeRef("", 5, 0));
+  ASSERT_TRUE(off.has_value());
+  EXPECT_EQ(off->row, 5U);
+
+  RowColShiftTransform t_on("Sheet1", RowColAxis::kRow, RowColEdit::kInsert, /*index=*/0, /*count=*/3,
+                            /*local_means_target=*/true);
+  std::optional<Reference> on = t_on.apply(MakeRef("", 5, 0));
+  ASSERT_TRUE(on.has_value());
+  EXPECT_EQ(on->row, 8U);
 }
 
 }  // namespace
