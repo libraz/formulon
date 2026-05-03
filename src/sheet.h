@@ -58,6 +58,111 @@ struct SpillRegion {
   std::vector<std::string> owned_strings;
 };
 
+/// A merged cell rectangle on a sheet.
+///
+/// Coordinates are 0-based and inclusive on both ends, matching the OOXML
+/// `<mergeCell ref="A1:B2">` shape after conversion. The merge reader/writer
+/// bundle owns this list; the evaluator treats merged ranges as a display
+/// concern and does not consult them. The schema may be extended by later
+/// bundles, but the field names declared here are stable.
+struct MergeRange {
+  std::uint32_t first_row = 0;
+  std::uint32_t last_row = 0;
+  std::uint32_t first_col = 0;
+  std::uint32_t last_col = 0;
+};
+
+/// A hyperlink anchored on a single cell.
+///
+/// `target` is the resolved URL or in-workbook target (e.g. `Sheet2!A1`),
+/// `display` is the surface text shown in the cell when distinct from the
+/// cell's stored value, and `tooltip` populates the OOXML `tooltip` attribute.
+/// `rid` is the source rels id from the sheet part, retained verbatim so
+/// round-trip writes can preserve relationship ordering. The schema may be
+/// extended by later bundles, but the field names declared here are stable.
+struct Hyperlink {
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+  std::string target;
+  std::string display;
+  std::string tooltip;
+  std::string rid;
+};
+
+/// A cell-anchored comment / threaded-comment payload.
+///
+/// The schema is intentionally minimal at this point and will grow as the
+/// comment reader/writer bundle wires up rich-text runs, threading metadata,
+/// and modern ("threaded") comment ids. The field names declared here are
+/// stable; new fields are appended.
+struct CellComment {
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+  std::string author;
+  std::string text;
+};
+
+/// A cell-range data-validation rule.
+///
+/// Schema deliberately empty at this point; the validation reader/writer
+/// bundle expands this with type / formula1 / formula2 / errorTitle /
+/// errorMessage / promptTitle / prompt fields. Existing fields (none) stay
+/// stable; new fields are appended.
+struct DataValidation {};
+
+/// Per-sheet view state (zoom, frozen panes, tab visibility).
+///
+/// Mirrors the OOXML `<sheetView>` and `<sheetPr>` attributes that survive
+/// a save/load round-trip without affecting evaluation. The schema may be
+/// extended by later bundles, but the field names declared here are stable.
+struct SheetView {
+  /// Default zoom percentage when no `<sheetView zoomScale="...">` was
+  /// stored. Matches Excel's "100%" default.
+  static constexpr std::uint32_t kDefaultZoomScale = 100U;
+
+  std::uint32_t zoom_scale = kDefaultZoomScale;
+  std::uint32_t freeze_rows = 0;  // 0 = no row freeze
+  std::uint32_t freeze_cols = 0;  // 0 = no column freeze
+  bool tab_hidden = false;
+};
+
+/// Layout overrides for a contiguous column span.
+///
+/// Mirrors the OOXML `<col min="..." max="..." width="..." hidden="..."
+/// outlineLevel="...">` shape. Both endpoints are 0-based and inclusive. The
+/// schema may be extended by later bundles, but the field names declared
+/// here are stable.
+struct ColumnLayout {
+  std::uint32_t first = 0;  // 0-based, inclusive
+  std::uint32_t last = 0;   // 0-based, inclusive
+  double width = 0.0;       // in OOXML character-width units
+  bool hidden = false;
+  std::uint8_t outline_level = 0;
+};
+
+/// Layout override for a single row.
+///
+/// Mirrors the OOXML `<row r="..." ht="..." hidden="..." outlineLevel="...">`
+/// attributes that override the default row metrics. The schema may be
+/// extended by later bundles, but the field names declared here are stable.
+struct RowLayout {
+  std::uint32_t row = 0;  // 0-based
+  double height = 0.0;    // in points
+  bool hidden = false;
+  std::uint8_t outline_level = 0;
+};
+
+/// Aggregate of per-sheet layout overrides (column spans + row overrides).
+///
+/// Both lists are empty by default; the OOXML reader populates them from
+/// `<cols>` and `<row>` entries that carry non-default attributes. The
+/// schema may be extended by later bundles, but the field names declared
+/// here are stable.
+struct SheetLayout {
+  std::vector<ColumnLayout> columns;
+  std::vector<RowLayout> row_overrides;
+};
+
 /// Hash for `CellAddress` suitable for `std::unordered_map`.
 ///
 /// Excel addresses cap at row < 2^21 and col < 2^14 so a simple
@@ -347,6 +452,89 @@ class Sheet {
   /// reorder blocks without an extra accessor pair per field.
   std::vector<cf::ConditionalFormat>& mutable_conditional_formats() noexcept { return conditional_formats_; }
 
+  // ---------------------------------------------------------------------------
+  // Merged cell rectangles
+  // ---------------------------------------------------------------------------
+
+  /// Read-only access to the merged-cell rectangles attached to this sheet.
+  /// Populated by the OOXML reader; empty until the corresponding format
+  /// support lands.
+  const std::vector<MergeRange>& merges() const noexcept { return merges_; }
+
+  /// Mutable access to the merged-cell rectangle list. Exposed so the
+  /// OOXML reader and future editing API can append, replace, or reorder
+  /// entries without an extra accessor pair per field.
+  std::vector<MergeRange>& mutable_merges() noexcept { return merges_; }
+
+  // ---------------------------------------------------------------------------
+  // Hyperlinks
+  // ---------------------------------------------------------------------------
+
+  /// Read-only access to the hyperlinks attached to this sheet. Populated
+  /// by the OOXML reader; empty until the corresponding format support
+  /// lands.
+  const std::vector<Hyperlink>& hyperlinks() const noexcept { return hyperlinks_; }
+
+  /// Mutable access to the hyperlink list. Exposed so the OOXML reader
+  /// and future editing API can append, replace, or reorder entries
+  /// without an extra accessor pair per field.
+  std::vector<Hyperlink>& mutable_hyperlinks() noexcept { return hyperlinks_; }
+
+  // ---------------------------------------------------------------------------
+  // Cell comments
+  // ---------------------------------------------------------------------------
+
+  /// Read-only access to the cell comments attached to this sheet.
+  /// Populated by the OOXML reader; empty until the corresponding format
+  /// support lands.
+  const std::vector<CellComment>& comments() const noexcept { return comments_; }
+
+  /// Mutable access to the cell-comment list. Exposed so the OOXML reader
+  /// and future editing API can append, replace, or reorder entries
+  /// without an extra accessor pair per field.
+  std::vector<CellComment>& mutable_comments() noexcept { return comments_; }
+
+  // ---------------------------------------------------------------------------
+  // Data validations
+  // ---------------------------------------------------------------------------
+
+  /// Read-only access to the data-validation rules attached to this sheet.
+  /// Populated by the OOXML reader; empty until the corresponding format
+  /// support lands.
+  const std::vector<DataValidation>& validations() const noexcept { return validations_; }
+
+  /// Mutable access to the data-validation list. Exposed so the OOXML
+  /// reader and future editing API can append, replace, or reorder
+  /// entries without an extra accessor pair per field.
+  std::vector<DataValidation>& mutable_validations() noexcept { return validations_; }
+
+  // ---------------------------------------------------------------------------
+  // Sheet view state
+  // ---------------------------------------------------------------------------
+
+  /// Read-only access to the sheet's view state (zoom, frozen panes, tab
+  /// visibility). Populated by the OOXML reader; carries default values
+  /// until the corresponding format support lands.
+  const SheetView& view() const noexcept { return view_; }
+
+  /// Mutable access to the sheet's view state. Exposed so the OOXML
+  /// reader and future editing API can update view fields without an
+  /// extra accessor pair per field.
+  SheetView& mutable_view() noexcept { return view_; }
+
+  // ---------------------------------------------------------------------------
+  // Sheet layout (column spans + row overrides)
+  // ---------------------------------------------------------------------------
+
+  /// Read-only access to the sheet's layout overrides. Populated by the
+  /// OOXML reader; empty until the corresponding format support lands.
+  const SheetLayout& layout() const noexcept { return layout_; }
+
+  /// Mutable access to the sheet's layout overrides. Exposed so the
+  /// OOXML reader and future editing API can append, replace, or
+  /// reorder entries without an extra accessor pair per field.
+  SheetLayout& mutable_layout() noexcept { return layout_; }
+
  private:
   std::string name_;
   std::unordered_map<std::uint32_t, std::vector<Cell>> rows_;
@@ -360,6 +548,27 @@ class Sheet {
   // Conditional-format blocks attached to this sheet. Empty by default;
   // populated by the OOXML reader from `<conditionalFormatting>` blocks.
   std::vector<cf::ConditionalFormat> conditional_formats_;
+  // Merged-cell rectangles. Empty by default; populated by the OOXML
+  // reader once the corresponding format support lands.
+  std::vector<MergeRange> merges_;
+  // Hyperlinks anchored on cells in this sheet. Empty by default;
+  // populated by the OOXML reader once the corresponding format support
+  // lands.
+  std::vector<Hyperlink> hyperlinks_;
+  // Cell comments / threaded comments. Empty by default; populated by the
+  // OOXML reader once the corresponding format support lands.
+  std::vector<CellComment> comments_;
+  // Data-validation rules. Empty by default; populated by the OOXML
+  // reader once the corresponding format support lands.
+  std::vector<DataValidation> validations_;
+  // Per-sheet view state (zoom, frozen panes, tab visibility). Defaults
+  // are populated inline; the OOXML reader overwrites them once the
+  // corresponding format support lands.
+  SheetView view_;
+  // Per-sheet layout overrides (column spans + row overrides). Empty by
+  // default; populated by the OOXML reader once the corresponding format
+  // support lands.
+  SheetLayout layout_;
 };
 
 }  // namespace formulon

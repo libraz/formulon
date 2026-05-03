@@ -10,8 +10,8 @@
 // `FM_VAL_ERROR`, and we print its display name. Only structural
 // failures (NULL handle, parser refusal, save/load) bubble out.
 //
-// `--repeat N` is a Phase 5 prep knob: it runs the eval `N` times and
-// reports timing on stderr without changing the stdout payload.
+// `--repeat N` exercises the recalc path repeatedly: it runs the eval `N`
+// times and reports timing on stderr without changing the stdout payload.
 
 #include <chrono>
 #include <cstdint>

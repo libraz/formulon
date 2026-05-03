@@ -78,6 +78,10 @@ struct Cell {
   /// on save. The annotation is stored as a single concatenated kana string
   /// (multi-block `<rPh>` runs collapse to one block on round-trip).
   std::string phonetic_text;
+  /// Index into the workbook's cellXfs table. 0 references the workbook's
+  /// default cellXf and applies for unstyled cells. Populated by the styles
+  /// reader/writer; the value is otherwise opaque to the evaluator.
+  std::uint32_t xf_index = 0;
 };
 
 }  // namespace formulon
