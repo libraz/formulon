@@ -16,9 +16,10 @@ Runs on macOS, Linux, Windows, in the browser, and in Node.
 
 - **Strict oracle, not aspirational compatibility.** Mac Excel 365 (ja-JP)
   is the behavioral oracle. Outputs are checked for bit-level parity against
-  golden data regenerated from the real product; 17 intentional divergences
-  (transcendental ulp drift, volatile-function snapshots, etc.) are recorded
-  in [`tests/divergence.yaml`](tests/divergence.yaml) with a reason and the
+  golden data regenerated from the real product; every accepted divergence
+  (transcendental ulp drift, volatile-function snapshots, Excel quirks where
+  Formulon deliberately keeps a saner answer) is recorded case-by-case in
+  [`tests/divergence.yaml`](tests/divergence.yaml) with a reason and the
   last verified Excel build.
 - **One C++ core, identical results everywhere.** JS-only competitors re-run
   the logic in the browser and the logic on the server. Formulon ships one
@@ -62,18 +63,25 @@ purpose.
 
 | Surface | Name | Notes |
 |---------|------|-------|
-| npm | `@libraz/formulon` | WASM ESM module, type definitions included. Node 22+, browsers, workers. |
-| PyPI | _name pending_ | CPython 3.10–3.13 wheels for macOS / Linux / Windows. |
-| GitHub Releases | `formulon-cli-<os>-<arch>` | Standalone CLI binaries. |
+| npm | `@libraz/formulon` | WASM ESM module, type definitions included. Node 18+, browsers, workers. |
+| PyPI | `formulon` | CPython 3.9–3.13 wheels for macOS / Linux / Windows. ctypes-based, stdlib-only at runtime. |
+| GitHub Releases | `formulon-cli-<os>-<arch>` | Standalone CLI binaries (`eval`, `recalc`, `dump`). |
 
 ## Status
 
-As of 2026-04: formula parser and tree-walking evaluator are in place, with
-**458 / 520 Excel functions implemented (88.1%)** across Math & Trig, Stats,
-Logical, Text, Date/Time, Lookup, Financial, Engineering, Info, and
-Database families. **43 oracle categories** are defined, regenerated from
-Mac Excel 365 ja-JP. The OOXML reader, WASM/Python/npm packaging, CLI, and
-the bytecode VM are under active construction.
+As of 2026-05: **all 522 catalogued Excel functions are implemented
+(100%)** across Math & Trig, Statistical, Logical, Text, Date/Time,
+Lookup, Financial, Engineering, Information, Database, Cube, and the
+2024/2025 additions (GROUPBY, PIVOTBY, TRANSLATE, COPILOT, ...).
+**92 oracle categories** are defined and regenerated from Mac Excel 365
+ja-JP. A bytecode compiler and stack-machine VM run in parallel with the
+tree-walker for parity verification. The OOXML reader/writer round-trips
+sheets, styles, conditional formatting, comments, hyperlinks, merges,
+data validations, defined names, tables, and pivot tables; an MS-XLSB
+reader/writer is in place. Workbook-level operations (sheet add /
+rename / move, row/column insert / delete with formula rewriting,
+partial recalc, iterative-solver progress callbacks) are wired through
+the C ABI and exposed in the WASM, Python, and CLI surfaces.
 
 Feedback, issue reports, and oracle divergence reports are welcome, but
 please do not rely on Formulon for production workloads yet.

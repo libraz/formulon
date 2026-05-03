@@ -17,10 +17,11 @@ Excel のインストール、Microsoft ランタイム、COM オートメーシ
 
 - **目標ではなく、検証済みの互換性。** Mac Excel 365 (ja-JP) を
   behavioral oracle として扱います。出力は実製品から再生成した golden
-  データと bit 単位で照合され、意図的な 17 件の差分 (超越関数の ulp 差、
-  揮発関数のスナップショットなど) は
-  [`tests/divergence.yaml`](tests/divergence.yaml) に理由と最終確認 Excel
-  バージョンつきで記録されています。
+  データと bit 単位で照合され、許容している差分 (超越関数の ulp 差、
+  揮発関数のスナップショット、Formulon が意図的に Excel 側の不整合を
+  訂正しているケースなど) は
+  [`tests/divergence.yaml`](tests/divergence.yaml) にケース単位で理由と
+  最終確認 Excel バージョンつきで記録されています。
 - **C++ コア 1 本、どこでも同じ結果。** JavaScript 系の競合はブラウザ用
   のロジックとサーバ用のロジックを二重に持ちがちですが、Formulon は全
   surface (WASM / Python / CLI) に同じエンジンを配ります。二つめの実装
@@ -63,21 +64,36 @@ Formulon は以下を **意図的にサポートしません**:
 
 | 媒体 | 名前 | 備考 |
 |------|------|------|
-| npm | `@libraz/formulon` | WASM ESM モジュール、型定義同梱。Node 22+ / ブラウザ / Worker 対応。 |
-| PyPI | _名称未定_ | macOS / Linux / Windows 向け CPython 3.10–3.13 wheel。 |
-| GitHub Releases | `formulon-cli-<os>-<arch>` | 単体 CLI バイナリ。 |
+| npm | `@libraz/formulon` | WASM ESM モジュール、型定義同梱。Node 18+ / ブラウザ / Worker 対応。 |
+| PyPI | `formulon` | macOS / Linux / Windows 向け CPython 3.9–3.13 wheel。実行時は ctypes と標準ライブラリのみに依存。 |
+| GitHub Releases | `formulon-cli-<os>-<arch>` | 単体 CLI バイナリ (`eval` / `recalc` / `dump`)。 |
 
 ## ステータス
 
-2026-04 時点: 数式パーサとツリーウォーク評価器が稼働し、**Excel 関数
-458 / 520 実装済み (88.1%)** — Math & Trig、統計、論理、文字列、日付
-時刻、ルックアップ、財務、エンジニアリング、情報、データベース各ファ
-ミリに展開しています。**43 カテゴリの oracle** を定義し、Mac Excel 365
-ja-JP から再生成しています。OOXML reader、WASM / Python / npm パッケー
-ジング、CLI、バイトコード VM は実装中です。
+2026-05 時点: **カタログ済みの Excel 関数 522 / 522 を実装済み (100%)**。
+Math & Trig、統計、論理、文字列、日付時刻、ルックアップ、財務、エン
+ジニアリング、情報、データベース、キューブ、および 2024/2025 追加分
+(GROUPBY、PIVOTBY、TRANSLATE、COPILOT など) を網羅しています。**92
+カテゴリの oracle** を定義し、Mac Excel 365 ja-JP から再生成しています。
+バイトコードコンパイラとスタックマシン VM が tree-walker と並列に動作し、
+parity 検証を行っています。OOXML reader / writer はシート、スタイル、
+条件付き書式、コメント、ハイパーリンク、結合セル、入力規則、定義済み
+名前、テーブル、ピボットテーブルを round-trip し、MS-XLSB の reader /
+writer も実装済みです。ワークブックレベルの操作 (シートの追加 / リネー
+ム / 移動、数式書き換えを伴う行・列の挿入 / 削除、partial recalc、
+反復計算ソルバの進捗コールバック) は C ABI を経由して WASM / Python /
+CLI 各 surface に露出しています。
 
 フィードバック・不具合報告・オラクル差分レポートは歓迎しますが、現時点
 で本番ワークロードでの利用はお控えください。
+
+## コントリビューション
+
+現時点でいちばん助かるのは **手元のロケールの Excel oracle データを
+寄贈していただくこと**です。Mac ja-JP 以外の Excel 365 が手元にあれば、
+`make oracle-contribute` ひとつで Excel を駆動して golden を取得し、
+PR まで案内します。詳細とコミュニティ駆動である理由は
+[CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
 
 ## ライセンス
 
