@@ -11,7 +11,7 @@
 // Keep this file in sync when adding or removing bindings.
 
 /** `fm_value_kind_t` ordinals (mirror of `fm_value_kind_t`). */
-export const enum ValueKind {
+export enum ValueKind {
   Blank = 0,
   Number = 1,
   Bool = 2,
@@ -106,7 +106,7 @@ export interface PassthroughEntry {
 }
 
 /** Conditional-format match kind. Mirrors `formulon::cf::CFMatchKind`. */
-export const enum CfMatchKind {
+export enum CfMatchKind {
   DifferentialFormat = 0,
   ColorScale = 1,
   DataBar = 2,
@@ -173,6 +173,149 @@ export interface CfRangeResult {
   cells: CfCellVector;
 }
 
+/** Per-sheet view: zoom (10..400, default 100), frozen-pane row/col
+ *  counts, and tab-hidden flag (0/1). */
+export interface SheetView {
+  zoomScale: number;
+  freezeRows: number;
+  freezeCols: number;
+  /** Boolean stored as 0/1 to match the embind binding's wire shape. */
+  tabHidden: number;
+}
+
+/** Return type of `Workbook.getSheetView(sheet)`. */
+export interface SheetViewResult {
+  status: Status;
+  view: SheetView;
+}
+
+/** Per-column-range layout override. Inclusive `[first, last]` columns
+ *  carry the same width / hidden / outline level. */
+export interface ColumnLayout {
+  first: number;
+  last: number;
+  width: number;
+  /** Boolean stored as 0/1. */
+  hidden: number;
+  outlineLevel: number;
+}
+
+/** Iterable handle backing a `std::vector<ColumnLayout>`. */
+export interface ColumnLayoutVector {
+  size(): number;
+  get(index: number): ColumnLayout;
+  delete(): void;
+}
+
+/** Return type of `Workbook.getSheetColumns(sheet)`. */
+export interface ColumnsResult {
+  status: Status;
+  columns: ColumnLayoutVector;
+}
+
+/** Per-row layout override. */
+export interface RowLayout {
+  row: number;
+  height: number;
+  /** Boolean stored as 0/1. */
+  hidden: number;
+  outlineLevel: number;
+}
+
+/** Iterable handle backing a `std::vector<RowLayout>`. */
+export interface RowLayoutVector {
+  size(): number;
+  get(index: number): RowLayout;
+  delete(): void;
+}
+
+/** Return type of `Workbook.getSheetRowOverrides(sheet)`. */
+export interface RowsResult {
+  status: Status;
+  rows: RowLayoutVector;
+}
+
+/** Inclusive cell rectangle used by `addMerge` / `getMerges`. */
+export interface MergeRange {
+  firstRow: number;
+  lastRow: number;
+  firstCol: number;
+  lastCol: number;
+}
+
+/** Sheet hyperlink entry as returned by `getHyperlinks(sheet)`. */
+export interface HyperlinkEntry {
+  row: number;
+  col: number;
+  /** Absolute or relative target (URL, email, internal ref, …). */
+  target: string;
+  /** Display text override (empty when default). */
+  display: string;
+  /** Tooltip text (empty when none). */
+  tooltip: string;
+}
+
+/** Cell comment entry returned by `getComment(sheet, row, col)`. */
+export interface CommentEntry {
+  author: string;
+  text: string;
+}
+
+/** Sheet validation entry. The shape will firm up when the writeable
+ *  surface lands; today the array is always empty. */
+export interface ValidationEntry {
+  ranges?: ReadonlyArray<MergeRange>;
+  type?: string;
+  op?: string;
+  formula1?: string;
+  formula2?: string;
+  errorMessage?: string;
+}
+
+/** Return type of `Workbook.getCellXfIndex(sheet, row, col)`. */
+export interface CellXfIndexResult {
+  status: Status;
+  xfIndex: number;
+}
+
+/** Return type of `Workbook.getCellXf(xfIndex)`. */
+export interface CellXfResult {
+  status: Status;
+  fontIndex: number;
+  fillIndex: number;
+  borderIndex: number;
+  numFmtId: number;
+  horizontalAlign: number;
+  verticalAlign: number;
+  wrapText: boolean;
+}
+
+/** Range used by `partialRecalc`. */
+export interface RecalcViewport {
+  sheet: number;
+  firstRow: number;
+  lastRow: number;
+  firstCol: number;
+  lastCol: number;
+}
+
+/** Return type of `Workbook.partialRecalc(viewport)`. */
+export interface PartialRecalcResult {
+  status: Status;
+  /** Number of cells the engine actually evaluated. */
+  recomputed: number;
+}
+
+/** Iterative-solver progress callback. Receives the current
+ *  iteration number, the maximum residual seen, and the configured
+ *  iteration cap. Returning `false` (or any falsy value) aborts the
+ *  solve; returning `true` (or `undefined`) continues. */
+export type IterativeProgressCallback = (
+  iteration: number,
+  maxResidual: number,
+  maxIterations: number,
+) => boolean | undefined | void;
+
 /** Workbook handle. Always release with `delete()` when finished. */
 export interface Workbook {
   /** True when the wrapper holds a live native handle. */
@@ -182,6 +325,12 @@ export interface Workbook {
 
   save(): SaveResult;
   addSheet(name: string): Status;
+  /** Removes the sheet at `index`. */
+  removeSheet(index: number): Status;
+  /** Renames the sheet at `index`. */
+  renameSheet(index: number, newName: string): Status;
+  /** Moves the sheet from `fromIdx` to `toIdx` (post-removal index). */
+  moveSheet(fromIdx: number, toIdx: number): Status;
   sheetCount(): number;
   sheetName(idx: number): StringResult;
 
@@ -194,13 +343,34 @@ export interface Workbook {
   getValue(sheet: number, row: number, col: number): CellResult;
 
   recalc(): Status;
+  /** Recalculates only cells touched by the supplied viewport. */
+  partialRecalc(viewport: RecalcViewport): PartialRecalcResult;
+
   setIterative(enabled: boolean, maxIterations: number, maxChange: number): Status;
+  /** Installs (or, when passed `null`, clears) a JS callback invoked
+   *  after each Gauss-Seidel sweep. Only one callback can be active per
+   *  WASM instance — installing a new one displaces the previous. */
+  setIterativeProgress(callback: IterativeProgressCallback | null): Status;
+
+  /** Inserts `count` rows at `row` on `sheet` and rewrites cross-workbook
+   *  references to follow the shift. */
+  insertRows(sheet: number, row: number, count: number): Status;
+  /** Deletes `count` rows starting at `row` on `sheet`. References that
+   *  fall inside the deleted interval collapse to `#REF!`. */
+  deleteRows(sheet: number, row: number, count: number): Status;
+  /** Inserts `count` columns at `col` on `sheet`. */
+  insertCols(sheet: number, col: number, count: number): Status;
+  /** Deletes `count` columns starting at `col` on `sheet`. */
+  deleteCols(sheet: number, col: number, count: number): Status;
 
   cellCount(sheet: number): number;
   cellAt(sheet: number, idx: number): CellEntry;
 
   definedNameCount(): number;
   definedNameAt(idx: number): DefinedNameEntry;
+  /** Adds, replaces, or (when `formula` is empty) removes a workbook-
+   *  scoped defined name. */
+  setDefinedName(name: string, formula: string): Status;
 
   tableCount(): number;
   tableAt(idx: number): TableEntry;
@@ -219,6 +389,58 @@ export interface Workbook {
     lastCol: number,
     todaySerial: number,
   ): CfRangeResult;
+
+  /** Reads the per-sheet view (zoom, freeze, tab-hidden). */
+  getSheetView(sheet: number): SheetViewResult;
+  /** Sets the sheet zoom percentage (clamped to `[10, 400]`). */
+  setSheetZoom(sheet: number, zoomScale: number): Status;
+  /** Sets the frozen pane in `(rows, cols)`. */
+  setSheetFreeze(sheet: number, freezeRows: number, freezeCols: number): Status;
+  /** Sets the sheet tab's hidden flag. */
+  setSheetTabHidden(sheet: number, hidden: boolean): Status;
+
+  /** Returns the column-layout overrides on `sheet` in storage order. */
+  getSheetColumns(sheet: number): ColumnsResult;
+  /** Sets / replaces the column width override on `[first, last]`. */
+  setColumnWidth(sheet: number, first: number, last: number, width: number): Status;
+  /** Sets / replaces the column hidden flag on `[first, last]`. */
+  setColumnHidden(sheet: number, first: number, last: number, hidden: boolean): Status;
+  /** Sets / replaces the column outline level on `[first, last]` (clamped to 0..255). */
+  setColumnOutline(sheet: number, first: number, last: number, level: number): Status;
+
+  /** Returns the row-layout overrides on `sheet`. */
+  getSheetRowOverrides(sheet: number): RowsResult;
+  /** Sets / replaces the row height override at `row`. */
+  setRowHeight(sheet: number, row: number, height: number): Status;
+  /** Sets / replaces the row hidden flag at `row`. */
+  setRowHidden(sheet: number, row: number, hidden: boolean): Status;
+  /** Sets / replaces the row outline level at `row` (clamped to 0..255). */
+  setRowOutline(sheet: number, row: number, level: number): Status;
+
+  /** Returns `{ status, xfIndex }` for the cell at `(sheet, row, col)`. */
+  getCellXfIndex(sheet: number, row: number, col: number): CellXfIndexResult;
+  /** Persists `xfIndex` on the cell at `(sheet, row, col)`. */
+  setCellXfIndex(sheet: number, row: number, col: number, xfIndex: number): Status;
+  /** Returns the resolved XF record at `xfIndex`. */
+  getCellXf(xfIndex: number): CellXfResult;
+
+  /** Adds a merge range to `sheet`. */
+  addMerge(sheet: number, range: MergeRange): Status;
+  /** Returns every merge range on `sheet` as a JS array. */
+  getMerges(sheet: number): ReadonlyArray<MergeRange>;
+
+  /** Returns the cell comment at `(sheet, row, col)`, or `null` when absent. */
+  getComment(sheet: number, row: number, col: number): CommentEntry | null;
+  /** Sets / replaces the cell comment. Pass an empty `text` to remove. */
+  setComment(sheet: number, row: number, col: number, author: string, text: string): Status;
+
+  /** Returns every hyperlink on `sheet` as a JS array. */
+  getHyperlinks(sheet: number): ReadonlyArray<HyperlinkEntry>;
+
+  /** Returns every validation entry on `sheet`. Currently always empty:
+   *  the writeable surface (and the underlying C ABI iterator) lands in
+   *  a follow-up bundle. */
+  getValidations(sheet: number): ReadonlyArray<ValidationEntry>;
 }
 
 /** Static factories on the Workbook class. */
