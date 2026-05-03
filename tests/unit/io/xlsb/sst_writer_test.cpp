@@ -107,14 +107,18 @@ TEST(XlsbSstBuilder, InternHandlesBmpAndSurrogatePairStrings) {
   // BMP only ("日本") and a string that triggers surrogate pairs ("🌟ok")
   // to exercise the writer's UTF-16 expansion.
   EXPECT_EQ(sst.intern("\xE6\x97\xA5\xE6\x9C\xAC"), 0U);
-  EXPECT_EQ(sst.intern("\xF0\x9F\x8C\x9F""ok"), 1U);
+  EXPECT_EQ(sst.intern("\xF0\x9F\x8C\x9F"
+                       "ok"),
+            1U);
 
   auto body_or = emit_sst(sst);
   ASSERT_TRUE(static_cast<bool>(body_or));
   const std::vector<std::string> items = DecodeSstStream(body_or.value());
   ASSERT_EQ(items.size(), 2U);
   EXPECT_EQ(items[0], "\xE6\x97\xA5\xE6\x9C\xAC");
-  EXPECT_EQ(items[1], "\xF0\x9F\x8C\x9F""ok");
+  EXPECT_EQ(items[1],
+            "\xF0\x9F\x8C\x9F"
+            "ok");
 }
 
 TEST(XlsbSstBuilder, BeginRecordCarriesCountFields) {

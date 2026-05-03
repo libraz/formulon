@@ -339,8 +339,7 @@ TEST(BuiltinsUnique, FourArgsRejected) {
   const EvalContext ctx(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
-  const Value v =
-      EvalUnder("=UNIQUE(A1:A1, FALSE, FALSE, FALSE)", &parse_arena, &eval_arena, ctx);
+  const Value v = EvalUnder("=UNIQUE(A1:A1, FALSE, FALSE, FALSE)", &parse_arena, &eval_arena, ctx);
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }

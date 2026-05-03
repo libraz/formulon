@@ -10,8 +10,6 @@
 // C ABI's `fm_workbook_cell_at` enumerates cells in a stable order
 // matching this ordering, so the CLI does not need to sort here.
 
-#include "cli/cli.h"
-
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
@@ -24,6 +22,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "cli/cli.h"
 #include "cli/render.h"
 #include "utils/error.h"
 

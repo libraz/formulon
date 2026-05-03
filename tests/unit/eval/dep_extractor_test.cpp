@@ -318,8 +318,10 @@ TEST(DepExtractor, RangeAcrossSheetQualifierOnLeft) {
   ExtractedDeps deps = extract_deps(*root, 0U, wb);
   EXPECT_FALSE(deps.is_volatile);
   std::vector<CellNodeId> expected = {
-      CellNodeId{1U, 0U, 0U}, CellNodeId{1U, 0U, 1U},  //
-      CellNodeId{1U, 1U, 0U}, CellNodeId{1U, 1U, 1U},
+      CellNodeId{1U, 0U, 0U},
+      CellNodeId{1U, 0U, 1U},  //
+      CellNodeId{1U, 1U, 0U},
+      CellNodeId{1U, 1U, 1U},
   };
   EXPECT_EQ(Sorted(deps.cell_deps), Sorted(expected));
 }

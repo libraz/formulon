@@ -209,12 +209,12 @@ TEST(IterativeSolverThread, MixedIterativeAndAcyclicWorkbookTSanClean) {
   wb.set_iterative_options(opts);
 
   // Acyclic prefix.
-  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(5.0))));        // A1
-  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=A1*2")));                // A2
-  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 2U, 0U, "=A2+10")));               // A3
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(5.0))));  // A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=A1*2")));           // A2
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 2U, 0U, "=A2+10")));          // A3
   // Iterative cycle in (B1, B2).
-  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=(B2+8)/2")));            // B1
-  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 1U, "=(B1+12)/2")));           // B2
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=(B2+8)/2")));   // B1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 1U, "=(B1+12)/2")));  // B2
 
   SchedulerConfig cfg;
   cfg.num_threads = 4U;

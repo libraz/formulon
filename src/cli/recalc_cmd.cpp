@@ -16,8 +16,6 @@
 // the `Recalculated ...` status line on stderr; otherwise we print one
 // per successful run.
 
-#include "cli/cli.h"
-
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
@@ -31,6 +29,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "cli/cli.h"
 #include "utils/error.h"
 
 namespace formulon {

@@ -603,8 +603,7 @@ TEST(BuiltinsRandarray, RealRangeRespected) {
   // 100 cells in [10, 20) -- bound check + statistical "not all equal"
   // guard so a regression that fills the array with `min` is caught.
   Arena arena;
-  const Value v = CallRandArray(
-      arena, {Value::number(10), Value::number(10), Value::number(10), Value::number(20)});
+  const Value v = CallRandArray(arena, {Value::number(10), Value::number(10), Value::number(10), Value::number(20)});
   ASSERT_TRUE(v.is_array());
   ASSERT_EQ(v.as_array_rows(), 10U);
   ASSERT_EQ(v.as_array_cols(), 10U);
@@ -624,8 +623,8 @@ TEST(BuiltinsRandarray, RealRangeRespected) {
 TEST(BuiltinsRandarray, WholeNumberIntegerInclusiveRange) {
   // whole_number = TRUE samples integers in [1, 6] (a six-sided die).
   Arena arena;
-  const Value v = CallRandArray(arena, {Value::number(50), Value::number(1), Value::number(1),
-                                        Value::number(6), Value::boolean(true)});
+  const Value v = CallRandArray(
+      arena, {Value::number(50), Value::number(1), Value::number(1), Value::number(6), Value::boolean(true)});
   ASSERT_TRUE(v.is_array());
   ASSERT_EQ(v.as_array_rows(), 50U);
   ASSERT_EQ(v.as_array_cols(), 1U);
@@ -644,8 +643,7 @@ TEST(BuiltinsRandarray, MinEqualsMaxIsDeterministic) {
   // shared bound -- guards against `uniform_real_distribution`'s
   // implementation-defined behaviour at degenerate ranges.
   Arena arena;
-  const Value v = CallRandArray(arena, {Value::number(2), Value::number(2), Value::number(7.5),
-                                        Value::number(7.5)});
+  const Value v = CallRandArray(arena, {Value::number(2), Value::number(2), Value::number(7.5), Value::number(7.5)});
   ASSERT_TRUE(v.is_array());
   const Value* cells = v.as_array_cells();
   for (std::size_t i = 0; i < 4U; ++i) {
@@ -656,8 +654,7 @@ TEST(BuiltinsRandarray, MinEqualsMaxIsDeterministic) {
 
 TEST(BuiltinsRandarray, MinGreaterThanMaxReturnsValue) {
   Arena arena;
-  const Value v = CallRandArray(arena, {Value::number(1), Value::number(1), Value::number(5),
-                                        Value::number(2)});
+  const Value v = CallRandArray(arena, {Value::number(1), Value::number(1), Value::number(5), Value::number(2)});
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
@@ -665,8 +662,8 @@ TEST(BuiltinsRandarray, MinGreaterThanMaxReturnsValue) {
 TEST(BuiltinsRandarray, WholeNumberWithFractionalBoundReturnsValue) {
   // whole_number = TRUE with min = 1.5 must surface #VALUE!.
   Arena arena;
-  const Value v = CallRandArray(arena, {Value::number(1), Value::number(1), Value::number(1.5),
-                                        Value::number(10), Value::boolean(true)});
+  const Value v = CallRandArray(
+      arena, {Value::number(1), Value::number(1), Value::number(1.5), Value::number(10), Value::boolean(true)});
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }

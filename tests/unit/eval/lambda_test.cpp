@@ -82,9 +82,7 @@ struct AstBuilder {
     std::vector<std::string_view> params{p0, p1};
     return make_lambda(arena, params.data(), 2, /*optional_count=*/0, body);
   }
-  AstNode* lambda0(AstNode* body) {
-    return make_lambda(arena, /*params=*/nullptr, 0, /*optional_count=*/0, body);
-  }
+  AstNode* lambda0(AstNode* body) { return make_lambda(arena, /*params=*/nullptr, 0, /*optional_count=*/0, body); }
 
   AstNode* call(AstNode* callee, std::vector<AstNode*> args) {
     std::vector<const AstNode*> as;

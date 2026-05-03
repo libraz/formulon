@@ -256,7 +256,8 @@ void EmitLiteralCellRecord(std::vector<std::uint8_t>& dst, std::uint32_t col, co
 
 }  // namespace
 
-void emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell, std::uint32_t row, std::uint32_t col, SstBuilder& sst) {
+void emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell, std::uint32_t row, std::uint32_t col,
+               SstBuilder& sst) {
   // Formula cells take precedence: even if the cached_value is blank,
   // we still want to emit a BrtFmla* record so the formula text round-
   // trips. (The reader resets cached_value to blank when it sees a

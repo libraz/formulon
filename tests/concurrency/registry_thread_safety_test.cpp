@@ -51,21 +51,16 @@ namespace {
 // concurrent-lookup test. Mixing hits and misses keeps the lookup loop
 // honest (it must walk the whole hash bucket chain for each).
 constexpr std::string_view kKnownNames[] = {
-    "SUM",      "AVERAGE", "COUNT",   "MAX",   "MIN",     "ABS",       "ROUND",     "POWER",   "SQRT",
-    "EXP",      "LN",      "LOG",     "PI",    "RAND",    "RANDBETWEEN",
-    "IF",       "IFERROR", "IFNA",    "AND",   "OR",      "NOT",       "TRUE",      "FALSE",
-    "LEN",      "UPPER",   "LOWER",   "TRIM",  "LEFT",    "RIGHT",     "MID",       "CONCATENATE",
-    "DATE",     "YEAR",    "MONTH",   "DAY",   "TODAY",   "NOW",       "WEEKDAY",
-    "VLOOKUP",  "HLOOKUP", "INDEX",   "MATCH", "OFFSET",  "INDIRECT",
-    "ISBLANK",  "ISERROR", "ISNUMBER", "ISTEXT", "ISLOGICAL",
+    "SUM",     "AVERAGE",  "COUNT",   "MAX",         "MIN",   "ABS",         "ROUND",  "POWER",    "SQRT",
+    "EXP",     "LN",       "LOG",     "PI",          "RAND",  "RANDBETWEEN", "IF",     "IFERROR",  "IFNA",
+    "AND",     "OR",       "NOT",     "TRUE",        "FALSE", "LEN",         "UPPER",  "LOWER",    "TRIM",
+    "LEFT",    "RIGHT",    "MID",     "CONCATENATE", "DATE",  "YEAR",        "MONTH",  "DAY",      "TODAY",
+    "NOW",     "WEEKDAY",  "VLOOKUP", "HLOOKUP",     "INDEX", "MATCH",       "OFFSET", "INDIRECT", "ISBLANK",
+    "ISERROR", "ISNUMBER", "ISTEXT",  "ISLOGICAL",
 };
 
 constexpr std::string_view kUnknownNames[] = {
-    "DEFINITELY_NOT_A_FUNCTION",
-    "ZZZ_PHANTOM",
-    "FOO",
-    "BAR_BAZ",
-    "EXCEL_DOES_NOT_HAVE_THIS",
+    "DEFINITELY_NOT_A_FUNCTION", "ZZZ_PHANTOM", "FOO", "BAR_BAZ", "EXCEL_DOES_NOT_HAVE_THIS",
 };
 
 // ---------------------------------------------------------------------------
@@ -134,10 +129,9 @@ TEST(RegistryThreadSafety, EightThreadsLookupOneThousandNamesEach) {
   for (int i = 0; i < kThreads; ++i) {
     workers.emplace_back([&, seed = static_cast<std::uint32_t>(i + 1)] {
       std::mt19937 rng(seed);
-      std::uniform_int_distribution<std::size_t> known_pick(
-          0U, sizeof(kKnownNames) / sizeof(kKnownNames[0]) - 1U);
-      std::uniform_int_distribution<std::size_t> unknown_pick(
-          0U, sizeof(kUnknownNames) / sizeof(kUnknownNames[0]) - 1U);
+      std::uniform_int_distribution<std::size_t> known_pick(0U, sizeof(kKnownNames) / sizeof(kKnownNames[0]) - 1U);
+      std::uniform_int_distribution<std::size_t> unknown_pick(0U,
+                                                              sizeof(kUnknownNames) / sizeof(kUnknownNames[0]) - 1U);
       std::uniform_int_distribution<int> bucket(0, 9);
       for (int n = 0; n < kLookupsPerThread; ++n) {
         if (bucket(rng) < 7) {

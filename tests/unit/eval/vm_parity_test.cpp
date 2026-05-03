@@ -210,14 +210,12 @@ TEST_P(ParitySweep, ResultsAgree) {
     vm_v = Value::number(0.0);
   }
 
-  EXPECT_TRUE(ValuesAgree(tree_v, vm_v))
-      << "parity divergence for: " << src << " tree=" << tree_v.debug_to_string()
-      << " vm=" << vm_v.debug_to_string();
+  EXPECT_TRUE(ValuesAgree(tree_v, vm_v)) << "parity divergence for: " << src << " tree=" << tree_v.debug_to_string()
+                                         << " vm=" << vm_v.debug_to_string();
 }
 
 INSTANTIATE_TEST_SUITE_P(VmParity, ParitySweep,
-                        ::testing::Range(static_cast<std::size_t>(0),
-                                         sizeof(kCorpus) / sizeof(kCorpus[0])));
+                         ::testing::Range(static_cast<std::size_t>(0), sizeof(kCorpus) / sizeof(kCorpus[0])));
 
 #else  // !FORMULON_VM_PARITY_CHECK
 

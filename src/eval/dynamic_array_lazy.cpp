@@ -616,8 +616,7 @@ Value eval_sortby_lazy(const parser::AstNode& call, Arena& arena, const Function
       }
       axis_decided = true;
     } else {
-      const bool matches = by_col ? (by->rows == 1U && by->cols == lanes)
-                                  : (by->cols == 1U && by->rows == lanes);
+      const bool matches = by_col ? (by->rows == 1U && by->cols == lanes) : (by->cols == 1U && by->rows == lanes);
       if (!matches) {
         return Value::error(ErrorCode::Value);
       }
@@ -713,8 +712,8 @@ namespace {
 /// returned ArrayValue pointers borrow from the caller arena, which must
 /// outlive their use.
 bool resolve_stack_args(const parser::AstNode& call, std::uint32_t arity, Arena& arena,
-                        const FunctionRegistry& registry, const EvalContext& ctx,
-                        std::vector<const ArrayValue*>& out, Value& error_out) {
+                        const FunctionRegistry& registry, const EvalContext& ctx, std::vector<const ArrayValue*>& out,
+                        Value& error_out) {
   out.reserve(arity);
   for (std::uint32_t i = 0; i < arity; ++i) {
     const Value v = eval_node_as_array(call.as_call_arg(i), arena, registry, ctx);
@@ -1052,8 +1051,7 @@ bool resolve_take_drop_range(const parser::AstNode* node, std::uint32_t axis_siz
       return false;
     }
     if (count > 0.0) {
-      const auto take_n =
-          (count >= static_cast<double>(axis_size)) ? axis_size : static_cast<std::uint32_t>(count);
+      const auto take_n = (count >= static_cast<double>(axis_size)) ? axis_size : static_cast<std::uint32_t>(count);
       lo = 0;
       hi = take_n;
       return true;
@@ -1087,8 +1085,8 @@ bool resolve_take_drop_range(const parser::AstNode* node, std::uint32_t axis_siz
 /// Materialise a 2D row-major slice `[row_lo, row_hi) x [col_lo, col_hi)`
 /// of `src` into the caller arena. Returns nullptr on arena OOM. Both
 /// half-open intervals must satisfy `lo <= hi <= src axis size`.
-ArrayValue* materialise_slice(const ArrayValue& src, std::uint32_t row_lo, std::uint32_t row_hi,
-                              std::uint32_t col_lo, std::uint32_t col_hi, Arena& arena) {
+ArrayValue* materialise_slice(const ArrayValue& src, std::uint32_t row_lo, std::uint32_t row_hi, std::uint32_t col_lo,
+                              std::uint32_t col_hi, Arena& arena) {
   const std::uint32_t out_rows = row_hi - row_lo;
   const std::uint32_t out_cols = col_hi - col_lo;
   const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
@@ -1133,15 +1131,15 @@ Value eval_take_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   std::uint32_t row_lo = 0;
   std::uint32_t row_hi = 0;
   Value err = Value::error(ErrorCode::Value);
-  if (!resolve_take_drop_range(&call.as_call_arg(1), array->rows, /*take=*/true, arena, registry, ctx,
-                               row_lo, row_hi, err)) {
+  if (!resolve_take_drop_range(&call.as_call_arg(1), array->rows, /*take=*/true, arena, registry, ctx, row_lo, row_hi,
+                               err)) {
     return err;
   }
   std::uint32_t col_lo = 0;
   std::uint32_t col_hi = array->cols;
   if (arity == 3U) {
-    if (!resolve_take_drop_range(&call.as_call_arg(2), array->cols, /*take=*/true, arena, registry, ctx,
-                                 col_lo, col_hi, err)) {
+    if (!resolve_take_drop_range(&call.as_call_arg(2), array->cols, /*take=*/true, arena, registry, ctx, col_lo, col_hi,
+                                 err)) {
       return err;
     }
   }
@@ -1172,15 +1170,15 @@ Value eval_drop_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   std::uint32_t row_lo = 0;
   std::uint32_t row_hi = 0;
   Value err = Value::error(ErrorCode::Value);
-  if (!resolve_take_drop_range(&call.as_call_arg(1), array->rows, /*take=*/false, arena, registry, ctx,
-                               row_lo, row_hi, err)) {
+  if (!resolve_take_drop_range(&call.as_call_arg(1), array->rows, /*take=*/false, arena, registry, ctx, row_lo, row_hi,
+                               err)) {
     return err;
   }
   std::uint32_t col_lo = 0;
   std::uint32_t col_hi = array->cols;
   if (arity == 3U) {
-    if (!resolve_take_drop_range(&call.as_call_arg(2), array->cols, /*take=*/false, arena, registry, ctx,
-                                 col_lo, col_hi, err)) {
+    if (!resolve_take_drop_range(&call.as_call_arg(2), array->cols, /*take=*/false, arena, registry, ctx, col_lo,
+                                 col_hi, err)) {
       return err;
     }
   }
@@ -1337,8 +1335,8 @@ bool collect_tocol_torow_cells(const ArrayValue& array, std::int64_t ignore_mask
 /// argument is the source array, hence the optional args are at indices
 /// 1 and 2 here.
 bool resolve_tocol_torow_options(const parser::AstNode& call, std::uint32_t arity, Arena& arena,
-                                 const FunctionRegistry& registry, const EvalContext& ctx,
-                                 std::int64_t& ignore_mask, bool& scan_by_column, Value& error_out) {
+                                 const FunctionRegistry& registry, const EvalContext& ctx, std::int64_t& ignore_mask,
+                                 bool& scan_by_column, Value& error_out) {
   ignore_mask = 0;
   scan_by_column = false;
   if (arity >= 2U) {
@@ -1479,9 +1477,8 @@ namespace {
 /// `wrap_count >= 1`, and an optional scalar `pad_with` (default #N/A).
 /// Returns true and writes `flat`, `wrap_count`, `pad` on success;
 /// `false` and the caller-visible error otherwise.
-bool resolve_wrap_args(const parser::AstNode& call, std::uint32_t arity, Arena& arena,
-                       const FunctionRegistry& registry, const EvalContext& ctx,
-                       const ArrayValue*& vector_arr, std::uint32_t& wrap_count, Value& pad,
+bool resolve_wrap_args(const parser::AstNode& call, std::uint32_t arity, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx, const ArrayValue*& vector_arr, std::uint32_t& wrap_count, Value& pad,
                        Value& error_out) {
   if (arity < 2U || arity > 3U) {
     error_out = Value::error(ErrorCode::Value);

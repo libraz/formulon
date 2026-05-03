@@ -407,8 +407,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
   // host-callable function family cannot accidentally race the dirty set
   // by attempting nested recalc.
   if (g_in_recalc) {
-    return make_error(FormulonErrorCode::kGraphRecalcReentrant,
-                      "recalc_parallel called recursively on the same thread",
+    return make_error(FormulonErrorCode::kGraphRecalcReentrant, "recalc_parallel called recursively on the same thread",
                       "the scheduler does not support nested recalc; the inner call is rejected");
   }
   ReentrantGuard guard;

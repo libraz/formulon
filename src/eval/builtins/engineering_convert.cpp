@@ -271,18 +271,22 @@ struct Prefix {
 // linear prefix-match ("does the candidate begin with this symbol?")
 // always picks the longest applicable symbol (e.g. "da" before "d").
 constexpr Prefix kSiPrefixes[] = {
-    {"Y", 1e24},  {"Z", 1e21}, {"E", 1e18}, {"P", 1e15},  {"T", 1e12},  {"G", 1e9},  {"M", 1e6},
-    {"k", 1e3},   {"h", 1e2},  {"da", 1e1}, {"e", 1e1},   {"d", 1e-1},  {"c", 1e-2}, {"m", 1e-3},
-    {"u", 1e-6},  {"n", 1e-9}, {"p", 1e-12}, {"f", 1e-15}, {"a", 1e-18}, {"z", 1e-21}, {"y", 1e-24},
+    {"Y", 1e24}, {"Z", 1e21}, {"E", 1e18},  {"P", 1e15},  {"T", 1e12},  {"G", 1e9},   {"M", 1e6},
+    {"k", 1e3},  {"h", 1e2},  {"da", 1e1},  {"e", 1e1},   {"d", 1e-1},  {"c", 1e-2},  {"m", 1e-3},
+    {"u", 1e-6}, {"n", 1e-9}, {"p", 1e-12}, {"f", 1e-15}, {"a", 1e-18}, {"z", 1e-21}, {"y", 1e-24},
 };
 constexpr std::size_t kSiPrefixCount = sizeof(kSiPrefixes) / sizeof(kSiPrefixes[0]);
 
 // Binary prefixes for bit / byte.
 constexpr Prefix kBinaryPrefixes[] = {
-    {"Yi", 1208925819614629174706176.0}, {"Zi", 1180591620717411303424.0},
-    {"Ei", 1152921504606846976.0},        {"Pi", 1125899906842624.0},
-    {"Ti", 1099511627776.0},              {"Gi", 1073741824.0},
-    {"Mi", 1048576.0},                    {"ki", 1024.0},
+    {"Yi", 1208925819614629174706176.0},
+    {"Zi", 1180591620717411303424.0},
+    {"Ei", 1152921504606846976.0},
+    {"Pi", 1125899906842624.0},
+    {"Ti", 1099511627776.0},
+    {"Gi", 1073741824.0},
+    {"Mi", 1048576.0},
+    {"ki", 1024.0},
 };
 constexpr std::size_t kBinaryPrefixCount = sizeof(kBinaryPrefixes) / sizeof(kBinaryPrefixes[0]);
 
@@ -322,10 +326,13 @@ bool resolve_unit(std::string_view name, Resolved* out) {
   // symbol that happens to be a prefix of a SI prefix ("Y" vs. "Yi").
   for (std::size_t i = 0; i < kBinaryPrefixCount; ++i) {
     const std::size_t sym_len = std::strlen(kBinaryPrefixes[i].symbol);
-    if (name.size() <= sym_len) continue;
-    if (name.substr(0, sym_len) != kBinaryPrefixes[i].symbol) continue;
+    if (name.size() <= sym_len)
+      continue;
+    if (name.substr(0, sym_len) != kBinaryPrefixes[i].symbol)
+      continue;
     const UnitEntry* base = find_exact_unit(name.substr(sym_len));
-    if (base == nullptr || !base->allows_binary) continue;
+    if (base == nullptr || !base->allows_binary)
+      continue;
     out->category = base->category;
     out->dim = base->dim;
     out->factor = base->factor * kBinaryPrefixes[i].multiplier;
@@ -334,16 +341,21 @@ bool resolve_unit(std::string_view name, Resolved* out) {
   }
   for (std::size_t i = 0; i < kSiPrefixCount; ++i) {
     const std::size_t sym_len = std::strlen(kSiPrefixes[i].symbol);
-    if (name.size() <= sym_len) continue;
-    if (name.substr(0, sym_len) != kSiPrefixes[i].symbol) continue;
+    if (name.size() <= sym_len)
+      continue;
+    if (name.substr(0, sym_len) != kSiPrefixes[i].symbol)
+      continue;
     const UnitEntry* base = find_exact_unit(name.substr(sym_len));
-    if (base == nullptr || !base->allows_si) continue;
+    if (base == nullptr || !base->allows_si)
+      continue;
     double multiplier = kSiPrefixes[i].multiplier;
     // For squared / cubed units the SI prefix acts on the linear length
     // first and is then raised to the unit's dimensionality. Power-of-3
     // and power-of-2 are the only cases in the catalog.
-    if (base->dim == 2) multiplier *= multiplier;
-    if (base->dim == 3) multiplier *= multiplier * kSiPrefixes[i].multiplier;
+    if (base->dim == 2)
+      multiplier *= multiplier;
+    if (base->dim == 3)
+      multiplier *= multiplier * kSiPrefixes[i].multiplier;
     out->category = base->category;
     out->dim = base->dim;
     out->factor = base->factor * multiplier;

@@ -27,8 +27,8 @@
 
 #include "parser/reference.h"
 #include "sheet.h"
-#include "utils/expected.h"
 #include "utils/error.h"
+#include "utils/expected.h"
 #include "value.h"
 
 namespace formulon {
@@ -82,8 +82,7 @@ class EvalContext {
   /// is left alone, and all formula-result caching lives in `state` for the
   /// duration of a single `evaluate()` call. Qualified refs resolve to
   /// `#REF!` (no workbook bound).
-  EvalContext(const Sheet& sheet, EvalState& state) noexcept
-      : current_sheet_(&sheet), state_(&state) {}
+  EvalContext(const Sheet& sheet, EvalState& state) noexcept : current_sheet_(&sheet), state_(&state) {}
 
   /// Evaluating + cross-sheet–aware context. Unqualified refs resolve
   /// against `current_sheet`; qualified refs (`Reference::sheet` non-empty)
@@ -94,8 +93,7 @@ class EvalContext {
   /// `current_sheet` MUST be a sheet owned by `workbook` (no check is
   /// enforced). `workbook`, `current_sheet`, and `state` must outlive the
   /// context.
-  EvalContext(const Workbook& workbook, const Sheet& current_sheet,
-              EvalState& state) noexcept
+  EvalContext(const Workbook& workbook, const Sheet& current_sheet, EvalState& state) noexcept
       : current_sheet_(&current_sheet), state_(&state), workbook_(&workbook) {}
 
   /// Workbook-aware, *state-less* factory. Unqualified refs resolve
@@ -109,8 +107,7 @@ class EvalContext {
   /// `#REF!` on any back-edge inside the cycle.
   ///
   /// Both `workbook` and `current_sheet` must outlive the context.
-  static EvalContext workbook_only(const Workbook& workbook,
-                                   const Sheet& current_sheet) noexcept {
+  static EvalContext workbook_only(const Workbook& workbook, const Sheet& current_sheet) noexcept {
     EvalContext out;
     out.current_sheet_ = &current_sheet;
     out.workbook_ = &workbook;
@@ -160,8 +157,7 @@ class EvalContext {
   /// The Sheet is NOT mutated; `cell->cached_value` is left alone. Text
   /// values returned from recursion reference storage in `arena`, so the
   /// caller's evaluation arena must outlive the returned `Value`.
-  Value resolve_ref(const parser::Reference& ref, Arena& arena,
-                    const FunctionRegistry& registry) const;
+  Value resolve_ref(const parser::Reference& ref, Arena& arena, const FunctionRegistry& registry) const;
 
   /// Expands the rectangle `[lhs : rhs]` into a flat list of cell values in
   /// row-major order (top-left to bottom-right, row by row). Endpoint
@@ -195,9 +191,8 @@ class EvalContext {
   /// | Either endpoint has `is_full_col` or `is_full_row`        | `#VALUE!`|
   /// | Either endpoint has row/col >= `Sheet::kMax*`             | `#REF!`  |
   /// | Otherwise                                                 | vector   |
-  Expected<std::vector<Value>, ErrorCode> expand_range(
-      const parser::Reference& lhs, const parser::Reference& rhs,
-      Arena& arena, const FunctionRegistry& registry) const;
+  Expected<std::vector<Value>, ErrorCode> expand_range(const parser::Reference& lhs, const parser::Reference& rhs,
+                                                       Arena& arena, const FunctionRegistry& registry) const;
 
   /// Returns the sheet this context is bound to, or `nullptr` when the
   /// context was default-constructed.

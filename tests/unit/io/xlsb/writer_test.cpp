@@ -49,8 +49,8 @@ TEST(XlsbWriter, RoundTripsTwoSheetsWithLiteralCells) {
   Sheet& s2 = wb.sheet(1);
 
   // Sheet 1: a mix of literal kinds spread across 2 rows.
-  s1.set_cell_value(0U, 0U, Value::number(42.0));     // RK-encodable
-  s1.set_cell_value(0U, 1U, Value::number(123.45));   // x100 form
+  s1.set_cell_value(0U, 0U, Value::number(42.0));       // RK-encodable
+  s1.set_cell_value(0U, 1U, Value::number(123.45));     // x100 form
   s1.set_cell_value(0U, 2U, Value::number(1.0 / 3.0));  // BrtCellReal
   s1.set_cell_value(0U, 3U, Value::boolean(true));
   s1.set_cell_value(0U, 4U, Value::text("hello"));
@@ -62,7 +62,7 @@ TEST(XlsbWriter, RoundTripsTwoSheetsWithLiteralCells) {
   // Tests for that path live further down.
 
   // Sheet 2: text dedup + another numeric cell.
-  s2.set_cell_value(2U, 3U, Value::text("hello"));    // shares SST index with Sheet1
+  s2.set_cell_value(2U, 3U, Value::text("hello"));  // shares SST index with Sheet1
   s2.set_cell_value(2U, 4U, Value::text("world"));
   s2.set_cell_value(5U, 0U, Value::number(-7.0));
 
@@ -218,8 +218,7 @@ TEST(XlsbWriter, FormulaStubRoundTripsAsFormulaCell) {
   // byte-exact equality of the stub body (the reader prepends extra
   // CellParsedFormula framing bytes when it slices the rgce as opaque
   // bytes), but we do confirm the stub prefix survives.
-  EXPECT_EQ(c->formula_text.substr(0, std::string_view("=__FORMULON_XLSB_PTG__(").size()),
-            "=__FORMULON_XLSB_PTG__(");
+  EXPECT_EQ(c->formula_text.substr(0, std::string_view("=__FORMULON_XLSB_PTG__(").size()), "=__FORMULON_XLSB_PTG__(");
 }
 
 TEST(XlsbWriter, GeneratedPartsBeatPassthroughOnCollision) {

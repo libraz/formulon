@@ -40,9 +40,8 @@ namespace {
 //
 // Assumes `current_sheet` is non-null when `sheet_name` is empty; callers
 // must short-circuit the unbound-context case before invoking this helper.
-const Sheet* resolve_target_sheet(std::string_view sheet_name,
-                                  const Sheet* current_sheet,
-                                  const Workbook* workbook, ErrorCode* out_err) {
+const Sheet* resolve_target_sheet(std::string_view sheet_name, const Sheet* current_sheet, const Workbook* workbook,
+                                  ErrorCode* out_err) {
   if (sheet_name.empty()) {
     return current_sheet;
   }
@@ -86,9 +85,7 @@ struct ResolvePrefix {
 // cross-sheet lookup, full-column / full-row, out-of-bounds, absent cell,
 // literal cell. A formula-cell hit is returned as `Kind::Formula` so each
 // caller can decide whether (and how) to evaluate the formula.
-ResolvePrefix resolve_prefix(const Sheet* current_sheet,
-                             const Workbook* workbook,
-                             const parser::Reference& ref) {
+ResolvePrefix resolve_prefix(const Sheet* current_sheet, const Workbook* workbook, const parser::Reference& ref) {
   ResolvePrefix out;
   if (current_sheet == nullptr) {
     out.value = Value::error(ErrorCode::Name);
@@ -98,8 +95,7 @@ ResolvePrefix resolve_prefix(const Sheet* current_sheet,
   // `#REF!`. With a match, the target becomes the current sheet for the
   // remainder of the preamble.
   ErrorCode sheet_err = ErrorCode::Ref;
-  const Sheet* target =
-      resolve_target_sheet(ref.sheet, current_sheet, workbook, &sheet_err);
+  const Sheet* target = resolve_target_sheet(ref.sheet, current_sheet, workbook, &sheet_err);
   if (target == nullptr) {
     out.value = Value::error(sheet_err);
     return out;
@@ -143,8 +139,7 @@ Value EvalContext::resolve_ref(const parser::Reference& ref) const {
   return prefix.cell->cached_value;
 }
 
-Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena,
-                               const FunctionRegistry& registry) const {
+Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const FunctionRegistry& registry) const {
   const ResolvePrefix prefix = resolve_prefix(current_sheet_, workbook_, ref);
   if (prefix.kind == ResolvePrefix::Kind::Terminal) {
     return prefix.value;
@@ -156,9 +151,7 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena,
     return prefix.cell->cached_value;
   }
 
-  if (const Value* memo =
-          state_->lookup_memo(prefix.target_sheet, prefix.row, prefix.col);
-      memo != nullptr) {
+  if (const Value* memo = state_->lookup_memo(prefix.target_sheet, prefix.row, prefix.col); memo != nullptr) {
     return *memo;
   }
 
@@ -252,9 +245,9 @@ Value EvalContext::dispatch_array_result(Value v) const {
   return mutable_sheet_->resolve_cell_value(formula_row_, formula_col_);
 }
 
-Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(
-    const parser::Reference& lhs, const parser::Reference& rhs, Arena& arena,
-    const FunctionRegistry& registry) const {
+Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::Reference& lhs,
+                                                                  const parser::Reference& rhs, Arena& arena,
+                                                                  const FunctionRegistry& registry) const {
   if (current_sheet_ == nullptr) {
     return ErrorCode::Name;
   }
@@ -278,8 +271,7 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(
   }
 
   ErrorCode sheet_err = ErrorCode::Ref;
-  const Sheet* target_sheet = resolve_target_sheet(
-      effective_sheet_name, current_sheet_, workbook_, &sheet_err);
+  const Sheet* target_sheet = resolve_target_sheet(effective_sheet_name, current_sheet_, workbook_, &sheet_err);
   if (target_sheet == nullptr) {
     return sheet_err;
   }
@@ -289,8 +281,8 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(
     // lands; in scalar context they degrade to #VALUE!.
     return ErrorCode::Value;
   }
-  if (lhs.row >= Sheet::kMaxRows || lhs.col >= Sheet::kMaxCols ||
-      rhs.row >= Sheet::kMaxRows || rhs.col >= Sheet::kMaxCols) {
+  if (lhs.row >= Sheet::kMaxRows || lhs.col >= Sheet::kMaxCols || rhs.row >= Sheet::kMaxRows ||
+      rhs.col >= Sheet::kMaxCols) {
     return ErrorCode::Ref;
   }
 
@@ -307,8 +299,8 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(
   // being silently skipped. Excel's range-vs-direct semantic split is a
   // future pass; flattening here keeps the dispatcher agnostic.
   std::vector<Value> out;
-  const std::uint64_t total = static_cast<std::uint64_t>(r_max - r_min + 1) *
-                              static_cast<std::uint64_t>(c_max - c_min + 1);
+  const std::uint64_t total =
+      static_cast<std::uint64_t>(r_max - r_min + 1) * static_cast<std::uint64_t>(c_max - c_min + 1);
   out.reserve(static_cast<std::size_t>(total));
   for (std::uint32_t r = r_min; r <= r_max; ++r) {
     for (std::uint32_t c = c_min; c <= c_max; ++c) {

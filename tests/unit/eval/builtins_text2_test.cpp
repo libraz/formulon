@@ -531,7 +531,9 @@ TEST(BuiltinsText2Proper, AsciiAfterJapaneseStartsWord) {
   // so it is treated as the start of a word.
   const Value v = EvalSource("=PROPER(\"\xE3\x81\x82\x62\x63\")");
   ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "\xE3\x81\x82" "Bc");
+  EXPECT_EQ(v.as_text(),
+            "\xE3\x81\x82"
+            "Bc");
 }
 
 TEST(BuiltinsText2Proper, MultiByteOnlyPassesThrough) {

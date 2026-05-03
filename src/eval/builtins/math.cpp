@@ -89,9 +89,11 @@ Value Trunc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   // Empty-string arguments surface #VALUE! rather than coercing to 0, same
   // rule as CEILING / FLOOR / MROUND.
   auto is_empty = [](const Value& v) {
-    if (v.kind() != ValueKind::Text) return false;
+    if (v.kind() != ValueKind::Text)
+      return false;
     for (char c : v.as_text()) {
-      if (c != ' ' && c != '\t') return false;
+      if (c != ' ' && c != '\t')
+        return false;
     }
     return true;
   };
@@ -304,10 +306,12 @@ Value RoundUp(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // branch would otherwise convert `FLOOR(10, "")` to `#DIV/0!` -- Excel's
 // observed behaviour is `#VALUE!`.
 inline bool is_empty_text(const Value& v) {
-  if (v.kind() != ValueKind::Text) return false;
+  if (v.kind() != ValueKind::Text)
+    return false;
   const std::string_view t = v.as_text();
   for (char c : t) {
-    if (c != ' ' && c != '\t') return false;
+    if (c != ' ' && c != '\t')
+      return false;
   }
   return true;
 }
@@ -392,9 +396,8 @@ Value Ceiling(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   // Mismatched signs: math ceiling on the signed value. `snap_to_integer`
   // absorbs the floating-point noise that would otherwise make e.g.
   // `CEILING(-7.1, 0.1)` return `-7` instead of `-7.1`.
-  const double r = (signum(n) == signum(s))
-                       ? signum(n) * std::ceil(snap_to_integer(std::fabs(n) / abs_s)) * abs_s
-                       : std::ceil(snap_to_integer(n / abs_s)) * abs_s;
+  const double r = (signum(n) == signum(s)) ? signum(n) * std::ceil(snap_to_integer(std::fabs(n) / abs_s)) * abs_s
+                                            : std::ceil(snap_to_integer(n / abs_s)) * abs_s;
   if (std::isnan(r) || std::isinf(r)) {
     return Value::error(ErrorCode::Num);
   }
@@ -445,9 +448,8 @@ Value Floor(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   // Mismatched signs: math floor on the signed value. `snap_to_integer`
   // absorbs the floating-point noise that would otherwise make e.g.
   // `FLOOR(7.1, 0.1)` return `7` instead of `7.1`.
-  const double r = (signum(n) == signum(s))
-                       ? signum(n) * std::floor(snap_to_integer(std::fabs(n) / abs_s)) * abs_s
-                       : std::floor(snap_to_integer(n / abs_s)) * abs_s;
+  const double r = (signum(n) == signum(s)) ? signum(n) * std::floor(snap_to_integer(std::fabs(n) / abs_s)) * abs_s
+                                            : std::floor(snap_to_integer(n / abs_s)) * abs_s;
   if (std::isnan(r) || std::isinf(r)) {
     return Value::error(ErrorCode::Num);
   }

@@ -1878,9 +1878,7 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
         if (!eq) {
           // Best-effort diagnostic: the harness does not have access to the
           // formula text here, so we only print the divergent kind / payload.
-          std::fprintf(stderr,
-                       "[FORMULON_VM_PARITY] mismatch: tree=%s vm=%s\n",
-                       v.debug_to_string().c_str(),
+          std::fprintf(stderr, "[FORMULON_VM_PARITY] mismatch: tree=%s vm=%s\n", v.debug_to_string().c_str(),
                        vm_final.debug_to_string().c_str());
         }
       }

@@ -240,8 +240,7 @@ TEST(BuiltinsRow, ZeroArgReturnsAnchorRowOneBased) {
   parser::AstNode* root = p.parse();
   ASSERT_NE(root, nullptr);
   EvalState state;
-  const EvalContext ctx =
-      EvalContext(wb, wb.sheet(0), state).with_formula_cell(4U, 2U);  // C5
+  const EvalContext ctx = EvalContext(wb, wb.sheet(0), state).with_formula_cell(4U, 2U);  // C5
   const Value v = evaluate(*root, eval_arena, default_registry(), ctx);
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 5.0);
@@ -255,8 +254,7 @@ TEST(BuiltinsColumn, ZeroArgReturnsAnchorColumnOneBased) {
   parser::AstNode* root = p.parse();
   ASSERT_NE(root, nullptr);
   EvalState state;
-  const EvalContext ctx =
-      EvalContext(wb, wb.sheet(0), state).with_formula_cell(4U, 2U);  // C5
+  const EvalContext ctx = EvalContext(wb, wb.sheet(0), state).with_formula_cell(4U, 2U);  // C5
   const Value v = evaluate(*root, eval_arena, default_registry(), ctx);
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 3.0);

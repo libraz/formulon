@@ -139,12 +139,10 @@ TEST(SpillRefBroadcast, EqualShapeArraysAddCellwise) {
   // Two 3x1 spills added cellwise -> 3x1 Array of [11, 22, 33].
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
-  ASSERT_TRUE(sheet.commit_spill(
-      0U, 0U, 3U, 1U,
-      std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
-  ASSERT_TRUE(sheet.commit_spill(
-      0U, 1U, 3U, 1U,
-      std::vector<Value>{Value::number(1.0), Value::number(2.0), Value::number(3.0)}));
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 1U,
+                                 std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
+  ASSERT_TRUE(sheet.commit_spill(0U, 1U, 3U, 1U,
+                                 std::vector<Value>{Value::number(1.0), Value::number(2.0), Value::number(3.0)}));
 
   EvalState state;
   const EvalContext ctx(wb, sheet, state);
@@ -165,9 +163,8 @@ TEST(SpillRefBroadcast, ScalarOnRightBroadcastsAcrossArray) {
   // `=A1#+1` -> 3x1 Array of [11, 21, 31]. Scalar RHS broadcasts.
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
-  ASSERT_TRUE(sheet.commit_spill(
-      0U, 0U, 3U, 1U,
-      std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 1U,
+                                 std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
 
   EvalState state;
   const EvalContext ctx(wb, sheet, state);
@@ -187,9 +184,8 @@ TEST(SpillRefBroadcast, ScalarOnLeftBroadcastsAcrossArray) {
   // `=2*A1#` -> 3x1 Array of [20, 40, 60]. Scalar LHS broadcasts.
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
-  ASSERT_TRUE(sheet.commit_spill(
-      0U, 0U, 3U, 1U,
-      std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 1U,
+                                 std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
 
   EvalState state;
   const EvalContext ctx(wb, sheet, state);
@@ -211,11 +207,9 @@ TEST(SpillRefBroadcast, ShapeMismatchYieldsValue) {
   // in this case — the whole expression short-circuits.
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
-  ASSERT_TRUE(sheet.commit_spill(
-      0U, 0U, 3U, 1U,
-      std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
-  ASSERT_TRUE(sheet.commit_spill(
-      0U, 1U, 2U, 1U, std::vector<Value>{Value::number(1.0), Value::number(2.0)}));
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 1U,
+                                 std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
+  ASSERT_TRUE(sheet.commit_spill(0U, 1U, 2U, 1U, std::vector<Value>{Value::number(1.0), Value::number(2.0)}));
 
   EvalState state;
   const EvalContext ctx(wb, sheet, state);
@@ -232,9 +226,8 @@ TEST(SpillRefBroadcast, UnaryMinusBroadcastsAcrossArray) {
   // routes through broadcast_unary when the operand is a Value::Array.
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
-  ASSERT_TRUE(sheet.commit_spill(
-      0U, 0U, 3U, 1U,
-      std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 1U,
+                                 std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
 
   EvalState state;
   const EvalContext ctx(wb, sheet, state);
@@ -255,8 +248,7 @@ TEST(SpillRefBroadcast, ConcatBroadcastsAcrossArray) {
   // broadcasts through the same per-cell helper.
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
-  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 2U, 1U,
-                                 std::vector<Value>{Value::number(10.0), Value::number(20.0)}));
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 2U, 1U, std::vector<Value>{Value::number(10.0), Value::number(20.0)}));
 
   EvalState state;
   const EvalContext ctx(wb, sheet, state);
@@ -276,9 +268,8 @@ TEST(SpillRefBroadcast, ComparisonBroadcastsAcrossArray) {
   // broadcast cellwise through apply_comparison.
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
-  ASSERT_TRUE(sheet.commit_spill(
-      0U, 0U, 3U, 1U,
-      std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 1U,
+                                 std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
 
   EvalState state;
   const EvalContext ctx(wb, sheet, state);
@@ -300,9 +291,8 @@ TEST(SpillRefBroadcast, PerCellErrorPropagatesPerCell) {
   // cells compute normally. Mac Excel's behaviour: per-cell error transit.
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
-  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 1U,
-                                 std::vector<Value>{Value::number(10.0), Value::error(ErrorCode::Div0),
-                                                    Value::number(30.0)}));
+  ASSERT_TRUE(sheet.commit_spill(
+      0U, 0U, 3U, 1U, std::vector<Value>{Value::number(10.0), Value::error(ErrorCode::Div0), Value::number(30.0)}));
 
   EvalState state;
   const EvalContext ctx(wb, sheet, state);
@@ -323,10 +313,8 @@ TEST(SpillRefBroadcast, ArrayMinusArrayBroadcastsViaSubtraction) {
   // Combined sanity check: subtraction operator over two equal-shape arrays.
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
-  ASSERT_TRUE(sheet.commit_spill(
-      0U, 0U, 2U, 1U, std::vector<Value>{Value::number(100.0), Value::number(50.0)}));
-  ASSERT_TRUE(sheet.commit_spill(
-      0U, 1U, 2U, 1U, std::vector<Value>{Value::number(40.0), Value::number(20.0)}));
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 2U, 1U, std::vector<Value>{Value::number(100.0), Value::number(50.0)}));
+  ASSERT_TRUE(sheet.commit_spill(0U, 1U, 2U, 1U, std::vector<Value>{Value::number(40.0), Value::number(20.0)}));
 
   EvalState state;
   const EvalContext ctx(wb, sheet, state);
@@ -407,9 +395,8 @@ TEST(SpillRefLet, SumOverLetBoundSpill) {
   // AST for the NameRef.
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
-  ASSERT_TRUE(sheet.commit_spill(
-      0U, 0U, 3U, 1U,
-      std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 1U,
+                                 std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
 
   EvalState state;
   const EvalContext ctx(wb, sheet, state);
@@ -427,9 +414,8 @@ TEST(SpillRefLet, BroadcastOverLetBoundSpill) {
   // cells) and routes through broadcast_binop.
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
-  ASSERT_TRUE(sheet.commit_spill(
-      0U, 0U, 3U, 1U,
-      std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 1U,
+                                 std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
 
   EvalState state;
   const EvalContext ctx(wb, sheet, state);
@@ -451,9 +437,9 @@ TEST(SpillRefLet, CountIfOverLetBoundSpill) {
   // verify COUNTIF resolves the binding through the new branch.
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
-  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 4U, 1U,
-                                 std::vector<Value>{Value::number(5.0), Value::number(20.0),
-                                                    Value::number(30.0), Value::number(15.0)}));
+  ASSERT_TRUE(sheet.commit_spill(
+      0U, 0U, 4U, 1U,
+      std::vector<Value>{Value::number(5.0), Value::number(20.0), Value::number(30.0), Value::number(15.0)}));
 
   EvalState state;
   const EvalContext ctx(wb, sheet, state);
@@ -471,9 +457,8 @@ TEST(SpillRefLet, TransitiveLetBindingPreservesShape) {
   // through `t`'s binding so SUM still sees a range.
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
-  ASSERT_TRUE(sheet.commit_spill(
-      0U, 0U, 3U, 1U,
-      std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 1U,
+                                 std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
 
   EvalState state;
   const EvalContext ctx(wb, sheet, state);
@@ -556,9 +541,8 @@ TEST(AnchorArrayLazy, SumOverAnchorArray) {
   // is the same shape as `=SUM(A1#)`.
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
-  ASSERT_TRUE(sheet.commit_spill(
-      0U, 0U, 3U, 1U,
-      std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 1U,
+                                 std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
 
   EvalState state;
   const EvalContext ctx(wb, sheet, state);

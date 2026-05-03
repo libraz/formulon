@@ -58,7 +58,8 @@ class JsonValue {
 
   JsonValue(const JsonValue& other) { copy_from(other); }
   JsonValue& operator=(const JsonValue& other) {
-    if (this != &other) copy_from(other);
+    if (this != &other)
+      copy_from(other);
     return *this;
   }
   JsonValue(JsonValue&&) noexcept = default;
@@ -77,9 +78,7 @@ class JsonValue {
   double as_number() const noexcept { return number_; }
   const std::string& as_string() const noexcept { return *string_; }
   const std::vector<JsonValue>& as_array() const noexcept { return *array_; }
-  const std::map<std::string, JsonValue>& as_object() const noexcept {
-    return *object_;
-  }
+  const std::map<std::string, JsonValue>& as_object() const noexcept { return *object_; }
 
   /// Returns a pointer to the value at `key`, or `nullptr` if missing. Must
   /// be called only on an object.

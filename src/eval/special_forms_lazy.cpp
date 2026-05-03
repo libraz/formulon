@@ -125,8 +125,7 @@ Value eval_count_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     // scalar path and collapse to the spill anchor.
     const parser::AstNode* effective = &raw_arg;
     if (raw_arg.kind() == parser::NodeKind::NameRef) {
-      const parser::AstNode& resolved =
-          resolve_name_ast(raw_arg, ctx.name_env());
+      const parser::AstNode& resolved = resolve_name_ast(raw_arg, ctx.name_env());
       if (&resolved != &raw_arg && is_range_shaped_ast(resolved)) {
         effective = &resolved;
       }

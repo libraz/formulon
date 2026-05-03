@@ -59,12 +59,12 @@ void JsonValue::copy_from(const JsonValue& other) {
   number_ = other.number_;
   string_ = other.string_ ? std::make_unique<std::string>(*other.string_) : nullptr;
   array_ = other.array_ ? std::make_unique<std::vector<JsonValue>>(*other.array_) : nullptr;
-  object_ =
-      other.object_ ? std::make_unique<std::map<std::string, JsonValue>>(*other.object_) : nullptr;
+  object_ = other.object_ ? std::make_unique<std::map<std::string, JsonValue>>(*other.object_) : nullptr;
 }
 
 const JsonValue* JsonValue::find(std::string_view key) const {
-  if (kind_ != JsonKind::Object || !object_) return nullptr;
+  if (kind_ != JsonKind::Object || !object_)
+    return nullptr;
   auto it = object_->find(std::string(key));
   return it == object_->end() ? nullptr : &it->second;
 }
@@ -85,16 +85,19 @@ class Parser {
   Expected<JsonValue, JsonError> parse_document() {
     skip_ws();
     auto root = parse_value();
-    if (!root.has_value()) return root;
+    if (!root.has_value())
+      return root;
     skip_ws();
-    if (pos_ != src_.size()) return err("trailing content after root value");
+    if (pos_ != src_.size())
+      return err("trailing content after root value");
     return root;
   }
 
  private:
   Expected<JsonValue, JsonError> parse_value() {
     skip_ws();
-    if (pos_ >= src_.size()) return err("unexpected end of input");
+    if (pos_ >= src_.size())
+      return err("unexpected end of input");
     char c = src_[pos_];
     switch (c) {
       case '{':
@@ -109,7 +112,8 @@ class Parser {
       case 'n':
         return parse_null();
       default:
-        if (c == '-' || (c >= '0' && c <= '9')) return parse_number();
+        if (c == '-' || (c >= '0' && c <= '9'))
+          return parse_number();
         return err("unexpected character");
     }
   }
@@ -124,14 +128,18 @@ class Parser {
     }
     while (true) {
       skip_ws();
-      if (peek() != '"') return err("expected string key");
+      if (peek() != '"')
+        return err("expected string key");
       auto key = parse_string_raw();
-      if (!key.has_value()) return key.error();
+      if (!key.has_value())
+        return key.error();
       skip_ws();
-      if (peek() != ':') return err("expected ':' after key");
+      if (peek() != ':')
+        return err("expected ':' after key");
       advance();
       auto val = parse_value();
-      if (!val.has_value()) return val;
+      if (!val.has_value())
+        return val;
       members.emplace(std::move(key.value()), std::move(val.value()));
       skip_ws();
       char sep = peek();
@@ -157,7 +165,8 @@ class Parser {
     }
     while (true) {
       auto val = parse_value();
-      if (!val.has_value()) return val;
+      if (!val.has_value())
+        return val;
       items.push_back(std::move(val.value()));
       skip_ws();
       char sep = peek();
@@ -175,12 +184,14 @@ class Parser {
 
   Expected<JsonValue, JsonError> parse_string_value() {
     auto s = parse_string_raw();
-    if (!s.has_value()) return s.error();
+    if (!s.has_value())
+      return s.error();
     return JsonValue::make_string(std::move(s.value()));
   }
 
   Expected<std::string, JsonError> parse_string_raw() {
-    if (peek() != '"') return err("expected '\"'");
+    if (peek() != '"')
+      return err("expected '\"'");
     advance();
     std::string out;
     while (pos_ < src_.size()) {
@@ -191,7 +202,8 @@ class Parser {
       }
       if (c == '\\') {
         advance();
-        if (pos_ >= src_.size()) return err("unterminated string escape");
+        if (pos_ >= src_.size())
+          return err("unterminated string escape");
         char esc = src_[pos_];
         advance();
         switch (esc) {
@@ -221,21 +233,23 @@ class Parser {
             break;
           case 'u': {
             auto cp = parse_hex_codepoint();
-            if (!cp.has_value()) return cp.error();
+            if (!cp.has_value())
+              return cp.error();
             std::uint32_t code = cp.value();
             if (code >= 0xD800 && code <= 0xDBFF) {
               // High surrogate -> consume matching low surrogate and combine
               // into an SMP code point.
-              if (pos_ + 1 >= src_.size() || src_[pos_] != '\\' ||
-                  src_[pos_ + 1] != 'u') {
+              if (pos_ + 1 >= src_.size() || src_[pos_] != '\\' || src_[pos_ + 1] != 'u') {
                 return err("expected low surrogate");
               }
               advance();
               advance();
               auto lo = parse_hex_codepoint();
-              if (!lo.has_value()) return lo.error();
+              if (!lo.has_value())
+                return lo.error();
               std::uint32_t low = lo.value();
-              if (low < 0xDC00 || low > 0xDFFF) return err("invalid low surrogate");
+              if (low < 0xDC00 || low > 0xDFFF)
+                return err("invalid low surrogate");
               code = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00);
             }
             append_utf8(out, code);
@@ -253,7 +267,8 @@ class Parser {
   }
 
   Expected<std::uint32_t, JsonError> parse_hex_codepoint() {
-    if (pos_ + 4 > src_.size()) return err("short \\u escape");
+    if (pos_ + 4 > src_.size())
+      return err("short \\u escape");
     std::uint32_t v = 0;
     for (int i = 0; i < 4; ++i) {
       char c = src_[pos_ + static_cast<std::size_t>(i)];
@@ -317,17 +332,18 @@ class Parser {
 
   Expected<JsonValue, JsonError> parse_number() {
     std::size_t start = pos_;
-    if (peek() == '-') advance();
+    if (peek() == '-')
+      advance();
     while (pos_ < src_.size()) {
       char c = src_[pos_];
-      if ((c >= '0' && c <= '9') || c == '.' || c == 'e' || c == 'E' || c == '+' ||
-          c == '-') {
+      if ((c >= '0' && c <= '9') || c == '.' || c == 'e' || c == 'E' || c == '+' || c == '-') {
         advance();
       } else {
         break;
       }
     }
-    if (pos_ == start) return err("empty number");
+    if (pos_ == start)
+      return err("empty number");
     std::string num{src_.substr(start, pos_ - start)};
     char* end = nullptr;
     errno = 0;
@@ -403,7 +419,8 @@ Expected<JsonValue, JsonError> parse_json_file(const std::string& path) {
   char chunk[4096];
   while (true) {
     std::size_t n = std::fread(chunk, 1, sizeof(chunk), fp);
-    if (n == 0) break;
+    if (n == 0)
+      break;
     buffer.append(chunk, n);
   }
   std::fclose(fp);

@@ -406,10 +406,10 @@ AstNode* Parser::parse_lambda_call(const Token& name_tok) {
     // a `[ref]` structured reference inside the body parses there). We
     // only treat it as a param when the closing bracket is followed by a
     // comma; otherwise let the body branch handle it.
-    const bool is_optional_param_slot =
-        (peek_kind() == TokenKind::LBracket) && (peek_kind_at(1) == TokenKind::Ident) &&
-        IsLetNameShape(peek_at(1).lexeme) && !LooksLikeCellRef(peek_at(1).lexeme) &&
-        (peek_kind_at(2) == TokenKind::RBracket) && (peek_kind_at(3) == TokenKind::Comma);
+    const bool is_optional_param_slot = (peek_kind() == TokenKind::LBracket) && (peek_kind_at(1) == TokenKind::Ident) &&
+                                        IsLetNameShape(peek_at(1).lexeme) && !LooksLikeCellRef(peek_at(1).lexeme) &&
+                                        (peek_kind_at(2) == TokenKind::RBracket) &&
+                                        (peek_kind_at(3) == TokenKind::Comma);
     const bool is_param_slot = (peek_kind() == TokenKind::Ident) && IsLetNameShape(peek().lexeme) &&
                                !LooksLikeCellRef(peek().lexeme) && peek_kind_at(1) == TokenKind::Comma;
     if (is_optional_param_slot || is_param_slot) {

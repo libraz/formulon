@@ -33,7 +33,10 @@ TEST(CoerceToNumberTextDate, SlashSeparatedDate) {
 }
 
 TEST(CoerceToNumberTextDate, KanjiDate) {
-  auto r = coerce_to_number(Value::text("2024\xE5\xB9\xB4""1\xE6\x9C\x88""10\xE6\x97\xA5"));
+  auto r =
+      coerce_to_number(Value::text("2024\xE5\xB9\xB4"
+                                   "1\xE6\x9C\x88"
+                                   "10\xE6\x97\xA5"));
   ASSERT_TRUE(r.has_value());
   EXPECT_DOUBLE_EQ(r.value(), 45301.0);
 }
@@ -182,19 +185,25 @@ TEST(CoerceToNumberTextCurrency, LeadingDollar) {
 }
 
 TEST(CoerceToNumberTextCurrency, LeadingEuro) {
-  auto r = coerce_to_number(Value::text("\xE2\x82\xAC""100"));
+  auto r =
+      coerce_to_number(Value::text("\xE2\x82\xAC"
+                                   "100"));
   ASSERT_TRUE(r.has_value());
   EXPECT_DOUBLE_EQ(r.value(), 100.0);
 }
 
 TEST(CoerceToNumberTextCurrency, LeadingYen) {
-  auto r = coerce_to_number(Value::text("\xC2\xA5""1000"));
+  auto r =
+      coerce_to_number(Value::text("\xC2\xA5"
+                                   "1000"));
   ASSERT_TRUE(r.has_value());
   EXPECT_DOUBLE_EQ(r.value(), 1000.0);
 }
 
 TEST(CoerceToNumberTextCurrency, LeadingPoundWithFraction) {
-  auto r = coerce_to_number(Value::text("\xC2\xA3""42.5"));
+  auto r =
+      coerce_to_number(Value::text("\xC2\xA3"
+                                   "42.5"));
   ASSERT_TRUE(r.has_value());
   EXPECT_DOUBLE_EQ(r.value(), 42.5);
 }
@@ -225,7 +234,9 @@ TEST(CoerceToNumberTextCurrency, TrailingYen) {
 
 TEST(CoerceToNumberTextCurrency, LeadingEuroPadded) {
   // Outer ASCII trim strips the spaces; the currency strip handles `€`.
-  auto r = coerce_to_number(Value::text(" \xE2\x82\xAC""100 "));
+  auto r =
+      coerce_to_number(Value::text(" \xE2\x82\xAC"
+                                   "100 "));
   ASSERT_TRUE(r.has_value());
   EXPECT_DOUBLE_EQ(r.value(), 100.0);
 }

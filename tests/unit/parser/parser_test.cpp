@@ -37,37 +37,69 @@ std::string ParseToSexpr(std::string_view src) {
 // Atoms
 // ---------------------------------------------------------------------------
 
-TEST(ParserAtoms, IntegerLiteral) { EXPECT_EQ(ParseToSexpr("=42"), "(num 42)"); }
+TEST(ParserAtoms, IntegerLiteral) {
+  EXPECT_EQ(ParseToSexpr("=42"), "(num 42)");
+}
 
-TEST(ParserAtoms, NegativeInteger) { EXPECT_EQ(ParseToSexpr("=-7"), "(unary - (num 7))"); }
+TEST(ParserAtoms, NegativeInteger) {
+  EXPECT_EQ(ParseToSexpr("=-7"), "(unary - (num 7))");
+}
 
-TEST(ParserAtoms, DecimalLiteral) { EXPECT_EQ(ParseToSexpr("=3.14"), "(num 3.14)"); }
+TEST(ParserAtoms, DecimalLiteral) {
+  EXPECT_EQ(ParseToSexpr("=3.14"), "(num 3.14)");
+}
 
-TEST(ParserAtoms, BoolTrueUpperCase) { EXPECT_EQ(ParseToSexpr("=TRUE"), "(bool true)"); }
+TEST(ParserAtoms, BoolTrueUpperCase) {
+  EXPECT_EQ(ParseToSexpr("=TRUE"), "(bool true)");
+}
 
-TEST(ParserAtoms, BoolTrueLowerCase) { EXPECT_EQ(ParseToSexpr("=true"), "(bool true)"); }
+TEST(ParserAtoms, BoolTrueLowerCase) {
+  EXPECT_EQ(ParseToSexpr("=true"), "(bool true)");
+}
 
-TEST(ParserAtoms, BoolFalse) { EXPECT_EQ(ParseToSexpr("=FALSE"), "(bool false)"); }
+TEST(ParserAtoms, BoolFalse) {
+  EXPECT_EQ(ParseToSexpr("=FALSE"), "(bool false)");
+}
 
-TEST(ParserAtoms, ErrorLiteralDiv0) { EXPECT_EQ(ParseToSexpr("=#DIV/0!"), "(err-lit #DIV/0!)"); }
+TEST(ParserAtoms, ErrorLiteralDiv0) {
+  EXPECT_EQ(ParseToSexpr("=#DIV/0!"), "(err-lit #DIV/0!)");
+}
 
-TEST(ParserAtoms, ErrorLiteralName) { EXPECT_EQ(ParseToSexpr("=#NAME?"), "(err-lit #NAME?)"); }
+TEST(ParserAtoms, ErrorLiteralName) {
+  EXPECT_EQ(ParseToSexpr("=#NAME?"), "(err-lit #NAME?)");
+}
 
-TEST(ParserAtoms, ErrorLiteralNA) { EXPECT_EQ(ParseToSexpr("=#N/A"), "(err-lit #N/A)"); }
+TEST(ParserAtoms, ErrorLiteralNA) {
+  EXPECT_EQ(ParseToSexpr("=#N/A"), "(err-lit #N/A)");
+}
 
-TEST(ParserAtoms, CellRefA1) { EXPECT_EQ(ParseToSexpr("=A1"), "(ref A1)"); }
+TEST(ParserAtoms, CellRefA1) {
+  EXPECT_EQ(ParseToSexpr("=A1"), "(ref A1)");
+}
 
-TEST(ParserAtoms, CellRefAbsoluteBoth) { EXPECT_EQ(ParseToSexpr("=$A$1"), "(ref $A$1)"); }
+TEST(ParserAtoms, CellRefAbsoluteBoth) {
+  EXPECT_EQ(ParseToSexpr("=$A$1"), "(ref $A$1)");
+}
 
-TEST(ParserAtoms, CellRefAbsoluteCol) { EXPECT_EQ(ParseToSexpr("=$A1"), "(ref $A1)"); }
+TEST(ParserAtoms, CellRefAbsoluteCol) {
+  EXPECT_EQ(ParseToSexpr("=$A1"), "(ref $A1)");
+}
 
-TEST(ParserAtoms, CellRefAbsoluteRow) { EXPECT_EQ(ParseToSexpr("=A$1"), "(ref A$1)"); }
+TEST(ParserAtoms, CellRefAbsoluteRow) {
+  EXPECT_EQ(ParseToSexpr("=A$1"), "(ref A$1)");
+}
 
-TEST(ParserAtoms, CellRefMultiLetter) { EXPECT_EQ(ParseToSexpr("=AA10"), "(ref AA10)"); }
+TEST(ParserAtoms, CellRefMultiLetter) {
+  EXPECT_EQ(ParseToSexpr("=AA10"), "(ref AA10)");
+}
 
-TEST(ParserAtoms, CellRefXfd1048576) { EXPECT_EQ(ParseToSexpr("=XFD1048576"), "(ref XFD1048576)"); }
+TEST(ParserAtoms, CellRefXfd1048576) {
+  EXPECT_EQ(ParseToSexpr("=XFD1048576"), "(ref XFD1048576)");
+}
 
-TEST(ParserAtoms, SheetQualifiedRef) { EXPECT_EQ(ParseToSexpr("=Sheet1!A1"), "(ref Sheet1!A1)"); }
+TEST(ParserAtoms, SheetQualifiedRef) {
+  EXPECT_EQ(ParseToSexpr("=Sheet1!A1"), "(ref Sheet1!A1)");
+}
 
 TEST(ParserAtoms, SheetQualifiedRefAbsolute) {
   EXPECT_EQ(ParseToSexpr("=Sheet1!$A$1"), "(ref Sheet1!$A$1)");
@@ -77,9 +109,13 @@ TEST(ParserAtoms, QuotedSheetQualifiedRef) {
   EXPECT_EQ(ParseToSexpr("='Sheet 1'!A1"), "(ref 'Sheet 1'!A1)");
 }
 
-TEST(ParserAtoms, FullColumnRef) { EXPECT_EQ(ParseToSexpr("=A:A"), "(ref A:A)"); }
+TEST(ParserAtoms, FullColumnRef) {
+  EXPECT_EQ(ParseToSexpr("=A:A"), "(ref A:A)");
+}
 
-TEST(ParserAtoms, FullRowRef) { EXPECT_EQ(ParseToSexpr("=1:1"), "(ref 1:1)"); }
+TEST(ParserAtoms, FullRowRef) {
+  EXPECT_EQ(ParseToSexpr("=1:1"), "(ref 1:1)");
+}
 
 TEST(ParserAtoms, SheetQualifiedFullColumn) {
   EXPECT_EQ(ParseToSexpr("=Sheet1!A:A"), "(ref Sheet1!A:A)");
@@ -89,17 +125,25 @@ TEST(ParserAtoms, SheetQualifiedFullRow) {
   EXPECT_EQ(ParseToSexpr("=Sheet1!1:1"), "(ref Sheet1!1:1)");
 }
 
-TEST(ParserAtoms, NameRef) { EXPECT_EQ(ParseToSexpr("=foo"), "(name foo)"); }
+TEST(ParserAtoms, NameRef) {
+  EXPECT_EQ(ParseToSexpr("=foo"), "(name foo)");
+}
 
-TEST(ParserAtoms, NameRefMixedCase) { EXPECT_EQ(ParseToSexpr("=Foo_bar"), "(name Foo_bar)"); }
+TEST(ParserAtoms, NameRefMixedCase) {
+  EXPECT_EQ(ParseToSexpr("=Foo_bar"), "(name Foo_bar)");
+}
 
 // ---------------------------------------------------------------------------
 // String literals
 // ---------------------------------------------------------------------------
 
-TEST(ParserStrings, PlainString) { EXPECT_EQ(ParseToSexpr("=\"hello\""), "(text \"hello\")"); }
+TEST(ParserStrings, PlainString) {
+  EXPECT_EQ(ParseToSexpr("=\"hello\""), "(text \"hello\")");
+}
 
-TEST(ParserStrings, EmptyString) { EXPECT_EQ(ParseToSexpr("=\"\""), "(text \"\")"); }
+TEST(ParserStrings, EmptyString) {
+  EXPECT_EQ(ParseToSexpr("=\"\""), "(text \"\")");
+}
 
 TEST(ParserStrings, EscapedDoubleQuotes) {
   // Excel doubles `"` inside string literals; the tokenizer resolves the
@@ -113,8 +157,7 @@ TEST(ParserStrings, ConcatTwoStrings) {
 }
 
 TEST(ParserStrings, IfWithStringBranches) {
-  EXPECT_EQ(ParseToSexpr("=IF(TRUE,\"yes\",\"no\")"),
-            "(call IF (bool true) (text \"yes\") (text \"no\"))");
+  EXPECT_EQ(ParseToSexpr("=IF(TRUE,\"yes\",\"no\")"), "(call IF (bool true) (text \"yes\") (text \"no\"))");
 }
 
 TEST(ParserStrings, LenOfString) {
@@ -155,7 +198,9 @@ TEST(ParserCalls, ThreeArgSum) {
   EXPECT_EQ(ParseToSexpr("=SUM(1,2,3)"), "(call SUM (num 1) (num 2) (num 3))");
 }
 
-TEST(ParserCalls, ZeroArgNow) { EXPECT_EQ(ParseToSexpr("=NOW()"), "(call NOW)"); }
+TEST(ParserCalls, ZeroArgNow) {
+  EXPECT_EQ(ParseToSexpr("=NOW()"), "(call NOW)");
+}
 
 TEST(ParserCalls, NestedIfWithRange) {
   EXPECT_EQ(ParseToSexpr("=IF(A1>0,SUM(B1:B10),0)"),
@@ -166,7 +211,9 @@ TEST(ParserCalls, FunctionNameCasePreserved) {
   EXPECT_EQ(ParseToSexpr("=Sum(1)"), "(call Sum (num 1))");
 }
 
-TEST(ParserCalls, OneArg) { EXPECT_EQ(ParseToSexpr("=ABS(-1)"), "(call ABS (unary - (num 1)))"); }
+TEST(ParserCalls, OneArg) {
+  EXPECT_EQ(ParseToSexpr("=ABS(-1)"), "(call ABS (unary - (num 1)))");
+}
 
 // ---------------------------------------------------------------------------
 // CellRef-to-call disambiguation
@@ -236,8 +283,7 @@ TEST(ParserRange, RangeInsideSum) {
 // ---------------------------------------------------------------------------
 
 TEST(ParserIntersect, BetweenTwoRanges) {
-  EXPECT_EQ(ParseToSexpr("=A1:C3 B2:D4"),
-            "(intersect (range (ref A1) (ref C3)) (range (ref B2) (ref D4)))");
+  EXPECT_EQ(ParseToSexpr("=A1:C3 B2:D4"), "(intersect (range (ref A1) (ref C3)) (range (ref B2) (ref D4)))");
 }
 
 TEST(ParserIntersect, InsideAreasCall) {
@@ -261,17 +307,25 @@ TEST(ParserIntersect, FunctionCallNotAffected) {
 // Unary operators
 // ---------------------------------------------------------------------------
 
-TEST(ParserUnary, UnaryMinusInteger) { EXPECT_EQ(ParseToSexpr("=-1"), "(unary - (num 1))"); }
+TEST(ParserUnary, UnaryMinusInteger) {
+  EXPECT_EQ(ParseToSexpr("=-1"), "(unary - (num 1))");
+}
 
-TEST(ParserUnary, UnaryPlusInteger) { EXPECT_EQ(ParseToSexpr("=+1"), "(unary + (num 1))"); }
+TEST(ParserUnary, UnaryPlusInteger) {
+  EXPECT_EQ(ParseToSexpr("=+1"), "(unary + (num 1))");
+}
 
-TEST(ParserUnary, UnaryMinusOnRef) { EXPECT_EQ(ParseToSexpr("=-A1"), "(unary - (ref A1))"); }
+TEST(ParserUnary, UnaryMinusOnRef) {
+  EXPECT_EQ(ParseToSexpr("=-A1"), "(unary - (ref A1))");
+}
 
 TEST(ParserUnary, DoubleNegation) {
   EXPECT_EQ(ParseToSexpr("=--1"), "(unary - (unary - (num 1)))");
 }
 
-TEST(ParserUnary, PostfixPercentOnRef) { EXPECT_EQ(ParseToSexpr("=A1%"), "(unary % (ref A1))"); }
+TEST(ParserUnary, PostfixPercentOnRef) {
+  EXPECT_EQ(ParseToSexpr("=A1%"), "(unary % (ref A1))");
+}
 
 TEST(ParserUnary, PercentBindsTighterThanStar) {
   // `2*A1%` should parse as `2*(A1%)` (postfix `%` is tighter than `*`).
@@ -301,8 +355,7 @@ TEST(ParserBinary, PowIsRightAssoc) {
 }
 
 TEST(ParserBinary, ComparisonChainsLeftAssoc) {
-  EXPECT_EQ(ParseToSexpr("=1<2=TRUE"),
-            "(binary = (binary < (num 1) (num 2)) (bool true))");
+  EXPECT_EQ(ParseToSexpr("=1<2=TRUE"), "(binary = (binary < (num 1) (num 2)) (bool true))");
 }
 
 TEST(ParserBinary, ConcatRefs) {
@@ -321,8 +374,7 @@ TEST(ParserBinary, AllSixComparisons) {
 TEST(ParserBinary, CompareTighterThanConcat) {
   // `&` (bp 20) binds tighter than `=` (bp 10): so `A1&B1=C1` parses as
   // `(A1&B1)=C1`.
-  EXPECT_EQ(ParseToSexpr("=A1&B1=C1"),
-            "(binary = (binary & (ref A1) (ref B1)) (ref C1))");
+  EXPECT_EQ(ParseToSexpr("=A1&B1=C1"), "(binary = (binary & (ref A1) (ref B1)) (ref C1))");
 }
 
 TEST(ParserBinary, RangeBindsTighterThanArith) {
@@ -333,7 +385,9 @@ TEST(ParserBinary, RangeBindsTighterThanArith) {
 // Implicit intersection
 // ---------------------------------------------------------------------------
 
-TEST(ParserAt, AtPrefixOnRef) { EXPECT_EQ(ParseToSexpr("=@A1"), "(at (ref A1))"); }
+TEST(ParserAt, AtPrefixOnRef) {
+  EXPECT_EQ(ParseToSexpr("=@A1"), "(at (ref A1))");
+}
 
 TEST(ParserAt, AtConsumesRestOfExpression) {
   // `@` has the lowest precedence, so it wraps the whole RHS expression.
@@ -403,8 +457,7 @@ TEST(ParserComposite, RoundExpression) {
 }
 
 TEST(ParserComposite, NestedFunctions) {
-  EXPECT_EQ(ParseToSexpr("=MAX(MIN(A1,B1),C1)"),
-            "(call MAX (call MIN (ref A1) (ref B1)) (ref C1))");
+  EXPECT_EQ(ParseToSexpr("=MAX(MIN(A1,B1),C1)"), "(call MAX (call MIN (ref A1) (ref B1)) (ref C1))");
 }
 
 }  // namespace

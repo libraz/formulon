@@ -207,8 +207,8 @@ std::vector<std::uint8_t> BuildWorkbookBin(const Workbook& wb) {
     //   strRelID   : XLNullableWideString
     //   strName    : XLWideString
     std::vector<std::uint8_t> p;
-    emit_u32(p, 0U);                                      // hsState (visible)
-    emit_u32(p, static_cast<std::uint32_t>(i + 1U));       // iTabID
+    emit_u32(p, 0U);                                  // hsState (visible)
+    emit_u32(p, static_cast<std::uint32_t>(i + 1U));  // iTabID
     const std::string rid = std::string("rId") + std::to_string(i + 1U);
     emit_xlnullablewidestring(p, std::optional<std::string_view>{rid});
     emit_xlwidestring(p, wb.sheet(i).name());
@@ -324,8 +324,7 @@ Expected<std::vector<std::uint8_t>, Error> write_xlsb(const Workbook& workbook) 
 
   ZipWriterGuard writer;
   if (!writer.init()) {
-    return make_error(FormulonErrorCode::kIoWriteFailed, "miniz mz_zip_writer_init_heap failed",
-                      "context=write_xlsb");
+    return make_error(FormulonErrorCode::kIoWriteFailed, "miniz mz_zip_writer_init_heap failed", "context=write_xlsb");
   }
 
   // 1. [Content_Types].xml
@@ -337,9 +336,7 @@ Expected<std::vector<std::uint8_t>, Error> write_xlsb(const Workbook& workbook) 
     return r.error();
   }
   // 3. xl/_rels/workbook.bin.rels
-  if (auto r =
-          AddPart(writer.get(), "xl/_rels/workbook.bin.rels", BuildWorkbookRels(sheet_count, emit_sst_part));
-      !r) {
+  if (auto r = AddPart(writer.get(), "xl/_rels/workbook.bin.rels", BuildWorkbookRels(sheet_count, emit_sst_part)); !r) {
     return r.error();
   }
   // 4. xl/workbook.bin

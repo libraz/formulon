@@ -12,10 +12,10 @@
 #include <string>
 #include <string_view>
 
-#include "gtest/gtest.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"

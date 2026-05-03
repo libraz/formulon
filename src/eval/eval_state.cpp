@@ -33,8 +33,7 @@ void EvalState::pop_cell(const Sheet* sheet, std::uint32_t row, std::uint32_t co
   stack_.pop_back();
 }
 
-const Value* EvalState::lookup_memo(const Sheet* sheet, std::uint32_t row,
-                                    std::uint32_t col) const noexcept {
+const Value* EvalState::lookup_memo(const Sheet* sheet, std::uint32_t row, std::uint32_t col) const noexcept {
   const auto found = memo_.find(CellKey{sheet, row, col});
   if (found == memo_.end()) {
     return nullptr;
@@ -42,8 +41,7 @@ const Value* EvalState::lookup_memo(const Sheet* sheet, std::uint32_t row,
   return &found->second;
 }
 
-void EvalState::memoize(const Sheet* sheet, std::uint32_t row, std::uint32_t col,
-                        Value value) {
+void EvalState::memoize(const Sheet* sheet, std::uint32_t row, std::uint32_t col, Value value) {
   // `unordered_map::operator[]` requires a default-constructible mapped
   // type; `Value`'s default ctor is private. `insert_or_assign` constructs
   // the pair from the supplied Value directly. `Value` is trivially

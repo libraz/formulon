@@ -77,8 +77,7 @@ std::string_view strip_currency(std::string_view s) noexcept {
 // when no Euro suffix is present.
 std::string_view strip_trailing_euro(std::string_view s) noexcept {
   if (s.size() >= 3 && static_cast<unsigned char>(s[s.size() - 3]) == 0xE2u &&
-      static_cast<unsigned char>(s[s.size() - 2]) == 0x82u &&
-      static_cast<unsigned char>(s[s.size() - 1]) == 0xACu) {
+      static_cast<unsigned char>(s[s.size() - 2]) == 0x82u && static_cast<unsigned char>(s[s.size() - 1]) == 0xACu) {
     return s.substr(0, s.size() - 3);
   }
   return s;
@@ -277,9 +276,8 @@ std::string normalize_locale_numeric(std::string_view raw, bool* paren_negated) 
     if (b0 >= 0xE0u && b0 < 0xF0u && i + 2 < raw.size()) {
       const unsigned char b1 = static_cast<unsigned char>(raw[i + 1]);
       const unsigned char b2 = static_cast<unsigned char>(raw[i + 2]);
-      const std::uint32_t cp =
-          (static_cast<std::uint32_t>(b0 & 0x0Fu) << 12) | (static_cast<std::uint32_t>(b1 & 0x3Fu) << 6) |
-          static_cast<std::uint32_t>(b2 & 0x3Fu);
+      const std::uint32_t cp = (static_cast<std::uint32_t>(b0 & 0x0Fu) << 12) |
+                               (static_cast<std::uint32_t>(b1 & 0x3Fu) << 6) | static_cast<std::uint32_t>(b2 & 0x3Fu);
       char ascii = '\0';
       if (cp >= 0xFF10u && cp <= 0xFF19u) {
         ascii = static_cast<char>('0' + (cp - 0xFF10u));

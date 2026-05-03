@@ -77,15 +77,13 @@ class EvalState {
   /// `nullptr` when no result has been recorded for that address yet. The
   /// pointer is valid until the next `memoize()` call (which may rehash
   /// the map).
-  const Value* lookup_memo(const Sheet* sheet, std::uint32_t row,
-                           std::uint32_t col) const noexcept;
+  const Value* lookup_memo(const Sheet* sheet, std::uint32_t row, std::uint32_t col) const noexcept;
 
   /// Records `value` as the memoised result for `(sheet, row, col)`.
   /// Overwrites any prior entry for the same key; formula cells are
   /// idempotent within a single `evaluate()` invocation so overwriting is
   /// harmless.
-  void memoize(const Sheet* sheet, std::uint32_t row, std::uint32_t col,
-               Value value);
+  void memoize(const Sheet* sheet, std::uint32_t row, std::uint32_t col, Value value);
 
   /// Current nesting depth of the in-progress stack. Useful for tests and
   /// as a coarse guard against runaway recursion.

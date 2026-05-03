@@ -163,8 +163,7 @@ int parse_cond_directive(std::string_view body, CondOp* out_op, double* out_valu
   }
   char* endp = nullptr;
   const double v = std::strtod(buf.c_str(), &endp);
-  if (endp == nullptr || endp == buf.c_str() ||
-      static_cast<std::size_t>(endp - buf.c_str()) != buf.size()) {
+  if (endp == nullptr || endp == buf.c_str() || static_cast<std::size_t>(endp - buf.c_str()) != buf.size()) {
     return -1;
   }
   *out_op = op;
@@ -1000,7 +999,8 @@ void classify(Section& section, std::string_view fmt) noexcept {
         ++den_end;
       }
       // Numerator and denominator both need to be at least one digit.
-      const bool has_num = num_end >= num_begin && is_digit_tok2(section.tokens[static_cast<std::size_t>(num_begin)].kind);
+      const bool has_num =
+          num_end >= num_begin && is_digit_tok2(section.tokens[static_cast<std::size_t>(num_begin)].kind);
       const bool has_den = den_end > den_begin;
       if (has_num && has_den) {
         // Optional integer group: a literal-space immediately precedes the

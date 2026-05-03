@@ -106,8 +106,7 @@ class NameEnv {
   /// via `lookup_ast` and re-dispatch on the original RangeOp / ArrayLiteral
   /// / OFFSET-call shape. Pass `nullptr` for `expr` to opt back into the
   /// Value-only behaviour (equivalent to the 3-argument overload).
-  NameEnv extend(std::string_view name, Value value,
-                 const parser::AstNode* expr, Arena& arena) const noexcept {
+  NameEnv extend(std::string_view name, Value value, const parser::AstNode* expr, Arena& arena) const noexcept {
     auto* frame = arena.create<Binding>();
     if (frame == nullptr) {
       return *this;

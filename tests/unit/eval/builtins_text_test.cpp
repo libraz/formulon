@@ -146,7 +146,9 @@ TEST(TextTrim, MultiBytePreserved) {
 TEST(TextTrim, StripsIdeographicSpace) {
   // Mac Excel 365 ja-JP: TRIM("　a　") -> "a". U+3000 (UTF-8 E3 80 80)
   // is treated as a trimmable whitespace at edges.
-  const Value v = EvalSource("=TRIM(\"\xE3\x80\x80""a\xE3\x80\x80\")");
+  const Value v = EvalSource(
+      "=TRIM(\"\xE3\x80\x80"
+      "a\xE3\x80\x80\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "a");
 }
@@ -155,7 +157,9 @@ TEST(TextTrim, CollapsesIdeographicWithAscii) {
   // Mixed ideographic + ASCII spaces between non-space chars collapse to a
   // single ASCII space, mirroring Excel's behaviour of normalising any run
   // of trimmable spaces to one U+0020.
-  const Value v = EvalSource("=TRIM(\"a\xE3\x80\x80 \xE3\x80\x80""b\")");
+  const Value v = EvalSource(
+      "=TRIM(\"a\xE3\x80\x80 \xE3\x80\x80"
+      "b\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "a b");
 }

@@ -64,29 +64,28 @@ TEST_P(RecordFramingRoundTrip, WriterReaderSymmetry) {
   EXPECT_EQ(bytes.size() - tc.payload.size(), tc.expected_header_bytes);
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    XlsbRecordWriter, RecordFramingRoundTrip,
-    ::testing::Values(
-        // 1-byte type, 1-byte size, empty payload.
-        FramingCase{5U, {}, 2U},
-        // 1-byte type, 1-byte size, small payload.
-        FramingCase{1U, {0xAA, 0xBB, 0xCC, 0xDD, 0xEE}, 2U},
-        // 2-byte type (>= 0x80), 1-byte size.
-        FramingCase{130U, {}, 3U},
-        // 2-byte type (== max 14-bit), 1-byte size.
-        FramingCase{16383U, {}, 3U},
-        // 1-byte type, 2-byte size (>= 0x80).
-        FramingCase{1U, std::vector<std::uint8_t>(128, 0xCC), 3U},
-        // 1-byte type, 3-byte size (>= 0x4000).
-        FramingCase{1U, std::vector<std::uint8_t>(0x4000, 0xDE), 4U},
-        // 1-byte type, 4-byte size (>= 0x200000).
-        FramingCase{1U, std::vector<std::uint8_t>(0x200000, 0xEE), 5U},
-        // 2-byte type + 3-byte size combination.
-        FramingCase{130U, std::vector<std::uint8_t>(0x4000, 0xAB), 5U},
-        // BrtCellRk (type=2): 4-byte payload, classic small record.
-        FramingCase{2U, {0x42, 0x42, 0x42, 0x42}, 2U},
-        // BrtBundleSh (type=156): 2-byte type, real-world record.
-        FramingCase{156U, {0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}, 3U}));
+INSTANTIATE_TEST_SUITE_P(XlsbRecordWriter, RecordFramingRoundTrip,
+                         ::testing::Values(
+                             // 1-byte type, 1-byte size, empty payload.
+                             FramingCase{5U, {}, 2U},
+                             // 1-byte type, 1-byte size, small payload.
+                             FramingCase{1U, {0xAA, 0xBB, 0xCC, 0xDD, 0xEE}, 2U},
+                             // 2-byte type (>= 0x80), 1-byte size.
+                             FramingCase{130U, {}, 3U},
+                             // 2-byte type (== max 14-bit), 1-byte size.
+                             FramingCase{16383U, {}, 3U},
+                             // 1-byte type, 2-byte size (>= 0x80).
+                             FramingCase{1U, std::vector<std::uint8_t>(128, 0xCC), 3U},
+                             // 1-byte type, 3-byte size (>= 0x4000).
+                             FramingCase{1U, std::vector<std::uint8_t>(0x4000, 0xDE), 4U},
+                             // 1-byte type, 4-byte size (>= 0x200000).
+                             FramingCase{1U, std::vector<std::uint8_t>(0x200000, 0xEE), 5U},
+                             // 2-byte type + 3-byte size combination.
+                             FramingCase{130U, std::vector<std::uint8_t>(0x4000, 0xAB), 5U},
+                             // BrtCellRk (type=2): 4-byte payload, classic small record.
+                             FramingCase{2U, {0x42, 0x42, 0x42, 0x42}, 2U},
+                             // BrtBundleSh (type=156): 2-byte type, real-world record.
+                             FramingCase{156U, {0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}, 3U}));
 
 // ---------------------------------------------------------------------------
 // XLWideString: ASCII, Unicode BMP, and surrogate-pair round-trip.
@@ -220,21 +219,20 @@ TEST_P(RkRoundTrip, ValueRoundTripsExactlyWhenPredicateSaysSo) {
   }
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    XlsbRecordWriter, RkRoundTrip,
-    ::testing::Values(RkCase{0.0, true},                                      // exact integer zero
-                      RkCase{1.0, true},                                      // small positive integer
-                      RkCase{-1.0, true},                                     // small negative integer
-                      RkCase{42.0, true},                                     // mid-range integer
-                      RkCase{static_cast<double>((1 << 29) - 1), true},        // upper bound
-                      RkCase{-static_cast<double>(1 << 29), true},             // lower bound
-                      RkCase{0.5, true},                                      // IEEE-form: low 34 bits zero
-                      RkCase{123.45, true},                                   // x100 form
-                      RkCase{-123.45, true},                                  // negative x100 form
-                      // Slightly outside x100 representable range: pick a
-                      // double whose lower 34 bits are non-zero so neither
-                      // integer nor IEEE-exact form applies.
-                      RkCase{1.0 / 3.0, false}));
+INSTANTIATE_TEST_SUITE_P(XlsbRecordWriter, RkRoundTrip,
+                         ::testing::Values(RkCase{0.0, true},                                 // exact integer zero
+                                           RkCase{1.0, true},                                 // small positive integer
+                                           RkCase{-1.0, true},                                // small negative integer
+                                           RkCase{42.0, true},                                // mid-range integer
+                                           RkCase{static_cast<double>((1 << 29) - 1), true},  // upper bound
+                                           RkCase{-static_cast<double>(1 << 29), true},       // lower bound
+                                           RkCase{0.5, true},      // IEEE-form: low 34 bits zero
+                                           RkCase{123.45, true},   // x100 form
+                                           RkCase{-123.45, true},  // negative x100 form
+                                           // Slightly outside x100 representable range: pick a
+                                           // double whose lower 34 bits are non-zero so neither
+                                           // integer nor IEEE-exact form applies.
+                                           RkCase{1.0 / 3.0, false}));
 
 TEST(XlsbRecordWriter, RkNumberNegativeZeroPicksIeeeForm) {
   // -0.0 must NOT take the integer encoding (which loses the sign).

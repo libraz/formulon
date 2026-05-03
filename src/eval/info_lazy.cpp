@@ -225,17 +225,14 @@ Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const Fun
     }
     if (!in_string) {
       const char prev = stripped.empty() ? '\0' : stripped.back();
-      const bool at_token_start =
-          prev == '\0' || !((prev >= 'A' && prev <= 'Z') || (prev >= 'a' && prev <= 'z') ||
-                             (prev >= '0' && prev <= '9') || prev == '_' || prev == '.');
+      const bool at_token_start = prev == '\0' || !((prev >= 'A' && prev <= 'Z') || (prev >= 'a' && prev <= 'z') ||
+                                                    (prev >= '0' && prev <= '9') || prev == '_' || prev == '.');
       if (at_token_start) {
-        if (i + kXlws.size() <= src.size() &&
-            strings::case_insensitive_eq(src.substr(i, kXlws.size()), kXlws)) {
+        if (i + kXlws.size() <= src.size() && strings::case_insensitive_eq(src.substr(i, kXlws.size()), kXlws)) {
           i += kXlws.size();
           continue;
         }
-        if (i + kXlfn.size() <= src.size() &&
-            strings::case_insensitive_eq(src.substr(i, kXlfn.size()), kXlfn)) {
+        if (i + kXlfn.size() <= src.size() && strings::case_insensitive_eq(src.substr(i, kXlfn.size()), kXlfn)) {
           i += kXlfn.size();
           continue;
         }

@@ -124,8 +124,7 @@ TEST(BuiltinsSortby, TwoKeysTiebreaker) {
   const EvalContext ctx(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
-  const Value v =
-      EvalUnder("=SORTBY(A1:A4, B1:B4, 1, C1:C4, 1)", &parse_arena, &eval_arena, ctx);
+  const Value v = EvalUnder("=SORTBY(A1:A4, B1:B4, 1, C1:C4, 1)", &parse_arena, &eval_arena, ctx);
   ASSERT_TRUE(v.is_array());
   ASSERT_EQ(v.as_array_rows(), 4U);
   EXPECT_EQ(v.as_array_cells()[0].as_text(), "y");
@@ -156,8 +155,7 @@ TEST(BuiltinsSortby, TwoKeysWithMixedOrders) {
   const EvalContext ctx(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
-  const Value v =
-      EvalUnder("=SORTBY(A1:A4, B1:B4, 1, C1:C4, -1)", &parse_arena, &eval_arena, ctx);
+  const Value v = EvalUnder("=SORTBY(A1:A4, B1:B4, 1, C1:C4, -1)", &parse_arena, &eval_arena, ctx);
   ASSERT_TRUE(v.is_array());
   ASSERT_EQ(v.as_array_rows(), 4U);
   EXPECT_EQ(v.as_array_cells()[0].as_text(), "x");
@@ -272,8 +270,7 @@ TEST(BuiltinsSortby, SecondKeyAxisMismatchReturnsValue) {
   const EvalContext ctx(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
-  const Value v =
-      EvalUnder("=SORTBY(A1:A4, B1:B4, 1, A6:D6)", &parse_arena, &eval_arena, ctx);
+  const Value v = EvalUnder("=SORTBY(A1:A4, B1:B4, 1, A6:D6)", &parse_arena, &eval_arena, ctx);
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }

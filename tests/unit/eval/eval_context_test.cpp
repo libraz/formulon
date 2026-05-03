@@ -10,9 +10,9 @@
 #include <cstdint>
 #include <string>
 
-#include "gtest/gtest.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "gtest/gtest.h"
 #include "parser/reference.h"
 #include "sheet.h"
 #include "utils/arena.h"
@@ -144,8 +144,7 @@ TEST(EvalContextResolve, CurrentSheetAccessor_ReflectsBinding) {
 
 // Resolves `(row, col)` on `sheet` with the supplied recursive `state`,
 // using a fresh-per-call arena to keep text payloads alive for the caller.
-Value ResolveWithState(const Sheet& sheet, EvalState& state,
-                       std::uint32_t row, std::uint32_t col) {
+Value ResolveWithState(const Sheet& sheet, EvalState& state, std::uint32_t row, std::uint32_t col) {
   static thread_local Arena arena;
   arena.reset();
   const eval::EvalContext ctx(sheet, state);
@@ -292,8 +291,7 @@ TEST(EvalContextRecursive, NestedFormulaPreservesStackBalance) {
 
 // Helper: invoke `expand_range` on a literal-cell-only sheet (no EvalState
 // needed). Uses a fresh-per-call arena to keep text payloads readable.
-Expected<std::vector<Value>, ErrorCode> ExpandRange(const Sheet& sheet,
-                                                    const parser::Reference& lhs,
+Expected<std::vector<Value>, ErrorCode> ExpandRange(const Sheet& sheet, const parser::Reference& lhs,
                                                     const parser::Reference& rhs) {
   static thread_local Arena arena;
   arena.reset();
@@ -305,8 +303,7 @@ TEST(EvalContextExpandRange, UnboundContext_ReturnsName) {
   const eval::EvalContext ctx;
   static thread_local Arena arena;
   arena.reset();
-  auto result = ctx.expand_range(MakeLocalRef(0, 0), MakeLocalRef(2, 0), arena,
-                                 eval::default_registry());
+  auto result = ctx.expand_range(MakeLocalRef(0, 0), MakeLocalRef(2, 0), arena, eval::default_registry());
   ASSERT_FALSE(result);
   EXPECT_EQ(result.error(), ErrorCode::Name);
 }
@@ -462,8 +459,7 @@ TEST(EvalContextExpandRange, FormulaCellInRange_IsEvaluated) {
   static thread_local Arena arena;
   arena.reset();
   const eval::EvalContext ctx(sheet, state);
-  auto result = ctx.expand_range(MakeLocalRef(0, 0), MakeLocalRef(2, 0), arena,
-                                 eval::default_registry());
+  auto result = ctx.expand_range(MakeLocalRef(0, 0), MakeLocalRef(2, 0), arena, eval::default_registry());
   ASSERT_TRUE(result);
   ASSERT_EQ(result.value().size(), 3u);
   EXPECT_EQ(result.value()[0].as_number(), 10.0);

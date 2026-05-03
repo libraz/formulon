@@ -10,7 +10,6 @@
 // inspect output ordering.
 
 #include <gtest/gtest.h>
-
 #include <unistd.h>
 
 #include <cstdint>
@@ -246,8 +245,7 @@ TEST(FormulonCli, EvalJsonOutputShape) {
   CliRun r = run_cli({"eval", "--json", "=SUM(1,2,3)"});
   EXPECT_EQ(r.exit_code, 0);
   // Compact form: `{"kind":"number","value":6}`.
-  EXPECT_NE(r.stdout_text.find("\"kind\":\"number\""), std::string::npos)
-      << "stdout=" << r.stdout_text;
+  EXPECT_NE(r.stdout_text.find("\"kind\":\"number\""), std::string::npos) << "stdout=" << r.stdout_text;
   EXPECT_NE(r.stdout_text.find("\"value\":6"), std::string::npos) << "stdout=" << r.stdout_text;
 }
 
@@ -346,10 +344,8 @@ TEST(FormulonCli, DumpFormulasListsFormulaCells) {
   CliRun r = run_cli({"dump", "--formulas", in});
   EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
   // B1 = `=A1+1` is the only formula; A1 is a literal.
-  EXPECT_NE(r.stdout_text.find("Sheet1!B1"), std::string::npos)
-      << "stdout=" << r.stdout_text;
-  EXPECT_EQ(r.stdout_text.find("Sheet1!A1"), std::string::npos)
-      << "literal A1 must not appear in --formulas dump";
+  EXPECT_NE(r.stdout_text.find("Sheet1!B1"), std::string::npos) << "stdout=" << r.stdout_text;
+  EXPECT_EQ(r.stdout_text.find("Sheet1!A1"), std::string::npos) << "literal A1 must not appear in --formulas dump";
 }
 
 TEST(FormulonCli, DumpMetadataPrintsSectionHeaders) {

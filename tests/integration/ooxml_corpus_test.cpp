@@ -68,7 +68,9 @@ io::ByteSpan SpanOf(const std::vector<std::uint8_t>& bytes) {
 }
 
 /// `save()` wrapper that ASSERTs success and returns the bytes.
-Expected<std::vector<std::uint8_t>, Error> SaveBytes(const Workbook& wb) { return wb.save(); }
+Expected<std::vector<std::uint8_t>, Error> SaveBytes(const Workbook& wb) {
+  return wb.save();
+}
 
 /// Builds a synthetic `.xlsx` archive in memory by gluing a list of
 /// `(path, body)` pairs through miniz. Used for books 18 / 19 / 20
@@ -143,8 +145,8 @@ bool defined_names_equal(const Workbook& a, const Workbook& b) {
   for (std::size_t i = 0; i < a.defined_names().size(); ++i) {
     const io::DefinedName& x = a.defined_names()[i];
     const io::DefinedName& y = b.defined_names()[i];
-    if (x.name != y.name || x.formula != y.formula || x.local_sheet_id != y.local_sheet_id ||
-        x.hidden != y.hidden || x.comment != y.comment) {
+    if (x.name != y.name || x.formula != y.formula || x.local_sheet_id != y.local_sheet_id || x.hidden != y.hidden ||
+        x.comment != y.comment) {
       return false;
     }
   }
@@ -634,8 +636,7 @@ Expected<std::vector<std::uint8_t>, Error> BuildNestedFunctionCalls() {
   RETURN_IF_ERROR(wb.set_cell_value(0U, 0U, 0U, Value::number(5.0)));  // A1
   RETURN_IF_ERROR(wb.set_cell_value(0U, 1U, 0U, Value::number(3.0)));  // A2
   RETURN_IF_ERROR(wb.set_cell_value(0U, 2U, 0U, Value::number(8.0)));  // A3
-  RETURN_IF_ERROR(wb.set_cell_formula(0U, 0U, 1U,
-                                      "=IF(AND(OR(A1>0,A2<0),A3=8),IF(A1+A2>A3,A1,A2),0)"));
+  RETURN_IF_ERROR(wb.set_cell_formula(0U, 0U, 1U, "=IF(AND(OR(A1>0,A2<0),A3=8),IF(A1+A2>A3,A1,A2),0)"));
   return SaveBytes(wb);
 }
 
@@ -714,9 +715,9 @@ Expected<std::vector<std::uint8_t>, Error> BuildKitchenSink() {
   wb.set_tables(std::move(tables));
 
   // Mixed formulas + unicode text.
-  RETURN_IF_ERROR(wb.set_cell_value(0U, 0U, 0U, Value::number(3.14)));            // A1
-  RETURN_IF_ERROR(wb.set_cell_formula(0U, 1U, 0U, "=A1*2"));                      // A2
-  RETURN_IF_ERROR(wb.set_cell_value(0U, 0U, 1U, Value::text("\xE3\x81\x82")));    // B1: "あ"
+  RETURN_IF_ERROR(wb.set_cell_value(0U, 0U, 0U, Value::number(3.14)));                    // A1
+  RETURN_IF_ERROR(wb.set_cell_formula(0U, 1U, 0U, "=A1*2"));                              // A2
+  RETURN_IF_ERROR(wb.set_cell_value(0U, 0U, 1U, Value::text("\xE3\x81\x82")));            // B1: "あ"
   RETURN_IF_ERROR(wb.set_cell_value(1U, 0U, 0U, Value::text("Hello \xF0\x9F\x91\x8B")));  // emoji wave
 
   // Iterative circular pair on Sheet2 (rows 5-6).
@@ -1090,8 +1091,7 @@ TEST_P(RoundTripParity, TwoCyclePipeline) {
 
   // (4) write A back to bytes.
   auto bytes_or = first.workbook.save();
-  ASSERT_TRUE(static_cast<bool>(bytes_or))
-      << "first save failed for '" << book.id << "': " << bytes_or.error().message;
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << "first save failed for '" << book.id << "': " << bytes_or.error().message;
 
   // (5) read again into workbook C.
   auto second_or = io::read_ooxml(SpanOf(bytes_or.value()));

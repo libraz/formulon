@@ -171,7 +171,7 @@ TEST(SaxXmlReader, InlineStringWithRPhSkipsKana) {
   ASSERT_TRUE(static_cast<bool>(scan_sheet_data(SpanOf(xml), MakeCallbacks(&cap))));
   ASSERT_EQ(cap.cells.size(), 1U);
   EXPECT_TRUE(cap.cells[0].is_inline_string);
-  EXPECT_EQ(cap.cells[0].value, "\xE5\xB1\xB1\xE7\x94\xB0");  // 山田
+  EXPECT_EQ(cap.cells[0].value, "\xE5\xB1\xB1\xE7\x94\xB0");                 // 山田
   EXPECT_EQ(cap.cells[0].phonetic, "\xE3\x82\x84\xE3\x81\xBE\xE3\x81\xA0");  // やまだ
 }
 

@@ -42,8 +42,8 @@ bool returns_single_reference(std::string_view name) noexcept {
   // CHOOSE / IF / IFS / SWITCH propagate references when both branches
   // are references; we treat them as 1 area regardless because the oracle
   // cases that exercise this all resolve to a single area in Excel.
-  return name == "INDIRECT" || name == "OFFSET" || name == "CHOOSE" || name == "IF" ||
-         name == "IFS" || name == "SWITCH" || name == "INDEX" || name == "XLOOKUP";
+  return name == "INDIRECT" || name == "OFFSET" || name == "CHOOSE" || name == "IF" || name == "IFS" ||
+         name == "SWITCH" || name == "INDEX" || name == "XLOOKUP";
 }
 
 // Recursively sums the leaf rectangles in a reference-shaped AST subtree.

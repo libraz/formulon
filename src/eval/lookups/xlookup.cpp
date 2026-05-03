@@ -456,8 +456,7 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (off == SIZE_MAX) {
     if (arity >= 4U) {
       const parser::AstNode& if_arg = call.as_call_arg(3);
-      const bool is_empty_slot =
-          if_arg.kind() == parser::NodeKind::Literal && if_arg.as_literal().is_blank();
+      const bool is_empty_slot = if_arg.kind() == parser::NodeKind::Literal && if_arg.as_literal().is_blank();
       if (!is_empty_slot) {
         return eval_node(if_arg, arena, registry, ctx);
       }

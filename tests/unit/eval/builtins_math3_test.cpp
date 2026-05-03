@@ -602,9 +602,8 @@ TEST(BuiltinsMath3Quotient, OneArgIsArityViolation) {
 
 TEST(BuiltinsMath3Registration, AllNamesRegistered) {
   const FunctionRegistry& reg = default_registry();
-  for (const char* name : {"SINH",  "COSH",  "TANH",  "ASINH", "ACOSH",    "ATANH", "SEC",
-                           "CSC",   "COT",   "ACOT",  "SECH",  "CSCH",     "COTH",  "ACOTH",
-                           "EVEN",  "ODD",   "QUOTIENT"}) {
+  for (const char* name : {"SINH", "COSH", "TANH", "ASINH", "ACOSH", "ATANH", "SEC", "CSC", "COT", "ACOT", "SECH",
+                           "CSCH", "COTH", "ACOTH", "EVEN", "ODD", "QUOTIENT"}) {
     EXPECT_NE(reg.lookup(name), nullptr) << "not registered: " << name;
   }
 }

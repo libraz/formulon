@@ -91,13 +91,9 @@ Value evaluate_cell(Workbook& workbook, Sheet& sheet, const Cell& cell_data, std
   if (iterative_mode) {
     // Workbook-bound, state-less context: formula refs short-circuit to
     // their cached values, which is what the solver iterates against.
-    ctx = EvalContext::workbook_only(workbook, sheet)
-              .with_mutable_sheet(sheet)
-              .with_formula_cell(row, col);
+    ctx = EvalContext::workbook_only(workbook, sheet).with_mutable_sheet(sheet).with_formula_cell(row, col);
   } else {
-    ctx = EvalContext(workbook, sheet, state)
-              .with_mutable_sheet(sheet)
-              .with_formula_cell(row, col);
+    ctx = EvalContext(workbook, sheet, state).with_mutable_sheet(sheet).with_formula_cell(row, col);
   }
 
   Value result = evaluate(*root, arena, registry, ctx);
@@ -146,7 +142,9 @@ void RecalcEngine::clear_cell_dependencies(CellNodeId cell) {
   volatiles_.unregister_cell(cell);
 }
 
-void RecalcEngine::mark_dirty(CellNodeId cell) { dirty_.mark(cell); }
+void RecalcEngine::mark_dirty(CellNodeId cell) {
+  dirty_.mark(cell);
+}
 
 Expected<RecalcStats, Error> RecalcEngine::recalc(Workbook& workbook, const FunctionRegistry& registry) {
   RecalcStats stats;

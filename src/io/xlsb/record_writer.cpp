@@ -203,8 +203,8 @@ void emit_rk_number(std::vector<std::uint8_t>& dst, double value) {
         // here by shifting the signed value left by 2 (UB-free for
         // values in `[-(1<<29), (1<<29)-1]`, which is what we just
         // checked).
-        const std::uint32_t shifted =
-            static_cast<std::uint32_t>(signed_payload) << 2;  // wraps for negatives, decoded via arithmetic shift
+        const std::uint32_t shifted = static_cast<std::uint32_t>(signed_payload)
+                                      << 2;                        // wraps for negatives, decoded via arithmetic shift
         const std::uint32_t rk = (shifted & 0xFFFFFFFCU) | 0x02U;  // fInt=1, fX100=0
         emit_u32(dst, rk);
         return;

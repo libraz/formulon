@@ -63,12 +63,12 @@ struct CurrencyToken {
   std::size_t len;
 };
 constexpr CurrencyToken kCurrencyTokens[] = {
-    {"\x24", 1},                  // $  U+0024
-    {"\xC2\xA2", 2},              // cent  U+00A2
-    {"\xC2\xA3", 2},              // pound  U+00A3
-    {"\xC2\xA5", 2},              // yen  U+00A5
-    {"\xE2\x82\xAC", 3},          // euro  U+20AC
-    {"\xE2\x82\xA9", 3},          // won  U+20A9
+    {"\x24", 1},          // $  U+0024
+    {"\xC2\xA2", 2},      // cent  U+00A2
+    {"\xC2\xA3", 2},      // pound  U+00A3
+    {"\xC2\xA5", 2},      // yen  U+00A5
+    {"\xE2\x82\xAC", 3},  // euro  U+20AC
+    {"\xE2\x82\xA9", 3},  // won  U+20A9
 };
 
 bool try_strip_leading_currency(std::string_view s, std::string_view* out) {
@@ -83,8 +83,7 @@ bool try_strip_leading_currency(std::string_view s, std::string_view* out) {
 
 bool try_strip_trailing_currency(std::string_view s, std::string_view* out) {
   for (const auto& tok : kCurrencyTokens) {
-    if (s.size() > tok.len &&
-        std::memcmp(s.data() + s.size() - tok.len, tok.bytes, tok.len) == 0) {
+    if (s.size() > tok.len && std::memcmp(s.data() + s.size() - tok.len, tok.bytes, tok.len) == 0) {
       *out = s.substr(0, s.size() - tok.len);
       return true;
     }

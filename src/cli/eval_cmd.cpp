@@ -13,8 +13,6 @@
 // `--repeat N` is a Phase 5 prep knob: it runs the eval `N` times and
 // reports timing on stderr without changing the stdout payload.
 
-#include "cli/cli.h"
-
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -23,6 +21,7 @@
 #include <string_view>
 
 #include "c_api/formulon_c.h"
+#include "cli/cli.h"
 #include "cli/render.h"
 #include "utils/error.h"
 

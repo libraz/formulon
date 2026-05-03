@@ -258,9 +258,9 @@ TEST(SheetTest, RowsIterationExposesAllPopulatedRows) {
 
 TEST(SheetTest, RowsIterationReportsExpectedColumnCounts) {
   Sheet s("Sheet1");
-  s.set_cell_value(0U, 0U, Value::number(1.0));   // row 0, vector size 1
-  s.set_cell_value(1U, 4U, Value::number(2.0));   // row 1, vector size 5
-  s.set_cell_formula(2U, 2U, "=A1");              // row 2, vector size 3
+  s.set_cell_value(0U, 0U, Value::number(1.0));  // row 0, vector size 1
+  s.set_cell_value(1U, 4U, Value::number(2.0));  // row 1, vector size 5
+  s.set_cell_formula(2U, 2U, "=A1");             // row 2, vector size 3
 
   ASSERT_EQ(s.rows().size(), 3U);
   EXPECT_EQ(s.rows().at(0U).size(), 1U);

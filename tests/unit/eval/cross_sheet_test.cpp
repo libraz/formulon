@@ -8,11 +8,11 @@
 #include <cstdint>
 #include <string>
 
-#include "gtest/gtest.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "gtest/gtest.h"
 #include "parser/parser.h"
 #include "parser/reference.h"
 #include "sheet.h"
@@ -37,8 +37,7 @@ parser::Reference MakeLocalRef(std::uint32_t row, std::uint32_t col) {
 // Builds a qualified A1 reference whose `sheet` names `sheet_name`. The
 // view is borrowed from the caller — pass a stable string literal or a
 // named `std::string` whose lifetime outlasts the test body.
-parser::Reference MakeSheetRef(std::string_view sheet_name,
-                               std::uint32_t row, std::uint32_t col) {
+parser::Reference MakeSheetRef(std::string_view sheet_name, std::uint32_t row, std::uint32_t col) {
   parser::Reference ref;
   ref.sheet = sheet_name;
   ref.row = row;
@@ -301,8 +300,7 @@ TEST(EvalContextCrossSheetRange, LocalRangeUnaffected) {
   EvalState state;
   Arena arena;
   const EvalContext ctx(wb, wb.sheet(0), state);
-  auto result = ctx.expand_range(MakeLocalRef(0, 0), MakeLocalRef(1, 0), arena,
-                                 default_registry());
+  auto result = ctx.expand_range(MakeLocalRef(0, 0), MakeLocalRef(1, 0), arena, default_registry());
   ASSERT_TRUE(result);
   ASSERT_EQ(result.value().size(), 2u);
   EXPECT_EQ(result.value()[0].as_number(), 1.0);

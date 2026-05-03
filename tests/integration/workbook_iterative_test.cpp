@@ -95,10 +95,8 @@ TEST(WorkbookIterative, EnabledIdentityCycleObservedBehaviour) {
 
   Value a1 = StoredValue(wb, 0U, 0U, 0U);
   Value b1 = StoredValue(wb, 0U, 0U, 1U);
-  ASSERT_TRUE(a1.is_number()) << "A1 expected numeric, got "
-                              << (a1.is_error() ? static_cast<int>(a1.as_error()) : -1);
-  ASSERT_TRUE(b1.is_number()) << "B1 expected numeric, got "
-                              << (b1.is_error() ? static_cast<int>(b1.as_error()) : -1);
+  ASSERT_TRUE(a1.is_number()) << "A1 expected numeric, got " << (a1.is_error() ? static_cast<int>(a1.as_error()) : -1);
+  ASSERT_TRUE(b1.is_number()) << "B1 expected numeric, got " << (b1.is_error() ? static_cast<int>(b1.as_error()) : -1);
   EXPECT_DOUBLE_EQ(a1.as_number(), 1.0);
   EXPECT_DOUBLE_EQ(b1.as_number(), 0.0);
 }

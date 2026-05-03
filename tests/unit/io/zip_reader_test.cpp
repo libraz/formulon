@@ -134,12 +134,18 @@ TEST(ZipReader, ListEntriesReturnsAllNames) {
   bool saw_sheet1 = false;
   bool saw_styles = false;
   for (const std::string& n : names) {
-    if (n == "[Content_Types].xml") saw_ct = true;
-    if (n == "_rels/.rels") saw_rels = true;
-    if (n == "xl/workbook.xml") saw_workbook = true;
-    if (n == "xl/_rels/workbook.xml.rels") saw_workbook_rels = true;
-    if (n == "xl/worksheets/sheet1.xml") saw_sheet1 = true;
-    if (n == "xl/styles.xml") saw_styles = true;
+    if (n == "[Content_Types].xml")
+      saw_ct = true;
+    if (n == "_rels/.rels")
+      saw_rels = true;
+    if (n == "xl/workbook.xml")
+      saw_workbook = true;
+    if (n == "xl/_rels/workbook.xml.rels")
+      saw_workbook_rels = true;
+    if (n == "xl/worksheets/sheet1.xml")
+      saw_sheet1 = true;
+    if (n == "xl/styles.xml")
+      saw_styles = true;
   }
   EXPECT_TRUE(saw_ct);
   EXPECT_TRUE(saw_rels);

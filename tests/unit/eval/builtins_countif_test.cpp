@@ -279,8 +279,7 @@ TEST(BuiltinsSumIf, ExplicitSumRangeSameShape) {
   wb.sheet(0).set_cell_value(1, 1, Value::number(20.0));
   wb.sheet(0).set_cell_value(2, 1, Value::number(30.0));
   wb.sheet(0).set_cell_value(3, 1, Value::number(40.0));
-  const Value v =
-      EvalSourceIn("=SUMIF(A1:A4, \"high\", B1:B4)", wb, wb.sheet(0));
+  const Value v = EvalSourceIn("=SUMIF(A1:A4, \"high\", B1:B4)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 70.0);
 }
@@ -295,8 +294,7 @@ TEST(BuiltinsSumIf, SumRangeSmallerClampsToMin) {
   wb.sheet(0).set_cell_value(0, 1, Value::number(5.0));
   wb.sheet(0).set_cell_value(1, 1, Value::number(7.0));
   // B3 left blank — only two of three matches have a numeric sum cell.
-  const Value v =
-      EvalSourceIn("=SUMIF(A1:A3, \"x\", B1:B2)", wb, wb.sheet(0));
+  const Value v = EvalSourceIn("=SUMIF(A1:A3, \"x\", B1:B2)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 12.0);
 }
@@ -307,10 +305,9 @@ TEST(BuiltinsSumIf, NonNumericMatchingCellsAreExcluded) {
   wb.sheet(0).set_cell_value(1, 0, Value::text("x"));
   wb.sheet(0).set_cell_value(2, 0, Value::text("x"));
   wb.sheet(0).set_cell_value(0, 1, Value::number(10.0));
-  wb.sheet(0).set_cell_value(1, 1, Value::text("50"));   // skipped
+  wb.sheet(0).set_cell_value(1, 1, Value::text("50"));     // skipped
   wb.sheet(0).set_cell_value(2, 1, Value::boolean(true));  // skipped
-  const Value v =
-      EvalSourceIn("=SUMIF(A1:A3, \"x\", B1:B3)", wb, wb.sheet(0));
+  const Value v = EvalSourceIn("=SUMIF(A1:A3, \"x\", B1:B3)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 10.0);
 }
@@ -324,8 +321,7 @@ TEST(BuiltinsSumIf, CrossSheetQualifiedRanges) {
   wb.sheet(1).set_cell_value(0, 1, Value::number(1.0));
   wb.sheet(1).set_cell_value(1, 1, Value::number(2.0));
   wb.sheet(1).set_cell_value(2, 1, Value::number(3.0));
-  const Value v =
-      EvalSourceIn("=SUMIF(Data!A1:A3, \">=10\", Data!B1:B3)", wb, wb.sheet(0));
+  const Value v = EvalSourceIn("=SUMIF(Data!A1:A3, \">=10\", Data!B1:B3)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 5.0);
 }
@@ -363,8 +359,7 @@ TEST(BuiltinsAverageIf, NoMatchesReturnsDiv0) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
   wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
-  const Value v =
-      EvalSourceIn("=AVERAGEIF(A1:A2, \">999\")", wb, wb.sheet(0));
+  const Value v = EvalSourceIn("=AVERAGEIF(A1:A2, \">999\")", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
@@ -378,10 +373,9 @@ TEST(BuiltinsAverageIf, TextOrBoolMatchesExcludedFromPool) {
   wb.sheet(0).set_cell_value(1, 0, Value::text("x"));
   wb.sheet(0).set_cell_value(2, 0, Value::text("x"));
   wb.sheet(0).set_cell_value(0, 1, Value::number(10.0));
-  wb.sheet(0).set_cell_value(1, 1, Value::text("20"));   // excluded
+  wb.sheet(0).set_cell_value(1, 1, Value::text("20"));  // excluded
   wb.sheet(0).set_cell_value(2, 1, Value::number(30.0));
-  const Value v =
-      EvalSourceIn("=AVERAGEIF(A1:A3, \"x\", B1:B3)", wb, wb.sheet(0));
+  const Value v = EvalSourceIn("=AVERAGEIF(A1:A3, \"x\", B1:B3)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 20.0);
 }
@@ -394,8 +388,7 @@ TEST(BuiltinsAverageIf, ExplicitAverageRange) {
   wb.sheet(0).set_cell_value(0, 1, Value::number(2.0));
   wb.sheet(0).set_cell_value(1, 1, Value::number(100.0));
   wb.sheet(0).set_cell_value(2, 1, Value::number(8.0));
-  const Value v =
-      EvalSourceIn("=AVERAGEIF(A1:A3, \"cat\", B1:B3)", wb, wb.sheet(0));
+  const Value v = EvalSourceIn("=AVERAGEIF(A1:A3, \"cat\", B1:B3)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 5.0);
 }

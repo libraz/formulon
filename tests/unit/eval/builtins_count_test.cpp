@@ -320,8 +320,7 @@ TEST(BuiltinsCountA, MixedTypesAllCountedExceptBlank) {
 }
 
 TEST(BuiltinsCountA, BlankArgIsSkipped) {
-  const Value args[] = {Value::number(1.0), Value::blank(), Value::text("x"),
-                        Value::blank(), Value::boolean(true)};
+  const Value args[] = {Value::number(1.0), Value::blank(), Value::text("x"), Value::blank(), Value::boolean(true)};
   const Value v = CallDirect("COUNTA", args, 5u);
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
@@ -411,8 +410,7 @@ TEST(BuiltinsCountBlank, MixedDirectArgsOnlyEmptyStringsCounted) {
 }
 
 TEST(BuiltinsCountBlank, BlankArgCounts) {
-  const Value args[] = {Value::number(1.0), Value::blank(), Value::text(""),
-                        Value::number(0.0), Value::blank()};
+  const Value args[] = {Value::number(1.0), Value::blank(), Value::text(""), Value::number(0.0), Value::blank()};
   const Value v = CallDirect("COUNTBLANK", args, 5u);
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 3.0);

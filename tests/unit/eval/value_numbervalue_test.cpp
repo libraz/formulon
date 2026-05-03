@@ -208,7 +208,9 @@ TEST(ValueFunction, EuroSuffixSmall) {
 }
 
 TEST(ValueFunction, EuroPrefix) {
-  const Value v = EvalSource("=VALUE(\"\xE2\x82\xAC""23\")");
+  const Value v = EvalSource(
+      "=VALUE(\"\xE2\x82\xAC"
+      "23\")");
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 23.0);
 }
