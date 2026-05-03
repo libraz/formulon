@@ -388,6 +388,267 @@
           ]
         }
       ]
+    },
+    {
+      "id": "databar_min0_max100",
+      "cells": [
+        {
+          "row": 0,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DataBar",
+              "priority": 1,
+              "bar_length_pct": 0.0,
+              "bar_axis_position_pct": 0.0,
+              "is_negative": false,
+              "fill": {
+                "r": 33,
+                "g": 150,
+                "b": 243,
+                "a": 255
+              }
+            }
+          ]
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DataBar",
+              "priority": 1,
+              "bar_length_pct": 25.0,
+              "bar_axis_position_pct": 0.0,
+              "is_negative": false,
+              "fill": {
+                "r": 33,
+                "g": 150,
+                "b": 243,
+                "a": 255
+              }
+            }
+          ]
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DataBar",
+              "priority": 1,
+              "bar_length_pct": 50.0,
+              "bar_axis_position_pct": 0.0,
+              "is_negative": false,
+              "fill": {
+                "r": 33,
+                "g": 150,
+                "b": 243,
+                "a": 255
+              }
+            }
+          ]
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DataBar",
+              "priority": 1,
+              "bar_length_pct": 75.0,
+              "bar_axis_position_pct": 0.0,
+              "is_negative": false,
+              "fill": {
+                "r": 33,
+                "g": 150,
+                "b": 243,
+                "a": 255
+              }
+            }
+          ]
+        },
+        {
+          "row": 4,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DataBar",
+              "priority": 1,
+              "bar_length_pct": 100.0,
+              "bar_axis_position_pct": 0.0,
+              "is_negative": false,
+              "fill": {
+                "r": 33,
+                "g": 150,
+                "b": 243,
+                "a": 255
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "iconset_three_arrows",
+      "cells": [
+        {
+          "row": 0,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "IconSet",
+              "priority": 1,
+              "icon_set_name": "Three_Arrows",
+              "icon_index": 0
+            }
+          ]
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "IconSet",
+              "priority": 1,
+              "icon_set_name": "Three_Arrows",
+              "icon_index": 0
+            }
+          ]
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "IconSet",
+              "priority": 1,
+              "icon_set_name": "Three_Arrows",
+              "icon_index": 1
+            }
+          ]
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "IconSet",
+              "priority": 1,
+              "icon_set_name": "Three_Arrows",
+              "icon_index": 2
+            }
+          ]
+        },
+        {
+          "row": 4,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "IconSet",
+              "priority": 1,
+              "icon_set_name": "Three_Arrows",
+              "icon_index": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "time_period_today_via_expression",
+      "cells": [
+        {
+          "row": 0,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 24
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "time_period_yesterday_via_expression",
+      "cells": [
+        {
+          "row": 1,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 25
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "time_period_tomorrow_via_expression",
+      "cells": [
+        {
+          "row": 2,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 26
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "time_period_last_month_via_expression",
+      "cells": [
+        {
+          "row": 1,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 27
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "time_period_this_month_via_expression",
+      "cells": [
+        {
+          "row": 2,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 28
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "time_period_next_month_via_expression",
+      "cells": [
+        {
+          "row": 2,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 29
+            }
+          ]
+        }
+      ]
     }
   ]
 }

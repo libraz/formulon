@@ -464,3 +464,312 @@ cases:
             - kind: DifferentialFormat
               priority: 1
               dxf_id: 13
+
+  - id: databar_min0_max100
+    description: |
+      DataBar over A1:A5 = [0, 25, 50, 75, 100] with explicit Number
+      thresholds min=0 / max=100, min_length_pct=0, max_length_pct=100,
+      and a blue fill. Bar length is the linear fraction
+      `(value - min) / (max - min)` scaled into [0, 100], so each cell
+      reports a bar length equal to its value. Excel does not surface
+      bar length through DisplayFormat; the generator computes the
+      match payload directly from documented VBA semantics
+      (https://learn.microsoft.com/en-us/office/vba/api/excel.databar).
+    sheet:
+      A1: 0
+      A2: 25
+      A3: 50
+      A4: 75
+      A5: 100
+    cf_blocks:
+      - sqref: "A1:A5"
+        rules:
+          - type: DataBar
+            priority: 1
+            data_bar:
+              min: { type: Number, value: "0" }
+              max: { type: Number, value: "100" }
+              fill: { r: 33, g: 150, b: 243, a: 255 }
+              min_length_pct: 0
+              max_length_pct: 100
+    range: "A1:A5"
+    expected:
+      cells:
+        - addr: A1
+          matches:
+            - kind: DataBar
+              priority: 1
+              bar_length_pct: 0.0
+              bar_axis_position_pct: 0.0
+              is_negative: false
+              fill: { r: 33, g: 150, b: 243, a: 255 }
+        - addr: A2
+          matches:
+            - kind: DataBar
+              priority: 1
+              bar_length_pct: 25.0
+              bar_axis_position_pct: 0.0
+              is_negative: false
+              fill: { r: 33, g: 150, b: 243, a: 255 }
+        - addr: A3
+          matches:
+            - kind: DataBar
+              priority: 1
+              bar_length_pct: 50.0
+              bar_axis_position_pct: 0.0
+              is_negative: false
+              fill: { r: 33, g: 150, b: 243, a: 255 }
+        - addr: A4
+          matches:
+            - kind: DataBar
+              priority: 1
+              bar_length_pct: 75.0
+              bar_axis_position_pct: 0.0
+              is_negative: false
+              fill: { r: 33, g: 150, b: 243, a: 255 }
+        - addr: A5
+          matches:
+            - kind: DataBar
+              priority: 1
+              bar_length_pct: 100.0
+              bar_axis_position_pct: 0.0
+              is_negative: false
+              fill: { r: 33, g: 150, b: 243, a: 255 }
+
+  - id: iconset_three_arrows
+    description: |
+      IconSet (Three_Arrows) over A1:A5 = [10, 30, 50, 70, 90] with
+      Number thresholds 33 / 67 (gte=true). Bucket index per cell:
+      cell < 33 -> 0; 33 <= cell < 67 -> 1; cell >= 67 -> 2. Excel
+      does not surface the bucket index through DisplayFormat; the
+      generator computes the match payload directly from documented
+      VBA semantics
+      (https://learn.microsoft.com/en-us/office/vba/api/excel.iconsetcondition).
+    sheet:
+      A1: 10
+      A2: 30
+      A3: 50
+      A4: 70
+      A5: 90
+    cf_blocks:
+      - sqref: "A1:A5"
+        rules:
+          - type: IconSet
+            priority: 1
+            icon_set:
+              name: Three_Arrows
+              percent: false
+              reverse: false
+              thresholds:
+                - { type: Number, value: "33", gte: true }
+                - { type: Number, value: "67", gte: true }
+    range: "A1:A5"
+    expected:
+      cells:
+        - addr: A1
+          matches:
+            - kind: IconSet
+              priority: 1
+              icon_set_name: Three_Arrows
+              icon_index: 0
+        - addr: A2
+          matches:
+            - kind: IconSet
+              priority: 1
+              icon_set_name: Three_Arrows
+              icon_index: 0
+        - addr: A3
+          matches:
+            - kind: IconSet
+              priority: 1
+              icon_set_name: Three_Arrows
+              icon_index: 1
+        - addr: A4
+          matches:
+            - kind: IconSet
+              priority: 1
+              icon_set_name: Three_Arrows
+              icon_index: 2
+        - addr: A5
+          matches:
+            - kind: IconSet
+              priority: 1
+              icon_set_name: Three_Arrows
+              icon_index: 2
+
+  # ---------------------------------------------------------------------------
+  # TimePeriod-equivalent cases. Excel's `timePeriod` rules read live
+  # TODAY() at evaluation time, which makes deterministic golden capture
+  # awkward without a frozen-clock harness. The smoke suite pins the
+  # six day/month-bucket variants by rewriting each as an Expression
+  # rule that references a baked-in serial:
+  #
+  #   today_serial    = 46145  (corresponds to 2026-05-03)
+  #   yesterday       = 46144  (2026-05-02)
+  #   tomorrow        = 46146  (2026-05-04)
+  #   march mid 2026  = 46096
+  #   april mid 2026  = 46127
+  #   may mid 2026    = 46157
+  #   june mid 2026   = 46188
+  #
+  # The four week-boundary buckets (Last7Days / ThisWeek / LastWeek /
+  # NextWeek) need a frozen-clock capture path (libfaketime or similar)
+  # and are deferred. See README.md "Not yet captured".
+  # ---------------------------------------------------------------------------
+
+  - id: time_period_today_via_expression
+    description: |
+      TimePeriod=Today rewritten as Expression `A1=46145`. Sheet
+      A1=46145 (today), A2=46144 (yesterday), A3=46146 (tomorrow);
+      only A1 matches. Mirrors the dxf-fingerprint capture path the
+      other Expression cases use; dxfId=24, priority=1.
+    sheet:
+      A1: 46145
+      A2: 46144
+      A3: 46146
+    cf_blocks:
+      - sqref: "A1:A3"
+        rules:
+          - type: Expression
+            priority: 1
+            dxf_id: 24
+            formula1: "A1=46145"
+    range: "A1:A3"
+    expected:
+      cells:
+        - addr: A1
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 24
+
+  - id: time_period_yesterday_via_expression
+    description: |
+      TimePeriod=Yesterday rewritten as Expression `A1=46144`. Sheet
+      A1=46145 (today), A2=46144 (yesterday), A3=46146 (tomorrow);
+      only A2 matches. dxfId=25, priority=1.
+    sheet:
+      A1: 46145
+      A2: 46144
+      A3: 46146
+    cf_blocks:
+      - sqref: "A1:A3"
+        rules:
+          - type: Expression
+            priority: 1
+            dxf_id: 25
+            formula1: "A1=46144"
+    range: "A1:A3"
+    expected:
+      cells:
+        - addr: A2
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 25
+
+  - id: time_period_tomorrow_via_expression
+    description: |
+      TimePeriod=Tomorrow rewritten as Expression `A1=46146`. Sheet
+      A1=46145 (today), A2=46144 (yesterday), A3=46146 (tomorrow);
+      only A3 matches. dxfId=26, priority=1.
+    sheet:
+      A1: 46145
+      A2: 46144
+      A3: 46146
+    cf_blocks:
+      - sqref: "A1:A3"
+        rules:
+          - type: Expression
+            priority: 1
+            dxf_id: 26
+            formula1: "A1=46146"
+    range: "A1:A3"
+    expected:
+      cells:
+        - addr: A3
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 26
+
+  - id: time_period_last_month_via_expression
+    description: |
+      TimePeriod=LastMonth rewritten as Expression
+      `AND(YEAR(A1)=2026,MONTH(A1)=4)` (with today=2026-05-03,
+      LastMonth = April 2026). Sheet has serials in March (A1=46096),
+      April (A2=46127), and May (A3=46157); only A2 matches.
+      dxfId=27, priority=1.
+    sheet:
+      A1: 46096
+      A2: 46127
+      A3: 46157
+    cf_blocks:
+      - sqref: "A1:A3"
+        rules:
+          - type: Expression
+            priority: 1
+            dxf_id: 27
+            formula1: "AND(YEAR(A1)=2026,MONTH(A1)=4)"
+    range: "A1:A3"
+    expected:
+      cells:
+        - addr: A2
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 27
+
+  - id: time_period_this_month_via_expression
+    description: |
+      TimePeriod=ThisMonth rewritten as Expression
+      `AND(YEAR(A1)=2026,MONTH(A1)=5)` (with today=2026-05-03,
+      ThisMonth = May 2026). Sheet has serials in March (A1=46096),
+      April (A2=46127), and May (A3=46157); only A3 matches.
+      dxfId=28, priority=1.
+    sheet:
+      A1: 46096
+      A2: 46127
+      A3: 46157
+    cf_blocks:
+      - sqref: "A1:A3"
+        rules:
+          - type: Expression
+            priority: 1
+            dxf_id: 28
+            formula1: "AND(YEAR(A1)=2026,MONTH(A1)=5)"
+    range: "A1:A3"
+    expected:
+      cells:
+        - addr: A3
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 28
+
+  - id: time_period_next_month_via_expression
+    description: |
+      TimePeriod=NextMonth rewritten as Expression
+      `AND(YEAR(A1)=2026,MONTH(A1)=6)` (with today=2026-05-03,
+      NextMonth = June 2026). Sheet has serials in April (A1=46127),
+      May (A2=46157), and June (A3=46188); only A3 matches.
+      dxfId=29, priority=1.
+    sheet:
+      A1: 46127
+      A2: 46157
+      A3: 46188
+    cf_blocks:
+      - sqref: "A1:A3"
+        rules:
+          - type: Expression
+            priority: 1
+            dxf_id: 29
+            formula1: "AND(YEAR(A1)=2026,MONTH(A1)=6)"
+    range: "A1:A3"
+    expected:
+      cells:
+        - addr: A3
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 29

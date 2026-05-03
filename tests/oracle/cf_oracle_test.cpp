@@ -670,5 +670,193 @@ TEST(CfOracleSmoke, ContainsTextFoo) {
   EXPECT_EQ(*matches[1].matches[0].dxf_id, 13u);
 }
 
+// ---------------------------------------------------------------------------
+// Case 16: DataBar over A1:A5 = [0, 25, 50, 75, 100] with explicit
+// num/0 and num/100 thresholds, blue fill, and min/max length 0/100.
+// Bar length is the linear fraction `(value - min) / (max - min)`
+// scaled into [0, 100], so each cell reports a bar length equal to
+// its value. Mirrors cases_cf/cf_smoke.yaml :: databar_min0_max100.
+// ---------------------------------------------------------------------------
+
+TEST(CfOracleSmoke, DataBarMin0Max100) {
+  CFOracleHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(0.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(25.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(50.0));
+  harness.sheet.set_cell_value(3, 0, Value::number(75.0));
+  harness.sheet.set_cell_value(4, 0, Value::number(100.0));
+
+  ConditionalFormat block{};
+  block.sqref.push_back(MakeRange(0, 0, 4, 0));
+  CFRule rule;
+  rule.type = RuleType::DataBar;
+  rule.priority = 1;
+  DataBarSpec spec;
+  spec.min = {CfvoType::Number, "0", true};
+  spec.max = {CfvoType::Number, "100", true};
+  spec.fill = {33, 150, 243, 255};
+  spec.negative_fill = {255, 0, 0, 255};
+  spec.min_length_pct = 0;
+  spec.max_length_pct = 100;
+  spec.axis_position = DataBarAxisPosition::Automatic;
+  rule.data_bar = std::move(spec);
+  block.rules.push_back(std::move(rule));
+  harness.sheet.mutable_conditional_formats().push_back(std::move(block));
+
+  const CFHost host = harness.MakeHost();
+  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 4, 0), host);
+
+  ASSERT_EQ(matches.size(), 5u);
+
+  const double expected_lengths[5] = {0.0, 25.0, 50.0, 75.0, 100.0};
+  const Color expected_fill{33, 150, 243, 255};
+  for (std::size_t i = 0; i < 5; ++i) {
+    SCOPED_TRACE(testing::Message() << "cell index " << i);
+    EXPECT_EQ(matches[i].cell.row, static_cast<std::uint32_t>(i));
+    ASSERT_EQ(matches[i].matches.size(), 1u);
+    EXPECT_EQ(matches[i].matches[0].kind, CFMatchKind::DataBar);
+    EXPECT_EQ(matches[i].matches[0].priority, 1);
+    ASSERT_TRUE(matches[i].matches[0].data_bar_render.has_value());
+    const auto& render = *matches[i].matches[0].data_bar_render;
+    EXPECT_NEAR(render.length_pct, expected_lengths[i], 0.5);
+    EXPECT_NEAR(render.axis_position_pct, 0.0, 0.5);
+    EXPECT_FALSE(render.is_negative);
+    EXPECT_TRUE(ColorMatches(expected_fill, render.fill));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Case 17: IconSet (Three_Arrows) over A1:A5 = [10, 30, 50, 70, 90]
+// with Number thresholds 33 / 67 (gte=true). Bucket index per cell:
+// cell < 33 -> 0; 33 <= cell < 67 -> 1; cell >= 67 -> 2. Mirrors
+// cases_cf/cf_smoke.yaml :: iconset_three_arrows.
+// ---------------------------------------------------------------------------
+
+TEST(CfOracleSmoke, IconSetThreeArrows) {
+  CFOracleHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(10.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(30.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(50.0));
+  harness.sheet.set_cell_value(3, 0, Value::number(70.0));
+  harness.sheet.set_cell_value(4, 0, Value::number(90.0));
+
+  ConditionalFormat block{};
+  block.sqref.push_back(MakeRange(0, 0, 4, 0));
+  CFRule rule;
+  rule.type = RuleType::IconSet;
+  rule.priority = 1;
+  IconSetSpec spec;
+  spec.name = IconSetName::Three_Arrows;
+  spec.percent = false;
+  spec.reverse = false;
+  spec.thresholds = {
+      {CfvoType::Number, "33", true},
+      {CfvoType::Number, "67", true},
+  };
+  rule.icon_set = std::move(spec);
+  block.rules.push_back(std::move(rule));
+  harness.sheet.mutable_conditional_formats().push_back(std::move(block));
+
+  const CFHost host = harness.MakeHost();
+  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 4, 0), host);
+
+  ASSERT_EQ(matches.size(), 5u);
+
+  const std::uint8_t expected_indices[5] = {0, 0, 1, 2, 2};
+  for (std::size_t i = 0; i < 5; ++i) {
+    SCOPED_TRACE(testing::Message() << "cell index " << i);
+    EXPECT_EQ(matches[i].cell.row, static_cast<std::uint32_t>(i));
+    ASSERT_EQ(matches[i].matches.size(), 1u);
+    EXPECT_EQ(matches[i].matches[0].kind, CFMatchKind::IconSet);
+    EXPECT_EQ(matches[i].matches[0].priority, 1);
+    ASSERT_TRUE(matches[i].matches[0].icon_render.has_value());
+    EXPECT_EQ(matches[i].matches[0].icon_render->set_name, IconSetName::Three_Arrows);
+    EXPECT_EQ(matches[i].matches[0].icon_render->icon_index, expected_indices[i]);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cases 18-23: TimePeriod-equivalent cases. Excel's `timePeriod` rules
+// read live TODAY() at evaluation time, which makes deterministic
+// golden capture awkward. The smoke suite pins six day/month-bucket
+// variants by rewriting each as an Expression rule that references a
+// baked-in serial (today=46145 for 2026-05-03). Mirrors
+// cases_cf/cf_smoke.yaml :: time_period_*_via_expression.
+//
+// The four week-boundary buckets (Last7Days / ThisWeek / LastWeek /
+// NextWeek) need a frozen-clock capture path and are deferred.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Helper that builds a single-rule sheet, an Expression CF block, and
+// asserts that exactly `expected_rows` produced one DifferentialFormat
+// match each, all with the given dxf_id. Keeps the six TimePeriod
+// fixtures small enough to read at a glance.
+void RunTimePeriodExpressionCase(const double sheet_values[3], const char* formula1, std::uint32_t dxf_id,
+                                 const std::vector<std::uint32_t>& expected_rows) {
+  CFOracleHarness harness;
+  for (std::uint32_t row = 0; row < 3; ++row) {
+    harness.sheet.set_cell_value(row, 0, Value::number(sheet_values[row]));
+  }
+
+  ConditionalFormat block{};
+  block.sqref.push_back(MakeRange(0, 0, 2, 0));
+  CFRule rule;
+  rule.type = RuleType::Expression;
+  rule.priority = 1;
+  rule.dxf_id = dxf_id;
+  rule.formula1 = formula1;
+  block.rules.push_back(std::move(rule));
+  harness.sheet.mutable_conditional_formats().push_back(std::move(block));
+
+  const CFHost host = harness.MakeHost();
+  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+
+  ASSERT_EQ(matches.size(), expected_rows.size());
+  for (std::size_t i = 0; i < expected_rows.size(); ++i) {
+    SCOPED_TRACE(testing::Message() << "matched cell index " << i);
+    EXPECT_EQ(matches[i].cell.row, expected_rows[i]);
+    EXPECT_EQ(matches[i].cell.col, 0u);
+    ASSERT_EQ(matches[i].matches.size(), 1u);
+    EXPECT_EQ(matches[i].matches[0].kind, CFMatchKind::DifferentialFormat);
+    EXPECT_EQ(matches[i].matches[0].priority, 1);
+    ASSERT_TRUE(matches[i].matches[0].dxf_id.has_value());
+    EXPECT_EQ(*matches[i].matches[0].dxf_id, dxf_id);
+  }
+}
+
+}  // namespace
+
+TEST(CfOracleSmoke, TimePeriodTodayViaExpression) {
+  const double values[3] = {46145.0, 46144.0, 46146.0};
+  RunTimePeriodExpressionCase(values, "A1=46145", 24u, {0u});
+}
+
+TEST(CfOracleSmoke, TimePeriodYesterdayViaExpression) {
+  const double values[3] = {46145.0, 46144.0, 46146.0};
+  RunTimePeriodExpressionCase(values, "A1=46144", 25u, {1u});
+}
+
+TEST(CfOracleSmoke, TimePeriodTomorrowViaExpression) {
+  const double values[3] = {46145.0, 46144.0, 46146.0};
+  RunTimePeriodExpressionCase(values, "A1=46146", 26u, {2u});
+}
+
+TEST(CfOracleSmoke, TimePeriodLastMonthViaExpression) {
+  const double values[3] = {46096.0, 46127.0, 46157.0};
+  RunTimePeriodExpressionCase(values, "AND(YEAR(A1)=2026,MONTH(A1)=4)", 27u, {1u});
+}
+
+TEST(CfOracleSmoke, TimePeriodThisMonthViaExpression) {
+  const double values[3] = {46096.0, 46127.0, 46157.0};
+  RunTimePeriodExpressionCase(values, "AND(YEAR(A1)=2026,MONTH(A1)=5)", 28u, {2u});
+}
+
+TEST(CfOracleSmoke, TimePeriodNextMonthViaExpression) {
+  const double values[3] = {46127.0, 46157.0, 46188.0};
+  RunTimePeriodExpressionCase(values, "AND(YEAR(A1)=2026,MONTH(A1)=6)", 29u, {2u});
+}
+
 }  // namespace
 }  // namespace formulon::cf

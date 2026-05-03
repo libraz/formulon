@@ -359,6 +359,206 @@
         }
       ],
       "range": {"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}
+    },
+    {
+      "id": "databar_min0_max100",
+      "description": "DataBar over A1:A5 = [0, 25, 50, 75, 100], num/0 .. num/100, blue fill, min/max length 0/100.",
+      "sheet": [
+        {"row": 0, "col": 0, "kind": "number", "value": 0},
+        {"row": 1, "col": 0, "kind": "number", "value": 25},
+        {"row": 2, "col": 0, "kind": "number", "value": 50},
+        {"row": 3, "col": 0, "kind": "number", "value": 75},
+        {"row": 4, "col": 0, "kind": "number", "value": 100}
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [{"first_row": 0, "first_col": 0, "last_row": 4, "last_col": 0}],
+          "rules": [
+            {
+              "type": "DataBar",
+              "priority": 1,
+              "data_bar": {
+                "min": {"type": "Number", "value": "0"},
+                "max": {"type": "Number", "value": "100"},
+                "fill": {"r": 33, "g": 150, "b": 243, "a": 255},
+                "min_length_pct": 0,
+                "max_length_pct": 100
+              }
+            }
+          ]
+        }
+      ],
+      "range": {"first_row": 0, "first_col": 0, "last_row": 4, "last_col": 0}
+    },
+    {
+      "id": "iconset_three_arrows",
+      "description": "IconSet Three_Arrows over A1:A5 = [10, 30, 50, 70, 90], num thresholds 33/67.",
+      "sheet": [
+        {"row": 0, "col": 0, "kind": "number", "value": 10},
+        {"row": 1, "col": 0, "kind": "number", "value": 30},
+        {"row": 2, "col": 0, "kind": "number", "value": 50},
+        {"row": 3, "col": 0, "kind": "number", "value": 70},
+        {"row": 4, "col": 0, "kind": "number", "value": 90}
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [{"first_row": 0, "first_col": 0, "last_row": 4, "last_col": 0}],
+          "rules": [
+            {
+              "type": "IconSet",
+              "priority": 1,
+              "icon_set": {
+                "name": "Three_Arrows",
+                "percent": false,
+                "reverse": false,
+                "thresholds": [
+                  {"type": "Number", "value": "33", "gte": true},
+                  {"type": "Number", "value": "67", "gte": true}
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "range": {"first_row": 0, "first_col": 0, "last_row": 4, "last_col": 0}
+    },
+    {
+      "id": "time_period_today_via_expression",
+      "description": "TimePeriod=Today rewritten as Expression A1=46145; matches A1 only.",
+      "sheet": [
+        {"row": 0, "col": 0, "kind": "number", "value": 46145},
+        {"row": 1, "col": 0, "kind": "number", "value": 46144},
+        {"row": 2, "col": 0, "kind": "number", "value": 46146}
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [{"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}],
+          "rules": [
+            {
+              "type": "Expression",
+              "priority": 1,
+              "dxf_id": 24,
+              "formula1": "A1=46145"
+            }
+          ]
+        }
+      ],
+      "range": {"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}
+    },
+    {
+      "id": "time_period_yesterday_via_expression",
+      "description": "TimePeriod=Yesterday rewritten as Expression A1=46144; matches A2 only.",
+      "sheet": [
+        {"row": 0, "col": 0, "kind": "number", "value": 46145},
+        {"row": 1, "col": 0, "kind": "number", "value": 46144},
+        {"row": 2, "col": 0, "kind": "number", "value": 46146}
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [{"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}],
+          "rules": [
+            {
+              "type": "Expression",
+              "priority": 1,
+              "dxf_id": 25,
+              "formula1": "A1=46144"
+            }
+          ]
+        }
+      ],
+      "range": {"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}
+    },
+    {
+      "id": "time_period_tomorrow_via_expression",
+      "description": "TimePeriod=Tomorrow rewritten as Expression A1=46146; matches A3 only.",
+      "sheet": [
+        {"row": 0, "col": 0, "kind": "number", "value": 46145},
+        {"row": 1, "col": 0, "kind": "number", "value": 46144},
+        {"row": 2, "col": 0, "kind": "number", "value": 46146}
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [{"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}],
+          "rules": [
+            {
+              "type": "Expression",
+              "priority": 1,
+              "dxf_id": 26,
+              "formula1": "A1=46146"
+            }
+          ]
+        }
+      ],
+      "range": {"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}
+    },
+    {
+      "id": "time_period_last_month_via_expression",
+      "description": "TimePeriod=LastMonth (April 2026) rewritten as Expression AND(YEAR(A1)=2026,MONTH(A1)=4); matches A2.",
+      "sheet": [
+        {"row": 0, "col": 0, "kind": "number", "value": 46096},
+        {"row": 1, "col": 0, "kind": "number", "value": 46127},
+        {"row": 2, "col": 0, "kind": "number", "value": 46157}
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [{"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}],
+          "rules": [
+            {
+              "type": "Expression",
+              "priority": 1,
+              "dxf_id": 27,
+              "formula1": "AND(YEAR(A1)=2026,MONTH(A1)=4)"
+            }
+          ]
+        }
+      ],
+      "range": {"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}
+    },
+    {
+      "id": "time_period_this_month_via_expression",
+      "description": "TimePeriod=ThisMonth (May 2026) rewritten as Expression AND(YEAR(A1)=2026,MONTH(A1)=5); matches A3.",
+      "sheet": [
+        {"row": 0, "col": 0, "kind": "number", "value": 46096},
+        {"row": 1, "col": 0, "kind": "number", "value": 46127},
+        {"row": 2, "col": 0, "kind": "number", "value": 46157}
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [{"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}],
+          "rules": [
+            {
+              "type": "Expression",
+              "priority": 1,
+              "dxf_id": 28,
+              "formula1": "AND(YEAR(A1)=2026,MONTH(A1)=5)"
+            }
+          ]
+        }
+      ],
+      "range": {"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}
+    },
+    {
+      "id": "time_period_next_month_via_expression",
+      "description": "TimePeriod=NextMonth (June 2026) rewritten as Expression AND(YEAR(A1)=2026,MONTH(A1)=6); matches A3.",
+      "sheet": [
+        {"row": 0, "col": 0, "kind": "number", "value": 46127},
+        {"row": 1, "col": 0, "kind": "number", "value": 46157},
+        {"row": 2, "col": 0, "kind": "number", "value": 46188}
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [{"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}],
+          "rules": [
+            {
+              "type": "Expression",
+              "priority": 1,
+              "dxf_id": 29,
+              "formula1": "AND(YEAR(A1)=2026,MONTH(A1)=6)"
+            }
+          ]
+        }
+      ],
+      "range": {"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}
     }
   ]
 }

@@ -162,6 +162,27 @@ def _validate_rule(rule: Any, where: str) -> None:
         for i, c in enumerate(colors):
             _validate_color(c, f"{where}/color_scale/colors/{i}")
 
+    if "data_bar" in rule:
+        db = rule["data_bar"]
+        _require_keys(db, ["min", "max", "fill"], f"{where}/data_bar")
+        for stop in ("min", "max"):
+            _require_keys(db[stop], ["type"], f"{where}/data_bar/{stop}")
+        _validate_color(db["fill"], f"{where}/data_bar/fill")
+        for k in ("min_length_pct", "max_length_pct"):
+            if k in db and not isinstance(db[k], int):
+                raise ValidationError(f"{where}/data_bar/{k}: expected int")
+
+    if "icon_set" in rule:
+        ic = rule["icon_set"]
+        _require_keys(ic, ["name", "thresholds"], f"{where}/icon_set")
+        if not isinstance(ic["name"], str) or not ic["name"]:
+            raise ValidationError(f"{where}/icon_set/name: expected non-empty string")
+        thresholds = ic["thresholds"]
+        if not isinstance(thresholds, list) or not thresholds:
+            raise ValidationError(f"{where}/icon_set/thresholds: expected non-empty list")
+        for i, t in enumerate(thresholds):
+            _require_keys(t, ["type", "value"], f"{where}/icon_set/thresholds/{i}")
+
 
 def _validate_cf_block(block: Any, where: str) -> None:
     _require_keys(block, ["sqref", "rules"], where)

@@ -175,28 +175,55 @@ cell.api.display_format.interior_object.pattern  # -> k.pattern_solid / k.patter
 
 Supported rule types:
 
-- `CellIs` — captured as a `DifferentialFormat` match. The generator
-  paints each rule's `dxf` with a deterministic fingerprint colour
-  derived from the declared `dxf_id`, so the captured fill round-trips
-  unambiguously back to the originating rule.
+- `CellIs`, `Top10`, `AboveAverage`, `ContainsText`,
+  `NotContainsText`, `BeginsWith`, `EndsWith`, `ContainsBlanks`,
+  `NotContainsBlanks`, `ContainsErrors`, `NotContainsErrors`,
+  `DuplicateValues`, `UniqueValues`, `Expression` — captured as
+  `DifferentialFormat` matches. The generator paints each rule's
+  `dxf` with a deterministic fingerprint colour derived from the
+  declared `dxf_id`, so the captured fill round-trips unambiguously
+  back to the originating rule.
 - `ColorScale` — captured directly; `interior_object.color` returns
   the interpolated RGB for the cell.
+- `DataBar`, `IconSet` — Excel does not surface bar length or icon
+  bucket through `DisplayFormat`, so the generator opens the
+  workbook in Excel only to validate that the rule is loadable and
+  the workbook recalculates without error, then computes per-cell
+  match payloads in Python from the documented Microsoft VBA
+  semantics:
+  [DataBar](https://learn.microsoft.com/en-us/office/vba/api/excel.databar)
+  and
+  [IconSetCondition](https://learn.microsoft.com/en-us/office/vba/api/excel.iconsetcondition).
+  This is a "documented-semantics pin" — Formulon's evaluator is
+  locked against an independent Python implementation of the spec
+  rather than against Excel's render path. The dxf_id registry is
+  not used for these rules (visual rules carry render payloads
+  instead).
+- `TimePeriod` — covered indirectly via Expression-rule rewrites
+  (see "Coverage status" below). The native `timePeriod` rule is
+  deferred because Excel reads live `TODAY()` at evaluation time;
+  pinning a deterministic golden requires either a frozen-clock
+  capture path (libfaketime / similar) or rewriting the rule to
+  reference a known serial. The Expression rewrite is the latter.
 
 Not yet captured by the generator:
 
-- `DataBar`, `IconSet` — Excel does not expose the rendered bar length
-  or the icon bucket through `DisplayFormat`. Capturing these would
-  require either parsing the rendered cell or reverse-engineering
-  Excel's private CF state. Smoke cases exercising these rule types
-  stay on hand-authored Formulon-self-baseline goldens until a richer
-  capture path lands.
-- `Top10`, `AboveAverage`, text rules (`ContainsText` /
-  `NotContainsText` / `BeginsWith` / `EndsWith`), blank/error rules
-  (`ContainsBlanks` / `NotContainsBlanks` / `ContainsErrors` /
-  `NotContainsErrors`), `TimePeriod`, `DuplicateValues`,
-  `UniqueValues`, `Expression` — all `DifferentialFormat`-bearing.
-  They could reuse the same dxf-fingerprint trick as `CellIs`; they
-  are deferred until the smoke suite gains cases that exercise them.
+- `DataBar` / `IconSet` 1-bit Excel-render verification — Excel does
+  not expose the rendered bar length or icon bucket via the public
+  AppleScript surface. Capturing these against Excel-actual would
+  need parsing the rendered cell pixels or reverse-engineering
+  Excel's private CF state.
+- `TimePeriod` four week-boundary buckets (`Last7Days`, `ThisWeek`,
+  `LastWeek`, `NextWeek`) — these cannot be rewritten as a static
+  Expression because the bucket boundaries shift with the live
+  weekday. Capturing them deterministically needs a frozen-clock
+  harness (e.g. libfaketime) so the Excel-side `TODAY()` returns a
+  known value during capture; deferred.
+- Native `TimePeriod` rules (the day/month variants are exercised
+  through Expression rewrites today) — capture is supported in
+  principle via the dxf-fingerprint trick, but pinning the golden
+  requires the same frozen-clock harness as the week-boundary
+  buckets. Deferred.
 
 The generator raises `NotImplementedError` on unsupported rule types
 so cases cannot silently drop coverage. Requires a macOS host with
@@ -205,12 +232,44 @@ IDE (same prereqs as the function-oracle generator).
 
 ## Coverage status
 
-1 suite (`cf_smoke`), 2 cases:
+1 suite (`cf_smoke`), 23 cases. Of the 18 declared `RuleType`
+variants, 15 are pinned end-to-end (rule loaded by Excel + per-cell
+match captured), 2 are pinned via documented-semantics compute
+(`DataBar`, `IconSet`), and 1 (`TimePeriod`) is exercised via
+Expression-rule rewrites for the 6 day/month buckets that admit a
+deterministic translation.
 
-- `cellis_greater_than_50` — `CellIs > 50` over `A1:A3` (Excel-actual).
-- `colorscale_three_stop_red_yellow_green` — 3-stop colour scale
-  (Excel-actual).
+Cases by rule type:
+
+- `CellIs`        — `cellis_greater_than_50`
+- `ColorScale`    — `colorscale_three_stop_red_yellow_green`
+- `Top10`         — `top10_top2_of_a1_to_a5`
+- `AboveAverage`  — `above_average_a1_to_a5`
+- `BeginsWith`    — `begins_with_foo`
+- `EndsWith`      — `ends_with_bar`
+- `NotContainsText` — `not_contains_qux`
+- `ContainsBlanks` — `contains_blanks_a2`
+- `NotContainsBlanks` — `not_contains_blanks_a1_a3`
+- `ContainsErrors` — `contains_errors_a2`
+- `NotContainsErrors` — `not_contains_errors_a1_a3`
+- `DuplicateValues` — `duplicate_values_a1_a3`
+- `UniqueValues`  — `unique_values_a2`
+- `Expression`    — `expression_even_row`,
+                    `time_period_today_via_expression`,
+                    `time_period_yesterday_via_expression`,
+                    `time_period_tomorrow_via_expression`,
+                    `time_period_last_month_via_expression`,
+                    `time_period_this_month_via_expression`,
+                    `time_period_next_month_via_expression`
+- `ContainsText`  — `contains_text_foo`
+- `DataBar`       — `databar_min0_max100`
+- `IconSet`       — `iconset_three_arrows`
+
+`dxf_id` registry (one fingerprint per dxf-bearing case): 7, 11–23
+inclusive (15 dxfs), plus 24–29 for the six TimePeriod-via-Expression
+cases. New dxf_ids should continue from 30.
 
 Goldens under `golden_cf/` are Excel-actual captures verified against
-Mac Excel 365 (ja-JP). Re-running `make oracle-gen-cf` with no diff
-is the regression check.
+Mac Excel 365 (ja-JP) for the dxf-bearing and ColorScale cases, and
+documented-semantics computes for the DataBar / IconSet cases.
+Re-running `make oracle-gen-cf` with no diff is the regression check.
