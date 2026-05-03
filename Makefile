@@ -19,7 +19,7 @@ CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 
         python-package python-test python-wheel \
         parity-test \
         oracle-setup oracle-setup-mac oracle-setup-wsl \
-        oracle-gen oracle-verify oracle-contribute \
+        oracle-gen oracle-gen-cf oracle-verify oracle-contribute \
         ironcalc-import ironcalc-verify \
         fuzz-parser fuzz-xlsx fuzz-eval bench coverage \
         function-status behavior-status
@@ -277,6 +277,18 @@ oracle-gen:
 	  exit 1; \
 	fi
 	@$(ORACLE_GEN) $(if $(SUITE),--suite $(SUITE),) $(if $(TARGET),--target $(TARGET),)
+
+# Conditional-formatting oracle generator. Builds an xlsx per CF case
+# via openpyxl, opens it under Mac Excel 365, and records resolved
+# DisplayFormat fills back into tests/oracle/golden_cf/<suite>.golden.json.
+# macOS only. See tools/oracle/cf_oracle_gen.py for the supported rule
+# subset.
+oracle-gen-cf:
+	@if [ ! -x "$(ORACLE_VENV)/bin/python" ]; then \
+	  echo "oracle-gen-cf: run 'make oracle-setup' first"; \
+	  exit 1; \
+	fi
+	@$(ORACLE_VENV)/bin/python tools/oracle/cf_oracle_gen.py $(if $(SUITE),--suite $(SUITE),)
 
 oracle-verify:
 	@if [ ! -f $(BUILD_DIR)/CMakeCache.txt ]; then \

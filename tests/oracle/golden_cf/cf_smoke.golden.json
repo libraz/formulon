@@ -1,20 +1,30 @@
 {
   "name": "cf_smoke",
-  "description": "Hand-authored Formulon-self-baseline golden for the CF smoke pipeline. Replaceable by Mac-Excel-actuals once tools/oracle/cf_oracle_gen.py exists.",
+  "description": "Excel-actual golden captured by tools/oracle/cf_oracle_gen.py (macOS + Excel 365, ja-JP).",
   "cases": [
     {
       "id": "cellis_greater_than_50",
       "cells": [
         {
-          "row": 1, "col": 0,
+          "row": 1,
+          "col": 0,
           "matches": [
-            {"kind": "DifferentialFormat", "priority": 1, "dxf_id": 7}
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 7
+            }
           ]
         },
         {
-          "row": 2, "col": 0,
+          "row": 2,
+          "col": 0,
           "matches": [
-            {"kind": "DifferentialFormat", "priority": 1, "dxf_id": 7}
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 7
+            }
           ]
         }
       ]
@@ -23,21 +33,51 @@
       "id": "colorscale_three_stop_red_yellow_green",
       "cells": [
         {
-          "row": 0, "col": 0,
+          "row": 0,
+          "col": 0,
           "matches": [
-            {"kind": "ColorScale", "priority": 1, "color": {"r": 255, "g": 0,   "b": 0,   "a": 255}}
+            {
+              "kind": "ColorScale",
+              "priority": 1,
+              "color": {
+                "r": 255,
+                "g": 0,
+                "b": 0,
+                "a": 255
+              }
+            }
           ]
         },
         {
-          "row": 1, "col": 0,
+          "row": 1,
+          "col": 0,
           "matches": [
-            {"kind": "ColorScale", "priority": 1, "color": {"r": 255, "g": 255, "b": 0,   "a": 255}}
+            {
+              "kind": "ColorScale",
+              "priority": 1,
+              "color": {
+                "r": 255,
+                "g": 255,
+                "b": 0,
+                "a": 255
+              }
+            }
           ]
         },
         {
-          "row": 2, "col": 0,
+          "row": 2,
+          "col": 0,
           "matches": [
-            {"kind": "ColorScale", "priority": 1, "color": {"r": 0,   "g": 255, "b": 0,   "a": 255}}
+            {
+              "kind": "ColorScale",
+              "priority": 1,
+              "color": {
+                "r": 0,
+                "g": 255,
+                "b": 0,
+                "a": 255
+              }
+            }
           ]
         }
       ]

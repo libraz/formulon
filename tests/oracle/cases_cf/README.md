@@ -130,10 +130,10 @@ the C++ checks don't drift from author intent):
 2. Mirror the same case as JSON in `cases_cf/<suite>.case.json` (the
    YAML is for humans; the JSON is for the validator and the
    eventual Mac driver).
-3. Author the golden in `golden_cf/<suite>.golden.json`. Until the
-   Mac driver exists, this is a Formulon-self-baseline: it documents
-   what Formulon currently emits, so changes to the evaluator are
-   surfaced as a diff.
+3. Author the golden in `golden_cf/<suite>.golden.json`. On macOS the
+   preferred path is to let `tools/oracle/cf_oracle_gen.py` regenerate
+   it from Excel; on other hosts hand-author a Formulon-self-baseline
+   and document it as such in the suite description.
 4. Mirror the new case in `tests/oracle/cf_oracle_test.cpp` as a
    hardcoded gtest fixture. If you change the YAML or the golden,
    mirror the change in the C++ test.
@@ -149,33 +149,68 @@ the C++ checks don't drift from author intent):
    cd build && ctest -R CfOracleSmoke --output-on-failure
    ```
 
-## macOS Excel capture (TODO)
+## macOS Excel capture
 
-The next step is `tools/oracle/cf_oracle_gen.py`: a xlwings-driven
-script that opens each case as a real `.xlsx`, lets Excel evaluate the
-CF rules, and reads the resolved cell formats back out. The xlwings
-APIs needed:
+`tools/oracle/cf_oracle_gen.py` drives Mac Excel 365 to capture
+Excel-actual fills for each CF case. The generator builds one xlsx
+per case via openpyxl, opens it under a hidden Excel.app instance,
+recalculates, and reads `DisplayFormat.Interior` per cell in the case
+range. The captured fills are reverse-mapped against rule descriptors
+to emit the golden JSON.
 
-- `wb.sheets[0].api.FormatConditions` — to install rules that mirror
-  the JSON case (the script can also serialise the case's CF blocks
-  directly into the xlsx package).
-- `wb.sheets[0].range(addr).api.DisplayFormat.Interior.Color` —
-  resolved cell-fill colour (BGR-packed `int`; needs splitting into
-  RGBA).
-- `wb.sheets[0].range(addr).api.DisplayFormat.Interior` — full
-  interior payload, including pattern type for non-solid fills.
-- `wb.sheets[0].api.FormatConditions(...).Type` /
-  `.IconCriteria` /  `.BarColor` — needed to decode data-bar and
-  icon-set match payloads, since `DisplayFormat` collapses them.
+Run it via:
 
-Status: not yet implemented. Until then, goldens in `golden_cf/` are
-hand-authored Formulon-self-baselines, not Excel-actuals. The schema,
-the validator, and the C++ smoke test are sized to absorb the future
-real goldens without further migration. Requires a macOS host with
-Excel 365 (ja-JP) and Automation permission (same prereqs as the
-function-oracle generator).
+```
+make oracle-gen-cf                  # all suites
+make oracle-gen-cf SUITE=cf_smoke   # one suite
+```
+
+macOS uses snake_case appscript attribute names, distinct from the
+Windows COM `DisplayFormat.Interior.Color` path:
+
+```
+cell.api.display_format.interior_object.color    # -> [r, g, b]
+cell.api.display_format.interior_object.pattern  # -> k.pattern_solid / k.pattern_none
+```
+
+Supported rule types:
+
+- `CellIs` — captured as a `DifferentialFormat` match. The generator
+  paints each rule's `dxf` with a deterministic fingerprint colour
+  derived from the declared `dxf_id`, so the captured fill round-trips
+  unambiguously back to the originating rule.
+- `ColorScale` — captured directly; `interior_object.color` returns
+  the interpolated RGB for the cell.
+
+Not yet captured by the generator:
+
+- `DataBar`, `IconSet` — Excel does not expose the rendered bar length
+  or the icon bucket through `DisplayFormat`. Capturing these would
+  require either parsing the rendered cell or reverse-engineering
+  Excel's private CF state. Smoke cases exercising these rule types
+  stay on hand-authored Formulon-self-baseline goldens until a richer
+  capture path lands.
+- `Top10`, `AboveAverage`, text rules (`ContainsText` /
+  `NotContainsText` / `BeginsWith` / `EndsWith`), blank/error rules
+  (`ContainsBlanks` / `NotContainsBlanks` / `ContainsErrors` /
+  `NotContainsErrors`), `TimePeriod`, `DuplicateValues`,
+  `UniqueValues`, `Expression` — all `DifferentialFormat`-bearing.
+  They could reuse the same dxf-fingerprint trick as `CellIs`; they
+  are deferred until the smoke suite gains cases that exercise them.
+
+The generator raises `NotImplementedError` on unsupported rule types
+so cases cannot silently drop coverage. Requires a macOS host with
+Excel 365 (ja-JP) and Automation permission for the host terminal /
+IDE (same prereqs as the function-oracle generator).
 
 ## Coverage status
 
-1 case (smoke). Goldens are Formulon-self-baselines; replacing them
-with Excel-actuals is the macOS work.
+1 suite (`cf_smoke`), 2 cases:
+
+- `cellis_greater_than_50` — `CellIs > 50` over `A1:A3` (Excel-actual).
+- `colorscale_three_stop_red_yellow_green` — 3-stop colour scale
+  (Excel-actual).
+
+Goldens under `golden_cf/` are Excel-actual captures verified against
+Mac Excel 365 (ja-JP). Re-running `make oracle-gen-cf` with no diff
+is the regression check.
