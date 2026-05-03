@@ -77,6 +77,37 @@ gtest_discover_tests(formulon_ooxml_corpus_100_tests
 )
 
 # ---------------------------------------------------------------------------
+# Slow-labelled extended OOXML round-trip corpus.
+#
+# Sibling to the 100-book corpus above. Where that corpus pins the
+# general round-trip surface (cells / formulas / defined names / tables /
+# passthrough) but explicitly excludes styles, conditional formats, and
+# pivots, this 48-book corpus extends the same two-cycle pipeline to
+# cover those auxiliary subsystems. Lives in its own executable for the
+# same per-binary fast-suite-budget reasons; tagged `SLOW`.
+# ---------------------------------------------------------------------------
+
+add_executable(formulon_ooxml_corpus_extended_tests ooxml_corpus_extended_test.cpp)
+
+target_link_libraries(formulon_ooxml_corpus_extended_tests
+  PRIVATE
+    formulon_static
+    gtest_main
+)
+
+target_include_directories(formulon_ooxml_corpus_extended_tests
+  PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+formulon_apply_warnings(formulon_ooxml_corpus_extended_tests)
+
+gtest_discover_tests(formulon_ooxml_corpus_extended_tests
+  TEST_LIST formulon_ooxml_corpus_extended_test_list
+  PROPERTIES LABELS "SLOW"
+)
+
+# ---------------------------------------------------------------------------
 # SAX vs DOM parity gate over the same 100-book feature matrix.
 #
 # Drives every book through both the production DOM reader and the
