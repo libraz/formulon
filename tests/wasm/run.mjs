@@ -334,6 +334,142 @@ async function run() {
     }
   });
 
+  test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      // Empty workbook starts with empty styles tables.
+      assert.equal(wb.fontCount(), 0);
+      assert.equal(wb.fillCount(), 0);
+      assert.equal(wb.borderCount(), 0);
+      assert.equal(wb.xfCount(), 0);
+
+      const f1 = wb.addFont({
+        name: 'Arial',
+        size: 12,
+        bold: true,
+        italic: false,
+        strike: false,
+        underline: 0,
+        colorArgb: 0xff112233,
+      });
+      assert.ok(f1.status.ok, `addFont: ${JSON.stringify(f1.status)}`);
+      assert.equal(typeof f1.index, 'number');
+
+      // Adding the same font again returns the same index (linear-search dedup).
+      const f1b = wb.addFont({
+        name: 'Arial',
+        size: 12,
+        bold: true,
+        italic: false,
+        strike: false,
+        underline: 0,
+        colorArgb: 0xff112233,
+      });
+      assert.ok(f1b.status.ok);
+      assert.equal(f1b.index, f1.index);
+      assert.equal(wb.fontCount(), 1);
+
+      const fill = wb.addFill({ pattern: 1, fgArgb: 0xffff0000, bgArgb: 0xff000000 });
+      assert.ok(fill.status.ok);
+      const border = wb.addBorder({
+        left: { style: 1, colorArgb: 0xff000000 },
+        right: { style: 1, colorArgb: 0xff000000 },
+        top: { style: 1, colorArgb: 0xff000000 },
+        bottom: { style: 1, colorArgb: 0xff000000 },
+        diagonal: { style: 0, colorArgb: 0 },
+        diagonalUp: false,
+        diagonalDown: false,
+      });
+      assert.ok(border.status.ok);
+
+      // Built-in num_fmt resolves without growing the table.
+      const builtin = wb.addNumFmt('General');
+      assert.ok(builtin.status.ok);
+      assert.equal(builtin.numFmtId, 0);
+
+      // Custom num_fmt yields >= 164.
+      const custom = wb.addNumFmt('"USD" #,##0');
+      assert.ok(custom.status.ok);
+      assert.ok(custom.numFmtId >= 164, `expected custom id >= 164, got ${custom.numFmtId}`);
+
+      const xf = wb.addXf({
+        fontIndex: f1.index,
+        fillIndex: fill.index,
+        borderIndex: border.index,
+        numFmtId: custom.numFmtId,
+        horizontalAlign: 1,
+        verticalAlign: 2,
+        wrapText: true,
+      });
+      assert.ok(xf.status.ok, `addXf: ${JSON.stringify(xf.status)}`);
+      assert.ok(wb.xfCount() >= 1);
+
+      // Adding the same xf is a no-op.
+      const xfDup = wb.addXf({
+        fontIndex: f1.index,
+        fillIndex: fill.index,
+        borderIndex: border.index,
+        numFmtId: custom.numFmtId,
+        horizontalAlign: 1,
+        verticalAlign: 2,
+        wrapText: true,
+      });
+      assert.ok(xfDup.status.ok);
+      assert.equal(xfDup.index, xf.index);
+
+      // Stamp the xf on a cell.
+      assert.ok(wb.setNumber(0, 0, 0, 1).ok);
+      assert.ok(wb.setCellXfIndex(0, 0, 0, xf.index).ok);
+
+      // Read back through the getters.
+      const reread = wb.getCellXf(xf.index);
+      assert.ok(reread.status.ok);
+      assert.equal(reread.fontIndex, f1.index);
+      assert.equal(reread.numFmtId, custom.numFmtId);
+      assert.equal(reread.wrapText, true);
+
+      const rfont = wb.getFont(f1.index);
+      assert.ok(rfont.status.ok);
+      assert.equal(rfont.name, 'Arial');
+      assert.equal(rfont.size, 12);
+      assert.equal(rfont.bold, true);
+
+      const rfill = wb.getFill(fill.index);
+      assert.ok(rfill.status.ok);
+      assert.equal(rfill.pattern, 1);
+      assert.equal(rfill.fgArgb, 0xffff0000);
+
+      const rborder = wb.getBorder(border.index);
+      assert.ok(rborder.status.ok);
+      assert.equal(rborder.left.style, 1);
+      assert.equal(rborder.diagonalUp, false);
+
+      const rfmt = wb.getNumFmt(custom.numFmtId);
+      assert.ok(rfmt.status.ok);
+      assert.equal(rfmt.formatCode, '"USD" #,##0');
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('addXf rejects out-of-range font_index', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const r = wb.addXf({
+        fontIndex: 99,
+        fillIndex: 0,
+        borderIndex: 0,
+        numFmtId: 0,
+        horizontalAlign: 0,
+        verticalAlign: 0,
+        wrapText: false,
+      });
+      assert.ok(!r.status.ok, 'expected addXf to reject out-of-range font_index');
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('addMerge / getMerges round-trip', () => {
     const wb = Module.Workbook.createDefault();
     try {
@@ -381,6 +517,54 @@ async function run() {
     }
   });
 
+  test('addHyperlink + getHyperlinks round-trip', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.equal(wb.getHyperlinks(0).length, 0);
+      // Three entries with progressively more optional fields populated.
+      assert.ok(wb.addHyperlink(0, 1, 2, 'https://example.com/', '', '').ok);
+      assert.ok(wb.addHyperlink(0, 3, 4, 'mailto:hello@example.com', 'Hello', '').ok);
+      assert.ok(wb.addHyperlink(0, 5, 6, 'https://example.org/x', 'See X', 'External link').ok);
+      const list = wb.getHyperlinks(0);
+      assert.equal(list.length, 3);
+      assert.equal(list[0].row, 1);
+      assert.equal(list[0].col, 2);
+      assert.equal(list[0].target, 'https://example.com/');
+      assert.equal(list[0].display, '');
+      assert.equal(list[0].tooltip, '');
+      assert.equal(list[1].target, 'mailto:hello@example.com');
+      assert.equal(list[1].display, 'Hello');
+      assert.equal(list[2].display, 'See X');
+      assert.equal(list[2].tooltip, 'External link');
+      // Sheet-out-of-range is rejected.
+      assert.ok(!wb.addHyperlink(999, 0, 0, 'https://x/', '', '').ok);
+      // clearHyperlinks drops everything.
+      assert.ok(wb.clearHyperlinks(0).ok);
+      assert.equal(wb.getHyperlinks(0).length, 0);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('removeHyperlink / removeHyperlinkAt / clearHyperlinks surface on an empty sheet', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      // No-op variants on an empty list still return kOk.
+      assert.ok(wb.removeHyperlink(0, 0, 0).ok);
+      assert.ok(wb.clearHyperlinks(0).ok);
+      // Out-of-range index is rejected.
+      assert.ok(!wb.removeHyperlinkAt(0, 0).ok);
+      // Sheet-index-out-of-range is rejected on every variant.
+      assert.ok(!wb.removeHyperlink(999, 0, 0).ok);
+      assert.ok(!wb.removeHyperlinkAt(999, 0).ok);
+      assert.ok(!wb.clearHyperlinks(999).ok);
+      // Final list still matches the post-save+load read.
+      assert.equal(wb.getHyperlinks(0).length, 0);
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('setComment / getComment round-trip', () => {
     const wb = Module.Workbook.createDefault();
     try {
@@ -403,6 +587,95 @@ async function run() {
     try {
       const arr = wb.getValidations(0);
       assert.ok(Array.isArray(arr) || typeof arr.length === 'number');
+      assert.equal(arr.length, 0);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('addValidation / getValidations / removeValidationAt / clearValidations round-trip', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      // List-type validation at A1:B3 with prompts and an error message.
+      const listRule = {
+        ranges: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 }],
+        type: 3,
+        op: 0,
+        errorStyle: 1,
+        allowBlank: true,
+        showInputMessage: true,
+        showErrorMessage: true,
+        formula1: '"Yes,No,Maybe"',
+        promptTitle: 'Choose',
+        promptMessage: 'Pick one',
+        errorTitle: 'Bad value',
+        errorMessage: 'Pick from the list',
+      };
+      assert.ok(wb.addValidation(0, listRule).ok);
+
+      // Decimal between [0, 100] across two rectangles.
+      const decimalRule = {
+        ranges: [
+          { firstRow: 4, firstCol: 0, lastRow: 4, lastCol: 0 },
+          { firstRow: 6, firstCol: 0, lastRow: 9, lastCol: 0 },
+        ],
+        type: 2,
+        op: 0,
+        formula1: '0',
+        formula2: '100',
+        allowBlank: false,
+      };
+      assert.ok(wb.addValidation(0, decimalRule).ok);
+
+      const list = wb.getValidations(0);
+      assert.equal(list.length, 2);
+
+      const a = list[0];
+      assert.equal(a.type, 3);
+      assert.equal(a.op, 0);
+      assert.equal(a.errorStyle, 1);
+      // Booleans must arrive as JS booleans, not 0/1.
+      assert.equal(typeof a.allowBlank, 'boolean');
+      assert.equal(a.allowBlank, true);
+      assert.equal(typeof a.showInputMessage, 'boolean');
+      assert.equal(a.showInputMessage, true);
+      assert.equal(typeof a.showErrorMessage, 'boolean');
+      assert.equal(a.showErrorMessage, true);
+      assert.equal(a.formula1, '"Yes,No,Maybe"');
+      assert.equal(a.promptTitle, 'Choose');
+      assert.equal(a.errorTitle, 'Bad value');
+      assert.equal(a.errorMessage, 'Pick from the list');
+      assert.equal(a.ranges.length, 1);
+      assert.equal(a.ranges[0].firstRow, 0);
+      assert.equal(a.ranges[0].lastCol, 1);
+
+      const b = list[1];
+      assert.equal(b.type, 2);
+      assert.equal(b.formula1, '0');
+      assert.equal(b.formula2, '100');
+      assert.equal(b.allowBlank, false);
+      assert.equal(b.ranges.length, 2);
+      assert.equal(b.ranges[1].firstRow, 6);
+      assert.equal(b.ranges[1].lastRow, 9);
+
+      // removeValidationAt drops the first rule.
+      assert.ok(wb.removeValidationAt(0, 0).ok);
+      const after = wb.getValidations(0);
+      assert.equal(after.length, 1);
+      assert.equal(after[0].type, 2);
+
+      // Out-of-range index is rejected.
+      assert.ok(!wb.removeValidationAt(0, 99).ok);
+
+      // clearValidations drops everything; safe to call again.
+      assert.ok(wb.clearValidations(0).ok);
+      assert.equal(wb.getValidations(0).length, 0);
+      assert.ok(wb.clearValidations(0).ok);
+
+      // Sheet-out-of-range is rejected on every entry.
+      assert.ok(!wb.addValidation(999, listRule).ok);
+      assert.ok(!wb.removeValidationAt(999, 0).ok);
+      assert.ok(!wb.clearValidations(999).ok);
     } finally {
       wb.delete();
     }

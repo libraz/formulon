@@ -155,6 +155,48 @@ test('addMerge + getMerges round-trip a single range', async () => {
   );
 });
 
+test('addHyperlink + getHyperlinks round-trip', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.equal(wb.getHyperlinks(0).length, 0);
+  // Three entries with progressively more optional fields populated.
+  assert.ok(wb.addHyperlink(0, 1, 2, 'https://example.com/', '', '').ok);
+  assert.ok(wb.addHyperlink(0, 3, 4, 'mailto:hello@example.com', 'Hello', '').ok);
+  assert.ok(wb.addHyperlink(0, 5, 6, 'https://example.org/x', 'See X', 'External link').ok);
+  const list = wb.getHyperlinks(0);
+  assert.equal(list.length, 3);
+  assert.equal(list[0].row, 1);
+  assert.equal(list[0].col, 2);
+  assert.equal(list[0].target, 'https://example.com/');
+  assert.equal(list[0].display, '');
+  assert.equal(list[0].tooltip, '');
+  assert.equal(list[1].target, 'mailto:hello@example.com');
+  assert.equal(list[1].display, 'Hello');
+  assert.equal(list[2].display, 'See X');
+  assert.equal(list[2].tooltip, 'External link');
+  // Sheet-out-of-range is rejected.
+  assert.ok(!wb.addHyperlink(999, 0, 0, 'https://x/', '', '').ok);
+  // clearHyperlinks drops everything.
+  assert.ok(wb.clearHyperlinks(0).ok);
+  assert.equal(wb.getHyperlinks(0).length, 0);
+});
+
+test('removeHyperlink / removeHyperlinkAt / clearHyperlinks surface on an empty sheet', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  // No-op variants on an empty list still return kOk.
+  assert.ok(wb.removeHyperlink(0, 0, 0).ok);
+  assert.ok(wb.clearHyperlinks(0).ok);
+  // Out-of-range index is rejected.
+  assert.ok(!wb.removeHyperlinkAt(0, 0).ok);
+  // Sheet-index-out-of-range is rejected on every variant.
+  assert.ok(!wb.removeHyperlink(999, 0, 0).ok);
+  assert.ok(!wb.removeHyperlinkAt(999, 0).ok);
+  assert.ok(!wb.clearHyperlinks(999).ok);
+  // The hyperlink list is still empty afterwards.
+  assert.equal(wb.getHyperlinks(0).length, 0);
+});
+
 test('removeMerge + removeMergeAt + clearMerges step-wise prune the merge list', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
@@ -220,6 +262,113 @@ test('setCellXfIndex + getCellXfIndex round-trip the xf id', async () => {
   assert.ok(r.status.ok, `getCellXfIndex: ${JSON.stringify(r.status)}`);
   assert.equal(typeof r.xfIndex, 'number');
   assert.equal(r.xfIndex, 0);
+});
+
+test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  // A fresh workbook starts with empty styles tables.
+  assert.equal(wb.fontCount(), 0);
+  assert.equal(wb.fillCount(), 0);
+  assert.equal(wb.borderCount(), 0);
+  assert.equal(wb.xfCount(), 0);
+
+  const fontResult = wb.addFont({
+    name: 'Arial',
+    size: 12,
+    bold: true,
+    italic: false,
+    strike: false,
+    underline: 0,
+    colorArgb: 0xff112233,
+  });
+  assert.ok(fontResult.status.ok, `addFont: ${JSON.stringify(fontResult.status)}`);
+  // Linear-search dedup: the second call with the same payload returns the same index.
+  const fontDup = wb.addFont({
+    name: 'Arial',
+    size: 12,
+    bold: true,
+    italic: false,
+    strike: false,
+    underline: 0,
+    colorArgb: 0xff112233,
+  });
+  assert.equal(fontDup.index, fontResult.index);
+  assert.equal(wb.fontCount(), 1);
+
+  const fill = wb.addFill({ pattern: 1, fgArgb: 0xffff0000, bgArgb: 0xff000000 });
+  assert.ok(fill.status.ok);
+  const border = wb.addBorder({
+    left: { style: 1, colorArgb: 0xff000000 },
+    right: { style: 1, colorArgb: 0xff000000 },
+    top: { style: 1, colorArgb: 0xff000000 },
+    bottom: { style: 1, colorArgb: 0xff000000 },
+    diagonal: { style: 0, colorArgb: 0 },
+    diagonalUp: false,
+    diagonalDown: false,
+  });
+  assert.ok(border.status.ok);
+
+  const builtin = wb.addNumFmt('General');
+  assert.ok(builtin.status.ok);
+  assert.equal(builtin.numFmtId, 0);
+
+  const custom = wb.addNumFmt('"USD" #,##0');
+  assert.ok(custom.status.ok);
+  assert.ok(custom.numFmtId >= 164, `expected custom id >= 164, got ${custom.numFmtId}`);
+
+  const xf = wb.addXf({
+    fontIndex: fontResult.index,
+    fillIndex: fill.index,
+    borderIndex: border.index,
+    numFmtId: custom.numFmtId,
+    horizontalAlign: 1,
+    verticalAlign: 2,
+    wrapText: true,
+  });
+  assert.ok(xf.status.ok, `addXf: ${JSON.stringify(xf.status)}`);
+
+  assert.ok(wb.setNumber(0, 0, 0, 1).ok);
+  assert.ok(wb.setCellXfIndex(0, 0, 0, xf.index).ok);
+
+  const reread = wb.getCellXf(xf.index);
+  assert.ok(reread.status.ok);
+  assert.equal(reread.fontIndex, fontResult.index);
+  assert.equal(reread.numFmtId, custom.numFmtId);
+  assert.equal(reread.wrapText, true);
+
+  const rfont = wb.getFont(fontResult.index);
+  assert.ok(rfont.status.ok);
+  assert.equal(rfont.name, 'Arial');
+  assert.equal(rfont.bold, true);
+
+  const rfill = wb.getFill(fill.index);
+  assert.ok(rfill.status.ok);
+  assert.equal(rfill.pattern, 1);
+
+  const rborder = wb.getBorder(border.index);
+  assert.ok(rborder.status.ok);
+  assert.equal(rborder.left.style, 1);
+  assert.equal(rborder.diagonalUp, false);
+
+  const rfmt = wb.getNumFmt(custom.numFmtId);
+  assert.ok(rfmt.status.ok);
+  assert.equal(rfmt.formatCode, '"USD" #,##0');
+});
+
+test('addXf rejects out-of-range font_index', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const r = wb.addXf({
+    fontIndex: 99,
+    fillIndex: 0,
+    borderIndex: 0,
+    numFmtId: 0,
+    horizontalAlign: 0,
+    verticalAlign: 0,
+    wrapText: false,
+  });
+  assert.ok(!r.status.ok, 'expected addXf to reject out-of-range font_index');
 });
 
 test('setIterativeProgress accepts a function and accepts null to clear', async () => {
@@ -295,4 +444,75 @@ test('default export exposes CfMatchKind ordinals', async () => {
   assert.equal(mod.CfMatchKind.ColorScale, 1);
   assert.equal(mod.CfMatchKind.DataBar, 2);
   assert.equal(mod.CfMatchKind.IconSet, 3);
+});
+
+test('addValidation / getValidations / removeValidationAt / clearValidations round-trip', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  // Empty by default.
+  assert.equal(wb.getValidations(0).length, 0);
+
+  // List-type validation at A1:B3.
+  const listRule = {
+    ranges: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 }],
+    type: 3,
+    op: 0,
+    errorStyle: 1,
+    allowBlank: true,
+    showInputMessage: true,
+    showErrorMessage: true,
+    formula1: '"Yes,No,Maybe"',
+    promptTitle: 'Choose',
+    promptMessage: 'Pick one',
+    errorTitle: 'Bad value',
+    errorMessage: 'Pick from the list',
+  };
+  assert.ok(wb.addValidation(0, listRule).ok);
+
+  // Decimal between [0, 100] across two rectangles.
+  const decimalRule = {
+    ranges: [
+      { firstRow: 4, firstCol: 0, lastRow: 4, lastCol: 0 },
+      { firstRow: 6, firstCol: 0, lastRow: 9, lastCol: 0 },
+    ],
+    type: 2,
+    op: 0,
+    formula1: '0',
+    formula2: '100',
+    allowBlank: false,
+  };
+  assert.ok(wb.addValidation(0, decimalRule).ok);
+
+  const list = wb.getValidations(0);
+  assert.equal(list.length, 2);
+  // Booleans must arrive as JS booleans, not 0/1.
+  assert.equal(typeof list[0].allowBlank, 'boolean');
+  assert.equal(list[0].allowBlank, true);
+  assert.equal(typeof list[0].showInputMessage, 'boolean');
+  assert.equal(list[0].showInputMessage, true);
+  assert.equal(typeof list[1].allowBlank, 'boolean');
+  assert.equal(list[1].allowBlank, false);
+  assert.equal(list[0].formula1, '"Yes,No,Maybe"');
+  assert.equal(list[1].formula1, '0');
+  assert.equal(list[1].formula2, '100');
+  assert.equal(list[1].ranges.length, 2);
+  assert.equal(list[1].ranges[1].firstRow, 6);
+
+  // removeValidationAt removes the first rule.
+  assert.ok(wb.removeValidationAt(0, 0).ok);
+  const after = wb.getValidations(0);
+  assert.equal(after.length, 1);
+  assert.equal(after[0].type, 2);
+
+  // Out-of-range index is rejected.
+  assert.ok(!wb.removeValidationAt(0, 99).ok);
+  // Sheet-out-of-range is rejected on every entry.
+  assert.ok(!wb.addValidation(999, listRule).ok);
+  assert.ok(!wb.removeValidationAt(999, 0).ok);
+  assert.ok(!wb.clearValidations(999).ok);
+
+  // clearValidations drops everything; safe to call again.
+  assert.ok(wb.clearValidations(0).ok);
+  assert.equal(wb.getValidations(0).length, 0);
+  assert.ok(wb.clearValidations(0).ok);
 });

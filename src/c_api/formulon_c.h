@@ -609,6 +609,36 @@ typedef struct {
 FM_API fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, uint32_t sheet, fm_hyperlink hl);
 
 /**
+ * @brief Removes every hyperlink anchored at the exact `(row, col)`
+ *        cell on `sheet`. No-op when nothing matches.
+ *
+ * @return `kOk` on success (including the no-match case);
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet` is out of range.
+ */
+FM_API fm_status_t fm_sheet_remove_hyperlink(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col);
+
+/**
+ * @brief Removes the hyperlink at `index` on `sheet`. Mirrors the
+ *        index domain of fm_sheet_get_hyperlink_at.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet` or `index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_remove_hyperlink_at(fm_workbook_t* wb, uint32_t sheet, uint32_t index);
+
+/**
+ * @brief Drops every hyperlink on `sheet`. No-op when the sheet
+ *        already has no hyperlinks.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet` is out of range.
+ */
+FM_API fm_status_t fm_sheet_clear_hyperlinks(fm_workbook_t* wb, uint32_t sheet);
+
+/**
  * @brief Appends a merge range to the sheet's merge list.
  */
 FM_API fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, uint32_t sheet, fm_merge_range merge);
@@ -693,6 +723,110 @@ FM_API fm_status_t fm_sheet_get_merge_count(fm_workbook_t* wb, uint32_t sheet, u
  */
 FM_API fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
                                         const char* author, const char* text);
+
+/**
+ * @brief Data-validation rule descriptor.
+ *
+ * Mirrors `formulon::DataValidation`:
+ *   * `ranges` / `range_count` — the cell-range list this rule applies to.
+ *     For getter results the pointer is borrowed from the workbook handle
+ *     (see `fm_sheet_get_validation_at` for the lifetime contract). For
+ *     `fm_sheet_add_validation` the caller owns the buffer and must keep
+ *     it alive for the duration of the call only; the implementation
+ *     deep-copies every range into the sheet's owned storage.
+ *   * `type` — 0 none, 1 whole, 2 decimal, 3 list, 4 date, 5 time,
+ *     6 textLength, 7 custom.
+ *   * `op`   — 0 between, 1 notBetween, 2 equal, 3 notEqual,
+ *     4 greaterThan, 5 lessThan, 6 greaterThanOrEqual, 7 lessThanOrEqual.
+ *   * `error_style` — 0 stop, 1 warning, 2 information.
+ *   * `allow_blank` / `show_input_message` / `show_error_message` —
+ *     0 = false, 1 = true.
+ *   * `formula1` / `formula2` / `error_title` / `error_message` /
+ *     `prompt_title` / `prompt_message` — borrowed NUL-terminated UTF-8
+ *     strings. On the input path (`fm_sheet_add_validation`) `NULL`
+ *     means "absent" and is treated as the empty string. Getters always
+ *     return non-NULL pointers (possibly pointing at an empty string).
+ */
+typedef struct {
+  const fm_merge_range* ranges;
+  uint32_t range_count;
+  uint8_t type;
+  uint8_t op;
+  uint8_t error_style;
+  int32_t allow_blank;
+  int32_t show_input_message;
+  int32_t show_error_message;
+  const char* formula1;
+  const char* formula2;
+  const char* error_title;
+  const char* error_message;
+  const char* prompt_title;
+  const char* prompt_message;
+} fm_data_validation;
+
+/**
+ * @brief Returns the number of data-validation rules attached to `sheet`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet` is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_validation_count(fm_workbook_t* wb, uint32_t sheet, uint32_t* out_count);
+
+/**
+ * @brief Reads the `index`-th data-validation rule on `sheet` into `out`.
+ *
+ * Every borrowed pointer in `*out` (`ranges` and the six string fields)
+ * is owned by the workbook handle and remains valid until the next
+ * mutation that touches the sheet's validation list (any of
+ * `fm_sheet_add_validation`, `fm_sheet_remove_validation_at`,
+ * `fm_sheet_clear_validations`, or any reader / writer round-trip), or
+ * until the handle is destroyed. Callers that need to retain the
+ * payload across mutations must copy it.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet` or `index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_validation_at(fm_workbook_t* wb, uint32_t sheet, uint32_t index,
+                                              fm_data_validation* out);
+
+/**
+ * @brief Appends a data-validation rule to the sheet's validation list.
+ *
+ * Every string field accepts `NULL`, which is treated as the empty
+ * string. `v.ranges` may be `NULL` only when `v.range_count == 0`
+ * (a rule with no anchor ranges); otherwise it must point to
+ * `v.range_count` consecutive `fm_merge_range` values that the
+ * implementation copies into the rule's owned storage. Range corners
+ * are not normalised — callers should pass already-normalised
+ * `(first <= last)` rectangles.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet` is out of range or
+ *         `v.range_count > 0 && v.ranges == NULL`.
+ */
+FM_API fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, uint32_t sheet, fm_data_validation v);
+
+/**
+ * @brief Removes the validation rule at `index` on `sheet`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet` or `index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_remove_validation_at(fm_workbook_t* wb, uint32_t sheet, uint32_t index);
+
+/**
+ * @brief Drops every validation rule on `sheet`. No-op when the sheet
+ *        already has no rules.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet` is out of range.
+ */
+FM_API fm_status_t fm_sheet_clear_validations(fm_workbook_t* wb, uint32_t sheet);
 
 /* -------------------------------------------------------------------------- */
 /* Recalc                                                                     */
@@ -1188,6 +1322,49 @@ typedef struct {
 } fm_font_record;
 
 /**
+ * @brief Plain-data projection of a `formulon::io::FillRecord`.
+ *
+ * `pattern` is the OOXML pattern index: `0=none`, `1=solid`,
+ * `2..18=standard pattern set`. `fg_argb` and `bg_argb` are AARRGGBB
+ * packed colours.
+ */
+typedef struct {
+  uint8_t pattern;  /* 0=none, 1=solid, 2..18=standard pattern set */
+  uint32_t fg_argb; /* foreground colour, AARRGGBB */
+  uint32_t bg_argb; /* background colour, AARRGGBB */
+} fm_fill_record;
+
+/**
+ * @brief Plain-data projection of one side of a
+ *        `formulon::io::BorderRecord`.
+ *
+ * `style` is the OOXML border-style ordinal: `0=none`, `1=thin`,
+ * `2=medium`, `3=dashed`, ..., `13=slantDashDot`. `color_argb` is
+ * AARRGGBB.
+ */
+typedef struct {
+  uint8_t style;       /* 0=none, 1=thin, ..., 13=slantDashDot */
+  uint32_t color_argb; /* AARRGGBB */
+} fm_border_side;
+
+/**
+ * @brief Plain-data projection of a `formulon::io::BorderRecord`.
+ *
+ * Each side mirrors the OOXML schema. `diagonal_up` / `diagonal_down`
+ * carry the boolean flags as `0`/`1` int32_t to match the rest of the
+ * binding surface.
+ */
+typedef struct {
+  fm_border_side left;
+  fm_border_side right;
+  fm_border_side top;
+  fm_border_side bottom;
+  fm_border_side diagonal;
+  int32_t diagonal_up;   /* 0=false, 1=true */
+  int32_t diagonal_down; /* 0=false, 1=true */
+} fm_border_record;
+
+/**
  * @brief Reads the `xf_index` (style record id) attached to the cell at
  *        `(row, col)` on `sheet`.
  *
@@ -1254,6 +1431,160 @@ FM_API fm_status_t fm_styles_get_font(fm_workbook_t* wb, uint32_t font_index, fm
  *         `kInvalidArgument` when the id is unknown.
  */
 FM_API fm_status_t fm_styles_get_num_fmt_string(fm_workbook_t* wb, uint16_t num_fmt_id, const char** out);
+
+/**
+ * @brief Reads the `fill_index`-th fill record from the workbook's
+ *        styles table.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `fill_index >= fills.size()`.
+ */
+FM_API fm_status_t fm_styles_get_fill(fm_workbook_t* wb, uint32_t fill_index, fm_fill_record* out);
+
+/**
+ * @brief Reads the `border_index`-th border record from the workbook's
+ *        styles table.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `border_index >= borders.size()`.
+ */
+FM_API fm_status_t fm_styles_get_border(fm_workbook_t* wb, uint32_t border_index, fm_border_record* out);
+
+/**
+ * @brief Returns the number of font records currently registered in the
+ *        workbook's styles table.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ */
+FM_API fm_status_t fm_styles_get_font_count(fm_workbook_t* wb, uint32_t* out_count);
+
+/**
+ * @brief Returns the number of fill records currently registered in the
+ *        workbook's styles table.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ */
+FM_API fm_status_t fm_styles_get_fill_count(fm_workbook_t* wb, uint32_t* out_count);
+
+/**
+ * @brief Returns the number of border records currently registered in
+ *        the workbook's styles table.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ */
+FM_API fm_status_t fm_styles_get_border_count(fm_workbook_t* wb, uint32_t* out_count);
+
+/**
+ * @brief Returns the number of `<xf>` records currently registered in
+ *        the workbook's styles table (i.e. the size of the `cellXfs`
+ *        vector).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ */
+FM_API fm_status_t fm_styles_get_cell_xf_count(fm_workbook_t* wb, uint32_t* out_count);
+
+/**
+ * @brief Adds a font record to the workbook's styles table, deduplicating
+ *        against existing entries.
+ *
+ * Linear-search dedup: returns the index of the first existing record
+ * that is field-for-field equal to `record`. When no match exists the
+ * record is appended and the new (now-largest) index is returned. The
+ * dedup is `O(N)` per call; callers that bulk-build a workbook should
+ * batch when possible.
+ *
+ * `record.name` must be a NUL-terminated UTF-8 pointer; an empty /
+ * `NULL` pointer is treated as the empty string. The string is copied
+ * into the styles table and may be freed by the caller after the call
+ * returns.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_index` is `NULL`.
+ */
+FM_API fm_status_t fm_styles_add_font(fm_workbook_t* wb, fm_font_record record, uint32_t* out_index);
+
+/**
+ * @brief Adds a fill record to the workbook's styles table, deduplicating
+ *        against existing entries.
+ *
+ * Linear-search dedup: returns the index of the first existing record
+ * that is field-for-field equal to `record`. When no match exists the
+ * record is appended and the new (now-largest) index is returned. The
+ * dedup is `O(N)` per call; callers that bulk-build a workbook should
+ * batch when possible.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_index` is `NULL`.
+ */
+FM_API fm_status_t fm_styles_add_fill(fm_workbook_t* wb, fm_fill_record record, uint32_t* out_index);
+
+/**
+ * @brief Adds a border record to the workbook's styles table, deduplicating
+ *        against existing entries.
+ *
+ * Linear-search dedup: returns the index of the first existing record
+ * that is field-for-field equal to `record`. When no match exists the
+ * record is appended and the new (now-largest) index is returned. The
+ * dedup is `O(N)` per call; callers that bulk-build a workbook should
+ * batch when possible.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_index` is `NULL`.
+ */
+FM_API fm_status_t fm_styles_add_border(fm_workbook_t* wb, fm_border_record record, uint32_t* out_index);
+
+/**
+ * @brief Adds a number-format code to the workbook's styles table,
+ *        deduplicating against existing entries. Returns the resolved
+ *        OOXML `numFmtId`.
+ *
+ * Resolution proceeds in three steps:
+ *   1. If `format_code` matches a built-in id (`0..163`, compared
+ *      verbatim against `formulon::io::builtin_num_fmt(id)`) the
+ *      built-in id is returned and nothing is appended to the table.
+ *   2. Otherwise the existing custom entries are searched; the first
+ *      match returns its registered id.
+ *   3. Otherwise a new custom entry is appended with id
+ *      `max(existing_custom_id, 163) + 1`, and the new id is returned.
+ *
+ * `format_code` must be a NUL-terminated UTF-8 pointer; passing `NULL`
+ * is treated as the empty string.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_num_fmt_id` is `NULL`.
+ */
+FM_API fm_status_t fm_styles_add_num_fmt(fm_workbook_t* wb, const char* format_code, uint16_t* out_num_fmt_id);
+
+/**
+ * @brief Adds an `<xf>` record to the workbook's styles table,
+ *        deduplicating against existing entries.
+ *
+ * Linear-search dedup: returns the index of the first existing record
+ * that is field-for-field equal to `record`. When no match exists the
+ * record is appended and the new (now-largest) index is returned. The
+ * dedup is `O(N)` per call; callers that bulk-build a workbook should
+ * batch when possible.
+ *
+ * Validation:
+ *   * `record.font_index` must satisfy `< font_count` (no auto-grow).
+ *   * `record.fill_index` must satisfy `< fill_count`.
+ *   * `record.border_index` must satisfy `< border_count`.
+ *   * `record.num_fmt_id` must either be a documented built-in
+ *     (`< 164` AND resolves through `builtin_num_fmt`) or already
+ *     registered as a custom entry. Unknown ids surface
+ *     `kInvalidArgument`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_xf_index` is `NULL`;
+ *         `kInvalidArgument` for any out-of-range / unregistered field.
+ */
+FM_API fm_status_t fm_styles_add_cell_xf(fm_workbook_t* wb, fm_cell_xf record, uint32_t* out_xf_index);
 
 /* -------------------------------------------------------------------------- */
 /* Version                                                                    */

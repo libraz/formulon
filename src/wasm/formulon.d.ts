@@ -261,16 +261,66 @@ export interface CommentEntry {
   text: string;
 }
 
-/** Sheet validation entry. The shape will firm up when the writeable
- *  surface lands; today the array is always empty. */
-export interface ValidationEntry {
-  ranges?: ReadonlyArray<MergeRange>;
-  type?: string;
-  op?: string;
+/** One cell-range entry inside a `DataValidationEntry.ranges`. Identical
+ *  shape to `MergeRange`; declared separately so the data-validation
+ *  surface can evolve independently of the merge surface. */
+export interface DataValidationRange {
+  readonly firstRow: number;
+  readonly firstCol: number;
+  readonly lastRow: number;
+  readonly lastCol: number;
+}
+
+/** One sheet `<dataValidation>` block as returned by
+ *  `getValidations(sheet)`.
+ *
+ *  Field semantics (matches OOXML `dataValidations.xsd`):
+ *    * `type`        — 0 none, 1 whole, 2 decimal, 3 list, 4 date,
+ *                       5 time, 6 textLength, 7 custom.
+ *    * `op`          — 0 between, 1 notBetween, 2 equal, 3 notEqual,
+ *                       4 greaterThan, 5 lessThan,
+ *                       6 greaterThanOrEqual, 7 lessThanOrEqual.
+ *    * `errorStyle`  — 0 stop, 1 warning, 2 information.
+ */
+export interface DataValidationEntry {
+  readonly ranges: ReadonlyArray<DataValidationRange>;
+  readonly type: number;
+  readonly op: number;
+  readonly errorStyle: number;
+  readonly allowBlank: boolean;
+  readonly showInputMessage: boolean;
+  readonly showErrorMessage: boolean;
+  readonly formula1: string;
+  readonly formula2: string;
+  readonly errorTitle: string;
+  readonly errorMessage: string;
+  readonly promptTitle: string;
+  readonly promptMessage: string;
+}
+
+/** Argument shape accepted by `addValidation(sheet, validation)`. Every
+ *  field except `type` is optional; missing fields default to `0` for
+ *  the small enum-shaped integers, `false` for booleans, and `""` for
+ *  strings. `ranges` is required by the model but accepted as missing
+ *  to allow zero-range rules. */
+export interface DataValidationInput {
+  ranges?: ReadonlyArray<DataValidationRange>;
+  type: number;
+  op?: number;
+  errorStyle?: number;
+  allowBlank?: boolean;
+  showInputMessage?: boolean;
+  showErrorMessage?: boolean;
   formula1?: string;
   formula2?: string;
+  errorTitle?: string;
   errorMessage?: string;
+  promptTitle?: string;
+  promptMessage?: string;
 }
+
+/** @deprecated Use {@link DataValidationEntry} instead. */
+export type ValidationEntry = DataValidationEntry;
 
 /** Return type of `Workbook.getCellXfIndex(sheet, row, col)`. */
 export interface CellXfIndexResult {
@@ -288,6 +338,99 @@ export interface CellXfResult {
   horizontalAlign: number;
   verticalAlign: number;
   wrapText: boolean;
+}
+
+/** Plain-data shape of a font record. Mirrors `formulon::io::FontRecord`. */
+export interface FontRecord {
+  name: string;
+  size: number;
+  bold: boolean;
+  italic: boolean;
+  strike: boolean;
+  /** 0=none, 1=single, 2=double, 3=singleAccounting, 4=doubleAccounting. */
+  underline: number;
+  /** AARRGGBB packed colour. */
+  colorArgb: number;
+}
+
+/** Plain-data shape of a fill record. Mirrors `formulon::io::FillRecord`. */
+export interface FillRecord {
+  /** OOXML pattern ordinal: 0=none, 1=solid, 2..18=standard pattern set. */
+  pattern: number;
+  /** Foreground AARRGGBB colour. */
+  fgArgb: number;
+  /** Background AARRGGBB colour. */
+  bgArgb: number;
+}
+
+/** One side of a `BorderRecord`. */
+export interface BorderSide {
+  /** OOXML border-style ordinal: 0=none, 1=thin, ..., 13=slantDashDot. */
+  style: number;
+  /** AARRGGBB packed colour. */
+  colorArgb: number;
+}
+
+/** Plain-data shape of a border record. Mirrors `formulon::io::BorderRecord`. */
+export interface BorderRecord {
+  left: BorderSide;
+  right: BorderSide;
+  top: BorderSide;
+  bottom: BorderSide;
+  diagonal: BorderSide;
+  diagonalUp: boolean;
+  diagonalDown: boolean;
+}
+
+/** Plain-data shape of an `<xf>` record. Mirrors `formulon::io::CellXf`. */
+export interface CellXf {
+  fontIndex: number;
+  fillIndex: number;
+  borderIndex: number;
+  numFmtId: number;
+  /** 0=general, 1=left, 2=center, 3=right, 4=fill, 5=justify, 6=centerContinuous, 7=distributed. */
+  horizontalAlign: number;
+  /** 0=top, 1=center, 2=bottom, 3=justify, 4=distributed. */
+  verticalAlign: number;
+  wrapText: boolean;
+}
+
+/** Return type of `Workbook.getFont(fontIndex)`. */
+export interface FontResult extends FontRecord {
+  status: Status;
+}
+
+/** Return type of `Workbook.getFill(fillIndex)`. */
+export interface FillResult extends FillRecord {
+  status: Status;
+}
+
+/** Return type of `Workbook.getBorder(borderIndex)`. */
+export interface BorderResult extends BorderRecord {
+  status: Status;
+}
+
+/** Return type of `Workbook.getNumFmt(numFmtId)`. */
+export interface NumFmtResult {
+  status: Status;
+  numFmtId: number;
+  formatCode: string;
+}
+
+/** Return type of `Workbook.addFont/Fill/Border/Xf(...)`. The
+ *  add-functions deduplicate against existing entries via linear
+ *  search; `index` is either the matched index or the freshly-appended
+ *  index. */
+export interface AddStyleResult {
+  status: Status;
+  index: number;
+}
+
+/** Return type of `Workbook.addNumFmt(formatCode)`. The id is either a
+ *  matched built-in (`0..163`) or a freshly-assigned custom id (`>= 164`). */
+export interface AddNumFmtResult {
+  status: Status;
+  numFmtId: number;
 }
 
 /** Range used by `partialRecalc`. */
@@ -423,6 +566,40 @@ export interface Workbook {
   setCellXfIndex(sheet: number, row: number, col: number, xfIndex: number): Status;
   /** Returns the resolved XF record at `xfIndex`. */
   getCellXf(xfIndex: number): CellXfResult;
+  /** Returns the resolved font record at `fontIndex`. */
+  getFont(fontIndex: number): FontResult;
+  /** Returns the resolved fill record at `fillIndex`. */
+  getFill(fillIndex: number): FillResult;
+  /** Returns the resolved border record at `borderIndex`. */
+  getBorder(borderIndex: number): BorderResult;
+  /** Returns the format string registered for `numFmtId`. */
+  getNumFmt(numFmtId: number): NumFmtResult;
+
+  /** Adds a font (deduplicating against existing entries) and returns
+   *  the resolved index. */
+  addFont(record: FontRecord): AddStyleResult;
+  /** Adds a fill (deduplicating against existing entries). */
+  addFill(record: FillRecord): AddStyleResult;
+  /** Adds a border (deduplicating against existing entries). */
+  addBorder(record: BorderRecord): AddStyleResult;
+  /** Adds a number-format code. Built-in matches return the built-in id
+   *  without modifying the table; custom codes are appended at
+   *  `max(existing_custom_id, 163) + 1`. */
+  addNumFmt(formatCode: string): AddNumFmtResult;
+  /** Adds an `<xf>` record (deduplicating against existing entries).
+   *  Out-of-range font/fill/border indices or unregistered `numFmtId`
+   *  surface `kInvalidArgument` rather than auto-growing the parallel
+   *  tables. */
+  addXf(record: CellXf): AddStyleResult;
+
+  /** Returns the number of font records currently registered. */
+  fontCount(): number;
+  /** Returns the number of fill records currently registered. */
+  fillCount(): number;
+  /** Returns the number of border records currently registered. */
+  borderCount(): number;
+  /** Returns the number of `<xf>` records currently registered. */
+  xfCount(): number;
 
   /** Adds a merge range to `sheet`. */
   addMerge(sheet: number, range: MergeRange): Status;
@@ -440,13 +617,32 @@ export interface Workbook {
   /** Sets / replaces the cell comment. Pass an empty `text` to remove. */
   setComment(sheet: number, row: number, col: number, author: string, text: string): Status;
 
+  /** Appends a hyperlink to `sheet`. Pass empty strings for `display`
+   *  or `tooltip` to mean "use the default" or "no tooltip". The
+   *  `location` field is filled implicitly (empty) and the writer mints
+   *  a fresh `rId` on save. */
+  addHyperlink(sheet: number, row: number, col: number, target: string, display: string, tooltip: string): Status;
+  /** Removes every hyperlink anchored at `(row, col)`. No-op when none match. */
+  removeHyperlink(sheet: number, row: number, col: number): Status;
+  /** Removes the hyperlink at `index`. Returns kInvalidArgument if `index` is out of range. */
+  removeHyperlinkAt(sheet: number, index: number): Status;
+  /** Drops every hyperlink on `sheet`. */
+  clearHyperlinks(sheet: number): Status;
   /** Returns every hyperlink on `sheet` as a JS array. */
   getHyperlinks(sheet: number): ReadonlyArray<HyperlinkEntry>;
 
-  /** Returns every validation entry on `sheet`. Currently always empty:
-   *  the writeable surface (and the underlying C ABI iterator) lands in
-   *  a follow-up bundle. */
-  getValidations(sheet: number): ReadonlyArray<ValidationEntry>;
+  /** Returns every data-validation rule on `sheet` in storage order.
+   *  Each rule's `ranges` mirrors the OOXML `<dataValidation sqref=...>`
+   *  cell-range list; the rule itself surfaces its raw OOXML payload
+   *  (the engine does not yet evaluate validation rules). */
+  getValidations(sheet: number): ReadonlyArray<DataValidationEntry>;
+  /** Appends a data-validation rule to `sheet`. */
+  addValidation(sheet: number, validation: DataValidationInput): Status;
+  /** Removes the validation rule at `index`. Returns `kInvalidArgument`
+   *  if `index` is out of range. */
+  removeValidationAt(sheet: number, index: number): Status;
+  /** Drops every validation rule on `sheet`. */
+  clearValidations(sheet: number): Status;
 }
 
 /** Static factories on the Workbook class. */

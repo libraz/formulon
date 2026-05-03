@@ -192,6 +192,22 @@ struct JsRowsResult {
   std::vector<JsRowLayout> rows;
 };
 
+/// Return envelope for `Workbook.addFont` / `addFill` / `addBorder` /
+/// `addXf`. The `index` field carries the resolved (existing or new)
+/// table index.
+struct JsAddStyleResult {
+  JsStatus status;
+  uint32_t index = 0U;
+};
+
+/// Return envelope for `Workbook.addNumFmt`. `numFmtId` is either the
+/// matched built-in id (`0..163`) or the freshly-assigned custom id
+/// (`>= 164`).
+struct JsAddNumFmtResult {
+  JsStatus status;
+  uint32_t numFmtId = 0U;
+};
+
 /// Builds an `ok` envelope with empty diagnostic strings.
 JsStatus ok_status() {
   return JsStatus{true, 0, std::string(), std::string()};
@@ -208,6 +224,91 @@ JsStatus error_status(int32_t code) {
   s.message = msg != nullptr ? msg : "";
   s.context = ctx != nullptr ? ctx : "";
   return s;
+}
+
+// ---- JS field-extraction helpers ----------------------------------------
+//
+// These small helpers replace the repetitive
+// `record["x"].isUndefined() ? dflt : record["x"].as<T>()` pattern that
+// previously appeared inside addFont / addFill / addBorder / addXf /
+// addValidation. Centralising them lets the compiler emit one copy of the
+// embind glue (val::operator[], val::isUndefined, val::as<T>) per field
+// type instead of one per call site, which is a measurable WASM size win
+// because every embind operation pulls in non-trivial JS-bridge stubs.
+//
+// They are intentionally `inline` (not `noinline`): empirically, letting
+// `-Oz` keep them inlined yields a smaller `.wasm.br` than forcing a
+// call. The dedup win comes from the helpers themselves being shared
+// between sites, not from inhibiting inlining.
+
+/// Returns the `uint32_t` value of `v[key]`, or `dflt` when the field is
+/// missing / undefined / null.
+inline uint32_t js_pull_u32(const emscripten::val& v, const char* key, uint32_t dflt) {
+  emscripten::val f = v[key];
+  if (f.isUndefined() || f.isNull()) {
+    return dflt;
+  }
+  return f.as<uint32_t>();
+}
+
+/// Returns the low-byte `uint8_t` value of `v[key]`, or `dflt` when missing.
+inline uint8_t js_pull_u8(const emscripten::val& v, const char* key, uint8_t dflt) {
+  return static_cast<uint8_t>(js_pull_u32(v, key, dflt) & 0xFFU);
+}
+
+/// Returns the `uint16_t` value of `v[key]`, or `dflt` when missing.
+inline uint16_t js_pull_u16(const emscripten::val& v, const char* key, uint16_t dflt) {
+  return static_cast<uint16_t>(js_pull_u32(v, key, dflt) & 0xFFFFU);
+}
+
+/// Returns the `double` value of `v[key]`, or `dflt` when missing.
+inline double js_pull_double(const emscripten::val& v, const char* key, double dflt) {
+  emscripten::val f = v[key];
+  if (f.isUndefined() || f.isNull()) {
+    return dflt;
+  }
+  return f.as<double>();
+}
+
+/// Returns the `bool` value of `v[key]`, or `dflt` when missing.
+inline bool js_pull_bool(const emscripten::val& v, const char* key, bool dflt) {
+  emscripten::val f = v[key];
+  if (f.isUndefined() || f.isNull()) {
+    return dflt;
+  }
+  return f.as<bool>();
+}
+
+/// Returns the string value of `v[key]`, or an empty string when missing.
+inline std::string js_pull_string(const emscripten::val& v, const char* key) {
+  emscripten::val f = v[key];
+  if (f.isUndefined() || f.isNull()) {
+    return std::string();
+  }
+  return f.as<std::string>();
+}
+
+/// Pulls a `{style, colorArgb}` border-side record out of `v`, defaulting
+/// every absent field to zero.
+inline fm_border_side js_pull_border_side(const emscripten::val& v) {
+  fm_border_side s{};
+  if (v.isUndefined() || v.isNull()) {
+    return s;
+  }
+  s.style = js_pull_u8(v, "style", 0);
+  s.color_argb = js_pull_u32(v, "colorArgb", 0U);
+  return s;
+}
+
+/// Builds a `{firstRow, lastRow, firstCol, lastCol}` JS object from a
+/// merge / validation range record.
+inline emscripten::val merge_range_to_val(const fm_merge_range& m) {
+  emscripten::val item = emscripten::val::object();
+  item.set("firstRow", m.first_row);
+  item.set("lastRow", m.last_row);
+  item.set("firstCol", m.first_col);
+  item.set("lastCol", m.last_col);
+  return item;
 }
 
 /// Translates a `fm_value_t` into the embind-friendly `JsValue`.
@@ -1061,6 +1162,276 @@ class JsWorkbook {
     return o;
   }
 
+  /// Returns the resolved `<font>` record at `font_index`. Shape mirrors
+  /// the read-side `fm_font_record`.
+  emscripten::val getFont(uint32_t font_index) const {
+    emscripten::val o = emscripten::val::object();
+    if (handle_ == nullptr) {
+      o.set("status", error_status(7000));
+      return o;
+    }
+    fm_font_record f{};
+    fm_status_t rc = fm_styles_get_font(handle_, font_index, &f);
+    if (rc != 0) {
+      o.set("status", error_status(rc));
+      return o;
+    }
+    o.set("status", ok_status());
+    o.set("name", std::string(f.name != nullptr ? f.name : ""));
+    o.set("size", f.size);
+    o.set("colorArgb", f.color_argb);
+    o.set("bold", f.bold != 0);
+    o.set("italic", f.italic != 0);
+    o.set("strike", f.strike != 0);
+    o.set("underline", static_cast<uint32_t>(f.underline));
+    return o;
+  }
+
+  /// Returns the resolved `<fill>` record at `fill_index`.
+  emscripten::val getFill(uint32_t fill_index) const {
+    emscripten::val o = emscripten::val::object();
+    if (handle_ == nullptr) {
+      o.set("status", error_status(7000));
+      return o;
+    }
+    fm_fill_record f{};
+    fm_status_t rc = fm_styles_get_fill(handle_, fill_index, &f);
+    if (rc != 0) {
+      o.set("status", error_status(rc));
+      return o;
+    }
+    o.set("status", ok_status());
+    o.set("pattern", static_cast<uint32_t>(f.pattern));
+    o.set("fgArgb", f.fg_argb);
+    o.set("bgArgb", f.bg_argb);
+    return o;
+  }
+
+  /// Returns the resolved `<border>` record at `border_index`. Each
+  /// side appears as a `{ style, colorArgb }` object.
+  emscripten::val getBorder(uint32_t border_index) const {
+    emscripten::val o = emscripten::val::object();
+    if (handle_ == nullptr) {
+      o.set("status", error_status(7000));
+      return o;
+    }
+    fm_border_record b{};
+    fm_status_t rc = fm_styles_get_border(handle_, border_index, &b);
+    if (rc != 0) {
+      o.set("status", error_status(rc));
+      return o;
+    }
+    auto side_obj = [](const fm_border_side& s) {
+      emscripten::val v = emscripten::val::object();
+      v.set("style", static_cast<uint32_t>(s.style));
+      v.set("colorArgb", s.color_argb);
+      return v;
+    };
+    o.set("status", ok_status());
+    o.set("left", side_obj(b.left));
+    o.set("right", side_obj(b.right));
+    o.set("top", side_obj(b.top));
+    o.set("bottom", side_obj(b.bottom));
+    o.set("diagonal", side_obj(b.diagonal));
+    o.set("diagonalUp", b.diagonal_up != 0);
+    o.set("diagonalDown", b.diagonal_down != 0);
+    return o;
+  }
+
+  /// Returns the format string for a built-in or custom `num_fmt_id`.
+  emscripten::val getNumFmt(uint32_t num_fmt_id) const {
+    emscripten::val o = emscripten::val::object();
+    if (handle_ == nullptr) {
+      o.set("status", error_status(7000));
+      return o;
+    }
+    const char* s = nullptr;
+    fm_status_t rc = fm_styles_get_num_fmt_string(handle_, static_cast<uint16_t>(num_fmt_id), &s);
+    if (rc != 0) {
+      o.set("status", error_status(rc));
+      return o;
+    }
+    o.set("status", ok_status());
+    o.set("numFmtId", num_fmt_id);
+    o.set("formatCode", std::string(s != nullptr ? s : ""));
+    return o;
+  }
+
+  /// Adds (or dedups against an existing entry) a font record. JS-side
+  /// shape: `{ name, size, bold, italic, strike, underline, colorArgb }`.
+  JsAddStyleResult addFont(emscripten::val record) {
+    JsAddStyleResult r;
+    if (handle_ == nullptr) {
+      r.status = error_status(7000);
+      return r;
+    }
+    const std::string name = js_pull_string(record, "name");
+    fm_font_record fr{};
+    fr.name = name.c_str();
+    fr.size = js_pull_double(record, "size", 11.0);
+    fr.bold = js_pull_bool(record, "bold", false) ? 1 : 0;
+    fr.italic = js_pull_bool(record, "italic", false) ? 1 : 0;
+    fr.strike = js_pull_bool(record, "strike", false) ? 1 : 0;
+    fr.underline = js_pull_u8(record, "underline", 0U);
+    fr.color_argb = js_pull_u32(record, "colorArgb", 0xFF000000U);
+    uint32_t idx = 0;
+    fm_status_t rc = fm_styles_add_font(handle_, fr, &idx);
+    if (rc != 0) {
+      r.status = error_status(rc);
+      return r;
+    }
+    r.status = ok_status();
+    r.index = idx;
+    return r;
+  }
+
+  /// Adds (or dedups against an existing entry) a fill record. JS-side
+  /// shape: `{ pattern, fgArgb, bgArgb }`.
+  JsAddStyleResult addFill(emscripten::val record) {
+    JsAddStyleResult r;
+    if (handle_ == nullptr) {
+      r.status = error_status(7000);
+      return r;
+    }
+    fm_fill_record fr{};
+    fr.pattern = js_pull_u8(record, "pattern", 0U);
+    fr.fg_argb = js_pull_u32(record, "fgArgb", 0U);
+    fr.bg_argb = js_pull_u32(record, "bgArgb", 0U);
+    uint32_t idx = 0;
+    fm_status_t rc = fm_styles_add_fill(handle_, fr, &idx);
+    if (rc != 0) {
+      r.status = error_status(rc);
+      return r;
+    }
+    r.status = ok_status();
+    r.index = idx;
+    return r;
+  }
+
+  /// Adds (or dedups against an existing entry) a border record. JS-side
+  /// shape: `{ left:{style,colorArgb}, right, top, bottom, diagonal,
+  /// diagonalUp, diagonalDown }`. Missing sides default to `{0,0}`.
+  JsAddStyleResult addBorder(emscripten::val record) {
+    JsAddStyleResult r;
+    if (handle_ == nullptr) {
+      r.status = error_status(7000);
+      return r;
+    }
+    fm_border_record br{};
+    br.left = js_pull_border_side(record["left"]);
+    br.right = js_pull_border_side(record["right"]);
+    br.top = js_pull_border_side(record["top"]);
+    br.bottom = js_pull_border_side(record["bottom"]);
+    br.diagonal = js_pull_border_side(record["diagonal"]);
+    br.diagonal_up = js_pull_bool(record, "diagonalUp", false) ? 1 : 0;
+    br.diagonal_down = js_pull_bool(record, "diagonalDown", false) ? 1 : 0;
+    uint32_t idx = 0;
+    fm_status_t rc = fm_styles_add_border(handle_, br, &idx);
+    if (rc != 0) {
+      r.status = error_status(rc);
+      return r;
+    }
+    r.status = ok_status();
+    r.index = idx;
+    return r;
+  }
+
+  /// Adds (or dedups against an existing entry) a number-format entry.
+  /// `formatCode` matching a built-in id returns the built-in id; a
+  /// custom code is appended at `max(existing_custom_id, 163) + 1`.
+  JsAddNumFmtResult addNumFmt(const std::string& format_code) {
+    JsAddNumFmtResult r;
+    if (handle_ == nullptr) {
+      r.status = error_status(7000);
+      return r;
+    }
+    uint16_t id = 0;
+    fm_status_t rc = fm_styles_add_num_fmt(handle_, format_code.c_str(), &id);
+    if (rc != 0) {
+      r.status = error_status(rc);
+      return r;
+    }
+    r.status = ok_status();
+    r.numFmtId = id;
+    return r;
+  }
+
+  /// Adds (or dedups against an existing entry) an `<xf>` record.
+  /// JS-side shape: `{ fontIndex, fillIndex, borderIndex, numFmtId,
+  /// horizontalAlign, verticalAlign, wrapText }`.
+  JsAddStyleResult addXf(emscripten::val record) {
+    JsAddStyleResult r;
+    if (handle_ == nullptr) {
+      r.status = error_status(7000);
+      return r;
+    }
+    fm_cell_xf xf{};
+    xf.font_index = js_pull_u32(record, "fontIndex", 0U);
+    xf.fill_index = js_pull_u32(record, "fillIndex", 0U);
+    xf.border_index = js_pull_u32(record, "borderIndex", 0U);
+    xf.num_fmt_id = js_pull_u16(record, "numFmtId", 0U);
+    xf.horizontal_align = js_pull_u8(record, "horizontalAlign", 0U);
+    xf.vertical_align = js_pull_u8(record, "verticalAlign", 0U);
+    xf.wrap_text = js_pull_bool(record, "wrapText", false) ? 1 : 0;
+    uint32_t idx = 0;
+    fm_status_t rc = fm_styles_add_cell_xf(handle_, xf, &idx);
+    if (rc != 0) {
+      r.status = error_status(rc);
+      return r;
+    }
+    r.status = ok_status();
+    r.index = idx;
+    return r;
+  }
+
+  /// Returns the number of font records currently registered.
+  uint32_t fontCount() const {
+    if (handle_ == nullptr) {
+      return 0U;
+    }
+    uint32_t n = 0;
+    if (fm_styles_get_font_count(handle_, &n) != 0) {
+      return 0U;
+    }
+    return n;
+  }
+
+  /// Returns the number of fill records currently registered.
+  uint32_t fillCount() const {
+    if (handle_ == nullptr) {
+      return 0U;
+    }
+    uint32_t n = 0;
+    if (fm_styles_get_fill_count(handle_, &n) != 0) {
+      return 0U;
+    }
+    return n;
+  }
+
+  /// Returns the number of border records currently registered.
+  uint32_t borderCount() const {
+    if (handle_ == nullptr) {
+      return 0U;
+    }
+    uint32_t n = 0;
+    if (fm_styles_get_border_count(handle_, &n) != 0) {
+      return 0U;
+    }
+    return n;
+  }
+
+  /// Returns the number of `<xf>` records currently registered.
+  uint32_t xfCount() const {
+    if (handle_ == nullptr) {
+      return 0U;
+    }
+    uint32_t n = 0;
+    if (fm_styles_get_cell_xf_count(handle_, &n) != 0) {
+      return 0U;
+    }
+    return n;
+  }
+
   // ---- Sheet UI features (merges, hyperlinks, comments, validations) ------
   // Each accessor returns a JS-friendly value (Array<...> or null) so JS
   // callers don't need to step through count + getter pairs.
@@ -1126,6 +1497,56 @@ class JsWorkbook {
     return o;
   }
 
+  /// `addHyperlink(sheetIdx, row, col, target, display, tooltip)`.
+  ///
+  /// Append a hyperlink entry to `sheet`. The frontend surface omits the
+  /// `location` field; an empty string is forwarded to the C ABI so the
+  /// writer mints a fresh `rId` on save and treats the location as
+  /// absent. Pass empty strings for `display` / `tooltip` to mean "use
+  /// the default" / "no tooltip".
+  JsStatus addHyperlink(uint32_t sheet, uint32_t row, uint32_t col, const std::string& target,
+                        const std::string& display, const std::string& tooltip) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_hyperlink hl{};
+    hl.row = row;
+    hl.col = col;
+    hl.target = target.empty() ? nullptr : target.c_str();
+    hl.location = nullptr;
+    hl.display = display.empty() ? nullptr : display.c_str();
+    hl.tooltip = tooltip.empty() ? nullptr : tooltip.c_str();
+    fm_status_t rc = fm_sheet_add_hyperlink(handle_, sheet, hl);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// `removeHyperlink(sheetIdx, row, col)`.
+  JsStatus removeHyperlink(uint32_t sheet, uint32_t row, uint32_t col) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_sheet_remove_hyperlink(handle_, sheet, row, col);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// `removeHyperlinkAt(sheetIdx, index)`.
+  JsStatus removeHyperlinkAt(uint32_t sheet, uint32_t index) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_sheet_remove_hyperlink_at(handle_, sheet, index);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// `clearHyperlinks(sheetIdx)`.
+  JsStatus clearHyperlinks(uint32_t sheet) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_sheet_clear_hyperlinks(handle_, sheet);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
   /// `getHyperlinks(sheetIdx) -> Array<{row, col, target, display, tooltip}>`.
   emscripten::val getHyperlinks(uint32_t sheet) const {
     emscripten::val arr = emscripten::val::array();
@@ -1167,32 +1588,134 @@ class JsWorkbook {
       if (fm_sheet_get_merge_at(handle_, sheet, i, &m) != 0) {
         continue;
       }
-      emscripten::val item = emscripten::val::object();
-      item.set("firstRow", m.first_row);
-      item.set("lastRow", m.last_row);
-      item.set("firstCol", m.first_col);
-      item.set("lastCol", m.last_col);
-      arr.set(i, item);
+      arr.set(i, merge_range_to_val(m));
     }
     return arr;
   }
 
-  /// `getValidations(sheetIdx) -> Array<{ranges, type, op, formula1, formula2, errorMessage}>`.
-  /// Read-only: full mutators land in a follow-up.
+  /// `getValidations(sheetIdx) -> Array<{ranges, type, op, errorStyle,
+  ///                                      allowBlank, showInputMessage,
+  ///                                      showErrorMessage, formula1,
+  ///                                      formula2, errorTitle,
+  ///                                      errorMessage, promptTitle,
+  ///                                      promptMessage}>`.
+  ///
+  /// Each entry's `ranges` is an Array of `{firstRow, lastRow, firstCol,
+  /// lastCol}`. Boolean fields are surfaced as JS booleans (not 0/1).
   emscripten::val getValidations(uint32_t sheet) const {
     emscripten::val arr = emscripten::val::array();
     if (handle_ == nullptr) {
       return arr;
     }
-    // The C ABI does not yet surface validation entries (next bundle);
-    // fall through to the engine via the binding's existing handle by
-    // reaching into the workbook directly is not allowed here, so we
-    // currently return an empty array. JS callers can detect "feature
-    // unavailable" via length === 0 paired with an absent comments
-    // path. The structural contract stays stable for the follow-up
-    // bundle.
-    (void)sheet;
+    uint32_t count = 0;
+    if (fm_sheet_get_validation_count(handle_, sheet, &count) != 0) {
+      return arr;
+    }
+    for (uint32_t i = 0; i < count; ++i) {
+      fm_data_validation v{};
+      if (fm_sheet_get_validation_at(handle_, sheet, i, &v) != 0) {
+        continue;
+      }
+      emscripten::val item = emscripten::val::object();
+      emscripten::val ranges = emscripten::val::array();
+      for (uint32_t r = 0; r < v.range_count; ++r) {
+        ranges.set(r, merge_range_to_val(v.ranges[r]));
+      }
+      item.set("ranges", ranges);
+      item.set("type", v.type);
+      item.set("op", v.op);
+      item.set("errorStyle", v.error_style);
+      item.set("allowBlank", v.allow_blank != 0);
+      item.set("showInputMessage", v.show_input_message != 0);
+      item.set("showErrorMessage", v.show_error_message != 0);
+      item.set("formula1", v.formula1 != nullptr ? std::string(v.formula1) : std::string());
+      item.set("formula2", v.formula2 != nullptr ? std::string(v.formula2) : std::string());
+      item.set("errorTitle", v.error_title != nullptr ? std::string(v.error_title) : std::string());
+      item.set("errorMessage", v.error_message != nullptr ? std::string(v.error_message) : std::string());
+      item.set("promptTitle", v.prompt_title != nullptr ? std::string(v.prompt_title) : std::string());
+      item.set("promptMessage", v.prompt_message != nullptr ? std::string(v.prompt_message) : std::string());
+      arr.set(i, item);
+    }
     return arr;
+  }
+
+  /// `addValidation(sheetIdx, {ranges, type, op?, errorStyle?, allowBlank?,
+  ///                            showInputMessage?, showErrorMessage?,
+  ///                            formula1?, formula2?, errorTitle?,
+  ///                            errorMessage?, promptTitle?,
+  ///                            promptMessage?})`.
+  ///
+  /// Optional fields default to `0` for the small enum-shaped integers,
+  /// `false` for booleans, and `""` for strings. The string buffers
+  /// (`formula1`, etc.) are kept alive on the C++ stack frame for the
+  /// duration of the C ABI call so the borrowed `const char*` pointers
+  /// stay valid; the C ABI deep-copies them into the workbook's storage.
+  JsStatus addValidation(uint32_t sheet, emscripten::val v) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    // Pull every JS field into local storage first; the C ABI receives
+    // borrowed `const char*` views that must stay valid until
+    // `fm_sheet_add_validation` returns.
+    std::vector<fm_merge_range> ranges_buf;
+    if (v.hasOwnProperty("ranges")) {
+      emscripten::val ranges_js = v["ranges"];
+      if (ranges_js.isArray()) {
+        const uint32_t n = ranges_js["length"].as<uint32_t>();
+        ranges_buf.reserve(n);
+        for (uint32_t i = 0; i < n; ++i) {
+          emscripten::val rng = ranges_js[i];
+          fm_merge_range m{};
+          m.first_row = rng["firstRow"].as<uint32_t>();
+          m.last_row = rng["lastRow"].as<uint32_t>();
+          m.first_col = rng["firstCol"].as<uint32_t>();
+          m.last_col = rng["lastCol"].as<uint32_t>();
+          ranges_buf.push_back(m);
+        }
+      }
+    }
+    const std::string formula1 = js_pull_string(v, "formula1");
+    const std::string formula2 = js_pull_string(v, "formula2");
+    const std::string error_title = js_pull_string(v, "errorTitle");
+    const std::string error_message = js_pull_string(v, "errorMessage");
+    const std::string prompt_title = js_pull_string(v, "promptTitle");
+    const std::string prompt_message = js_pull_string(v, "promptMessage");
+
+    fm_data_validation dv{};
+    dv.ranges = ranges_buf.empty() ? nullptr : ranges_buf.data();
+    dv.range_count = static_cast<uint32_t>(ranges_buf.size());
+    dv.type = js_pull_u8(v, "type", 0U);
+    dv.op = js_pull_u8(v, "op", 0U);
+    dv.error_style = js_pull_u8(v, "errorStyle", 0U);
+    dv.allow_blank = js_pull_bool(v, "allowBlank", true) ? 1 : 0;
+    dv.show_input_message = js_pull_bool(v, "showInputMessage", false) ? 1 : 0;
+    dv.show_error_message = js_pull_bool(v, "showErrorMessage", false) ? 1 : 0;
+    dv.formula1 = formula1.empty() ? nullptr : formula1.c_str();
+    dv.formula2 = formula2.empty() ? nullptr : formula2.c_str();
+    dv.error_title = error_title.empty() ? nullptr : error_title.c_str();
+    dv.error_message = error_message.empty() ? nullptr : error_message.c_str();
+    dv.prompt_title = prompt_title.empty() ? nullptr : prompt_title.c_str();
+    dv.prompt_message = prompt_message.empty() ? nullptr : prompt_message.c_str();
+    fm_status_t rc = fm_sheet_add_validation(handle_, sheet, dv);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// `removeValidationAt(sheetIdx, index)`.
+  JsStatus removeValidationAt(uint32_t sheet, uint32_t index) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_sheet_remove_validation_at(handle_, sheet, index);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// `clearValidations(sheetIdx)`.
+  JsStatus clearValidations(uint32_t sheet) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_sheet_clear_validations(handle_, sheet);
+    return rc == 0 ? ok_status() : error_status(rc);
   }
 
   /// `setComment(sheetIdx, row, col, author, text)` (empty text removes).
@@ -1403,26 +1926,50 @@ EMSCRIPTEN_BINDINGS(formulon) {
 
   value_object<JsRowsResult>("RowsResult").field("status", &JsRowsResult::status).field("rows", &JsRowsResult::rows);
 
+  value_object<JsAddStyleResult>("AddStyleResult")
+      .field("status", &JsAddStyleResult::status)
+      .field("index", &JsAddStyleResult::index);
+
+  value_object<JsAddNumFmtResult>("AddNumFmtResult")
+      .field("status", &JsAddNumFmtResult::status)
+      .field("numFmtId", &JsAddNumFmtResult::numFmtId);
+
   // ---- Workbook class ------------------------------------------------------
   class_<JsWorkbook>("Workbook")
       .class_function("createDefault", &JsWorkbook::createDefault, allow_raw_pointers())
       .class_function("createEmpty", &JsWorkbook::createEmpty, allow_raw_pointers())
       .class_function("loadBytes", &JsWorkbook::loadBytes, allow_raw_pointers())
+      .function("addBorder", &JsWorkbook::addBorder)
+      .function("addFill", &JsWorkbook::addFill)
+      .function("addFont", &JsWorkbook::addFont)
+      .function("addHyperlink", &JsWorkbook::addHyperlink)
       .function("addMerge", &JsWorkbook::addMerge)
+      .function("addNumFmt", &JsWorkbook::addNumFmt)
       .function("addSheet", &JsWorkbook::addSheet)
+      .function("addValidation", &JsWorkbook::addValidation)
+      .function("addXf", &JsWorkbook::addXf)
+      .function("borderCount", &JsWorkbook::borderCount)
       .function("cellAt", &JsWorkbook::cellAt)
       .function("cellCount", &JsWorkbook::cellCount)
+      .function("clearHyperlinks", &JsWorkbook::clearHyperlinks)
       .function("clearMerges", &JsWorkbook::clearMerges)
+      .function("clearValidations", &JsWorkbook::clearValidations)
       .function("definedNameAt", &JsWorkbook::definedNameAt)
       .function("definedNameCount", &JsWorkbook::definedNameCount)
       .function("deleteCols", &JsWorkbook::deleteCols)
       .function("deleteRows", &JsWorkbook::deleteRows)
       .function("evaluateCfRange", &JsWorkbook::evaluateCfRange)
+      .function("fillCount", &JsWorkbook::fillCount)
+      .function("fontCount", &JsWorkbook::fontCount)
+      .function("getBorder", &JsWorkbook::getBorder)
       .function("getCellXf", &JsWorkbook::getCellXf)
       .function("getCellXfIndex", &JsWorkbook::getCellXfIndex)
       .function("getComment", &JsWorkbook::getComment)
+      .function("getFill", &JsWorkbook::getFill)
+      .function("getFont", &JsWorkbook::getFont)
       .function("getHyperlinks", &JsWorkbook::getHyperlinks)
       .function("getMerges", &JsWorkbook::getMerges)
+      .function("getNumFmt", &JsWorkbook::getNumFmt)
       .function("getSheetColumns", &JsWorkbook::getSheetColumns)
       .function("getSheetRowOverrides", &JsWorkbook::getSheetRowOverrides)
       .function("getSheetView", &JsWorkbook::getSheetView)
@@ -1436,9 +1983,12 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("passthroughAt", &JsWorkbook::passthroughAt)
       .function("passthroughCount", &JsWorkbook::passthroughCount)
       .function("recalc", &JsWorkbook::recalc)
+      .function("removeHyperlink", &JsWorkbook::removeHyperlink)
+      .function("removeHyperlinkAt", &JsWorkbook::removeHyperlinkAt)
       .function("removeMerge", &JsWorkbook::removeMerge)
       .function("removeMergeAt", &JsWorkbook::removeMergeAt)
       .function("removeSheet", &JsWorkbook::removeSheet)
+      .function("removeValidationAt", &JsWorkbook::removeValidationAt)
       .function("renameSheet", &JsWorkbook::renameSheet)
       .function("save", &JsWorkbook::save)
       .function("setBlank", &JsWorkbook::setBlank)
@@ -1463,7 +2013,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("sheetCount", &JsWorkbook::sheetCount)
       .function("sheetName", &JsWorkbook::sheetName)
       .function("tableAt", &JsWorkbook::tableAt)
-      .function("tableCount", &JsWorkbook::tableCount);
+      .function("tableCount", &JsWorkbook::tableCount)
+      .function("xfCount", &JsWorkbook::xfCount);
 
   // ---- Free functions ------------------------------------------------------
   function("evalFormula", &eval_formula);

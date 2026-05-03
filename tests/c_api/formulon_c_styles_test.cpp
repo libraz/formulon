@@ -118,3 +118,361 @@ TEST(FormulonCApiStyles, SetThenSaveLoadPreservesXfIndex) {
   EXPECT_EQ(fm_cell_get_xf_index(wb2.handle, 0, 0, 0, &xf), 0);
   EXPECT_EQ(xf, 7U);
 }
+
+// ---- Add-side dedup primitives -------------------------------------
+
+namespace {
+
+fm_font_record MakeArial() {
+  fm_font_record r{};
+  r.name = "Arial";
+  r.size = 12.0;
+  r.color_argb = 0xFF112233U;
+  r.bold = 1;
+  r.italic = 0;
+  r.strike = 0;
+  r.underline = 0;
+  return r;
+}
+
+fm_fill_record MakeRedFill() {
+  fm_fill_record r{};
+  r.pattern = 1;  // solid
+  r.fg_argb = 0xFFFF0000U;
+  r.bg_argb = 0xFF000000U;
+  return r;
+}
+
+fm_border_record MakeThinBoxBorder() {
+  fm_border_record r{};
+  r.left.style = 1;  // thin
+  r.left.color_argb = 0xFF000000U;
+  r.right = r.left;
+  r.top = r.left;
+  r.bottom = r.left;
+  r.diagonal.style = 0;
+  r.diagonal.color_argb = 0;
+  r.diagonal_up = 0;
+  r.diagonal_down = 0;
+  return r;
+}
+
+}  // namespace
+
+TEST(FormulonCApiStyles, AddFontDedupReturnsExistingIndex) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  uint32_t a = 0xFFFFFFFFU;
+  uint32_t b = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_font(wb.handle, MakeArial(), &a), 0);
+  ASSERT_EQ(fm_styles_add_font(wb.handle, MakeArial(), &b), 0);
+  EXPECT_EQ(a, b);
+}
+
+TEST(FormulonCApiStyles, AddFontDistinctReturnsNewIndex) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  uint32_t a = 0;
+  uint32_t b = 0;
+  fm_font_record arial = MakeArial();
+  fm_font_record calibri = MakeArial();
+  calibri.name = "Calibri";
+  ASSERT_EQ(fm_styles_add_font(wb.handle, arial, &a), 0);
+  ASSERT_EQ(fm_styles_add_font(wb.handle, calibri, &b), 0);
+  EXPECT_NE(a, b);
+}
+
+TEST(FormulonCApiStyles, AddFontGrowsTable) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  uint32_t before = 0;
+  ASSERT_EQ(fm_styles_get_font_count(wb.handle, &before), 0);
+  uint32_t idx = 0;
+  ASSERT_EQ(fm_styles_add_font(wb.handle, MakeArial(), &idx), 0);
+  uint32_t after = 0;
+  ASSERT_EQ(fm_styles_get_font_count(wb.handle, &after), 0);
+  EXPECT_EQ(after, before + 1U);
+  // Round-trip: the freshly added font should read back equal.
+  fm_font_record out{};
+  ASSERT_EQ(fm_styles_get_font(wb.handle, idx, &out), 0);
+  EXPECT_STREQ(out.name, "Arial");
+  EXPECT_DOUBLE_EQ(out.size, 12.0);
+  EXPECT_EQ(out.color_argb, 0xFF112233U);
+  EXPECT_EQ(out.bold, 1);
+}
+
+TEST(FormulonCApiStyles, AddFillDedupReturnsExistingIndex) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  uint32_t a = 0xFFFFFFFFU;
+  uint32_t b = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_fill(wb.handle, MakeRedFill(), &a), 0);
+  ASSERT_EQ(fm_styles_add_fill(wb.handle, MakeRedFill(), &b), 0);
+  EXPECT_EQ(a, b);
+}
+
+TEST(FormulonCApiStyles, AddFillDistinctReturnsNewIndex) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  uint32_t a = 0;
+  uint32_t b = 0;
+  fm_fill_record red = MakeRedFill();
+  fm_fill_record blue = MakeRedFill();
+  blue.fg_argb = 0xFF0000FFU;
+  ASSERT_EQ(fm_styles_add_fill(wb.handle, red, &a), 0);
+  ASSERT_EQ(fm_styles_add_fill(wb.handle, blue, &b), 0);
+  EXPECT_NE(a, b);
+}
+
+TEST(FormulonCApiStyles, AddFillGrowsTable) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  uint32_t before = 0;
+  ASSERT_EQ(fm_styles_get_fill_count(wb.handle, &before), 0);
+  uint32_t idx = 0;
+  ASSERT_EQ(fm_styles_add_fill(wb.handle, MakeRedFill(), &idx), 0);
+  uint32_t after = 0;
+  ASSERT_EQ(fm_styles_get_fill_count(wb.handle, &after), 0);
+  EXPECT_EQ(after, before + 1U);
+  fm_fill_record out{};
+  ASSERT_EQ(fm_styles_get_fill(wb.handle, idx, &out), 0);
+  EXPECT_EQ(out.pattern, 1U);
+  EXPECT_EQ(out.fg_argb, 0xFFFF0000U);
+}
+
+TEST(FormulonCApiStyles, AddBorderDedupReturnsExistingIndex) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  uint32_t a = 0xFFFFFFFFU;
+  uint32_t b = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_border(wb.handle, MakeThinBoxBorder(), &a), 0);
+  ASSERT_EQ(fm_styles_add_border(wb.handle, MakeThinBoxBorder(), &b), 0);
+  EXPECT_EQ(a, b);
+}
+
+TEST(FormulonCApiStyles, AddBorderDistinctReturnsNewIndex) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  uint32_t a = 0;
+  uint32_t b = 0;
+  fm_border_record thin = MakeThinBoxBorder();
+  fm_border_record dashed = MakeThinBoxBorder();
+  dashed.left.style = 3;  // dashed
+  ASSERT_EQ(fm_styles_add_border(wb.handle, thin, &a), 0);
+  ASSERT_EQ(fm_styles_add_border(wb.handle, dashed, &b), 0);
+  EXPECT_NE(a, b);
+}
+
+TEST(FormulonCApiStyles, AddBorderGrowsTable) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  uint32_t before = 0;
+  ASSERT_EQ(fm_styles_get_border_count(wb.handle, &before), 0);
+  uint32_t idx = 0;
+  ASSERT_EQ(fm_styles_add_border(wb.handle, MakeThinBoxBorder(), &idx), 0);
+  uint32_t after = 0;
+  ASSERT_EQ(fm_styles_get_border_count(wb.handle, &after), 0);
+  EXPECT_EQ(after, before + 1U);
+  fm_border_record out{};
+  ASSERT_EQ(fm_styles_get_border(wb.handle, idx, &out), 0);
+  EXPECT_EQ(out.left.style, 1U);
+  EXPECT_EQ(out.right.style, 1U);
+  EXPECT_EQ(out.diagonal_up, 0);
+  EXPECT_EQ(out.diagonal_down, 0);
+}
+
+TEST(FormulonCApiStyles, AddNumFmtBuiltinReturnsBuiltinId) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  uint16_t id = 0xFFFFU;
+  ASSERT_EQ(fm_styles_add_num_fmt(wb.handle, "General", &id), 0);
+  EXPECT_EQ(id, 0U);
+  // Adding a built-in must not create a custom entry.
+  uint32_t font_count = 7;  // unrelated, just ensure other tables untouched
+  EXPECT_EQ(fm_styles_get_font_count(wb.handle, &font_count), 0);
+  EXPECT_EQ(font_count, 0U);
+}
+
+TEST(FormulonCApiStyles, AddNumFmtCustomReturnsCustomId) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  uint16_t id = 0;
+  ASSERT_EQ(fm_styles_add_num_fmt(wb.handle, "\"USD\" #,##0", &id), 0);
+  EXPECT_GE(id, 164U);
+  // Resolves through the read-side getter.
+  const char* s = nullptr;
+  ASSERT_EQ(fm_styles_get_num_fmt_string(wb.handle, id, &s), 0);
+  ASSERT_NE(s, nullptr);
+  EXPECT_STREQ(s, "\"USD\" #,##0");
+}
+
+TEST(FormulonCApiStyles, AddNumFmtCustomDedup) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  uint16_t a = 0;
+  uint16_t b = 0;
+  ASSERT_EQ(fm_styles_add_num_fmt(wb.handle, "\"USD\" #,##0", &a), 0);
+  ASSERT_EQ(fm_styles_add_num_fmt(wb.handle, "\"USD\" #,##0", &b), 0);
+  EXPECT_EQ(a, b);
+}
+
+TEST(FormulonCApiStyles, AddCellXfDedupReturnsExistingIndex) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  uint32_t font_idx = 0;
+  uint32_t fill_idx = 0;
+  uint32_t border_idx = 0;
+  ASSERT_EQ(fm_styles_add_font(wb.handle, MakeArial(), &font_idx), 0);
+  ASSERT_EQ(fm_styles_add_fill(wb.handle, MakeRedFill(), &fill_idx), 0);
+  ASSERT_EQ(fm_styles_add_border(wb.handle, MakeThinBoxBorder(), &border_idx), 0);
+
+  fm_cell_xf xf{};
+  xf.font_index = font_idx;
+  xf.fill_index = fill_idx;
+  xf.border_index = border_idx;
+  xf.num_fmt_id = 0;  // built-in General
+  xf.horizontal_align = 1;
+  xf.vertical_align = 2;
+  xf.wrap_text = 1;
+
+  uint32_t a = 0xFFFFFFFFU;
+  uint32_t b = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &a), 0);
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &b), 0);
+  EXPECT_EQ(a, b);
+}
+
+TEST(FormulonCApiStyles, AddCellXfDistinctReturnsNewIndex) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  uint32_t font_idx = 0;
+  uint32_t fill_idx = 0;
+  uint32_t border_idx = 0;
+  ASSERT_EQ(fm_styles_add_font(wb.handle, MakeArial(), &font_idx), 0);
+  ASSERT_EQ(fm_styles_add_fill(wb.handle, MakeRedFill(), &fill_idx), 0);
+  ASSERT_EQ(fm_styles_add_border(wb.handle, MakeThinBoxBorder(), &border_idx), 0);
+
+  fm_cell_xf xf{};
+  xf.font_index = font_idx;
+  xf.fill_index = fill_idx;
+  xf.border_index = border_idx;
+  xf.num_fmt_id = 0;
+  xf.horizontal_align = 1;
+  xf.vertical_align = 2;
+  xf.wrap_text = 1;
+
+  uint32_t a = 0;
+  uint32_t b = 0;
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &a), 0);
+  // Flip wrap_text — distinct record.
+  xf.wrap_text = 0;
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &b), 0);
+  EXPECT_NE(a, b);
+}
+
+TEST(FormulonCApiStyles, AddCellXfGrowsTable) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  uint32_t font_idx = 0;
+  uint32_t fill_idx = 0;
+  uint32_t border_idx = 0;
+  ASSERT_EQ(fm_styles_add_font(wb.handle, MakeArial(), &font_idx), 0);
+  ASSERT_EQ(fm_styles_add_fill(wb.handle, MakeRedFill(), &fill_idx), 0);
+  ASSERT_EQ(fm_styles_add_border(wb.handle, MakeThinBoxBorder(), &border_idx), 0);
+  uint32_t before = 0;
+  ASSERT_EQ(fm_styles_get_cell_xf_count(wb.handle, &before), 0);
+  fm_cell_xf xf{};
+  xf.font_index = font_idx;
+  xf.fill_index = fill_idx;
+  xf.border_index = border_idx;
+  xf.num_fmt_id = 0;
+  uint32_t idx = 0;
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &idx), 0);
+  uint32_t after = 0;
+  ASSERT_EQ(fm_styles_get_cell_xf_count(wb.handle, &after), 0);
+  EXPECT_EQ(after, before + 1U);
+}
+
+TEST(FormulonCApiStyles, AddCellXfRejectsOutOfRangeIndex) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  // Empty styles table: any non-zero index is out of range.
+  fm_cell_xf xf{};
+  xf.font_index = 5;  // intentionally OOR
+  xf.fill_index = 0;
+  xf.border_index = 0;
+  xf.num_fmt_id = 0;
+  uint32_t idx = 0xFFFFFFFFU;
+  EXPECT_NE(fm_styles_add_cell_xf(wb.handle, xf, &idx), 0);
+}
+
+TEST(FormulonCApiStyles, AddCellXfRejectsUnknownNumFmt) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  uint32_t font_idx = 0;
+  uint32_t fill_idx = 0;
+  uint32_t border_idx = 0;
+  ASSERT_EQ(fm_styles_add_font(wb.handle, MakeArial(), &font_idx), 0);
+  ASSERT_EQ(fm_styles_add_fill(wb.handle, MakeRedFill(), &fill_idx), 0);
+  ASSERT_EQ(fm_styles_add_border(wb.handle, MakeThinBoxBorder(), &border_idx), 0);
+
+  fm_cell_xf xf{};
+  xf.font_index = font_idx;
+  xf.fill_index = fill_idx;
+  xf.border_index = border_idx;
+  xf.num_fmt_id = 200;  // not a registered custom and not a documented built-in
+  uint32_t idx = 0xFFFFFFFFU;
+  EXPECT_NE(fm_styles_add_cell_xf(wb.handle, xf, &idx), 0);
+}
+
+TEST(FormulonCApiStyles, AddNullArgumentRejected) {
+  uint32_t idx = 0;
+  EXPECT_NE(fm_styles_add_font(nullptr, MakeArial(), &idx), 0);
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  EXPECT_NE(fm_styles_add_font(wb.handle, MakeArial(), nullptr), 0);
+  uint16_t id = 0;
+  EXPECT_NE(fm_styles_add_num_fmt(nullptr, "General", &id), 0);
+  EXPECT_NE(fm_styles_add_num_fmt(wb.handle, "General", nullptr), 0);
+}
+
+TEST(FormulonCApiStyles, FullLifecycleSurvivesSaveLoad) {
+  // Build font -> xf -> stamp on cell -> save -> reload -> the font is
+  // resolvable via the read-side accessors.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  uint32_t font_idx = 0;
+  uint32_t fill_idx = 0;
+  uint32_t border_idx = 0;
+  ASSERT_EQ(fm_styles_add_font(wb.handle, MakeArial(), &font_idx), 0);
+  ASSERT_EQ(fm_styles_add_fill(wb.handle, MakeRedFill(), &fill_idx), 0);
+  ASSERT_EQ(fm_styles_add_border(wb.handle, MakeThinBoxBorder(), &border_idx), 0);
+
+  fm_cell_xf xf{};
+  xf.font_index = font_idx;
+  xf.fill_index = fill_idx;
+  xf.border_index = border_idx;
+  xf.num_fmt_id = 0;
+  uint32_t xf_idx = 0;
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &xf_idx), 0);
+
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 1.5), 0);
+  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0, 0, xf_idx), 0);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_GT(saved.len, 0U);
+
+  WorkbookGuard wb2;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
+  uint32_t reread_xf = 0;
+  EXPECT_EQ(fm_cell_get_xf_index(wb2.handle, 0, 0, 0, &reread_xf), 0);
+  fm_cell_xf reloaded{};
+  EXPECT_EQ(fm_styles_get_cell_xf(wb2.handle, reread_xf, &reloaded), 0);
+  fm_font_record reloaded_font{};
+  ASSERT_EQ(fm_styles_get_font(wb2.handle, reloaded.font_index, &reloaded_font), 0);
+  EXPECT_STREQ(reloaded_font.name, "Arial");
+  EXPECT_DOUBLE_EQ(reloaded_font.size, 12.0);
+  EXPECT_EQ(reloaded_font.bold, 1);
+}

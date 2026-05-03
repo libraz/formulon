@@ -326,6 +326,19 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetCellXfIndex(const Napi::CallbackInfo& info);
   Napi::Value SetCellXfIndex(const Napi::CallbackInfo& info);
   Napi::Value GetCellXf(const Napi::CallbackInfo& info);
+  Napi::Value GetFont(const Napi::CallbackInfo& info);
+  Napi::Value GetFill(const Napi::CallbackInfo& info);
+  Napi::Value GetBorder(const Napi::CallbackInfo& info);
+  Napi::Value GetNumFmt(const Napi::CallbackInfo& info);
+  Napi::Value AddFont(const Napi::CallbackInfo& info);
+  Napi::Value AddFill(const Napi::CallbackInfo& info);
+  Napi::Value AddBorder(const Napi::CallbackInfo& info);
+  Napi::Value AddNumFmt(const Napi::CallbackInfo& info);
+  Napi::Value AddXf(const Napi::CallbackInfo& info);
+  Napi::Value FontCount(const Napi::CallbackInfo& info);
+  Napi::Value FillCount(const Napi::CallbackInfo& info);
+  Napi::Value BorderCount(const Napi::CallbackInfo& info);
+  Napi::Value XfCount(const Napi::CallbackInfo& info);
 
   // Sheet UI features (merges, comments, hyperlinks, validations).
   Napi::Value AddMerge(const Napi::CallbackInfo& info);
@@ -335,8 +348,15 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetMerges(const Napi::CallbackInfo& info);
   Napi::Value GetComment(const Napi::CallbackInfo& info);
   Napi::Value SetComment(const Napi::CallbackInfo& info);
+  Napi::Value AddHyperlink(const Napi::CallbackInfo& info);
   Napi::Value GetHyperlinks(const Napi::CallbackInfo& info);
+  Napi::Value RemoveHyperlink(const Napi::CallbackInfo& info);
+  Napi::Value RemoveHyperlinkAt(const Napi::CallbackInfo& info);
+  Napi::Value ClearHyperlinks(const Napi::CallbackInfo& info);
   Napi::Value GetValidations(const Napi::CallbackInfo& info);
+  Napi::Value AddValidation(const Napi::CallbackInfo& info);
+  Napi::Value RemoveValidationAt(const Napi::CallbackInfo& info);
+  Napi::Value ClearValidations(const Napi::CallbackInfo& info);
 
  private:
   /// Extracts a `uint32_t` argument or sets `*ok=false` and surfaces
@@ -1292,6 +1312,303 @@ Napi::Value Workbook::GetCellXf(const Napi::CallbackInfo& info) {
   return out;
 }
 
+Napi::Value Workbook::GetFont(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  const uint32_t font_index = ArgU32(info, 0);
+  fm_font_record f{};
+  fm_status_t rc = fm_styles_get_font(handle_, font_index, &f);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("name", Napi::String::New(env, f.name != nullptr ? f.name : ""));
+  out.Set("size", Napi::Number::New(env, f.size));
+  out.Set("colorArgb", Napi::Number::New(env, f.color_argb));
+  out.Set("bold", Napi::Boolean::New(env, f.bold != 0));
+  out.Set("italic", Napi::Boolean::New(env, f.italic != 0));
+  out.Set("strike", Napi::Boolean::New(env, f.strike != 0));
+  out.Set("underline", Napi::Number::New(env, static_cast<uint32_t>(f.underline)));
+  return out;
+}
+
+Napi::Value Workbook::GetFill(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  const uint32_t fill_index = ArgU32(info, 0);
+  fm_fill_record f{};
+  fm_status_t rc = fm_styles_get_fill(handle_, fill_index, &f);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("pattern", Napi::Number::New(env, static_cast<uint32_t>(f.pattern)));
+  out.Set("fgArgb", Napi::Number::New(env, f.fg_argb));
+  out.Set("bgArgb", Napi::Number::New(env, f.bg_argb));
+  return out;
+}
+
+Napi::Value Workbook::GetBorder(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  const uint32_t border_index = ArgU32(info, 0);
+  fm_border_record b{};
+  fm_status_t rc = fm_styles_get_border(handle_, border_index, &b);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    return out;
+  }
+  auto side_obj = [&](const fm_border_side& s) {
+    Napi::Object so = Napi::Object::New(env);
+    so.Set("style", Napi::Number::New(env, static_cast<uint32_t>(s.style)));
+    so.Set("colorArgb", Napi::Number::New(env, s.color_argb));
+    return so;
+  };
+  out.Set("status", MakeOkStatus(env));
+  out.Set("left", side_obj(b.left));
+  out.Set("right", side_obj(b.right));
+  out.Set("top", side_obj(b.top));
+  out.Set("bottom", side_obj(b.bottom));
+  out.Set("diagonal", side_obj(b.diagonal));
+  out.Set("diagonalUp", Napi::Boolean::New(env, b.diagonal_up != 0));
+  out.Set("diagonalDown", Napi::Boolean::New(env, b.diagonal_down != 0));
+  return out;
+}
+
+Napi::Value Workbook::GetNumFmt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  const uint32_t num_fmt_id = ArgU32(info, 0);
+  const char* s = nullptr;
+  fm_status_t rc = fm_styles_get_num_fmt_string(handle_, static_cast<uint16_t>(num_fmt_id), &s);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("numFmtId", Napi::Number::New(env, num_fmt_id));
+  out.Set("formatCode", Napi::String::New(env, s != nullptr ? s : ""));
+  return out;
+}
+
+Napi::Value Workbook::AddFont(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    out.Set("index", Napi::Number::New(env, 0));
+    return out;
+  }
+  Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
+  std::string name;
+  if (record.Has("name") && !record.Get("name").IsUndefined() && !record.Get("name").IsNull()) {
+    name = record.Get("name").ToString().Utf8Value();
+  }
+  fm_font_record fr{};
+  fr.name = name.c_str();
+  fr.size = record.Has("size") ? record.Get("size").ToNumber().DoubleValue() : 11.0;
+  fr.bold = (record.Has("bold") && record.Get("bold").ToBoolean().Value()) ? 1 : 0;
+  fr.italic = (record.Has("italic") && record.Get("italic").ToBoolean().Value()) ? 1 : 0;
+  fr.strike = (record.Has("strike") && record.Get("strike").ToBoolean().Value()) ? 1 : 0;
+  fr.underline = record.Has("underline") ? static_cast<uint8_t>(record.Get("underline").ToNumber().Uint32Value()) : 0U;
+  fr.color_argb = record.Has("colorArgb") ? record.Get("colorArgb").ToNumber().Uint32Value() : 0xFF000000U;
+  uint32_t idx = 0;
+  fm_status_t rc = fm_styles_add_font(handle_, fr, &idx);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    out.Set("index", Napi::Number::New(env, 0));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("index", Napi::Number::New(env, idx));
+  return out;
+}
+
+Napi::Value Workbook::AddFill(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    out.Set("index", Napi::Number::New(env, 0));
+    return out;
+  }
+  Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
+  fm_fill_record fr{};
+  fr.pattern = record.Has("pattern") ? static_cast<uint8_t>(record.Get("pattern").ToNumber().Uint32Value()) : 0U;
+  fr.fg_argb = record.Has("fgArgb") ? record.Get("fgArgb").ToNumber().Uint32Value() : 0U;
+  fr.bg_argb = record.Has("bgArgb") ? record.Get("bgArgb").ToNumber().Uint32Value() : 0U;
+  uint32_t idx = 0;
+  fm_status_t rc = fm_styles_add_fill(handle_, fr, &idx);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    out.Set("index", Napi::Number::New(env, 0));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("index", Napi::Number::New(env, idx));
+  return out;
+}
+
+Napi::Value Workbook::AddBorder(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    out.Set("index", Napi::Number::New(env, 0));
+    return out;
+  }
+  Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
+  auto pull_side = [&](const char* key) {
+    fm_border_side s{};
+    if (record.Has(key) && record.Get(key).IsObject()) {
+      Napi::Object so = record.Get(key).As<Napi::Object>();
+      if (so.Has("style")) {
+        s.style = static_cast<uint8_t>(so.Get("style").ToNumber().Uint32Value());
+      }
+      if (so.Has("colorArgb")) {
+        s.color_argb = so.Get("colorArgb").ToNumber().Uint32Value();
+      }
+    }
+    return s;
+  };
+  fm_border_record br{};
+  br.left = pull_side("left");
+  br.right = pull_side("right");
+  br.top = pull_side("top");
+  br.bottom = pull_side("bottom");
+  br.diagonal = pull_side("diagonal");
+  br.diagonal_up = (record.Has("diagonalUp") && record.Get("diagonalUp").ToBoolean().Value()) ? 1 : 0;
+  br.diagonal_down = (record.Has("diagonalDown") && record.Get("diagonalDown").ToBoolean().Value()) ? 1 : 0;
+  uint32_t idx = 0;
+  fm_status_t rc = fm_styles_add_border(handle_, br, &idx);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    out.Set("index", Napi::Number::New(env, 0));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("index", Napi::Number::New(env, idx));
+  return out;
+}
+
+Napi::Value Workbook::AddNumFmt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    out.Set("numFmtId", Napi::Number::New(env, 0));
+    return out;
+  }
+  const std::string code = ArgString(info, 0);
+  uint16_t id = 0;
+  fm_status_t rc = fm_styles_add_num_fmt(handle_, code.c_str(), &id);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    out.Set("numFmtId", Napi::Number::New(env, 0));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("numFmtId", Napi::Number::New(env, static_cast<uint32_t>(id)));
+  return out;
+}
+
+Napi::Value Workbook::AddXf(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    out.Set("index", Napi::Number::New(env, 0));
+    return out;
+  }
+  Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
+  fm_cell_xf xf{};
+  xf.font_index = record.Has("fontIndex") ? record.Get("fontIndex").ToNumber().Uint32Value() : 0U;
+  xf.fill_index = record.Has("fillIndex") ? record.Get("fillIndex").ToNumber().Uint32Value() : 0U;
+  xf.border_index = record.Has("borderIndex") ? record.Get("borderIndex").ToNumber().Uint32Value() : 0U;
+  xf.num_fmt_id = record.Has("numFmtId") ? static_cast<uint16_t>(record.Get("numFmtId").ToNumber().Uint32Value()) : 0U;
+  xf.horizontal_align =
+      record.Has("horizontalAlign") ? static_cast<uint8_t>(record.Get("horizontalAlign").ToNumber().Uint32Value()) : 0U;
+  xf.vertical_align =
+      record.Has("verticalAlign") ? static_cast<uint8_t>(record.Get("verticalAlign").ToNumber().Uint32Value()) : 0U;
+  xf.wrap_text = (record.Has("wrapText") && record.Get("wrapText").ToBoolean().Value()) ? 1 : 0;
+  uint32_t idx = 0;
+  fm_status_t rc = fm_styles_add_cell_xf(handle_, xf, &idx);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    out.Set("index", Napi::Number::New(env, 0));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("index", Napi::Number::New(env, idx));
+  return out;
+}
+
+Napi::Value Workbook::FontCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::Number::New(env, 0);
+  }
+  uint32_t n = 0;
+  if (fm_styles_get_font_count(handle_, &n) != 0) {
+    return Napi::Number::New(env, 0);
+  }
+  return Napi::Number::New(env, n);
+}
+
+Napi::Value Workbook::FillCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::Number::New(env, 0);
+  }
+  uint32_t n = 0;
+  if (fm_styles_get_fill_count(handle_, &n) != 0) {
+    return Napi::Number::New(env, 0);
+  }
+  return Napi::Number::New(env, n);
+}
+
+Napi::Value Workbook::BorderCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::Number::New(env, 0);
+  }
+  uint32_t n = 0;
+  if (fm_styles_get_border_count(handle_, &n) != 0) {
+    return Napi::Number::New(env, 0);
+  }
+  return Napi::Number::New(env, n);
+}
+
+Napi::Value Workbook::XfCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::Number::New(env, 0);
+  }
+  uint32_t n = 0;
+  if (fm_styles_get_cell_xf_count(handle_, &n) != 0) {
+    return Napi::Number::New(env, 0);
+  }
+  return Napi::Number::New(env, n);
+}
+
 // ---- Sheet UI features (merges, comments, hyperlinks, validations) --
 
 Napi::Value Workbook::AddMerge(const Napi::CallbackInfo& info) {
@@ -1415,6 +1732,41 @@ Napi::Value Workbook::SetComment(const Napi::CallbackInfo& info) {
   return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
 }
 
+Napi::Value Workbook::AddHyperlink(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  // Frontend signature: addHyperlink(sheet, row, col, target, display, tooltip).
+  // The `location` field is omitted and forwarded as NULL; the writer
+  // mints a fresh `rId` on save.
+  if (info.Length() < 6 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber() || !info[3].IsString() ||
+      !info[4].IsString() || !info[5].IsString()) {
+    Napi::TypeError::New(env,
+                         "addHyperlink expects (sheet:number, row:number, col:number, "
+                         "target:string, display:string, tooltip:string)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t col = ArgU32(info, 2);
+  // Keep the std::string buffers alive until after the C ABI call so the
+  // borrowed `const char*` pointers in `fm_hyperlink` stay valid.
+  const std::string target = ArgString(info, 3);
+  const std::string display = ArgString(info, 4);
+  const std::string tooltip = ArgString(info, 5);
+  fm_hyperlink hl{};
+  hl.row = row;
+  hl.col = col;
+  hl.target = target.empty() ? nullptr : target.c_str();
+  hl.location = nullptr;
+  hl.display = display.empty() ? nullptr : display.c_str();
+  hl.tooltip = tooltip.empty() ? nullptr : tooltip.c_str();
+  fm_status_t rc = fm_sheet_add_hyperlink(handle_, sheet, hl);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
 Napi::Value Workbook::GetHyperlinks(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Array arr = Napi::Array::New(env);
@@ -1444,13 +1796,197 @@ Napi::Value Workbook::GetHyperlinks(const Napi::CallbackInfo& info) {
   return arr;
 }
 
+Napi::Value Workbook::RemoveHyperlink(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t col = ArgU32(info, 2);
+  fm_status_t rc = fm_sheet_remove_hyperlink(handle_, sheet, row, col);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::RemoveHyperlinkAt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  const uint32_t index = ArgU32(info, 1);
+  fm_status_t rc = fm_sheet_remove_hyperlink_at(handle_, sheet, index);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::ClearHyperlinks(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  fm_status_t rc = fm_sheet_clear_hyperlinks(handle_, sheet);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
 Napi::Value Workbook::GetValidations(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  // Mirrors the embind stub: the C ABI does not yet expose a validation
-  // iterator. The structural contract stays an empty Array<...>; once the
-  // iterator lands, both bindings light up simultaneously.
-  (void)info;
-  return Napi::Array::New(env);
+  Napi::Array arr = Napi::Array::New(env);
+  if (handle_ == nullptr) {
+    return arr;
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  uint32_t count = 0;
+  if (fm_sheet_get_validation_count(handle_, sheet, &count) != 0) {
+    return arr;
+  }
+  std::size_t emitted = 0;
+  for (uint32_t i = 0; i < count; ++i) {
+    fm_data_validation v{};
+    if (fm_sheet_get_validation_at(handle_, sheet, i, &v) != 0) {
+      continue;
+    }
+    Napi::Object item = Napi::Object::New(env);
+    Napi::Array ranges = Napi::Array::New(env);
+    for (uint32_t r = 0; r < v.range_count; ++r) {
+      Napi::Object rng = Napi::Object::New(env);
+      rng.Set("firstRow", Napi::Number::New(env, v.ranges[r].first_row));
+      rng.Set("lastRow", Napi::Number::New(env, v.ranges[r].last_row));
+      rng.Set("firstCol", Napi::Number::New(env, v.ranges[r].first_col));
+      rng.Set("lastCol", Napi::Number::New(env, v.ranges[r].last_col));
+      ranges.Set(r, rng);
+    }
+    item.Set("ranges", ranges);
+    item.Set("type", Napi::Number::New(env, v.type));
+    item.Set("op", Napi::Number::New(env, v.op));
+    item.Set("errorStyle", Napi::Number::New(env, v.error_style));
+    item.Set("allowBlank", Napi::Boolean::New(env, v.allow_blank != 0));
+    item.Set("showInputMessage", Napi::Boolean::New(env, v.show_input_message != 0));
+    item.Set("showErrorMessage", Napi::Boolean::New(env, v.show_error_message != 0));
+    item.Set("formula1", Napi::String::New(env, v.formula1 != nullptr ? v.formula1 : ""));
+    item.Set("formula2", Napi::String::New(env, v.formula2 != nullptr ? v.formula2 : ""));
+    item.Set("errorTitle", Napi::String::New(env, v.error_title != nullptr ? v.error_title : ""));
+    item.Set("errorMessage", Napi::String::New(env, v.error_message != nullptr ? v.error_message : ""));
+    item.Set("promptTitle", Napi::String::New(env, v.prompt_title != nullptr ? v.prompt_title : ""));
+    item.Set("promptMessage", Napi::String::New(env, v.prompt_message != nullptr ? v.prompt_message : ""));
+    arr.Set(static_cast<uint32_t>(emitted), item);
+    ++emitted;
+  }
+  return arr;
+}
+
+Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  if (info.Length() < 2 || !info[0].IsNumber() || !info[1].IsObject()) {
+    Napi::TypeError::New(env, "addValidation expects (sheet:number, validation:object)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  Napi::Object v = info[1].As<Napi::Object>();
+
+  // Pull every JS field into local storage first; the C ABI receives
+  // borrowed `const char*` views that must stay valid until
+  // `fm_sheet_add_validation` returns.
+  std::vector<fm_merge_range> ranges_buf;
+  if (v.Has("ranges")) {
+    Napi::Value ranges_js = v.Get("ranges");
+    if (ranges_js.IsArray()) {
+      Napi::Array ranges_arr = ranges_js.As<Napi::Array>();
+      const uint32_t n = ranges_arr.Length();
+      ranges_buf.reserve(n);
+      for (uint32_t i = 0; i < n; ++i) {
+        Napi::Value rng_v = ranges_arr.Get(i);
+        if (!rng_v.IsObject()) {
+          continue;
+        }
+        Napi::Object rng = rng_v.As<Napi::Object>();
+        fm_merge_range m{};
+        m.first_row = rng.Get("firstRow").ToNumber().Uint32Value();
+        m.last_row = rng.Get("lastRow").ToNumber().Uint32Value();
+        m.first_col = rng.Get("firstCol").ToNumber().Uint32Value();
+        m.last_col = rng.Get("lastCol").ToNumber().Uint32Value();
+        ranges_buf.push_back(m);
+      }
+    }
+  }
+  auto pull_string = [&](const char* key) -> std::string {
+    if (!v.Has(key)) {
+      return std::string();
+    }
+    Napi::Value f = v.Get(key);
+    if (f.IsUndefined() || f.IsNull()) {
+      return std::string();
+    }
+    return f.ToString().Utf8Value();
+  };
+  auto pull_u8 = [&](const char* key) -> uint8_t {
+    if (!v.Has(key)) {
+      return 0;
+    }
+    Napi::Value f = v.Get(key);
+    if (f.IsUndefined() || f.IsNull()) {
+      return 0;
+    }
+    return static_cast<uint8_t>(f.ToNumber().Uint32Value() & 0xFFU);
+  };
+  auto pull_bool = [&](const char* key, bool dflt) -> bool {
+    if (!v.Has(key)) {
+      return dflt;
+    }
+    Napi::Value f = v.Get(key);
+    if (f.IsUndefined() || f.IsNull()) {
+      return dflt;
+    }
+    return f.ToBoolean().Value();
+  };
+  const std::string formula1 = pull_string("formula1");
+  const std::string formula2 = pull_string("formula2");
+  const std::string error_title = pull_string("errorTitle");
+  const std::string error_message = pull_string("errorMessage");
+  const std::string prompt_title = pull_string("promptTitle");
+  const std::string prompt_message = pull_string("promptMessage");
+
+  fm_data_validation dv{};
+  dv.ranges = ranges_buf.empty() ? nullptr : ranges_buf.data();
+  dv.range_count = static_cast<uint32_t>(ranges_buf.size());
+  dv.type = pull_u8("type");
+  dv.op = pull_u8("op");
+  dv.error_style = pull_u8("errorStyle");
+  dv.allow_blank = pull_bool("allowBlank", true) ? 1 : 0;
+  dv.show_input_message = pull_bool("showInputMessage", false) ? 1 : 0;
+  dv.show_error_message = pull_bool("showErrorMessage", false) ? 1 : 0;
+  dv.formula1 = formula1.empty() ? nullptr : formula1.c_str();
+  dv.formula2 = formula2.empty() ? nullptr : formula2.c_str();
+  dv.error_title = error_title.empty() ? nullptr : error_title.c_str();
+  dv.error_message = error_message.empty() ? nullptr : error_message.c_str();
+  dv.prompt_title = prompt_title.empty() ? nullptr : prompt_title.c_str();
+  dv.prompt_message = prompt_message.empty() ? nullptr : prompt_message.c_str();
+  fm_status_t rc = fm_sheet_add_validation(handle_, sheet, dv);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::RemoveValidationAt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  const uint32_t index = ArgU32(info, 1);
+  fm_status_t rc = fm_sheet_remove_validation_at(handle_, sheet, index);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::ClearValidations(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  fm_status_t rc = fm_sheet_clear_validations(handle_, sheet);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
 }
 
 // ---- Class registration ---------------------------------------------
@@ -1461,21 +1997,37 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
                          StaticMethod<&Workbook::CreateDefault>("createDefault"),
                          StaticMethod<&Workbook::CreateEmpty>("createEmpty"),
                          StaticMethod<&Workbook::LoadBytes>("loadBytes"),
+                         InstanceMethod<&Workbook::AddBorder>("addBorder"),
+                         InstanceMethod<&Workbook::AddFill>("addFill"),
+                         InstanceMethod<&Workbook::AddFont>("addFont"),
+                         InstanceMethod<&Workbook::AddHyperlink>("addHyperlink"),
                          InstanceMethod<&Workbook::AddMerge>("addMerge"),
+                         InstanceMethod<&Workbook::AddNumFmt>("addNumFmt"),
                          InstanceMethod<&Workbook::AddSheet>("addSheet"),
+                         InstanceMethod<&Workbook::AddValidation>("addValidation"),
+                         InstanceMethod<&Workbook::AddXf>("addXf"),
+                         InstanceMethod<&Workbook::BorderCount>("borderCount"),
                          InstanceMethod<&Workbook::CellAt>("cellAt"),
                          InstanceMethod<&Workbook::CellCount>("cellCount"),
+                         InstanceMethod<&Workbook::ClearHyperlinks>("clearHyperlinks"),
                          InstanceMethod<&Workbook::ClearMerges>("clearMerges"),
+                         InstanceMethod<&Workbook::ClearValidations>("clearValidations"),
                          InstanceMethod<&Workbook::DefinedNameAt>("definedNameAt"),
                          InstanceMethod<&Workbook::DefinedNameCount>("definedNameCount"),
                          InstanceMethod<&Workbook::DeleteCols>("deleteCols"),
                          InstanceMethod<&Workbook::DeleteRows>("deleteRows"),
                          InstanceMethod<&Workbook::EvaluateCfRange>("evaluateCfRange"),
+                         InstanceMethod<&Workbook::FillCount>("fillCount"),
+                         InstanceMethod<&Workbook::FontCount>("fontCount"),
+                         InstanceMethod<&Workbook::GetBorder>("getBorder"),
                          InstanceMethod<&Workbook::GetCellXf>("getCellXf"),
                          InstanceMethod<&Workbook::GetCellXfIndex>("getCellXfIndex"),
                          InstanceMethod<&Workbook::GetComment>("getComment"),
+                         InstanceMethod<&Workbook::GetFill>("getFill"),
+                         InstanceMethod<&Workbook::GetFont>("getFont"),
                          InstanceMethod<&Workbook::GetHyperlinks>("getHyperlinks"),
                          InstanceMethod<&Workbook::GetMerges>("getMerges"),
+                         InstanceMethod<&Workbook::GetNumFmt>("getNumFmt"),
                          InstanceMethod<&Workbook::GetSheetColumns>("getSheetColumns"),
                          InstanceMethod<&Workbook::GetSheetRowOverrides>("getSheetRowOverrides"),
                          InstanceMethod<&Workbook::GetSheetView>("getSheetView"),
@@ -1489,9 +2041,12 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
                          InstanceMethod<&Workbook::PassthroughAt>("passthroughAt"),
                          InstanceMethod<&Workbook::PassthroughCount>("passthroughCount"),
                          InstanceMethod<&Workbook::Recalc>("recalc"),
+                         InstanceMethod<&Workbook::RemoveHyperlink>("removeHyperlink"),
+                         InstanceMethod<&Workbook::RemoveHyperlinkAt>("removeHyperlinkAt"),
                          InstanceMethod<&Workbook::RemoveMerge>("removeMerge"),
                          InstanceMethod<&Workbook::RemoveMergeAt>("removeMergeAt"),
                          InstanceMethod<&Workbook::RemoveSheet>("removeSheet"),
+                         InstanceMethod<&Workbook::RemoveValidationAt>("removeValidationAt"),
                          InstanceMethod<&Workbook::RenameSheet>("renameSheet"),
                          InstanceMethod<&Workbook::Save>("save"),
                          InstanceMethod<&Workbook::SetBlank>("setBlank"),
@@ -1517,6 +2072,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
                          InstanceMethod<&Workbook::SheetName>("sheetName"),
                          InstanceMethod<&Workbook::TableAt>("tableAt"),
                          InstanceMethod<&Workbook::TableCount>("tableCount"),
+                         InstanceMethod<&Workbook::XfCount>("xfCount"),
                      });
 }
 

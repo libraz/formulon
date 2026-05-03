@@ -385,6 +385,14 @@ class Workbook {
   /// reader hand-off allocation-free.
   void set_styles(io::StylesTable styles) { styles_ = std::move(styles); }
 
+  /// Mutable access to the workbook's styles table.
+  ///
+  /// The OOXML reader populates the table during package load via
+  /// `set_styles`; mutators added through the C ABI (font / fill /
+  /// border / num-fmt / xf inserts) reach the underlying records
+  /// through this accessor instead of round-tripping the whole table.
+  io::StylesTable& mutable_styles() noexcept { return styles_; }
+
   /// Persists the cell-level xf index without otherwise mutating cell
   /// state. The cell at `(row, col)` is created (as a default-blank
   /// literal) when it does not yet exist, mirroring the growth
