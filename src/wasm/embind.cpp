@@ -557,6 +557,70 @@ class JsWorkbook {
     return rc == 0 ? ok_status() : error_status(rc);
   }
 
+  /// Drives a viewport-bounded incremental recalc.
+  ///
+  /// `viewport` is a JS object of the shape
+  /// `{ sheet, firstRow, lastRow, firstCol, lastCol }`. The returned
+  /// envelope has the standard `{ ok, status, message, context }` plus
+  /// a `recomputed` field reporting the number of cells the engine
+  /// actually evaluated during the call.
+  emscripten::val partialRecalc(emscripten::val viewport) {
+    emscripten::val o = emscripten::val::object();
+    if (handle_ == nullptr) {
+      o.set("status", error_status(7000));
+      o.set("recomputed", static_cast<uint32_t>(0));
+      return o;
+    }
+    fm_viewport vp{};
+    vp.sheet = viewport["sheet"].as<uint32_t>();
+    vp.first_row = viewport["firstRow"].as<uint32_t>();
+    vp.last_row = viewport["lastRow"].as<uint32_t>();
+    vp.first_col = viewport["firstCol"].as<uint32_t>();
+    vp.last_col = viewport["lastCol"].as<uint32_t>();
+    uint32_t recomputed = 0;
+    fm_status_t rc = fm_workbook_partial_recalc(handle_, &vp, &recomputed);
+    if (rc != 0) {
+      o.set("status", error_status(rc));
+      o.set("recomputed", static_cast<uint32_t>(0));
+      return o;
+    }
+    o.set("status", ok_status());
+    o.set("recomputed", recomputed);
+    return o;
+  }
+
+  /// Installs an iterative-solver progress callback.
+  ///
+  /// The JS callback receives `(iteration, maxResidual, maxIterations)`
+  /// after each Gauss-Seidel sweep and must return a truthy value to
+  /// continue or a falsy value to abort. Pass `null` (or any value
+  /// whose `isNull() / isUndefined()` test holds) to clear the
+  /// callback.
+  ///
+  /// The wrapper holds the JS callable in a static `emscripten::val`
+  /// slot for the lifetime of this workbook handle. We do not pass
+  /// `user_data` through the C ABI: the JS layer does not need it
+  /// because the closure captures whatever state the JS caller wants.
+  /// As a consequence, only ONE JS progress callback can be active at
+  /// a time across all workbook handles in this WASM instance —
+  /// installing a new one displaces any previous registration. This
+  /// matches the typical UI workflow (a single "calculation in
+  /// progress" dialog) without requiring per-handle thread-local
+  /// storage.
+  JsStatus setIterativeProgress(emscripten::val cb) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    if (cb.isNull() || cb.isUndefined()) {
+      js_progress_callback() = emscripten::val::null();
+      fm_status_t rc = fm_workbook_set_iterative_progress(handle_, nullptr, nullptr);
+      return rc == 0 ? ok_status() : error_status(rc);
+    }
+    js_progress_callback() = cb;
+    fm_status_t rc = fm_workbook_set_iterative_progress(handle_, &JsWorkbook::iterativeProgressTrampoline, nullptr);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
   // ---- Iteration / metadata accessors --------------------------------------
   // These mirror the C-ABI iteration / metadata entry points. Each one
   // returns either a status-bearing envelope or, for plain count
@@ -900,6 +964,30 @@ class JsWorkbook {
   }
 
  private:
+  // Holder for the currently-installed JS progress callback. Function
+  // local static keeps the slot alive for the WASM module's lifetime
+  // without needing a global variable; embind's val type is not safe
+  // to default-initialise at static-init time.
+  static emscripten::val& js_progress_callback() {
+    static emscripten::val cb = emscripten::val::null();
+    return cb;
+  }
+
+  // C-ABI compatible trampoline that forwards to the held JS callback.
+  // Returning `false` from the JS side aborts the iterative solve.
+  static bool iterativeProgressTrampoline(uint32_t iteration, double max_residual, uint32_t max_iterations,
+                                          void* /*user_data*/) {
+    emscripten::val& cb = js_progress_callback();
+    if (cb.isNull() || cb.isUndefined()) {
+      return true;
+    }
+    emscripten::val ret = cb(iteration, max_residual, max_iterations);
+    if (ret.isUndefined() || ret.isNull()) {
+      return true;
+    }
+    return ret.as<bool>();
+  }
+
   fm_workbook_t* handle_ = nullptr;
 };
 
@@ -1092,8 +1180,10 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("setBlank", &JsWorkbook::setBlank)
       .function("setFormula", &JsWorkbook::setFormula)
       .function("getValue", &JsWorkbook::getValue)
+      .function("partialRecalc", &JsWorkbook::partialRecalc)
       .function("recalc", &JsWorkbook::recalc)
       .function("setIterative", &JsWorkbook::setIterative)
+      .function("setIterativeProgress", &JsWorkbook::setIterativeProgress)
       .function("cellCount", &JsWorkbook::cellCount)
       .function("cellAt", &JsWorkbook::cellAt)
       .function("definedNameCount", &JsWorkbook::definedNameCount)

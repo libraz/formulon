@@ -57,7 +57,8 @@ double abs_delta(const Value& prev, const Value& curr) noexcept {
 
 IterativeOutcome run_iterative_solve_impl(const std::vector<CellNodeId>& scc, const IterativeOptions& opts,
                                           const std::function<Value(CellNodeId)>& evaluate_one,
-                                          const std::function<void(CellNodeId, Value)>& commit) {
+                                          const std::function<void(CellNodeId, Value)>& commit,
+                                          IterativeProgressCb progress, void* progress_user_data) {
   IterativeOutcome out;
   if (scc.empty()) {
     // Defensive: an empty component is degenerate. Treat as immediate
@@ -132,6 +133,21 @@ IterativeOutcome run_iterative_solve_impl(const std::vector<CellNodeId>& scc, co
     }
 
     out.iterations_run = iter + 1U;
+
+    // Optional progress callback: invoked AFTER the sweep so the caller
+    // sees the residual that resulted from the work just performed and
+    // BEFORE the convergence / divergence checks so the caller can
+    // cancel a still-progressing solve. The callback returns `false` to
+    // abort; we surface `aborted` and leave the cell store in its
+    // current partially-converged state (the converged-or-not
+    // accounting belongs to the caller).
+    if (progress != nullptr) {
+      const bool keep_going = progress(out.iterations_run, max_delta, max_iters, progress_user_data);
+      if (!keep_going) {
+        out.aborted = true;
+        return out;
+      }
+    }
 
     // Convergence: the largest absolute change in this pass dropped
     // below the user-specified threshold. Strict-less-than mirrors the

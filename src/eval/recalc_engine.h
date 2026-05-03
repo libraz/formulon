@@ -66,6 +66,29 @@ struct SchedulerStats;
 Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry& registry, const SchedulerConfig& cfg,
                                            SchedulerStats* stats, RecalcEngine& engine);
 
+/// Workbook-relative half-open viewport rectangle, expressed in 0-based
+/// inclusive coordinates. Used by `RecalcEngine::partial_recalc` to bound
+/// the work performed during a latency-sensitive UI redraw.
+///
+/// `last_row` / `last_col` are inclusive — a single-cell viewport sets
+/// `first_*` and `last_*` to the same value. An empty viewport (the row
+/// range or the column range collapsed) is allowed and produces a
+/// no-op recalc; the engine treats it as "the UI does not need any
+/// fresh values right now".
+struct SheetCellRange {
+  /// 0-based sheet index. Out-of-range values are silently ignored by
+  /// `partial_recalc`.
+  std::uint16_t sheet_id = 0;
+  /// First row, 0-based, inclusive.
+  std::uint32_t first_row = 0;
+  /// Last row, 0-based, inclusive.
+  std::uint32_t last_row = 0;
+  /// First column, 0-based, inclusive.
+  std::uint32_t first_col = 0;
+  /// Last column, 0-based, inclusive.
+  std::uint32_t last_col = 0;
+};
+
 /// Statistics describing a single `recalc()` pass. Useful for tests and
 /// observability; the recalc engine itself does not interpret these counts.
 struct RecalcStats {
@@ -155,6 +178,34 @@ class RecalcEngine {
   /// cancellation / resource-limit failures.
   Expected<RecalcStats, Error> recalc(Workbook& workbook, const FunctionRegistry& registry);
 
+  /// Recalculates only those dirty cells whose final result is required to
+  /// produce correct values within the supplied viewport rectangle.
+  ///
+  /// Computes the dependency closure backward from the viewport: every cell
+  /// transitively reachable from a viewport cell via the dependency graph is
+  /// included; cells outside that closure are skipped even if they are
+  /// otherwise dirty. Volatile cells inside the closure are still
+  /// recomputed every call. Cells outside the closure remain dirty; a
+  /// subsequent full `recalc()` (or a `partial_recalc` whose closure
+  /// overlaps them) will visit them.
+  ///
+  /// Edge cases:
+  ///   * Empty viewport (`first_row > last_row` or `first_col >
+  ///     last_col`): no-op, returns `RecalcStats{}` with all zero counts.
+  ///   * Viewport extending beyond a sheet's bounds: silently clamped to
+  ///     the populated cells inside the rectangle.
+  ///   * Out-of-range `sheet_id`: no-op, returns `RecalcStats{}`.
+  ///   * Cycles inside the closure: surfaced exactly the way `recalc()`
+  ///     surfaces them (`#REF!` when iterative calc is disabled, the
+  ///     iterative solver otherwise) — the closure restriction never
+  ///     hides a circular reference.
+  ///
+  /// Threading: this method runs on the calling thread, holding the same
+  /// invariants as `recalc()`. Future revisions may dispatch the closure
+  /// through the parallel scheduler; today the contract is single-threaded.
+  Expected<RecalcStats, Error> partial_recalc(Workbook& workbook, const FunctionRegistry& registry,
+                                              const SheetCellRange& viewport);
+
   // ------------------------------------------------------------------------
   // Test / debug accessors. Const-only so external code cannot mutate the
   // engine's internal state without going through the public API.
@@ -177,6 +228,27 @@ class RecalcEngine {
   /// Returns the active iterative-calc options.
   const IterativeOptions& iterative_options() const noexcept { return iterative_; }
 
+  /// Installs a progress callback for the iterative solver.
+  ///
+  /// The callback is invoked once per Gauss-Seidel sweep with the
+  /// 1-based iteration index, the maximum residual observed during the
+  /// sweep, and the configured iteration cap. Returning `false` aborts
+  /// the in-flight solve; the recalc accounting then treats the SCC the
+  /// same way it treats an iteration-limit exhaustion (members tallied
+  /// in `cycle_cells`). Pass `nullptr` to clear the callback.
+  ///
+  /// `user_data` is forwarded verbatim to every invocation. The engine
+  /// does not take ownership; the caller must keep it alive across
+  /// every recalc that may consult the callback.
+  void set_iterative_progress(IterativeProgressCb cb, void* user_data) noexcept {
+    progress_cb_ = cb;
+    progress_user_data_ = user_data;
+  }
+
+  /// Returns the currently installed iterative progress callback, or
+  /// `nullptr` when none is active.
+  IterativeProgressCb iterative_progress() const noexcept { return progress_cb_; }
+
  private:
   // The parallel scheduler reads `graph_` / `volatiles_` and mutates
   // `dirty_` / `arena_` via the same algorithm as `recalc()`. Granting
@@ -194,6 +266,11 @@ class RecalcEngine {
   // Iterative-calc knobs. Default-disabled so existing callers keep the
   // legacy `#REF!` behaviour for cyclic SCCs without opting in.
   IterativeOptions iterative_;
+  // Optional progress callback for the iterative solver. `nullptr`
+  // disables it (the legacy contract). `progress_user_data_` is
+  // forwarded verbatim to every invocation; the engine does not own it.
+  IterativeProgressCb progress_cb_ = nullptr;
+  void* progress_user_data_ = nullptr;
 };
 
 }  // namespace eval

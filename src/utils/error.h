@@ -141,6 +141,11 @@ enum class FormulonErrorCode : int32_t {
   /// nested recalc; callers (typically a UDF that re-enters the engine)
   /// must avoid triggering recalc from inside an evaluator callback.
   kGraphRecalcReentrant = 4005,
+  /// The iterative solver returned early because the user-supplied
+  /// progress callback requested cancellation. The cell store is left in
+  /// its current partially-converged state and the caller should treat
+  /// the result as "not converged".
+  kGraphIterationAborted = 4006,
 
   // ===== 5000-5999: I/O (OOXML / XLSB / CSV) =====
   kIoFileNotFound = 5000,
@@ -399,6 +404,8 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kGraphThreadPoolError";
     case FormulonErrorCode::kGraphRecalcReentrant:
       return "kGraphRecalcReentrant";
+    case FormulonErrorCode::kGraphIterationAborted:
+      return "kGraphIterationAborted";
 
     // I/O
     case FormulonErrorCode::kIoFileNotFound:

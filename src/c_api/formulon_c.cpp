@@ -706,6 +706,45 @@ extern "C" fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, int32_t enab
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_partial_recalc(fm_workbook_t* wb, const fm_viewport* viewport,
+                                                  uint32_t* out_recomputed_count) {
+  clear_last_error();
+  if (wb == nullptr || viewport == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_partial_recalc: NULL argument");
+  }
+  formulon::eval::SheetCellRange range;
+  range.sheet_id = static_cast<std::uint16_t>(viewport->sheet);
+  range.first_row = viewport->first_row;
+  range.last_row = viewport->last_row;
+  range.first_col = viewport->first_col;
+  range.last_col = viewport->last_col;
+  auto r = wb->workbook().partial_recalc(formulon::eval::default_registry(), range);
+  if (!r) {
+    return set_last_error(r.error());
+  }
+  if (out_recomputed_count != nullptr) {
+    *out_recomputed_count = r.value().cells_evaluated;
+  }
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_set_iterative_progress(fm_workbook_t* wb, fm_iterative_progress_cb cb,
+                                                          void* user_data) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_set_iterative_progress: wb is NULL");
+  }
+  // The C ABI callback signature
+  //   `bool(*)(uint32_t, double, uint32_t, void*)`
+  // is bit-identical to the engine's `IterativeProgressCb` typedef, so
+  // a direct assignment is well-defined under both C and C++ rules.
+  formulon::eval::IterativeProgressCb engine_cb = cb;
+  wb->workbook().set_iterative_progress(engine_cb, user_data);
+  return 0;
+}
+
 // ---------------------------------------------------------------------------
 // Conditional formatting
 // ---------------------------------------------------------------------------

@@ -37,6 +37,9 @@ struct IterativeOptions;
 struct RecalcStats;
 struct SchedulerConfig;
 struct SchedulerStats;
+struct SheetCellRange;
+using IterativeProgressCb = bool (*)(std::uint32_t iteration, double max_residual, std::uint32_t max_iterations,
+                                     void* user_data);
 }  // namespace eval
 
 namespace pivot {
@@ -255,6 +258,21 @@ class Workbook {
 
   /// Returns the active iterative-calc options.
   const eval::IterativeOptions& iterative_options() const noexcept;
+
+  // --- Recalc ---
+  // Pass-through wrappers that surface a few `RecalcEngine` knobs from
+  // the workbook handle. Kept intentionally trivial so the workbook
+  // header does not depend on `eval/recalc_engine.h` for the type body.
+
+  /// Drives an incremental recalc bounded by `viewport`. Forwards to
+  /// `RecalcEngine::partial_recalc`; see that method for the closure
+  /// semantics.
+  Expected<eval::RecalcStats, Error> partial_recalc(const eval::FunctionRegistry& registry,
+                                                    const eval::SheetCellRange& viewport);
+
+  /// Installs / clears the iterative-solver progress callback. Forwards
+  /// to `RecalcEngine::set_iterative_progress`. Pass `nullptr` to clear.
+  void set_iterative_progress(eval::IterativeProgressCb cb, void* user_data) noexcept;
 
   // ---------------------------------------------------------------------------
   // Passive round-trip metadata (Bundle 2.4)

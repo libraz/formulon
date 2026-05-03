@@ -548,6 +548,73 @@ FM_API fm_status_t fm_workbook_recalc(fm_workbook_t* wb);
 FM_API fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, int32_t enabled, int32_t max_iterations,
                                              double max_change);
 
+/**
+ * @brief Workbook-relative viewport rectangle, expressed in 0-based
+ *        inclusive coordinates. Used by `fm_workbook_partial_recalc`.
+ *
+ * `last_row` / `last_col` are inclusive — a single-cell viewport sets
+ * the corresponding `first_*` and `last_*` to the same value. An empty
+ * viewport (the row or column range collapsed) is allowed and produces
+ * a no-op recalc.
+ */
+typedef struct {
+  uint32_t sheet;       /**< 0-based sheet index. */
+  uint32_t first_row;   /**< First row, 0-based, inclusive. */
+  uint32_t last_row;    /**< Last row, 0-based, inclusive. */
+  uint32_t first_col;   /**< First column, 0-based, inclusive. */
+  uint32_t last_col;    /**< Last column, 0-based, inclusive. */
+} fm_viewport;
+
+/**
+ * @brief Iterative-solver progress callback signature.
+ *
+ * Invoked once per Gauss-Seidel sweep with the 1-based iteration index,
+ * the maximum residual observed during the sweep, and the configured
+ * iteration cap. `user_data` is the opaque pointer the caller registered
+ * via `fm_workbook_set_iterative_progress`.
+ *
+ * Return `1` (true) to continue iterating, `0` (false) to abort early.
+ * An aborted solve leaves the workbook in its current
+ * partially-converged state.
+ */
+typedef bool (*fm_iterative_progress_cb)(uint32_t iteration, double max_residual, uint32_t max_iterations,
+                                         void* user_data);
+
+/**
+ * @brief Recalculates the dependency closure required to produce
+ *        correct values for the supplied viewport rectangle.
+ *
+ * Cells outside the closure remain dirty; a subsequent
+ * `fm_workbook_recalc` (or a `fm_workbook_partial_recalc` whose closure
+ * overlaps them) will visit them.
+ *
+ * @param wb                     Workbook handle. Must be non-NULL.
+ * @param viewport               Viewport rectangle. Must be non-NULL.
+ * @param out_recomputed_count   Optional. Receives the number of cells
+ *                               actually recomputed during this call.
+ *                               May be NULL if the caller does not
+ *                               care.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `viewport` is NULL;
+ *         a `kEval*` / `kGraph*` code on engine failure.
+ */
+FM_API fm_status_t fm_workbook_partial_recalc(fm_workbook_t* wb, const fm_viewport* viewport,
+                                              uint32_t* out_recomputed_count);
+
+/**
+ * @brief Sets the iterative-solver progress callback for subsequent
+ *        recalcs on this workbook.
+ *
+ * Pass `cb == NULL` to clear the callback. `user_data` is forwarded
+ * verbatim to every invocation; the workbook does not take ownership
+ * of it.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`.
+ */
+FM_API fm_status_t fm_workbook_set_iterative_progress(fm_workbook_t* wb, fm_iterative_progress_cb cb, void* user_data);
+
 /* -------------------------------------------------------------------------- */
 /* Conditional formatting                                                     */
 /* -------------------------------------------------------------------------- */

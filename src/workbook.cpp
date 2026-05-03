@@ -544,4 +544,13 @@ const eval::IterativeOptions& Workbook::iterative_options() const noexcept {
   return engine_->iterative_options();
 }
 
+Expected<eval::RecalcStats, Error> Workbook::partial_recalc(const eval::FunctionRegistry& registry,
+                                                            const eval::SheetCellRange& viewport) {
+  return engine_->partial_recalc(*this, registry, viewport);
+}
+
+void Workbook::set_iterative_progress(eval::IterativeProgressCb cb, void* user_data) noexcept {
+  engine_->set_iterative_progress(cb, user_data);
+}
+
 }  // namespace formulon

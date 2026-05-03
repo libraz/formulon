@@ -270,7 +270,8 @@ Expected<RecalcStats, Error> RecalcEngine::recalc(Workbook& workbook, const Func
         sheet.set_cell_cached_value(c.row, c.col, v);
       };
 
-      const IterativeOutcome outcome = run_iterative_solve(component, iterative_, evaluate_one, commit);
+      const IterativeOutcome outcome =
+          run_iterative_solve(component, iterative_, evaluate_one, commit, progress_cb_, progress_user_data_);
       if (outcome.converged) {
         // Solver wrote the converged values into the cell store; count
         // each member as evaluated (singleton-style accounting) plus
@@ -281,15 +282,20 @@ Expected<RecalcStats, Error> RecalcEngine::recalc(Workbook& workbook, const Func
           ++stats.iterative_cells;
         }
       } else {
-        // Either divergence (solver wrote `#NUM!` on every member) or
+        // Either divergence (solver wrote `#NUM!` on every member),
         // iteration-limit exhaustion (solver left the last-iteration
-        // values in place). The user-visible failure mode in both cases
-        // is that the cycle did not resolve, so we count the members in
-        // `cycle_cells` to mirror the disabled-iterative-calc accounting.
-        // For the iteration-limit case, write `#NUM!` ourselves so the
-        // cells do not retain misleading partial values that the user
-        // might mistake for a converged result.
-        if (!outcome.diverged) {
+        // values in place), or callback-driven abort (also leaves
+        // last-iteration values in place). The user-visible failure
+        // mode in every case is "the cycle did not resolve", so we
+        // count the members in `cycle_cells` to mirror the
+        // disabled-iterative-calc accounting.
+        //
+        // For the iteration-limit case (NOT for an aborted solve) we
+        // write `#NUM!` ourselves so the cells do not retain misleading
+        // partial values that the user might mistake for a converged
+        // result. An aborted solve is the user's choice — leave the
+        // partially-converged values intact so the UI can resume.
+        if (!outcome.diverged && !outcome.aborted) {
           for (CellNodeId c : component) {
             if (c.sheet_id >= sheet_count) {
               continue;
@@ -365,6 +371,275 @@ Expected<RecalcStats, Error> RecalcEngine::recalc(Workbook& workbook, const Func
 
   // ---- Phase 5: clear the dirty set. ----
   dirty_.clear();
+  return stats;
+}
+
+Expected<RecalcStats, Error> RecalcEngine::partial_recalc(Workbook& workbook, const FunctionRegistry& registry,
+                                                          const SheetCellRange& viewport) {
+  RecalcStats stats;
+
+  // ---- Phase 0: validate the viewport. ----
+  // Empty viewport — collapsed row / column range, or unknown sheet —
+  // is a no-op. The dirty set stays untouched so a subsequent full
+  // recalc still picks up everything.
+  const std::size_t sheet_count = workbook.sheet_count();
+  if (viewport.sheet_id >= sheet_count) {
+    return stats;
+  }
+  if (viewport.first_row > viewport.last_row || viewport.first_col > viewport.last_col) {
+    return stats;
+  }
+
+  // ---- Phase 1: enumerate the viewport's seed cells. ----
+  // Walk the requested rectangle and pull every populated cell into the
+  // seed set. Cells outside the sheet's stored extent are silently
+  // dropped (the dep graph will not have entries for them anyway).
+  // Phantoms of dynamic-array spills are intentionally NOT seeded
+  // separately — the spill anchor is the formula cell, and resolving the
+  // anchor forces the spill to refresh.
+  const Sheet& view_sheet = workbook.sheet(viewport.sheet_id);
+  std::vector<CellNodeId> seeds;
+  seeds.reserve(static_cast<std::size_t>(viewport.last_row - viewport.first_row + 1U));
+  for (std::uint32_t row = viewport.first_row; row <= viewport.last_row; ++row) {
+    for (std::uint32_t col = viewport.first_col; col <= viewport.last_col; ++col) {
+      // We seed every coordinate inside the viewport regardless of
+      // whether it currently holds a stored cell: a viewport coordinate
+      // that is presently blank may still have inbound dep-graph
+      // edges (e.g. a formula on it that has been cleared but whose
+      // dependents have not been re-registered yet). The closure walk
+      // below tolerates absent nodes.
+      (void)view_sheet;
+      seeds.push_back(CellNodeId{viewport.sheet_id, row, col});
+    }
+  }
+
+  // ---- Phase 2: compute the dependency closure backward from seeds. ----
+  // The closure is "every cell whose value the viewport (transitively)
+  // reads". We walk forward edges (`dependencies_of`) from each seed:
+  // if A reads B, B's value contributes to A. The closure includes the
+  // seed cells themselves so any dirty viewport cell still gets
+  // evaluated.
+  std::unordered_set<CellNodeId, CellNodeIdHash> closure;
+  closure.reserve(seeds.size());
+  std::vector<CellNodeId> bfs_queue = seeds;
+  for (CellNodeId seed : seeds) {
+    closure.insert(seed);
+  }
+  std::size_t bfs_head = 0;
+  while (bfs_head < bfs_queue.size()) {
+    const CellNodeId current = bfs_queue[bfs_head++];
+    for (CellNodeId predecessor : graph_.dependencies_of(current)) {
+      if (closure.insert(predecessor).second) {
+        bfs_queue.push_back(predecessor);
+      }
+    }
+  }
+
+  // ---- Phase 3: BFS-propagate dirtiness inside the closure only. ----
+  // Volatile cells inside the closure are forced dirty (the caller
+  // asked for fresh values within the viewport, and a volatile cell's
+  // result is by definition stale). Volatile cells OUTSIDE the closure
+  // are NOT touched: the user opted into a viewport-bounded recalc and
+  // expects volatile cells in remote regions to wait for the next
+  // full pass.
+  volatiles_.for_each([&](CellNodeId cell) {
+    if (closure.count(cell) == 0U) {
+      return;
+    }
+    if (!dirty_.contains(cell)) {
+      dirty_.mark(cell);
+    }
+    ++stats.volatile_cells;
+  });
+
+  // Now propagate dirtiness through the closure. We snapshot the dirty
+  // cells that are inside the closure and BFS through reverse edges,
+  // adding any newly-discovered dependents that themselves live inside
+  // the closure (a dependent outside the closure is by definition
+  // unreachable from the viewport, so we do not need to visit it).
+  std::vector<CellNodeId> propagation_queue;
+  propagation_queue.reserve(dirty_.size());
+  dirty_.for_each([&](CellNodeId c) {
+    if (closure.count(c) != 0U) {
+      propagation_queue.push_back(c);
+    }
+  });
+  std::size_t prop_head = 0;
+  while (prop_head < propagation_queue.size()) {
+    const CellNodeId current = propagation_queue[prop_head++];
+    for (CellNodeId dependent : graph_.dependents_of(current)) {
+      if (closure.count(dependent) == 0U) {
+        continue;
+      }
+      if (!dirty_.contains(dependent)) {
+        dirty_.mark(dependent);
+        propagation_queue.push_back(dependent);
+      }
+    }
+  }
+
+  // ---- Phase 4: Tarjan SCC + selective evaluation. ----
+  // We reuse the same Tarjan output as `recalc()`. Cells outside the
+  // closure are skipped even if they appear in dirty SCCs, which
+  // preserves their dirty flag for a future full / overlapping
+  // partial recalc.
+  const std::vector<std::vector<CellNodeId>> sccs = graph_.tarjan_scc();
+  std::unordered_set<CellNodeId, CellNodeIdHash> visited_in_sccs;
+  for (const std::vector<CellNodeId>& component : sccs) {
+    // Skip components that have no overlap with the closure: their
+    // cells are not transitively read by the viewport.
+    bool any_in_closure = false;
+    for (CellNodeId c : component) {
+      if (closure.count(c) != 0U) {
+        any_in_closure = true;
+        break;
+      }
+    }
+    if (!any_in_closure) {
+      continue;
+    }
+
+    // Skip components that have no dirty member: nothing to do here.
+    bool any_dirty = false;
+    for (CellNodeId c : component) {
+      if (dirty_.contains(c) && closure.count(c) != 0U) {
+        any_dirty = true;
+        break;
+      }
+    }
+    if (!any_dirty) {
+      continue;
+    }
+
+    if (is_cyclic_component(component, graph_)) {
+      // A cycle that the viewport reaches must still be surfaced as a
+      // cycle: the closure restriction never hides a circular reference.
+      // Mirrors `recalc()`'s cycle handling exactly, with the iterative
+      // solver wired to the same progress callback.
+      for (CellNodeId c : component) {
+        visited_in_sccs.insert(c);
+      }
+
+      if (!iterative_.enabled) {
+        for (CellNodeId c : component) {
+          if (c.sheet_id >= sheet_count) {
+            continue;
+          }
+          Sheet& sheet = workbook.sheet(c.sheet_id);
+          sheet.set_cell_cached_value(c.row, c.col, Value::error(ErrorCode::Ref));
+          ++stats.cycle_cells;
+        }
+        continue;
+      }
+
+      auto evaluate_one = [&](CellNodeId c) -> Value {
+        if (c.sheet_id >= sheet_count) {
+          return Value::error(ErrorCode::Ref);
+        }
+        Sheet& sheet = workbook.sheet(c.sheet_id);
+        const Cell* cell_data = sheet.cell_at(c.row, c.col);
+        if (cell_data == nullptr || cell_data->formula_text.empty()) {
+          return Value::blank();
+        }
+        arena_->reset();
+        return evaluate_cell(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_,
+                             /*iterative_mode=*/true);
+      };
+      auto commit = [&](CellNodeId c, Value v) {
+        if (c.sheet_id >= sheet_count) {
+          return;
+        }
+        Sheet& sheet = workbook.sheet(c.sheet_id);
+        sheet.set_cell_cached_value(c.row, c.col, v);
+      };
+
+      const IterativeOutcome outcome =
+          run_iterative_solve(component, iterative_, evaluate_one, commit, progress_cb_, progress_user_data_);
+      if (outcome.converged) {
+        for (CellNodeId c : component) {
+          (void)c;
+          ++stats.cells_evaluated;
+          ++stats.iterative_cells;
+        }
+      } else {
+        if (!outcome.diverged && !outcome.aborted) {
+          for (CellNodeId c : component) {
+            if (c.sheet_id >= sheet_count) {
+              continue;
+            }
+            Sheet& sheet = workbook.sheet(c.sheet_id);
+            sheet.set_cell_cached_value(c.row, c.col, Value::error(ErrorCode::Num));
+          }
+        }
+        for (CellNodeId c : component) {
+          (void)c;
+          ++stats.cycle_cells;
+        }
+      }
+      continue;
+    }
+
+    // Plain singleton: only evaluate if the cell is in the closure AND
+    // dirty. Cells outside the closure stay dirty for a later pass.
+    const CellNodeId only = component.front();
+    if (closure.count(only) == 0U || !dirty_.contains(only)) {
+      continue;
+    }
+    visited_in_sccs.insert(only);
+    if (only.sheet_id >= sheet_count) {
+      continue;
+    }
+    Sheet& sheet = workbook.sheet(only.sheet_id);
+    const Cell* cell_data = sheet.cell_at(only.row, only.col);
+    if (cell_data == nullptr || cell_data->formula_text.empty()) {
+      continue;
+    }
+    arena_->reset();
+    Value result = evaluate_cell(workbook, sheet, *cell_data, only.row, only.col, registry, *arena_);
+    sheet.set_cell_cached_value(only.row, only.col, result);
+    ++stats.cells_evaluated;
+  }
+
+  // ---- Phase 4b: standalone dirty cells inside the closure. ----
+  // Isolated formula cells with no dep-graph entries do not appear in
+  // Tarjan output; sweep the closure for any dirty cell we have not
+  // already touched.
+  std::vector<CellNodeId> standalone_dirty;
+  dirty_.for_each([&](CellNodeId c) {
+    if (closure.count(c) != 0U && visited_in_sccs.count(c) == 0U) {
+      standalone_dirty.push_back(c);
+    }
+  });
+  for (CellNodeId c : standalone_dirty) {
+    if (c.sheet_id >= sheet_count) {
+      continue;
+    }
+    Sheet& sheet = workbook.sheet(c.sheet_id);
+    const Cell* cell_data = sheet.cell_at(c.row, c.col);
+    if (cell_data == nullptr || cell_data->formula_text.empty()) {
+      continue;
+    }
+    arena_->reset();
+    Value result = evaluate_cell(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_);
+    sheet.set_cell_cached_value(c.row, c.col, result);
+    ++stats.cells_evaluated;
+  }
+
+  // ---- Phase 5: clear only the closure's dirty entries. ----
+  // Cells outside the closure must remain dirty so a subsequent
+  // `recalc()` (or an overlapping `partial_recalc`) revisits them.
+  // Snapshot the in-closure dirty entries first to avoid mutating the
+  // underlying container during iteration.
+  std::vector<CellNodeId> to_unmark;
+  to_unmark.reserve(closure.size());
+  dirty_.for_each([&](CellNodeId c) {
+    if (closure.count(c) != 0U) {
+      to_unmark.push_back(c);
+    }
+  });
+  for (CellNodeId c : to_unmark) {
+    dirty_.unmark(c);
+  }
   return stats;
 }
 
