@@ -48,7 +48,7 @@ void append_excel_exponent(std::string& out, int exp) {
     out.push_back('0');
     out.push_back(static_cast<char>('0' + abs_exp));
   } else {
-    char tmp[8];
+    char tmp[16];
     std::snprintf(tmp, sizeof(tmp), "%d", abs_exp);
     out.append(tmp);
   }
