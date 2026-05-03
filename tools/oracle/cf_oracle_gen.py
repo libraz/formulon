@@ -17,7 +17,8 @@ self-baselines under ``tests/oracle/golden_cf/``.
 
 Supported rule types (matches the smoke suite):
 
-  - ``CellIs``, ``Top10``, ``AboveAverage``, ``ContainsText`` ->
+  - ``CellIs``, ``Top10``, ``AboveAverage``, ``ContainsText``,
+    ``BeginsWith``, ``EndsWith``, ``NotContainsText`` ->
     ``DifferentialFormat`` match. The rule's ``dxf`` fill is set to a
     deterministic fingerprint colour so the generator can map the
     captured ``DisplayFormat`` colour back to the originating rule's
@@ -34,8 +35,7 @@ Not yet captured (intentional gaps):
     length or the icon bucket via the public AppleScript surface), so
     they will likely stay deferred even after the other rule types
     land.
-  - ``NotContainsText``, ``BeginsWith``, ``EndsWith``,
-    ``ContainsBlanks`` / ``NotContainsBlanks``, ``ContainsErrors`` /
+  - ``ContainsBlanks`` / ``NotContainsBlanks``, ``ContainsErrors`` /
     ``NotContainsErrors``, ``TimePeriod``, ``DuplicateValues``,
     ``UniqueValues``, ``Expression`` — all DifferentialFormat-bearing.
     They reuse the same dxf-fingerprint trick; they are deferred until
@@ -201,7 +201,14 @@ def _build_workbook(case: Dict[str, Any], path: Path) -> List[Dict[str, Any]]:
                         "dxf_fingerprint": fingerprint,
                     }
                 )
-            elif rtype in ("Top10", "AboveAverage", "ContainsText"):
+            elif rtype in (
+                "Top10",
+                "AboveAverage",
+                "ContainsText",
+                "BeginsWith",
+                "EndsWith",
+                "NotContainsText",
+            ):
                 # All three are DifferentialFormat-bearing rules; the
                 # capture path uses the same dxf-fingerprint reverse
                 # mapping as `CellIs`. Only the openpyxl `Rule` payload
@@ -243,22 +250,42 @@ def _build_workbook(case: Dict[str, Any], path: Path) -> List[Dict[str, Any]]:
                     if std_dev is not None:
                         rule_kwargs["stdDev"] = int(std_dev)
                     opx_rule = Rule(**rule_kwargs)
-                else:  # ContainsText
+                else:
+                    # Text-rule family: ContainsText, BeginsWith,
+                    # EndsWith, NotContainsText. Each requires a
+                    # synthesised formula because Excel computes one at
+                    # write time but openpyxl will not supply it.
                     text = rule.get("text", "")
                     if not text:
                         raise ValueError(
-                            "ContainsText rule requires a `text` field"
+                            f"{rtype} rule requires a `text` field"
                         )
-                    # Excel synthesises a SEARCH() formula at write time;
-                    # openpyxl wants us to provide it explicitly. Use the
-                    # case range's first cell as the row anchor — Excel
-                    # rewrites the row on apply just like a relative ref.
                     first_sqref = block["sqref"][0]
                     anchor = _addr(first_sqref["first_row"], first_sqref["first_col"])
-                    formula = [f'NOT(ISERROR(SEARCH("{text}",{anchor})))']
+                    text_escaped = text.replace('"', '""')
+                    if rtype == "ContainsText":
+                        op_str = "containsText"
+                        type_str = "containsText"
+                        formula = [
+                            f'NOT(ISERROR(SEARCH("{text_escaped}",{anchor})))'
+                        ]
+                    elif rtype == "BeginsWith":
+                        op_str = "beginsWith"
+                        type_str = "beginsWith"
+                        formula = [f'LEFT({anchor},{len(text)})="{text_escaped}"']
+                    elif rtype == "EndsWith":
+                        op_str = "endsWith"
+                        type_str = "endsWith"
+                        formula = [
+                            f'RIGHT({anchor},{len(text)})="{text_escaped}"'
+                        ]
+                    else:  # NotContainsText
+                        op_str = "notContains"
+                        type_str = "notContainsText"
+                        formula = [f'ISERROR(SEARCH("{text_escaped}",{anchor}))']
                     opx_rule = Rule(
-                        type="containsText",
-                        operator="containsText",
+                        type=type_str,
+                        operator=op_str,
                         text=text,
                         formula=formula,
                         dxf=dxf,

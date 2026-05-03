@@ -113,6 +113,75 @@
       "range": {"first_row": 0, "first_col": 0, "last_row": 4, "last_col": 0}
     },
     {
+      "id": "begins_with_foo",
+      "description": "BeginsWith 'foo' over A1:A3 = ['foobar', 'barfoo', 'food'].",
+      "sheet": [
+        {"row": 0, "col": 0, "kind": "text", "value": "foobar"},
+        {"row": 1, "col": 0, "kind": "text", "value": "barfoo"},
+        {"row": 2, "col": 0, "kind": "text", "value": "food"}
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [{"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}],
+          "rules": [
+            {
+              "type": "BeginsWith",
+              "priority": 1,
+              "dxf_id": 14,
+              "text": "foo"
+            }
+          ]
+        }
+      ],
+      "range": {"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}
+    },
+    {
+      "id": "ends_with_bar",
+      "description": "EndsWith 'bar' over A1:A3 = ['foobar', 'fooba', 'barfoo'].",
+      "sheet": [
+        {"row": 0, "col": 0, "kind": "text", "value": "foobar"},
+        {"row": 1, "col": 0, "kind": "text", "value": "fooba"},
+        {"row": 2, "col": 0, "kind": "text", "value": "barfoo"}
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [{"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}],
+          "rules": [
+            {
+              "type": "EndsWith",
+              "priority": 1,
+              "dxf_id": 15,
+              "text": "bar"
+            }
+          ]
+        }
+      ],
+      "range": {"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}
+    },
+    {
+      "id": "not_contains_qux",
+      "description": "NotContainsText 'qux' over A1:A3 = ['abc', 'quxy', 'def']; matches A1 and A3.",
+      "sheet": [
+        {"row": 0, "col": 0, "kind": "text", "value": "abc"},
+        {"row": 1, "col": 0, "kind": "text", "value": "quxy"},
+        {"row": 2, "col": 0, "kind": "text", "value": "def"}
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [{"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}],
+          "rules": [
+            {
+              "type": "NotContainsText",
+              "priority": 1,
+              "dxf_id": 16,
+              "text": "qux"
+            }
+          ]
+        }
+      ],
+      "range": {"first_row": 0, "first_col": 0, "last_row": 2, "last_col": 0}
+    },
+    {
       "id": "contains_text_foo",
       "description": "Contains-text 'foo' over A1:A3 = ['foobar', 'bar', 'foo'].",
       "sheet": [

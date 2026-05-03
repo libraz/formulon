@@ -137,6 +137,76 @@
       ]
     },
     {
+      "id": "begins_with_foo",
+      "cells": [
+        {
+          "row": 0,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 14
+            }
+          ]
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 14
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ends_with_bar",
+      "cells": [
+        {
+          "row": 0,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 15
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "not_contains_qux",
+      "cells": [
+        {
+          "row": 0,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 16
+            }
+          ]
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 16
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "contains_text_foo",
       "cells": [
         {

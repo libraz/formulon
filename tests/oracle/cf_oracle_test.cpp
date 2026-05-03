@@ -283,7 +283,121 @@ TEST(CfOracleSmoke, AboveAverage) {
 }
 
 // ---------------------------------------------------------------------------
-// Case 5: contains-text "foo" over A1:A3 = ["foobar", "bar", "foo"].
+// Case 5: begins-with "foo" over A1:A3 = ["foobar", "barfoo", "food"].
+// A1 ("foobar") and A3 ("food") both start with "foo"; A2 ("barfoo")
+// does not. Mirrors cases_cf/cf_smoke.yaml :: begins_with_foo.
+// ---------------------------------------------------------------------------
+
+TEST(CfOracleSmoke, BeginsWithFoo) {
+  CFOracleHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::text("foobar"));
+  harness.sheet.set_cell_value(1, 0, Value::text("barfoo"));
+  harness.sheet.set_cell_value(2, 0, Value::text("food"));
+
+  ConditionalFormat block{};
+  block.sqref.push_back(MakeRange(0, 0, 2, 0));
+  CFRule rule;
+  rule.type = RuleType::BeginsWith;
+  rule.priority = 1;
+  rule.dxf_id = 14u;
+  rule.text = "foo";
+  block.rules.push_back(std::move(rule));
+  harness.sheet.mutable_conditional_formats().push_back(std::move(block));
+
+  const CFHost host = harness.MakeHost();
+  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+
+  ASSERT_EQ(matches.size(), 2u);
+
+  EXPECT_EQ(matches[0].cell.row, 0u);
+  ASSERT_EQ(matches[0].matches.size(), 1u);
+  EXPECT_EQ(matches[0].matches[0].kind, CFMatchKind::DifferentialFormat);
+  ASSERT_TRUE(matches[0].matches[0].dxf_id.has_value());
+  EXPECT_EQ(*matches[0].matches[0].dxf_id, 14u);
+
+  EXPECT_EQ(matches[1].cell.row, 2u);
+  ASSERT_EQ(matches[1].matches.size(), 1u);
+  EXPECT_EQ(matches[1].matches[0].kind, CFMatchKind::DifferentialFormat);
+  ASSERT_TRUE(matches[1].matches[0].dxf_id.has_value());
+  EXPECT_EQ(*matches[1].matches[0].dxf_id, 14u);
+}
+
+// ---------------------------------------------------------------------------
+// Case 6: ends-with "bar" over A1:A3 = ["foobar", "fooba", "barfoo"].
+// Only A1 ("foobar") ends with "bar". Mirrors cases_cf/cf_smoke.yaml ::
+// ends_with_bar.
+// ---------------------------------------------------------------------------
+
+TEST(CfOracleSmoke, EndsWithBar) {
+  CFOracleHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::text("foobar"));
+  harness.sheet.set_cell_value(1, 0, Value::text("fooba"));
+  harness.sheet.set_cell_value(2, 0, Value::text("barfoo"));
+
+  ConditionalFormat block{};
+  block.sqref.push_back(MakeRange(0, 0, 2, 0));
+  CFRule rule;
+  rule.type = RuleType::EndsWith;
+  rule.priority = 1;
+  rule.dxf_id = 15u;
+  rule.text = "bar";
+  block.rules.push_back(std::move(rule));
+  harness.sheet.mutable_conditional_formats().push_back(std::move(block));
+
+  const CFHost host = harness.MakeHost();
+  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+
+  ASSERT_EQ(matches.size(), 1u);
+
+  EXPECT_EQ(matches[0].cell.row, 0u);
+  ASSERT_EQ(matches[0].matches.size(), 1u);
+  EXPECT_EQ(matches[0].matches[0].kind, CFMatchKind::DifferentialFormat);
+  ASSERT_TRUE(matches[0].matches[0].dxf_id.has_value());
+  EXPECT_EQ(*matches[0].matches[0].dxf_id, 15u);
+}
+
+// ---------------------------------------------------------------------------
+// Case 7: not-contains "qux" over A1:A3 = ["abc", "quxy", "def"].
+// A1 and A3 (no "qux") match; A2 ("quxy") does not. Mirrors
+// cases_cf/cf_smoke.yaml :: not_contains_qux.
+// ---------------------------------------------------------------------------
+
+TEST(CfOracleSmoke, NotContainsQux) {
+  CFOracleHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::text("abc"));
+  harness.sheet.set_cell_value(1, 0, Value::text("quxy"));
+  harness.sheet.set_cell_value(2, 0, Value::text("def"));
+
+  ConditionalFormat block{};
+  block.sqref.push_back(MakeRange(0, 0, 2, 0));
+  CFRule rule;
+  rule.type = RuleType::NotContainsText;
+  rule.priority = 1;
+  rule.dxf_id = 16u;
+  rule.text = "qux";
+  block.rules.push_back(std::move(rule));
+  harness.sheet.mutable_conditional_formats().push_back(std::move(block));
+
+  const CFHost host = harness.MakeHost();
+  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+
+  ASSERT_EQ(matches.size(), 2u);
+
+  EXPECT_EQ(matches[0].cell.row, 0u);
+  ASSERT_EQ(matches[0].matches.size(), 1u);
+  EXPECT_EQ(matches[0].matches[0].kind, CFMatchKind::DifferentialFormat);
+  ASSERT_TRUE(matches[0].matches[0].dxf_id.has_value());
+  EXPECT_EQ(*matches[0].matches[0].dxf_id, 16u);
+
+  EXPECT_EQ(matches[1].cell.row, 2u);
+  ASSERT_EQ(matches[1].matches.size(), 1u);
+  EXPECT_EQ(matches[1].matches[0].kind, CFMatchKind::DifferentialFormat);
+  ASSERT_TRUE(matches[1].matches[0].dxf_id.has_value());
+  EXPECT_EQ(*matches[1].matches[0].dxf_id, 16u);
+}
+
+// ---------------------------------------------------------------------------
+// Case 8: contains-text "foo" over A1:A3 = ["foobar", "bar", "foo"].
 // "foobar" and "foo" both contain the literal "foo"; "bar" does not.
 // Mirrors cases_cf/cf_smoke.yaml :: contains_text_foo.
 // ---------------------------------------------------------------------------

@@ -152,6 +152,94 @@ cases:
               priority: 1
               dxf_id: 12
 
+  - id: begins_with_foo
+    description: |
+      BeginsWith "foo" over A1:A3 = ["foobar", "barfoo", "food"].
+      A1 ("foobar") and A3 ("food") match; A2 ("barfoo") does not.
+      Both matching cells surface a single DifferentialFormat match
+      referencing dxfId=14, priority=1.
+    sheet:
+      A1: "foobar"
+      A2: "barfoo"
+      A3: "food"
+    cf_blocks:
+      - sqref: "A1:A3"
+        rules:
+          - type: BeginsWith
+            priority: 1
+            dxf_id: 14
+            text: "foo"
+    range: "A1:A3"
+    expected:
+      cells:
+        - addr: A1
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 14
+        - addr: A3
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 14
+
+  - id: ends_with_bar
+    description: |
+      EndsWith "bar" over A1:A3 = ["foobar", "fooba", "barfoo"].
+      A1 ("foobar") matches; A2 and A3 do not. The matching cell
+      surfaces one DifferentialFormat match referencing dxfId=15,
+      priority=1.
+    sheet:
+      A1: "foobar"
+      A2: "fooba"
+      A3: "barfoo"
+    cf_blocks:
+      - sqref: "A1:A3"
+        rules:
+          - type: EndsWith
+            priority: 1
+            dxf_id: 15
+            text: "bar"
+    range: "A1:A3"
+    expected:
+      cells:
+        - addr: A1
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 15
+
+  - id: not_contains_qux
+    description: |
+      NotContainsText "qux" over A1:A3 = ["abc", "quxy", "def"].
+      A1 ("abc") and A3 ("def") match (do not contain "qux"); A2
+      ("quxy") does not match. Both matching cells surface one
+      DifferentialFormat match referencing dxfId=16, priority=1.
+    sheet:
+      A1: "abc"
+      A2: "quxy"
+      A3: "def"
+    cf_blocks:
+      - sqref: "A1:A3"
+        rules:
+          - type: NotContainsText
+            priority: 1
+            dxf_id: 16
+            text: "qux"
+    range: "A1:A3"
+    expected:
+      cells:
+        - addr: A1
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 16
+        - addr: A3
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 16
+
   - id: contains_text_foo
     description: |
       Contains-text "foo" over A1:A3 = ["foobar", "bar", "foo"].
