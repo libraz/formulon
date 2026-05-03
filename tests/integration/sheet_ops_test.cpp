@@ -9,6 +9,8 @@
 #include <cstdint>
 #include <string>
 
+#include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
 #include "io/defined_names.h"
 #include "sheet.h"
@@ -485,6 +487,138 @@ TEST(WorkbookRowColEdits, InsertRowsRewritesDefinedName) {
   ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, /*row=*/3, /*count=*/2)));
 
   EXPECT_EQ(wb.defined_names()[0].formula, "Sheet1!$A$7:$A$12");
+}
+
+
+TEST(WorkbookRowColEdits, InsertRowsRecomputesShiftedFormulasAndAggregates) {
+  Workbook wb = Workbook::create();
+  // Items: qty (col 1), unit (col 2), subtotal=qty*unit (col 3), tax=sub*0.08 (col 4).
+  // Row 0 reserved for headers (left empty).
+  // Item rows 1..5.
+  const double qty[]  = {24, 30,  4, 12,  5};
+  const double unit[] = {0.42, 2.5, 4.45, 2.0, 0.75};
+  for (std::uint32_t i = 0; i < 5; ++i) {
+    const std::uint32_t r = i + 1;
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, r, 1, Value::number(qty[i]))));
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, r, 2, Value::number(unit[i]))));
+    // Excel-text uses 1-based addressing; the formula at cell row=i+1 references row=i+1 (1-based).
+    const std::string subtotal_formula = "=B" + std::to_string(r + 1) + "*C" + std::to_string(r + 1);
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, r, 3, subtotal_formula)));
+    const std::string tax_formula = "=D" + std::to_string(r + 1) + "*0.08";
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, r, 4, tax_formula)));
+  }
+  // Totals at row 7 (1-based row 8). =SUM(D2:D6) covers the entire item range.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 7, 3, "=SUM(D2:D6)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 7, 4, "=SUM(E2:E6)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 8, 3, "=D8+E8")));
+
+  // Initial recalc establishes the baseline.
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  {
+    const Sheet& s = wb.sheet(0);
+    EXPECT_EQ(s.cell_at(5, 3)->cached_value.as_number(), 5.0 * 0.75);  // eraser subtotal pre-shift
+    EXPECT_EQ(s.cell_at(7, 3)->cached_value.as_number(), 24 * 0.42 + 30 * 2.5 + 4 * 4.45 + 12 * 2.0 + 5 * 0.75);
+  }
+
+  // Insert one blank row at row index 1, push every item down by 1.
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, /*row=*/1, /*count=*/1)));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+
+  const Sheet& s = wb.sheet(0);
+  // Items now at rows 2..6, totals at row 8, with-tax at row 9.
+  for (std::uint32_t i = 0; i < 5; ++i) {
+    const std::uint32_t r = i + 2;
+    ASSERT_NE(s.cell_at(r, 3), nullptr) << "subtotal cell missing at row " << r;
+    ASSERT_NE(s.cell_at(r, 4), nullptr) << "tax cell missing at row " << r;
+    EXPECT_EQ(s.cell_at(r, 3)->cached_value.as_number(), qty[i] * unit[i])
+        << "subtotal mismatch at post-shift row " << r;
+    EXPECT_EQ(s.cell_at(r, 4)->cached_value.as_number(), qty[i] * unit[i] * 0.08)
+        << "tax mismatch at post-shift row " << r;
+  }
+  ASSERT_NE(s.cell_at(8, 3), nullptr);
+  EXPECT_EQ(s.cell_at(8, 3)->cached_value.as_number(), 24 * 0.42 + 30 * 2.5 + 4 * 4.45 + 12 * 2.0 + 5 * 0.75)
+      << "post-shift SUM mismatch (should NOT be #REF!)";
+  ASSERT_NE(s.cell_at(8, 4), nullptr);
+  EXPECT_NEAR(s.cell_at(8, 4)->cached_value.as_number(),
+              (24 * 0.42 + 30 * 2.5 + 4 * 4.45 + 12 * 2.0 + 5 * 0.75) * 0.08, 1e-9);
+  ASSERT_NE(s.cell_at(9, 3), nullptr);
+  EXPECT_NEAR(s.cell_at(9, 3)->cached_value.as_number(),
+              (24 * 0.42 + 30 * 2.5 + 4 * 4.45 + 12 * 2.0 + 5 * 0.75) * 1.08, 1e-9);
+}
+
+// Mirror of the row regression on the column axis. Items live in cols B..F,
+// SUM is in col H. After insertCols(1, 1) the SUM range shifts to C3..G3
+// and every item must keep a fresh value, especially the last shifted col.
+TEST(WorkbookRowColEdits, InsertColsRecomputesShiftedFormulasAndAggregates) {
+  Workbook wb = Workbook::create();
+  // Layout (1-based): row 3 has qty/unit per item; row 4 has the
+  // subtotal formulas; H4 = SUM(B4:F4).
+  const double qty[] = {2, 3, 4, 5, 6};
+  const double unit[] = {1.5, 2.5, 3.5, 4.5, 5.5};
+  for (std::uint32_t i = 0; i < 5; ++i) {
+    const std::uint32_t c = i + 1;  // cols 1..5 (B..F in 1-based)
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 2, c, Value::number(qty[i]))));
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 3, c, Value::number(unit[i]))));
+    const std::string col_letter(1, static_cast<char>('A' + c));
+    const std::string sub_formula = "=" + col_letter + "3*" + col_letter + "4";
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 4, c, sub_formula)));
+  }
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 4, 7, "=SUM(B5:F5)")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  double expected_sum = 0.0;
+  for (std::uint32_t i = 0; i < 5; ++i) {
+    expected_sum += qty[i] * unit[i];
+  }
+  EXPECT_EQ(wb.sheet(0).cell_at(4, 7)->cached_value.as_number(), expected_sum);
+
+  ASSERT_TRUE(static_cast<bool>(wb.insert_cols(0, /*col=*/1, /*count=*/1)));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+
+  const Sheet& s = wb.sheet(0);
+  for (std::uint32_t i = 0; i < 5; ++i) {
+    const std::uint32_t c = i + 2;  // cols 2..6 post-shift
+    ASSERT_NE(s.cell_at(4, c), nullptr);
+    EXPECT_EQ(s.cell_at(4, c)->cached_value.as_number(), qty[i] * unit[i])
+        << "post-shift subtotal mismatch at col " << c;
+  }
+  ASSERT_NE(s.cell_at(4, 8), nullptr);
+  EXPECT_EQ(s.cell_at(4, 8)->cached_value.as_number(), expected_sum) << "post-shift SUM stale or #REF!";
+}
+
+// Delete rows must drop dep-graph entries for cells inside the deletion
+// band AND re-key entries for cells trailing the band so dependents recalc
+// correctly. Without the fix the SUM that spans the deletion would read
+// stale (pre-delete) cached values from the now-empty rows.
+TEST(WorkbookRowColEdits, DeleteRowsRecomputesShiftedFormulasAndAggregates) {
+  Workbook wb = Workbook::create();
+  const double qty[] = {2, 3, 4, 5, 6};
+  for (std::uint32_t i = 0; i < 5; ++i) {
+    const std::uint32_t r = i + 1;
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, r, 1, Value::number(qty[i]))));
+    const std::string subtotal_formula = "=B" + std::to_string(r + 1) + "*2";
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, r, 3, subtotal_formula)));
+  }
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 7, 3, "=SUM(D2:D6)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  double expected_pre = 0.0;
+  for (std::uint32_t i = 0; i < 5; ++i) {
+    expected_pre += qty[i] * 2;
+  }
+  EXPECT_EQ(wb.sheet(0).cell_at(7, 3)->cached_value.as_number(), expected_pre);
+
+  // Delete rows 2..3 (0-based), removing the second and third items.
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, /*row=*/2, /*count=*/2)));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+
+  const Sheet& s = wb.sheet(0);
+  ASSERT_NE(s.cell_at(5, 3), nullptr);  // SUM moved from row 7 → 5
+  // SUM range was D2:D6 covering rows 1..5; after deleting rows 2..3
+  // the range refs collapse: D2 (row 1, untouched) + D5..D6 (rows 4..5
+  // pre-delete, now rows 2..3) survive; rows 2..3 (qty[1], qty[2]) drop.
+  const double expected_post = qty[0] * 2 + qty[3] * 2 + qty[4] * 2;
+  EXPECT_EQ(s.cell_at(5, 3)->cached_value.as_number(), expected_post)
+      << "post-delete SUM mismatch (range refs should collapse, not stale)";
 }
 
 TEST(WorkbookRowColEdits, RejectsZeroCount) {

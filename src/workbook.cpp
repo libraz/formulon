@@ -603,9 +603,69 @@ FormulaRewriteResult rewrite_formula(std::string_view formula, const parser::Ref
 // dep-graph re-registration; we keep the arena alive across both
 // operations so `register_formula` can read the same nodes the
 // formatter just emitted, instead of re-parsing the formatted output.
+//
+// Coordinate handling: cells on the target sheet have their keys shifted
+// by the same transform as the AST refs (the physical move happens
+// later in `Sheet::insert_rows` / `delete_rows`; here we re-key the
+// dep-graph entries and dirty marks so they match the post-shift cell
+// position). Without this re-key the dirty marks land at stale
+// coordinates and recalc evaluates the wrong cell — visible as blank
+// cached values on the band edge and `#REF!` on aggregators that span
+// the band.
 void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, eval::RecalcEngine& engine, const Workbook& workbook,
                                        std::string_view target_sheet, parser::RowColAxis axis, parser::RowColEdit edit,
                                        std::uint32_t index, std::uint32_t count) {
+  // Compute the post-shift coordinates of a cell on the target sheet.
+  // `kept == false` means the cell is dropped by the upcoming
+  // `Sheet::delete_rows/cols` (deletion fully covers the cell) or
+  // pushed past the sheet bound by an insert.
+  struct CellShift {
+    bool kept = true;
+    std::uint32_t new_row = 0;
+    std::uint32_t new_col = 0;
+  };
+  auto shift_cell_coords = [&](std::uint32_t row, std::uint32_t col) -> CellShift {
+    CellShift r;
+    r.new_row = row;
+    r.new_col = col;
+    if (axis == parser::RowColAxis::kRow) {
+      if (edit == parser::RowColEdit::kInsert) {
+        if (row >= index) {
+          const std::uint64_t shifted = static_cast<std::uint64_t>(row) + count;
+          if (shifted >= Sheet::kMaxRows) {
+            r.kept = false;
+          } else {
+            r.new_row = static_cast<std::uint32_t>(shifted);
+          }
+        }
+      } else {  // kDelete
+        if (row >= index + count) {
+          r.new_row = row - count;
+        } else if (row >= index) {
+          r.kept = false;
+        }
+      }
+    } else {  // kCol
+      if (edit == parser::RowColEdit::kInsert) {
+        if (col >= index) {
+          const std::uint64_t shifted = static_cast<std::uint64_t>(col) + count;
+          if (shifted >= Sheet::kMaxCols) {
+            r.kept = false;
+          } else {
+            r.new_col = static_cast<std::uint32_t>(shifted);
+          }
+        }
+      } else {  // kDelete
+        if (col >= index + count) {
+          r.new_col = col - count;
+        } else if (col >= index) {
+          r.kept = false;
+        }
+      }
+    }
+    return r;
+  };
+
   for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
     Sheet& sheet = sheets[sheet_idx];
     const bool local_means_target = strings::case_insensitive_eq(sheet.name(), target_sheet);
@@ -643,20 +703,59 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, eval::RecalcE
           continue;  // Unparseable formula; leave alone (matches Excel "carry through unchanged").
         }
         const parser::AstNode* shifted = parser::shift_refs(*root, arena, transform);
-        if (shifted == nullptr || shifted == root) {
-          continue;  // Identity walk; nothing to rewrite.
+        const bool ast_changed = (shifted != nullptr && shifted != root);
+
+        // Resolve the cell's post-shift coordinates. Only cells on the
+        // target sheet move; off-target cells keep their (row, col).
+        std::uint32_t new_row = row;
+        std::uint32_t new_col = static_cast<std::uint32_t>(col);
+        bool dropped = false;
+        if (local_means_target) {
+          const CellShift sr = shift_cell_coords(row, static_cast<std::uint32_t>(col));
+          if (!sr.kept) {
+            dropped = true;
+          } else {
+            new_row = sr.new_row;
+            new_col = sr.new_col;
+          }
         }
-        std::string rewritten;
-        if (had_equals) {
-          rewritten.push_back('=');
+        const bool cell_moves = (new_row != row) || (new_col != static_cast<std::uint32_t>(col));
+
+        if (!ast_changed && !cell_moves && !dropped) {
+          continue;  // Cell unaffected by the edit.
         }
-        rewritten.append(parser::format_formula(*shifted));
-        sheet.set_cell_formula(row, static_cast<std::uint32_t>(col), std::move(rewritten));
-        // Reuse the post-transform AST for dep-graph registration; no
-        // need to round-trip back through `parse_formula`.
-        eval::CellNodeId node{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)};
-        engine.register_formula(node, *shifted, workbook);
-        engine.mark_dirty(node);
+
+        // Rewrite the formula text only when the AST actually changed.
+        // Cells whose key shifts but whose refs are stable keep the
+        // existing text + cached value; the physical move done later
+        // by Sheet::insert_rows / delete_rows carries both into place.
+        if (ast_changed) {
+          std::string rewritten;
+          if (had_equals) {
+            rewritten.push_back('=');
+          }
+          rewritten.append(parser::format_formula(*shifted));
+          sheet.set_cell_formula(row, static_cast<std::uint32_t>(col), std::move(rewritten));
+        }
+
+        const eval::CellNodeId old_node{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)};
+        if (dropped) {
+          // Cell will vanish from the sheet — drop its dep-graph node.
+          engine.unregister_formula(old_node);
+          continue;
+        }
+
+        // Re-key the dep-graph entry from OLD to NEW coords. Even
+        // when the AST is identity, the cell's key changes so the
+        // engine must learn the new key; otherwise dirty marks and
+        // dependent edges fire against an empty / wrong slot.
+        if (cell_moves) {
+          engine.unregister_formula(old_node);
+        }
+        const eval::CellNodeId new_node{static_cast<std::uint16_t>(sheet_idx), new_row, new_col};
+        const parser::AstNode& effective_ast = ast_changed ? *shifted : *root;
+        engine.register_formula(new_node, effective_ast, workbook);
+        engine.mark_dirty(new_node);
       }
     }
   }
