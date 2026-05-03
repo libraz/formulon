@@ -99,6 +99,8 @@ set(FORMULON_CORE_SOURCES
   src/io/cell_parser.cpp
   src/io/cf_reader.cpp
   src/io/cf_writer.cpp
+  src/io/comments_reader.cpp
+  src/io/comments_writer.cpp
   src/io/defined_names.cpp
   src/io/ooxml_reader.cpp
   src/io/ooxml_writer.cpp

@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "io/cf_writer.h"
+#include "io/comments_writer.h"
 #include "io/defined_names.h"
 #include "io/ooxml_writer_cell.h"
 #include "io/passthrough_part.h"
@@ -76,6 +77,16 @@ constexpr std::string_view kRelPivotCacheRecords =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords";
 constexpr std::string_view kRelPivotTable =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
+constexpr std::string_view kRelHyperlink =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
+constexpr std::string_view kRelComments =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
+constexpr std::string_view kRelVmlDrawing =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
+
+constexpr std::string_view kCtComments =
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml";
+constexpr std::string_view kCtVmlDrawing = "application/vnd.openxmlformats-officedocument.vmlDrawing";
 
 // ---------------------------------------------------------------------------
 // Per-package emission plan
@@ -121,6 +132,19 @@ struct EmissionPlan {
     std::string path;              // "xl/pivotTables/pivotTable1.xml"
   };
   std::vector<std::vector<PivotTablePlan>> pivot_tables_by_sheet;
+  // Per-sheet comments / VML payload. `numeric_id` matches the
+  // `comments<N>.xml` filename (1-based, package-wide). `vml_path` is
+  // the per-sheet VML drawing path, emitted as a stub when the source
+  // had none and as passthrough bytes otherwise.
+  struct CommentsPlan {
+    std::uint32_t numeric_id = 0;
+    std::string comments_path;                  // "xl/comments<N>.xml"
+    std::string vml_path;                       // "xl/drawings/vmlDrawing<N>.vml"
+    const PassthroughPart* vml_source = nullptr;  // non-null => use bytes verbatim
+  };
+  // One entry per sheet; engaged only for sheets with at least one
+  // comment. Disengaged entries have `numeric_id == 0`.
+  std::vector<CommentsPlan> comments_by_sheet;
   // Passthrough parts we will keep. Entries that collide with a
   // generated path are dropped here (with a warning) so downstream
   // emission can blindly write everything in the list.
@@ -132,7 +156,8 @@ struct EmissionPlan {
 std::unordered_set<std::string> BuildGeneratedPathSet(
     const Workbook& wb, const std::vector<EmissionPlan::PerSheetTable>& flat_tables,
     const std::vector<EmissionPlan::PivotCachePlan>& pivot_caches,
-    const std::vector<std::vector<EmissionPlan::PivotTablePlan>>& pivot_tables_by_sheet) {
+    const std::vector<std::vector<EmissionPlan::PivotTablePlan>>& pivot_tables_by_sheet,
+    const std::vector<EmissionPlan::CommentsPlan>& comments_by_sheet) {
   std::unordered_set<std::string> paths;
   paths.insert("[Content_Types].xml");
   paths.insert("_rels/.rels");
@@ -157,6 +182,14 @@ std::unordered_set<std::string> BuildGeneratedPathSet(
     for (const EmissionPlan::PivotTablePlan& t : per_sheet) {
       paths.insert(t.path);
     }
+  }
+  // Comment / VML parts (one per sheet that has at least one comment).
+  for (const EmissionPlan::CommentsPlan& c : comments_by_sheet) {
+    if (c.numeric_id == 0) {
+      continue;
+    }
+    paths.insert(c.comments_path);
+    paths.insert(c.vml_path);
   }
   // Sheet rels: any sheet that owns at least one table or pivot table.
   // Computed by callers; we enumerate them here for completeness.
@@ -256,16 +289,45 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb) {
     }
   }
 
+  // Comments / VML parts. One package-wide numeric counter; each sheet
+  // with at least one comment gets a `comments<N>.xml` and a matching
+  // `vmlDrawing<N>.vml`. The numeric id matches between the two so the
+  // sheet rels file pairs them by ordinal.
+  plan.comments_by_sheet.assign(wb.sheet_count(), EmissionPlan::CommentsPlan{});
+  std::uint32_t next_comments_id = 1;
+  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+    if (wb.sheet(s).comments().empty()) {
+      continue;
+    }
+    EmissionPlan::CommentsPlan entry;
+    entry.numeric_id = next_comments_id++;
+    entry.comments_path = "xl/comments" + std::to_string(entry.numeric_id) + ".xml";
+    entry.vml_path = "xl/drawings/vmlDrawing" + std::to_string(entry.numeric_id) + ".vml";
+    // Detect whether the workbook still carries the original VML bytes
+    // via passthrough. If so, prefer those bytes over the writer's
+    // stub so the round-trip stays byte-identical for unmodified
+    // sheets.
+    for (const PassthroughPart& part : wb.passthrough_parts()) {
+      if (part.path == entry.vml_path) {
+        entry.vml_source = &part;
+        break;
+      }
+    }
+    plan.comments_by_sheet[s] = std::move(entry);
+  }
+
   // Collision detection between generated paths and passthrough paths.
   // Generated paths win; passthrough copy is dropped with a warning.
   std::unordered_set<std::string> generated =
-      BuildGeneratedPathSet(wb, flat_tables, plan.pivot_caches, plan.pivot_tables_by_sheet);
-  // Sheet rels for sheets that own tables OR pivot tables are also
-  // generated.
+      BuildGeneratedPathSet(wb, flat_tables, plan.pivot_caches, plan.pivot_tables_by_sheet, plan.comments_by_sheet);
+  // Sheet rels for sheets that own tables, pivot tables, hyperlinks,
+  // comments, or that need a VML drawing rel are also generated.
   for (std::size_t i = 0; i < plan.tables_by_sheet.size(); ++i) {
     const bool has_tables = !plan.tables_by_sheet[i].empty();
     const bool has_pivots = i < plan.pivot_tables_by_sheet.size() && !plan.pivot_tables_by_sheet[i].empty();
-    if (has_tables || has_pivots) {
+    const bool has_hyperlinks = i < wb.sheet_count() && !wb.sheet(i).hyperlinks().empty();
+    const bool has_comments = i < plan.comments_by_sheet.size() && plan.comments_by_sheet[i].numeric_id != 0;
+    if (has_tables || has_pivots || has_hyperlinks || has_comments) {
       generated.insert("xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels");
     }
   }
@@ -309,6 +371,21 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   out.append("  <Default Extension=\"xml\" ContentType=\"");
   out.append(kCtXml);
   out.append("\"/>\n");
+  // VML drawings are referenced by extension via a Default; this lets
+  // the per-sheet VML stub avoid an Override entry. Emitted only when
+  // at least one sheet has comments (i.e. a VML companion is needed).
+  bool any_comments = false;
+  for (const EmissionPlan::CommentsPlan& cplan : plan.comments_by_sheet) {
+    if (cplan.numeric_id != 0) {
+      any_comments = true;
+      break;
+    }
+  }
+  if (any_comments) {
+    out.append("  <Default Extension=\"vml\" ContentType=\"");
+    out.append(kCtVmlDrawing);
+    out.append("\"/>\n");
+  }
   out.append("  <Override PartName=\"/xl/workbook.xml\" ContentType=\"");
   out.append(workbook_kind_content_type(wb.kind()));
   out.append("\"/>\n");
@@ -355,6 +432,18 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
       out.append(kCtPivotTable);
       out.append("\"/>\n");
     }
+  }
+  // Comments parts: one Override per part. VML drawings are covered
+  // by the `Default Extension="vml"` entry above and need no Override.
+  for (const EmissionPlan::CommentsPlan& cplan : plan.comments_by_sheet) {
+    if (cplan.numeric_id == 0) {
+      continue;
+    }
+    out.append("  <Override PartName=\"/");
+    out.append(cplan.comments_path);
+    out.append("\" ContentType=\"");
+    out.append(kCtComments);
+    out.append("\"/>\n");
   }
   // Passthrough overrides: only for entries that carried an explicit
   // ContentType in the source archive. Default-typed parts (empty
@@ -507,14 +596,238 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan)
   return out;
 }
 
-// Forward declarations for the helpers defined at the bottom of this
-// file. Each builder is fenced into its own translation-unit-local
-// helper so concurrent Wave 1 bundles can extend the worksheet XML
-// shape without colliding here.
+// Forward declarations for sheet-view / column-layout builders. The
+// definitions live at the bottom of the file alongside the other XML
+// helpers; their signatures are needed up here so `BuildWorksheetXml`
+// can call them.
 std::string BuildSheetViewXml(const SheetView& view);
 std::string BuildColsXml(const SheetLayout& layout);
 
-std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables) {
+/// Bijective base-26 column letters (`0 -> A`, `25 -> Z`, `26 -> AA`,
+/// ...). Mirrors `cli/render.cpp`'s helper; kept inline here so the
+/// writer side has no cross-package dependency.
+void AppendColumnLettersForRef(std::string& out, std::uint32_t col) {
+  char buf[4];
+  std::uint32_t i = 0;
+  std::uint32_t v = col + 1;
+  while (v > 0 && i < 4) {
+    const std::uint32_t rem = (v - 1) % 26U;
+    buf[i++] = static_cast<char>('A' + rem);
+    v = (v - 1) / 26U;
+  }
+  while (i > 0) {
+    out.push_back(buf[--i]);
+  }
+}
+
+void AppendCellRefForRef(std::string& out, std::uint32_t row, std::uint32_t col) {
+  AppendColumnLettersForRef(out, col);
+  out.append(std::to_string(row + 1));
+}
+
+void AppendRangeRef(std::string& out, const MergeRange& r) {
+  AppendCellRefForRef(out, r.first_row, r.first_col);
+  if (r.first_row != r.last_row || r.first_col != r.last_col) {
+    out.push_back(':');
+    AppendCellRefForRef(out, r.last_row, r.last_col);
+  }
+}
+
+std::string BuildMergeCellsBlock(const Sheet& sheet) {
+  if (sheet.merges().empty()) {
+    return {};
+  }
+  std::string out;
+  out.reserve(64 + sheet.merges().size() * 32);
+  out.append("<mergeCells count=\"");
+  out.append(std::to_string(sheet.merges().size()));
+  out.append("\">");
+  for (const MergeRange& m : sheet.merges()) {
+    out.append("<mergeCell ref=\"");
+    AppendRangeRef(out, m);
+    out.append("\"/>");
+  }
+  out.append("</mergeCells>");
+  return out;
+}
+
+std::string_view DataValidationTypeToString(std::uint8_t type) {
+  switch (type) {
+    case 1:
+      return "whole";
+    case 2:
+      return "decimal";
+    case 3:
+      return "list";
+    case 4:
+      return "date";
+    case 5:
+      return "time";
+    case 6:
+      return "textLength";
+    case 7:
+      return "custom";
+    default:
+      return "";
+  }
+}
+
+std::string_view DataValidationOperatorToString(std::uint8_t op) {
+  switch (op) {
+    case 1:
+      return "notBetween";
+    case 2:
+      return "equal";
+    case 3:
+      return "notEqual";
+    case 4:
+      return "greaterThan";
+    case 5:
+      return "lessThan";
+    case 6:
+      return "greaterThanOrEqual";
+    case 7:
+      return "lessThanOrEqual";
+    default:
+      return "";  // 0 == between, omitted
+  }
+}
+
+std::string_view DataValidationErrorStyleToString(std::uint8_t style) {
+  switch (style) {
+    case 1:
+      return "warning";
+    case 2:
+      return "information";
+    default:
+      return "";  // 0 == stop (default)
+  }
+}
+
+std::string BuildDataValidationsBlock(const Sheet& sheet) {
+  if (sheet.validations().empty()) {
+    return {};
+  }
+  std::string out;
+  out.reserve(96 + sheet.validations().size() * 96);
+  out.append("<dataValidations count=\"");
+  out.append(std::to_string(sheet.validations().size()));
+  out.append("\">");
+  for (const DataValidation& v : sheet.validations()) {
+    out.append("<dataValidation");
+    if (const std::string_view t = DataValidationTypeToString(v.type); !t.empty()) {
+      out.append(" type=\"");
+      out.append(t);
+      out.append("\"");
+    }
+    if (const std::string_view op = DataValidationOperatorToString(v.op); !op.empty()) {
+      out.append(" operator=\"");
+      out.append(op);
+      out.append("\"");
+    }
+    if (const std::string_view es = DataValidationErrorStyleToString(v.error_style); !es.empty()) {
+      out.append(" errorStyle=\"");
+      out.append(es);
+      out.append("\"");
+    }
+    if (!v.allow_blank) {
+      out.append(" allowBlank=\"0\"");
+    } else {
+      out.append(" allowBlank=\"1\"");
+    }
+    if (v.show_input_message) {
+      out.append(" showInputMessage=\"1\"");
+    }
+    if (v.show_error_message) {
+      out.append(" showErrorMessage=\"1\"");
+    }
+    if (!v.error_title.empty()) {
+      out.append(" errorTitle=\"");
+      AppendXmlEscaped(out, v.error_title);
+      out.append("\"");
+    }
+    if (!v.error_message.empty()) {
+      out.append(" error=\"");
+      AppendXmlEscaped(out, v.error_message);
+      out.append("\"");
+    }
+    if (!v.prompt_title.empty()) {
+      out.append(" promptTitle=\"");
+      AppendXmlEscaped(out, v.prompt_title);
+      out.append("\"");
+    }
+    if (!v.prompt_message.empty()) {
+      out.append(" prompt=\"");
+      AppendXmlEscaped(out, v.prompt_message);
+      out.append("\"");
+    }
+    out.append(" sqref=\"");
+    for (std::size_t i = 0; i < v.ranges.size(); ++i) {
+      if (i > 0) {
+        out.push_back(' ');
+      }
+      AppendRangeRef(out, v.ranges[i]);
+    }
+    out.append("\">");
+    if (!v.formula1.empty()) {
+      out.append("<formula1>");
+      AppendXmlEscaped(out, v.formula1);
+      out.append("</formula1>");
+    }
+    if (!v.formula2.empty()) {
+      out.append("<formula2>");
+      AppendXmlEscaped(out, v.formula2);
+      out.append("</formula2>");
+    }
+    out.append("</dataValidation>");
+  }
+  out.append("</dataValidations>");
+  return out;
+}
+
+/// Builds the `<hyperlinks>` block. `rid_for_index` returns the rels-file
+/// rId integer assigned to the hyperlink at index `i`, or 0 when no rId
+/// was assigned (defensive — every external hyperlink gets one).
+std::string BuildHyperlinksBlock(const Sheet& sheet, const std::vector<std::string>& rid_per_hyperlink) {
+  if (sheet.hyperlinks().empty()) {
+    return {};
+  }
+  std::string out;
+  out.reserve(48 + sheet.hyperlinks().size() * 96);
+  out.append("<hyperlinks>");
+  for (std::size_t i = 0; i < sheet.hyperlinks().size(); ++i) {
+    const Hyperlink& h = sheet.hyperlinks()[i];
+    out.append("<hyperlink ref=\"");
+    AppendCellRefForRef(out, h.row, h.col);
+    out.append("\"");
+    if (i < rid_per_hyperlink.size() && !rid_per_hyperlink[i].empty()) {
+      out.append(" r:id=\"");
+      AppendXmlEscaped(out, rid_per_hyperlink[i]);
+      out.append("\"");
+    }
+    if (!h.location.empty()) {
+      out.append(" location=\"");
+      AppendXmlEscaped(out, h.location);
+      out.append("\"");
+    }
+    if (!h.tooltip.empty()) {
+      out.append(" tooltip=\"");
+      AppendXmlEscaped(out, h.tooltip);
+      out.append("\"");
+    }
+    if (!h.display.empty()) {
+      out.append(" display=\"");
+      AppendXmlEscaped(out, h.display);
+      out.append("\"");
+    }
+    out.append("/>");
+  }
+  out.append("</hyperlinks>");
+  return out;
+}
+
+std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
+                              const std::vector<std::string>& hyperlink_rids) {
   const std::string sheet_view_xml = BuildSheetViewXml(sheet.view());
   const std::string cols_xml = BuildColsXml(sheet.layout());
   const std::string sheet_data = BuildSheetDataXml(sheet);
@@ -522,9 +835,12 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // in ECMA-376 document order. Empty list => empty string, no
   // wrapper.
   const std::string cf_xml = write_conditional_formattings(sheet.conditional_formats());
+  const std::string merges_xml = BuildMergeCellsBlock(sheet);
+  const std::string dv_xml = BuildDataValidationsBlock(sheet);
+  const std::string hl_xml = BuildHyperlinksBlock(sheet, hyperlink_rids);
   std::string out;
-  out.reserve(192U + sheet_view_xml.size() + cols_xml.size() + sheet_data.size() + cf_xml.size() +
-              sheet_tables.size() * 96);
+  out.reserve(192U + sheet_view_xml.size() + cols_xml.size() + sheet_data.size() + cf_xml.size() + merges_xml.size() +
+              dv_xml.size() + hl_xml.size() + sheet_tables.size() * 96);
   out.append(kXmlDecl);
   out.append(
       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
@@ -547,9 +863,25 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   out.append("  ");
   out.append(sheet_data);
   out.push_back('\n');
+  // Merge cells precede CF in ECMA-376 document order.
+  if (!merges_xml.empty()) {
+    out.append("  ");
+    out.append(merges_xml);
+    out.push_back('\n');
+  }
   if (!cf_xml.empty()) {
     out.append("  ");
     out.append(cf_xml);
+    out.push_back('\n');
+  }
+  if (!dv_xml.empty()) {
+    out.append("  ");
+    out.append(dv_xml);
+    out.push_back('\n');
+  }
+  if (!hl_xml.empty()) {
+    out.append("  ");
+    out.append(hl_xml);
     out.push_back('\n');
   }
   if (!sheet_tables.empty()) {
@@ -567,15 +899,27 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   return out;
 }
 
-std::string BuildSheetRels(const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
-                           const std::vector<EmissionPlan::PivotTablePlan>& sheet_pivot_tables) {
-  std::string out;
-  out.reserve(256 + (sheet_tables.size() + sheet_pivot_tables.size()) * 192);
+/// Returned per-sheet rels result: the serialised XML plus the rId
+/// strings (`"rIdN"`) the writer assigned to each hyperlink in
+/// document order. The caller threads the rId vector into the sheet
+/// part's `<hyperlinks>` block so the two stay in sync.
+struct SheetRelsResult {
+  std::string xml;
+  std::vector<std::string> hyperlink_rids;
+};
+
+SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
+                               const std::vector<EmissionPlan::PivotTablePlan>& sheet_pivot_tables,
+                               const EmissionPlan::CommentsPlan& comments_plan) {
+  SheetRelsResult res;
+  std::string& out = res.xml;
+  out.reserve(256 + (sheet_tables.size() + sheet_pivot_tables.size() + sheet.hyperlinks().size()) * 192);
   out.append(kXmlDecl);
   out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
+  std::uint32_t next_rid = 1;
   for (std::size_t i = 0; i < sheet_tables.size(); ++i) {
     out.append("  <Relationship Id=\"rId");
-    out.append(std::to_string(i + 1));
+    out.append(std::to_string(next_rid++));
     out.append("\" Type=\"");
     out.append(kRelTable);
     out.append("\" Target=\"../tables/table");
@@ -587,15 +931,62 @@ std::string BuildSheetRels(const std::vector<EmissionPlan::PerSheetTable>& sheet
   // the sheet rels file.
   for (std::size_t i = 0; i < sheet_pivot_tables.size(); ++i) {
     out.append("  <Relationship Id=\"rId");
-    out.append(std::to_string(sheet_tables.size() + i + 1));
+    out.append(std::to_string(next_rid++));
     out.append("\" Type=\"");
     out.append(kRelPivotTable);
     out.append("\" Target=\"../pivotTables/pivotTable");
     out.append(std::to_string(sheet_pivot_tables[i].numeric_id));
     out.append(".xml\"/>\n");
   }
+  // Hyperlink relationships. Each external hyperlink target gets one
+  // entry. Relative ordering is preserved so the round-trip writes the
+  // rIds in the same order the reader observed.
+  res.hyperlink_rids.reserve(sheet.hyperlinks().size());
+  for (const Hyperlink& h : sheet.hyperlinks()) {
+    if (h.target.empty()) {
+      // Pure internal links carry their target through the inline
+      // `location=` attribute instead of a rels entry.
+      res.hyperlink_rids.emplace_back();
+      continue;
+    }
+    // Reuse the source `rid` when present so byte-identical round-trips
+    // are possible; otherwise mint a fresh rIdN counter.
+    std::string rid;
+    if (!h.rid.empty()) {
+      rid = h.rid;
+    } else {
+      rid = "rId" + std::to_string(next_rid++);
+    }
+    res.hyperlink_rids.push_back(rid);
+    out.append("  <Relationship Id=\"");
+    AppendXmlEscaped(out, rid);
+    out.append("\" Type=\"");
+    out.append(kRelHyperlink);
+    out.append("\" Target=\"");
+    AppendXmlEscaped(out, h.target);
+    out.append("\" TargetMode=\"External\"/>\n");
+  }
+  // Comments + VML relationships when the sheet has comments. The
+  // comments rel comes first; the VML rel follows so the two ids are
+  // adjacent and readers that scan top-down see them as a pair.
+  if (comments_plan.numeric_id != 0) {
+    out.append("  <Relationship Id=\"rId");
+    out.append(std::to_string(next_rid++));
+    out.append("\" Type=\"");
+    out.append(kRelComments);
+    out.append("\" Target=\"../comments");
+    out.append(std::to_string(comments_plan.numeric_id));
+    out.append(".xml\"/>\n");
+    out.append("  <Relationship Id=\"rId");
+    out.append(std::to_string(next_rid++));
+    out.append("\" Type=\"");
+    out.append(kRelVmlDrawing);
+    out.append("\" Target=\"../drawings/vmlDrawing");
+    out.append(std::to_string(comments_plan.numeric_id));
+    out.append(".vml\"/>\n");
+  }
   out.append("</Relationships>\n");
-  return out;
+  return res;
 }
 
 /// Emits the `_rels` document for a pivotCacheDefinition part: a single
@@ -887,25 +1278,34 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
     }
   }
 
-  // 5. Per-sheet: worksheet, sheet rels (when the sheet owns tables or
-  // pivot tables).
+  // 5. Per-sheet: worksheet, sheet rels (when the sheet owns tables,
+  // pivot tables, hyperlinks, or comments).
   for (std::size_t i = 0; i < sheet_count; ++i) {
     const auto& sheet_tables = plan.tables_by_sheet[i];
     const auto& sheet_pivot_tables = plan.pivot_tables_by_sheet[i];
+    const auto& comments_plan = plan.comments_by_sheet[i];
+    const bool has_hyperlinks = !wb.sheet(i).hyperlinks().empty();
+    const bool has_comments = comments_plan.numeric_id != 0;
+    const bool has_rels = !sheet_tables.empty() || !sheet_pivot_tables.empty() || has_hyperlinks || has_comments;
+    // Build the rels first because the hyperlink rId vector feeds into
+    // the worksheet's <hyperlinks> block. When the sheet has no rels we
+    // still call BuildSheetRels with an empty comments plan to get a
+    // (possibly-empty) hyperlink_rids vector.
+    SheetRelsResult rels_result = BuildSheetRels(wb.sheet(i), sheet_tables, sheet_pivot_tables, comments_plan);
     std::string part_path("xl/worksheets/sheet");
     part_path.append(std::to_string(i + 1));
     part_path.append(".xml");
-    auto result = AddPart(writer.get(), part_path, BuildWorksheetXml(wb.sheet(i), sheet_tables));
-    if (!result) {
-      return result.error();
+    auto wresult = AddPart(writer.get(), part_path, BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.hyperlink_rids));
+    if (!wresult) {
+      return wresult.error();
     }
-    if (!sheet_tables.empty() || !sheet_pivot_tables.empty()) {
+    if (has_rels) {
       std::string rels_path("xl/worksheets/_rels/sheet");
       rels_path.append(std::to_string(i + 1));
       rels_path.append(".xml.rels");
-      auto rels_result = AddPart(writer.get(), rels_path, BuildSheetRels(sheet_tables, sheet_pivot_tables));
-      if (!rels_result) {
-        return rels_result.error();
+      auto rels_add = AddPart(writer.get(), rels_path, rels_result.xml);
+      if (!rels_add) {
+        return rels_add.error();
       }
     }
   }
@@ -969,6 +1369,32 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
       auto result = AddPart(writer.get(), t.path, write_pivot_table_definition(*t.table));
       if (!result) {
         return result.error();
+      }
+    }
+  }
+
+  // 9.5. Comments + VML drawings — one pair per sheet that has at
+  // least one comment. The VML companion uses the passthrough bytes
+  // when available so unchanged round-trips stay byte-identical;
+  // otherwise the writer's stub keeps Excel happy on a fresh comment.
+  for (std::size_t i = 0; i < plan.comments_by_sheet.size(); ++i) {
+    const EmissionPlan::CommentsPlan& cplan = plan.comments_by_sheet[i];
+    if (cplan.numeric_id == 0) {
+      continue;
+    }
+    auto cresult = AddPart(writer.get(), cplan.comments_path, write_comments(wb.sheet(i).comments()));
+    if (!cresult) {
+      return cresult.error();
+    }
+    if (cplan.vml_source != nullptr) {
+      auto vresult = AddPartBytes(writer.get(), cplan.vml_path, cplan.vml_source->bytes);
+      if (!vresult) {
+        return vresult.error();
+      }
+    } else {
+      auto vresult = AddPart(writer.get(), cplan.vml_path, write_vml_drawing_stub());
+      if (!vresult) {
+        return vresult.error();
       }
     }
   }

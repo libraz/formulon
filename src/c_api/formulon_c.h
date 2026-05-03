@@ -518,6 +518,110 @@ FM_API size_t fm_workbook_passthrough_count(const fm_workbook_t* wb);
 FM_API fm_status_t fm_workbook_passthrough_at(const fm_workbook_t* wb, size_t idx, const char** out_path);
 
 /* -------------------------------------------------------------------------- */
+/* Sheet UI features (merges, hyperlinks, comments)                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Merge range descriptor: 0-based inclusive `(first, last)` corners.
+ */
+typedef struct {
+  uint32_t first_row;
+  uint32_t first_col;
+  uint32_t last_row;
+  uint32_t last_col;
+} fm_merge_range;
+
+/**
+ * @brief Hyperlink descriptor. String fields are NUL-terminated UTF-8
+ *        pointers borrowed from the workbook handle; they are valid
+ *        until the next mutation that touches the sheet's hyperlink
+ *        list or until the handle is destroyed. Newly-added entries
+ *        accept NULL for any of `target`, `display`, `tooltip`,
+ *        `location` to mean "empty".
+ */
+typedef struct {
+  uint32_t row;
+  uint32_t col;
+  const char* target;
+  const char* location;
+  const char* display;
+  const char* tooltip;
+} fm_hyperlink;
+
+/**
+ * @brief Comment descriptor. `author` and `text` are borrowed UTF-8
+ *        pointers with the same lifetime contract as `fm_hyperlink`.
+ */
+typedef struct {
+  uint32_t row;
+  uint32_t col;
+  const char* author;
+  const char* text;
+} fm_comment;
+
+/**
+ * @brief Appends a merge range to the sheet's merge list.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet` is out of range.
+ */
+FM_API fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, uint32_t sheet, fm_hyperlink hl);
+
+/**
+ * @brief Appends a merge range to the sheet's merge list.
+ */
+FM_API fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, uint32_t sheet, fm_merge_range merge);
+
+/**
+ * @brief Reads `(out_row, out_col, out_author, out_text)` for the
+ *        comment at `(row, col)` on `sheet`. Returns `kInvalidArgument`
+ *        when no comment is anchored there.
+ *
+ * `out->author` and `out->text` borrow NUL-terminated UTF-8 pointers
+ * from the workbook handle. Both are valid until the next mutation
+ * that touches the sheet's comment list or until the handle is
+ * destroyed.
+ */
+FM_API fm_status_t fm_sheet_get_comment_at(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+                                           fm_comment* out);
+
+/**
+ * @brief Reads the `index`-th hyperlink on `sheet` into `out`.
+ *
+ * String fields in `out` are borrowed pointers (see `fm_hyperlink`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet` or `index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_hyperlink_at(fm_workbook_t* wb, uint32_t sheet, uint32_t index, fm_hyperlink* out);
+
+/**
+ * @brief Returns the number of hyperlinks attached to `sheet`.
+ */
+FM_API fm_status_t fm_sheet_get_hyperlink_count(fm_workbook_t* wb, uint32_t sheet, uint32_t* out_count);
+
+/**
+ * @brief Reads the `index`-th merge range on `sheet`.
+ */
+FM_API fm_status_t fm_sheet_get_merge_at(fm_workbook_t* wb, uint32_t sheet, uint32_t index, fm_merge_range* out);
+
+/**
+ * @brief Returns the number of merge ranges attached to `sheet`.
+ */
+FM_API fm_status_t fm_sheet_get_merge_count(fm_workbook_t* wb, uint32_t sheet, uint32_t* out_count);
+
+/**
+ * @brief Inserts or replaces the comment at `(row, col)` on `sheet`.
+ *        Pass `text == NULL || text[0] == '\0'` to remove an existing
+ *        comment. The strings are copied into the workbook handle's
+ *        text storage.
+ */
+FM_API fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+                                        const char* author, const char* text);
+
+/* -------------------------------------------------------------------------- */
 /* Recalc                                                                     */
 /* -------------------------------------------------------------------------- */
 

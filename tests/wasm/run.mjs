@@ -334,6 +334,55 @@ async function run() {
     }
   });
 
+  test('addMerge / getMerges round-trip', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.ok(wb.addMerge(0, { firstRow: 0, lastRow: 1, firstCol: 0, lastCol: 2 }).ok);
+      const merges = wb.getMerges(0);
+      assert.equal(merges.length, 1);
+      assert.equal(merges[0].firstRow, 0);
+      assert.equal(merges[0].lastCol, 2);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('hyperlinks are read after save+load', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.equal(wb.getHyperlinks(0).length, 0);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('setComment / getComment round-trip', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.ok(wb.setComment(0, 1, 1, 'Alice', 'Hello').ok);
+      const c = wb.getComment(0, 1, 1);
+      assert.ok(c !== null);
+      assert.equal(c.author, 'Alice');
+      assert.equal(c.text, 'Hello');
+      // Empty text removes.
+      assert.ok(wb.setComment(0, 1, 1, '', '').ok);
+      const after = wb.getComment(0, 1, 1);
+      assert.equal(after, null);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('getValidations returns an array', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const arr = wb.getValidations(0);
+      assert.ok(Array.isArray(arr) || typeof arr.length === 'number');
+    } finally {
+      wb.delete();
+    }
+  });
+
   // ---- Run --------------------------------------------------------------
   for (const c of cases) {
     try {

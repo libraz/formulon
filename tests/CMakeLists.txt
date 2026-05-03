@@ -25,7 +25,11 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/cell_parser_test.cpp
   unit/io/cf_reader_test.cpp
   unit/io/cf_writer_test.cpp
+  unit/io/comments_roundtrip_test.cpp
+  unit/io/data_validation_roundtrip_test.cpp
   unit/io/defined_names_test.cpp
+  unit/io/hyperlink_roundtrip_test.cpp
+  unit/io/merge_roundtrip_test.cpp
   unit/io/ooxml_reader_test.cpp
   unit/io/ooxml_unknown_kind_test.cpp
   unit/io/ooxml_writer_cell_test.cpp

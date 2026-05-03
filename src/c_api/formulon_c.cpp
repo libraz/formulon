@@ -678,6 +678,194 @@ extern "C" fm_status_t fm_workbook_passthrough_at(const fm_workbook_t* wb, size_
 }
 
 // ---------------------------------------------------------------------------
+// Sheet UI features (merges, hyperlinks, comments)
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Bounds-check for the uint32-typed sheet index used by the sheet UI
+// surface. Mirrors `check_sheet_index` but accepts the ABI's uint32.
+fm_status_t check_sheet_u32(fm_workbook_t* wb, std::uint32_t sheet, const char* fn) {
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, fn);
+  }
+  if (static_cast<std::size_t>(sheet) >= wb->workbook().sheet_count()) {
+    return set_binding_error(
+        formulon::FormulonErrorCode::kInvalidArgument, fn,
+        "sheet=" + std::to_string(sheet) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  }
+  return 0;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, std::uint32_t sheet, fm_hyperlink hl) {
+  clear_last_error();
+  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_add_hyperlink"); rc != 0) {
+    return rc;
+  }
+  formulon::Hyperlink out;
+  out.row = hl.row;
+  out.col = hl.col;
+  out.target = (hl.target != nullptr) ? std::string(hl.target) : std::string();
+  out.location = (hl.location != nullptr) ? std::string(hl.location) : std::string();
+  out.display = (hl.display != nullptr) ? std::string(hl.display) : std::string();
+  out.tooltip = (hl.tooltip != nullptr) ? std::string(hl.tooltip) : std::string();
+  // rid stays empty; the writer mints a fresh rIdN on save.
+  wb->workbook().sheet(sheet).mutable_hyperlinks().push_back(std::move(out));
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, std::uint32_t sheet, fm_merge_range merge) {
+  clear_last_error();
+  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_add_merge"); rc != 0) {
+    return rc;
+  }
+  // Normalise corners so first <= last componentwise; mirrors the
+  // reader's behaviour and keeps downstream consumers simple.
+  formulon::MergeRange m;
+  m.first_row = (merge.first_row < merge.last_row) ? merge.first_row : merge.last_row;
+  m.first_col = (merge.first_col < merge.last_col) ? merge.first_col : merge.last_col;
+  m.last_row = (merge.first_row < merge.last_row) ? merge.last_row : merge.first_row;
+  m.last_col = (merge.first_col < merge.last_col) ? merge.last_col : merge.first_col;
+  wb->workbook().sheet(sheet).mutable_merges().push_back(m);
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_comment_at(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
+                                                std::uint32_t col, fm_comment* out) {
+  clear_last_error();
+  if (out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_comment_at: out is NULL");
+  }
+  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_get_comment_at"); rc != 0) {
+    return rc;
+  }
+  for (const formulon::CellComment& c : wb->workbook().sheet(sheet).comments()) {
+    if (c.row == row && c.col == col) {
+      out->row = c.row;
+      out->col = c.col;
+      out->author = c.author.c_str();
+      out->text = c.text.c_str();
+      return 0;
+    }
+  }
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_get_comment_at: no comment at cell",
+                           "row=" + std::to_string(row) + " col=" + std::to_string(col));
+}
+
+extern "C" fm_status_t fm_sheet_get_hyperlink_at(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t index,
+                                                  fm_hyperlink* out) {
+  clear_last_error();
+  if (out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_sheet_get_hyperlink_at: out is NULL");
+  }
+  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_get_hyperlink_at"); rc != 0) {
+    return rc;
+  }
+  const auto& hls = wb->workbook().sheet(sheet).hyperlinks();
+  if (static_cast<std::size_t>(index) >= hls.size()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_get_hyperlink_at: index out of range",
+                             "index=" + std::to_string(index) + " count=" + std::to_string(hls.size()));
+  }
+  const formulon::Hyperlink& h = hls[index];
+  out->row = h.row;
+  out->col = h.col;
+  out->target = h.target.c_str();
+  out->location = h.location.c_str();
+  out->display = h.display.c_str();
+  out->tooltip = h.tooltip.c_str();
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_hyperlink_count(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t* out_count) {
+  clear_last_error();
+  if (out_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_sheet_get_hyperlink_count: out_count is NULL");
+  }
+  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_get_hyperlink_count"); rc != 0) {
+    return rc;
+  }
+  *out_count = static_cast<std::uint32_t>(wb->workbook().sheet(sheet).hyperlinks().size());
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_merge_at(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t index,
+                                              fm_merge_range* out) {
+  clear_last_error();
+  if (out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_merge_at: out is NULL");
+  }
+  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_get_merge_at"); rc != 0) {
+    return rc;
+  }
+  const auto& merges = wb->workbook().sheet(sheet).merges();
+  if (static_cast<std::size_t>(index) >= merges.size()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_get_merge_at: index out of range",
+                             "index=" + std::to_string(index) + " count=" + std::to_string(merges.size()));
+  }
+  const formulon::MergeRange& m = merges[index];
+  out->first_row = m.first_row;
+  out->first_col = m.first_col;
+  out->last_row = m.last_row;
+  out->last_col = m.last_col;
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_merge_count(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t* out_count) {
+  clear_last_error();
+  if (out_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_sheet_get_merge_count: out_count is NULL");
+  }
+  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_get_merge_count"); rc != 0) {
+    return rc;
+  }
+  *out_count = static_cast<std::uint32_t>(wb->workbook().sheet(sheet).merges().size());
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
+                                             std::uint32_t col, const char* author, const char* text) {
+  clear_last_error();
+  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_set_comment"); rc != 0) {
+    return rc;
+  }
+  auto& list = wb->workbook().sheet(sheet).mutable_comments();
+  // Locate any existing entry first; mutating the list invalidates
+  // iterators so we capture the index instead of an iterator.
+  std::size_t found = list.size();
+  for (std::size_t i = 0; i < list.size(); ++i) {
+    if (list[i].row == row && list[i].col == col) {
+      found = i;
+      break;
+    }
+  }
+  // Empty/NULL text => removal.
+  if (text == nullptr || text[0] == '\0') {
+    if (found < list.size()) {
+      list.erase(list.begin() + static_cast<std::ptrdiff_t>(found));
+    }
+    return 0;
+  }
+  formulon::CellComment c;
+  c.row = row;
+  c.col = col;
+  c.author = (author != nullptr) ? std::string(author) : std::string();
+  c.text = std::string(text);
+  if (found < list.size()) {
+    list[found] = std::move(c);
+  } else {
+    list.push_back(std::move(c));
+  }
+  return 0;
+}
+
+// ---------------------------------------------------------------------------
 // Recalc
 // ---------------------------------------------------------------------------
 

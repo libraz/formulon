@@ -19,10 +19,12 @@
 #include <deque>
 #include <string>
 #include <tuple>
+#include <unordered_map>
 #include <vector>
 
 #include "io/zip_reader.h"
 #include "pugixml.hpp"
+#include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "workbook.h"
@@ -149,6 +151,33 @@ Expected<void, Error> read_sheet_data_sax(ByteSpan sheet_xml, std::size_t sheet_
 /// Missing optional sub-elements are not errors.
 Expected<void, Error> read_sheet_view_and_layout(const pugi::xml_document& sheet_doc, std::size_t sheet_index,
                                                  Workbook& workbook);
+
+/// Walks `<mergeCells>` inside `worksheet` and returns the parsed
+/// `MergeRange` list in document order. Returns an empty vector when
+/// the sheet has no merges. `kIoSheetCorrupt` on a malformed `ref=`.
+Expected<std::vector<MergeRange>, Error> read_merges(const pugi::xml_node& worksheet);
+
+/// Walks `<hyperlinks>` inside `worksheet` and returns the parsed
+/// `Hyperlink` list in document order. The reader populates
+/// `Hyperlink::rid` from the `r:id` attribute as observed; the caller
+/// is responsible for joining each rid against the sheet's rels file
+/// to fill in `target` (external URL) — see `apply_hyperlink_rels`.
+/// `kIoSheetCorrupt` on a malformed `ref=`.
+Expected<std::vector<Hyperlink>, Error> read_hyperlinks(const pugi::xml_node& worksheet);
+
+/// Joins `hyperlinks` against the parsed sheet rels file (`rid -> target`
+/// map) populating `Hyperlink::target` in place for entries whose `rid`
+/// matches an entry in `rid_to_target`. Entries with empty `rid` or no
+/// matching rid are left untouched (their `target` stays whatever the
+/// reader picked up from any inline `location` attribute).
+void apply_hyperlink_rels(std::vector<Hyperlink>& hyperlinks,
+                          const std::unordered_map<std::string, std::string>& rid_to_target);
+
+/// Walks `<dataValidations>` inside `worksheet` and returns the parsed
+/// `DataValidation` list in document order. Returns an empty vector
+/// when the sheet has no validations. `kIoSheetCorrupt` on a malformed
+/// `sqref=`.
+Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::xml_node& worksheet);
 
 }  // namespace io
 }  // namespace formulon

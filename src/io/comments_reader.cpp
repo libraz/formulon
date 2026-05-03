@@ -1,0 +1,102 @@
+// Copyright 2026 libraz. Licensed under the MIT License.
+//
+// Implementation of the comments-part reader. See comments_reader.h
+// for the contract; the format is a small fragment of OOXML so the
+// implementation is intentionally short and self-contained.
+
+#include "io/comments_reader.h"
+
+#include <cstdint>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+#include "io/cell_parser.h"
+#include "pugixml.hpp"
+#include "sheet.h"
+#include "utils/error.h"
+#include "utils/expected.h"
+
+namespace formulon::io {
+namespace {
+
+/// Concatenates every `<t>` text node inside `node` (walking nested
+/// `<r>` runs in document order) into `out`. No formatting is
+/// preserved; this matches Excel's behaviour when a binding asks for
+/// the comment's plain text.
+void CollectPlainText(const pugi::xml_node& node, std::string& out) {
+  // Direct `<t>` child (the `<text><t>...</t></text>` form for plain
+  // comments). Append before walking runs so the document-order
+  // concatenation is preserved.
+  for (pugi::xml_node t = node.child("t"); t; t = t.next_sibling("t")) {
+    out.append(t.text().get());
+  }
+  for (pugi::xml_node r = node.child("r"); r; r = r.next_sibling("r")) {
+    for (pugi::xml_node t = r.child("t"); t; t = t.next_sibling("t")) {
+      out.append(t.text().get());
+    }
+  }
+}
+
+}  // namespace
+
+Expected<std::vector<CellComment>, Error> read_comments(const std::vector<std::uint8_t>& bytes) {
+  std::vector<CellComment> out;
+  pugi::xml_document doc;
+  pugi::xml_parse_result parse =
+      doc.load_buffer(bytes.data(), bytes.size(), pugi::parse_default, pugi::encoding_utf8);
+  if (!parse) {
+    std::string ctx("context=comments_reader desc=");
+    ctx.append(parse.description());
+    return make_error(FormulonErrorCode::kIoXmlParse, "comments part: pugixml parse failed", std::move(ctx));
+  }
+  pugi::xml_node root = doc.child("comments");
+  if (!root) {
+    return make_error(FormulonErrorCode::kIoSheetCorrupt, "comments part: missing <comments> root",
+                      "context=comments_reader");
+  }
+
+  // Author table: `<authors><author>Alice</author>...</authors>`. The
+  // table is referenced by `<comment authorId="N">` indices.
+  std::vector<std::string> authors;
+  if (pugi::xml_node a = root.child("authors"); a) {
+    for (pugi::xml_node au = a.child("author"); au; au = au.next_sibling("author")) {
+      authors.emplace_back(au.text().get());
+    }
+  }
+
+  pugi::xml_node list = root.child("commentList");
+  if (!list) {
+    // Empty author table with no <commentList> is technically legal;
+    // surface the empty list rather than failing.
+    return out;
+  }
+  for (pugi::xml_node c = list.child("comment"); c; c = c.next_sibling("comment")) {
+    const std::string_view ref = c.attribute("ref").value();
+    if (ref.empty()) {
+      return make_error(FormulonErrorCode::kIoSheetCorrupt, "comment: missing/empty ref",
+                        "context=comments_reader");
+    }
+    auto rc = parse_a1(ref);
+    if (!rc) {
+      std::string ctx("context=comments_reader ref=");
+      ctx.append(ref);
+      return make_error(FormulonErrorCode::kIoSheetCorrupt, "comment: ref unparseable", std::move(ctx));
+    }
+    CellComment cc;
+    cc.row = rc.value().first;
+    cc.col = rc.value().second;
+    const std::int64_t author_id = c.attribute("authorId").as_llong(-1);
+    if (author_id >= 0 && static_cast<std::size_t>(author_id) < authors.size()) {
+      cc.author = authors[static_cast<std::size_t>(author_id)];
+    }
+    if (pugi::xml_node text = c.child("text"); text) {
+      CollectPlainText(text, cc.text);
+    }
+    out.push_back(std::move(cc));
+  }
+  return out;
+}
+
+}  // namespace formulon::io

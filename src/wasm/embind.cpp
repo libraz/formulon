@@ -1023,6 +1023,119 @@ class JsWorkbook {
     return o;
   }
 
+  // ---- Sheet UI features (merges, hyperlinks, comments, validations) ------
+  // Each accessor returns a JS-friendly value (Array<...> or null) so JS
+  // callers don't need to step through count + getter pairs.
+
+  /// `addMerge(sheetIdx, {firstRow, lastRow, firstCol, lastCol})`.
+  JsStatus addMerge(uint32_t sheet, emscripten::val range) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_merge_range m;
+    m.first_row = range["firstRow"].as<uint32_t>();
+    m.last_row = range["lastRow"].as<uint32_t>();
+    m.first_col = range["firstCol"].as<uint32_t>();
+    m.last_col = range["lastCol"].as<uint32_t>();
+    fm_status_t rc = fm_sheet_add_merge(handle_, sheet, m);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// `getComment(sheetIdx, row, col) -> {author, text} | null`.
+  emscripten::val getComment(uint32_t sheet, uint32_t row, uint32_t col) const {
+    if (handle_ == nullptr) {
+      return emscripten::val::null();
+    }
+    fm_comment c{};
+    if (fm_sheet_get_comment_at(handle_, sheet, row, col, &c) != 0) {
+      return emscripten::val::null();
+    }
+    emscripten::val o = emscripten::val::object();
+    o.set("author", c.author != nullptr ? std::string(c.author) : std::string());
+    o.set("text", c.text != nullptr ? std::string(c.text) : std::string());
+    return o;
+  }
+
+  /// `getHyperlinks(sheetIdx) -> Array<{row, col, target, display, tooltip}>`.
+  emscripten::val getHyperlinks(uint32_t sheet) const {
+    emscripten::val arr = emscripten::val::array();
+    if (handle_ == nullptr) {
+      return arr;
+    }
+    uint32_t count = 0;
+    if (fm_sheet_get_hyperlink_count(handle_, sheet, &count) != 0) {
+      return arr;
+    }
+    for (uint32_t i = 0; i < count; ++i) {
+      fm_hyperlink h{};
+      if (fm_sheet_get_hyperlink_at(handle_, sheet, i, &h) != 0) {
+        continue;
+      }
+      emscripten::val item = emscripten::val::object();
+      item.set("row", h.row);
+      item.set("col", h.col);
+      item.set("target", h.target != nullptr ? std::string(h.target) : std::string());
+      item.set("display", h.display != nullptr ? std::string(h.display) : std::string());
+      item.set("tooltip", h.tooltip != nullptr ? std::string(h.tooltip) : std::string());
+      arr.set(i, item);
+    }
+    return arr;
+  }
+
+  /// `getMerges(sheetIdx) -> Array<{firstRow, lastRow, firstCol, lastCol}>`.
+  emscripten::val getMerges(uint32_t sheet) const {
+    emscripten::val arr = emscripten::val::array();
+    if (handle_ == nullptr) {
+      return arr;
+    }
+    uint32_t count = 0;
+    if (fm_sheet_get_merge_count(handle_, sheet, &count) != 0) {
+      return arr;
+    }
+    for (uint32_t i = 0; i < count; ++i) {
+      fm_merge_range m{};
+      if (fm_sheet_get_merge_at(handle_, sheet, i, &m) != 0) {
+        continue;
+      }
+      emscripten::val item = emscripten::val::object();
+      item.set("firstRow", m.first_row);
+      item.set("lastRow", m.last_row);
+      item.set("firstCol", m.first_col);
+      item.set("lastCol", m.last_col);
+      arr.set(i, item);
+    }
+    return arr;
+  }
+
+  /// `getValidations(sheetIdx) -> Array<{ranges, type, op, formula1, formula2, errorMessage}>`.
+  /// Read-only: full mutators land in a follow-up.
+  emscripten::val getValidations(uint32_t sheet) const {
+    emscripten::val arr = emscripten::val::array();
+    if (handle_ == nullptr) {
+      return arr;
+    }
+    // The C ABI does not yet surface validation entries (next bundle);
+    // fall through to the engine via the binding's existing handle by
+    // reaching into the workbook directly is not allowed here, so we
+    // currently return an empty array. JS callers can detect "feature
+    // unavailable" via length === 0 paired with an absent comments
+    // path. The structural contract stays stable for the follow-up
+    // bundle.
+    (void)sheet;
+    return arr;
+  }
+
+  /// `setComment(sheetIdx, row, col, author, text)` (empty text removes).
+  JsStatus setComment(uint32_t sheet, uint32_t row, uint32_t col, const std::string& author, const std::string& text) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    const char* author_c = author.empty() ? nullptr : author.c_str();
+    const char* text_c = text.empty() ? nullptr : text.c_str();
+    fm_status_t rc = fm_sheet_set_comment(handle_, sheet, row, col, author_c, text_c);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
  private:
   // Holder for the currently-installed JS progress callback. Function
   // local static keeps the slot alive for the WASM module's lifetime
@@ -1225,49 +1338,53 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .class_function("createDefault", &JsWorkbook::createDefault, allow_raw_pointers())
       .class_function("createEmpty", &JsWorkbook::createEmpty, allow_raw_pointers())
       .class_function("loadBytes", &JsWorkbook::loadBytes, allow_raw_pointers())
-      .function("isValid", &JsWorkbook::isValid)
-      .function("save", &JsWorkbook::save)
+      .function("addMerge", &JsWorkbook::addMerge)
       .function("addSheet", &JsWorkbook::addSheet)
-      .function("moveSheet", &JsWorkbook::moveSheet)
-      .function("removeSheet", &JsWorkbook::removeSheet)
-      .function("renameSheet", &JsWorkbook::renameSheet)
-      .function("setDefinedName", &JsWorkbook::setDefinedName)
-      .function("sheetCount", &JsWorkbook::sheetCount)
-      .function("sheetName", &JsWorkbook::sheetName)
-      .function("setNumber", &JsWorkbook::setNumber)
-      .function("setBool", &JsWorkbook::setBool)
-      .function("setText", &JsWorkbook::setText)
-      .function("setBlank", &JsWorkbook::setBlank)
-      .function("setFormula", &JsWorkbook::setFormula)
-      .function("getValue", &JsWorkbook::getValue)
-      .function("partialRecalc", &JsWorkbook::partialRecalc)
-      .function("recalc", &JsWorkbook::recalc)
-      .function("setIterative", &JsWorkbook::setIterative)
-      .function("setIterativeProgress", &JsWorkbook::setIterativeProgress)
-      .function("cellCount", &JsWorkbook::cellCount)
       .function("cellAt", &JsWorkbook::cellAt)
-      .function("definedNameCount", &JsWorkbook::definedNameCount)
+      .function("cellCount", &JsWorkbook::cellCount)
       .function("definedNameAt", &JsWorkbook::definedNameAt)
+      .function("definedNameCount", &JsWorkbook::definedNameCount)
+      .function("evaluateCfRange", &JsWorkbook::evaluateCfRange)
       .function("getCellXf", &JsWorkbook::getCellXf)
       .function("getCellXfIndex", &JsWorkbook::getCellXfIndex)
-      .function("setCellXfIndex", &JsWorkbook::setCellXfIndex)
-      .function("tableCount", &JsWorkbook::tableCount)
-      .function("tableAt", &JsWorkbook::tableAt)
-      .function("passthroughCount", &JsWorkbook::passthroughCount)
-      .function("passthroughAt", &JsWorkbook::passthroughAt)
-      .function("evaluateCfRange", &JsWorkbook::evaluateCfRange)
+      .function("getComment", &JsWorkbook::getComment)
+      .function("getHyperlinks", &JsWorkbook::getHyperlinks)
+      .function("getMerges", &JsWorkbook::getMerges)
       .function("getSheetColumns", &JsWorkbook::getSheetColumns)
       .function("getSheetRowOverrides", &JsWorkbook::getSheetRowOverrides)
       .function("getSheetView", &JsWorkbook::getSheetView)
+      .function("getValidations", &JsWorkbook::getValidations)
+      .function("getValue", &JsWorkbook::getValue)
+      .function("moveSheet", &JsWorkbook::moveSheet)
+      .function("partialRecalc", &JsWorkbook::partialRecalc)
+      .function("passthroughAt", &JsWorkbook::passthroughAt)
+      .function("passthroughCount", &JsWorkbook::passthroughCount)
+      .function("recalc", &JsWorkbook::recalc)
+      .function("removeSheet", &JsWorkbook::removeSheet)
+      .function("renameSheet", &JsWorkbook::renameSheet)
+      .function("setBlank", &JsWorkbook::setBlank)
+      .function("setBool", &JsWorkbook::setBool)
+      .function("setCellXfIndex", &JsWorkbook::setCellXfIndex)
       .function("setColumnHidden", &JsWorkbook::setColumnHidden)
       .function("setColumnOutline", &JsWorkbook::setColumnOutline)
       .function("setColumnWidth", &JsWorkbook::setColumnWidth)
+      .function("setComment", &JsWorkbook::setComment)
+      .function("setDefinedName", &JsWorkbook::setDefinedName)
+      .function("setFormula", &JsWorkbook::setFormula)
+      .function("setIterative", &JsWorkbook::setIterative)
+      .function("setIterativeProgress", &JsWorkbook::setIterativeProgress)
+      .function("setNumber", &JsWorkbook::setNumber)
       .function("setRowHeight", &JsWorkbook::setRowHeight)
       .function("setRowHidden", &JsWorkbook::setRowHidden)
       .function("setRowOutline", &JsWorkbook::setRowOutline)
       .function("setSheetFreeze", &JsWorkbook::setSheetFreeze)
       .function("setSheetTabHidden", &JsWorkbook::setSheetTabHidden)
-      .function("setSheetZoom", &JsWorkbook::setSheetZoom);
+      .function("setSheetZoom", &JsWorkbook::setSheetZoom)
+      .function("setText", &JsWorkbook::setText)
+      .function("sheetCount", &JsWorkbook::sheetCount)
+      .function("sheetName", &JsWorkbook::sheetName)
+      .function("tableAt", &JsWorkbook::tableAt)
+      .function("tableCount", &JsWorkbook::tableCount);
 
   // ---- Free functions ------------------------------------------------------
   function("evalFormula", &eval_formula);

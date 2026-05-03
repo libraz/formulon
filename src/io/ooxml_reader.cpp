@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "io/cf_reader.h"
+#include "io/comments_reader.h"
 #include "io/defined_names.h"
 #include "io/pivot_cache_reader.h"
 #include "io/pivot_table_reader.h"
@@ -69,6 +70,12 @@ constexpr std::string_view kRelPivotCacheRecords =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords";
 constexpr std::string_view kRelPivotTable =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
+constexpr std::string_view kRelHyperlink =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
+constexpr std::string_view kRelComments =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
+constexpr std::string_view kRelVmlDrawing =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
 
 // Content types we expect to see referenced from `[Content_Types].xml`.
 // We only look up the workbook content type to verify the package is
@@ -497,6 +504,73 @@ Expected<std::vector<std::string>, Error> LoadSheetTableTargets(const ZipReader&
     // dispatch.
   }
   return targets;
+}
+
+/// Aggregated lookup for the per-sheet auxiliary parts that are not
+/// already covered by `LoadSheetTableTargets` /
+/// `LoadSheetPivotTableTargets`:
+///
+///   * `hyperlink_rid_to_target` — every `rId -> Target` pair under the
+///     hyperlink relationship type. Hyperlink targets are external
+///     URLs (`http://...`, `mailto:...`, `file:...`); the writer
+///     re-emits them verbatim, so we keep them as the raw string the
+///     OOXML producer emitted (no resolution).
+///   * `comments_path` — resolved path of the `kRelComments` target, or
+///     empty when the sheet has none.
+///   * `vml_path` — resolved path of the `kRelVmlDrawing` target, or
+///     empty. Used to detect the legacy bounding-box stub so it gets
+///     marked consumed (passthrough re-emits the bytes).
+struct SheetAuxRels {
+  std::unordered_map<std::string, std::string> hyperlink_rid_to_target;
+  std::string comments_path;
+  std::string vml_path;
+};
+
+Expected<SheetAuxRels, Error> LoadSheetAuxRels(const ZipReader& zip, std::string_view sheet_rels_path,
+                                                std::string_view sheet_dir) {
+  SheetAuxRels out;
+  auto rels_bytes_or = zip.read_entry(sheet_rels_path);
+  if (!rels_bytes_or) {
+    return rels_bytes_or.error();
+  }
+  const std::vector<std::uint8_t>& rels_bytes = rels_bytes_or.value();
+  pugi::xml_document doc;
+  pugi::xml_parse_result parse =
+      doc.load_buffer(rels_bytes.data(), rels_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
+  if (!parse) {
+    std::string ctx("context=ooxml_reader part=");
+    ctx.append(sheet_rels_path);
+    ctx.append(" desc=");
+    ctx.append(parse.description());
+    return make_error(FormulonErrorCode::kIoXmlParse, "sheet rels: pugixml parse failed", std::move(ctx));
+  }
+  pugi::xml_node root = doc.child("Relationships");
+  if (!root) {
+    std::string ctx("context=ooxml_reader part=");
+    ctx.append(sheet_rels_path);
+    return make_error(FormulonErrorCode::kIoRelationshipBroken, "sheet rels: missing <Relationships>", std::move(ctx));
+  }
+  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+    const std::string_view type = rel.attribute("Type").value();
+    const std::string_view target = rel.attribute("Target").value();
+    if (target.empty()) {
+      continue;
+    }
+    if (type == kRelHyperlink) {
+      const std::string id = rel.attribute("Id").value();
+      if (id.empty()) {
+        continue;
+      }
+      // Hyperlink targets are external URLs — preserve them exactly as
+      // the OOXML producer wrote them (no relative-path resolution).
+      out.hyperlink_rid_to_target.emplace(id, std::string(target));
+    } else if (type == kRelComments) {
+      out.comments_path = ResolveRelativePath(sheet_dir, target);
+    } else if (type == kRelVmlDrawing) {
+      out.vml_path = ResolveRelativePath(sheet_dir, target);
+    }
+  }
+  return out;
 }
 
 /// Walks `sheet_rels_path` for `kRelPivotTable` entries and returns the
@@ -929,6 +1003,27 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
       if (!view_layout_or) {
         return view_layout_or.error();
       }
+
+      // Merge / hyperlink / validation blocks all live at the top
+      // level of <worksheet>, same as CF. Same DOM-only reasoning
+      // applies.
+      auto merges_or = read_merges(sheet_doc.child("worksheet"));
+      if (!merges_or) {
+        return merges_or.error();
+      }
+      wb.sheet(i).mutable_merges() = std::move(merges_or.value());
+
+      auto hls_or = read_hyperlinks(sheet_doc.child("worksheet"));
+      if (!hls_or) {
+        return hls_or.error();
+      }
+      wb.sheet(i).mutable_hyperlinks() = std::move(hls_or.value());
+
+      auto dvs_or = read_data_validations(sheet_doc.child("worksheet"));
+      if (!dvs_or) {
+        return dvs_or.error();
+      }
+      wb.sheet(i).mutable_validations() = std::move(dvs_or.value());
     }
 
     // Sheet rels file (`xl/worksheets/_rels/sheetN.xml.rels`) — drives
@@ -998,6 +1093,33 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
         if (zip.has_entry(pt_rels_path)) {
           consumed_parts.insert(pt_rels_path);
         }
+      }
+
+      // Hyperlink / comments / VML auxiliary parts. The rels walker
+      // surfaces all three in one pass; missing entries are simply
+      // empty in the result.
+      auto aux_or = LoadSheetAuxRels(zip, sheet_rels_path, sheet_dir);
+      if (!aux_or) {
+        return aux_or.error();
+      }
+      const SheetAuxRels& aux = aux_or.value();
+      // Stitch each hyperlink's `target` from the rels lookup.
+      apply_hyperlink_rels(wb.sheet(i).mutable_hyperlinks(), aux.hyperlink_rid_to_target);
+
+      // Comments part: load + attach. The VML drawing companion is
+      // intentionally NOT consumed here so the bytes flow through the
+      // unknown-parts passthrough mechanism unchanged.
+      if (!aux.comments_path.empty() && zip.has_entry(aux.comments_path)) {
+        auto cb_or = zip.read_entry(aux.comments_path);
+        if (!cb_or) {
+          return cb_or.error();
+        }
+        auto comments_or = read_comments(cb_or.value());
+        if (!comments_or) {
+          return comments_or.error();
+        }
+        wb.sheet(i).mutable_comments() = std::move(comments_or.value());
+        consumed_parts.insert(aux.comments_path);
       }
     }
   }

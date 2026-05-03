@@ -36,6 +36,86 @@ namespace pivot {
 class PivotTable;
 }  // namespace pivot
 
+/// One `<mergeCell ref="A1:B2"/>` block: a rectangular merged range
+/// stored as 0-based, inclusive `(row, col)` corners. The two corners
+/// are normalised so that `first_row <= last_row` and
+/// `first_col <= last_col`; degenerate `first == last` rectangles are
+/// permitted (single-cell merges, which Excel emits).
+struct MergeRange {
+  std::uint32_t first_row = 0;
+  std::uint32_t first_col = 0;
+  std::uint32_t last_row = 0;
+  std::uint32_t last_col = 0;
+};
+
+/// One `<hyperlink>` entry attached to a sheet. The OOXML wire form is
+///
+///     <hyperlink ref="A1" r:id="rId3" tooltip="..." display="..."/>
+///
+/// where `r:id` resolves to a `Target` in the sheet's
+/// `_rels/<sheet>.xml.rels`. Hyperlinks may be external (URLs / mailto)
+/// or internal (e.g. `#Sheet2!A1`); for internal links Excel emits the
+/// `location` attribute on the `<hyperlink>` itself rather than going
+/// through rels. We capture both shapes in a single struct so the
+/// writer can reproduce either.
+///
+/// Lifetime: `target` / `display` / `tooltip` / `location` are owned
+/// `std::string`s. `rid` is the relationship id observed at read time;
+/// the writer reuses it verbatim for round-trip stability and assigns a
+/// fresh `rId<N>` when the field is empty (newly added entries).
+struct Hyperlink {
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+  std::string target;    ///< External URL / mailto / file path. Empty for purely internal links.
+  std::string location;  ///< `Sheet2!A1` style internal target, or empty.
+  std::string display;   ///< Optional `display="..."` attribute.
+  std::string tooltip;   ///< Optional `tooltip="..."` attribute.
+  std::string rid;       ///< Reader populates from sheet rels; empty for fresh entries.
+};
+
+/// One per-cell text comment (`<comment ref="A1" authorId="N"><text>...</text></comment>`).
+///
+/// The struct is intentionally narrow: a single plain-text payload, no
+/// rich-text runs. Reads of multi-run rich text concatenate the runs
+/// into `text`; writes always emit the plain form. Authors are
+/// preserved verbatim so the workbook-wide author list round-trips.
+struct CellComment {
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+  std::string author;
+  std::string text;
+};
+
+/// One `<dataValidation>` block: a list of cell ranges that share a
+/// validation rule, plus the rule itself. Storage is plain POD; the
+/// engine does not yet evaluate the rules — the data is captured for
+/// round-trip and surfacing through the binding APIs.
+///
+/// Field semantics (matches OOXML `dataValidations.xsd`):
+///   * `type`         — 0 none, 1 whole, 2 decimal, 3 list, 4 date,
+///                      5 time, 6 textLength, 7 custom.
+///   * `op`           — 0 between, 1 notBetween, 2 equal, 3 notEqual,
+///                      4 greaterThan, 5 lessThan, 6 greaterThanOrEqual,
+///                      7 lessThanOrEqual.
+///   * `error_style`  — 0 stop, 1 warning, 2 information.
+///   * `formula1`/`formula2` — raw OOXML formula text without leading
+///                      `=`; the evaluator does not consume these.
+struct DataValidation {
+  std::vector<MergeRange> ranges;
+  std::uint8_t type = 0;
+  std::uint8_t op = 0;
+  std::uint8_t error_style = 0;
+  bool allow_blank = true;
+  bool show_input_message = false;
+  bool show_error_message = false;
+  std::string formula1;
+  std::string formula2;
+  std::string error_title;
+  std::string error_message;
+  std::string prompt_title;
+  std::string prompt_message;
+};
+
 /// A registered spill region produced by a dynamic-array formula.
 ///
 /// `cells` is row-major (size = `rows * cols`) and holds heap-owned `Value`
@@ -57,58 +137,6 @@ struct SpillRegion {
   // copyable).
   std::vector<std::string> owned_strings;
 };
-
-/// A merged cell rectangle on a sheet.
-///
-/// Coordinates are 0-based and inclusive on both ends, matching the OOXML
-/// `<mergeCell ref="A1:B2">` shape after conversion. The merge reader/writer
-/// bundle owns this list; the evaluator treats merged ranges as a display
-/// concern and does not consult them. The schema may be extended by later
-/// bundles, but the field names declared here are stable.
-struct MergeRange {
-  std::uint32_t first_row = 0;
-  std::uint32_t last_row = 0;
-  std::uint32_t first_col = 0;
-  std::uint32_t last_col = 0;
-};
-
-/// A hyperlink anchored on a single cell.
-///
-/// `target` is the resolved URL or in-workbook target (e.g. `Sheet2!A1`),
-/// `display` is the surface text shown in the cell when distinct from the
-/// cell's stored value, and `tooltip` populates the OOXML `tooltip` attribute.
-/// `rid` is the source rels id from the sheet part, retained verbatim so
-/// round-trip writes can preserve relationship ordering. The schema may be
-/// extended by later bundles, but the field names declared here are stable.
-struct Hyperlink {
-  std::uint32_t row = 0;
-  std::uint32_t col = 0;
-  std::string target;
-  std::string display;
-  std::string tooltip;
-  std::string rid;
-};
-
-/// A cell-anchored comment / threaded-comment payload.
-///
-/// The schema is intentionally minimal at this point and will grow as the
-/// comment reader/writer bundle wires up rich-text runs, threading metadata,
-/// and modern ("threaded") comment ids. The field names declared here are
-/// stable; new fields are appended.
-struct CellComment {
-  std::uint32_t row = 0;
-  std::uint32_t col = 0;
-  std::string author;
-  std::string text;
-};
-
-/// A cell-range data-validation rule.
-///
-/// Schema deliberately empty at this point; the validation reader/writer
-/// bundle expands this with type / formula1 / formula2 / errorTitle /
-/// errorMessage / promptTitle / prompt fields. Existing fields (none) stay
-/// stable; new fields are appended.
-struct DataValidation {};
 
 /// Per-sheet view state (zoom, frozen panes, tab visibility).
 ///
@@ -555,26 +583,20 @@ class Sheet {
   // Conditional-format blocks attached to this sheet. Empty by default;
   // populated by the OOXML reader from `<conditionalFormatting>` blocks.
   std::vector<cf::ConditionalFormat> conditional_formats_;
-  // Merged-cell rectangles. Empty by default; populated by the OOXML
-  // reader once the corresponding format support lands.
+  // Merge ranges from `<mergeCells>`. Empty by default; populated by the
+  // OOXML reader and round-tripped through the writer.
   std::vector<MergeRange> merges_;
-  // Hyperlinks anchored on cells in this sheet. Empty by default;
-  // populated by the OOXML reader once the corresponding format support
-  // lands.
+  // Hyperlinks from `<hyperlinks>` plus the sheet's rels file. Empty by default.
   std::vector<Hyperlink> hyperlinks_;
-  // Cell comments / threaded comments. Empty by default; populated by the
-  // OOXML reader once the corresponding format support lands.
+  // Per-cell text comments aggregated from `xl/comments<N>.xml`. Empty by default.
   std::vector<CellComment> comments_;
-  // Data-validation rules. Empty by default; populated by the OOXML
-  // reader once the corresponding format support lands.
+  // `<dataValidations>` blocks. Empty by default.
   std::vector<DataValidation> validations_;
   // Per-sheet view state (zoom, frozen panes, tab visibility). Defaults
-  // are populated inline; the OOXML reader overwrites them once the
-  // corresponding format support lands.
+  // are populated inline; the OOXML reader overwrites them when present.
   SheetView view_;
   // Per-sheet layout overrides (column spans + row overrides). Empty by
-  // default; populated by the OOXML reader once the corresponding format
-  // support lands.
+  // default; populated by the OOXML reader from `<cols>` / `<row>` entries.
   SheetLayout layout_;
 };
 
