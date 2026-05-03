@@ -752,7 +752,18 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
       return make_error(FormulonErrorCode::kIoRelationshipBroken,
                         "workbook.xml: r:id has no matching workbook relationship", std::move(ctx));
     }
+    // Workbook-side `<sheet state="hidden">` (or `state="veryHidden"`)
+    // attribute — Excel records sheet visibility here, not on the
+    // worksheet part. Mirror it onto `Sheet::view().tab_hidden` so
+    // either signal flips the bit at load time. The worksheet-side
+    // `<sheetPr><tabHidden/>` form is handled by the per-sheet reader
+    // call below; the merge across both paths is OR-style.
+    const std::string_view state = sn.attribute("state").value();
+    const bool workbook_hides = (state == "hidden") || (state == "veryHidden");
     wb.add_sheet(std::move(name));
+    if (workbook_hides) {
+      wb.sheet(wb.sheet_count() - 1U).mutable_view().tab_hidden = true;
+    }
     sheet_part_paths.push_back(it->second);
     consumed_parts.insert(it->second);
   }
@@ -911,6 +922,14 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
         return cfs_or.error();
       }
       wb.sheet(i).mutable_conditional_formats() = std::move(cfs_or.value());
+      // View / layout metadata (`<sheetView>`, `<sheetPr>`, `<cols>`,
+      // per-row overrides) lives at the same DOM level — process it
+      // here so the round-trip writer can reproduce it. SAX-side
+      // coverage is deferred for the same reason as CF.
+      auto view_layout_or = read_sheet_view_and_layout(sheet_doc, i, wb);
+      if (!view_layout_or) {
+        return view_layout_or.error();
+      }
     }
 
     // Sheet rels file (`xl/worksheets/_rels/sheetN.xml.rels`) — drives

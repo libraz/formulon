@@ -120,6 +120,36 @@ constexpr std::size_t kSaxThresholdBytes = 256U * 1024U;
 Expected<void, Error> read_sheet_data_sax(ByteSpan sheet_xml, std::size_t sheet_index, Workbook& workbook,
                                           SheetReadContext& ctx, std::deque<std::string>& text_storage);
 
+/// Reads non-cell worksheet metadata from the parsed `sheet*.xml`
+/// document and writes it onto `workbook.sheet(sheet_index)`. Currently
+/// covers the viewport state mirrored by `Sheet::view()` (zoom scale,
+/// frozen panes, tab visibility) and the layout overrides mirrored by
+/// `Sheet::layout()` (`<cols>` spans, `<row>`-level height / hidden /
+/// outline overrides).
+///
+/// Behaviour:
+///   * `<sheetView zoomScale="...">` — clamped to `[10, 400]`, defaulting
+///     to `SheetView::kDefaultZoomScale` when absent or out of range.
+///   * `<sheetView><pane state="frozen" xSplit ySplit/></sheetView>` —
+///     populates `freeze_rows` / `freeze_cols`. Non-frozen panes leave
+///     both at `0`.
+///   * `<sheetPr><tabHidden val="1"/></sheetPr>` — sets
+///     `view().tab_hidden`. The workbook-side `<sheet state="hidden">`
+///     path (handled in `read_ooxml`) merges OR-style: either signal
+///     marks the sheet as hidden.
+///   * `<cols>/<col min max width hidden outlineLevel/>` — appended to
+///     `layout().columns`. Entries that omit `width` are skipped (a
+///     `customWidth=1` / `bestFit=1` marker without a stored width is a
+///     no-op for the layout model).
+///   * `<row r ht hidden outlineLevel ...>` — appended to
+///     `layout().row_overrides` only when at least one of `ht`,
+///     `hidden`, or `outlineLevel` is present.
+///
+/// Returns `kIoSheetCorrupt` when the worksheet root is malformed.
+/// Missing optional sub-elements are not errors.
+Expected<void, Error> read_sheet_view_and_layout(const pugi::xml_document& sheet_doc, std::size_t sheet_index,
+                                                 Workbook& workbook);
+
 }  // namespace io
 }  // namespace formulon
 

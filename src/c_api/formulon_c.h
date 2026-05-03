@@ -618,6 +618,200 @@ FM_API fm_status_t fm_cf_results_match_at(const fm_cf_results_t* results, size_t
                                           fm_cf_match_t* out);
 
 /* -------------------------------------------------------------------------- */
+/* Sheet view / layout (viewport, frozen panes, column / row overrides)       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Per-sheet view state surfaced over the C ABI.
+ *
+ * Mirrors `formulon::SheetView`. Fields that are at their default value
+ * still surface (zoom_scale defaults to `100`, freeze_rows /
+ * freeze_cols default to `0`, tab_hidden defaults to `0`).
+ */
+typedef struct {
+  uint32_t zoom_scale;
+  uint32_t freeze_rows;
+  uint32_t freeze_cols;
+  int32_t tab_hidden; /* 0/1 */
+} fm_sheet_view_t;
+
+/**
+ * @brief Per-column layout override surfaced over the C ABI.
+ *
+ * Mirrors `formulon::ColumnLayout`. Both endpoints are 0-based and
+ * inclusive (matches the engine-side type; OOXML's `min`/`max`
+ * 1-based conversion stays inside the writer).
+ */
+typedef struct {
+  uint32_t first;
+  uint32_t last;
+  double width;
+  int32_t hidden; /* 0/1 */
+  uint8_t outline_level;
+  uint8_t _pad[3];
+} fm_column_layout_t;
+
+/**
+ * @brief Per-row layout override surfaced over the C ABI.
+ *
+ * Mirrors `formulon::RowLayout`. The row index is 0-based; height is
+ * in points (matches OOXML `<row ht=...>`).
+ */
+typedef struct {
+  uint32_t row;
+  double height;
+  int32_t hidden; /* 0/1 */
+  uint8_t outline_level;
+  uint8_t _pad[3];
+} fm_row_layout_t;
+
+/**
+ * @brief Returns the column-layout-override count for `sheet_index`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_column_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
+
+/**
+ * @brief Reads the `idx`-th column-layout override.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` or `idx` is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_column(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
+                                       fm_column_layout_t* out);
+
+/**
+ * @brief Returns the row-layout-override count for `sheet_index`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_row_override_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
+
+/**
+ * @brief Reads the `idx`-th row-layout override.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` or `idx` is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_row_override(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
+                                             fm_row_layout_t* out);
+
+/**
+ * @brief Reads the sheet-view state (zoom, frozen panes, tab hidden).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_index, fm_sheet_view_t* out);
+
+/**
+ * @brief Sets or replaces the column width override for the inclusive
+ *        column span `[first, last]`. Existing overrides whose span
+ *        intersects the requested span are merged so the new width
+ *        takes precedence on overlapping columns; non-overlapping
+ *        portions of pre-existing entries are retained.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or
+ *         `last < first`.
+ */
+FM_API fm_status_t fm_sheet_set_column_width(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
+                                             double width);
+
+/**
+ * @brief Sets or replaces the column hidden flag for the inclusive
+ *        column span `[first, last]`. See `fm_sheet_set_column_width`
+ *        for the merge semantics.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or
+ *         `last < first`.
+ */
+FM_API fm_status_t fm_sheet_set_column_hidden(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
+                                              int32_t hidden);
+
+/**
+ * @brief Sets or replaces the column outline level for the inclusive
+ *        column span `[first, last]`. See `fm_sheet_set_column_width`
+ *        for the merge semantics.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or
+ *         `last < first`.
+ */
+FM_API fm_status_t fm_sheet_set_column_outline(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
+                                               uint8_t level);
+
+/**
+ * @brief Sets or replaces the row height override for `row`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_set_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t row, double height);
+
+/**
+ * @brief Sets or replaces the row hidden flag for `row`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_index, uint32_t row, int32_t hidden);
+
+/**
+ * @brief Sets or replaces the row outline level for `row`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint8_t level);
+
+/**
+ * @brief Sets the sheet's zoom percentage. Values outside `[10, 400]`
+ *        are clamped to the nearest endpoint.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_set_zoom(fm_workbook_t* wb, size_t sheet_index, uint32_t zoom_scale);
+
+/**
+ * @brief Sets the sheet's freeze pane in `(rows, cols)`. Either or
+ *        both may be `0` to remove that axis.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_set_freeze(fm_workbook_t* wb, size_t sheet_index, uint32_t freeze_rows,
+                                       uint32_t freeze_cols);
+
+/**
+ * @brief Sets the sheet's tab-hidden flag. Non-zero hides the sheet
+ *        tab; zero shows it.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_set_tab_hidden(fm_workbook_t* wb, size_t sheet_index, int32_t hidden);
+
+/* -------------------------------------------------------------------------- */
 /* Diagnostics                                                                */
 /* -------------------------------------------------------------------------- */
 

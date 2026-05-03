@@ -430,7 +430,16 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
     out.append(std::to_string(i + 1));
     out.append("\" r:id=\"rId");
     out.append(std::to_string(i + 1));
-    out.append("\"/>\n");
+    out.push_back('"');
+    // Excel records tab visibility on the workbook part via the
+    // `state` attribute. We OR-merge that with `<sheetPr><tabHidden/>`
+    // on the worksheet part inside `BuildWorksheetXml`, so either
+    // path round-trips correctly. Keeping the workbook-side emission
+    // here mirrors what Excel writes by default.
+    if (wb.sheet(i).view().tab_hidden) {
+      out.append(" state=\"hidden\"");
+    }
+    out.append("/>\n");
   }
   out.append("  </sheets>\n");
   // <definedNames> sits between <sheets> and <calcPr>/end-of-workbook
@@ -497,18 +506,43 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan)
   return out;
 }
 
+// Forward declarations for the helpers defined at the bottom of this
+// file. Each builder is fenced into its own translation-unit-local
+// helper so concurrent Wave 1 bundles can extend the worksheet XML
+// shape without colliding here.
+std::string BuildSheetViewXml(const SheetView& view);
+std::string BuildColsXml(const SheetLayout& layout);
+
 std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables) {
+  const std::string sheet_view_xml = BuildSheetViewXml(sheet.view());
+  const std::string cols_xml = BuildColsXml(sheet.layout());
   const std::string sheet_data = BuildSheetDataXml(sheet);
   // Conditional-format blocks live between <sheetData> and <tableParts>
   // in ECMA-376 document order. Empty list => empty string, no
   // wrapper.
   const std::string cf_xml = write_conditional_formattings(sheet.conditional_formats());
   std::string out;
-  out.reserve(192U + sheet_data.size() + cf_xml.size() + sheet_tables.size() * 96);
+  out.reserve(192U + sheet_view_xml.size() + cols_xml.size() + sheet_data.size() + cf_xml.size() +
+              sheet_tables.size() * 96);
   out.append(kXmlDecl);
   out.append(
       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
       "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\n");
+  // ECMA-376 element order: sheetPr -> dimension -> sheetViews ->
+  // sheetFormatPr -> cols -> sheetData -> conditionalFormatting ->
+  // tableParts. We currently emit a subset; the helpers stay quiet
+  // when their underlying field is at default values so absent
+  // metadata yields no extra bytes.
+  if (!sheet_view_xml.empty()) {
+    out.append("  ");
+    out.append(sheet_view_xml);
+    out.push_back('\n');
+  }
+  if (!cols_xml.empty()) {
+    out.append("  ");
+    out.append(cols_xml);
+    out.push_back('\n');
+  }
   out.append("  ");
   out.append(sheet_data);
   out.push_back('\n');
@@ -726,6 +760,99 @@ Expected<void, Error> AddPartBytes(mz_zip_archive* archive, std::string_view pat
                       std::move(context));
   }
   return Expected<void, Error>::Ok();
+}
+
+// ---------------------------------------------------------------------------
+// View / layout part builders
+// ---------------------------------------------------------------------------
+//
+// These helpers each return either an empty string (when the underlying
+// field is at its default value, meaning the worksheet XML omits the
+// element entirely) or a self-contained XML chunk that the caller
+// inserts inside the `<worksheet>` element. Keeping them local to this
+// translation unit avoids cross-bundle collisions; they consume only
+// the public Sheet accessors documented in `src/sheet.h`.
+
+/// Emits `<sheetViews><sheetView>...</sheetView></sheetViews>` for the
+/// sheet's view state. Returns an empty string when every field is at
+/// its default (zoom 100, no freeze panes, tab not hidden) — Excel
+/// itself omits the element in that case.
+std::string BuildSheetViewXml(const SheetView& view) {
+  const bool zoom_default = view.zoom_scale == SheetView::kDefaultZoomScale;
+  const bool no_freeze = view.freeze_rows == 0U && view.freeze_cols == 0U;
+  const bool tab_default = !view.tab_hidden;
+  if (zoom_default && no_freeze && tab_default) {
+    return std::string();
+  }
+  std::string out;
+  out.reserve(192);
+  out.append("<sheetViews><sheetView workbookViewId=\"0\"");
+  if (!zoom_default) {
+    out.append(" zoomScale=\"");
+    out.append(std::to_string(view.zoom_scale));
+    out.push_back('"');
+  }
+  if (no_freeze) {
+    out.append("/></sheetViews>");
+    return out;
+  }
+  out.push_back('>');
+  // OOXML attribute order for `<pane>`: xSplit, ySplit, topLeftCell,
+  // activePane, state. We emit only the fields we own; the writer
+  // does not yet model `topLeftCell` or `activePane`, so they are
+  // absent. Excel gracefully accepts a freeze record without them.
+  out.append("<pane");
+  if (view.freeze_cols != 0U) {
+    out.append(" xSplit=\"");
+    out.append(std::to_string(view.freeze_cols));
+    out.push_back('"');
+  }
+  if (view.freeze_rows != 0U) {
+    out.append(" ySplit=\"");
+    out.append(std::to_string(view.freeze_rows));
+    out.push_back('"');
+  }
+  out.append(" state=\"frozen\"/></sheetView></sheetViews>");
+  return out;
+}
+
+/// Emits `<cols>...</cols>` containing one `<col>` per
+/// `ColumnLayout` entry. Returns an empty string when there are no
+/// column layout overrides.
+std::string BuildColsXml(const SheetLayout& layout) {
+  if (layout.columns.empty()) {
+    return std::string();
+  }
+  std::string out;
+  out.reserve(32U + layout.columns.size() * 96U);
+  out.append("<cols>");
+  for (const ColumnLayout& col : layout.columns) {
+    out.append("<col min=\"");
+    out.append(std::to_string(col.first + 1U));
+    out.append("\" max=\"");
+    out.append(std::to_string(col.last + 1U));
+    out.push_back('"');
+    if (col.width > 0.0) {
+      out.append(" width=\"");
+      char buf[32];
+      std::snprintf(buf, sizeof(buf), "%.6g", col.width);
+      out.append(buf);
+      // Excel emits `customWidth="1"` whenever an explicit `width` is
+      // present so a reload preserves the column metric.
+      out.append("\" customWidth=\"1\"");
+    }
+    if (col.hidden) {
+      out.append(" hidden=\"1\"");
+    }
+    if (col.outline_level != 0U) {
+      out.append(" outlineLevel=\"");
+      out.append(std::to_string(static_cast<unsigned int>(col.outline_level)));
+      out.push_back('"');
+    }
+    out.append("/>");
+  }
+  out.append("</cols>");
+  return out;
 }
 
 }  // namespace

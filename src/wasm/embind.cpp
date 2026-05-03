@@ -147,6 +147,51 @@ struct JsCfRangeResult {
   std::vector<JsCfCellResult> cells;
 };
 
+/// JS-side mirror of `fm_sheet_view_t`.
+struct JsSheetView {
+  uint32_t zoomScale = 100U;
+  uint32_t freezeRows = 0U;
+  uint32_t freezeCols = 0U;
+  int32_t tabHidden = 0;
+};
+
+/// Return envelope for `Workbook.getSheetView(...)`.
+struct JsSheetViewResult {
+  JsStatus status;
+  JsSheetView view{};
+};
+
+/// JS-side mirror of `fm_column_layout_t`. Channel widths are normal
+/// JS numbers; the embind-side `int32_t` stand-in for booleans matches
+/// the rest of this binding surface.
+struct JsColumnLayout {
+  uint32_t first = 0U;
+  uint32_t last = 0U;
+  double width = 0.0;
+  int32_t hidden = 0;
+  int32_t outlineLevel = 0;
+};
+
+/// JS-side mirror of `fm_row_layout_t`.
+struct JsRowLayout {
+  uint32_t row = 0U;
+  double height = 0.0;
+  int32_t hidden = 0;
+  int32_t outlineLevel = 0;
+};
+
+/// Return envelope for `Workbook.getSheetColumns(...)`.
+struct JsColumnsResult {
+  JsStatus status;
+  std::vector<JsColumnLayout> columns;
+};
+
+/// Return envelope for `Workbook.getSheetRowOverrides(...)`.
+struct JsRowsResult {
+  JsStatus status;
+  std::vector<JsRowLayout> rows;
+};
+
 /// Builds an `ok` envelope with empty diagnostic strings.
 JsStatus ok_status() {
   return JsStatus{true, 0, std::string(), std::string()};
@@ -644,6 +689,178 @@ class JsWorkbook {
     return r;
   }
 
+  // ---- Sheet view / layout ------------------------------------------------
+
+  /// Reads the per-sheet view (zoom, frozen panes, tab visibility).
+  JsSheetViewResult getSheetView(uint32_t sheet) const {
+    JsSheetViewResult r;
+    if (handle_ == nullptr) {
+      r.status = error_status(7000);
+      return r;
+    }
+    fm_sheet_view_t v{};
+    fm_status_t rc = fm_sheet_get_view(handle_, sheet, &v);
+    if (rc != 0) {
+      r.status = error_status(rc);
+      return r;
+    }
+    r.view.zoomScale = v.zoom_scale;
+    r.view.freezeRows = v.freeze_rows;
+    r.view.freezeCols = v.freeze_cols;
+    r.view.tabHidden = v.tab_hidden;
+    r.status = ok_status();
+    return r;
+  }
+
+  /// Sets the sheet's zoom percentage. Out-of-range values are clamped
+  /// to `[10, 400]`.
+  JsStatus setSheetZoom(uint32_t sheet, uint32_t zoomScale) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_sheet_set_zoom(handle_, sheet, zoomScale);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Sets the sheet's frozen pane in `(rows, cols)`.
+  JsStatus setSheetFreeze(uint32_t sheet, uint32_t freezeRows, uint32_t freezeCols) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_sheet_set_freeze(handle_, sheet, freezeRows, freezeCols);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Sets the sheet tab's hidden flag.
+  JsStatus setSheetTabHidden(uint32_t sheet, bool hidden) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_sheet_set_tab_hidden(handle_, sheet, hidden ? 1 : 0);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Returns the column-layout overrides on `sheet` in storage order.
+  JsColumnsResult getSheetColumns(uint32_t sheet) const {
+    JsColumnsResult r;
+    if (handle_ == nullptr) {
+      r.status = error_status(7000);
+      return r;
+    }
+    std::size_t count = 0;
+    fm_status_t rc = fm_sheet_get_column_count(handle_, sheet, &count);
+    if (rc != 0) {
+      r.status = error_status(rc);
+      return r;
+    }
+    r.columns.reserve(count);
+    for (std::size_t i = 0; i < count; ++i) {
+      fm_column_layout_t entry{};
+      if (fm_sheet_get_column(handle_, sheet, i, &entry) != 0) {
+        continue;
+      }
+      JsColumnLayout out;
+      out.first = entry.first;
+      out.last = entry.last;
+      out.width = entry.width;
+      out.hidden = entry.hidden;
+      out.outlineLevel = static_cast<int32_t>(entry.outline_level);
+      r.columns.push_back(out);
+    }
+    r.status = ok_status();
+    return r;
+  }
+
+  /// Sets / replaces the column width override on `[first, last]`.
+  JsStatus setColumnWidth(uint32_t sheet, uint32_t first, uint32_t last, double width) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_sheet_set_column_width(handle_, sheet, first, last, width);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Sets / replaces the column hidden flag on `[first, last]`.
+  JsStatus setColumnHidden(uint32_t sheet, uint32_t first, uint32_t last, bool hidden) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_sheet_set_column_hidden(handle_, sheet, first, last, hidden ? 1 : 0);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Sets / replaces the column outline level on `[first, last]`.
+  JsStatus setColumnOutline(uint32_t sheet, uint32_t first, uint32_t last, uint32_t level) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    if (level > 255U) {
+      level = 255U;
+    }
+    fm_status_t rc = fm_sheet_set_column_outline(handle_, sheet, first, last, static_cast<uint8_t>(level));
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Returns the row-layout overrides on `sheet` in storage order.
+  JsRowsResult getSheetRowOverrides(uint32_t sheet) const {
+    JsRowsResult r;
+    if (handle_ == nullptr) {
+      r.status = error_status(7000);
+      return r;
+    }
+    std::size_t count = 0;
+    fm_status_t rc = fm_sheet_get_row_override_count(handle_, sheet, &count);
+    if (rc != 0) {
+      r.status = error_status(rc);
+      return r;
+    }
+    r.rows.reserve(count);
+    for (std::size_t i = 0; i < count; ++i) {
+      fm_row_layout_t entry{};
+      if (fm_sheet_get_row_override(handle_, sheet, i, &entry) != 0) {
+        continue;
+      }
+      JsRowLayout out;
+      out.row = entry.row;
+      out.height = entry.height;
+      out.hidden = entry.hidden;
+      out.outlineLevel = static_cast<int32_t>(entry.outline_level);
+      r.rows.push_back(out);
+    }
+    r.status = ok_status();
+    return r;
+  }
+
+  /// Sets / replaces the row height override at `row`.
+  JsStatus setRowHeight(uint32_t sheet, uint32_t row, double height) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_sheet_set_row_height(handle_, sheet, row, height);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Sets / replaces the row hidden flag at `row`.
+  JsStatus setRowHidden(uint32_t sheet, uint32_t row, bool hidden) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_sheet_set_row_hidden(handle_, sheet, row, hidden ? 1 : 0);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  /// Sets / replaces the row outline level at `row`.
+  JsStatus setRowOutline(uint32_t sheet, uint32_t row, uint32_t level) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    if (level > 255U) {
+      level = 255U;
+    }
+    fm_status_t rc = fm_sheet_set_row_outline(handle_, sheet, row, static_cast<uint8_t>(level));
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
  private:
   fm_workbook_t* handle_ = nullptr;
 };
@@ -783,6 +1000,40 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .field("status", &JsCfRangeResult::status)
       .field("cells", &JsCfRangeResult::cells);
 
+  // ---- Sheet view / layout value-objects -----------------------------------
+  value_object<JsSheetView>("SheetView")
+      .field("zoomScale", &JsSheetView::zoomScale)
+      .field("freezeRows", &JsSheetView::freezeRows)
+      .field("freezeCols", &JsSheetView::freezeCols)
+      .field("tabHidden", &JsSheetView::tabHidden);
+
+  value_object<JsSheetViewResult>("SheetViewResult")
+      .field("status", &JsSheetViewResult::status)
+      .field("view", &JsSheetViewResult::view);
+
+  value_object<JsColumnLayout>("ColumnLayout")
+      .field("first", &JsColumnLayout::first)
+      .field("last", &JsColumnLayout::last)
+      .field("width", &JsColumnLayout::width)
+      .field("hidden", &JsColumnLayout::hidden)
+      .field("outlineLevel", &JsColumnLayout::outlineLevel);
+
+  register_vector<JsColumnLayout>("ColumnLayoutVector");
+
+  value_object<JsColumnsResult>("ColumnsResult")
+      .field("status", &JsColumnsResult::status)
+      .field("columns", &JsColumnsResult::columns);
+
+  value_object<JsRowLayout>("RowLayout")
+      .field("row", &JsRowLayout::row)
+      .field("height", &JsRowLayout::height)
+      .field("hidden", &JsRowLayout::hidden)
+      .field("outlineLevel", &JsRowLayout::outlineLevel);
+
+  register_vector<JsRowLayout>("RowLayoutVector");
+
+  value_object<JsRowsResult>("RowsResult").field("status", &JsRowsResult::status).field("rows", &JsRowsResult::rows);
+
   // ---- Workbook class ------------------------------------------------------
   class_<JsWorkbook>("Workbook")
       .class_function("createDefault", &JsWorkbook::createDefault, allow_raw_pointers())
@@ -809,7 +1060,19 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("tableAt", &JsWorkbook::tableAt)
       .function("passthroughCount", &JsWorkbook::passthroughCount)
       .function("passthroughAt", &JsWorkbook::passthroughAt)
-      .function("evaluateCfRange", &JsWorkbook::evaluateCfRange);
+      .function("evaluateCfRange", &JsWorkbook::evaluateCfRange)
+      .function("getSheetColumns", &JsWorkbook::getSheetColumns)
+      .function("getSheetRowOverrides", &JsWorkbook::getSheetRowOverrides)
+      .function("getSheetView", &JsWorkbook::getSheetView)
+      .function("setColumnHidden", &JsWorkbook::setColumnHidden)
+      .function("setColumnOutline", &JsWorkbook::setColumnOutline)
+      .function("setColumnWidth", &JsWorkbook::setColumnWidth)
+      .function("setRowHeight", &JsWorkbook::setRowHeight)
+      .function("setRowHidden", &JsWorkbook::setRowHidden)
+      .function("setRowOutline", &JsWorkbook::setRowOutline)
+      .function("setSheetFreeze", &JsWorkbook::setSheetFreeze)
+      .function("setSheetTabHidden", &JsWorkbook::setSheetTabHidden)
+      .function("setSheetZoom", &JsWorkbook::setSheetZoom);
 
   // ---- Free functions ------------------------------------------------------
   function("evalFormula", &eval_formula);

@@ -16,8 +16,11 @@
 
 #include "io/sheet_reader.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <deque>
 #include <string>
 #include <string_view>
@@ -27,6 +30,7 @@
 #include "io/cell_parser.h"
 #include "io/sax_xml_reader.h"
 #include "pugixml.hpp"
+#include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -210,6 +214,228 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
       }
     }
   }
+  return Expected<void, Error>::Ok();
+}
+
+// ---------------------------------------------------------------------------
+// View / layout helpers. Each lives in an anonymous namespace so the
+// translation unit owns its parsing fences; the public driver
+// `read_sheet_view_and_layout` composes them in document order.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// Returns true when the OOXML boolean attribute string is "true" /
+/// "1" (case-insensitive). Matches the lexicon Excel emits for sheet
+/// hidden / outline flags.
+bool ParseXmlBool(std::string_view value) noexcept {
+  if (value == "1") {
+    return true;
+  }
+  if (value.size() != 4) {
+    return false;
+  }
+  return (value[0] == 't' || value[0] == 'T') && (value[1] == 'r' || value[1] == 'R') &&
+         (value[2] == 'u' || value[2] == 'U') && (value[3] == 'e' || value[3] == 'E');
+}
+
+/// Saturating cast from a possibly-signed C string to `std::uint8_t`.
+/// Used for `outlineLevel`; OOXML caps the value at 7 but we accept up
+/// to 255 defensively and clamp negatives to 0.
+std::uint8_t ParseOutlineLevel(const char* text) noexcept {
+  if (text == nullptr || *text == '\0') {
+    return 0U;
+  }
+  // strtol is locale-independent for ASCII digits and doesn't pull in
+  // <iostream>. The result is clamped to [0, 255] so callers see a
+  // valid `uint8_t` even on garbage input.
+  char* end = nullptr;
+  const long n = std::strtol(text, &end, 10);
+  if (end == text) {
+    return 0U;
+  }
+  if (n <= 0) {
+    return 0U;
+  }
+  if (n >= 255) {
+    return 255U;
+  }
+  return static_cast<std::uint8_t>(n);
+}
+
+/// Parses `<sheetView zoomScale="...">` and `<pane state="frozen"
+/// xSplit="N" ySplit="M">` into `view`. Missing or out-of-range
+/// `zoomScale` falls back to `SheetView::kDefaultZoomScale`. A `<pane>`
+/// element with `state != "frozen"` (or absent) leaves
+/// `freeze_rows` / `freeze_cols` at zero.
+void ApplySheetView(const pugi::xml_node& worksheet, SheetView& view) {
+  pugi::xml_node sheet_views = worksheet.child("sheetViews");
+  if (!sheet_views) {
+    return;
+  }
+  pugi::xml_node sheet_view = sheet_views.child("sheetView");
+  if (!sheet_view) {
+    return;
+  }
+  if (pugi::xml_attribute zoom_attr = sheet_view.attribute("zoomScale"); zoom_attr) {
+    const long raw = std::strtol(zoom_attr.value(), nullptr, 10);
+    if (raw >= 10 && raw <= 400) {
+      view.zoom_scale = static_cast<std::uint32_t>(raw);
+    }
+  }
+  pugi::xml_node pane = sheet_view.child("pane");
+  if (pane) {
+    const std::string_view state = pane.attribute("state").value();
+    if (state == "frozen") {
+      const long y = std::strtol(pane.attribute("ySplit").value(), nullptr, 10);
+      const long x = std::strtol(pane.attribute("xSplit").value(), nullptr, 10);
+      if (y > 0) {
+        view.freeze_rows = static_cast<std::uint32_t>(y);
+      }
+      if (x > 0) {
+        view.freeze_cols = static_cast<std::uint32_t>(x);
+      }
+    }
+  }
+}
+
+/// Parses `<sheetPr><tabHidden val="1"/></sheetPr>` into `view`.
+/// OOXML also accepts `<sheetPr><tabColor .../>`, but only `tabHidden`
+/// is a visibility-affecting flag for the worksheet part itself. The
+/// workbook-level `<sheet state="hidden">` form is handled in
+/// `read_ooxml`; this helper preserves any prior `tab_hidden` state so
+/// the merge is OR-style.
+void ApplySheetPrTabHidden(const pugi::xml_node& worksheet, SheetView& view) {
+  pugi::xml_node sheet_pr = worksheet.child("sheetPr");
+  if (!sheet_pr) {
+    return;
+  }
+  // Some writers emit `tabHidden` as a direct attribute (`<sheetPr
+  // tabHidden="1"/>`); others emit it as a child element with a `val`
+  // attribute. Accept both shapes.
+  if (pugi::xml_attribute attr = sheet_pr.attribute("tabHidden"); attr) {
+    if (ParseXmlBool(attr.value())) {
+      view.tab_hidden = true;
+    }
+  }
+  if (pugi::xml_node child = sheet_pr.child("tabHidden"); child) {
+    if (pugi::xml_attribute val = child.attribute("val"); val) {
+      if (ParseXmlBool(val.value())) {
+        view.tab_hidden = true;
+      }
+    } else {
+      // Bare `<tabHidden/>` element with no `val` attribute is treated
+      // as `val="1"` to match what Excel's older writers emit.
+      view.tab_hidden = true;
+    }
+  }
+}
+
+/// Parses `<cols><col min max width hidden outlineLevel/></cols>` into
+/// `layout.columns`. Entries that omit `width` are skipped: the layout
+/// model only carries explicit width overrides, and pure
+/// `customWidth=1` / `bestFit=1` markers without a stored width have no
+/// observable round-trip effect.
+void ApplyColumnLayouts(const pugi::xml_node& worksheet, SheetLayout& layout) {
+  pugi::xml_node cols = worksheet.child("cols");
+  if (!cols) {
+    return;
+  }
+  for (pugi::xml_node col = cols.child("col"); col; col = col.next_sibling("col")) {
+    pugi::xml_attribute min_attr = col.attribute("min");
+    pugi::xml_attribute max_attr = col.attribute("max");
+    pugi::xml_attribute width_attr = col.attribute("width");
+    if (!min_attr || !max_attr) {
+      continue;
+    }
+    const long min_v = std::strtol(min_attr.value(), nullptr, 10);
+    const long max_v = std::strtol(max_attr.value(), nullptr, 10);
+    if (min_v < 1 || max_v < min_v) {
+      continue;
+    }
+    ColumnLayout entry;
+    entry.first = static_cast<std::uint32_t>(min_v - 1);
+    entry.last = static_cast<std::uint32_t>(max_v - 1);
+    if (width_attr) {
+      entry.width = std::strtod(width_attr.value(), nullptr);
+    } else {
+      // No explicit width override — skip. `customWidth` / `bestFit`
+      // alone are not enough to round-trip through the layout model.
+      continue;
+    }
+    if (pugi::xml_attribute hidden_attr = col.attribute("hidden"); hidden_attr) {
+      entry.hidden = ParseXmlBool(hidden_attr.value());
+    }
+    if (pugi::xml_attribute outline_attr = col.attribute("outlineLevel"); outline_attr) {
+      entry.outline_level = ParseOutlineLevel(outline_attr.value());
+    }
+    layout.columns.push_back(entry);
+  }
+}
+
+/// Walks `<sheetData><row .../></sheetData>` collecting per-row
+/// overrides (height / hidden / outline) into `layout.row_overrides`.
+/// Rows that carry only `r` (the row number) are skipped — they are
+/// just position markers and have no override payload.
+void ApplyRowOverrides(const pugi::xml_node& worksheet, SheetLayout& layout) {
+  pugi::xml_node sheet_data = worksheet.child("sheetData");
+  if (!sheet_data) {
+    return;
+  }
+  for (pugi::xml_node row = sheet_data.child("row"); row; row = row.next_sibling("row")) {
+    pugi::xml_attribute r_attr = row.attribute("r");
+    pugi::xml_attribute ht_attr = row.attribute("ht");
+    pugi::xml_attribute hidden_attr = row.attribute("hidden");
+    pugi::xml_attribute outline_attr = row.attribute("outlineLevel");
+    if (!ht_attr && !hidden_attr && !outline_attr) {
+      continue;
+    }
+    if (!r_attr) {
+      continue;
+    }
+    const long r_v = std::strtol(r_attr.value(), nullptr, 10);
+    if (r_v < 1) {
+      continue;
+    }
+    RowLayout entry;
+    entry.row = static_cast<std::uint32_t>(r_v - 1);
+    if (ht_attr) {
+      entry.height = std::strtod(ht_attr.value(), nullptr);
+    }
+    if (hidden_attr) {
+      entry.hidden = ParseXmlBool(hidden_attr.value());
+    }
+    if (outline_attr) {
+      entry.outline_level = ParseOutlineLevel(outline_attr.value());
+    }
+    layout.row_overrides.push_back(entry);
+  }
+}
+
+}  // namespace
+
+Expected<void, Error> read_sheet_view_and_layout(const pugi::xml_document& sheet_doc, std::size_t sheet_index,
+                                                 Workbook& workbook) {
+  if (sheet_index >= workbook.sheet_count()) {
+    std::string ctx("context=sheet_reader.view_layout sheet_index=");
+    ctx.append(std::to_string(sheet_index));
+    ctx.append(" sheet_count=");
+    ctx.append(std::to_string(workbook.sheet_count()));
+    return make_error(FormulonErrorCode::kInvalidArgument, "read_sheet_view_and_layout: sheet_index out of range",
+                      std::move(ctx));
+  }
+  pugi::xml_node worksheet = sheet_doc.child("worksheet");
+  if (!worksheet) {
+    return make_error(FormulonErrorCode::kIoSheetCorrupt, "sheet doc: missing <worksheet> root",
+                      "context=sheet_reader.view_layout");
+  }
+  Sheet& sheet = workbook.sheet(sheet_index);
+  SheetView& view = sheet.mutable_view();
+  SheetLayout& layout = sheet.mutable_layout();
+  ApplySheetView(worksheet, view);
+  ApplySheetPrTabHidden(worksheet, view);
+  ApplyColumnLayouts(worksheet, layout);
+  ApplyRowOverrides(worksheet, layout);
   return Expected<void, Error>::Ok();
 }
 

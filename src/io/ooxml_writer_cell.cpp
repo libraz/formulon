@@ -25,6 +25,7 @@
 #include <cstdio>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "cell.h"
@@ -241,11 +242,41 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
   return true;
 }
 
+// Appends OOXML-conformant `<row>` start-tag attributes derived from a
+// `RowLayout` override. Caller has already emitted `<row r="N"`. Each
+// override field is emitted only when it differs from the OOXML
+// default (height -> none, hidden -> "0", outlineLevel -> 0). Excel
+// itself emits `customHeight="1"` alongside `ht`; we mirror that so a
+// reload reproduces the visual size.
+void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout) {
+  if (layout.height > 0.0) {
+    out.append(" ht=\"");
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "%.6g", layout.height);
+    out.append(buf);
+    out.append("\" customHeight=\"1\"");
+  }
+  if (layout.hidden) {
+    out.append(" hidden=\"1\"");
+  }
+  if (layout.outline_level != 0U) {
+    out.append(" outlineLevel=\"");
+    out.append(std::to_string(static_cast<unsigned int>(layout.outline_level)));
+    out.push_back('"');
+  }
+}
+
 // Emits the <row> wrapper with all visible cells in the row. Returns true
 // when at least one <c> was emitted (i.e. the <row> was actually written),
 // false when the row collapsed to nothing (every cell was blank or a
-// phantom).
-bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const std::vector<Cell>& row_cells) {
+// phantom). When `override_attrs` is non-empty it is appended to the
+// `<row>` start-tag (between `r="N"` and the closing `>`), allowing the
+// caller to merge per-row layout overrides without reshaping the body.
+// When the row body collapses to nothing but `override_attrs` is
+// non-empty, an empty self-closing `<row r="N" .../>` is still emitted
+// so the override survives the round-trip.
+bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const std::vector<Cell>& row_cells,
+                  std::string_view override_attrs) {
   // Buffer the row body separately so we can tell whether anything ended
   // up inside the <row> wrapper before we commit to writing it.
   std::string body;
@@ -260,12 +291,20 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
     }
     (void)AppendCellXml(body, sheet, row, col, row_cells[i]);
   }
-  if (body.empty()) {
+  if (body.empty() && override_attrs.empty()) {
     return false;
   }
   out.append("<row r=\"");
   out.append(std::to_string(row + 1U));
-  out.append("\">");
+  out.push_back('"');
+  if (!override_attrs.empty()) {
+    out.append(override_attrs);
+  }
+  if (body.empty()) {
+    out.append("/>");
+    return true;
+  }
+  out.push_back('>');
   out.append(body);
   out.append("</row>");
   return true;
@@ -290,21 +329,47 @@ std::string BuildSheetDataXml(const Sheet& sheet) {
   // Collect populated row indices and sort ascending so the output is
   // deterministic regardless of unordered_map iteration order.
   const auto& rows_map = sheet.rows();
+  // Index the per-row overrides by row index. The vector is small in
+  // practice (rarely more than a few dozen entries even for hand-crafted
+  // sheets), so a flat scan would also be fine; the map keeps the merge
+  // O(rows + overrides).
+  std::unordered_map<std::uint32_t, const RowLayout*> overrides_by_row;
+  const auto& row_overrides = sheet.layout().row_overrides;
+  overrides_by_row.reserve(row_overrides.size());
+  for (const RowLayout& ro : row_overrides) {
+    overrides_by_row.emplace(ro.row, &ro);
+  }
+
+  // Union of populated rows and override rows. Rows that have only an
+  // override (no cells) still need to surface so the override survives
+  // a save/load round-trip.
   std::vector<std::uint32_t> row_indices;
-  row_indices.reserve(rows_map.size());
+  row_indices.reserve(rows_map.size() + row_overrides.size());
   for (const auto& kv : rows_map) {
     row_indices.push_back(kv.first);
   }
+  for (const RowLayout& ro : row_overrides) {
+    if (rows_map.find(ro.row) == rows_map.end()) {
+      row_indices.push_back(ro.row);
+    }
+  }
   std::sort(row_indices.begin(), row_indices.end());
+  row_indices.erase(std::unique(row_indices.begin(), row_indices.end()), row_indices.end());
 
   std::string body;
-  body.reserve(rows_map.size() * 64U);
+  body.reserve((rows_map.size() + row_overrides.size()) * 64U);
+  // Sentinel empty span used when a row has no override; avoids a
+  // per-row default-construction of std::string.
+  static const std::vector<Cell> kEmptyRow;
   for (std::uint32_t row : row_indices) {
-    const auto it = rows_map.find(row);
-    if (it == rows_map.end()) {
-      continue;
+    std::string override_attrs;
+    auto override_it = overrides_by_row.find(row);
+    if (override_it != overrides_by_row.end()) {
+      AppendRowOverrideAttrs(override_attrs, *override_it->second);
     }
-    AppendRowXml(body, sheet, row, it->second);
+    auto cells_it = rows_map.find(row);
+    const std::vector<Cell>& row_cells = (cells_it != rows_map.end()) ? cells_it->second : kEmptyRow;
+    AppendRowXml(body, sheet, row, row_cells, override_attrs);
   }
 
   if (body.empty()) {
