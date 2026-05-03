@@ -6,7 +6,7 @@
 // It is a thin C++ wrapper around the stable C ABI declared in
 // `c_api/formulon_c.h`; the JavaScript surface NEVER touches
 // `formulon::Workbook`, `formulon::Value`, or any other internal
-// symbol directly — exactly mirroring the WASM/embind binding's
+// symbol directly -- exactly mirroring the WASM/embind binding's
 // architectural stance.
 //
 // ## Design notes
@@ -29,6 +29,19 @@
 //   * `Workbook` is wrapped in `Napi::ObjectWrap<Workbook>`. The wrapper
 //     owns the `fm_workbook_t*` and frees it in its destructor, which
 //     N-API invokes when the JS object is garbage-collected.
+//
+//   * The full method surface mirrors `src/wasm/embind.cpp` field-for-
+//     field so JS callers can swap between the WASM and native packages
+//     without code changes. Field names on returned objects are kept
+//     IDENTICAL to the embind shape.
+//
+//   * `setIterativeProgress` registers a JS callback through a static
+//     `Napi::FunctionReference` slot. The slot is module-global (one
+//     callback at a time across all workbook handles in the process),
+//     mirroring the embind binding's single-slot policy. The C ABI's
+//     iterative solver is synchronous within `recalc()` so the JS
+//     callback always runs on the same thread that invoked recalc;
+//     no thread-safe-function plumbing is required.
 
 // NOTE: `NODE_ADDON_API_DISABLE_CPP_EXCEPTIONS` and
 // `NAPI_DISABLE_CPP_EXCEPTIONS` are defined on the command line by
@@ -135,6 +148,95 @@ Napi::Object TranslateValue(Napi::Env env, const fm_value_t& v) {
 /// the wrapper is asked to operate on a destroyed handle.
 constexpr fm_status_t kBindingNullPointer = 7000;
 
+/// Translates an `fm_cf_color_t` into the JS shape used by embind.
+Napi::Object TranslateCfColor(Napi::Env env, const fm_cf_color_t& c) {
+  Napi::Object o = Napi::Object::New(env);
+  o.Set("r", Napi::Number::New(env, static_cast<int32_t>(c.r)));
+  o.Set("g", Napi::Number::New(env, static_cast<int32_t>(c.g)));
+  o.Set("b", Napi::Number::New(env, static_cast<int32_t>(c.b)));
+  o.Set("a", Napi::Number::New(env, static_cast<int32_t>(c.a)));
+  return o;
+}
+
+/// Translates an `fm_cf_match_t` into the JS shape used by embind.
+Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_t& m) {
+  Napi::Object o = Napi::Object::New(env);
+  o.Set("kind", Napi::Number::New(env, static_cast<int32_t>(m.kind)));
+  o.Set("priority", Napi::Number::New(env, m.priority));
+  o.Set("dxfIdEngaged", Napi::Number::New(env, m.dxf_id_engaged));
+  o.Set("dxfId", Napi::Number::New(env, m.dxf_id));
+  o.Set("color", TranslateCfColor(env, m.color));
+  o.Set("barLengthPct", Napi::Number::New(env, m.bar_length_pct));
+  o.Set("barAxisPositionPct", Napi::Number::New(env, m.bar_axis_position_pct));
+  o.Set("barIsNegative", Napi::Number::New(env, m.bar_is_negative));
+  o.Set("barFill", TranslateCfColor(env, m.bar_fill));
+  o.Set("barBorderEngaged", Napi::Number::New(env, m.bar_border_engaged));
+  o.Set("barBorder", TranslateCfColor(env, m.bar_border));
+  o.Set("barGradient", Napi::Number::New(env, m.bar_gradient));
+  o.Set("iconSetName", Napi::Number::New(env, m.icon_set_name));
+  o.Set("iconIndex", Napi::Number::New(env, static_cast<int32_t>(m.icon_index)));
+  return o;
+}
+
+// ---------------------------------------------------------------------
+// JS-side iterative-progress callback slot
+// ---------------------------------------------------------------------
+//
+// The C ABI's iterative solver is synchronous: it invokes the
+// registered C callback inline from `fm_workbook_recalc` /
+// `fm_workbook_partial_recalc` on the calling thread. That means the
+// JS function we hold here is always invoked on the same thread that
+// drove recalc, and we can safely call it through the standard
+// `Napi::FunctionReference::Call` API (no thread-safe-function plumbing
+// is required).
+//
+// Mirrors the embind binding's single-slot policy: there is one JS
+// callback for the whole module, installing a new one displaces the
+// previous, and clearing it (passing `null`) reverts to the default
+// "always continue" behaviour.
+struct ProgressSlot {
+  Napi::FunctionReference fn;
+  bool installed = false;
+};
+
+// Function-local static keeps the slot alive for the addon's lifetime
+// without needing eager static initialisation of a Napi::Reference.
+ProgressSlot& js_progress_slot() {
+  static ProgressSlot slot;
+  return slot;
+}
+
+// C-ABI compatible trampoline that forwards into the held JS callback.
+// Returning `false` from the JS side aborts the iterative solve.
+bool IterativeProgressTrampoline(uint32_t iteration, double max_residual, uint32_t max_iterations,
+                                 void* /*user_data*/) {
+  ProgressSlot& slot = js_progress_slot();
+  if (!slot.installed || slot.fn.IsEmpty()) {
+    return true;
+  }
+  Napi::Env env = slot.fn.Env();
+  Napi::HandleScope scope(env);
+  // The iteration index, max residual, and max iteration cap are all
+  // delivered to JS as plain numbers; embind does the same.
+  Napi::Value ret = slot.fn.Call({
+      Napi::Number::New(env, iteration),
+      Napi::Number::New(env, max_residual),
+      Napi::Number::New(env, max_iterations),
+  });
+  if (env.IsExceptionPending()) {
+    // Under -fno-exceptions, node-addon-api still routes JS exceptions
+    // through `env.GetAndClearPendingException()`. Treat any pending
+    // exception from the callback as "abort the solve" and clear it
+    // so we don't propagate into the engine.
+    (void)env.GetAndClearPendingException();
+    return false;
+  }
+  if (ret.IsUndefined() || ret.IsNull()) {
+    return true;
+  }
+  return ret.ToBoolean().Value();
+}
+
 // ---------------------------------------------------------------------
 // Workbook ObjectWrap
 // ---------------------------------------------------------------------
@@ -168,17 +270,67 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
 
   // Recalc + save.
   Napi::Value Recalc(const Napi::CallbackInfo& info);
+  Napi::Value PartialRecalc(const Napi::CallbackInfo& info);
+  Napi::Value SetIterative(const Napi::CallbackInfo& info);
+  Napi::Value SetIterativeProgress(const Napi::CallbackInfo& info);
   Napi::Value Save(const Napi::CallbackInfo& info);
 
   // Sheet operations.
   Napi::Value AddSheet(const Napi::CallbackInfo& info);
   Napi::Value RemoveSheet(const Napi::CallbackInfo& info);
   Napi::Value RenameSheet(const Napi::CallbackInfo& info);
+  Napi::Value MoveSheet(const Napi::CallbackInfo& info);
   Napi::Value SheetCount(const Napi::CallbackInfo& info);
   Napi::Value SheetName(const Napi::CallbackInfo& info);
 
+  // Row / column structural edits.
+  Napi::Value InsertRows(const Napi::CallbackInfo& info);
+  Napi::Value DeleteRows(const Napi::CallbackInfo& info);
+  Napi::Value InsertCols(const Napi::CallbackInfo& info);
+  Napi::Value DeleteCols(const Napi::CallbackInfo& info);
+
+  // Iteration / metadata.
+  Napi::Value CellCount(const Napi::CallbackInfo& info);
+  Napi::Value CellAt(const Napi::CallbackInfo& info);
+  Napi::Value DefinedNameCount(const Napi::CallbackInfo& info);
+  Napi::Value DefinedNameAt(const Napi::CallbackInfo& info);
+  Napi::Value TableCount(const Napi::CallbackInfo& info);
+  Napi::Value TableAt(const Napi::CallbackInfo& info);
+  Napi::Value PassthroughCount(const Napi::CallbackInfo& info);
+  Napi::Value PassthroughAt(const Napi::CallbackInfo& info);
+
   // Defined names.
   Napi::Value SetDefinedName(const Napi::CallbackInfo& info);
+
+  // Conditional formatting.
+  Napi::Value EvaluateCfRange(const Napi::CallbackInfo& info);
+
+  // Sheet view / layout.
+  Napi::Value GetSheetView(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetZoom(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetFreeze(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetTabHidden(const Napi::CallbackInfo& info);
+  Napi::Value GetSheetColumns(const Napi::CallbackInfo& info);
+  Napi::Value SetColumnWidth(const Napi::CallbackInfo& info);
+  Napi::Value SetColumnHidden(const Napi::CallbackInfo& info);
+  Napi::Value SetColumnOutline(const Napi::CallbackInfo& info);
+  Napi::Value GetSheetRowOverrides(const Napi::CallbackInfo& info);
+  Napi::Value SetRowHeight(const Napi::CallbackInfo& info);
+  Napi::Value SetRowHidden(const Napi::CallbackInfo& info);
+  Napi::Value SetRowOutline(const Napi::CallbackInfo& info);
+
+  // Styles.
+  Napi::Value GetCellXfIndex(const Napi::CallbackInfo& info);
+  Napi::Value SetCellXfIndex(const Napi::CallbackInfo& info);
+  Napi::Value GetCellXf(const Napi::CallbackInfo& info);
+
+  // Sheet UI features (merges, comments, hyperlinks, validations).
+  Napi::Value AddMerge(const Napi::CallbackInfo& info);
+  Napi::Value GetMerges(const Napi::CallbackInfo& info);
+  Napi::Value GetComment(const Napi::CallbackInfo& info);
+  Napi::Value SetComment(const Napi::CallbackInfo& info);
+  Napi::Value GetHyperlinks(const Napi::CallbackInfo& info);
+  Napi::Value GetValidations(const Napi::CallbackInfo& info);
 
  private:
   /// Extracts a `uint32_t` argument or sets `*ok=false` and surfaces
@@ -186,6 +338,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   static uint32_t ArgU32(const Napi::CallbackInfo& info, size_t idx);
   static double ArgDouble(const Napi::CallbackInfo& info, size_t idx);
   static std::string ArgString(const Napi::CallbackInfo& info, size_t idx);
+  static bool ArgBool(const Napi::CallbackInfo& info, size_t idx);
 
   /// Builds an error-Status envelope when the wrapper has been
   /// finalized / destroyed but JS still holds a reference.
@@ -205,6 +358,13 @@ Workbook::Workbook(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Workbook>(
 
 Workbook::~Workbook() {
   if (handle_ != nullptr) {
+    // If this workbook had the global progress callback installed
+    // we tear that down too -- otherwise the dangling C-callback
+    // pointer would be invoked on a destroyed handle if recalc is
+    // somehow re-driven against the same workbook. The slot itself
+    // keeps the JS function reference alive across the addon's
+    // lifetime; only the per-handle registration is unwound here.
+    (void)fm_workbook_set_iterative_progress(handle_, nullptr, nullptr);
     fm_workbook_destroy(handle_);
     handle_ = nullptr;
   }
@@ -229,6 +389,13 @@ std::string Workbook::ArgString(const Napi::CallbackInfo& info, size_t idx) {
     return std::string();
   }
   return info[idx].ToString().Utf8Value();
+}
+
+bool Workbook::ArgBool(const Napi::CallbackInfo& info, size_t idx) {
+  if (idx >= info.Length()) {
+    return false;
+  }
+  return info[idx].ToBoolean().Value();
 }
 
 // ---- Static factories -----------------------------------------------
@@ -396,6 +563,80 @@ Napi::Value Workbook::Recalc(const Napi::CallbackInfo& info) {
   return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
 }
 
+Napi::Value Workbook::PartialRecalc(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    out.Set("recomputed", Napi::Number::New(env, 0));
+    return out;
+  }
+  // Embind takes the viewport as a JS object; we mirror that shape.
+  fm_viewport vp{};
+  if (info.Length() > 0 && info[0].IsObject()) {
+    Napi::Object vpobj = info[0].As<Napi::Object>();
+    vp.sheet = vpobj.Get("sheet").ToNumber().Uint32Value();
+    vp.first_row = vpobj.Get("firstRow").ToNumber().Uint32Value();
+    vp.last_row = vpobj.Get("lastRow").ToNumber().Uint32Value();
+    vp.first_col = vpobj.Get("firstCol").ToNumber().Uint32Value();
+    vp.last_col = vpobj.Get("lastCol").ToNumber().Uint32Value();
+  }
+  uint32_t recomputed = 0;
+  fm_status_t rc = fm_workbook_partial_recalc(handle_, &vp, &recomputed);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    out.Set("recomputed", Napi::Number::New(env, 0));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("recomputed", Napi::Number::New(env, recomputed));
+  return out;
+}
+
+Napi::Value Workbook::SetIterative(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const bool enabled = ArgBool(info, 0);
+  const uint32_t max_iter = ArgU32(info, 1);
+  const double max_change = ArgDouble(info, 2);
+  fm_status_t rc = fm_workbook_set_iterative(handle_, enabled ? 1 : 0, static_cast<int32_t>(max_iter), max_change);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::SetIterativeProgress(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  ProgressSlot& slot = js_progress_slot();
+  // Passing null / undefined clears the callback. Anything else MUST be
+  // a JS function -- we surface a 7000-band error if it is not.
+  if (info.Length() < 1 || info[0].IsNull() || info[0].IsUndefined()) {
+    if (slot.installed) {
+      slot.fn.Reset();
+      slot.installed = false;
+    }
+    fm_status_t rc = fm_workbook_set_iterative_progress(handle_, nullptr, nullptr);
+    return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  }
+  if (!info[0].IsFunction()) {
+    return MakeErrorStatus(env, kBindingNullPointer);
+  }
+  // Persist the JS function in the module-global slot. A FunctionReference
+  // with refcount=1 keeps the function alive against GC for as long as
+  // the slot owns it. Replace any previous registration.
+  if (slot.installed) {
+    slot.fn.Reset();
+  }
+  slot.fn = Napi::Persistent(info[0].As<Napi::Function>());
+  slot.fn.SuppressDestruct();
+  slot.installed = true;
+  fm_status_t rc = fm_workbook_set_iterative_progress(handle_, &IterativeProgressTrampoline, nullptr);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
 Napi::Value Workbook::Save(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
@@ -457,6 +698,17 @@ Napi::Value Workbook::RenameSheet(const Napi::CallbackInfo& info) {
   return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
 }
 
+Napi::Value Workbook::MoveSheet(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t from_idx = ArgU32(info, 0);
+  const uint32_t to_idx = ArgU32(info, 1);
+  fm_status_t rc = fm_workbook_move_sheet(handle_, from_idx, to_idx);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
 Napi::Value Workbook::SheetCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
@@ -486,6 +738,190 @@ Napi::Value Workbook::SheetName(const Napi::CallbackInfo& info) {
   return out;
 }
 
+// ---- Row / column structural edits ----------------------------------
+
+Napi::Value Workbook::InsertRows(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t count = ArgU32(info, 2);
+  fm_status_t rc = fm_workbook_insert_rows(handle_, sheet, row, count);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::DeleteRows(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t count = ArgU32(info, 2);
+  fm_status_t rc = fm_workbook_delete_rows(handle_, sheet, row, count);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::InsertCols(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  const uint32_t col = ArgU32(info, 1);
+  const uint32_t count = ArgU32(info, 2);
+  fm_status_t rc = fm_workbook_insert_cols(handle_, sheet, col, count);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::DeleteCols(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  const uint32_t col = ArgU32(info, 1);
+  const uint32_t count = ArgU32(info, 2);
+  fm_status_t rc = fm_workbook_delete_cols(handle_, sheet, col, count);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+// ---- Iteration / metadata accessors ---------------------------------
+
+Napi::Value Workbook::CellCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::Number::New(env, 0);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  std::size_t count = 0;
+  if (fm_workbook_cell_count(handle_, sheet, &count) != 0) {
+    return Napi::Number::New(env, 0);
+  }
+  return Napi::Number::New(env, static_cast<double>(count));
+}
+
+Napi::Value Workbook::CellAt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 1));
+  uint32_t row = 0;
+  uint32_t col = 0;
+  const char* formula = nullptr;
+  fm_value_t v{};
+  fm_status_t rc = fm_workbook_cell_at(handle_, sheet, idx, &row, &col, &formula, &v);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("row", Napi::Number::New(env, row));
+  out.Set("col", Napi::Number::New(env, col));
+  if (formula != nullptr) {
+    out.Set("formula", Napi::String::New(env, formula));
+  } else {
+    out.Set("formula", env.Null());
+  }
+  out.Set("value", TranslateValue(env, v));
+  return out;
+}
+
+Napi::Value Workbook::DefinedNameCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::Number::New(env, 0);
+  }
+  return Napi::Number::New(env, static_cast<double>(fm_workbook_defined_name_count(handle_)));
+}
+
+Napi::Value Workbook::DefinedNameAt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
+  const char* name = nullptr;
+  const char* formula = nullptr;
+  fm_status_t rc = fm_workbook_defined_name_at(handle_, idx, &name, &formula);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("name", Napi::String::New(env, name != nullptr ? name : ""));
+  out.Set("formula", Napi::String::New(env, formula != nullptr ? formula : ""));
+  return out;
+}
+
+Napi::Value Workbook::TableCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::Number::New(env, 0);
+  }
+  return Napi::Number::New(env, static_cast<double>(fm_workbook_table_count(handle_)));
+}
+
+Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
+  const char* name = nullptr;
+  const char* display = nullptr;
+  const char* ref = nullptr;
+  std::size_t sheet_index = 0;
+  fm_status_t rc = fm_workbook_table_at(handle_, idx, &name, &display, &ref, &sheet_index);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("name", Napi::String::New(env, name != nullptr ? name : ""));
+  out.Set("displayName", Napi::String::New(env, display != nullptr ? display : ""));
+  out.Set("ref", Napi::String::New(env, ref != nullptr ? ref : ""));
+  out.Set("sheetIndex", Napi::Number::New(env, static_cast<double>(sheet_index)));
+  return out;
+}
+
+Napi::Value Workbook::PassthroughCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::Number::New(env, 0);
+  }
+  return Napi::Number::New(env, static_cast<double>(fm_workbook_passthrough_count(handle_)));
+}
+
+Napi::Value Workbook::PassthroughAt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
+  const char* path = nullptr;
+  fm_status_t rc = fm_workbook_passthrough_at(handle_, idx, &path);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("path", Napi::String::New(env, path != nullptr ? path : ""));
+  return out;
+}
+
 // ---- Defined names --------------------------------------------------
 
 Napi::Value Workbook::SetDefinedName(const Napi::CallbackInfo& info) {
@@ -499,6 +935,475 @@ Napi::Value Workbook::SetDefinedName(const Napi::CallbackInfo& info) {
   return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
 }
 
+// ---- Conditional formatting -----------------------------------------
+
+Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    out.Set("cells", Napi::Array::New(env));
+    return out;
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  const uint32_t first_row = ArgU32(info, 1);
+  const uint32_t first_col = ArgU32(info, 2);
+  const uint32_t last_row = ArgU32(info, 3);
+  const uint32_t last_col = ArgU32(info, 4);
+  const double today_serial = ArgDouble(info, 5);
+  fm_cf_results_t* results = nullptr;
+  fm_status_t rc =
+      fm_workbook_cf_evaluate_range(handle_, sheet, first_row, first_col, last_row, last_col, today_serial, &results);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    out.Set("cells", Napi::Array::New(env));
+    return out;
+  }
+  const std::size_t cell_count = fm_cf_results_cell_count(results);
+  Napi::Array cells = Napi::Array::New(env, cell_count);
+  std::size_t emitted = 0;
+  for (std::size_t i = 0; i < cell_count; ++i) {
+    uint32_t row = 0;
+    uint32_t col = 0;
+    std::size_t match_count = 0;
+    if (fm_cf_results_cell_at(results, i, &row, &col, &match_count) != 0) {
+      // Defensive: skip entries the C ABI declines to materialise.
+      continue;
+    }
+    Napi::Array matches = Napi::Array::New(env, match_count);
+    std::size_t mj = 0;
+    for (std::size_t j = 0; j < match_count; ++j) {
+      fm_cf_match_t m{};
+      if (fm_cf_results_match_at(results, i, j, &m) != 0) {
+        continue;
+      }
+      matches.Set(static_cast<uint32_t>(mj), TranslateCfMatch(env, m));
+      ++mj;
+    }
+    Napi::Object cell = Napi::Object::New(env);
+    cell.Set("row", Napi::Number::New(env, row));
+    cell.Set("col", Napi::Number::New(env, col));
+    cell.Set("matches", matches);
+    cells.Set(static_cast<uint32_t>(emitted), cell);
+    ++emitted;
+  }
+  fm_cf_results_destroy(results);
+  out.Set("status", MakeOkStatus(env));
+  out.Set("cells", cells);
+  return out;
+}
+
+// ---- Sheet view / layout --------------------------------------------
+
+Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    Napi::Object view = Napi::Object::New(env);
+    view.Set("zoomScale", Napi::Number::New(env, 100));
+    view.Set("freezeRows", Napi::Number::New(env, 0));
+    view.Set("freezeCols", Napi::Number::New(env, 0));
+    view.Set("tabHidden", Napi::Number::New(env, 0));
+    out.Set("view", view);
+    return out;
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  fm_sheet_view_t v{};
+  fm_status_t rc = fm_sheet_get_view(handle_, sheet, &v);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    Napi::Object view = Napi::Object::New(env);
+    view.Set("zoomScale", Napi::Number::New(env, 100));
+    view.Set("freezeRows", Napi::Number::New(env, 0));
+    view.Set("freezeCols", Napi::Number::New(env, 0));
+    view.Set("tabHidden", Napi::Number::New(env, 0));
+    out.Set("view", view);
+    return out;
+  }
+  Napi::Object view = Napi::Object::New(env);
+  view.Set("zoomScale", Napi::Number::New(env, v.zoom_scale));
+  view.Set("freezeRows", Napi::Number::New(env, v.freeze_rows));
+  view.Set("freezeCols", Napi::Number::New(env, v.freeze_cols));
+  view.Set("tabHidden", Napi::Number::New(env, v.tab_hidden));
+  out.Set("status", MakeOkStatus(env));
+  out.Set("view", view);
+  return out;
+}
+
+Napi::Value Workbook::SetSheetZoom(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t zoom = ArgU32(info, 1);
+  fm_status_t rc = fm_sheet_set_zoom(handle_, sheet, zoom);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::SetSheetFreeze(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t freeze_rows = ArgU32(info, 1);
+  const uint32_t freeze_cols = ArgU32(info, 2);
+  fm_status_t rc = fm_sheet_set_freeze(handle_, sheet, freeze_rows, freeze_cols);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::SetSheetTabHidden(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const bool hidden = ArgBool(info, 1);
+  fm_status_t rc = fm_sheet_set_tab_hidden(handle_, sheet, hidden ? 1 : 0);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::GetSheetColumns(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    out.Set("columns", Napi::Array::New(env));
+    return out;
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  std::size_t count = 0;
+  fm_status_t rc = fm_sheet_get_column_count(handle_, sheet, &count);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    out.Set("columns", Napi::Array::New(env));
+    return out;
+  }
+  Napi::Array arr = Napi::Array::New(env, count);
+  std::size_t emitted = 0;
+  for (std::size_t i = 0; i < count; ++i) {
+    fm_column_layout_t entry{};
+    if (fm_sheet_get_column(handle_, sheet, i, &entry) != 0) {
+      continue;
+    }
+    Napi::Object col = Napi::Object::New(env);
+    col.Set("first", Napi::Number::New(env, entry.first));
+    col.Set("last", Napi::Number::New(env, entry.last));
+    col.Set("width", Napi::Number::New(env, entry.width));
+    col.Set("hidden", Napi::Number::New(env, entry.hidden));
+    col.Set("outlineLevel", Napi::Number::New(env, static_cast<int32_t>(entry.outline_level)));
+    arr.Set(static_cast<uint32_t>(emitted), col);
+    ++emitted;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("columns", arr);
+  return out;
+}
+
+Napi::Value Workbook::SetColumnWidth(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t first = ArgU32(info, 1);
+  const uint32_t last = ArgU32(info, 2);
+  const double width = ArgDouble(info, 3);
+  fm_status_t rc = fm_sheet_set_column_width(handle_, sheet, first, last, width);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::SetColumnHidden(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t first = ArgU32(info, 1);
+  const uint32_t last = ArgU32(info, 2);
+  const bool hidden = ArgBool(info, 3);
+  fm_status_t rc = fm_sheet_set_column_hidden(handle_, sheet, first, last, hidden ? 1 : 0);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::SetColumnOutline(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t first = ArgU32(info, 1);
+  const uint32_t last = ArgU32(info, 2);
+  uint32_t level = ArgU32(info, 3);
+  if (level > 255U) {
+    level = 255U;
+  }
+  fm_status_t rc = fm_sheet_set_column_outline(handle_, sheet, first, last, static_cast<uint8_t>(level));
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::GetSheetRowOverrides(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    out.Set("rows", Napi::Array::New(env));
+    return out;
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  std::size_t count = 0;
+  fm_status_t rc = fm_sheet_get_row_override_count(handle_, sheet, &count);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    out.Set("rows", Napi::Array::New(env));
+    return out;
+  }
+  Napi::Array arr = Napi::Array::New(env, count);
+  std::size_t emitted = 0;
+  for (std::size_t i = 0; i < count; ++i) {
+    fm_row_layout_t entry{};
+    if (fm_sheet_get_row_override(handle_, sheet, i, &entry) != 0) {
+      continue;
+    }
+    Napi::Object row = Napi::Object::New(env);
+    row.Set("row", Napi::Number::New(env, entry.row));
+    row.Set("height", Napi::Number::New(env, entry.height));
+    row.Set("hidden", Napi::Number::New(env, entry.hidden));
+    row.Set("outlineLevel", Napi::Number::New(env, static_cast<int32_t>(entry.outline_level)));
+    arr.Set(static_cast<uint32_t>(emitted), row);
+    ++emitted;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("rows", arr);
+  return out;
+}
+
+Napi::Value Workbook::SetRowHeight(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t row = ArgU32(info, 1);
+  const double height = ArgDouble(info, 2);
+  fm_status_t rc = fm_sheet_set_row_height(handle_, sheet, row, height);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::SetRowHidden(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t row = ArgU32(info, 1);
+  const bool hidden = ArgBool(info, 2);
+  fm_status_t rc = fm_sheet_set_row_hidden(handle_, sheet, row, hidden ? 1 : 0);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::SetRowOutline(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t row = ArgU32(info, 1);
+  uint32_t level = ArgU32(info, 2);
+  if (level > 255U) {
+    level = 255U;
+  }
+  fm_status_t rc = fm_sheet_set_row_outline(handle_, sheet, row, static_cast<uint8_t>(level));
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+// ---- Styles ---------------------------------------------------------
+
+Napi::Value Workbook::GetCellXfIndex(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    out.Set("xfIndex", Napi::Number::New(env, 0));
+    return out;
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t col = ArgU32(info, 2);
+  uint32_t xf = 0;
+  fm_status_t rc = fm_cell_get_xf_index(handle_, sheet, row, col, &xf);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    out.Set("xfIndex", Napi::Number::New(env, 0));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("xfIndex", Napi::Number::New(env, xf));
+  return out;
+}
+
+Napi::Value Workbook::SetCellXfIndex(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t col = ArgU32(info, 2);
+  const uint32_t xf = ArgU32(info, 3);
+  fm_status_t rc = fm_cell_set_xf_index(handle_, sheet, row, col, xf);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::GetCellXf(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  const uint32_t xf_index = ArgU32(info, 0);
+  fm_cell_xf xf{};
+  fm_status_t rc = fm_styles_get_cell_xf(handle_, xf_index, &xf);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("fontIndex", Napi::Number::New(env, xf.font_index));
+  out.Set("fillIndex", Napi::Number::New(env, xf.fill_index));
+  out.Set("borderIndex", Napi::Number::New(env, xf.border_index));
+  out.Set("numFmtId", Napi::Number::New(env, static_cast<uint32_t>(xf.num_fmt_id)));
+  out.Set("horizontalAlign", Napi::Number::New(env, static_cast<uint32_t>(xf.horizontal_align)));
+  out.Set("verticalAlign", Napi::Number::New(env, static_cast<uint32_t>(xf.vertical_align)));
+  out.Set("wrapText", Napi::Boolean::New(env, xf.wrap_text != 0));
+  return out;
+}
+
+// ---- Sheet UI features (merges, comments, hyperlinks, validations) --
+
+Napi::Value Workbook::AddMerge(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  fm_merge_range m{};
+  if (info.Length() > 1 && info[1].IsObject()) {
+    Napi::Object range = info[1].As<Napi::Object>();
+    m.first_row = range.Get("firstRow").ToNumber().Uint32Value();
+    m.last_row = range.Get("lastRow").ToNumber().Uint32Value();
+    m.first_col = range.Get("firstCol").ToNumber().Uint32Value();
+    m.last_col = range.Get("lastCol").ToNumber().Uint32Value();
+  }
+  fm_status_t rc = fm_sheet_add_merge(handle_, sheet, m);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::GetMerges(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Array arr = Napi::Array::New(env);
+  if (handle_ == nullptr) {
+    return arr;
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  uint32_t count = 0;
+  if (fm_sheet_get_merge_count(handle_, sheet, &count) != 0) {
+    return arr;
+  }
+  std::size_t emitted = 0;
+  for (uint32_t i = 0; i < count; ++i) {
+    fm_merge_range m{};
+    if (fm_sheet_get_merge_at(handle_, sheet, i, &m) != 0) {
+      continue;
+    }
+    Napi::Object item = Napi::Object::New(env);
+    item.Set("firstRow", Napi::Number::New(env, m.first_row));
+    item.Set("lastRow", Napi::Number::New(env, m.last_row));
+    item.Set("firstCol", Napi::Number::New(env, m.first_col));
+    item.Set("lastCol", Napi::Number::New(env, m.last_col));
+    arr.Set(static_cast<uint32_t>(emitted), item);
+    ++emitted;
+  }
+  return arr;
+}
+
+Napi::Value Workbook::GetComment(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return env.Null();
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t col = ArgU32(info, 2);
+  fm_comment c{};
+  if (fm_sheet_get_comment_at(handle_, sheet, row, col, &c) != 0) {
+    return env.Null();
+  }
+  Napi::Object o = Napi::Object::New(env);
+  o.Set("author", Napi::String::New(env, c.author != nullptr ? c.author : ""));
+  o.Set("text", Napi::String::New(env, c.text != nullptr ? c.text : ""));
+  return o;
+}
+
+Napi::Value Workbook::SetComment(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t col = ArgU32(info, 2);
+  const std::string author = ArgString(info, 3);
+  const std::string text = ArgString(info, 4);
+  // Empty strings turn into NULL in the C ABI to remove an entry,
+  // matching the embind binding's contract.
+  const char* author_c = author.empty() ? nullptr : author.c_str();
+  const char* text_c = text.empty() ? nullptr : text.c_str();
+  fm_status_t rc = fm_sheet_set_comment(handle_, sheet, row, col, author_c, text_c);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::GetHyperlinks(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Array arr = Napi::Array::New(env);
+  if (handle_ == nullptr) {
+    return arr;
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  uint32_t count = 0;
+  if (fm_sheet_get_hyperlink_count(handle_, sheet, &count) != 0) {
+    return arr;
+  }
+  std::size_t emitted = 0;
+  for (uint32_t i = 0; i < count; ++i) {
+    fm_hyperlink h{};
+    if (fm_sheet_get_hyperlink_at(handle_, sheet, i, &h) != 0) {
+      continue;
+    }
+    Napi::Object item = Napi::Object::New(env);
+    item.Set("row", Napi::Number::New(env, h.row));
+    item.Set("col", Napi::Number::New(env, h.col));
+    item.Set("target", Napi::String::New(env, h.target != nullptr ? h.target : ""));
+    item.Set("display", Napi::String::New(env, h.display != nullptr ? h.display : ""));
+    item.Set("tooltip", Napi::String::New(env, h.tooltip != nullptr ? h.tooltip : ""));
+    arr.Set(static_cast<uint32_t>(emitted), item);
+    ++emitted;
+  }
+  return arr;
+}
+
+Napi::Value Workbook::GetValidations(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  // Mirrors the embind stub: the C ABI does not yet expose a validation
+  // iterator. The structural contract stays an empty Array<...>; once the
+  // iterator lands, both bindings light up simultaneously.
+  (void)info;
+  return Napi::Array::New(env);
+}
+
 // ---- Class registration ---------------------------------------------
 
 Napi::Function Workbook::GetClass(Napi::Env env) {
@@ -507,20 +1412,58 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
                          StaticMethod<&Workbook::CreateDefault>("createDefault"),
                          StaticMethod<&Workbook::CreateEmpty>("createEmpty"),
                          StaticMethod<&Workbook::LoadBytes>("loadBytes"),
-                         InstanceMethod<&Workbook::SetNumber>("setNumber"),
-                         InstanceMethod<&Workbook::SetBool>("setBool"),
-                         InstanceMethod<&Workbook::SetText>("setText"),
-                         InstanceMethod<&Workbook::SetBlank>("setBlank"),
-                         InstanceMethod<&Workbook::SetFormula>("setFormula"),
-                         InstanceMethod<&Workbook::GetValue>("getValue"),
-                         InstanceMethod<&Workbook::Recalc>("recalc"),
-                         InstanceMethod<&Workbook::Save>("save"),
+                         InstanceMethod<&Workbook::AddMerge>("addMerge"),
                          InstanceMethod<&Workbook::AddSheet>("addSheet"),
+                         InstanceMethod<&Workbook::CellAt>("cellAt"),
+                         InstanceMethod<&Workbook::CellCount>("cellCount"),
+                         InstanceMethod<&Workbook::DefinedNameAt>("definedNameAt"),
+                         InstanceMethod<&Workbook::DefinedNameCount>("definedNameCount"),
+                         InstanceMethod<&Workbook::DeleteCols>("deleteCols"),
+                         InstanceMethod<&Workbook::DeleteRows>("deleteRows"),
+                         InstanceMethod<&Workbook::EvaluateCfRange>("evaluateCfRange"),
+                         InstanceMethod<&Workbook::GetCellXf>("getCellXf"),
+                         InstanceMethod<&Workbook::GetCellXfIndex>("getCellXfIndex"),
+                         InstanceMethod<&Workbook::GetComment>("getComment"),
+                         InstanceMethod<&Workbook::GetHyperlinks>("getHyperlinks"),
+                         InstanceMethod<&Workbook::GetMerges>("getMerges"),
+                         InstanceMethod<&Workbook::GetSheetColumns>("getSheetColumns"),
+                         InstanceMethod<&Workbook::GetSheetRowOverrides>("getSheetRowOverrides"),
+                         InstanceMethod<&Workbook::GetSheetView>("getSheetView"),
+                         InstanceMethod<&Workbook::GetValidations>("getValidations"),
+                         InstanceMethod<&Workbook::GetValue>("getValue"),
+                         InstanceMethod<&Workbook::InsertCols>("insertCols"),
+                         InstanceMethod<&Workbook::InsertRows>("insertRows"),
+                         InstanceMethod<&Workbook::MoveSheet>("moveSheet"),
+                         InstanceMethod<&Workbook::PartialRecalc>("partialRecalc"),
+                         InstanceMethod<&Workbook::PassthroughAt>("passthroughAt"),
+                         InstanceMethod<&Workbook::PassthroughCount>("passthroughCount"),
+                         InstanceMethod<&Workbook::Recalc>("recalc"),
                          InstanceMethod<&Workbook::RemoveSheet>("removeSheet"),
                          InstanceMethod<&Workbook::RenameSheet>("renameSheet"),
+                         InstanceMethod<&Workbook::Save>("save"),
+                         InstanceMethod<&Workbook::SetBlank>("setBlank"),
+                         InstanceMethod<&Workbook::SetBool>("setBool"),
+                         InstanceMethod<&Workbook::SetCellXfIndex>("setCellXfIndex"),
+                         InstanceMethod<&Workbook::SetColumnHidden>("setColumnHidden"),
+                         InstanceMethod<&Workbook::SetColumnOutline>("setColumnOutline"),
+                         InstanceMethod<&Workbook::SetColumnWidth>("setColumnWidth"),
+                         InstanceMethod<&Workbook::SetComment>("setComment"),
+                         InstanceMethod<&Workbook::SetDefinedName>("setDefinedName"),
+                         InstanceMethod<&Workbook::SetFormula>("setFormula"),
+                         InstanceMethod<&Workbook::SetIterative>("setIterative"),
+                         InstanceMethod<&Workbook::SetIterativeProgress>("setIterativeProgress"),
+                         InstanceMethod<&Workbook::SetNumber>("setNumber"),
+                         InstanceMethod<&Workbook::SetRowHeight>("setRowHeight"),
+                         InstanceMethod<&Workbook::SetRowHidden>("setRowHidden"),
+                         InstanceMethod<&Workbook::SetRowOutline>("setRowOutline"),
+                         InstanceMethod<&Workbook::SetSheetFreeze>("setSheetFreeze"),
+                         InstanceMethod<&Workbook::SetSheetTabHidden>("setSheetTabHidden"),
+                         InstanceMethod<&Workbook::SetSheetZoom>("setSheetZoom"),
+                         InstanceMethod<&Workbook::SetText>("setText"),
                          InstanceMethod<&Workbook::SheetCount>("sheetCount"),
                          InstanceMethod<&Workbook::SheetName>("sheetName"),
-                         InstanceMethod<&Workbook::SetDefinedName>("setDefinedName"),
+                         InstanceMethod<&Workbook::TableAt>("tableAt"),
+                         InstanceMethod<&Workbook::TableCount>("tableCount"),
                      });
 }
 

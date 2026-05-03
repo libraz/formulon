@@ -38,6 +38,14 @@ export const ValueKind = Object.freeze({
   Lambda: 7,
 });
 
+/** `fm_cf_match_kind_t` ordinals (mirror of `formulon::cf::CFMatchKind`). */
+export const CfMatchKind = Object.freeze({
+  DifferentialFormat: 0,
+  ColorScale: 1,
+  DataBar: 2,
+  IconSet: 3,
+});
+
 export default {
   Workbook,
   evalFormula,
@@ -46,4 +54,5 @@ export default {
   lastErrorContext,
   statusString,
   ValueKind,
+  CfMatchKind,
 };

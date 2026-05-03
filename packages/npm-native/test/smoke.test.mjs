@@ -123,3 +123,145 @@ test('save() returns Uint8Array; loadBytes round-trips the value', async () => {
   assert.equal(r.value.kind, mod.ValueKind.Number);
   assert.equal(r.value.number, 42);
 });
+
+// -- Expanded surface coverage -----------------------------------------
+// These tests exercise the methods the addon mirrors from the embind
+// binding. They are deliberately shallow: each call should round-trip
+// some observable state without crashing the Node process.
+
+test('addMerge + getMerges round-trip a single range', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const range = { firstRow: 1, firstCol: 1, lastRow: 2, lastCol: 3 };
+  const ar = wb.addMerge(0, range);
+  assert.ok(ar.ok, `addMerge: ${JSON.stringify(ar)}`);
+  const list = wb.getMerges(0);
+  assert.ok(Array.isArray(list), `expected Array, got ${typeof list}`);
+  assert.equal(list.length, 1);
+  assert.deepEqual(
+    {
+      firstRow: list[0].firstRow,
+      firstCol: list[0].firstCol,
+      lastRow: list[0].lastRow,
+      lastCol: list[0].lastCol,
+    },
+    range,
+  );
+});
+
+test('setSheetZoom + getSheetView surface the new zoom', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.ok(wb.setSheetZoom(0, 175).ok);
+  const v = wb.getSheetView(0);
+  assert.ok(v.status.ok, `getSheetView: ${JSON.stringify(v.status)}`);
+  assert.equal(v.view.zoomScale, 175);
+  // Default freeze / tab-hidden state survives a zoom change.
+  assert.equal(v.view.freezeRows, 0);
+  assert.equal(v.view.freezeCols, 0);
+  assert.equal(v.view.tabHidden, 0);
+});
+
+test('insertRows shifts an existing literal forward', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  // Populate row 0; insert one row at row 0; the literal is now at row 1.
+  assert.ok(wb.setNumber(0, 0, 0, 99).ok);
+  assert.ok(wb.insertRows(0, 0, 1).ok);
+  const r0 = wb.getValue(0, 0, 0);
+  assert.ok(r0.status.ok);
+  // The freshly-inserted row 0 is blank.
+  assert.equal(r0.value.kind, mod.ValueKind.Blank);
+  const r1 = wb.getValue(0, 1, 0);
+  assert.ok(r1.status.ok);
+  assert.equal(r1.value.kind, mod.ValueKind.Number);
+  assert.equal(r1.value.number, 99);
+});
+
+test('setCellXfIndex + getCellXfIndex round-trip the xf id', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  // Seed the cell so the xf attaches to a stored slot.
+  assert.ok(wb.setNumber(0, 0, 0, 1).ok);
+  // xfIndex 0 is always the default xf and is guaranteed to be valid.
+  assert.ok(wb.setCellXfIndex(0, 0, 0, 0).ok);
+  const r = wb.getCellXfIndex(0, 0, 0);
+  assert.ok(r.status.ok, `getCellXfIndex: ${JSON.stringify(r.status)}`);
+  assert.equal(typeof r.xfIndex, 'number');
+  assert.equal(r.xfIndex, 0);
+});
+
+test('setIterativeProgress accepts a function and accepts null to clear', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  // Registration roundtrip; we don't assert the callback fires because
+  // a non-iterative recalc never invokes the trampoline. The smoke
+  // signal we want is "the addon does not crash on register / clear".
+  const cb = () => true;
+  const reg = wb.setIterativeProgress(cb);
+  assert.ok(reg.ok, `setIterativeProgress(fn): ${JSON.stringify(reg)}`);
+  const clr = wb.setIterativeProgress(null);
+  assert.ok(clr.ok, `setIterativeProgress(null): ${JSON.stringify(clr)}`);
+});
+
+test('evaluateCfRange returns ok envelope with empty cells for a CF-less workbook', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  // The default workbook has no CF rules, so the call should succeed
+  // and return an empty cell list. NaN disables `TimePeriod` rules.
+  const r = wb.evaluateCfRange(0, 0, 0, 4, 4, Number.NaN);
+  assert.ok(r.status.ok, `evaluateCfRange: ${JSON.stringify(r.status)}`);
+  assert.ok(Array.isArray(r.cells));
+  assert.equal(r.cells.length, 0);
+});
+
+test('comments round-trip: setComment + getComment', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  // Pre-existing cell so the comment attaches to a stored slot.
+  assert.ok(wb.setNumber(0, 1, 1, 7).ok);
+  const sc = wb.setComment(0, 1, 1, 'libraz', 'hello world');
+  assert.ok(sc.ok, `setComment: ${JSON.stringify(sc)}`);
+  const c = wb.getComment(0, 1, 1);
+  assert.ok(c !== null, 'expected non-null CommentEntry');
+  assert.equal(c.author, 'libraz');
+  assert.equal(c.text, 'hello world');
+  // Removing surfaces null on the next read.
+  assert.ok(wb.setComment(0, 1, 1, '', '').ok);
+  assert.equal(wb.getComment(0, 1, 1), null);
+});
+
+test('cellCount + cellAt enumerate stored cells', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.ok(wb.setNumber(0, 0, 0, 1).ok);
+  assert.ok(wb.setNumber(0, 0, 1, 2).ok);
+  assert.ok(wb.setFormula(0, 1, 0, '=A1+B1').ok);
+  assert.ok(wb.recalc().ok);
+  const n = wb.cellCount(0);
+  assert.equal(typeof n, 'number');
+  assert.ok(n >= 3, `expected >= 3 stored cells, got ${n}`);
+  // Iterate; one of the entries should carry our formula.
+  let foundFormula = false;
+  for (let i = 0; i < n; ++i) {
+    const e = wb.cellAt(0, i);
+    assert.ok(e.status.ok, `cellAt(${i}): ${JSON.stringify(e.status)}`);
+    assert.equal(typeof e.row, 'number');
+    assert.equal(typeof e.col, 'number');
+    if (e.formula === '=A1+B1') {
+      foundFormula = true;
+      assert.equal(e.value.kind, mod.ValueKind.Number);
+      assert.equal(e.value.number, 3);
+    }
+  }
+  assert.ok(foundFormula, 'expected to find the =A1+B1 cell during iteration');
+});
+
+test('default export exposes CfMatchKind ordinals', async () => {
+  const mod = await getModule();
+  assert.equal(typeof mod.CfMatchKind, 'object');
+  assert.equal(mod.CfMatchKind.DifferentialFormat, 0);
+  assert.equal(mod.CfMatchKind.ColorScale, 1);
+  assert.equal(mod.CfMatchKind.DataBar, 2);
+  assert.equal(mod.CfMatchKind.IconSet, 3);
+});
