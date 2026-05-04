@@ -10,6 +10,7 @@
 //   * Out-of-range or non-finite codes surface `#VALUE!`.
 //   * Truncating dispatch: 9.7 -> SUM, 109.4 -> SUM (matches Excel).
 
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <string_view>
