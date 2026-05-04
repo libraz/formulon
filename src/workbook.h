@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "io/defined_names.h"
+#include "io/external_links.h"
 #include "io/passthrough_part.h"
 #include "io/styles_reader.h"
 #include "io/tables_reader.h"
@@ -327,6 +328,16 @@ class Workbook {
   /// preserved parts.
   void set_passthrough_parts(std::vector<io::PassthroughPart> parts) { passthrough_parts_ = std::move(parts); }
 
+  /// Read-only access to the workbook's external-link list (in
+  /// `<externalReferences>` document order). Each entry surfaces the
+  /// relationship metadata for one cross-workbook reference; the body
+  /// part itself round-trips through `passthrough_parts()` unchanged.
+  const std::vector<io::ExternalLinkRecord>& external_links() const noexcept { return external_links_; }
+
+  /// Replaces the workbook's external-link list. Move-assigns to keep
+  /// the I/O hand-off allocation-free.
+  void set_external_links(std::vector<io::ExternalLinkRecord> links) { external_links_ = std::move(links); }
+
   // ---------------------------------------------------------------------------
   // Pivot caches
   // ---------------------------------------------------------------------------
@@ -489,6 +500,7 @@ class Workbook {
   std::vector<io::DefinedName> defined_names_;
   std::vector<io::TableMetadata> tables_;
   std::vector<io::PassthroughPart> passthrough_parts_;
+  std::vector<io::ExternalLinkRecord> external_links_;
   // Pivot caches owned by the workbook. One cache may be referenced by
   // multiple pivot tables (per `Sheet::pivot_tables()`).
   std::vector<std::unique_ptr<pivot::PivotCache>> pivot_caches_;

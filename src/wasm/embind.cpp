@@ -1661,6 +1661,43 @@ class JsWorkbook {
     return o;
   }
 
+  /// Returns the number of external-link records carried by the
+  /// workbook. Always 0 for fresh workbooks.
+  uint32_t externalLinkCount() const {
+    if (handle_ == nullptr) {
+      return 0U;
+    }
+    uint32_t n = 0;
+    if (fm_workbook_external_link_count(handle_, &n) != 0) {
+      return 0U;
+    }
+    return n;
+  }
+
+  /// Returns the `index`-th external-link record. The result object
+  /// follows the same `{ status, ... }` envelope as the styles getters.
+  emscripten::val getExternalLink(uint32_t index) const {
+    emscripten::val o = emscripten::val::object();
+    if (handle_ == nullptr) {
+      o.set("status", error_status(7000));
+      return o;
+    }
+    fm_external_link_record_t rec{};
+    fm_status_t rc = fm_workbook_external_link_at(handle_, index, &rec);
+    if (rc != 0) {
+      o.set("status", error_status(rc));
+      return o;
+    }
+    o.set("status", ok_status());
+    o.set("index", rec.index);
+    o.set("relId", std::string(rec.rel_id != nullptr ? rec.rel_id : ""));
+    o.set("partPath", std::string(rec.part_path != nullptr ? rec.part_path : ""));
+    o.set("target", std::string(rec.target != nullptr ? rec.target : ""));
+    o.set("targetExternal", rec.target_external != 0);
+    o.set("kind", rec.kind);
+    return o;
+  }
+
   // ---- Sheet UI features (merges, hyperlinks, comments, validations) ------
   // Each accessor returns a JS-friendly value (Array<...> or null) so JS
   // callers don't need to step through count + getter pairs.
@@ -2526,6 +2563,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("deleteRows", &JsWorkbook::deleteRows)
       .function("dependents", &JsWorkbook::dependents)
       .function("evaluateCfRange", &JsWorkbook::evaluateCfRange)
+      .function("externalLinkCount", &JsWorkbook::externalLinkCount)
       .function("fillCount", &JsWorkbook::fillCount)
       .function("fontCount", &JsWorkbook::fontCount)
       .function("functionMetadata", &JsWorkbook::functionMetadata)
@@ -2537,6 +2575,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getCellXfIndex", &JsWorkbook::getCellXfIndex)
       .function("getComment", &JsWorkbook::getComment)
       .function("getConditionalFormats", &JsWorkbook::getConditionalFormats)
+      .function("getExternalLink", &JsWorkbook::getExternalLink)
       .function("getFill", &JsWorkbook::getFill)
       .function("getFont", &JsWorkbook::getFont)
       .function("getHyperlinks", &JsWorkbook::getHyperlinks)

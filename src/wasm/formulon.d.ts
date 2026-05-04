@@ -600,6 +600,41 @@ export interface LambdaTextResult {
   text: string;
 }
 
+/** External-link kinds. Mirrors
+ *  `formulon::io::ExternalLinkRecord::Kind`. */
+export const enum ExternalLinkKind {
+  Unknown = 0,
+  ExternalBook = 1,
+  Ole = 2,
+  Dde = 3,
+}
+
+/** Return type of `Workbook.getExternalLink(index)`. Mirrors
+ *  `formulon::io::ExternalLinkRecord`. The body part itself is not
+ *  exposed (it round-trips through the OOXML passthrough mechanism);
+ *  this surface only enumerates the cross-workbook references and
+ *  their resolved target URLs. */
+export interface ExternalLinkResult {
+  status: Status;
+  /** 1-based document order matching `<externalReferences>` in
+   *  `xl/workbook.xml`. */
+  index: number;
+  /** Workbook-rels Id ("rId3" etc.). */
+  relId: string;
+  /** Resolved package-relative path of the body part (e.g.
+   *  `xl/externalLinks/externalLink1.xml`). */
+  partPath: string;
+  /** Remote workbook URL (e.g. `file:///path/book.xlsx`,
+   *  `https://example/sheet.xlsx`). Empty when the per-link rels file
+   *  was missing or unparseable. */
+  target: string;
+  /** Whether the per-link rels relationship was emitted with
+   *  `TargetMode="External"` (the common case). */
+  targetExternal: boolean;
+  /** One of `ExternalLinkKind.*`. */
+  kind: number;
+}
+
 /** Return type of `Workbook.getCellStyle(index)`. Mirrors
  *  `formulon::io::CellStyleRecord`. `xfId` indexes into the named-style
  *  xf table reachable via `Workbook.getCellStyleXf(...)`. */
@@ -844,6 +879,15 @@ export interface Workbook {
   /** Returns the named-style xf record at `index`. Output shape mirrors
    *  `getCellXf`. */
   getCellStyleXf(index: number): CellXfResult;
+
+  /** Returns the number of external-link records carried by the
+   *  workbook. Zero for fresh workbooks and any package whose source
+   *  archive had no `<externalReferences>` block. */
+  externalLinkCount(): number;
+  /** Returns the external-link record at `index` (0-based, mapped onto
+   *  the 1-based `<externalReferences>` document order). Out-of-range
+   *  indices surface `kInvalidArgument` via `status`. */
+  getExternalLink(index: number): ExternalLinkResult;
 
   /** Adds a merge range to `sheet`. */
   addMerge(sheet: number, range: MergeRange): Status;

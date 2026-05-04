@@ -34,6 +34,7 @@
 #include "io/cf_reader.h"
 #include "io/comments_reader.h"
 #include "io/defined_names.h"
+#include "io/external_links.h"
 #include "io/pivot_cache_reader.h"
 #include "io/pivot_table_reader.h"
 #include "io/sheet_reader.h"
@@ -77,6 +78,12 @@ constexpr std::string_view kRelComments =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
 constexpr std::string_view kRelVmlDrawing =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
+constexpr std::string_view kRelExternalLink =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink";
+constexpr std::string_view kRelExternalLinkPath =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath";
+constexpr std::string_view kRelOleLink = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleLink";
+constexpr std::string_view kRelDdeLink = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/ddeLink";
 
 // Content types we expect to see referenced from `[Content_Types].xml`.
 // We only look up the workbook content type to verify the package is
@@ -359,6 +366,7 @@ struct WorkbookRels {
   std::string sst_path;
   std::string styles_path;
   std::unordered_map<std::string, std::string> pivot_cache_definition_paths_by_rid;
+  std::unordered_map<std::string, std::string> external_link_paths_by_rid;
 };
 
 /// Loads `<workbook_dir>/_rels/<workbook_filename>.rels` (if present) and
@@ -434,6 +442,12 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
         continue;
       }
       rels.pivot_cache_definition_paths_by_rid.emplace(id, ResolveRelativePath(base_dir, target));
+    } else if (type == kRelExternalLink) {
+      const std::string id = rel.attribute("Id").value();
+      if (id.empty()) {
+        continue;
+      }
+      rels.external_link_paths_by_rid.emplace(id, ResolveRelativePath(base_dir, target));
     }
   }
   return rels;
@@ -453,6 +467,132 @@ std::string SheetRelsPath(std::string_view sheet_path) {
     out.append("/_rels/");
     out.append(sheet_path.substr(slash + 1));
     out.append(".rels");
+  }
+  return out;
+}
+
+/// Walks `<externalReferences>` in the parsed workbook document and
+/// joins each entry against `wb_rels` to build one `ExternalLinkRecord`
+/// per `<externalReference>` in document order. For each resolved body
+/// part the helper additionally classifies the link kind by peeking at
+/// the body's root element and captures the target URL from the per-link
+/// rels file. Missing / unparseable parts produce an `kUnknown` record
+/// rather than failing the load: round-trip preservation matters more
+/// here than strict validation, and Excel itself tolerates partially-
+/// broken external link sections.
+///
+/// `consumed_rels_paths` collects the paths of per-link rels files the
+/// reader observed so the caller can mark them as consumed (the writer
+/// regenerates them from the captured records). The body part itself
+/// stays in `passthrough_parts()` because its inner `r:id` references
+/// — captured here in `body_rel_id` — are preserved by-value through
+/// the writer's per-link rels emission.
+struct ExternalLinkLoadResult {
+  std::vector<ExternalLinkRecord> records;
+  std::vector<std::string> consumed_rels_paths;
+};
+
+ExternalLinkLoadResult LoadExternalLinks(const ZipReader& zip, const pugi::xml_node& wb_root,
+                                         const WorkbookRels& wb_rels) {
+  ExternalLinkLoadResult out;
+  pugi::xml_node refs_node = wb_root.child("externalReferences");
+  if (!refs_node) {
+    return out;
+  }
+  std::uint32_t index = 1;
+  for (pugi::xml_node ref = refs_node.child("externalReference"); ref;
+       ref = ref.next_sibling("externalReference"), ++index) {
+    std::string rid = ref.attribute("r:id").value();
+    if (rid.empty()) {
+      rid = ref.attribute("id").value();
+    }
+    if (rid.empty()) {
+      continue;
+    }
+    auto it = wb_rels.external_link_paths_by_rid.find(rid);
+    if (it == wb_rels.external_link_paths_by_rid.end()) {
+      continue;
+    }
+    ExternalLinkRecord rec;
+    rec.index = index;
+    rec.rel_id = std::move(rid);
+    rec.part_path = it->second;
+    rec.kind = ExternalLinkRecord::Kind::kUnknown;
+
+    // Body part — detect kind and capture the inner r:id reference.
+    if (zip.has_entry(rec.part_path)) {
+      auto body_or = zip.read_entry(rec.part_path);
+      if (body_or) {
+        const std::vector<std::uint8_t>& body_bytes = body_or.value();
+        pugi::xml_document body_doc;
+        pugi::xml_parse_result body_parse =
+            body_doc.load_buffer(body_bytes.data(), body_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
+        if (body_parse) {
+          pugi::xml_node link_root = body_doc.child("externalLink");
+          if (link_root) {
+            if (pugi::xml_node book = link_root.child("externalBook"); book) {
+              rec.kind = ExternalLinkRecord::Kind::kExternalBook;
+              std::string body_rid = book.attribute("r:id").value();
+              if (body_rid.empty()) {
+                body_rid = book.attribute("id").value();
+              }
+              rec.body_rel_id = std::move(body_rid);
+            } else if (pugi::xml_node ole = link_root.child("oleLink"); ole) {
+              rec.kind = ExternalLinkRecord::Kind::kOleLink;
+              std::string body_rid = ole.attribute("r:id").value();
+              if (body_rid.empty()) {
+                body_rid = ole.attribute("id").value();
+              }
+              rec.body_rel_id = std::move(body_rid);
+            } else if (link_root.child("ddeLink")) {
+              rec.kind = ExternalLinkRecord::Kind::kDdeLink;
+              // ddeLink carries its connection metadata inline; no inner r:id.
+            }
+          }
+        }
+      }
+    }
+
+    // Per-link rels — capture target URL + target_mode for round-trip.
+    const std::string body_rels_path = SheetRelsPath(rec.part_path);
+    if (zip.has_entry(body_rels_path)) {
+      auto rels_or = zip.read_entry(body_rels_path);
+      if (rels_or) {
+        const std::vector<std::uint8_t>& rels_bytes = rels_or.value();
+        pugi::xml_document rels_doc;
+        pugi::xml_parse_result rels_parse =
+            rels_doc.load_buffer(rels_bytes.data(), rels_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
+        if (rels_parse) {
+          pugi::xml_node rels_root = rels_doc.child("Relationships");
+          if (rels_root) {
+            // Pick the relationship whose Id matches the body's inner
+            // r:id when available; otherwise take the first link-typed
+            // relationship as a best-effort fallback.
+            for (pugi::xml_node rel = rels_root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+              const std::string_view type = rel.attribute("Type").value();
+              if (type != kRelExternalLinkPath && type != kRelOleLink && type != kRelDdeLink) {
+                continue;
+              }
+              const std::string_view rel_id = rel.attribute("Id").value();
+              const bool id_match = !rec.body_rel_id.empty() && rel_id == rec.body_rel_id;
+              if (rec.target.empty() || id_match) {
+                rec.target = rel.attribute("Target").value();
+                const std::string_view target_mode = rel.attribute("TargetMode").value();
+                rec.target_external = (target_mode == "External") || target_mode.empty();
+                if (rec.body_rel_id.empty()) {
+                  rec.body_rel_id = rel_id;
+                }
+                if (id_match) {
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+      out.consumed_rels_paths.push_back(body_rels_path);
+    }
+    out.records.push_back(std::move(rec));
   }
   return out;
 }
@@ -1225,6 +1365,20 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   // 8. Tables — already accumulated in the per-sheet loop above. Move
   // the workbook-scope vector onto the workbook for round-trip.
   wb.set_tables(std::move(tables_metadata));
+
+  // 8b. External links. Joins `<externalReferences>` against the
+  // workbook rels and the per-link rels files. The body parts continue
+  // to round-trip through `passthrough_parts()`; only the per-link rels
+  // files are marked as consumed (their content is regenerated by the
+  // writer from the captured records). Failure-tolerant: malformed
+  // sections produce `kUnknown` records rather than failing the load.
+  {
+    ExternalLinkLoadResult ext = LoadExternalLinks(zip, wb_root, wb_rels);
+    for (const std::string& rels_path : ext.consumed_rels_paths) {
+      consumed_parts.insert(rels_path);
+    }
+    wb.set_external_links(std::move(ext.records));
+  }
 
   // 9. Pivot caches. The workbook XML's `<pivotCaches>` element pairs
   // each `cacheId` with a workbook-scoped relationship id; the

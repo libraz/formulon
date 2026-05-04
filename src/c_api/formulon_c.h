@@ -2186,6 +2186,70 @@ FM_API fm_status_t fm_styles_add_num_fmt(fm_workbook_t* wb, const char* format_c
 FM_API fm_status_t fm_styles_add_cell_xf(fm_workbook_t* wb, fm_cell_xf record, uint32_t* out_xf_index);
 
 /* -------------------------------------------------------------------------- */
+/* External links                                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Kind discriminator for `fm_external_link_record_t::kind`. Values
+ *        mirror `formulon::io::ExternalLinkRecord::Kind`.
+ */
+#define FM_EXTERNAL_LINK_KIND_UNKNOWN 0u
+#define FM_EXTERNAL_LINK_KIND_EXTERNAL_BOOK 1u
+#define FM_EXTERNAL_LINK_KIND_OLE 2u
+#define FM_EXTERNAL_LINK_KIND_DDE 3u
+
+/**
+ * @brief Plain-data projection of `formulon::io::ExternalLinkRecord`.
+ *
+ * `rel_id`, `part_path`, and `target` are NUL-terminated UTF-8 pointers
+ * borrowed from the workbook's external-links table; they remain valid
+ * until the workbook is destroyed or the external-links table is
+ * replaced (currently only the OOXML reader replaces it; there is no
+ * mutator on this surface). `target_external` follows the wide-POD
+ * convention used elsewhere on this surface.
+ *
+ * `index` is the 1-based position in `<externalReferences>` document
+ * order. `kind` matches the `FM_EXTERNAL_LINK_KIND_*` constants above.
+ * `target` is empty when the per-link rels file was missing or
+ * unparseable; callers that need the URL to be present should check
+ * `target[0] != '\0'` before using it.
+ */
+typedef struct {
+  uint32_t index;          /* 1-based document order */
+  const char* rel_id;      /* workbook.xml.rels rId for this link */
+  const char* part_path;   /* resolved package-relative body path */
+  const char* target;      /* remote workbook URL, or "" */
+  int32_t target_external; /* TargetMode="External" => 1 */
+  uint32_t kind;           /* one of FM_EXTERNAL_LINK_KIND_* */
+} fm_external_link_record_t;
+
+/**
+ * @brief Returns the number of external-link records carried by the
+ *        workbook.
+ *
+ * Always succeeds for a non-NULL workbook. Returns `0` for fresh
+ * workbooks and any package whose source archive had no
+ * `<externalReferences>` block.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ */
+FM_API fm_status_t fm_workbook_external_link_count(fm_workbook_t* wb, uint32_t* out_count);
+
+/**
+ * @brief Reads the `index`-th external-link record (1-based document
+ *        order minus one — i.e. `0` is the first `<externalReference>`).
+ *
+ * The returned string pointers borrow workbook-owned storage; see
+ * `fm_external_link_record_t` for lifetime rules.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `index >= external_link_count`.
+ */
+FM_API fm_status_t fm_workbook_external_link_at(fm_workbook_t* wb, uint32_t index, fm_external_link_record_t* out);
+
+/* -------------------------------------------------------------------------- */
 /* Version                                                                    */
 /* -------------------------------------------------------------------------- */
 
