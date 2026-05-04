@@ -61,6 +61,8 @@
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
+#include "eval/lambda_format.h"
+#include "eval/lambda_value.h"
 #include "eval/recalc_engine.h"
 #include "io/ooxml_reader.h"
 #include "io/styles_reader.h"
@@ -558,6 +560,36 @@ extern "C" fm_status_t fm_workbook_get_value(const fm_workbook_t* wb, size_t she
   // the workbook's observable state.
   TextStore& store = const_cast<TextStore&>(wb->text_store);
   value_to_fm(v, store, out);
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_lambda_text_at(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                                  const char** out_text) {
+  clear_last_error();
+  if (wb == nullptr || out_text == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_lambda_text_at: NULL argument");
+  }
+  if (sheet_index >= wb->workbook().sheet_count()) {
+    return set_binding_error(
+        formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_lambda_text_at: sheet_index out of range",
+        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  }
+  const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
+  if (cell == nullptr || !cell->cached_value.is_lambda()) {
+    return set_binding_error(
+        formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_lambda_text_at: cell does not hold a lambda value",
+        "sheet_index=" + std::to_string(sheet_index) + " row=" + std::to_string(row) + " col=" + std::to_string(col));
+  }
+  const formulon::eval::LambdaValue* lv = cell->cached_value.as_lambda();
+  if (lv == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_lambda_text_at: lambda payload is NULL");
+  }
+  std::string formatted = formulon::eval::format_lambda_value(*lv);
+  TextStore& store = const_cast<TextStore&>(wb->text_store);
+  store.emplace_back(std::move(formatted));
+  *out_text = store.back().c_str();
   return 0;
 }
 

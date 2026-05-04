@@ -447,6 +447,31 @@ FM_API fm_status_t fm_workbook_set_formula(fm_workbook_t* wb, size_t sheet_index
 FM_API fm_status_t fm_workbook_get_value(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                          fm_value_t* out);
 
+/**
+ * @brief Renders the lambda closure stored at `(sheet_index, row, col)`
+ *        as Excel formula text.
+ *
+ * Use this to recover a printable form of a `Value::Lambda` whose
+ * source is otherwise opaque — for example, a cell whose formula
+ * evaluates to a lambda via `=LET(...) -> LAMBDA(...)` rather than
+ * carrying a literal `LAMBDA(...)` in the formula text. The rendering
+ * is the full surface form `LAMBDA(p1,p2,body)` (no leading `=`),
+ * suitable for re-parsing through `fm_workbook_set_formula`.
+ *
+ * On success `*out_text` borrows a NUL-terminated UTF-8 pointer owned
+ * by the workbook handle's text store. The pointer is valid until the
+ * handle is destroyed; subsequent calls that intern strings (cell text
+ * writes, value reads) do not invalidate it because the underlying
+ * `std::deque<std::string>` preserves references on growth.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range, the
+ *         cell is absent, or the cached value is not a lambda.
+ */
+FM_API fm_status_t fm_workbook_lambda_text_at(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                              const char** out_text);
+
 /* -------------------------------------------------------------------------- */
 /* Iteration / dump                                                           */
 /* -------------------------------------------------------------------------- */

@@ -589,6 +589,17 @@ export interface NumFmtResult {
   formatCode: string;
 }
 
+/** Return type of `Workbook.getLambdaText(sheet, row, col)`. The
+ *  rendered text never carries a leading `=` and is suitable for
+ *  passing back through `setFormula`. `kInvalidArgument` surfaces when
+ *  the cell is absent or its cached value is not a lambda. */
+export interface LambdaTextResult {
+  status: Status;
+  /** Excel formula text in `LAMBDA(p1,p2,body)` form. Empty string
+   *  when `status` is non-OK. */
+  text: string;
+}
+
 /** Return type of `Workbook.getCellStyle(index)`. Mirrors
  *  `formulon::io::CellStyleRecord`. `xfId` indexes into the named-style
  *  xf table reachable via `Workbook.getCellStyleXf(...)`. */
@@ -674,6 +685,11 @@ export interface Workbook {
   setFormula(sheet: number, row: number, col: number, formula: string): Status;
 
   getValue(sheet: number, row: number, col: number): CellResult;
+
+  /** Renders the lambda value stored at `(sheet, row, col)` as Excel
+   *  formula text. Returns `kInvalidArgument` when the cell is absent
+   *  or its cached value is not a lambda. */
+  getLambdaText(sheet: number, row: number, col: number): LambdaTextResult;
 
   recalc(): Status;
   /** Recalculates only cells touched by the supplied viewport. */

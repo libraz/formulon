@@ -713,6 +713,29 @@ class JsWorkbook {
     return r;
   }
 
+  /// Renders the lambda closure stored at `(sheet, row, col)` as the
+  /// surface form `LAMBDA(p1,p2,body)` (no leading `=`). Returns
+  /// `{ status, text }`; `kInvalidArgument` when the cell is absent or
+  /// does not hold a lambda value.
+  emscripten::val getLambdaText(uint32_t sheet, uint32_t row, uint32_t col) const {
+    emscripten::val o = emscripten::val::object();
+    if (handle_ == nullptr) {
+      o.set("status", error_status(7000));
+      o.set("text", std::string());
+      return o;
+    }
+    const char* text = nullptr;
+    fm_status_t rc = fm_workbook_lambda_text_at(handle_, sheet, row, col, &text);
+    if (rc != 0) {
+      o.set("status", error_status(rc));
+      o.set("text", std::string());
+      return o;
+    }
+    o.set("status", ok_status());
+    o.set("text", std::string(text != nullptr ? text : ""));
+    return o;
+  }
+
   /// Drives a full incremental recalc.
   JsStatus recalc() {
     if (handle_ == nullptr) {
@@ -2517,6 +2540,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getFill", &JsWorkbook::getFill)
       .function("getFont", &JsWorkbook::getFont)
       .function("getHyperlinks", &JsWorkbook::getHyperlinks)
+      .function("getLambdaText", &JsWorkbook::getLambdaText)
       .function("getMerges", &JsWorkbook::getMerges)
       .function("getNumFmt", &JsWorkbook::getNumFmt)
       .function("getSheetColumns", &JsWorkbook::getSheetColumns)
