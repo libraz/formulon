@@ -1161,6 +1161,49 @@ extern "C" fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, int32_t enab
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_calc_mode(const fm_workbook_t* wb, fm_calc_mode_t* out_mode) {
+  clear_last_error();
+  if (wb == nullptr || out_mode == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_calc_mode: NULL argument");
+  }
+  switch (wb->workbook().calc_mode()) {
+    case formulon::Workbook::CalcMode::kAuto:
+      *out_mode = FM_CALC_MODE_AUTO;
+      break;
+    case formulon::Workbook::CalcMode::kManual:
+      *out_mode = FM_CALC_MODE_MANUAL;
+      break;
+    case formulon::Workbook::CalcMode::kAutoNoTable:
+      *out_mode = FM_CALC_MODE_AUTO_NO_TABLE;
+      break;
+  }
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, fm_calc_mode_t mode) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_set_calc_mode: wb is NULL");
+  }
+  formulon::Workbook::CalcMode resolved = formulon::Workbook::CalcMode::kAuto;
+  switch (mode) {
+    case FM_CALC_MODE_AUTO:
+      resolved = formulon::Workbook::CalcMode::kAuto;
+      break;
+    case FM_CALC_MODE_MANUAL:
+      resolved = formulon::Workbook::CalcMode::kManual;
+      break;
+    case FM_CALC_MODE_AUTO_NO_TABLE:
+      resolved = formulon::Workbook::CalcMode::kAutoNoTable;
+      break;
+    default:
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                               "fm_workbook_set_calc_mode: unknown mode");
+  }
+  wb->workbook().set_calc_mode(resolved);
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_partial_recalc(fm_workbook_t* wb, const fm_viewport* viewport,
                                                   uint32_t* out_recomputed_count) {
   clear_last_error();

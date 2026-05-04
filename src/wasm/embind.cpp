@@ -696,6 +696,28 @@ class JsWorkbook {
     return rc == 0 ? ok_status() : error_status(rc);
   }
 
+  /// Returns the workbook's calc mode as the underlying enum value:
+  /// `0` = auto, `1` = manual, `2` = autoNoTable. Defaults to `0` for an
+  /// invalid handle so the JS side never sees an error envelope here.
+  uint32_t calcMode() const {
+    if (handle_ == nullptr) {
+      return static_cast<uint32_t>(FM_CALC_MODE_AUTO);
+    }
+    fm_calc_mode_t mode = FM_CALC_MODE_AUTO;
+    fm_workbook_calc_mode(handle_, &mode);
+    return static_cast<uint32_t>(mode);
+  }
+
+  /// Sets the workbook's calc mode. Accepts the same enum codes as
+  /// `calcMode()`. Returns `kInvalidArgument` for unknown values.
+  JsStatus setCalcMode(uint32_t mode) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_set_calc_mode(handle_, static_cast<fm_calc_mode_t>(mode));
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
   /// Drives a viewport-bounded incremental recalc.
   ///
   /// `viewport` is a JS object of the shape
@@ -2250,6 +2272,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("addValidation", &JsWorkbook::addValidation)
       .function("addXf", &JsWorkbook::addXf)
       .function("borderCount", &JsWorkbook::borderCount)
+      .function("calcMode", &JsWorkbook::calcMode)
       .function("canonicalizeFunctionName", &JsWorkbook::canonicalizeFunctionName)
       .function("cellAt", &JsWorkbook::cellAt)
       .function("cellCount", &JsWorkbook::cellCount)
@@ -2303,6 +2326,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("save", &JsWorkbook::save)
       .function("setBlank", &JsWorkbook::setBlank)
       .function("setBool", &JsWorkbook::setBool)
+      .function("setCalcMode", &JsWorkbook::setCalcMode)
       .function("setCellXfIndex", &JsWorkbook::setCellXfIndex)
       .function("setColumnHidden", &JsWorkbook::setColumnHidden)
       .function("setColumnOutline", &JsWorkbook::setColumnOutline)

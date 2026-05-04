@@ -4,6 +4,7 @@
 # touches the pure-C surface declared in `src/c_api/formulon_c.h`.
 
 set(FORMULON_C_API_TEST_SOURCES
+  formulon_c_calc_mode_test.cpp
   formulon_c_cf_test.cpp
   formulon_c_function_metadata_test.cpp
   formulon_c_sheet_features_test.cpp

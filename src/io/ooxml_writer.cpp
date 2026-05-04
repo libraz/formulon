@@ -26,6 +26,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/iterative_solver.h"
 #include "io/cf_writer.h"
 #include "io/comments_writer.h"
 #include "io/defined_names.h"
@@ -41,6 +42,7 @@
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
+#include "utils/double_format.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/structured_log.h"
@@ -534,9 +536,42 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   // <definedNames> sits between <sheets> and <calcPr>/end-of-workbook
   // per OOXML schema (cf. ECMA-376 sheet ordering).
   AppendDefinedNamesBlock(out, wb.defined_names());
-  // <pivotCaches> follows <definedNames> in the ECMA-376 schema element
-  // order: sheets, functionGroups, externalReferences, definedNames,
-  // calcPr, oleSize, customWorkbookViews, pivotCaches, ...
+  // <calcPr> persists Excel's workbook-level calculation policy
+  // (`calcMode` + iterative trio). Emit only when at least one
+  // attribute differs from the spec defaults so a fresh workbook keeps
+  // emitting a minimal, diff-friendly part. Element order per ECMA-376:
+  // sheets, functionGroups, externalReferences, definedNames, calcPr,
+  // oleSize, customWorkbookViews, pivotCaches, ...
+  {
+    const Workbook::CalcMode calc_mode = wb.calc_mode();
+    const eval::IterativeOptions& iter = wb.iterative_options();
+    const bool calc_mode_default = calc_mode == Workbook::CalcMode::kAuto;
+    const bool iterate_default = !iter.enabled && iter.max_iterations == eval::kDefaultMaxIterations &&
+                                 iter.max_change == eval::kDefaultMaxChange;
+    if (!calc_mode_default || !iterate_default) {
+      out.append("  <calcPr");
+      if (calc_mode == Workbook::CalcMode::kManual) {
+        out.append(" calcMode=\"manual\"");
+      } else if (calc_mode == Workbook::CalcMode::kAutoNoTable) {
+        out.append(" calcMode=\"autoNoTable\"");
+      }
+      if (iter.enabled) {
+        out.append(" iterate=\"1\"");
+      }
+      if (iter.max_iterations != eval::kDefaultMaxIterations) {
+        out.append(" iterateCount=\"");
+        out.append(std::to_string(iter.max_iterations));
+        out.push_back('"');
+      }
+      if (iter.max_change != eval::kDefaultMaxChange) {
+        out.append(" iterateDelta=\"");
+        format_double(out, iter.max_change);
+        out.push_back('"');
+      }
+      out.append("/>\n");
+    }
+  }
+  // <pivotCaches> follows <calcPr> in the ECMA-376 schema element order.
   if (!plan.pivot_caches.empty()) {
     out.append("  <pivotCaches>\n");
     for (const EmissionPlan::PivotCachePlan& c : plan.pivot_caches) {

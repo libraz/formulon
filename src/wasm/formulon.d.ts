@@ -113,6 +113,22 @@ export enum CfMatchKind {
   IconSet = 3,
 }
 
+/**
+ * Workbook-level calc mode (`<calcPr calcMode>`).
+ *
+ * - `Auto` — recalc on every input change (Excel default).
+ * - `Manual` — only recalc when explicitly requested.
+ * - `AutoNoTable` — recalc on every change EXCEPT data-table cells.
+ *
+ * Round-trip metadata only — the engine recalcs all dirty cells
+ * regardless of which mode is set.
+ */
+export enum CalcMode {
+  Auto = 0,
+  Manual = 1,
+  AutoNoTable = 2,
+}
+
 /** RGBA colour. Channels are 0-255 (sRGB). */
 export interface CfColor {
   r: number;
@@ -607,6 +623,17 @@ export interface Workbook {
    *  after each Gauss-Seidel sweep. Only one callback can be active per
    *  WASM instance — installing a new one displaces the previous. */
   setIterativeProgress(callback: IterativeProgressCallback | null): Status;
+
+  /**
+   * Workbook-level calc mode (Excel `<calcPr calcMode>` policy).
+   *
+   * Returns one of `CalcMode` codes. The engine itself does NOT gate
+   * evaluation on this value — every `recalc()` call honours all dirty
+   * cells. The mode is preserved as round-trip metadata and surfaced
+   * here so the UI can mirror Excel's user-visible state.
+   */
+  calcMode(): CalcMode;
+  setCalcMode(mode: CalcMode): Status;
 
   /** Inserts `count` rows at `row` on `sheet` and rewrites cross-workbook
    *  references to follow the shift. */

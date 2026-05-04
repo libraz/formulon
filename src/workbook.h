@@ -369,6 +369,34 @@ class Workbook {
   void set_kind(io::WorkbookKind kind) noexcept { kind_ = kind; }
 
   // ---------------------------------------------------------------------------
+  // Calculation mode (workbook-level `<calcPr>` policy)
+  // ---------------------------------------------------------------------------
+  //
+  // Excel's "Calculation options" workbook setting. `kAuto` is the
+  // default; `kManual` suppresses automatic recalc on input, leaving
+  // it to the host UI to drive `recalc()` explicitly; `kAutoNoTable`
+  // recalcs everything except data-table cells. The engine itself
+  // does not gate evaluation on this setting (every `recalc()` call
+  // honours all dirty cells); it is preserved as round-trip metadata
+  // and surfaced through the bindings so the host UI can mirror
+  // Excel's user-visible state.
+
+  /// Excel calc-mode enum. Mirrors the `calcMode` attribute on
+  /// `<calcPr>` (`auto` / `manual` / `autoNoTable`).
+  enum class CalcMode : std::uint8_t {
+    kAuto = 0,
+    kManual = 1,
+    kAutoNoTable = 2,
+  };
+
+  /// Returns the workbook-level calc mode. Defaults to `kAuto`.
+  CalcMode calc_mode() const noexcept { return calc_mode_; }
+
+  /// Sets the workbook-level calc mode. Plain metadata — does not
+  /// affect the recalc engine's evaluation policy.
+  void set_calc_mode(CalcMode mode) noexcept { calc_mode_ = mode; }
+
+  // ---------------------------------------------------------------------------
   // Styles
   // ---------------------------------------------------------------------------
   //
@@ -469,6 +497,10 @@ class Workbook {
   // emitting the workbook content-type Override. Plain data; no
   // lifecycle implications.
   io::WorkbookKind kind_ = io::WorkbookKind::kXlsx;
+  // Workbook-level calc mode. Round-trip metadata mirroring `<calcPr
+  // calcMode=...>`. Default `kAuto` matches a freshly created
+  // workbook in Excel.
+  CalcMode calc_mode_ = CalcMode::kAuto;
   // Workbook-scoped style records (fonts, fills, borders, num fmts,
   // and the cellXfs index that ties them together). The default table
   // is empty and the writer falls back to a minimal-but-valid styles

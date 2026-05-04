@@ -859,6 +859,52 @@ FM_API fm_status_t fm_workbook_recalc(fm_workbook_t* wb);
 FM_API fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, int32_t enabled, int32_t max_iterations,
                                              double max_change);
 
+/* -------------------------------------------------------------------------- */
+/* Calculation mode (workbook-level `<calcPr calcMode>` policy)               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Workbook-level calculation mode.
+ *
+ * Mirrors Excel's "Calculation options" workbook setting and the
+ * `calcMode` attribute on the `<calcPr>` element. `kAuto` is the
+ * default; `kManual` suppresses automatic recalc on input;
+ * `kAutoNoTable` recalcs everything except data-table cells.
+ *
+ * The engine itself does NOT gate evaluation on this enum (every
+ * `fm_workbook_recalc` call honours all dirty cells); it is preserved
+ * as round-trip metadata and surfaced through this API so the host UI
+ * can mirror Excel's user-visible state.
+ */
+typedef enum {
+  FM_CALC_MODE_AUTO = 0,
+  FM_CALC_MODE_MANUAL = 1,
+  FM_CALC_MODE_AUTO_NO_TABLE = 2,
+} fm_calc_mode_t;
+
+/**
+ * @brief Returns the workbook's calc mode.
+ *
+ * @param wb       Workbook handle. Must not be NULL.
+ * @param out_mode Populated on success.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_mode` is NULL.
+ */
+FM_API fm_status_t fm_workbook_calc_mode(const fm_workbook_t* wb, fm_calc_mode_t* out_mode);
+
+/**
+ * @brief Sets the workbook's calc mode.
+ *
+ * Plain metadata — does not affect evaluation. Unknown enum values
+ * (outside the documented range) return `kInvalidArgument`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` if `mode` is not a documented value.
+ */
+FM_API fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, fm_calc_mode_t mode);
+
 /**
  * @brief Workbook-relative viewport rectangle, expressed in 0-based
  *        inclusive coordinates. Used by `fm_workbook_partial_recalc`.

@@ -30,6 +30,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/iterative_solver.h"
 #include "io/cf_reader.h"
 #include "io/comments_reader.h"
 #include "io/defined_names.h"
@@ -845,6 +846,36 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   if (sheet_part_paths.empty()) {
     return make_error(FormulonErrorCode::kIoSheetCorrupt, "workbook.xml: empty <sheets> list",
                       "context=ooxml_reader part=" + workbook_path);
+  }
+
+  // <calcPr> — workbook-level calc mode and iterative-calc options. The
+  // element is optional; absence means Excel defaults (auto + iterative
+  // off). When present, accept the documented `calcMode` values
+  // (`auto` / `manual` / `autoNoTable`) and the iterative trio
+  // (`iterate`, `iterateCount`, `iterateDelta`). Unknown calcMode
+  // strings fall back to `auto` rather than failing the load.
+  if (pugi::xml_node calc_pr = wb_root.child("calcPr"); calc_pr) {
+    const std::string_view calc_mode_attr = calc_pr.attribute("calcMode").value();
+    if (calc_mode_attr == "manual") {
+      wb.set_calc_mode(Workbook::CalcMode::kManual);
+    } else if (calc_mode_attr == "autoNoTable") {
+      wb.set_calc_mode(Workbook::CalcMode::kAutoNoTable);
+    } else {
+      wb.set_calc_mode(Workbook::CalcMode::kAuto);
+    }
+    eval::IterativeOptions opts;
+    if (pugi::xml_attribute iterate = calc_pr.attribute("iterate"); iterate) {
+      const std::string_view v = iterate.value();
+      opts.enabled = (v == "1" || v == "true");
+    }
+    if (pugi::xml_attribute count = calc_pr.attribute("iterateCount"); count) {
+      const long long parsed = count.as_llong(static_cast<long long>(eval::kDefaultMaxIterations));
+      opts.max_iterations = parsed < 1 ? 1U : static_cast<std::uint32_t>(parsed);
+    }
+    if (pugi::xml_attribute delta = calc_pr.attribute("iterateDelta"); delta) {
+      opts.max_change = delta.as_double(eval::kDefaultMaxChange);
+    }
+    wb.set_iterative_options(opts);
   }
 
   // result_text_storage is the workbook-lifetime backing store for every

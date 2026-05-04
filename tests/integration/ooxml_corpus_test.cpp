@@ -1070,18 +1070,9 @@ TEST_P(RoundTripParity, TwoCyclePipeline) {
       << "first read_ooxml failed for '" << book.id << "': " << first_or.error().message;
   io::OoxmlReadResult& first = first_or.value();
 
-  // (3) recalc workbook A so cached values are populated. The
-  // `iterative_circular` and `combined_kitchen_sink` books need
-  // iterative options re-applied because the writer does not yet
-  // persist `<calcPr iterate=...>`; without this the cyclic SCC would
-  // surface #REF!. See the deviation note in the bundle report.
-  if (book.id == "iterative_circular" || book.id == "combined_kitchen_sink") {
-    eval::IterativeOptions opts;
-    opts.enabled = true;
-    opts.max_iterations = 20U;
-    opts.max_change = 0.01;
-    first.workbook.set_iterative_options(opts);
-  }
+  // (3) recalc workbook A so cached values are populated. Iterative
+  // options round-trip through `<calcPr>` (parser + writer), so the
+  // cyclic SCC books no longer need their options re-applied here.
   auto stats_or = first.workbook.recalc(eval::default_registry());
   ASSERT_TRUE(static_cast<bool>(stats_or))
       << "first recalc failed for '" << book.id << "': " << stats_or.error().message;
@@ -1099,14 +1090,8 @@ TEST_P(RoundTripParity, TwoCyclePipeline) {
       << "second read_ooxml failed for '" << book.id << "': " << second_or.error().message;
   io::OoxmlReadResult& second = second_or.value();
 
-  // (6) recalc workbook C, with iterative options re-applied if needed.
-  if (book.id == "iterative_circular" || book.id == "combined_kitchen_sink") {
-    eval::IterativeOptions opts;
-    opts.enabled = true;
-    opts.max_iterations = 20U;
-    opts.max_change = 0.01;
-    second.workbook.set_iterative_options(opts);
-  }
+  // (6) recalc workbook C. Iterative options round-trip via `<calcPr>`
+  // and so are already in place from the second read.
   auto stats2_or = second.workbook.recalc(eval::default_registry());
   ASSERT_TRUE(static_cast<bool>(stats2_or))
       << "second recalc failed for '" << book.id << "': " << stats2_or.error().message;
