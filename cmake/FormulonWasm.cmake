@@ -83,6 +83,9 @@ set(_FM_WASM_COMMON_LINK_FLAGS
   "-sNO_EXIT_RUNTIME=1"
   "-sFILESYSTEM=0"
   "-sDISABLE_EXCEPTION_CATCHING=1"
+  "-sSUPPORT_LONGJMP=0"
+  "-sDYNAMIC_EXECUTION=0"
+  "-sWASM_BIGINT=0"
   "-sMALLOC=emmalloc"
   "-pthread"
   "-sUSE_PTHREADS=1"
@@ -94,6 +97,10 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(_FM_WASM_OPT_FLAGS "-O0;-g")
   set(_FM_WASM_LINK_OPT_FLAGS "-O0;-g;-sASSERTIONS=2")
 else()
+  # -O3 outperforms -Oz on this codebase (measured 2026-05): -Oz with
+  # thinLTO grew the artifact by ~270 KiB because the engine's hot lazy
+  # dispatch tables benefit materially from -O3's inlining heuristics.
+  # The size win comes instead from the wasm-opt post-link pass below.
   set(_FM_WASM_OPT_FLAGS "-O3")
   set(_FM_WASM_LINK_OPT_FLAGS "-O3;-sASSERTIONS=0")
 endif()
@@ -148,6 +155,37 @@ set_target_properties(formulon_wasm PROPERTIES
   OUTPUT_NAME "${_FM_WASM_BASE}"
   SUFFIX ".js"
 )
+
+# Post-build: run wasm-opt with --converge so optimisation passes
+# stabilise (Emscripten's link-time -Oz only invokes wasm-opt once).
+# Located via the binaryen bin dir that ships with the active emcc
+# toolchain. The pass is skipped under Debug to keep symbol info intact.
+if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+  get_filename_component(_FM_EMCC_DIR "${CMAKE_C_COMPILER}" DIRECTORY)
+  find_program(WASM_OPT_EXECUTABLE
+    NAMES wasm-opt
+    HINTS "${_FM_EMCC_DIR}/../binaryen/bin"
+          "${_FM_EMCC_DIR}/binaryen/bin"
+    NO_DEFAULT_PATH
+  )
+  if(NOT WASM_OPT_EXECUTABLE)
+    find_program(WASM_OPT_EXECUTABLE NAMES wasm-opt)
+  endif()
+  if(WASM_OPT_EXECUTABLE)
+    add_custom_command(TARGET formulon_wasm POST_BUILD
+      COMMAND ${WASM_OPT_EXECUTABLE}
+        -Oz --converge
+        --strip-debug --strip-producers
+        --vacuum --dce --rse
+        --enable-bulk-memory --enable-sign-ext --enable-mutable-globals
+        --enable-threads --enable-nontrapping-float-to-int --enable-multivalue
+        --enable-reference-types
+        $<TARGET_FILE_DIR:formulon_wasm>/${_FM_WASM_BASE}.wasm
+        -o $<TARGET_FILE_DIR:formulon_wasm>/${_FM_WASM_BASE}.wasm
+      VERBATIM
+    )
+  endif()
+endif()
 
 # Post-build: print the artifact size (uncompressed + Brotli when
 # available). This is informational only — no enforcement here; the
