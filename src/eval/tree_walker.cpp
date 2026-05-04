@@ -116,6 +116,59 @@ namespace {
 // `find_lazy_impl` and `lazy_table_names` are the only seam this file
 // uses to reach the per-family routing decisions.
 
+// Hard caps on recursion depth. The parser already enforces a parse-depth
+// limit of 128 (see `parser::ParserOptions::max_parse_depth`), which bounds
+// stack growth from a single formula. These two evaluator-side caps defend
+// against the orthogonal vectors that bypass that bound:
+//
+//   * `kMaxEvalDepth` — bounds linear cell-chain recursion through
+//     `EvalContext::resolve_ref`. A workbook of `A1=A2, A2=A3, ..., A1000=1`
+//     is not a cycle (so `EvalState::push_cell` does not flag it), and each
+//     resolved formula spawns a fresh `eval_node` recursion. Without this
+//     cap a chain of ~1000 cells overflows the WASM 256-512 KB stack.
+//
+//   * `kMaxLambdaDepth` — bounds runtime recursion through user-defined
+//     LAMBDA closures (e.g. `LET(f, LAMBDA(n, f(n+1)), f(0))`). The body
+//     AST stays small so `kMaxEvalDepth` does not trigger; the recursion
+//     lives in `invoke_lambda` re-entering itself.
+//
+// On overflow the offending sub-expression returns `#CALC!` (the same
+// Excel-visible code Mac Excel surfaces for indeterminate / runaway lambda
+// recursion). The internal `kEvalStackOverflow` code is reserved for the
+// `Expected<T, Error>` plumbing (currently unused on this path).
+constexpr std::uint32_t kMaxEvalDepth = 512;
+constexpr std::uint32_t kMaxLambdaDepth = 256;
+
+// RAII guard: bumps `*p` on construction (when `*p < cap`) and decrements
+// on destruction. When the cap was already reached, `exceeded()` reports
+// `true` and the counter is left untouched so a later sibling in the same
+// frame does not double-decrement past zero. Null `p` disables tracking
+// entirely — `exceeded()` always returns `false` — which preserves
+// behaviour for ad-hoc callers that bypass `evaluate()`.
+class EvalDepthGuard {
+ public:
+  EvalDepthGuard(std::uint32_t* p, std::uint32_t cap) noexcept : p_(p), exceeded_(p != nullptr && *p >= cap) {
+    if (p_ != nullptr && !exceeded_) {
+      ++(*p_);
+    }
+  }
+  ~EvalDepthGuard() noexcept {
+    if (p_ != nullptr && !exceeded_) {
+      --(*p_);
+    }
+  }
+  EvalDepthGuard(const EvalDepthGuard&) = delete;
+  EvalDepthGuard& operator=(const EvalDepthGuard&) = delete;
+  EvalDepthGuard(EvalDepthGuard&&) = delete;
+  EvalDepthGuard& operator=(EvalDepthGuard&&) = delete;
+
+  bool exceeded() const noexcept { return exceeded_; }
+
+ private:
+  std::uint32_t* p_;
+  bool exceeded_;
+};
+
 // Strips the xlsx-only `_xlfn.` and `_xlfn._xlws.` prefixes from a function
 // name. These prefixes are a storage artifact: xlsx tags post-2007 functions
 // with `_xlfn.` and modern worksheet-only ones (FILTER, XLOOKUP, LET, ...)
@@ -151,6 +204,13 @@ std::string_view strip_future_prefix(std::string_view name) noexcept {
 // work across both invocation paths.
 Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::AstNode* const* call_args, Arena& arena,
                     const FunctionRegistry& registry, const EvalContext& ctx) {
+  // Lambda-depth cap fires before the arity check so a runaway
+  // self-recursion (e.g. `LAMBDA(n, f(n+1))`) cannot keep extending the
+  // call stack on its own dime. See `kMaxLambdaDepth` for rationale.
+  EvalDepthGuard lambda_guard(ctx.lambda_depth_counter(), kMaxLambdaDepth);
+  if (lambda_guard.exceeded()) {
+    return Value::error(ErrorCode::Calc);
+  }
   const std::uint32_t required = lv->param_count - lv->optional_count;
   if (arity < required || arity > lv->param_count) {
     return Value::error(ErrorCode::Value);
@@ -1053,6 +1113,12 @@ const char* const* lazy_form_names() {
 // anonymous namespace above and remains reachable for the same reason
 // (the anonymous namespace is nested inside `formulon::eval`).
 Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
+  // Bounds linear cell-chain recursion through `EvalContext::resolve_ref`
+  // and any other re-entrant evaluator path. See `kMaxEvalDepth`.
+  EvalDepthGuard depth_guard(ctx.eval_depth_counter(), kMaxEvalDepth);
+  if (depth_guard.exceeded()) {
+    return Value::error(ErrorCode::Calc);
+  }
   switch (node.kind()) {
     case parser::NodeKind::Literal:
       return node.as_literal();
@@ -1565,7 +1631,21 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
 }
 
 Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
-  Value v = eval_node(node, arena, registry, ctx);
+  // Allocate the depth counters on this stack frame iff the inbound
+  // context does not already carry them. `EvalContext::resolve_ref`
+  // recursively re-enters `evaluate()` when a referenced cell is a
+  // formula; if that re-entry reset the counters, a linear cell chain
+  // (`A1=A2, A2=A3, ..., A1000=1`) would never trip the cap because
+  // each link would start from zero. Preserving inherited counters lets
+  // `kMaxEvalDepth` bound the cumulative recursion across the chain.
+  // See `kMaxEvalDepth` / `kMaxLambdaDepth` for the policy.
+  std::uint32_t eval_depth = 0;
+  std::uint32_t lambda_depth = 0;
+  EvalContext ctx_with_counters = ctx;
+  if (ctx_with_counters.eval_depth_counter() == nullptr) {
+    ctx_with_counters = ctx_with_counters.with_depth_counters(&eval_depth, &lambda_depth);
+  }
+  Value v = eval_node(node, arena, registry, ctx_with_counters);
   // Excel surfaces a non-IIFE LAMBDA expression sitting at the top of a cell
   // formula as `#CALC!`: `=LAMBDA(x, x+1)` is a closure value with no
   // application site, so the cell renderer cannot project it onto a scalar.

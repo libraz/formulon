@@ -22,19 +22,6 @@
 namespace formulon {
 namespace io {
 
-namespace {
-
-// Hard cap on the uncompressed size of any single ZIP entry. Excel parts
-// rarely exceed a few MB; 100 MiB is well above any realistic per-part
-// payload (sharedStrings.xml and large sheets are the worst offenders and
-// stay under ~30 MB even on million-cell workbooks). The cap blunts ZIP
-// bombs whose 99:1 compression ratio would otherwise allow a few KB of
-// archive bytes to expand into multi-GiB allocations and trigger OOM /
-// DoS during `read_entry`.
-constexpr std::size_t kMaxExtractedBytesPerEntry = 100ULL * 1024ULL * 1024ULL;
-
-}  // namespace
-
 struct ZipReader::Impl {
   mz_zip_archive archive{};
   bool open = false;
@@ -43,6 +30,12 @@ struct ZipReader::Impl {
   // requires a caller-supplied buffer. We keep one resident on the impl
   // so `entry_name` does not allocate per call.
   mutable std::string name_buf;
+
+  // Running total of bytes returned by successful `read_entry` calls
+  // since the last `open()`. Compared against `kMaxTotalExtractedBytes`
+  // so an archive cannot drip-feed individually-legal entries until the
+  // aggregate footprint becomes hostile.
+  mutable std::size_t total_extracted_bytes = 0;
 
   Impl() { name_buf.resize(kInitialNameCapacity); }
 
@@ -97,7 +90,25 @@ Expected<void, Error> ZipReader::open(ByteSpan bytes) {
     return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::open: mz_zip_reader_init_mem failed",
                       std::move(ctx));
   }
+
+  // Reject archives whose central directory advertises an unreasonable
+  // number of parts before we hand a usable reader back. Doing this at
+  // open-time means callers never start iterating through entries that
+  // the policy would refuse anyway, and the cap is enforced even if the
+  // caller never exercises `read_entry`.
+  const mz_uint num_files = mz_zip_reader_get_num_files(&impl_->archive);
+  if (static_cast<std::size_t>(num_files) > kMaxParts) {
+    mz_zip_reader_end(&impl_->archive);
+    std::string ctx("context=zip_reader limit=parts num_files=");
+    ctx.append(std::to_string(static_cast<std::uint64_t>(num_files)));
+    ctx.append(" cap=");
+    ctx.append(std::to_string(static_cast<std::uint64_t>(kMaxParts)));
+    return make_error(FormulonErrorCode::kIoZipBomb, "ZipReader::open: archive entry count exceeds cap",
+                      std::move(ctx));
+  }
+
   impl_->open = true;
+  impl_->total_extracted_bytes = 0;
   return Expected<void, Error>::Ok();
 }
 
@@ -188,7 +199,7 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
     return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::read_entry: stat failed", std::move(ctx));
   }
   if (stat.m_uncomp_size > static_cast<mz_uint64>(kMaxExtractedBytesPerEntry)) {
-    std::string ctx("context=zip_reader entry=");
+    std::string ctx("context=zip_reader limit=entry entry=");
     ctx.append(c_name);
     ctx.append(" uncompressed_size=");
     ctx.append(std::to_string(static_cast<std::uint64_t>(stat.m_uncomp_size)));
@@ -196,6 +207,47 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
     ctx.append(std::to_string(static_cast<std::uint64_t>(kMaxExtractedBytesPerEntry)));
     return make_error(FormulonErrorCode::kIoZipBomb, "ZipReader::read_entry: uncompressed size exceeds per-entry cap",
                       std::move(ctx));
+  }
+
+  // Reject pathological compression ratios. miniz reports `m_comp_size = 0`
+  // for stored (uncompressed) entries; treat that as ratio 1 to avoid a
+  // division by zero and to skip the check for entries that cannot bomb
+  // by construction.
+  if (stat.m_comp_size > 0) {
+    const std::uint64_t ratio =
+        static_cast<std::uint64_t>(stat.m_uncomp_size) / static_cast<std::uint64_t>(stat.m_comp_size);
+    if (ratio > static_cast<std::uint64_t>(kMaxRatio)) {
+      std::string ctx("context=zip_reader limit=ratio entry=");
+      ctx.append(c_name);
+      ctx.append(" uncompressed_size=");
+      ctx.append(std::to_string(static_cast<std::uint64_t>(stat.m_uncomp_size)));
+      ctx.append(" compressed_size=");
+      ctx.append(std::to_string(static_cast<std::uint64_t>(stat.m_comp_size)));
+      ctx.append(" ratio=");
+      ctx.append(std::to_string(ratio));
+      ctx.append(" cap=");
+      ctx.append(std::to_string(static_cast<std::uint64_t>(kMaxRatio)));
+      return make_error(FormulonErrorCode::kIoZipBomb, "ZipReader::read_entry: compression ratio exceeds cap",
+                        std::move(ctx));
+    }
+  }
+
+  // Reject if extracting this entry would push the cumulative footprint
+  // past the per-archive ceiling. Checked against the *advertised*
+  // uncompressed size rather than miniz's eventual heap allocation so the
+  // refusal happens before any heap pressure is exerted.
+  const std::size_t advertised = static_cast<std::size_t>(stat.m_uncomp_size);
+  if (advertised > kMaxTotalExtractedBytes - impl_->total_extracted_bytes) {
+    std::string ctx("context=zip_reader limit=total entry=");
+    ctx.append(c_name);
+    ctx.append(" already_extracted=");
+    ctx.append(std::to_string(static_cast<std::uint64_t>(impl_->total_extracted_bytes)));
+    ctx.append(" entry_uncompressed_size=");
+    ctx.append(std::to_string(static_cast<std::uint64_t>(advertised)));
+    ctx.append(" cap=");
+    ctx.append(std::to_string(static_cast<std::uint64_t>(kMaxTotalExtractedBytes)));
+    return make_error(FormulonErrorCode::kIoZipBomb,
+                      "ZipReader::read_entry: cumulative extracted bytes would exceed cap", std::move(ctx));
   }
 
   std::size_t extracted_size = 0;
@@ -216,6 +268,10 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
     std::memcpy(bytes.data(), extracted, extracted_size);
   }
   mz_free(extracted);
+  // Account for the actual extracted size (which may differ from the
+  // advertised `m_uncomp_size` if miniz had to truncate); the next call
+  // sees the updated cumulative footprint when checking the total cap.
+  impl_->total_extracted_bytes += extracted_size;
   return bytes;
 }
 

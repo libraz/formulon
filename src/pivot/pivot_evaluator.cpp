@@ -21,6 +21,7 @@
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
+#include "utils/checked_mul.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -533,6 +534,17 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   }
 
   // 4. Aggregate per (row_leaf, col_leaf, data_field).
+  //
+  // Defensive overflow guard: on 32-bit `size_t` (WASM) a pathological
+  // pivot configuration with very large axis cardinalities could wrap
+  // `row_leaf_count * col_leaf_count`, leaving the nested vector
+  // inconsistent. Checked multiplication keeps the failure recoverable
+  // (caller surfaces `kFnOverflow`) rather than silently corrupting the
+  // result matrix.
+  auto value_count_or = checked_mul_size_t(row_leaf_count, col_leaf_count);
+  if (!value_count_or) {
+    return value_count_or.error();
+  }
   result.values.assign(row_leaf_count, std::vector<std::vector<Value>>(col_leaf_count));
   for (std::size_t r = 0; r < row_leaf_count; ++r) {
     for (std::size_t c = 0; c < col_leaf_count; ++c) {

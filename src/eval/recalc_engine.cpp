@@ -21,6 +21,7 @@
 #include "eval/dirty_set.h"
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
+#include "eval/recalc_reentry.h"
 #include "eval/volatile_tracker.h"
 #include "parser/ast.h"
 #include "sheet.h"
@@ -114,6 +115,17 @@ void RecalcEngine::mark_dirty_locked(CellNodeId cell) {
 }
 
 Expected<RecalcStats, Error> RecalcEngine::recalc(Workbook& workbook, const FunctionRegistry& registry) {
+  // Same-thread re-entry would deadlock on the non-recursive `mutex_`.
+  // The shared `g_in_recalc` flag (also tracked by `recalc_parallel_impl`)
+  // converts that deadlock into a structured `kGraphRecalcReentrant`
+  // error, which is the friendlier surface for a UDF or progress callback
+  // that accidentally calls back into the engine.
+  if (detail::g_in_recalc) {
+    return make_error(FormulonErrorCode::kGraphRecalcReentrant,
+                      "RecalcEngine::recalc called recursively on the same thread",
+                      "the engine does not support nested recalc; the inner call is rejected");
+  }
+  detail::RecalcReentryGuard reentry_guard;
   std::lock_guard<std::mutex> guard(mutex_);
   return recalc_locked(workbook, registry);
 }
@@ -349,6 +361,14 @@ Expected<RecalcStats, Error> RecalcEngine::recalc_locked(Workbook& workbook, con
 
 Expected<RecalcStats, Error> RecalcEngine::partial_recalc(Workbook& workbook, const FunctionRegistry& registry,
                                                           const SheetCellRange& viewport) {
+  // Mirror `recalc()` re-entry handling: a callback that calls back into a
+  // recalc API would otherwise deadlock on the engine mutex.
+  if (detail::g_in_recalc) {
+    return make_error(FormulonErrorCode::kGraphRecalcReentrant,
+                      "RecalcEngine::partial_recalc called recursively on the same thread",
+                      "the engine does not support nested recalc; the inner call is rejected");
+  }
+  detail::RecalcReentryGuard reentry_guard;
   std::lock_guard<std::mutex> guard(mutex_);
   return partial_recalc_locked(workbook, registry, viewport);
 }

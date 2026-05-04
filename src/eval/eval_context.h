@@ -288,6 +288,32 @@ class EvalContext {
   /// `mutable_sheet()` is the explicit opt-in that authorises spill writes.
   Sheet* mutable_sheet() const noexcept { return mutable_sheet_; }
 
+  /// Returns a pointer to the caller-owned counter that `eval_node` bumps on
+  /// entry / decrements on exit. The top-level `evaluate()` entry point
+  /// allocates the counter on its own stack frame and points the cloned
+  /// context at it; nested `with_*` rebuilders preserve the pointer through
+  /// member-wise copy. Null indicates that depth tracking is disabled (for
+  /// ad-hoc CLI eval, parser-only smoke tests, and any caller that has not
+  /// opted in by going through `evaluate()`).
+  std::uint32_t* eval_depth_counter() const noexcept { return eval_depth_counter_; }
+
+  /// Returns a pointer to the caller-owned counter that `invoke_lambda`
+  /// bumps on every lambda activation. Same lifetime / null semantics as
+  /// `eval_depth_counter()`.
+  std::uint32_t* lambda_depth_counter() const noexcept { return lambda_depth_counter_; }
+
+  /// Returns a copy of `*this` with the depth counters bound to the
+  /// supplied storage. Both pointers may be null to opt back out of depth
+  /// tracking (defensive symmetry; not used in production paths). The
+  /// storage must outlive every evaluator call that observes the returned
+  /// context.
+  EvalContext with_depth_counters(std::uint32_t* eval_counter, std::uint32_t* lambda_counter) const noexcept {
+    EvalContext copy = *this;
+    copy.eval_depth_counter_ = eval_counter;
+    copy.lambda_depth_counter_ = lambda_counter;
+    return copy;
+  }
+
   /// Commits an Array result as a dynamic-array spill anchored at the
   /// currently bound formula cell, returning the post-dispatch scalar value
   /// the caller should propagate.
@@ -319,6 +345,14 @@ class EvalContext {
   Sheet* mutable_sheet_ = nullptr;
   std::uint32_t formula_row_ = kNoFormulaCell;
   std::uint32_t formula_col_ = kNoFormulaCell;
+  // Non-owning pointers to caller-stack-allocated depth counters. The
+  // top-level `evaluate()` entry point materialises both and binds them
+  // via `with_depth_counters`; member-wise copy in the other `with_*`
+  // builders preserves the binding for downstream sub-evaluations. Null
+  // means "depth tracking disabled" (legacy callers that bypass
+  // `evaluate()` retain the pre-existing behaviour).
+  std::uint32_t* eval_depth_counter_ = nullptr;
+  std::uint32_t* lambda_depth_counter_ = nullptr;
 };
 
 /// Fluent builder for the workbook-aware, state-carrying flavour of

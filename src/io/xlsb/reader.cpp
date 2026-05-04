@@ -414,7 +414,14 @@ std::string FormulaStubFromBytes(ByteSpan ptg_bytes, std::size_t sheet_index, st
       .field("ptg_bytes", static_cast<std::int64_t>(ptg_bytes.size))
       .warn();
   std::string out;
-  out.reserve(ptg_bytes.size * 3 + 16);
+  // `ptg_bytes.size` is bounded by the enclosing record's payload size
+  // (currently <= 64 KiB on the wire); cap defensively so a future record
+  // size growth never lets `size * 3 + 16` overflow `std::size_t` on a
+  // 32-bit WASM build. The cap only constrains the reservation hint -
+  // the per-byte loop below still emits every input byte verbatim.
+  constexpr std::size_t kMaxPtgBytesForStub = 65535U;
+  const std::size_t bounded = std::min(ptg_bytes.size, kMaxPtgBytesForStub);
+  out.reserve(bounded * 3 + 16);
   out.append("=__FORMULON_XLSB_PTG__(");
   static constexpr char kHex[] = "0123456789ABCDEF";
   for (std::size_t i = 0; i < ptg_bytes.size; ++i) {

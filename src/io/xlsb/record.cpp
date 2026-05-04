@@ -88,17 +88,25 @@ Expected<std::string, Error> read_xlwidestring(ByteSpan& cursor) {
   }
   const std::uint32_t cch = len_or.value();
   // 16-bit code units per char; cap at the buffer to avoid large
-  // synthetic allocations on hostile input.
-  const std::size_t needed = static_cast<std::size_t>(cch) * 2;
-  if (cursor.size < needed) {
+  // synthetic allocations on hostile input. The bound on `cch` is also
+  // what makes the `cch * 3` reservation below safe to compute as
+  // `std::size_t`: at this point we know `cch <= cursor.size / 2`, so
+  // `cch * 3 <= cursor.size * 1.5`, which cannot overflow even on the
+  // 32-bit `size_t` of a WASM build (`cursor.size` is always at most the
+  // enclosing record's payload size).
+  if (cch > cursor.size / 2) {
     std::string ctx("context=xlsb.record what=XLWideString cch=");
     ctx.append(std::to_string(cch));
+    ctx.append(" cursor_size=");
+    ctx.append(std::to_string(cursor.size));
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb wide-string body truncated", std::move(ctx));
   }
+  const std::size_t needed = static_cast<std::size_t>(cch) * 2;
   std::string out;
   // Reserve a generous upper bound: every code unit takes at most 3
-  // UTF-8 bytes (BMP) and surrogate pairs take 4 over two units.
-  out.reserve(cch * 3);
+  // UTF-8 bytes (BMP) and surrogate pairs take 4 over two units. Safe
+  // from overflow per the bound established above.
+  out.reserve(static_cast<std::size_t>(cch) * 3);
   for (std::uint32_t i = 0; i < cch; ++i) {
     const std::uint32_t cu_lo = cursor.data[2 * i];
     const std::uint32_t cu_hi = cursor.data[2 * i + 1];

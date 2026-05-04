@@ -17,6 +17,7 @@
 #include "parser/ast.h"
 #include "sheet.h"
 #include "utils/arena.h"
+#include "utils/checked_mul.h"
 #include "utils/error.h"
 #include "utils/strings.h"
 #include "value.h"
@@ -1419,8 +1420,17 @@ Value eval_tocol_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     return err;
   }
 
+  // Defensive overflow guard on `rows * cols` before the reserve: on
+  // 32-bit `size_t` (WASM) a maliciously crafted source array could wrap
+  // and request a tiny capacity, causing the subsequent push_backs to
+  // grow unexpectedly. Surface as `#NUM!` if the upper bound itself
+  // cannot be represented.
+  auto reserve_or = checked_mul_size_t(array->rows, array->cols);
+  if (!reserve_or) {
+    return Value::error(ErrorCode::Num);
+  }
   std::vector<Value> kept;
-  kept.reserve(static_cast<std::size_t>(array->rows) * static_cast<std::size_t>(array->cols));
+  kept.reserve(reserve_or.value());
   if (!collect_tocol_torow_cells(*array, ignore_mask, scan_by_column, kept, err)) {
     return err;
   }
@@ -1456,8 +1466,14 @@ Value eval_torow_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     return err;
   }
 
+  // Same overflow guard as TOCOL above: bounds the reserve against a 32-bit
+  // `size_t` wrap from attacker-shaped dimensions.
+  auto reserve_or = checked_mul_size_t(array->rows, array->cols);
+  if (!reserve_or) {
+    return Value::error(ErrorCode::Num);
+  }
   std::vector<Value> kept;
-  kept.reserve(static_cast<std::size_t>(array->rows) * static_cast<std::size_t>(array->cols));
+  kept.reserve(reserve_or.value());
   if (!collect_tocol_torow_cells(*array, ignore_mask, scan_by_column, kept, err)) {
     return err;
   }

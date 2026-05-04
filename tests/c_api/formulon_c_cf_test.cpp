@@ -386,6 +386,32 @@ TEST(FormulonCApiCfMutate, EmptySqrefRejected) {
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }
 
+TEST(FormulonCApiCfMutate, AddRuleRejectsExcessiveSqrefCount) {
+  // Hostile caller passes the maximum unsigned 32-bit value as
+  // `sqref_count`. The `sqref` pointer is non-null so the early
+  // null-check does not short-circuit, but the binding's range-count
+  // cap must reject the call before the body attempts a 4 GiB
+  // `reserve()`. Sheet state must be unchanged on rejection.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::size_t before = 0;
+  ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &before), 0);
+
+  fm_cf_cell_range_t sqref{0, 0, 0, 0};
+  fm_cf_rule_t rule{};
+  rule.type = 0;  // Expression
+  std::string f = "TRUE";
+  rule.formula1 = f.c_str();
+  rule.sqref = &sqref;
+  rule.sqref_count = 0xFFFFFFFFu;
+  fm_status_t rc = fm_sheet_cf_add_rule(wb.handle, 0, rule);
+  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+
+  std::size_t after = 0;
+  ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &after), 0);
+  EXPECT_EQ(before, after);
+}
+
 TEST(FormulonCApiCfMutate, OutOfRangeIndexReturnsInvalidArgument) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

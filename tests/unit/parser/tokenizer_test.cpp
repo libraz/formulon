@@ -133,6 +133,27 @@ TEST(TokenizerNumberLiterals, RejectBareDot) {
   ASSERT_FALSE(tz.errors().empty());
 }
 
+TEST(TokenizerNumberLiterals, RejectsOverlongNumberLiteralAsInvalid) {
+  // 76 byte literal: `0.` + 75 zeros + `1`. Earlier bug silently truncated
+  // anything past 63 bytes, letting the surface lexeme and the parsed
+  // numeric value disagree. The fix surfaces overlong literals as Invalid
+  // with an `InvalidNumberLiteral` diagnostic so callers cannot rely on a
+  // mismatched semantic.
+  std::string overlong = "0.";
+  overlong.append(75, '0');
+  overlong.push_back('1');
+  ASSERT_GT(overlong.size(), 63u);
+
+  Tokenizer tz(overlong);
+  const auto& v = tz.tokens();
+  // Tokenizer emits at least one token for the literal plus the trailing
+  // Eof; the literal must be the Invalid kind, not Number.
+  ASSERT_GE(v.size(), 1u);
+  EXPECT_EQ(v[0].kind, TokenKind::Invalid);
+  ASSERT_FALSE(tz.errors().empty());
+  EXPECT_EQ(tz.errors().front().code, LexerErrorCode::InvalidNumberLiteral);
+}
+
 // ---------------------------------------------------------------------------
 // StringLiterals
 // ---------------------------------------------------------------------------

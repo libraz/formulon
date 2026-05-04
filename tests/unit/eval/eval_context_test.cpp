@@ -482,6 +482,20 @@ TEST(EvalContextExpandRange, LargeButValidRectangle_Reserves) {
   EXPECT_EQ(result.value()[99].as_number(), 99.0);  // (9,9)
 }
 
+TEST(EvalContextExpandRange, RejectsHugeRectangle) {
+  // Excel's full-grid range `A1:XFD1048576` covers ~1.7e10 cells; any
+  // value past 10M must surface as `#CALC!` rather than triggering the
+  // narrowing-conversion-into-`reserve` failure mode the cap exists to
+  // prevent. The cap is enforced before any per-cell work, so an
+  // unbound workbook (here: just the local sheet) is sufficient.
+  Sheet sheet("Sheet1");
+  parser::Reference lhs = MakeLocalRef(0, 0);
+  parser::Reference rhs = MakeLocalRef(Sheet::kMaxRows - 1, Sheet::kMaxCols - 1);
+  auto result = ExpandRange(sheet, lhs, rhs);
+  ASSERT_FALSE(result);
+  EXPECT_EQ(result.error(), ErrorCode::Calc);
+}
+
 TEST(EvalContextExpandRange, FormulaCellInRange_IsEvaluated) {
   Sheet sheet("Sheet1");
   sheet.set_cell_value(0, 0, Value::number(10.0));

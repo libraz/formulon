@@ -356,6 +356,60 @@ TEST(RecalcLifetime, ReentryFlagClearedAfterOuterReturns) {
   EXPECT_TRUE(ok.load());
 }
 
+namespace {
+
+// Serial-recalc analogue of `reentry_probe_impl`: nested call routed
+// through `Workbook::recalc()` rather than `recalc_parallel()`. Without
+// the shared `g_in_recalc` flag the inner serial call would deadlock on
+// the engine mutex; with the guard it surfaces `kGraphRecalcReentrant`.
+Value serial_reentry_probe_impl(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  ++g_reentry_call_count;
+  if (g_reentry_workbook == nullptr) {
+    return Value::number(0.0);
+  }
+  auto result = g_reentry_workbook->recalc(default_registry());
+  if (!result) {
+    g_reentry_observed_code.store(static_cast<int>(result.error().code), std::memory_order_release);
+  } else {
+    g_reentry_observed_code.store(static_cast<int>(FormulonErrorCode::kOk), std::memory_order_release);
+  }
+  return Value::number(7.0);
+}
+
+}  // namespace
+
+TEST(RecalcLifetime, NestedSerialRecalcReturnsRecalcReentrant) {
+  // Outer `Workbook::recalc()` evaluates a UDF that re-enters
+  // `recalc()` on the same thread. The shared `g_in_recalc` flag must
+  // observe the outer pass and reject the inner call instead of
+  // deadlocking on the engine mutex.
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=PROBE_NESTED_SERIAL_RECALC()")));
+
+  FunctionRegistry registry;
+  FunctionDef def{};
+  def.canonical_name = "PROBE_NESTED_SERIAL_RECALC";
+  def.min_arity = 0U;
+  def.max_arity = 0U;
+  def.impl = &serial_reentry_probe_impl;
+  ASSERT_TRUE(registry.register_function(def));
+
+  g_reentry_workbook = &wb;
+  g_reentry_observed_code.store(-1, std::memory_order_release);
+  g_reentry_call_count.store(0, std::memory_order_release);
+
+  auto outer = wb.recalc(registry);
+  EXPECT_TRUE(static_cast<bool>(outer));
+  EXPECT_GE(g_reentry_call_count.load(), 1) << "UDF was never invoked";
+  EXPECT_EQ(g_reentry_observed_code.load(), static_cast<int>(FormulonErrorCode::kGraphRecalcReentrant));
+
+  Value v = StoredValue(wb, 0, 0, 0);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 7.0);
+
+  g_reentry_workbook = nullptr;
+}
+
 // ---------------------------------------------------------------------------
 // recalc_parallel followed by serial recalc on the same workbook
 // ---------------------------------------------------------------------------

@@ -26,6 +26,7 @@
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
+#include "utils/checked_mul.h"
 #include "utils/error.h"
 #include "value.h"
 
@@ -57,7 +58,16 @@ bool resolve_matrix_arg(const parser::AstNode& arg, Arena& arena, const Function
 /// cell). On the first non-numeric or error cell, returns `false` and
 /// writes the propagating error into `out_err`.
 bool coerce_matrix(const ArrayValue& src, std::vector<double>& out, Value& out_err) {
-  const std::size_t n = static_cast<std::size_t>(src.rows) * static_cast<std::size_t>(src.cols);
+  // Defensive overflow check: on 32-bit `size_t` (WASM) a maliciously
+  // crafted ArrayValue with `rows * cols >= 2^32` would silently wrap and
+  // leave `out` shorter than the loop expects, producing an OOB read on
+  // `src.cells[i]`. Surface the overflow as `#NUM!` instead.
+  auto n_or = checked_mul_size_t(src.rows, src.cols);
+  if (!n_or) {
+    out_err = Value::error(ErrorCode::Num);
+    return false;
+  }
+  const std::size_t n = n_or.value();
   out.resize(n);
   for (std::size_t i = 0; i < n; ++i) {
     const Value& cell = src.cells[i];
@@ -85,7 +95,14 @@ bool coerce_matrix(const ArrayValue& src, std::vector<double>& out, Value& out_e
 /// Builds an arena-allocated `ArrayValue` from a flat row-major double
 /// buffer + shape. Returns `nullptr` on arena OOM.
 ArrayValue* make_double_array(const std::vector<double>& data, std::uint32_t rows, std::uint32_t cols, Arena& arena) {
-  const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+  // Same overflow-defensive guard as `coerce_matrix`: on 32-bit `size_t`
+  // an attacker-controlled `rows * cols >= 2^32` would wrap and request a
+  // truncated arena buffer. Bail to nullptr; callers map that to `#NUM!`.
+  auto n_or = checked_mul_size_t(rows, cols);
+  if (!n_or) {
+    return nullptr;
+  }
+  const std::size_t n = n_or.value();
   Value* buffer = arena.create_array<Value>(n);
   if (buffer == nullptr) {
     return nullptr;
@@ -139,7 +156,14 @@ Value eval_mmult_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   const std::uint32_t out_rows = a->rows;
   const std::uint32_t out_cols = b->cols;
   const std::uint32_t inner = a->cols;
-  std::vector<double> out(static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols), 0.0);
+  // Defensive overflow check on the result allocation; same rationale as
+  // `coerce_matrix`. WASM 32-bit `size_t` can wrap on `out_rows * out_cols`
+  // when both operands are pathologically wide.
+  auto out_n_or = checked_mul_size_t(out_rows, out_cols);
+  if (!out_n_or) {
+    return Value::error(ErrorCode::Num);
+  }
+  std::vector<double> out(out_n_or.value(), 0.0);
   for (std::uint32_t i = 0; i < out_rows; ++i) {
     for (std::uint32_t j = 0; j < out_cols; ++j) {
       double s = 0.0;
@@ -276,6 +300,16 @@ Value eval_minverse_lazy(const parser::AstNode& call, Arena& arena, const Functi
   const std::uint32_t n = a->rows;
   if (n == 0U) {
     return Value::error(ErrorCode::Value);
+  }
+  // Hard cap to keep downstream `uint32_t` arithmetic from wrapping. The
+  // augmented system is `n x 2n`, so `2U * n` and the loop indices over
+  // `n * w` need to stay well below `UINT32_MAX`. Excel 365 itself caps
+  // worksheet width at 16384 columns, so any matrix the engine could
+  // legitimately encounter from a workbook is comfortably under this
+  // limit; values above it can only come from synthetic inputs.
+  constexpr std::uint32_t kMaxMinverseDimension = 16384U;
+  if (n > kMaxMinverseDimension) {
+    return Value::error(ErrorCode::Num);
   }
 
   // Gauss-Jordan elimination on the augmented `[m | I]` system. We work

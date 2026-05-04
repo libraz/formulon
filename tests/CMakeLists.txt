@@ -19,6 +19,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/sheet_spill_test.cpp
   unit/sheet_cached_text_test.cpp
   unit/workbook_test.cpp
+  unit/utils/checked_mul_test.cpp
   unit/utils/double_format_test.cpp
   unit/deps/miniz_smoke_test.cpp
   unit/deps/pugixml_smoke_test.cpp
@@ -72,6 +73,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/tree_walker_test.cpp
   unit/eval/scalar_ops_test.cpp
   unit/eval/eval_context_test.cpp
+  unit/eval/eval_recursion_depth_test.cpp
   unit/eval/eval_state_test.cpp
   unit/eval/dep_graph_test.cpp
   unit/eval/dep_extractor_test.cpp

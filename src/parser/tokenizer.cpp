@@ -811,8 +811,20 @@ void Tokenizer::scan_number() {
   }
 
   // Parse via strtod over a NUL-terminated copy (strtod requires C-strings).
+  // Refuse to silently truncate over-long literals: feeding only the first
+  // 63 bytes to strtod when the lexeme is longer would let the token's
+  // semantic value diverge from its source spelling, which an attacker
+  // could exploit to smuggle different numbers past callers that compare
+  // lexeme bytes. Excel only cares about the IEEE-754 representation, so
+  // any literal that does not fit in the local buffer is reported as an
+  // invalid token rather than truncated.
   char buf[64];
-  const std::size_t n = (lex.size() < sizeof(buf) - 1) ? lex.size() : sizeof(buf) - 1;
+  if (lex.size() >= sizeof(buf)) {
+    emit(TokenKind::Invalid, start);
+    record_error(LexerErrorCode::InvalidNumberLiteral, start);
+    return;
+  }
+  const std::size_t n = lex.size();
   std::memcpy(buf, lex.data(), n);
   buf[n] = '\0';
   char* end_ptr = nullptr;

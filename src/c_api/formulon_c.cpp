@@ -110,6 +110,29 @@ fm_status_t set_binding_error(formulon::FormulonErrorCode code, const char* mess
   return set_last_error(err);
 }
 
+// Hard cap on the number of cell ranges any single C-API call may carry.
+// Validation lists and conditional-format sqrefs are unbounded on the
+// wire (`uint32_t`), so a hostile caller can pass `0xFFFFFFFF` and force
+// a 4 GiB `reserve()` before the loop body even runs. 16384 is several
+// orders of magnitude past Excel's own usage (sheets rarely exceed a
+// handful of CF sqrefs) but high enough that no legitimate caller will
+// trip the cap.
+constexpr std::uint32_t kMaxRangesPerCApiCall = 16384U;
+
+// Returns `false` and sets the thread-local binding error if `n` is past
+// the per-call range cap. The caller threads the result back as the
+// fail-fast path so the body never starts the per-range loop with a
+// bogus reservation.
+bool check_range_count(std::uint32_t n, const char* api) {
+  if (n > kMaxRangesPerCApiCall) {
+    set_binding_error(
+        formulon::FormulonErrorCode::kInvalidArgument, "range_count exceeds per-call cap",
+        std::string(api) + ": range_count=" + std::to_string(n) + " cap=" + std::to_string(kMaxRangesPerCApiCall));
+    return false;
+  }
+  return true;
+}
+
 // Per-handle UTF-8 storage. `std::deque` is used (matching the OOXML
 // reader) for pointer stability: we hand out `c_str()` pointers from
 // elements deep inside the container, so a `std::vector` reallocation
@@ -1098,6 +1121,9 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::uint32_t 
                              "fm_sheet_add_validation: ranges is NULL but range_count > 0",
                              "range_count=" + std::to_string(v.range_count));
   }
+  if (!check_range_count(v.range_count, "fm_sheet_add_validation")) {
+    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
   formulon::DataValidation out;
   out.ranges.reserve(v.range_count);
   for (std::uint32_t i = 0; i < v.range_count; ++i) {
@@ -1303,6 +1329,14 @@ extern "C" fm_status_t fm_workbook_partial_recalc(fm_workbook_t* wb, const fm_vi
   if (wb == nullptr || viewport == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_partial_recalc: NULL argument");
+  }
+  // SheetCellRange::sheet_id is std::uint16_t; reject the narrowing path so
+  // a caller-supplied sheet > 0xFFFF does not silently address a different
+  // sheet (or wrap to 0). Excel's hard cap is far below 0xFFFF anyway.
+  if (viewport->sheet > 0xFFFFU) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_partial_recalc: viewport->sheet exceeds 16-bit sheet id range",
+                             "sheet=" + std::to_string(viewport->sheet));
   }
   formulon::eval::SheetCellRange range;
   range.sheet_id = static_cast<std::uint16_t>(viewport->sheet);
@@ -1665,6 +1699,9 @@ extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet
   if (rule.sqref == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_sheet_cf_add_rule: sqref is NULL while sqref_count > 0");
+  }
+  if (!check_range_count(rule.sqref_count, "fm_sheet_cf_add_rule")) {
+    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
   if (is_visual_rule_type(rule.type)) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,

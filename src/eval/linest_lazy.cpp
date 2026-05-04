@@ -20,6 +20,7 @@
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
+#include "utils/checked_mul.h"
 #include "utils/error.h"
 #include "value.h"
 
@@ -69,7 +70,16 @@ bool coerce_cell(const Value& cell, double* out, Value* out_err) {
 /// `out` with the coerced doubles in row-major order. Returns `false`
 /// on the first non-numeric / error cell.
 bool coerce_array(const ArrayValue& src, std::vector<double>& out, Value* out_err) {
-  const std::size_t n = static_cast<std::size_t>(src.rows) * static_cast<std::size_t>(src.cols);
+  // Defensive overflow guard: on 32-bit `size_t` (WASM) a malformed
+  // ArrayValue with `rows * cols >= 2^32` would silently wrap the
+  // multiply, leaving `out` shorter than the loop's iteration bound and
+  // producing OOB reads on `src.cells[i]`. Surface as `#NUM!` instead.
+  auto n_or = checked_mul_size_t(src.rows, src.cols);
+  if (!n_or) {
+    *out_err = Value::error(ErrorCode::Num);
+    return false;
+  }
+  const std::size_t n = n_or.value();
   out.resize(n);
   for (std::size_t i = 0; i < n; ++i) {
     if (!coerce_cell(src.cells[i], &out[i], out_err)) {
@@ -81,7 +91,13 @@ bool coerce_array(const ArrayValue& src, std::vector<double>& out, Value* out_er
 
 /// Flat row-major buffer + shape returned by `make_double_array`.
 ArrayValue* make_double_array(const std::vector<Value>& data, std::uint32_t rows, std::uint32_t cols, Arena& arena) {
-  const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+  // Same overflow-defensive guard as `coerce_array`: bail on 32-bit
+  // wrap so the arena allocation request matches what the loop expects.
+  auto n_or = checked_mul_size_t(rows, cols);
+  if (!n_or) {
+    return nullptr;
+  }
+  const std::size_t n = n_or.value();
   Value* buffer = arena.create_array<Value>(n);
   if (buffer == nullptr) {
     return nullptr;

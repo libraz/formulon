@@ -263,6 +263,15 @@ class RecalcEngine {
   /// `user_data` is forwarded verbatim to every invocation. The engine
   /// does not take ownership; the caller must keep it alive across
   /// every recalc that may consult the callback.
+  ///
+  /// **Re-entrancy**: the callback MUST NOT call back into any
+  /// `RecalcEngine` (`recalc`, `partial_recalc`) or `Workbook` recalc
+  /// API on the same thread. The engine guards against accidental
+  /// re-entry by surfacing `kGraphRecalcReentrant` from the inner call
+  /// (no deadlock, no cell-store corruption), but the caller's own state
+  /// is the safe place to mutate from a callback. Cell mutation
+  /// (`set_cell_formula`, etc.) issued from the callback is also
+  /// unsupported and races with the engine's in-flight bookkeeping.
   void set_iterative_progress(IterativeProgressCb cb, void* user_data) noexcept {
     progress_cb_ = cb;
     progress_user_data_ = user_data;

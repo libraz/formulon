@@ -37,6 +37,38 @@ struct ByteSpan {
   std::size_t size = 0;
 };
 
+/// Hard cap on the uncompressed size of any single ZIP entry. Excel parts
+/// rarely exceed a few MB; 100 MiB is well above any realistic per-part
+/// payload (sharedStrings.xml and large sheets are the worst offenders and
+/// stay under ~30 MB even on million-cell workbooks). The cap blunts ZIP
+/// bombs whose 99:1 compression ratio would otherwise allow a few KB of
+/// archive bytes to expand into multi-GiB allocations and trigger OOM /
+/// DoS during `read_entry`.
+inline constexpr std::size_t kMaxExtractedBytesPerEntry = 100ULL * 1024ULL * 1024ULL;
+
+/// Hard cap on the number of entries in a ZIP. OOXML packages emitted by
+/// Excel rarely exceed a few hundred parts even with many sheets, drawings
+/// and embedded media; 2048 leaves plenty of headroom while preventing a
+/// crafted archive from forcing the central-directory walk to allocate
+/// proportional memory before any extraction takes place.
+inline constexpr std::size_t kMaxParts = 2048;
+
+/// Hard cap on the per-entry uncompressed-to-compressed ratio. A ratio of
+/// 1024 is several orders of magnitude above what real OOXML payloads
+/// achieve (XML compresses ~10:1, image/binary parts ~1:1) but rules out
+/// 99999:1 zero-fill bombs that pass the per-entry size cap by being
+/// individually small but collectively catastrophic.
+inline constexpr std::size_t kMaxRatio = 1024;
+
+/// Hard cap on the cumulative uncompressed bytes a single `ZipReader` will
+/// hand back across the lifetime of one open archive. Even with the
+/// per-entry cap of 100 MiB, an archive with thousands of entries could
+/// still walk the reader through gigabytes of allocations; this ceiling
+/// (256 MiB) is comfortably above any realistic Excel package while
+/// containing the blast radius of pathological input. The counter resets
+/// on every `open()` call.
+inline constexpr std::size_t kMaxTotalExtractedBytes = 256ULL * 1024ULL * 1024ULL;
+
 /// Read-only accessor for a ZIP archive backed by an in-memory buffer.
 ///
 /// The archive bytes are *not* copied: the buffer passed to `open()` must

@@ -26,6 +26,7 @@
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
+#include "eval/recalc_reentry.h"
 #include "eval/volatile_tracker.h"
 #include "sheet.h"
 #include "utils/arena.h"
@@ -42,30 +43,18 @@ namespace {
 // browser runtimes.
 constexpr std::uint32_t kMaxAutoThreads = 8U;
 
-// Per-thread re-entrancy flag. Set to true on entry to `recalc_parallel`
-// and cleared on exit. A nested invocation on the same thread (typically a
-// UDF that re-enters the engine via `Workbook::recalc_parallel`) trips the
-// flag and surfaces `kGraphRecalcReentrant`. The scheduler intentionally
-// does NOT extend the check across worker threads: separate threads are
-// still expected to obey the documented "no two concurrent
-// `recalc_parallel` on the same workbook" contract; this guard exists to
-// fail fast on a recursive same-thread call rather than to police
-// cross-thread misuse.
-thread_local bool g_in_recalc = false;
-
-// RAII guard that scopes the `g_in_recalc` flag to a recalc invocation.
-// Captures the prior value so it restores correctly even when nested
-// invocations are blocked further up the stack (the outer call releases
-// the flag and the next sibling invocation proceeds normally).
-struct ReentrantGuard {
-  bool prev;
-  ReentrantGuard() noexcept : prev(g_in_recalc) { g_in_recalc = true; }
-  ~ReentrantGuard() { g_in_recalc = prev; }
-  ReentrantGuard(const ReentrantGuard&) = delete;
-  ReentrantGuard& operator=(const ReentrantGuard&) = delete;
-  ReentrantGuard(ReentrantGuard&&) = delete;
-  ReentrantGuard& operator=(ReentrantGuard&&) = delete;
-};
+// Per-thread re-entrancy flag and guard live in `recalc_reentry.h` so the
+// serial `RecalcEngine::recalc` and the parallel scheduler share the same
+// flag. A nested invocation on the same thread (typically a UDF or a
+// progress callback that calls back into the engine) trips the flag and
+// surfaces `kGraphRecalcReentrant` instead of deadlocking on the engine
+// mutex. The scheduler intentionally does NOT extend the check across
+// worker threads: separate threads are still expected to obey the
+// documented "no two concurrent recalc on the same workbook" contract;
+// this guard exists to fail fast on a recursive same-thread call rather
+// than to police cross-thread misuse.
+using detail::g_in_recalc;
+using detail::RecalcReentryGuard;
 
 // Returns true when the SCC `component` is cyclic (more than one cell, or
 // a singleton with a self-loop). Mirrors `recalc_engine.cpp`'s helper —
@@ -405,7 +394,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
     return make_error(FormulonErrorCode::kGraphRecalcReentrant, "recalc_parallel called recursively on the same thread",
                       "the scheduler does not support nested recalc; the inner call is rejected");
   }
-  ReentrantGuard guard;
+  RecalcReentryGuard guard;
 
   // Acquire the engine mutex for the entire pass. Workers spawned below
   // operate on `Sheet` storage (guarded by `write_mutex` for the cell

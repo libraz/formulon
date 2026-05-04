@@ -197,13 +197,58 @@ TEST(ZipReader, MoveAssignmentPreservesOpenState) {
 /// to `ZipReader::open`. Used to construct the > 100 MiB ZIP-bomb-shaped
 /// fixture below; kept local to this TU because production code never
 /// needs to round-trip raw bytes through miniz's writer surface.
-std::vector<std::uint8_t> BuildSingleEntryZip(const std::string& name, const std::vector<std::uint8_t>& payload) {
+std::vector<std::uint8_t> BuildSingleEntryZip(const std::string& name, const std::vector<std::uint8_t>& payload,
+                                              mz_uint compression = static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION)) {
   mz_zip_archive archive{};
   std::memset(&archive, 0, sizeof(archive));
   EXPECT_EQ(mz_zip_writer_init_heap(&archive, 0, 0), MZ_TRUE);
-  EXPECT_EQ(mz_zip_writer_add_mem(&archive, name.c_str(), payload.data(), payload.size(),
-                                  static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION)),
-            MZ_TRUE);
+  EXPECT_EQ(mz_zip_writer_add_mem(&archive, name.c_str(), payload.data(), payload.size(), compression), MZ_TRUE);
+  void* heap = nullptr;
+  std::size_t heap_size = 0;
+  EXPECT_EQ(mz_zip_writer_finalize_heap_archive(&archive, &heap, &heap_size), MZ_TRUE);
+  EXPECT_EQ(mz_zip_writer_end(&archive), MZ_TRUE);
+  std::vector<std::uint8_t> out(heap_size);
+  std::memcpy(out.data(), heap, heap_size);
+  mz_free(heap);
+  return out;
+}
+
+/// Builds an in-memory ZIP containing `count` empty entries named
+/// `entry_<n>.bin`. Used to drive the per-archive entry-count cap check.
+std::vector<std::uint8_t> BuildManyEmptyEntriesZip(std::size_t count) {
+  mz_zip_archive archive{};
+  std::memset(&archive, 0, sizeof(archive));
+  EXPECT_EQ(mz_zip_writer_init_heap(&archive, 0, 0), MZ_TRUE);
+  const std::array<std::uint8_t, 1> tiny{{0x00u}};
+  for (std::size_t i = 0; i < count; ++i) {
+    std::string name = "entry_" + std::to_string(i) + ".bin";
+    EXPECT_EQ(mz_zip_writer_add_mem(&archive, name.c_str(), tiny.data(), tiny.size(),
+                                    static_cast<mz_uint>(MZ_NO_COMPRESSION)),
+              MZ_TRUE);
+  }
+  void* heap = nullptr;
+  std::size_t heap_size = 0;
+  EXPECT_EQ(mz_zip_writer_finalize_heap_archive(&archive, &heap, &heap_size), MZ_TRUE);
+  EXPECT_EQ(mz_zip_writer_end(&archive), MZ_TRUE);
+  std::vector<std::uint8_t> out(heap_size);
+  std::memcpy(out.data(), heap, heap_size);
+  mz_free(heap);
+  return out;
+}
+
+/// Builds an in-memory ZIP containing `count` entries that each carry the
+/// same `payload`. All entries share the supplied compression level so
+/// the per-entry cumulative-cap test can drive the running total without
+/// hitting the per-entry size cap.
+std::vector<std::uint8_t> BuildMultiEntryZip(std::size_t count, const std::vector<std::uint8_t>& payload,
+                                             mz_uint compression = static_cast<mz_uint>(MZ_NO_COMPRESSION)) {
+  mz_zip_archive archive{};
+  std::memset(&archive, 0, sizeof(archive));
+  EXPECT_EQ(mz_zip_writer_init_heap(&archive, 0, 0), MZ_TRUE);
+  for (std::size_t i = 0; i < count; ++i) {
+    std::string name = "blob_" + std::to_string(i) + ".bin";
+    EXPECT_EQ(mz_zip_writer_add_mem(&archive, name.c_str(), payload.data(), payload.size(), compression), MZ_TRUE);
+  }
   void* heap = nullptr;
   std::size_t heap_size = 0;
   EXPECT_EQ(mz_zip_writer_finalize_heap_archive(&archive, &heap, &heap_size), MZ_TRUE);
@@ -246,6 +291,89 @@ TEST(ZipReader, ReadEntryAcceptsBelowCapEntry) {
   auto result = zip.read_entry("ok.bin");
   ASSERT_TRUE(static_cast<bool>(result)) << "read_entry failed: " << result.error().message;
   EXPECT_EQ(result.value().size(), kPayloadBytes);
+}
+
+TEST(ZipReader, OpenRejectsTooManyParts) {
+  // One entry past the cap is enough to flip `kIoZipBomb`; the writer
+  // produces a structurally-valid archive so the rejection is solely on
+  // policy grounds.
+  const std::vector<std::uint8_t> bytes = BuildManyEmptyEntriesZip(kMaxParts + 1);
+  ZipReader zip;
+  auto result = zip.open(SpanOf(bytes));
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoZipBomb);
+  EXPECT_NE(result.error().context.find("limit=parts"), std::string::npos);
+  // The reader must surface as not-open after a refused open(); subsequent
+  // reads return a not-open / not-found error rather than aliasing into a
+  // half-initialised miniz handle.
+  EXPECT_EQ(zip.entry_count(), 0U);
+}
+
+TEST(ZipReader, ReadEntryRejectsHighRatioEntry) {
+  // 4 MiB of zero bytes compresses to roughly 4 KiB with miniz at
+  // best-compression: ratio comfortably exceeds the 1024 cap. (200 KiB
+  // was on the edge — deflate's per-block bookkeeping kept the ratio
+  // around ~800 in practice.)
+  constexpr std::size_t kPayloadBytes = 4ULL * 1024ULL * 1024ULL;
+  std::vector<std::uint8_t> payload(kPayloadBytes, 0u);
+  const std::vector<std::uint8_t> bytes =
+      BuildSingleEntryZip("zeros.bin", payload, static_cast<mz_uint>(MZ_BEST_COMPRESSION));
+
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes))));
+  ASSERT_TRUE(zip.has_entry("zeros.bin"));
+
+  auto result = zip.read_entry("zeros.bin");
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoZipBomb);
+  EXPECT_NE(result.error().context.find("limit=ratio"), std::string::npos);
+  EXPECT_NE(result.error().context.find("entry=zeros.bin"), std::string::npos);
+}
+
+TEST(ZipReader, ReadEntryRejectsCumulativeTotal) {
+  // Six 50 MiB entries: each individually under the per-entry 100 MiB
+  // cap, but together they cross the 256 MiB cumulative cap on the sixth
+  // read. Compress the archive at default level so the on-disk archive
+  // bytes stay small (~50 KiB) while the advertised uncompressed sizes
+  // still drive the cumulative-total check; the ratio cap (1024) is
+  // satisfied by 50 MiB / 50 KiB ~= 1024 only when we use uniform-fill
+  // data, so we use a non-uniform pattern that compresses to ~5 MiB
+  // (ratio ~10) — comfortably under the ratio cap and still light on
+  // build-time memory.
+  constexpr std::size_t kPayloadBytes = 50ULL * 1024ULL * 1024ULL;
+  std::vector<std::uint8_t> payload(kPayloadBytes, 0u);
+  // Fill with a low-entropy but non-uniform pattern: ratio ~10 with the
+  // default deflate level, well under the 1024 ratio cap.
+  for (std::size_t i = 0; i < payload.size(); ++i) {
+    payload[i] = static_cast<std::uint8_t>(i & 0xFFu);
+  }
+  const std::vector<std::uint8_t> bytes =
+      BuildMultiEntryZip(/*count=*/6, payload, /*compression=*/static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION));
+
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes))));
+  ASSERT_EQ(zip.entry_count(), 6U);
+
+  // First five reads succeed: 5 * 50 MiB == 250 MiB <= 256 MiB cap.
+  for (int i = 0; i < 5; ++i) {
+    const std::string name = "blob_" + std::to_string(i) + ".bin";
+    auto ok = zip.read_entry(name);
+    ASSERT_TRUE(static_cast<bool>(ok)) << "read_entry failed at i=" << i << ": " << ok.error().message;
+    EXPECT_EQ(ok.value().size(), kPayloadBytes);
+  }
+
+  // Sixth read would push cumulative past 256 MiB: 250 MiB + 50 MiB.
+  auto refused = zip.read_entry("blob_5.bin");
+  ASSERT_FALSE(static_cast<bool>(refused));
+  EXPECT_EQ(refused.error().code, FormulonErrorCode::kIoZipBomb);
+  EXPECT_NE(refused.error().context.find("limit=total"), std::string::npos);
+
+  // Re-opening the same reader resets the running total so a fresh
+  // archive is not penalised by a previous run's history.
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes))));
+  auto reopened = zip.read_entry("blob_0.bin");
+  ASSERT_TRUE(static_cast<bool>(reopened)) << "post-reopen read_entry failed: " << reopened.error().message;
+  EXPECT_EQ(reopened.value().size(), kPayloadBytes);
 }
 
 TEST(ZipReader, IdempotentReopen) {

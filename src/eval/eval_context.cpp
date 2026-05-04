@@ -272,6 +272,17 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
   std::vector<Value> out;
   const std::uint64_t total =
       static_cast<std::uint64_t>(r_max - r_min + 1) * static_cast<std::uint64_t>(c_max - c_min + 1);
+  // Refuse pathological rectangles before `reserve()`. Excel's logical
+  // grid is 1,048,576 rows * 16,384 cols ~= 1.7e10 cells, which would
+  // overflow `std::size_t` on a 32-bit WASM build (`size_t` is 32-bit
+  // there) and silently truncate the reservation, leaving the inner
+  // push-back loop to repeatedly re-allocate / OOM. Capping at 10M cells
+  // is still well above any realistic aggregator footprint and rejects
+  // `A1:XFD1048576`-shaped inputs uniformly across native and WASM.
+  constexpr std::uint64_t kMaxRangeExpansionCells = 10'000'000ULL;
+  if (total > kMaxRangeExpansionCells) {
+    return ErrorCode::Calc;
+  }
   out.reserve(static_cast<std::size_t>(total));
   for (std::uint32_t r = r_min; r <= r_max; ++r) {
     for (std::uint32_t c = c_min; c <= c_max; ++c) {
