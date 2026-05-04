@@ -1,0 +1,105 @@
+# Formulon develop-branch CI workflow.
+#
+# Runs the heavier signals that `main` (ci.yml) intentionally skips so
+# iteration on `main` stays fast:
+#
+#   - format-and-lint : clang-format dry-run + clang-tidy. Currently
+#                       soft-fail (`continue-on-error: true`) until the
+#                       pre-existing warnings backlog is drained.
+#   - tsan            : ThreadSanitizer gate. Builds the dedicated TSAN-
+#                       labelled concurrency tests under
+#                       `-fsanitize=thread` and uploads logs on failure.
+#                       Driver: tools/ci/run_tsan.sh.
+#
+# Pattern mirrored from ../mygram-db's develop-ci.yml: heavier checks
+# stay off the main-branch hot path; they fire when the human is
+# explicitly working on the develop branch (or via `workflow_dispatch`
+# from the Actions UI).
+#
+# Sanitizers can also be triggered manually from any branch via the
+# `workflow_dispatch` button in the Actions UI when investigating a
+# specific commit out of band.
+name: develop-ci
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [develop]
+  workflow_dispatch:
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format-and-lint:
+    name: clang-format and clang-tidy
+    runs-on: ubuntu-latest
+    # Soft-fail until the pre-existing warnings backlog is drained.
+    # Hard-flip is scheduled for Phase 6; remove this line at that point.
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build clang-format clang-tidy
+
+      - name: clang-format check
+        run: |
+          find src tests -type f \( -name '*.cpp' -o -name '*.h' \) \
+            | xargs clang-format --dry-run -Werror
+
+      - name: Configure (Debug, for compile_commands.json)
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build (compile_commands.json)
+        run: cmake --build build --parallel
+
+      - name: clang-tidy
+        run: |
+          make lint > /tmp/lint.log 2>&1 || true
+          tail -200 /tmp/lint.log
+          if grep -E "warning:|error:" /tmp/lint.log >/dev/null; then
+            echo "clang-tidy reported warnings/errors (soft-fail; see log above)"
+            exit 1
+          fi
+
+  tsan:
+    name: ThreadSanitizer (Linux, clang)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies + clang
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build clang
+
+      - name: Cache CMake build directory (TSan)
+        uses: actions/cache@v4
+        with:
+          path: build-tsan
+          key: tsan-build-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'tests/CMakeLists.txt', 'tests/concurrency/**', 'cmake/**') }}
+          restore-keys: |
+            tsan-build-${{ runner.os }}-
+
+      - name: Run TSan gate
+        env:
+          CXX_COMPILER: clang++
+        run: bash tools/ci/run_tsan.sh
+
+      - name: Upload TSan logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tsan-logs
+          path: build-tsan/_tsan_logs/
+          retention-days: 7

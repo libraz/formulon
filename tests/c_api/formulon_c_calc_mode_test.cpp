@@ -6,6 +6,7 @@
 // `<calcPr calcMode>`.
 
 #include <cstdint>
+#include <cstring>
 
 #include "c_api/formulon_c.h"
 #include "gtest/gtest.h"
@@ -61,8 +62,15 @@ TEST(FormulonCApiCalcMode, SetThenGetReturnsRequestedMode) {
 TEST(FormulonCApiCalcMode, UnknownModeRejected) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  // Domain is {0, 1, 2}; 99 is out-of-range.
-  fm_status_t rc = fm_workbook_set_calc_mode(wb.handle, static_cast<fm_calc_mode_t>(99));
+  // Domain is {0, 1, 2}; build an out-of-range value via memcpy because a
+  // direct `static_cast<fm_calc_mode_t>(99)` is unspecified per the standard
+  // (99 sits outside the enum's representable range, which GCC's
+  // -Wconversion correctly flags). The C ABI accepts the raw byte value
+  // regardless and routes it through the validation switch.
+  fm_calc_mode_t bad_mode{};
+  const int raw = 99;
+  std::memcpy(&bad_mode, &raw, sizeof(bad_mode));
+  fm_status_t rc = fm_workbook_set_calc_mode(wb.handle, bad_mode);
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   // Workbook state should be unchanged after a rejected set.
   fm_calc_mode_t mode = FM_CALC_MODE_MANUAL;

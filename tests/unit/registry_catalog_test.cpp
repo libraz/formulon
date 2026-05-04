@@ -135,8 +135,7 @@ TEST(RegistryCatalog, AllRegisteredInCatalog) {
     for (const auto& name : orphans) {
       msg << "  - " << name << "\n";
     }
-    msg << "Add them to the catalog (under the appropriate `# 11.3.x` "
-        << "section) to silence this test.";
+    msg << "Add them to the catalog (under the appropriate `# 11.3.x` section) to silence this test.";
     FAIL() << msg.str();
   }
 }
