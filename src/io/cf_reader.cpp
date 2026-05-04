@@ -6,6 +6,7 @@
 #include "io/cf_reader.h"
 
 #include <cerrno>
+#include <climits>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -31,6 +32,10 @@ bool ParseBoolAttr(const pugi::xml_attribute& attr) {
   return text == "1" || text == "true";
 }
 
+/// Parses a signed 32-bit attribute. On 64-bit hosts `long` covers the
+/// full int32 range so the implementation is safe; on 32-bit hosts
+/// `errno == ERANGE` traps overflow. The explicit `INT32_MIN..INT32_MAX`
+/// bounds are belt-and-suspenders for hosts where `long` is wider.
 std::int32_t ParseI32Attr(const pugi::xml_attribute& attr, std::int32_t default_value) {
   if (!attr) {
     return default_value;
@@ -42,7 +47,8 @@ std::int32_t ParseI32Attr(const pugi::xml_attribute& attr, std::int32_t default_
   errno = 0;
   char* end = nullptr;
   const long parsed = std::strtol(raw, &end, 10);
-  if (end == raw || *end != '\0' || errno != 0) {
+  if (end == raw || *end != '\0' || errno != 0 || parsed > static_cast<long>(INT32_MAX) ||
+      parsed < static_cast<long>(INT32_MIN)) {
     return default_value;
   }
   return static_cast<std::int32_t>(parsed);

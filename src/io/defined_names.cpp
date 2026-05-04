@@ -3,8 +3,6 @@
 // Implementation of the defined-names reader. See defined_names.h for the
 // public contract.
 
-#include "io/defined_names.h"
-
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>
@@ -13,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/defined_names_internal.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"

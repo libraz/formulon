@@ -383,8 +383,8 @@ Value Text_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 
   std::string out;
   out.reserve(32);
-  const auto status = text_format::apply_format(number, format_text, out);
-  if (status != text_format::FormatStatus::kOk) {
+  const auto status = ::formulon::text_format::apply_format(number, format_text, out);
+  if (status != ::formulon::text_format::FormatStatus::kOk) {
     return Value::error(ErrorCode::Value);
   }
   return Value::text(arena.intern(out));
@@ -459,8 +459,8 @@ Value Fixed_(const Value* args, std::uint32_t arity, Arena& arena) {
   }
   std::string out;
   out.reserve(32);
-  const auto status = text_format::apply_format(value, fmt, out);
-  if (status != text_format::FormatStatus::kOk) {
+  const auto status = ::formulon::text_format::apply_format(value, fmt, out);
+  if (status != ::formulon::text_format::FormatStatus::kOk) {
     return Value::error(ErrorCode::Value);
   }
   return Value::text(arena.intern(out));
@@ -536,8 +536,8 @@ Value Dollar_(const Value* args, std::uint32_t arity, Arena& arena) {
   fmt.append(fraction);
   std::string out;
   out.reserve(32);
-  const auto status = text_format::apply_format(value, fmt, out);
-  if (status != text_format::FormatStatus::kOk) {
+  const auto status = ::formulon::text_format::apply_format(value, fmt, out);
+  if (status != ::formulon::text_format::FormatStatus::kOk) {
     return Value::error(ErrorCode::Value);
   }
   return Value::text(arena.intern(out));

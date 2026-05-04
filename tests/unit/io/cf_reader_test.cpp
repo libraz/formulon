@@ -416,5 +416,26 @@ TEST(CFReader, IdAttributeRoundTrips) {
   EXPECT_EQ(cfs.value()[0].rules[0].id, "{12345678-90AB-CDEF-1234-567890ABCDEF}");
 }
 
+TEST(CFReader, OutOfRangePriorityFallsBackToDefault) {
+  // Regression: priority="9999999999" (> INT32_MAX) used to slip through
+  // ParseI32Attr because errno was implementation-defined; now the value
+  // is bounds-checked against INT32_MIN..INT32_MAX explicitly.
+  pugi::xml_document doc = Load(R"(
+    <worksheet>
+      <conditionalFormatting sqref="A1">
+        <cfRule type="expression" priority="9999999999" dxfId="0">
+          <formula>1</formula>
+        </cfRule>
+      </conditionalFormatting>
+    </worksheet>)");
+  auto cfs = read_conditional_formats(doc.child("worksheet"));
+  ASSERT_TRUE(cfs);
+  ASSERT_EQ(cfs.value().size(), 1u);
+  ASSERT_EQ(cfs.value()[0].rules.size(), 1u);
+  // priority default is 1; the value must NOT be clamped to INT32_MAX
+  // and must NOT be wrapped to a negative.
+  EXPECT_EQ(cfs.value()[0].rules[0].priority, 1);
+}
+
 }  // namespace
 }  // namespace formulon::io

@@ -97,6 +97,7 @@ set(FORMULON_CORE_SOURCES
   src/value.cpp
   src/sheet.cpp
   src/workbook.cpp
+  src/io/a1_ref.cpp
   src/io/cell_parser.cpp
   src/io/cf_reader.cpp
   src/io/cf_writer.cpp
@@ -117,6 +118,7 @@ set(FORMULON_CORE_SOURCES
   src/io/styles_writer.cpp
   src/io/tables_reader.cpp
   src/io/xml_escape.cpp
+  src/io/xml_utils.cpp
   src/io/zip_reader.cpp
   src/io/xlsb/cell_writer.cpp
   src/io/xlsb/func_id_table.cpp
@@ -151,6 +153,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/dirty_set.cpp
   src/eval/iterative_solver.cpp
   src/eval/recalc_engine.cpp
+  src/eval/cell_evaluator.cpp
   src/eval/scheduler.cpp
   src/eval/volatile_tracker.cpp
   src/eval/function_registry.cpp
@@ -204,10 +207,12 @@ set(FORMULON_CORE_SOURCES
   src/eval/text_format/number_format_render.cpp
   src/eval/stats/special_functions.cpp
   src/eval/tree_walker.cpp
+  src/eval/tree_walker_lazy_table.cpp
   src/eval/eval_context.cpp
   src/eval/eval_state.cpp
   src/eval/criteria.cpp
   src/eval/jp_fold.cpp
+  src/eval/jp_kana_table.cpp
   src/eval/jis0208_table.cpp
   src/eval/jis0208_table_lookup.cpp
   src/eval/coupon_schedule.cpp
@@ -215,6 +220,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/date_text_parse.cpp
   src/eval/range_args.cpp
   src/eval/scalar_ops.cpp
+  src/eval/spill_committer.cpp
   src/eval/special_forms_lazy.cpp
   src/eval/structured_ref.cpp
   src/eval/aggregate_lazy.cpp

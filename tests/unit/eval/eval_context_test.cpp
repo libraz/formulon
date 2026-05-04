@@ -250,6 +250,38 @@ TEST(EvalContextRecursive, MemoizationReusesResult) {
   EXPECT_EQ(v2.as_number(), 42.0);
 }
 
+// Verifies the recursive resolver tolerates `formula_text` stored with the
+// leading `=` prefix retained — `Sheet::set_cell_formula` stores whatever
+// the caller hands it verbatim, and external readers occasionally leave the
+// `=` in place. The shared `strip_formula_prefix` helper plus the parser's
+// own optional-prefix handling must combine to yield the same answer for
+// `=A1+1` and `A1+1`. INDIRECT exercises the recursive path explicitly.
+TEST(EvalContextRecursive, FormulaTextWithEqualsPrefixParsesCleanly) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(7.0));
+  // Leading `=` deliberately preserved.
+  sheet.set_cell_formula(1, 0, "=A1+1");
+  EvalState state;
+  const Value v = ResolveWithState(sheet, state, 1, 0);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 8.0);
+}
+
+TEST(EvalContextRecursive, FormulaTextIndirectThroughEqualsPrefixedCell) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(11.0));
+  // Cell B1 holds a formula stored WITH the `=` prefix that resolves
+  // through INDIRECT — the recursive resolve path in eval_context.cpp
+  // must strip the prefix before parsing or the parser sees `=` as the
+  // top-level token. ROW(...) / column-only inference avoids relying on
+  // INDIRECT(textfn) coverage.
+  sheet.set_cell_formula(0, 1, "=INDIRECT(\"A1\")+1");
+  EvalState state;
+  const Value v = ResolveWithState(sheet, state, 0, 1);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 12.0);
+}
+
 TEST(EvalContextRecursive, WithoutStateFormulaCellStillReturnsCachedValue) {
   Sheet sheet("Sheet1");
   sheet.set_cell_formula(0, 0, "=1+1");

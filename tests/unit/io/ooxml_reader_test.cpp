@@ -13,10 +13,12 @@
 #include <utility>
 #include <vector>
 
+#include "cell.h"
 #include "gtest/gtest.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
 #include "utils/error.h"
+#include "value.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -59,6 +61,42 @@ TEST(OoxmlReader, RoundTripsThreeSheetsInOrder) {
   EXPECT_EQ(result.workbook.sheet(0).name(), "Alpha");
   EXPECT_EQ(result.workbook.sheet(1).name(), "Beta");
   EXPECT_EQ(result.workbook.sheet(2).name(), "\xE3\x82\xAC\xE3\x83\xB3\xE3\x83\x9E");
+}
+
+// Regression: every text-cell `Value::text` must remain valid for the
+// workbook's lifetime, NOT only for the lifetime of the
+// `OoxmlReadResult`. Earlier slices stashed the inline-string deque on
+// the read result; moving the workbook out of the result and discarding
+// the result therefore left every text view dangling. The fix moves
+// the deque onto the workbook itself; this test pins that contract.
+TEST(OoxmlReader, WorkbookOutlivesReadResult) {
+  // Build a workbook with at least one inline-string cell so the
+  // text-storage deque is exercised on the read path.
+  Workbook src = Workbook::create();
+  std::string greeting = "Hello, world!";
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_value(0U, 0U, 0U, Value::text(greeting))));
+  const std::vector<std::uint8_t> bytes = SaveOrDie(src);
+
+  // Move the workbook out of the read result and immediately drop the
+  // result. The workbook must still report the cell text correctly.
+  Workbook wb = Workbook::create_empty();
+  {
+    auto result_or = read_ooxml(SpanOf(bytes));
+    ASSERT_TRUE(static_cast<bool>(result_or));
+    wb = std::move(result_or.value().workbook);
+  }  // OoxmlReadResult destructed here.
+
+  ASSERT_EQ(wb.sheet_count(), 1U);
+  const Cell* a1 = wb.sheet(0).cell_at(0U, 0U);
+  ASSERT_NE(a1, nullptr);
+  ASSERT_TRUE(a1->cached_value.is_text());
+  EXPECT_EQ(a1->cached_value.as_text(), "Hello, world!");
+
+  // And `save()` must succeed — the writer walks every cell's
+  // `Value::text` view and would crash under the old layout.
+  auto save_or = wb.save();
+  ASSERT_TRUE(static_cast<bool>(save_or));
+  EXPECT_FALSE(save_or.value().empty());
 }
 
 TEST(OoxmlReader, JapaneseSheetNameSurvivesRoundTrip) {
@@ -167,6 +205,118 @@ TEST(OoxmlReader, UnknownPartsExcludesSheetAndStylesAndSst) {
   EXPECT_EQ(path_eq("xl/styles.xml"), parts.end()) << "styles.xml unexpectedly still in unknown_parts";
   EXPECT_EQ(path_eq("xl/worksheets/sheet1.xml"), parts.end()) << "sheet1.xml unexpectedly still in unknown_parts";
   EXPECT_EQ(path_eq("xl/sharedStrings.xml"), parts.end()) << "sharedStrings.xml unexpectedly in unknown_parts";
+}
+
+// ---------------------------------------------------------------------------
+// Path-traversal hardening for `ResolveRelativePath`. A hostile rels file
+// with a Target like `../../../etc/passwd` must not be allowed to walk
+// out of the package root: even though the resulting path never reaches
+// the filesystem (the reader looks it up in the in-memory ZIP catalogue),
+// allowing the value to flow through to downstream stages — `has_entry`,
+// passthrough emission, link resolution — invites confusion-shaped bugs
+// at minimum and a real escape if any caller ever maps the path back to
+// disk.
+// ---------------------------------------------------------------------------
+
+TEST(OoxmlReader, ResolveRelativePathRefusesEscapingTarget) {
+  // base_dir = "xl" + target = "../../etc/passwd": one ".." pops "xl",
+  // the second ".." escapes the package root and must trigger
+  // kIoZipSlip.
+  auto result = internal::ResolveRelativePathForTesting("xl", "../../etc/passwd");
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoZipSlip);
+  // Diagnostic context must echo both arguments so the offending input
+  // is recoverable from logs.
+  EXPECT_NE(result.error().context.find("base_dir=xl"), std::string::npos);
+  EXPECT_NE(result.error().context.find("target=../../etc/passwd"), std::string::npos);
+}
+
+TEST(OoxmlReader, ResolveRelativePathRefusesPackageAbsoluteTarget) {
+  // A package-absolute Target ("/xl/...") bypasses base-dir-relative
+  // accounting entirely; we refuse it rather than silently treat it as
+  // root-relative.
+  auto result = internal::ResolveRelativePathForTesting("xl/_rels", "/etc/passwd");
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoZipSlip);
+}
+
+TEST(OoxmlReader, ResolveRelativePathAllowsValidParentRefs) {
+  // A single ".." that stays inside the package is legitimate:
+  // xl/worksheets/_rels/sheet1.xml.rels Target="../../theme/theme1.xml"
+  // resolves to "xl/theme/theme1.xml".
+  auto result = internal::ResolveRelativePathForTesting("xl/worksheets", "../theme/theme1.xml");
+  ASSERT_TRUE(static_cast<bool>(result)) << "rejected legitimate parent-relative target";
+  EXPECT_EQ(result.value(), "xl/theme/theme1.xml");
+}
+
+TEST(OoxmlReader, ResolveRelativePathRefusesEmptyResult) {
+  // Pop every directory off the stack but stop short of escaping; the
+  // resolver previously returned an empty string here, which downstream
+  // callers would happily store into rid->path maps. We now refuse
+  // empty results outright.
+  auto result = internal::ResolveRelativePathForTesting("xl", "..");
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoZipSlip);
+}
+
+/// Builds an `xl/_rels/workbook.xml.rels` body whose worksheet
+/// relationship Target attempts to escape the package root. Used to
+/// drive the end-to-end rejection test below.
+std::vector<std::uint8_t> RebuildArchiveWithMaliciousWorkbookRels(const std::vector<std::uint8_t>& src) {
+  mz_zip_archive reader{};
+  EXPECT_NE(mz_zip_reader_init_mem(&reader, src.data(), src.size(), 0), MZ_FALSE);
+  const mz_uint count = mz_zip_reader_get_num_files(&reader);
+
+  mz_zip_archive writer{};
+  EXPECT_NE(mz_zip_writer_init_heap(&writer, 0, 4096), MZ_FALSE);
+
+  static constexpr std::string_view kMaliciousRels =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+      "<Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
+      "Target=\"../../etc/passwd\"/>"
+      "</Relationships>";
+
+  for (mz_uint i = 0; i < count; ++i) {
+    char name_buf[256] = {};
+    const mz_uint name_len = mz_zip_reader_get_filename(&reader, i, name_buf, sizeof(name_buf));
+    EXPECT_GT(name_len, 0u);
+    const std::string_view name(name_buf);
+    if (name == "xl/_rels/workbook.xml.rels") {
+      EXPECT_NE(mz_zip_writer_add_mem(&writer, name_buf, kMaliciousRels.data(), kMaliciousRels.size(),
+                                      static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION)),
+                MZ_FALSE);
+      continue;
+    }
+    std::size_t extracted_size = 0;
+    void* extracted = mz_zip_reader_extract_to_heap(&reader, i, &extracted_size, 0);
+    EXPECT_NE(extracted, nullptr);
+    EXPECT_NE(mz_zip_writer_add_mem(&writer, name_buf, extracted, extracted_size,
+                                    static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION)),
+              MZ_FALSE);
+    mz_free(extracted);
+  }
+  mz_zip_reader_end(&reader);
+
+  void* archive_ptr = nullptr;
+  std::size_t archive_size = 0;
+  EXPECT_NE(mz_zip_writer_finalize_heap_archive(&writer, &archive_ptr, &archive_size), MZ_FALSE);
+  EXPECT_NE(mz_zip_writer_end(&writer), MZ_FALSE);
+  std::vector<std::uint8_t> out(static_cast<const std::uint8_t*>(archive_ptr),
+                                static_cast<const std::uint8_t*>(archive_ptr) + archive_size);
+  mz_free(archive_ptr);
+  return out;
+}
+
+TEST(OoxmlReader, RejectsArchiveWithEscapingRelsTarget) {
+  Workbook wb = Workbook::create();
+  const std::vector<std::uint8_t> ok_bytes = SaveOrDie(wb);
+  const std::vector<std::uint8_t> mutated = RebuildArchiveWithMaliciousWorkbookRels(ok_bytes);
+
+  auto result_or = read_ooxml(SpanOf(mutated));
+  ASSERT_FALSE(static_cast<bool>(result_or));
+  EXPECT_EQ(result_or.error().code, FormulonErrorCode::kIoZipSlip);
 }
 
 TEST(OoxmlReader, EmptyWorkbookFactoryProducesZeroSheets) {

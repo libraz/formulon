@@ -111,9 +111,20 @@ void AppendErrorCellXml(std::string& out, std::string_view addr, ErrorCode code,
 // preserved without per-span boundaries.
 void AppendLiteralCellBody(std::string& out, const Value& value, std::string_view phonetic) {
   if (value.is_number()) {
+    // Defensive: NaN / +/-Inf must never reach AppendNumberValue, which
+    // would emit `nan`/`inf` text inside `<v>` (Excel rejects this on
+    // load). The caller AppendCellXml pre-screens, but a future caller
+    // path may not — downgrade to #NUM! here as a last line of defence.
+    const double v = value.as_number();
+    if (!std::isfinite(v)) {
+      out.append("\" t=\"e\"><v>");
+      out.append(display_name(ErrorCode::Num));
+      out.append("</v></c>");
+      return;
+    }
     out.append("\">");
     out.append("<v>");
-    AppendNumberValue(out, value.as_number());
+    AppendNumberValue(out, v);
     out.append("</v></c>");
     return;
   }
@@ -292,9 +303,16 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     // expectation. The cleanest fix is to inline the helper's prefix
     // here.
     if (cell.cached_value.is_number()) {
-      out.append(" ><v>");
-      AppendNumberValue(out, cell.cached_value.as_number());
-      out.append("</v></c>");
+      const double nv = cell.cached_value.as_number();
+      if (!std::isfinite(nv)) {
+        out.append(" t=\"e\"><v>");
+        out.append(display_name(ErrorCode::Num));
+        out.append("</v></c>");
+      } else {
+        out.append(" ><v>");
+        AppendNumberValue(out, nv);
+        out.append("</v></c>");
+      }
     } else if (cell.cached_value.is_boolean()) {
       out.append(" t=\"b\"><v>");
       out.push_back(cell.cached_value.as_boolean() ? '1' : '0');

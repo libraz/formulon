@@ -5,6 +5,8 @@
 
 #include "io/tables_reader.h"
 
+#include <cerrno>
+#include <climits>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -23,6 +25,10 @@ namespace {
 /// Parses an unsigned-int attribute, returning `default_value` on any
 /// malformed / negative / out-of-range input. Defensive parsing keeps a
 /// stray attribute from rejecting an otherwise-valid table.
+///
+/// Uses `strtoul` with explicit `errno` and `> UINT32_MAX` checks: a
+/// 32-bit `long` would clamp legitimate IDs (e.g. tableId="3000000000")
+/// to LONG_MAX without surfacing the overflow.
 std::uint32_t ParseU32Attr(const pugi::xml_attribute& attr, std::uint32_t default_value) {
   if (!attr) {
     return default_value;
@@ -31,9 +37,16 @@ std::uint32_t ParseU32Attr(const pugi::xml_attribute& attr, std::uint32_t defaul
   if (raw == nullptr || *raw == '\0') {
     return default_value;
   }
+  // Reject leading sign characters explicitly: strtoul accepts a leading
+  // '-' and silently wraps the result, so "-1" would otherwise parse as
+  // UINT32_MAX rather than being rejected.
+  if (*raw == '-' || *raw == '+') {
+    return default_value;
+  }
+  errno = 0;
   char* end = nullptr;
-  long parsed = std::strtol(raw, &end, 10);
-  if (end == raw || *end != '\0' || parsed < 0) {
+  const unsigned long parsed = std::strtoul(raw, &end, 10);
+  if (end == raw || *end != '\0' || errno != 0 || parsed > static_cast<unsigned long>(UINT32_MAX)) {
     return default_value;
   }
   return static_cast<std::uint32_t>(parsed);

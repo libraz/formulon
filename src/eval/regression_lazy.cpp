@@ -56,15 +56,20 @@ bool resolve_array_arg(const parser::AstNode& arg_node, Arena& arena, const Func
                        const EvalContext& ctx, ResolvedArray* out, Value* out_err) {
   const parser::NodeKind k = arg_node.kind();
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
-    ErrorCode err_code = ErrorCode::NA;
-    if (!resolve_range_arg(arg_node, arena, registry, ctx, &out->cells, &err_code, &out->rows, &out->cols)) {
+    auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
+    if (!resolved) {
       // `resolve_range_arg` reports `#VALUE!` for non-Ref / non-RangeOp
       // shapes and `#REF!` for expansion failures. For the regression
       // family we remap the shape-rejection case to `#N/A` to match
       // Excel; `#REF!` passes through unchanged.
+      const ErrorCode err_code = resolved.error();
       *out_err = Value::error(err_code == ErrorCode::Value ? ErrorCode::NA : err_code);
       return false;
     }
+    auto& rr = resolved.value();
+    out->rows = rr.rows;
+    out->cols = rr.cols;
+    out->cells = std::move(rr.cells);
     return true;
   }
   if (k == parser::NodeKind::ArrayLiteral) {

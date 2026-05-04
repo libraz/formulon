@@ -154,6 +154,39 @@ TEST(JpFold, HiraAndFullWidthLatinStillFoldUnderHalfKanaDisabled) {
   EXPECT_EQ(fold_jp_text("\xEF\xBC\x91", /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false), "1");
 }
 
+// `fold_and_lower` composes the kana fold with an ASCII lowercase pass.
+// These tests pin the equality verdict (cell vs. lookup) the lookup
+// family relies on so xlookup and classic stay byte-identical.
+TEST(FoldAndLower, AsciiLowercase) {
+  EXPECT_EQ(fold_and_lower("HELLO"), "hello");
+  EXPECT_EQ(fold_and_lower("Hello"), "hello");
+  EXPECT_EQ(fold_and_lower("hello"), "hello");
+}
+
+TEST(FoldAndLower, FullWidthAsciiFoldsThenLowercases) {
+  // Ａ (U+FF21) -> 'A' -> 'a'; Ｂ -> 'b'.
+  EXPECT_EQ(fold_and_lower("\xEF\xBC\xA1\xEF\xBC\xA2"), "ab");
+}
+
+TEST(FoldAndLower, HalfWidthKatakanaWithVoicingComposes) {
+  // ｶﾞ (FF76 FF9E) -> ガ (U+30AC). Lower-pass leaves CJK bytes alone.
+  EXPECT_EQ(fold_and_lower("\xEF\xBD\xB6\xEF\xBE\x9E"), "\xE3\x82\xAC");
+}
+
+TEST(FoldAndLower, MixedAsciiAndKana) {
+  // Ｓｍｉｔｈガ -> "smith" + "ガ".
+  EXPECT_EQ(fold_and_lower("\xEF\xBC\xB3\xEF\xBD\x8D\xEF\xBD\x89\xEF\xBD\x94\xEF\xBD\x88\xE3\x82\xAC"),
+            "smith\xE3\x82\xAC");
+}
+
+TEST(FoldAndLower, FullWidthDigitsNotFoldedByDefault) {
+  // Default mode (lookup parity): full-width digit '１' (U+FF11) stays
+  // unfolded; ASCII pass leaves it alone.
+  EXPECT_EQ(fold_and_lower("\xEF\xBC\x91"), "\xEF\xBC\x91");
+  // Opt in to digit folding (criteria parity): '１' -> '1'.
+  EXPECT_EQ(fold_and_lower("\xEF\xBC\x91", /*fold_fullwidth_digits=*/true), "1");
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

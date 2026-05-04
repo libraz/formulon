@@ -70,6 +70,22 @@ struct Utf8DecodeResult {
 /// UNICODE() to read the leading codepoint of a string.
 Utf8DecodeResult decode_first_utf8_codepoint(std::string_view text) noexcept;
 
+/// Lenient single-step UTF-8 decoder. Decodes the codepoint starting at
+/// `text[i]` (caller must guarantee `i < text.size()`), writes the consumed
+/// byte length into `*out_bytes`, and returns the codepoint.
+///
+/// Lenient handling on malformed input matches the engine's prevailing
+/// `decode_utf8` / `next_utf8_step` convention used by JP folding,
+/// criteria wildcards, and DBCS text helpers: every malformed-leading-byte,
+/// truncated, or bad-continuation case returns U+FFFD with `*out_bytes = 1`
+/// so the caller can simply advance by `*out_bytes` and resynchronise.
+/// When `i >= text.size()` the function returns U+FFFD with
+/// `*out_bytes = 0` (matches the pre-existing `criteria.cpp` guard).
+///
+/// Distinct from `decode_first_utf8_codepoint`, which signals "invalid"
+/// via a `valid=false` flag instead of advancing by one byte.
+std::uint32_t decode_utf8_step(std::string_view text, std::size_t i, std::size_t* out_bytes) noexcept;
+
 }  // namespace eval
 }  // namespace formulon
 

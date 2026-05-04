@@ -290,7 +290,10 @@ Expected<Workbook, Error> read_via_sax(io::ByteSpan bytes, const Workbook& templ
     wb.add_sheet(std::string(template_wb.sheet(i).name()));
   }
 
-  std::deque<std::string> text_storage;
+  // The workbook itself owns the text-storage deque now, so the SAX
+  // reader appends directly into `wb.mutable_text_storage()`. Cell
+  // `Value::text` views remain valid for the workbook's lifetime.
+  std::deque<std::string>& text_storage = wb.mutable_text_storage();
   // Walk the same per-sheet part paths the DOM reader resolves. We
   // enumerate the archive directly because we want the raw bytes
   // regardless of relationship structure; the assumption is that
@@ -314,12 +317,9 @@ Expected<Workbook, Error> read_via_sax(io::ByteSpan bytes, const Workbook& templ
       return rs.error();
     }
   }
-  // Anchor the text storage on a static so the views into it remain
-  // valid for the lifetime of the test (we only ever append). Using a
-  // function-scoped static is safe under gtest's single-threaded
-  // execution.
-  static std::deque<std::deque<std::string>>& s_pool = *new std::deque<std::deque<std::string>>;
-  s_pool.push_back(std::move(text_storage));
+  // Text storage now travels with the workbook itself, so no static
+  // anchor is needed: the `Value::text` views remain valid for as
+  // long as the returned `Workbook` is alive.
   return wb;
 }
 

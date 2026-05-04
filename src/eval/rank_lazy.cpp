@@ -56,11 +56,12 @@ bool resolve_array_cells(const parser::AstNode& arg_node, Arena& arena, const Fu
                          const EvalContext& ctx, std::vector<Value>* out_cells, Value* out_err) {
   const parser::NodeKind k = arg_node.kind();
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
-    ErrorCode err_code = ErrorCode::Value;
-    if (!resolve_range_arg(arg_node, arena, registry, ctx, out_cells, &err_code, nullptr, nullptr)) {
-      *out_err = Value::error(err_code);
+    auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
+    if (!resolved) {
+      *out_err = Value::error(resolved.error());
       return false;
     }
+    *out_cells = std::move(resolved.value().cells);
     return true;
   }
   if (k == parser::NodeKind::ArrayLiteral) {

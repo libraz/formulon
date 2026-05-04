@@ -48,13 +48,12 @@ bool collect_cash_flows(const parser::AstNode& arg, Arena& arena, const Function
   out_flows->clear();
   const parser::NodeKind k = arg.kind();
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
-    std::vector<Value> cells;
-    ErrorCode range_err = ErrorCode::Value;
-    if (!resolve_range_arg(arg, arena, registry, ctx, &cells, &range_err)) {
-      *out_err = Value::error(range_err);
+    auto resolved = resolve_range_arg(arg, arena, registry, ctx);
+    if (!resolved) {
+      *out_err = Value::error(resolved.error());
       return false;
     }
-    for (const Value& v : cells) {
+    for (const Value& v : resolved.value().cells) {
       if (v.is_error()) {
         *out_err = v;
         return false;
@@ -456,11 +455,12 @@ bool collect_range_cells(const parser::AstNode& arg, Arena& arena, const Functio
   out_cells->clear();
   const parser::NodeKind k = arg.kind();
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
-    ErrorCode range_err = ErrorCode::Value;
-    if (!resolve_range_arg(arg, arena, registry, ctx, out_cells, &range_err)) {
-      *out_err = Value::error(range_err);
+    auto resolved = resolve_range_arg(arg, arena, registry, ctx);
+    if (!resolved) {
+      *out_err = Value::error(resolved.error());
       return false;
     }
+    *out_cells = std::move(resolved.value().cells);
     return true;
   }
   if (k == parser::NodeKind::ArrayLiteral) {

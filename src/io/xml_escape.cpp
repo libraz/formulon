@@ -10,6 +10,14 @@ namespace io {
 
 void AppendXmlEscaped(std::string& out, std::string_view in) {
   for (char raw : in) {
+    // XML 1.0 forbids U+0000 and U+0001..U+001F (except TAB, LF, CR) in
+    // document content. Emitting them verbatim makes the resulting part
+    // un-reparseable by pugixml on round-trip. Strip them defensively;
+    // Excel itself essentially never produces these in cell text.
+    const unsigned char byte = static_cast<unsigned char>(raw);
+    if (byte < 0x20U && raw != '\t' && raw != '\n' && raw != '\r') {
+      continue;
+    }
     switch (raw) {
       case '&':
         out.append("&amp;");

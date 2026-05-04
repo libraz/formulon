@@ -18,7 +18,6 @@
 #include "gtest/gtest.h"
 
 namespace formulon {
-namespace eval {
 namespace text_format {
 namespace {
 
@@ -225,5 +224,4 @@ TEST(DateFormatMixedRejection, MonthAndZeroDigit) {
 
 }  // namespace
 }  // namespace text_format
-}  // namespace eval
 }  // namespace formulon

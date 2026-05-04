@@ -4,12 +4,11 @@
 //
 // Design notes:
 //
-//   * The opaque `fm_workbook_t` is a thin C++ struct that owns either a
-//     bare `Workbook` (for `create` / `create_empty`) or a full
-//     `io::OoxmlReadResult` (for `load`). The latter is required so the
-//     `text_storage` deque outlives every `Value::text` view that the
-//     reader populated; without it, the cell-text views would dangle the
-//     moment the result was discarded.
+//   * The opaque `fm_workbook_t` is a thin C++ struct that owns a single
+//     `Workbook`. The workbook itself owns the text-storage deque that
+//     backs every `Value::text` view, so the load path simply moves the
+//     workbook out of the `io::OoxmlReadResult`; the cell-text views
+//     remain valid for the workbook's lifetime.
 //
 //   * Every text byte that crosses the C boundary needs to be
 //     NUL-terminated. `Value::text` carries a non-owning `string_view`
@@ -130,20 +129,14 @@ std::string_view intern_text(TextStore& store, std::string_view text) {
 
 // Opaque handle definition.
 //
-// Holds either a bare `Workbook` plus its own text storage (for the
-// `create` / `create_empty` paths) or the full `OoxmlReadResult` (for
-// `load`). The `result_` slot is engaged for loaded workbooks so the
-// reader's `text_storage` deque survives long enough for every cell view
-// to remain valid.
+// Holds a single `Workbook`. The workbook itself owns the text-storage
+// deque that backs every `Value::text` view, so the load path no longer
+// needs to keep an `OoxmlReadResult` alive beyond the call that
+// produced it — the workbook is move-constructed out of the result and
+// retains the storage. (Earlier slices kept the result alive purely
+// for that reason; the dual-slot layout is no longer needed.)
 struct fm_workbook {
-  // For `load`: holds the entire OoxmlReadResult so its `text_storage`
-  // outlives the workbook handle. The workbook reference below points
-  // into `result_->workbook` when this slot is engaged.
-  std::optional<formulon::io::OoxmlReadResult> result;
-
-  // For `create` / `create_empty`: holds the workbook directly.
-  // Ignored when `result_` is engaged.
-  std::optional<formulon::Workbook> standalone;
+  std::optional<formulon::Workbook> wb;
 
   // Storage for UTF-8 strings owned by this handle: cell text inputs
   // (`fm_workbook_set_text`) and read-side NUL-terminated copies
@@ -151,20 +144,8 @@ struct fm_workbook {
   // would otherwise alias inline storage).
   TextStore text_store;
 
-  // Returns the underlying workbook. Exactly one of the two `optional`
-  // slots is engaged for any valid handle.
-  formulon::Workbook& workbook() {
-    if (result.has_value()) {
-      return result->workbook;
-    }
-    return *standalone;
-  }
-  const formulon::Workbook& workbook() const {
-    if (result.has_value()) {
-      return result->workbook;
-    }
-    return *standalone;
-  }
+  formulon::Workbook& workbook() { return *wb; }
+  const formulon::Workbook& workbook() const { return *wb; }
 };
 
 namespace {
@@ -231,7 +212,7 @@ extern "C" fm_status_t fm_workbook_create(fm_workbook_t** out) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_create: out is NULL");
   }
   auto handle = std::unique_ptr<fm_workbook_t>(new fm_workbook_t{});
-  handle->standalone.emplace(formulon::Workbook::create());
+  handle->wb.emplace(formulon::Workbook::create());
   *out = handle.release();
   return 0;
 }
@@ -242,7 +223,7 @@ extern "C" fm_status_t fm_workbook_create_empty(fm_workbook_t** out) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_create_empty: out is NULL");
   }
   auto handle = std::unique_ptr<fm_workbook_t>(new fm_workbook_t{});
-  handle->standalone.emplace(formulon::Workbook::create_empty());
+  handle->wb.emplace(formulon::Workbook::create_empty());
   *out = handle.release();
   return 0;
 }
@@ -260,7 +241,11 @@ extern "C" fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_wor
     return set_last_error(result.error());
   }
   auto handle = std::unique_ptr<fm_workbook_t>(new fm_workbook_t{});
-  handle->result.emplace(std::move(result.value()));
+  // The workbook now owns the text-storage deque that backs every
+  // Text-cell `string_view`, so we move only the workbook out of the
+  // result; the rest of `OoxmlReadResult` (passthrough parts mirror,
+  // audit counter) is discarded.
+  handle->wb.emplace(std::move(result.value().workbook));
   *out = handle.release();
   return 0;
 }

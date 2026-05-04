@@ -74,9 +74,18 @@ std::string NormalisePartName(std::string_view raw) {
 /// Resolves an OOXML rels target relative to a base directory, normalising
 /// `.` / `..` segments. Mirror of the OOXML reader's helper, restated
 /// here so we don't drag the OOXML reader header into this TU.
-std::string ResolveRelativePath(std::string_view base_dir, std::string_view target) {
+///
+/// Path-traversal hardening matches the OOXML variant: a `Target` with
+/// excess `..` segments or a leading `/` (package-absolute) is refused
+/// with `kIoZipSlip`.
+Expected<std::string, Error> ResolveRelativePath(std::string_view base_dir, std::string_view target) {
   if (!target.empty() && target.front() == '/') {
-    return std::string(target.substr(1));
+    std::string ctx("context=xlsb_reader base_dir=");
+    ctx.append(base_dir);
+    ctx.append(" target=");
+    ctx.append(target);
+    return make_error(FormulonErrorCode::kIoZipSlip, "rels target uses package-absolute path; refusing to resolve",
+                      std::move(ctx));
   }
   std::vector<std::string> stack;
   std::size_t start = 0;
@@ -96,9 +105,15 @@ std::string ResolveRelativePath(std::string_view base_dir, std::string_view targ
         if (seg == ".") {
           // skip
         } else if (seg == "..") {
-          if (!stack.empty()) {
-            stack.pop_back();
+          if (stack.empty()) {
+            std::string ctx("context=xlsb_reader base_dir=");
+            ctx.append(base_dir);
+            ctx.append(" target=");
+            ctx.append(target);
+            return make_error(FormulonErrorCode::kIoZipSlip, "rels target escapes package root via '..' traversal",
+                              std::move(ctx));
           }
+          stack.pop_back();
         } else {
           stack.emplace_back(seg);
         }
@@ -112,6 +127,13 @@ std::string ResolveRelativePath(std::string_view base_dir, std::string_view targ
       out.push_back('/');
     }
     out.append(stack[i]);
+  }
+  if (out.empty()) {
+    std::string ctx("context=xlsb_reader base_dir=");
+    ctx.append(base_dir);
+    ctx.append(" target=");
+    ctx.append(target);
+    return make_error(FormulonErrorCode::kIoZipSlip, "rels target resolves to empty path", std::move(ctx));
   }
   return out;
 }
@@ -256,11 +278,23 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
       if (id.empty()) {
         continue;
       }
-      rels.sheet_targets.emplace(id, ResolveRelativePath(base_dir, target));
+      auto resolved = ResolveRelativePath(base_dir, target);
+      if (!resolved) {
+        return resolved.error();
+      }
+      rels.sheet_targets.emplace(id, std::move(resolved).value());
     } else if (type == kRelSharedStrings) {
-      rels.sst_path = ResolveRelativePath(base_dir, target);
+      auto resolved = ResolveRelativePath(base_dir, target);
+      if (!resolved) {
+        return resolved.error();
+      }
+      rels.sst_path = std::move(resolved).value();
     } else if (type == kRelStyles) {
-      rels.styles_path = ResolveRelativePath(base_dir, target);
+      auto resolved = ResolveRelativePath(base_dir, target);
+      if (!resolved) {
+        return resolved.error();
+      }
+      rels.styles_path = std::move(resolved).value();
     }
   }
   return rels;
@@ -783,8 +817,10 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   }
 
   // 6. xl/sharedStrings.bin — load before the per-sheet decode loop so
-  // BrtCellIsst can resolve indices in-pipeline.
-  std::deque<std::string> text_storage;
+  // BrtCellIsst can resolve indices in-pipeline. The text deque is
+  // owned by the workbook itself so `Value::text` views remain valid
+  // after the caller moves the workbook out of the read result.
+  std::deque<std::string>& text_storage = wb.mutable_text_storage();
   std::vector<std::string_view> sst_entries;
   if (!wb_rels.sst_path.empty() && zip.has_entry(wb_rels.sst_path)) {
     auto sst_bytes_or = zip.read_entry(wb_rels.sst_path);
@@ -871,7 +907,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
             [](const PassthroughPart& a, const PassthroughPart& b) { return a.path < b.path; });
   wb.set_passthrough_parts(unknown_parts);
 
-  XlsbReadResult result{std::move(wb), std::move(unknown_parts), std::move(text_storage), cells_read};
+  XlsbReadResult result{std::move(wb), std::move(unknown_parts), cells_read};
   return result;
 }
 

@@ -138,10 +138,13 @@ Value apply_unary(parser::UnaryOp op, const Value& operand) {
   if (operand.is_error()) {
     return operand;
   }
-  // Unary `+` in Excel 365 is an identity operation — it does NOT coerce.
-  // `=+""` evaluates to the empty string (not #VALUE!); `=+TRUE` stays
-  // TRUE; numbers are returned unchanged. This diverges from Minus and
-  // Percent, which explicitly require a numeric coercion.
+  // Unary `+` in Excel 365 is the type-preserving identity — it does NOT
+  // coerce its operand. `=+""` evaluates to the empty string (not
+  // #VALUE!); `=+TRUE` stays TRUE; numbers are returned unchanged. This
+  // diverges from Minus and Percent, which explicitly require numeric
+  // coercion. Returning here BEFORE the `coerce_to_number` call below is
+  // load-bearing: removing this short-circuit would change `+x` from an
+  // identity into a #VALUE!-on-text coercion, breaking Excel parity.
   if (op == parser::UnaryOp::Plus) {
     return operand;
   }
@@ -150,13 +153,19 @@ Value apply_unary(parser::UnaryOp op, const Value& operand) {
     return Value::error(coerced.error());
   }
   const double x = coerced.value();
+  // `UnaryOp::Plus` is intentionally absent from this switch — the
+  // identity short-circuit above handles it before any coercion. If a
+  // future Plus variant ever needed numeric handling, it would have to
+  // re-enter this switch deliberately rather than fall through silently.
   switch (op) {
-    case parser::UnaryOp::Plus:
-      return finalize_arithmetic(x);
     case parser::UnaryOp::Minus:
       return finalize_arithmetic(-x);
     case parser::UnaryOp::Percent:
       return finalize_arithmetic(x / 100.0);
+    case parser::UnaryOp::Plus:
+      // Unreachable — handled by the early return above. Kept here so
+      // the compiler's exhaustiveness check still covers every enum.
+      return operand;
   }
   return Value::error(ErrorCode::Value);
 }

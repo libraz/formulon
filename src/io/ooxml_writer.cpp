@@ -39,6 +39,7 @@
 #include "io/tables_reader.h"
 #include "io/workbook_kind.h"
 #include "io/xml_escape.h"
+#include "io/xml_utils.h"
 #include "miniz.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
@@ -57,7 +58,8 @@ namespace {
 // Constants
 // ---------------------------------------------------------------------------
 
-constexpr std::string_view kXmlDecl = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
+// `kXmlDecl` lives in `io/xml_utils.h` and is shared with comments / cf
+// writers (single source of truth for the XML 1.0 prologue).
 
 constexpr std::string_view kCtPackageRels = "application/vnd.openxmlformats-package.relationships+xml";
 constexpr std::string_view kCtXml = "application/xml";
@@ -404,6 +406,25 @@ inline void AppendEscaped(std::string& out, std::string_view text) {
   AppendXmlEscaped(out, text);
 }
 
+/// Appends a single `<Override PartName="/<path>" ContentType="<ct>"/>`
+/// entry plus its trailing newline. Used by `BuildContentTypes` for the
+/// per-table / per-pivot / per-comments / passthrough Override blocks
+/// — each emitting bytes-identical fragments before this helper landed.
+/// `path` is escaped to defend against passthrough paths carrying
+/// XML-critical characters; `ct` is a writer-controlled string view from
+/// our content-type table and is emitted verbatim.
+inline void AppendOverride(std::string& out, std::string_view path, std::string_view ct, bool escape_path = false) {
+  out.append("  <Override PartName=\"/");
+  if (escape_path) {
+    AppendXmlEscaped(out, path);
+  } else {
+    out.append(path.data(), path.size());
+  }
+  out.append("\" ContentType=\"");
+  out.append(ct.data(), ct.size());
+  out.append("\"/>\n");
+}
+
 // ---------------------------------------------------------------------------
 // Part builders
 // ---------------------------------------------------------------------------
@@ -434,51 +455,28 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     out.append(kCtVmlDrawing);
     out.append("\"/>\n");
   }
-  out.append("  <Override PartName=\"/xl/workbook.xml\" ContentType=\"");
-  out.append(workbook_kind_content_type(wb.kind()));
-  out.append("\"/>\n");
+  AppendOverride(out, "xl/workbook.xml", workbook_kind_content_type(wb.kind()));
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    out.append("  <Override PartName=\"/xl/worksheets/sheet");
-    out.append(std::to_string(i + 1));
-    out.append(".xml\" ContentType=\"");
-    out.append(kCtWorksheet);
-    out.append("\"/>\n");
+    const std::string sheet_path = "xl/worksheets/sheet" + std::to_string(i + 1) + ".xml";
+    AppendOverride(out, sheet_path, kCtWorksheet);
   }
-  out.append("  <Override PartName=\"/xl/styles.xml\" ContentType=\"");
-  out.append(kCtStyles);
-  out.append("\"/>\n");
+  AppendOverride(out, "xl/styles.xml", kCtStyles);
   // Per-table overrides (one per emitted table part, regardless of
   // owning sheet).
   for (const auto& per_sheet : plan.tables_by_sheet) {
     for (const EmissionPlan::PerSheetTable& t : per_sheet) {
-      out.append("  <Override PartName=\"/");
-      out.append(t.path);
-      out.append("\" ContentType=\"");
-      out.append(kCtTable);
-      out.append("\"/>\n");
+      AppendOverride(out, t.path, kCtTable);
     }
   }
   // Pivot caches: one Override per definition + one per records part.
   for (const EmissionPlan::PivotCachePlan& c : plan.pivot_caches) {
-    out.append("  <Override PartName=\"/");
-    out.append(c.definition_path);
-    out.append("\" ContentType=\"");
-    out.append(kCtPivotCacheDefinition);
-    out.append("\"/>\n");
-    out.append("  <Override PartName=\"/");
-    out.append(c.records_path);
-    out.append("\" ContentType=\"");
-    out.append(kCtPivotCacheRecords);
-    out.append("\"/>\n");
+    AppendOverride(out, c.definition_path, kCtPivotCacheDefinition);
+    AppendOverride(out, c.records_path, kCtPivotCacheRecords);
   }
   // Pivot tables: one Override per part.
   for (const auto& per_sheet : plan.pivot_tables_by_sheet) {
     for (const EmissionPlan::PivotTablePlan& t : per_sheet) {
-      out.append("  <Override PartName=\"/");
-      out.append(t.path);
-      out.append("\" ContentType=\"");
-      out.append(kCtPivotTable);
-      out.append("\"/>\n");
+      AppendOverride(out, t.path, kCtPivotTable);
     }
   }
   // Comments parts: one Override per part. VML drawings are covered
@@ -487,11 +485,7 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     if (cplan.numeric_id == 0) {
       continue;
     }
-    out.append("  <Override PartName=\"/");
-    out.append(cplan.comments_path);
-    out.append("\" ContentType=\"");
-    out.append(kCtComments);
-    out.append("\"/>\n");
+    AppendOverride(out, cplan.comments_path, kCtComments);
   }
   // Passthrough overrides: only for entries that carried an explicit
   // ContentType in the source archive. Default-typed parts (empty
@@ -501,6 +495,8 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     if (part->content_type.empty()) {
       continue;
     }
+    // Passthrough payloads may carry XML-critical bytes in either path
+    // or content type (rare but legal); escape both.
     out.append("  <Override PartName=\"/");
     AppendXmlEscaped(out, part->path);
     out.append("\" ContentType=\"");

@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "pugixml.hpp"
 #include "sheet.h"
 #include "value.h"
 
@@ -144,6 +145,52 @@ TEST(BuildSheetDataXml, InfDowngradesToNum) {
   const std::string xml = BuildSheetDataXml(s);
   EXPECT_NE(xml.find("t=\"e\""), std::string::npos) << xml;
   EXPECT_NE(xml.find("#NUM!"), std::string::npos) << xml;
+}
+
+TEST(BuildSheetDataXml, StyledNaNDowngradesToNum) {
+  // Regression: a styled (xf_index != 0) cell holding NaN took the
+  // inline-style branch in AppendCellXml that bypasses the pre-screen
+  // and emitted "<v>nan</v>" verbatim. The branch now downgrades to
+  // an error cell, matching the unstyled path.
+  Sheet s("Sheet1");
+  s.set_cell_value(0U, 0U, Value::number(std::numeric_limits<double>::quiet_NaN()));
+  s.set_cell_xf_index(0U, 0U, 7U);
+  const std::string xml = BuildSheetDataXml(s);
+  EXPECT_NE(xml.find("t=\"e\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("#NUM!"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("nan"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("inf"), std::string::npos) << xml;
+}
+
+TEST(BuildSheetDataXml, StyledInfDowngradesToNum) {
+  Sheet s("Sheet1");
+  s.set_cell_value(0U, 0U, Value::number(-std::numeric_limits<double>::infinity()));
+  s.set_cell_xf_index(0U, 0U, 4U);
+  const std::string xml = BuildSheetDataXml(s);
+  EXPECT_NE(xml.find("t=\"e\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("#NUM!"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("inf"), std::string::npos) << xml;
+}
+
+TEST(BuildSheetDataXml, ControlCharacterStrippedInText) {
+  // Regression: U+0001..U+001F (excluding TAB/LF/CR) are forbidden in
+  // XML 1.0 content. AppendXmlEscaped used to pass them through, which
+  // produced bytes that pugixml refuses to re-parse on round-trip.
+  Sheet s("Sheet1");
+  // "ab\x01cd\x0Bef" — \x01 (SOH) and \x0B (VT) must vanish.
+  s.set_cell_value(0U, 0U,
+                   Value::text(std::string("ab\x01"
+                                           "cd\x0B"
+                                           "ef")));
+  const std::string xml = BuildSheetDataXml(s);
+  EXPECT_EQ(xml.find('\x01'), std::string::npos) << xml;
+  EXPECT_EQ(xml.find('\x0B'), std::string::npos) << xml;
+  EXPECT_NE(xml.find("abcdef"), std::string::npos) << xml;
+
+  // Re-parse the produced XML to confirm it is well-formed.
+  pugi::xml_document doc;
+  pugi::xml_parse_result rc = doc.load_buffer(xml.data(), xml.size());
+  EXPECT_TRUE(rc) << rc.description();
 }
 
 TEST(BuildSheetDataXml, NegZeroNormalized) {

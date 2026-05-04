@@ -52,9 +52,13 @@ namespace parser {
 /// may recurse before we emit `NestedFormulaTooDeep` and bail to the
 /// nearest sync point; this is the parser's stack-overflow guard.
 struct ParserOptions {
-  /// Maximum number of `ParseError` records to accumulate. When the limit is
-  /// hit the offending error is recorded normally and a sentinel
-  /// `TooManyErrors` entry is appended; further parsing is skipped.
+  /// Total cap on the size of the diagnostic list, including the
+  /// `TooManyErrors` sentinel that the parser appends when the cap is
+  /// reached. With the default of `50` the parser emits up to **49**
+  /// real diagnostics plus **1** trailing `TooManyErrors` sentinel —
+  /// `errors_.size() <= max_error_count` is preserved as an invariant by
+  /// the cap check in `parser.cpp`. After the sentinel is appended,
+  /// further parsing is skipped (the parser short-circuits).
   std::uint32_t max_error_count = 50;
   /// Maximum recursion depth of `parse_expression`. Excel-side formulas in
   /// the wild rarely exceed double-digit depths; 128 leaves a comfortable

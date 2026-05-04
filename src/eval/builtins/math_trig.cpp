@@ -30,18 +30,30 @@ namespace {
 // `RADIANS(180) == kPi` exact.
 static constexpr double kPi = 3.14159265358979323846;
 
-// EXP(x) - e raised to x. Overflow (e.g. EXP(1000)) produces +Inf, which is
-// caught by the finite-check and surfaces as `#NUM!`. EXP(0) == 1.
-Value Exp(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+// Shared kernel for unary numeric built-ins that follow the
+// "coerce arg → std::*(x) → reject NaN/Inf as #NUM!" pattern. Used by
+// EXP, the trigonometric primaries (SIN/COS/TAN/ATAN), and the entire
+// hyperbolic family (SINH/COSH/TANH/ASINH). Functions with extra domain
+// guards (LN/LOG/LOG10/ASIN/ACOS/ACOSH/ATANH) keep their own bodies
+// because the guard can short-circuit before invoking the math function.
+using DoubleFn = double (*)(double);
+
+inline Value apply_unary_math(DoubleFn fn, const Value* args) {
   auto x = coerce_to_number(args[0]);
   if (!x) {
     return Value::error(x.error());
   }
-  const double r = std::exp(x.value());
+  const double r = fn(x.value());
   if (std::isnan(r) || std::isinf(r)) {
     return Value::error(ErrorCode::Num);
   }
   return Value::number(r);
+}
+
+// EXP(x) - e raised to x. Overflow (e.g. EXP(1000)) produces +Inf, which is
+// caught by the finite-check and surfaces as `#NUM!`. EXP(0) == 1.
+Value Exp(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  return apply_unary_math(&std::exp, args);
 }
 
 // LN(x) - natural logarithm. Excel rejects `x <= 0` with `#NUM!`.
@@ -154,28 +166,12 @@ Value Degrees(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // non-finite results (essentially impossible for finite input) surface
 // `#NUM!`.
 Value Sin(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  const double r = std::sin(x.value());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return apply_unary_math(&std::sin, args);
 }
 
 // COS(x) - cosine in radians.
 Value Cos(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  const double r = std::cos(x.value());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return apply_unary_math(&std::cos, args);
 }
 
 // TAN(x) - tangent in radians. Excel quirk pin: even at the pole
@@ -184,15 +180,7 @@ Value Cos(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // so we do NOT pre-reject pole-adjacent inputs - only true Inf/NaN is
 // reported as `#NUM!`.
 Value Tan(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  const double r = std::tan(x.value());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return apply_unary_math(&std::tan, args);
 }
 
 // ASIN(x) - arcsine. Domain [-1, 1]; outside -> `#NUM!`. Result in
@@ -232,15 +220,7 @@ Value Acos(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // ATAN(x) - arctangent. No domain restriction. Result in (-pi/2, pi/2)
 // radians.
 Value Atan(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  const double r = std::atan(x.value());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return apply_unary_math(&std::atan, args);
 }
 
 // ATAN2(x, y) - two-argument arctangent. Excel's argument order is
@@ -278,54 +258,22 @@ Value Atan2(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // SINH(x) - hyperbolic sine. Overflow (|x| beyond ~710) yields +/-Inf from
 // std::sinh, caught by the finite-check and reported as `#NUM!`.
 Value Sinh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  const double r = std::sinh(x.value());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return apply_unary_math(&std::sinh, args);
 }
 
 // COSH(x) - hyperbolic cosine. Overflow yields +Inf -> `#NUM!`.
 Value Cosh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  const double r = std::cosh(x.value());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return apply_unary_math(&std::cosh, args);
 }
 
 // TANH(x) - hyperbolic tangent. Asymptotic to +/-1; no domain restriction.
 Value Tanh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  const double r = std::tanh(x.value());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return apply_unary_math(&std::tanh, args);
 }
 
 // ASINH(x) - inverse hyperbolic sine. Domain: all reals.
 Value Asinh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  const double r = std::asinh(x.value());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return apply_unary_math(&std::asinh, args);
 }
 
 // ACOSH(x) - inverse hyperbolic cosine. Domain: `[1, +inf)`. `x < 1` is

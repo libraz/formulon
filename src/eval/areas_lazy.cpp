@@ -18,7 +18,7 @@
 #include <string_view>
 
 #include "eval/eval_context.h"
-#include "eval/reference_lazy.h"
+#include "eval/range_resolvers.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"

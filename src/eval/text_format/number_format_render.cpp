@@ -25,7 +25,7 @@
 #include "eval/text_format/number_format_types.h"
 
 namespace formulon {
-namespace eval {
+namespace text_format {
 namespace number_format_detail {
 namespace {
 
@@ -1062,9 +1062,9 @@ void render_date(const Section& section, std::string_view fmt, double serial, st
     // Excel rejects out-of-range serials from TEXT.
     return;
   }
-  const date_time::YMD ymd = date_time::ymd_from_serial(serial);
+  const ::formulon::eval::date_time::YMD ymd = ::formulon::eval::date_time::ymd_from_serial(serial);
   // Weekday Sunday=0..Saturday=6 computed from the civil day count.
-  const std::int64_t days = date_time::days_from_civil(ymd.y, ymd.m, ymd.d);
+  const std::int64_t days = ::formulon::eval::date_time::days_from_civil(ymd.y, ymd.m, ymd.d);
   const int sun0 = static_cast<int>(((days + 4) % 7 + 7) % 7);
 
   // Decompose the time portion with optional fractional seconds.
@@ -1339,5 +1339,5 @@ void render_text_section(const Section& /*section*/, std::string_view fmt, std::
 }
 
 }  // namespace number_format_detail
-}  // namespace eval
+}  // namespace text_format
 }  // namespace formulon

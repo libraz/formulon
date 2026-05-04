@@ -37,8 +37,6 @@
 #define FORMULON_IO_XLSB_READER_H_
 
 #include <cstdint>
-#include <deque>
-#include <string>
 #include <vector>
 
 #include "io/passthrough_part.h"
@@ -55,20 +53,22 @@ namespace xlsb {
 /// plus a list of binary parts the reader did not consume. Mirrors
 /// `OoxmlReadResult` so callers can treat both flows symmetrically.
 ///
-/// `text_storage` is the workbook-lifetime backing store for every
-/// string the reader owns: BrtCellSt inline-string payloads and
-/// BrtSSTItem shared-string entries both live here. `Value::text` is
-/// a non-owning view, so callers must keep `XlsbReadResult` alive for
-/// as long as they read text values from `workbook`. The container is
-/// a `std::deque` (pointer-stable across appends) to match the OOXML
-/// reader's contract — see `OoxmlReadResult` for the rationale.
+/// Text payloads (BrtCellSt inline strings, BrtSSTItem entries) are
+/// interned into the workbook itself
+/// (`Workbook::mutable_text_storage()`) so that `Value::text` views
+/// remain valid for the workbook's lifetime — even after the
+/// `XlsbReadResult` is destroyed and the workbook is moved out. Earlier
+/// slices stored the deque on this struct, which caused a use-after-free
+/// when callers wrote
+/// `Workbook wb = std::move(read_xlsb(...).value().workbook);` — the
+/// result (and its deque) went out of scope at the end of the
+/// statement while text views were still aliasing it.
 ///
 /// `cells_read` is an audit counter: every cell record successfully
 /// decoded into the workbook (literal or formula) bumps it once.
 struct XlsbReadResult {
   Workbook workbook;
   std::vector<PassthroughPart> unknown_parts;
-  std::deque<std::string> text_storage;
   std::uint32_t cells_read = 0;
 };
 

@@ -19,7 +19,13 @@
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
 #include "eval/scheduler.h"
+#include "io/defined_names.h"
+#include "io/external_links.h"
 #include "io/ooxml_writer.h"
+#include "io/passthrough_part.h"
+#include "io/styles_reader.h"
+#include "io/tables_reader.h"
+#include "io/workbook_kind.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/ast_shift.h"
@@ -36,7 +42,7 @@
 
 namespace formulon {
 
-Workbook::Workbook() : engine_(std::make_unique<eval::RecalcEngine>()) {}
+Workbook::Workbook() : engine_(std::make_unique<eval::RecalcEngine>()), kind_(io::WorkbookKind::kXlsx) {}
 Workbook::Workbook(Workbook&&) noexcept = default;
 Workbook& Workbook::operator=(Workbook&&) noexcept = default;
 Workbook::~Workbook() = default;
@@ -50,6 +56,11 @@ Workbook Workbook::create() {
 Workbook Workbook::create_empty() {
   // No default sheet; callers are expected to populate via add_sheet().
   return Workbook{};
+}
+
+std::string_view Workbook::intern_text(std::string_view text) {
+  text_storage_.emplace_back(text.data(), text.size());
+  return std::string_view(text_storage_.back());
 }
 
 Sheet& Workbook::add_sheet(std::string name) {

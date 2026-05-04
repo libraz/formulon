@@ -8,6 +8,7 @@
 #ifndef FORMULON_EVAL_BUILTINS_AGGREGATE_H_
 #define FORMULON_EVAL_BUILTINS_AGGREGATE_H_
 
+#include "eval/lazy_impls.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -34,6 +35,12 @@ void register_aggregate_builtins(FunctionRegistry& registry);
 /// `tree_walker.cpp` references this extern by unqualified name.
 Value eval_percentof_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                           const EvalContext& ctx);
+
+// Compile-time guard: `eval_percentof_lazy` must convert implicitly to
+// the shared `LazyImpl` function-pointer type published in
+// `eval/lazy_impls.h`, otherwise the dispatch table in `tree_walker.cpp`
+// would silently break.
+inline constexpr LazyImpl kPercentOfLazySignatureWitness = &eval_percentof_lazy;
 
 }  // namespace eval
 }  // namespace formulon

@@ -171,35 +171,15 @@ struct Utf8Step {
 };
 
 Utf8Step next_utf8_step(std::string_view src, std::size_t i) noexcept {
-  const auto c0 = static_cast<unsigned char>(src[i]);
-  if (c0 < 0x80u) {
-    return {static_cast<std::uint32_t>(c0), 1u, 1};
-  }
-  std::size_t need = 0;
-  std::uint32_t value = 0;
-  if ((c0 & 0xE0u) == 0xC0u) {
-    need = 1;
-    value = c0 & 0x1Fu;
-  } else if ((c0 & 0xF0u) == 0xE0u) {
-    need = 2;
-    value = c0 & 0x0Fu;
-  } else if ((c0 & 0xF8u) == 0xF0u) {
-    need = 3;
-    value = c0 & 0x07u;
-  } else {
+  std::size_t bytes = 0;
+  const std::uint32_t cp = decode_utf8_step(src, i, &bytes);
+  // Lenient decoder reports U+FFFD on malformed input with a 1-byte
+  // advance. The DBCS cost for replacement / single-byte fallbacks is
+  // 1 (a single ASCII-equivalent byte), matching the prior contract.
+  if (bytes == 1 && cp == 0xFFFDu) {
     return {0xFFFDu, 1u, 1};
   }
-  if (i + need >= src.size()) {
-    return {0xFFFDu, 1u, 1};
-  }
-  for (std::size_t k = 0; k < need; ++k) {
-    const auto ck = static_cast<unsigned char>(src[i + 1 + k]);
-    if ((ck & 0xC0u) != 0x80u) {
-      return {0xFFFDu, 1u, 1};
-    }
-    value = (value << 6) | (ck & 0x3Fu);
-  }
-  return {value, need + 1, byte_count_jajp(value)};
+  return {cp, bytes, byte_count_jajp(cp)};
 }
 
 }  // namespace

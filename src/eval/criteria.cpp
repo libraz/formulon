@@ -12,6 +12,7 @@
 #include "eval/coerce.h"
 #include "eval/date_text_parse.h"
 #include "eval/jp_fold.h"
+#include "eval/text_ops.h"
 #include "eval/utf8_length.h"
 #include "utils/strings.h"
 #include "value.h"
@@ -60,13 +61,18 @@ std::string_view strip_comparator(std::string_view text, CriteriaOp* out_op) {
   return text;
 }
 
-// Attempts to parse `rhs` as a standalone number by wrapping it in a
-// temporary `Value::text` and delegating to `coerce_to_number`. Matches
-// Excel's behaviour where ">5" and ">5.0" and "> 5 " all parse as numeric.
-// Returns true + writes to `*out_number` on success; false otherwise.
+// Attempts to parse `rhs` as a standalone number by delegating to the
+// string_view overload of `coerce_to_number`. Matches Excel's behaviour
+// where ">5" and ">5.0" and "> 5 " all parse as numeric. Returns true +
+// writes to `*out_number` on success; false otherwise.
+//
+// Note: the previous implementation wrapped `rhs` in a `Value::text(rhs)`
+// temporary, which forced a heap allocation of the string payload on
+// every COUNTIFS / SUMIFS criterion-cell pair. The string_view overload
+// runs the same trim / numeric / percent / currency / date fallback
+// ladder without materialising the temporary.
 bool probe_number(std::string_view rhs, double* out_number) {
-  const Value probe = Value::text(rhs);
-  const auto result = coerce_to_number(probe);
+  const auto result = coerce_text_to_number(rhs);
   if (!result) {
     return false;
   }
@@ -193,52 +199,6 @@ std::size_t utf8_codepoint_bytes(std::string_view text, std::size_t i) {
   return len;
 }
 
-// Decodes a single UTF-8 codepoint at `text[i]`, mirroring the lenient
-// broken-UTF-8 handling of `utf8_codepoint_bytes`: a malformed leading byte
-// returns U+FFFD with `*out_bytes == 1`, and a bad continuation likewise
-// returns U+FFFD over the byte range we tentatively consumed. Used by the
-// byte-mode `?` branch of the wildcard matcher.
-std::uint32_t decode_utf8_codepoint(std::string_view text, std::size_t i, std::size_t* out_bytes) {
-  if (i >= text.size()) {
-    *out_bytes = 0;
-    return 0xFFFDu;
-  }
-  const auto lead = static_cast<unsigned char>(text[i]);
-  if ((lead & 0x80u) == 0x00u) {
-    *out_bytes = 1;
-    return lead;
-  }
-  std::size_t need = 0;
-  std::uint32_t value = 0;
-  if ((lead & 0xE0u) == 0xC0u) {
-    need = 1;
-    value = lead & 0x1Fu;
-  } else if ((lead & 0xF0u) == 0xE0u) {
-    need = 2;
-    value = lead & 0x0Fu;
-  } else if ((lead & 0xF8u) == 0xF0u) {
-    need = 3;
-    value = lead & 0x07u;
-  } else {
-    *out_bytes = 1;
-    return 0xFFFDu;
-  }
-  if (i + need >= text.size()) {
-    *out_bytes = 1;
-    return 0xFFFDu;
-  }
-  for (std::size_t k = 0; k < need; ++k) {
-    const auto ck = static_cast<unsigned char>(text[i + 1 + k]);
-    if ((ck & 0xC0u) != 0x80u) {
-      *out_bytes = 1;
-      return 0xFFFDu;
-    }
-    value = (value << 6) | (ck & 0x3Fu);
-  }
-  *out_bytes = need + 1;
-  return value;
-}
-
 bool wildcard_match_impl(std::string_view pattern, std::string_view text, bool prefix_match_ok,
                          std::size_t* out_consumed, bool question_is_byte = false) {
   std::size_t pi = 0;
@@ -285,7 +245,7 @@ bool wildcard_match_impl(std::string_view pattern, std::string_view text, bool p
           // refuses to match here, falling through to the `*`-backtrack /
           // failure path below.
           std::size_t cp_bytes = 0;
-          const std::uint32_t cp = decode_utf8_codepoint(text, ti, &cp_bytes);
+          const std::uint32_t cp = decode_utf8_step(text, ti, &cp_bytes);
           if (byte_count_jajp(cp) == 1) {
             ++pi;
             ti += cp_bytes;

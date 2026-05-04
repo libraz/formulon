@@ -450,6 +450,30 @@ TEST(TokenizerWhitespace, PreservedAsToken) {
   EXPECT_EQ(v, expected);
 }
 
+TEST(TokenizerIdentBytes, ContinuationByteIsNotIdentStart) {
+  // Regression: U+0080..U+00BF are UTF-8 continuation bytes and must
+  // not begin an identifier. is_ident_start_byte previously returned
+  // true for any byte >= 0x80, which let a stray continuation slip into
+  // the identifier slot and shift all subsequent tokens off by a byte.
+  // A standalone continuation byte must surface as InvalidCharacter.
+  Tokenizer tz(
+      "\x80"
+      "abc");
+  (void)tz.tokens();
+  ASSERT_FALSE(tz.errors().empty());
+  EXPECT_EQ(tz.errors().front().code, LexerErrorCode::InvalidCharacter);
+}
+
+TEST(TokenizerIdentBytes, MidRangeContinuationByteIsNotIdentStart) {
+  // 0xBF is the highest UTF-8 continuation byte; same expectation.
+  Tokenizer tz(
+      "\xBF"
+      "abc");
+  (void)tz.tokens();
+  ASSERT_FALSE(tz.errors().empty());
+  EXPECT_EQ(tz.errors().front().code, LexerErrorCode::InvalidCharacter);
+}
+
 TEST(TokenizerWhitespace, FullwidthSpaceIsInvalid) {
   // U+3000 is three UTF-8 bytes (E3 80 80) and must be flagged.
   Tokenizer tz(

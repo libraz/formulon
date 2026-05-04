@@ -19,10 +19,10 @@
 #include <cstdint>
 #include <string_view>
 
+#include "eval/a1_parse.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
-#include "eval/reference_lazy.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"

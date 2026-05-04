@@ -70,9 +70,13 @@ Value Trim(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
     return Value::error(text.error());
   }
   const std::string& src = text.value();
-  // Detects U+3000 (UTF-8: 0xE3 0x80 0x80) starting at byte index `i` in src.
+  // Detects U+3000 (UTF-8: 0xE3 0x80 0x80) starting at byte index `i` in
+  // src. The bound is written `i + 3 <= src.size()` rather than the
+  // equivalent `i + 2 < src.size()` so the "we need to read three bytes
+  // starting at `i`" intent is visible at a glance and so a future
+  // refactor that changes the sequence length is harder to get wrong.
   auto is_ideographic_space_at = [&src](std::size_t i) -> bool {
-    return i + 2 < src.size() && static_cast<unsigned char>(src[i]) == 0xE3u &&
+    return i + 3 <= src.size() && static_cast<unsigned char>(src[i]) == 0xE3u &&
            static_cast<unsigned char>(src[i + 1]) == 0x80u && static_cast<unsigned char>(src[i + 2]) == 0x80u;
   };
   std::string out;

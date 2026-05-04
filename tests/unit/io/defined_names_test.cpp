@@ -11,6 +11,7 @@
 #include <string_view>
 
 #include "gtest/gtest.h"
+#include "io/defined_names_internal.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 

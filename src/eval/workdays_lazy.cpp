@@ -143,11 +143,12 @@ bool collect_holidays_from_arg(const parser::AstNode& hol_arg, Arena& arena, con
   const parser::NodeKind k = hol_arg.kind();
   std::vector<Value> cells;
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
-    ErrorCode err_code = ErrorCode::Value;
-    if (!resolve_range_arg(hol_arg, arena, registry, ctx, &cells, &err_code)) {
-      *out_err = Value::error(err_code);
+    auto resolved = resolve_range_arg(hol_arg, arena, registry, ctx);
+    if (!resolved) {
+      *out_err = Value::error(resolved.error());
       return false;
     }
+    cells = std::move(resolved.value().cells);
   } else if (k == parser::NodeKind::ArrayLiteral) {
     const std::uint32_t rows = hol_arg.as_array_rows();
     const std::uint32_t cols = hol_arg.as_array_cols();

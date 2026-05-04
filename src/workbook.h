@@ -14,23 +14,34 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "io/calc_mode.h"
 #include "io/defined_names.h"
 #include "io/external_links.h"
 #include "io/passthrough_part.h"
 #include "io/styles_reader.h"
 #include "io/tables_reader.h"
-#include "io/workbook_kind.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "value.h"
 
 namespace formulon {
+
+// `io::WorkbookKind` is held by value but is an enum class with an
+// explicit underlying type, so we can opaque-forward-declare it here.
+// Concrete callers that need to name enumerators include
+// `io/workbook_kind.h` directly. The default value is assigned in the
+// out-of-line `Workbook()` constructor in workbook.cpp so the header
+// itself never references an enumerator.
+namespace io {
+enum class WorkbookKind : std::uint8_t;
+}  // namespace io
 
 namespace eval {
 class FunctionRegistry;
@@ -392,13 +403,12 @@ class Workbook {
   // and surfaced through the bindings so the host UI can mirror
   // Excel's user-visible state.
 
-  /// Excel calc-mode enum. Mirrors the `calcMode` attribute on
-  /// `<calcPr>` (`auto` / `manual` / `autoNoTable`).
-  enum class CalcMode : std::uint8_t {
-    kAuto = 0,
-    kManual = 1,
-    kAutoNoTable = 2,
-  };
+  /// Workbook-level calc-mode enum. Type-aliased from `io::CalcMode`
+  /// (declared in `io/calc_mode.h`) so the C ABI, the OOXML
+  /// reader/writer and the bindings can all reference the enum
+  /// without pulling in the full `workbook.h`. Existing source that
+  /// names `Workbook::CalcMode::kAuto` keeps compiling unchanged.
+  using CalcMode = io::CalcMode;
 
   /// Returns the workbook-level calc mode. Defaults to `kAuto`.
   CalcMode calc_mode() const noexcept { return calc_mode_; }
@@ -431,6 +441,52 @@ class Workbook {
   /// border / num-fmt / xf inserts) reach the underlying records
   /// through this accessor instead of round-tripping the whole table.
   io::StylesTable& mutable_styles() noexcept { return styles_; }
+
+  // ---------------------------------------------------------------------------
+  // Text storage (workbook-lifetime backing for `Value::text` views)
+  // ---------------------------------------------------------------------------
+  //
+  // `Value::text` is a non-owning `string_view`. Cells that carry text
+  // payloads decoded by the OOXML / XLSB readers (inline strings, SST
+  // entries, BrtCellSt records) need a workbook-lifetime backing store
+  // so the views remain valid after the read result is destructed and
+  // the workbook is moved out. `text_storage_` provides exactly that:
+  // a pointer-stable `std::deque<std::string>` owned by the workbook.
+  //
+  // Thread safety: appends are NOT synchronised. The current readers
+  // (`read_ooxml`, `read_xlsb`) drive a single-threaded decode pass per
+  // workbook, so concurrent `intern_text` calls are not possible. If
+  // future code introduces parallel decode it must serialise around
+  // this store (or replace it with a workbook-scoped shared-string
+  // pool, which is the planned long-term design).
+  //
+  // Duplicate de-duplication is intentionally NOT performed: that
+  // optimisation belongs in the future `SharedStringPool` redesign and
+  // would otherwise complicate the lifetime invariant for callers that
+  // still hold views into earlier appends.
+
+  /// Appends `text`'s bytes to the workbook's text-storage deque and
+  /// returns a `string_view` aliasing the freshly-stored copy. The
+  /// returned view is valid for the workbook's lifetime; it is
+  /// preserved across move construction / move assignment of the
+  /// workbook because `std::deque`'s element addresses are stable
+  /// under appends (and because the deque's storage is itself moved,
+  /// not copied, by the workbook's defaulted move operations).
+  std::string_view intern_text(std::string_view text);
+
+  /// Mutable access to the workbook's text-storage deque. Reader
+  /// pipelines (sheet_reader, sst_reader, cell_parser, xlsb::reader)
+  /// take a `std::deque<std::string>&` and append payloads directly so
+  /// they can build `string_view`s aliasing the stored bytes without
+  /// going through `intern_text` (which would copy from a `string_view`
+  /// rather than emplace in place). Non-reader callers should prefer
+  /// `intern_text`.
+  std::deque<std::string>& mutable_text_storage() noexcept { return text_storage_; }
+
+  /// Read-only access to the workbook's text-storage deque. Exposed
+  /// for tests / tooling that need to introspect how many distinct
+  /// text payloads the workbook owns.
+  const std::deque<std::string>& text_storage() const noexcept { return text_storage_; }
 
   /// Persists the cell-level xf index without otherwise mutating cell
   /// state. The cell at `(row, col)` is created (as a default-blank
@@ -507,8 +563,10 @@ class Workbook {
   // OOXML workbook variant. Defaults to plain `.xlsx`; the reader sets
   // this from `[Content_Types].xml` and the writer consults it when
   // emitting the workbook content-type Override. Plain data; no
-  // lifecycle implications.
-  io::WorkbookKind kind_ = io::WorkbookKind::kXlsx;
+  // lifecycle implications. The default `kXlsx` value is assigned in
+  // the out-of-line constructor (workbook.cpp) so `workbook.h` does
+  // not need the full `io/workbook_kind.h` definition.
+  io::WorkbookKind kind_;
   // Workbook-level calc mode. Round-trip metadata mirroring `<calcPr
   // calcMode=...>`. Default `kAuto` matches a freshly created
   // workbook in Excel.
@@ -519,6 +577,11 @@ class Workbook {
   // document; the OOXML reader replaces this wholesale via
   // `set_styles(...)` when an `xl/styles.xml` part is present.
   io::StylesTable styles_;
+  // Backing store for every `Value::text` view owned by cells in this
+  // workbook. See the `intern_text` / `mutable_text_storage` block in
+  // the public API for the contract. `std::deque` is required for
+  // pointer stability across appends.
+  std::deque<std::string> text_storage_;
 };
 
 }  // namespace formulon

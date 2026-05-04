@@ -6,7 +6,9 @@
 #include "eval/range_args.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -14,7 +16,8 @@
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
-#include "eval/reference_lazy.h"
+#include "eval/range_expanders.h"
+#include "eval/range_resolvers.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
@@ -26,10 +29,43 @@
 
 namespace formulon {
 namespace eval {
+namespace {
 
-bool resolve_range_arg(const parser::AstNode& raw_arg, Arena& arena, const FunctionRegistry& registry,
-                       const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
-                       std::uint32_t* out_rows, std::uint32_t* out_cols) {
+/// Range-shaped Call-name dispatch. `OFFSET` / `CHOOSE` produce
+/// rectangles directly; `IF` preserves shape through the picked branch;
+/// `ROW` / `COLUMN` spill to a 1-D index array. Each kind routes to a
+/// dedicated expansion path below — the lookup table replaces a 5-way
+/// `if (case_insensitive_eq(name, ...))` chain so the case-insensitive
+/// compare runs at most twice (early-out on first hit) instead of five
+/// times in the worst case.
+enum class RangeShapedKind : std::uint8_t { Offset, Choose, If, Row, Column };
+
+constexpr std::array<std::pair<std::string_view, RangeShapedKind>, 5> kRangeShapedNames = {{
+    {"OFFSET", RangeShapedKind::Offset},
+    {"CHOOSE", RangeShapedKind::Choose},
+    {"IF", RangeShapedKind::If},
+    {"ROW", RangeShapedKind::Row},
+    {"COLUMN", RangeShapedKind::Column},
+}};
+
+bool lookup_range_shaped_kind(std::string_view name, RangeShapedKind* out) {
+  for (const auto& entry : kRangeShapedNames) {
+    if (strings::case_insensitive_eq(name, entry.first)) {
+      *out = entry.second;
+      return true;
+    }
+  }
+  return false;
+}
+
+// Internal counterpart that still uses the legacy `bool + out_param`
+// shape so it can call (and be called by) the cluster of `expand_*_call`
+// helpers — which are not yet migrated. The public `resolve_range_arg`
+// below is a thin Expected-returning wrapper around this. Once the
+// rest of the family migrates, this helper folds away.
+bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
+                            std::uint32_t* out_rows, std::uint32_t* out_cols) {
   // LET-binding passthrough: when a caller wrote `VLOOKUP(key, t, 2, FALSE)`
   // with `t` bound to a RangeOp / OFFSET-call / ArrayLiteral via LET, the
   // shape decisions below need the original AST, not the NameRef. Single-
@@ -43,66 +79,71 @@ bool resolve_range_arg(const parser::AstNode& raw_arg, Arena& arena, const Funct
     }
   }
   const parser::AstNode& arg_node = *effective;
-  // OFFSET(...) and CHOOSE(...) both produce a rectangle that aggregator-
-  // family callers (SUM, AVERAGE, COUNTIF, …) must be able to iterate as if
-  // it were a literal `RangeOp`. Forward to the dedicated expansion helpers
-  // so the expansion shares the same `EvalContext::expand_range` path and
-  // cross-sheet / cycle guarantees. Any other Call (INDIRECT, a user-
-  // defined function, etc.) falls through to the scalar `#VALUE!` branch
-  // below because dynamic range construction requires a `Value::Array`
+  // OFFSET / CHOOSE / IF / ROW / COLUMN all need range-shaped expansion
+  // glue (see per-branch comments below). Dispatch via a single
+  // case-insensitive name lookup against `kRangeShapedNames` so the hot
+  // path runs at most one full string compare per matching prefix —
+  // dramatically cheaper than the previous five-way `if`-chain when none
+  // of the names match (the common case for plain `RangeOp` / `Ref`
+  // arguments). Any other Call (INDIRECT, a user-defined function, etc.)
+  // falls through to the scalar-evaluation branch at the bottom of the
+  // function because dynamic range construction requires a `Value::Array`
   // runtime we do not yet have.
-  if (arg_node.kind() == parser::NodeKind::Call && strings::case_insensitive_eq(arg_node.as_call_name(), "OFFSET")) {
-    return expand_offset_call(arg_node, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
-  }
-  if (arg_node.kind() == parser::NodeKind::Call && strings::case_insensitive_eq(arg_node.as_call_name(), "CHOOSE")) {
-    return expand_choose_call(arg_node, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
-  }
-  // ROW(range) / COLUMN(range) spill in Excel 365 to a vertical / horizontal
-  // array of 1-based indices. Without a `Value::Array` runtime the scalar
-  // path collapses to the rectangle's first row / column, so the seam here
-  // unpacks the indices directly into the aggregator's range buffer (mirrors
-  // OFFSET / CHOOSE / IF). `=SUM(ROW(A1:A5))` therefore aggregates
-  // `{1;2;3;4;5}` rather than the scalar 1.
-  if (arg_node.kind() == parser::NodeKind::Call && strings::case_insensitive_eq(arg_node.as_call_name(), "ROW")) {
-    return expand_row_call(arg_node, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
-  }
-  if (arg_node.kind() == parser::NodeKind::Call && strings::case_insensitive_eq(arg_node.as_call_name(), "COLUMN")) {
-    return expand_column_call(arg_node, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
-  }
-  if (arg_node.kind() == parser::NodeKind::Call && strings::case_insensitive_eq(arg_node.as_call_name(), "IF")) {
-    // `IF(cond, then, [else])` preserves reference-shape through the picked
-    // branch in Mac Excel, so `=LET(r, IF(TRUE, A1:A3, B1:B3), SUM(r))`
-    // aggregates the 3-cell range rather than collapsing `r` to a scalar.
-    // Short-circuit the condition exactly like `eval_if_lazy`, then recurse
-    // into the chosen branch so nested CHOOSE / OFFSET / RangeOp / Ref keep
-    // their existing expansion paths. Errors propagate left-to-right (cond
-    // first, then the chosen branch), matching Excel and `expand_choose_call`.
-    // For the `IF(FALSE, then)` two-arity case Excel's scalar path returns
-    // boolean FALSE — not a reference — so we surface `#VALUE!` and let the
-    // caller fall back to the scalar branch (mirrors the `IF` block in
-    // `resolve_reference_call` added in commit `e068a7f`).
-    const std::uint32_t arity = arg_node.as_call_arity();
-    if (arity != 2U && arity != 3U) {
-      *out_err_code = ErrorCode::Value;
-      return false;
+  if (arg_node.kind() == parser::NodeKind::Call) {
+    RangeShapedKind kind = RangeShapedKind::Offset;
+    if (lookup_range_shaped_kind(arg_node.as_call_name(), &kind)) {
+      switch (kind) {
+        case RangeShapedKind::Offset:
+          return expand_offset_call(arg_node, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+        case RangeShapedKind::Choose:
+          return expand_choose_call(arg_node, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+        case RangeShapedKind::Row:
+          // ROW(range) / COLUMN(range) spill in Excel 365 to a vertical /
+          // horizontal array of 1-based indices. Without a `Value::Array`
+          // runtime the scalar path collapses to the rectangle's first
+          // row / column, so the seam here unpacks the indices directly
+          // into the aggregator's range buffer.
+          return expand_row_call(arg_node, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+        case RangeShapedKind::Column:
+          return expand_column_call(arg_node, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+        case RangeShapedKind::If: {
+          // `IF(cond, then, [else])` preserves reference-shape through the
+          // picked branch in Mac Excel, so `=LET(r, IF(TRUE, A1:A3, B1:B3),
+          // SUM(r))` aggregates the 3-cell range rather than collapsing `r`
+          // to a scalar. Short-circuit the condition exactly like
+          // `eval_if_lazy`, then recurse into the chosen branch so nested
+          // CHOOSE / OFFSET / RangeOp / Ref keep their existing expansion
+          // paths. Errors propagate left-to-right (cond first, then the
+          // chosen branch), matching Excel and `expand_choose_call`. For
+          // the `IF(FALSE, then)` two-arity case Excel's scalar path
+          // returns boolean FALSE — not a reference — so we surface
+          // `#VALUE!` and let the caller fall back to the scalar branch
+          // (mirrors the `IF` block in `resolve_reference_call`).
+          const std::uint32_t arity = arg_node.as_call_arity();
+          if (arity != 2U && arity != 3U) {
+            *out_err_code = ErrorCode::Value;
+            return false;
+          }
+          const Value cond = eval_node(arg_node.as_call_arg(0), arena, registry, ctx);
+          if (cond.is_error()) {
+            *out_err_code = cond.as_error();
+            return false;
+          }
+          auto coerced = coerce_to_bool(cond);
+          if (!coerced) {
+            *out_err_code = coerced.error();
+            return false;
+          }
+          if (!coerced.value() && arity == 2U) {
+            *out_err_code = ErrorCode::Value;
+            return false;
+          }
+          const std::uint32_t pick = coerced.value() ? 1U : 2U;
+          const parser::AstNode& chosen = arg_node.as_call_arg(pick);
+          return resolve_range_arg_into(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+        }
+      }
     }
-    const Value cond = eval_node(arg_node.as_call_arg(0), arena, registry, ctx);
-    if (cond.is_error()) {
-      *out_err_code = cond.as_error();
-      return false;
-    }
-    auto coerced = coerce_to_bool(cond);
-    if (!coerced) {
-      *out_err_code = coerced.error();
-      return false;
-    }
-    if (!coerced.value() && arity == 2U) {
-      *out_err_code = ErrorCode::Value;
-      return false;
-    }
-    const std::uint32_t pick = coerced.value() ? 1U : 2U;
-    const parser::AstNode& chosen = arg_node.as_call_arg(pick);
-    return resolve_range_arg(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
   }
   if (arg_node.kind() == parser::NodeKind::RangeOp) {
     const parser::AstNode& lhs_ast = arg_node.as_range_lhs();
@@ -145,11 +186,22 @@ bool resolve_range_arg(const parser::AstNode& raw_arg, Arena& arena, const Funct
       return false;
     }
     *out_cells = std::move(expanded.value());
+    // Defensive normalisation: while the union is constructed with min /
+    // max above (so union_rhs >= union_lhs is the documented invariant),
+    // a future refactor that stops using min / max — or a malformed
+    // endpoint resolver returning a degenerate rectangle — would silently
+    // wrap the unsigned subtraction below into a multi-billion shape.
+    // Recompute both axes through min/max so the dimension is always
+    // positive regardless of which endpoint became the union top-left.
     if (out_rows != nullptr) {
-      *out_rows = union_rhs.row - union_lhs.row + 1U;
+      const std::uint32_t r_lo = std::min(union_lhs.row, union_rhs.row);
+      const std::uint32_t r_hi = std::max(union_lhs.row, union_rhs.row);
+      *out_rows = r_hi - r_lo + 1U;
     }
     if (out_cols != nullptr) {
-      *out_cols = union_rhs.col - union_lhs.col + 1U;
+      const std::uint32_t c_lo = std::min(union_lhs.col, union_rhs.col);
+      const std::uint32_t c_hi = std::max(union_lhs.col, union_rhs.col);
+      *out_cols = c_hi - c_lo + 1U;
     }
     return true;
   }
@@ -261,6 +313,18 @@ bool resolve_range_arg(const parser::AstNode& raw_arg, Arena& arena, const Funct
     *out_cols = 1U;
   }
   return true;
+}
+
+}  // namespace
+
+Expected<RangeResult, ErrorCode> resolve_range_arg(const parser::AstNode& arg_node, Arena& arena,
+                                                   const FunctionRegistry& registry, const EvalContext& ctx) {
+  RangeResult result;
+  ErrorCode err = ErrorCode::Value;
+  if (!resolve_range_arg_into(arg_node, arena, registry, ctx, &result.cells, &err, &result.rows, &result.cols)) {
+    return err;
+  }
+  return result;
 }
 
 }  // namespace eval

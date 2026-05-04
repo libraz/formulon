@@ -20,6 +20,7 @@
 #include <string_view>
 #include <vector>
 
+#include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -27,36 +28,6 @@
 namespace formulon {
 namespace io {
 namespace {
-
-/// Appends every `<t>` text descendant of `node` to `out`, walking into
-/// `<r>` (rich-text run) children but skipping `<rPh>` (phonetic guide)
-/// subtrees entirely. Returns the number of `<t>` elements consumed so
-/// callers can flag empty `<si>` entries as corrupt.
-std::size_t AppendSiText(const pugi::xml_node& node, std::string& out) {
-  std::size_t count = 0;
-
-  // Direct <t> child: a plain (non-rich) string item.
-  for (pugi::xml_node t = node.child("t"); t; t = t.next_sibling("t")) {
-    out.append(t.text().get());
-    ++count;
-  }
-
-  // Rich-text runs: each <r> may contain its own <rPr> (formatting,
-  // ignored at this layer) and a single <t>. Concatenate <t> payloads in
-  // document order across runs.
-  for (pugi::xml_node r = node.child("r"); r; r = r.next_sibling("r")) {
-    for (pugi::xml_node t = r.child("t"); t; t = t.next_sibling("t")) {
-      out.append(t.text().get());
-      ++count;
-    }
-  }
-
-  // <rPh> (phonetic guides) are walked by `AppendPhoneticText`; this
-  // helper deliberately skips them so the surface text in `entries[i]`
-  // never picks up kana annotations.
-
-  return count;
-}
 
 /// Walks every `<rPh>` direct child of `si_node` and concatenates their
 /// `<t>` descendants into `out` in document order. Each `<rPh>` block
@@ -98,7 +69,7 @@ Expected<SharedStringTable, Error> read_shared_strings(const std::vector<std::ui
   for (pugi::xml_node si = root.child("si"); si; si = si.next_sibling("si"), ++index) {
     text_storage.emplace_back();
     std::string& payload = text_storage.back();
-    const std::size_t t_count = AppendSiText(si, payload);
+    const std::size_t t_count = append_rich_text(si, payload);
     if (t_count == 0) {
       // No <t> descendant at all. Roll the placeholder back so
       // text_storage stays in sync with the (failing) result and report

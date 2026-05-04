@@ -22,6 +22,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/utils/double_format_test.cpp
   unit/deps/miniz_smoke_test.cpp
   unit/deps/pugixml_smoke_test.cpp
+  unit/io/a1_ref_test.cpp
   unit/io/cell_parser_test.cpp
   unit/io/cf_reader_test.cpp
   unit/io/cf_writer_test.cpp
@@ -63,11 +64,13 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/parser/let_test.cpp
   unit/parser/ref_transforms_test.cpp
   unit/eval/bytecode_test.cpp
+  unit/eval/jp_kana_table_test.cpp
   unit/eval/compiler_test.cpp
   unit/eval/optimizer_test.cpp
   unit/eval/vm_test.cpp
   unit/eval/vm_parity_test.cpp
   unit/eval/tree_walker_test.cpp
+  unit/eval/scalar_ops_test.cpp
   unit/eval/eval_context_test.cpp
   unit/eval/eval_state_test.cpp
   unit/eval/dep_graph_test.cpp
@@ -77,6 +80,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/iterative_solver_test.cpp
   unit/eval/partial_recalc_test.cpp
   unit/eval/recalc_engine_test.cpp
+  unit/eval/cell_evaluator_test.cpp
   unit/eval/volatile_tracker_test.cpp
   unit/eval/cross_sheet_test.cpp
   unit/eval/utf8_length_test.cpp
@@ -109,6 +113,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/sumproduct_array_test.cpp
   unit/eval/eval_spill_dispatch_test.cpp
   unit/eval/eval_context_spill_read_test.cpp
+  unit/eval/spill_committer_test.cpp
   unit/eval/builtins_stats_test.cpp
   unit/eval/builtins_subtotal_test.cpp
   unit/eval/builtins_aggregate_fn_test.cpp

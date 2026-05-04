@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "eval/coerce.h"
@@ -771,7 +772,20 @@ bool expand_choose_call(const parser::AstNode& call, Arena& arena, const Functio
       return expand_choose_call(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
     }
   }
-  return resolve_range_arg(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+  auto resolved = resolve_range_arg(chosen, arena, registry, ctx);
+  if (!resolved) {
+    *out_err_code = resolved.error();
+    return false;
+  }
+  auto& rr = resolved.value();
+  if (out_rows != nullptr) {
+    *out_rows = rr.rows;
+  }
+  if (out_cols != nullptr) {
+    *out_cols = rr.cols;
+  }
+  *out_cells = std::move(rr.cells);
+  return true;
 }
 
 bool expand_if_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
@@ -823,7 +837,20 @@ bool expand_if_call(const parser::AstNode& call, Arena& arena, const FunctionReg
       return expand_if_call(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
     }
   }
-  return resolve_range_arg(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+  auto resolved = resolve_range_arg(chosen, arena, registry, ctx);
+  if (!resolved) {
+    *out_err_code = resolved.error();
+    return false;
+  }
+  auto& rr = resolved.value();
+  if (out_rows != nullptr) {
+    *out_rows = rr.rows;
+  }
+  if (out_cols != nullptr) {
+    *out_cols = rr.cols;
+  }
+  *out_cells = std::move(rr.cells);
+  return true;
 }
 
 namespace {

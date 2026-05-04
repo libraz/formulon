@@ -65,12 +65,12 @@ bool resolve_criteria_pairs(const parser::AstNode& call, std::uint32_t first_pai
   for (std::uint32_t k = 0; k < pair_count; ++k) {
     const std::uint32_t range_idx = first_pair_index + (k * 2);
     const std::uint32_t crit_idx = range_idx + 1;
-    std::vector<Value> cells;
-    ErrorCode range_err = ErrorCode::Value;
-    if (!resolve_range_arg(call.as_call_arg(range_idx), arena, registry, ctx, &cells, &range_err)) {
-      *out_err_value = Value::error(range_err);
+    auto resolved = resolve_range_arg(call.as_call_arg(range_idx), arena, registry, ctx);
+    if (!resolved) {
+      *out_err_value = Value::error(resolved.error());
       return false;
     }
+    std::vector<Value> cells = std::move(resolved.value().cells);
     if (cells.size() != expected_size) {
       *out_err_value = Value::error(ErrorCode::Value);
       return false;
@@ -123,11 +123,11 @@ Value eval_countif_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (call.as_call_arity() != 2) {
     return Value::error(ErrorCode::Value);
   }
-  std::vector<Value> cells;
-  ErrorCode range_err = ErrorCode::Value;
-  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &cells, &range_err)) {
-    return Value::error(range_err);
+  auto resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
+  if (!resolved) {
+    return Value::error(resolved.error());
   }
+  const std::vector<Value>& cells = resolved.value().cells;
   // An error-valued criterion (e.g. `COUNTIF(range, #N/A)`) is NOT
   // propagated: `parse_criterion` turns it into an error-match filter.
   const Value criterion_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
@@ -168,14 +168,13 @@ Value eval_sumif_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (arity != 2 && arity != 3) {
     return Value::error(ErrorCode::Value);
   }
-  std::vector<Value> criteria_cells;
-  ErrorCode range_err = ErrorCode::Value;
-  std::uint32_t crit_rows = 0U;
-  std::uint32_t crit_cols = 0U;
-  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &criteria_cells, &range_err, &crit_rows,
-                         &crit_cols)) {
-    return Value::error(range_err);
+  auto crit_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
+  if (!crit_resolved) {
+    return Value::error(crit_resolved.error());
   }
+  std::vector<Value> criteria_cells = std::move(crit_resolved.value().cells);
+  const std::uint32_t crit_rows = crit_resolved.value().rows;
+  const std::uint32_t crit_cols = crit_resolved.value().cols;
   // Error criterion is NOT propagated; `parse_criterion` converts it to a
   // filter over error cells with the same code.
   const Value criterion_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
@@ -211,10 +210,11 @@ Value eval_sumif_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       }
       explicit_sum_cells = std::move(expanded.value());
     } else {
-      ErrorCode sum_err = ErrorCode::Value;
-      if (!resolve_range_arg(call.as_call_arg(2), arena, registry, ctx, &explicit_sum_cells, &sum_err)) {
-        return Value::error(sum_err);
+      auto sum_resolved = resolve_range_arg(call.as_call_arg(2), arena, registry, ctx);
+      if (!sum_resolved) {
+        return Value::error(sum_resolved.error());
       }
+      explicit_sum_cells = std::move(sum_resolved.value().cells);
     }
     sum_cells_ptr = &explicit_sum_cells;
   } else {
@@ -261,14 +261,13 @@ Value eval_averageif_lazy(const parser::AstNode& call, Arena& arena, const Funct
   if (arity != 2 && arity != 3) {
     return Value::error(ErrorCode::Value);
   }
-  std::vector<Value> criteria_cells;
-  ErrorCode range_err = ErrorCode::Value;
-  std::uint32_t crit_rows = 0U;
-  std::uint32_t crit_cols = 0U;
-  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &criteria_cells, &range_err, &crit_rows,
-                         &crit_cols)) {
-    return Value::error(range_err);
+  auto crit_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
+  if (!crit_resolved) {
+    return Value::error(crit_resolved.error());
   }
+  std::vector<Value> criteria_cells = std::move(crit_resolved.value().cells);
+  const std::uint32_t crit_rows = crit_resolved.value().rows;
+  const std::uint32_t crit_cols = crit_resolved.value().cols;
   // Error criterion is NOT propagated; `parse_criterion` converts it to a
   // filter over error cells with the same code.
   const Value criterion_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
@@ -299,10 +298,11 @@ Value eval_averageif_lazy(const parser::AstNode& call, Arena& arena, const Funct
       }
       explicit_avg_cells = std::move(expanded.value());
     } else {
-      ErrorCode avg_err = ErrorCode::Value;
-      if (!resolve_range_arg(call.as_call_arg(2), arena, registry, ctx, &explicit_avg_cells, &avg_err)) {
-        return Value::error(avg_err);
+      auto avg_resolved = resolve_range_arg(call.as_call_arg(2), arena, registry, ctx);
+      if (!avg_resolved) {
+        return Value::error(avg_resolved.error());
       }
+      explicit_avg_cells = std::move(avg_resolved.value().cells);
     }
     avg_cells_ptr = &explicit_avg_cells;
   } else {
@@ -349,11 +349,11 @@ Value eval_countifs_lazy(const parser::AstNode& call, Arena& arena, const Functi
   // Resolve the first criteria range to fix the expected size.
   std::vector<std::vector<Value>> criteria_cells;
   std::vector<std::unique_ptr<ParsedCriterion>> parsed;
-  std::vector<Value> first_cells;
-  ErrorCode range_err = ErrorCode::Value;
-  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &first_cells, &range_err)) {
-    return Value::error(range_err);
+  auto first_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
+  if (!first_resolved) {
+    return Value::error(first_resolved.error());
   }
+  std::vector<Value> first_cells = std::move(first_resolved.value().cells);
   const std::size_t expected_size = first_cells.size();
   // Error criterion is NOT propagated; it filters error cells (see
   // `parse_criterion` ValueKind::Error).
@@ -392,11 +392,11 @@ Value eval_sumifs_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (arity < 3 || (arity % 2) != 1) {
     return Value::error(ErrorCode::Value);
   }
-  std::vector<Value> sum_cells;
-  ErrorCode range_err = ErrorCode::Value;
-  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &sum_cells, &range_err)) {
-    return Value::error(range_err);
+  auto sum_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
+  if (!sum_resolved) {
+    return Value::error(sum_resolved.error());
   }
+  std::vector<Value> sum_cells = std::move(sum_resolved.value().cells);
   const std::size_t expected_size = sum_cells.size();
 
   std::vector<std::vector<Value>> criteria_cells;
@@ -437,11 +437,11 @@ Value eval_averageifs_lazy(const parser::AstNode& call, Arena& arena, const Func
   if (arity < 3 || (arity % 2) != 1) {
     return Value::error(ErrorCode::Value);
   }
-  std::vector<Value> avg_cells;
-  ErrorCode range_err = ErrorCode::Value;
-  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &avg_cells, &range_err)) {
-    return Value::error(range_err);
+  auto avg_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
+  if (!avg_resolved) {
+    return Value::error(avg_resolved.error());
   }
+  std::vector<Value> avg_cells = std::move(avg_resolved.value().cells);
   const std::size_t expected_size = avg_cells.size();
 
   std::vector<std::vector<Value>> criteria_cells;
@@ -487,11 +487,11 @@ Value eval_maxifs_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (arity < 3 || (arity % 2) != 1) {
     return Value::error(ErrorCode::Value);
   }
-  std::vector<Value> max_cells;
-  ErrorCode range_err = ErrorCode::Value;
-  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &max_cells, &range_err)) {
-    return Value::error(range_err);
+  auto max_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
+  if (!max_resolved) {
+    return Value::error(max_resolved.error());
   }
+  std::vector<Value> max_cells = std::move(max_resolved.value().cells);
   const std::size_t expected_size = max_cells.size();
 
   std::vector<std::vector<Value>> criteria_cells;
@@ -538,11 +538,11 @@ Value eval_minifs_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (arity < 3 || (arity % 2) != 1) {
     return Value::error(ErrorCode::Value);
   }
-  std::vector<Value> min_cells;
-  ErrorCode range_err = ErrorCode::Value;
-  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &min_cells, &range_err)) {
-    return Value::error(range_err);
+  auto min_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
+  if (!min_resolved) {
+    return Value::error(min_resolved.error());
   }
+  std::vector<Value> min_cells = std::move(min_resolved.value().cells);
   const std::size_t expected_size = min_cells.size();
 
   std::vector<std::vector<Value>> criteria_cells;

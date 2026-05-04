@@ -186,6 +186,43 @@ TEST(Scheduler, WideIndependentLayer) {
   }
 }
 
+// Repeats the wide-independent-layer scenario in a tight loop with the
+// maximum auto-detected pool to give ThreadSanitizer the maximum chance
+// of catching a racy `next_index` claim. Each iteration must produce
+// exactly the same per-cell results — a missed task (e.g. from a
+// premature `relaxed` fetch_add allowing a worker to skip a slot) would
+// surface as a non-numeric / wrong-numeric cached value.
+TEST(SchedulerParallelClaim, WideLayerNoMissedTasksUnderRepeatedRuns) {
+  constexpr std::uint32_t kRows = 64U;
+  constexpr int kIterations = 16;
+  for (int iter = 0; iter < kIterations; ++iter) {
+    Workbook wb = Workbook::create();
+    for (std::uint32_t r = 0; r < kRows; ++r) {
+      ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, r, 0U, Value::number(static_cast<double>(r) + 1.0))));
+    }
+    // Column B: every B<r> reads A<r>. One wide layer of `kRows` super-nodes
+    // all draining through the same `next_index` atomic.
+    for (std::uint32_t r = 0; r < kRows; ++r) {
+      ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, r, 1U, "=A" + std::to_string(r + 1) + "+1")));
+    }
+
+    SchedulerStats stats;
+    SchedulerConfig cfg;
+    cfg.num_threads = 8U;
+    ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(default_registry(), cfg, &stats)));
+    // Every formula must have been claimed exactly once.
+    EXPECT_EQ(stats.cells_evaluated, static_cast<std::uint64_t>(kRows)) << "iteration " << iter;
+    EXPECT_GE(stats.parallel_steps, 1U) << "iteration " << iter;
+    EXPECT_EQ(stats.serial_fallback_steps, 0U) << "iteration " << iter;
+
+    for (std::uint32_t r = 0; r < kRows; ++r) {
+      const Value v = StoredValue(wb, 0U, r, 1U);
+      ASSERT_TRUE(v.is_number()) << "iter " << iter << " row " << r;
+      EXPECT_DOUBLE_EQ(v.as_number(), static_cast<double>(r) + 2.0) << "iter " << iter << " row " << r;
+    }
+  }
+}
+
 TEST(Scheduler, DeepChainNoParallelism) {
   // 100-cell deep chain: A1=1, A2=A1+1, ..., A100=A99+1. Every cell is
   // its own layer (size 1) so parallel_steps must stay 0.

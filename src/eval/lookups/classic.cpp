@@ -58,7 +58,12 @@ enum class LookupAxis : std::uint8_t { Column, Row };
 bool resolve_table_array(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
                          std::uint32_t* out_rows, std::uint32_t* out_cols) {
-  if (resolve_range_arg(arg_node, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols)) {
+  auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
+  if (resolved) {
+    auto& rr = resolved.value();
+    *out_rows = rr.rows;
+    *out_cols = rr.cols;
+    *out_cells = std::move(rr.cells);
     // Reject scalar Text table_array: `=HLOOKUP(M,"Nothing",1)` -> `#VALUE!`.
     // A 1x1 Text cell that came from a real Ref / RangeOp / SpillRef or a
     // reference-producing call (OFFSET/CHOOSE/INDIRECT/IF) is allowed because
@@ -70,6 +75,7 @@ bool resolve_table_array(const parser::AstNode& arg_node, Arena& arena, const Fu
     }
     return true;
   }
+  *out_err_code = resolved.error();
   if (*out_err_code != ErrorCode::Value) {
     return false;
   }
@@ -132,15 +138,13 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
       // on both sides BEFORE ASCII-lowercasing so e.g. `ｶﾞ` -> `ガ`,
       // `Ａ` -> `a`. Full-width digits are deliberately NOT folded for
       // lookups (Mac asymmetry — see jp_fold.h).
-      const std::string pat_lower =
-          strings::to_ascii_lower(fold_jp_text(lookup_value.as_text(), /*fold_fullwidth_digits=*/false));
+      const std::string pat_lower = fold_and_lower(lookup_value.as_text(), /*fold_fullwidth_digits=*/false);
       for (std::size_t i = 0; i < n; ++i) {
         const Value& cell = cell_at(i);
         if (!cell.is_text()) {
           continue;
         }
-        const std::string cell_lower =
-            strings::to_ascii_lower(fold_jp_text(cell.as_text(), /*fold_fullwidth_digits=*/false));
+        const std::string cell_lower = fold_and_lower(cell.as_text(), /*fold_fullwidth_digits=*/false);
         if (wildcard_match(pat_lower, cell_lower)) {
           return i;
         }
@@ -293,13 +297,13 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (arity != 2 && arity != 3) {
     return Value::error(ErrorCode::Value);
   }
-  std::vector<Value> cells;
-  std::uint32_t rows = 0;
-  std::uint32_t cols = 0;
-  ErrorCode range_err = ErrorCode::Value;
-  if (!resolve_range_arg(call.as_call_arg(0), arena, registry, ctx, &cells, &range_err, &rows, &cols)) {
-    return Value::error(range_err);
+  auto resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
+  if (!resolved) {
+    return Value::error(resolved.error());
   }
+  const std::uint32_t rows = resolved.value().rows;
+  const std::uint32_t cols = resolved.value().cols;
+  std::vector<Value> cells = std::move(resolved.value().cells);
   if (rows == 0U || cols == 0U) {
     // Defensive: expand_range always produces a positive rectangle today.
     return Value::error(ErrorCode::Ref);
@@ -503,13 +507,13 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   }
 
   // lookup_array: must be a range / Ref with a 1-D shape.
-  std::vector<Value> cells;
-  std::uint32_t rows = 0;
-  std::uint32_t cols = 0;
-  ErrorCode range_err = ErrorCode::Value;
-  if (!resolve_range_arg(call.as_call_arg(1), arena, registry, ctx, &cells, &range_err, &rows, &cols)) {
-    return Value::error(range_err);
+  auto resolved = resolve_range_arg(call.as_call_arg(1), arena, registry, ctx);
+  if (!resolved) {
+    return Value::error(resolved.error());
   }
+  const std::uint32_t rows = resolved.value().rows;
+  const std::uint32_t cols = resolved.value().cols;
+  std::vector<Value> cells = std::move(resolved.value().cells);
   if (rows != 1U && cols != 1U) {
     // 2-D array to MATCH is not supported and Excel reports #N/A.
     return Value::error(ErrorCode::NA);
@@ -556,15 +560,13 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       // Excel's case-insensitive ASCII equality.
       // ja-JP fold (see classic.cpp::lookup_scan) before lower-casing so
       // MATCH agrees with Mac Excel on kana / full-width variants.
-      const std::string pat_lower =
-          strings::to_ascii_lower(fold_jp_text(lookup.as_text(), /*fold_fullwidth_digits=*/false));
+      const std::string pat_lower = fold_and_lower(lookup.as_text(), /*fold_fullwidth_digits=*/false);
       for (std::size_t i = 0; i < n; ++i) {
         const Value& cell = cells[i];
         if (!cell.is_text()) {
           continue;
         }
-        const std::string cell_lower =
-            strings::to_ascii_lower(fold_jp_text(cell.as_text(), /*fold_fullwidth_digits=*/false));
+        const std::string cell_lower = fold_and_lower(cell.as_text(), /*fold_fullwidth_digits=*/false);
         if (wildcard_match(pat_lower, cell_lower)) {
           return Value::number(static_cast<double>(i + 1));
         }
@@ -869,13 +871,13 @@ Value eval_lookup_lazy(const parser::AstNode& call, Arena& arena, const Function
     return Value::error(ErrorCode::NA);
   }
 
-  std::vector<Value> lookup_cells;
-  std::uint32_t lrows = 0;
-  std::uint32_t lcols = 0;
-  ErrorCode range_err = ErrorCode::Value;
-  if (!resolve_range_arg(call.as_call_arg(1), arena, registry, ctx, &lookup_cells, &range_err, &lrows, &lcols)) {
-    return Value::error(range_err);
+  auto lookup_resolved = resolve_range_arg(call.as_call_arg(1), arena, registry, ctx);
+  if (!lookup_resolved) {
+    return Value::error(lookup_resolved.error());
   }
+  const std::uint32_t lrows = lookup_resolved.value().rows;
+  const std::uint32_t lcols = lookup_resolved.value().cols;
+  std::vector<Value> lookup_cells = std::move(lookup_resolved.value().cells);
   if (lrows == 0U || lcols == 0U) {
     return Value::error(ErrorCode::Ref);
   }
@@ -905,12 +907,13 @@ Value eval_lookup_lazy(const parser::AstNode& call, Arena& arena, const Function
     return flat < lookup_cells.size() ? lookup_cells[flat] : Value::error(ErrorCode::NA);
   }
 
-  std::vector<Value> result_cells;
-  std::uint32_t rrows = 0;
-  std::uint32_t rcols = 0;
-  if (!resolve_range_arg(call.as_call_arg(2), arena, registry, ctx, &result_cells, &range_err, &rrows, &rcols)) {
-    return Value::error(range_err);
+  auto result_resolved = resolve_range_arg(call.as_call_arg(2), arena, registry, ctx);
+  if (!result_resolved) {
+    return Value::error(result_resolved.error());
   }
+  const std::uint32_t rrows = result_resolved.value().rows;
+  const std::uint32_t rcols = result_resolved.value().cols;
+  std::vector<Value> result_cells = std::move(result_resolved.value().cells);
   if (rrows == 0U || rcols == 0U) {
     return Value::error(ErrorCode::Ref);
   }

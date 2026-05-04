@@ -9,11 +9,13 @@
 
 #include <array>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "miniz.h"
 #include "utils/error.h"
 #include "workbook.h"
 
@@ -188,6 +190,62 @@ TEST(ZipReader, MoveAssignmentPreservesOpenState) {
   dst = std::move(src);
   EXPECT_EQ(dst.entry_count(), 6U);
   EXPECT_TRUE(dst.has_entry("xl/styles.xml"));
+}
+
+/// Builds an in-memory ZIP archive containing a single entry whose
+/// uncompressed payload is `payload`. Returned bytes can be fed straight
+/// to `ZipReader::open`. Used to construct the > 100 MiB ZIP-bomb-shaped
+/// fixture below; kept local to this TU because production code never
+/// needs to round-trip raw bytes through miniz's writer surface.
+std::vector<std::uint8_t> BuildSingleEntryZip(const std::string& name, const std::vector<std::uint8_t>& payload) {
+  mz_zip_archive archive{};
+  std::memset(&archive, 0, sizeof(archive));
+  EXPECT_EQ(mz_zip_writer_init_heap(&archive, 0, 0), MZ_TRUE);
+  EXPECT_EQ(mz_zip_writer_add_mem(&archive, name.c_str(), payload.data(), payload.size(),
+                                  static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION)),
+            MZ_TRUE);
+  void* heap = nullptr;
+  std::size_t heap_size = 0;
+  EXPECT_EQ(mz_zip_writer_finalize_heap_archive(&archive, &heap, &heap_size), MZ_TRUE);
+  EXPECT_EQ(mz_zip_writer_end(&archive), MZ_TRUE);
+  std::vector<std::uint8_t> out(heap_size);
+  std::memcpy(out.data(), heap, heap_size);
+  mz_free(heap);
+  return out;
+}
+
+TEST(ZipReader, ReadEntryRejectsZipBombSizedEntry) {
+  // 101 MiB of zero bytes compresses to a few KB but reports an
+  // uncompressed size that exceeds the per-entry cap; the reader must
+  // refuse extraction before allocating the full payload.
+  constexpr std::size_t kPayloadBytes = 101ULL * 1024ULL * 1024ULL;
+  std::vector<std::uint8_t> payload(kPayloadBytes, 0u);
+  const std::vector<std::uint8_t> bytes = BuildSingleEntryZip("huge.bin", payload);
+
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes))));
+  ASSERT_TRUE(zip.has_entry("huge.bin"));
+
+  auto result = zip.read_entry("huge.bin");
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoZipBomb);
+  // Context must mention the offending entry so callers can attribute
+  // the rejection in logs.
+  EXPECT_NE(result.error().context.find("entry=huge.bin"), std::string::npos);
+}
+
+TEST(ZipReader, ReadEntryAcceptsBelowCapEntry) {
+  // 1 MiB sits comfortably under the 100 MiB cap; round-trip succeeds.
+  constexpr std::size_t kPayloadBytes = 1024ULL * 1024ULL;
+  std::vector<std::uint8_t> payload(kPayloadBytes, 0xAAu);
+  const std::vector<std::uint8_t> bytes = BuildSingleEntryZip("ok.bin", payload);
+
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes))));
+
+  auto result = zip.read_entry("ok.bin");
+  ASSERT_TRUE(static_cast<bool>(result)) << "read_entry failed: " << result.error().message;
+  EXPECT_EQ(result.value().size(), kPayloadBytes);
 }
 
 TEST(ZipReader, IdempotentReopen) {

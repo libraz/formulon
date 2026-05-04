@@ -93,6 +93,85 @@ bool try_strip_trailing_currency(std::string_view s, std::string_view* out) {
 
 }  // namespace
 
+Expected<double, ErrorCode> coerce_text_to_number(std::string_view text) {
+  // Implementation factored out of the Value-shaped overload's `Text`
+  // arm so hot-path callers (criterion parsing) can avoid wrapping a
+  // raw string_view in a `Value::text(...)` temporary. The trim / numeric
+  // / percent / currency / date fallback ladder is byte-for-byte
+  // identical to the original site so external behaviour is unchanged.
+  const std::string_view trimmed = strings::trim(text);
+  if (trimmed.empty()) {
+    // Empty / whitespace-only text is #VALUE! in every numeric-coercion
+    // context Mac Excel 365 was tested against (`=""+1`, `=SIN("")`,
+    // `=EXP("")`, ... all yield #VALUE!). Blank cells still coerce to
+    // 0 via the `ValueKind::Blank` branch in the Value-shaped overload;
+    // only the explicit empty string is rejected here.
+    return ErrorCode::Value;
+  }
+  // Layered numeric-coercion fallback, in order:
+  //   1. strtod(trimmed)                    - plain numeric fast path
+  //   2. trailing '%' stripped, strtod, /100 - percent literals
+  //   3. leading currency stripped, strtod   - "$100", "€100", ...
+  //   4. trailing currency stripped, strtod  - "100$", "100€", ...
+  //   5. date / datetime fallback (raw text) - DATEVALUE-style shapes
+  //   6. #VALUE!
+  // Percent + currency combinations and currency-only markers remain
+  // rejected; the date fallback still runs against the raw, untrimmed
+  // text so padded date strings stay #VALUE! (see WhitespacePaddedDate
+  // rejection test).
+  double parsed = 0.0;
+  if (strtod_full(trimmed, &parsed)) {
+    if (std::isnan(parsed) || std::isinf(parsed)) {
+      return ErrorCode::Num;
+    }
+    return parsed;
+  }
+  if (trimmed.back() == '%') {
+    const std::string_view body = trimmed.substr(0, trimmed.size() - 1);
+    if (strtod_full(body, &parsed)) {
+      const double scaled = parsed / 100.0;
+      if (std::isnan(scaled) || std::isinf(scaled)) {
+        return ErrorCode::Num;
+      }
+      return scaled;
+    }
+  }
+  std::string_view stripped;
+  if (try_strip_leading_currency(trimmed, &stripped) && strtod_full(stripped, &parsed)) {
+    if (std::isnan(parsed) || std::isinf(parsed)) {
+      return ErrorCode::Num;
+    }
+    return parsed;
+  }
+  if (try_strip_trailing_currency(trimmed, &stripped) && strtod_full(stripped, &parsed)) {
+    if (std::isnan(parsed) || std::isinf(parsed)) {
+      return ErrorCode::Num;
+    }
+    return parsed;
+  }
+  // Mac Excel 365 accepts date / datetime text wherever a number is
+  // expected: e.g. `=FLOOR(10, "2024-01-10")` coerces the second
+  // argument to its serial (45301). Reuse the shared DATEVALUE /
+  // TIMEVALUE / VALUE parser; only fires after the numeric fallbacks
+  // have rejected the input so plain numerics keep their fast path.
+  // The raw, un-trimmed text is passed: implicit numeric coercion is
+  // strict about whitespace around date strings (`=FLOOR(10,
+  // " 2024-01-10 ")` -> #VALUE!), even though `strtod` and DATEVALUE
+  // both tolerate it.
+  double serial = 0.0;
+  double frac = 0.0;
+  bool has_date = false;
+  bool has_time = false;
+  if (date_parse::parse_date_time_text(text, &serial, &frac, &has_date, &has_time)) {
+    const double combined = serial + frac;
+    if (std::isnan(combined) || std::isinf(combined)) {
+      return ErrorCode::Num;
+    }
+    return combined;
+  }
+  return ErrorCode::Value;
+}
+
 Expected<double, ErrorCode> coerce_to_number(const Value& v) {
   switch (v.kind()) {
     case ValueKind::Number: {
@@ -106,79 +185,12 @@ Expected<double, ErrorCode> coerce_to_number(const Value& v) {
       return v.as_boolean() ? 1.0 : 0.0;
     case ValueKind::Blank:
       return 0.0;
-    case ValueKind::Text: {
-      const std::string_view trimmed = strings::trim(v.as_text());
-      if (trimmed.empty()) {
-        // Empty / whitespace-only text is #VALUE! in every numeric-coercion
-        // context Mac Excel 365 was tested against (`=""+1`, `=SIN("")`,
-        // `=EXP("")`, ... all yield #VALUE!). Blank cells still coerce to
-        // 0 via the `ValueKind::Blank` branch above; only the explicit
-        // empty string is rejected here.
-        return ErrorCode::Value;
-      }
-      // Layered numeric-coercion fallback, in order:
-      //   1. strtod(trimmed)                    - plain numeric fast path
-      //   2. trailing '%' stripped, strtod, /100 - percent literals
-      //   3. leading currency stripped, strtod   - "$100", "€100", ...
-      //   4. trailing currency stripped, strtod  - "100$", "100€", ...
-      //   5. date / datetime fallback (raw text) - DATEVALUE-style shapes
-      //   6. #VALUE!
-      // Percent + currency combinations and currency-only markers remain
-      // rejected; the date fallback still runs against the raw, untrimmed
-      // text so padded date strings stay #VALUE! (see WhitespacePaddedDate
-      // rejection test).
-      double parsed = 0.0;
-      if (strtod_full(trimmed, &parsed)) {
-        if (std::isnan(parsed) || std::isinf(parsed)) {
-          return ErrorCode::Num;
-        }
-        return parsed;
-      }
-      if (trimmed.back() == '%') {
-        const std::string_view body = trimmed.substr(0, trimmed.size() - 1);
-        if (strtod_full(body, &parsed)) {
-          const double scaled = parsed / 100.0;
-          if (std::isnan(scaled) || std::isinf(scaled)) {
-            return ErrorCode::Num;
-          }
-          return scaled;
-        }
-      }
-      std::string_view stripped;
-      if (try_strip_leading_currency(trimmed, &stripped) && strtod_full(stripped, &parsed)) {
-        if (std::isnan(parsed) || std::isinf(parsed)) {
-          return ErrorCode::Num;
-        }
-        return parsed;
-      }
-      if (try_strip_trailing_currency(trimmed, &stripped) && strtod_full(stripped, &parsed)) {
-        if (std::isnan(parsed) || std::isinf(parsed)) {
-          return ErrorCode::Num;
-        }
-        return parsed;
-      }
-      // Mac Excel 365 accepts date / datetime text wherever a number is
-      // expected: e.g. `=FLOOR(10, "2024-01-10")` coerces the second
-      // argument to its serial (45301). Reuse the shared DATEVALUE /
-      // TIMEVALUE / VALUE parser; only fires after the numeric fallbacks
-      // have rejected the input so plain numerics keep their fast path.
-      // The raw, un-trimmed text is passed: implicit numeric coercion is
-      // strict about whitespace around date strings (`=FLOOR(10,
-      // " 2024-01-10 ")` -> #VALUE!), even though `strtod` and DATEVALUE
-      // both tolerate it.
-      double serial = 0.0;
-      double frac = 0.0;
-      bool has_date = false;
-      bool has_time = false;
-      if (date_parse::parse_date_time_text(v.as_text(), &serial, &frac, &has_date, &has_time)) {
-        const double combined = serial + frac;
-        if (std::isnan(combined) || std::isinf(combined)) {
-          return ErrorCode::Num;
-        }
-        return combined;
-      }
-      return ErrorCode::Value;
-    }
+    case ValueKind::Text:
+      // Delegate to the string_view overload so the two entry points
+      // share one implementation. Hot-path callers that already have
+      // a `string_view` should call `coerce_text_to_number` directly to
+      // avoid materialising a `Value::text(...)` temporary.
+      return coerce_text_to_number(v.as_text());
     case ValueKind::Error:
       return v.as_error();
     case ValueKind::Array:

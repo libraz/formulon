@@ -221,6 +221,37 @@ TEST(TablesReader, MissingRefAttributeIsCorruption) {
   EXPECT_EQ(table_or.error().code, FormulonErrorCode::kIoSheetCorrupt);
 }
 
+TEST(TablesReader, OutOfRangeIdFallsBackToDefault) {
+  // Regression: tableId="3000000000" used to clamp to LONG_MAX on 32-bit
+  // hosts via std::strtol. ParseU32Attr now ranges-checks against
+  // UINT32_MAX and falls back to the default (0) on overflow.
+  std::string xml(kXmlDecl);
+  xml.append(
+      "<table xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "id=\"99999999999\" name=\"T1\" displayName=\"T1\" ref=\"A1:B5\">");
+  xml.append("  <tableColumns count=\"1\"><tableColumn id=\"1\" name=\"X\"/></tableColumns>");
+  xml.append("</table>");
+
+  auto table_or = read_table(Bytes(xml), 0U);
+  ASSERT_TRUE(static_cast<bool>(table_or));
+  // Default fallback is 0, not a wrapped value.
+  EXPECT_EQ(table_or.value().id, 0U);
+}
+
+TEST(TablesReader, NegativeIdFallsBackToDefault) {
+  std::string xml(kXmlDecl);
+  xml.append(
+      "<table xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "id=\"-1\" name=\"T1\" displayName=\"T1\" ref=\"A1:B5\">");
+  xml.append("  <tableColumns count=\"1\"><tableColumn id=\"1\" name=\"X\"/></tableColumns>");
+  xml.append("</table>");
+
+  auto table_or = read_table(Bytes(xml), 0U);
+  ASSERT_TRUE(static_cast<bool>(table_or));
+  // Negative integers must not be reinterpreted as huge unsigned values.
+  EXPECT_EQ(table_or.value().id, 0U);
+}
+
 TEST(TablesReader, MalformedXmlIsParseError) {
   // Unterminated element — pugixml should refuse it.
   std::string xml(kXmlDecl);

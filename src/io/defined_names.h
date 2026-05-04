@@ -21,11 +21,6 @@
 
 #include <cstdint>
 #include <string>
-#include <vector>
-
-#include "pugixml.hpp"
-#include "utils/error.h"
-#include "utils/expected.h"
 
 namespace formulon {
 namespace io {
@@ -47,38 +42,10 @@ struct DefinedName {
   std::string comment;
 };
 
-/// Parses every `<definedName>` child of `<workbook>/<definedNames>` in
-/// the supplied workbook document.
-///
-/// Behaviour:
-///   * A workbook with no `<definedNames>` block — or with an empty
-///     block — yields an empty vector. This is not an error: most
-///     workbooks have no defined names at all.
-///   * Declaration order is preserved: callers (and the eventual
-///     writer) can rely on `result[i]` matching the i-th `<definedName>`
-///     in the source document.
-///   * The `name` attribute is required. A `<definedName>` element
-///     without a `name=` is a corruption (Excel rejects such input), so
-///     the reader surfaces `kIoSheetCorrupt`.
-///   * `localSheetId="N"` sets `local_sheet_id` to the parsed integer
-///     (any non-numeric or negative value is treated as workbook scope,
-///     i.e. `-1`).
-///   * `hidden="1"` / `hidden="true"` (case-insensitive) sets
-///     `hidden = true`. Any other value (or absent attribute) leaves it
-///     `false`.
-///   * `comment="..."` is captured verbatim; absent/empty becomes "".
-///   * Formula text comes from the element's text payload. Leading and
-///     trailing ASCII whitespace is stripped (writers occasionally pad
-///     the body for readability); interior whitespace is preserved as-
-///     authored.
-///
-/// Errors:
-///   * `kIoXmlParse` — should not occur in this function (the caller
-///     hands in an already-parsed `xml_document`); reserved for future
-///     paths that might re-parse a sub-document.
-///   * `kIoSheetCorrupt` — a `<definedName>` lacks the required `name=`
-///     attribute.
-Expected<std::vector<DefinedName>, Error> read_defined_names(const pugi::xml_document& workbook_doc);
+// The pugi-typed `read_defined_names(...)` reader entry point lives in
+// `io/defined_names_internal.h`. That header is `io/`-internal and is
+// the only place pugixml types appear in the defined-name pipeline; the
+// public surface above is just the round-trip carrier struct.
 
 }  // namespace io
 }  // namespace formulon

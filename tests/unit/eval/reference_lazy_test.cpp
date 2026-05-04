@@ -7,10 +7,9 @@
 // `$FF:FG`) and full-row (`5:5`, `$12:$23`) extensions that feed
 // `ROW(INDIRECT("D:D"))` / `COLUMN(INDIRECT("5:5"))`.
 
-#include "eval/reference_lazy.h"
-
 #include <cstdint>
 
+#include "eval/a1_parse.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
 

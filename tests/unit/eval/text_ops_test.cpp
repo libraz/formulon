@@ -226,6 +226,83 @@ TEST(TextOpsDecodeUtf8, BadContinuationByte) {
   EXPECT_FALSE(r.valid);
 }
 
+// ---------------------------------------------------------------------------
+// decode_utf8_step (lenient single-step decoder)
+// ---------------------------------------------------------------------------
+
+TEST(DecodeUtf8Step, AsciiOneByte) {
+  std::size_t n = 0;
+  EXPECT_EQ(decode_utf8_step("A", 0, &n), 0x41u);
+  EXPECT_EQ(n, 1u);
+}
+
+TEST(DecodeUtf8Step, TwoByteSequence) {
+  std::size_t n = 0;
+  EXPECT_EQ(decode_utf8_step("\xC2\xA9", 0, &n), 0x00A9u);
+  EXPECT_EQ(n, 2u);
+}
+
+TEST(DecodeUtf8Step, ThreeByteSequence) {
+  std::size_t n = 0;
+  EXPECT_EQ(decode_utf8_step("\xE3\x81\x82", 0, &n), 0x3042u);
+  EXPECT_EQ(n, 3u);
+}
+
+TEST(DecodeUtf8Step, FourByteSupplementary) {
+  std::size_t n = 0;
+  EXPECT_EQ(decode_utf8_step("\xF0\x9F\x98\x80", 0, &n), 0x1F600u);
+  EXPECT_EQ(n, 4u);
+}
+
+TEST(DecodeUtf8Step, MalformedLeadByteEmitsReplacementOneStep) {
+  std::size_t n = 0;
+  // Continuation byte in lead position.
+  EXPECT_EQ(decode_utf8_step("\x80hello", 0, &n), 0xFFFDu);
+  EXPECT_EQ(n, 1u);
+  // 5-byte form lead (0xF8) is illegal in modern UTF-8.
+  EXPECT_EQ(decode_utf8_step("\xF8\x88\x80\x80\x80", 0, &n), 0xFFFDu);
+  EXPECT_EQ(n, 1u);
+}
+
+TEST(DecodeUtf8Step, TruncatedSequenceEmitsReplacementOneStep) {
+  std::size_t n = 0;
+  // 3-byte lead followed by only one continuation byte.
+  EXPECT_EQ(decode_utf8_step("\xE3\x81", 0, &n), 0xFFFDu);
+  EXPECT_EQ(n, 1u);
+}
+
+TEST(DecodeUtf8Step, BadContinuationEmitsReplacementOneStep) {
+  std::size_t n = 0;
+  // 3-byte lead, second "continuation" lacks the 10xxxxxx tag.
+  EXPECT_EQ(decode_utf8_step("\xE3\x81\x20", 0, &n), 0xFFFDu);
+  EXPECT_EQ(n, 1u);
+}
+
+TEST(DecodeUtf8Step, OutOfBoundsOffsetReturnsZeroStep) {
+  std::size_t n = 99;
+  EXPECT_EQ(decode_utf8_step(std::string_view{}, 0, &n), 0xFFFDu);
+  EXPECT_EQ(n, 0u);
+  // Caller probes past end of valid string: also 0-step.
+  n = 99;
+  EXPECT_EQ(decode_utf8_step("abc", 5, &n), 0xFFFDu);
+  EXPECT_EQ(n, 0u);
+}
+
+TEST(DecodeUtf8Step, MultiCodepointWalk) {
+  // Mixed ASCII + 3-byte + 4-byte in one walk: covers the typical
+  // jp_fold / criteria caller pattern.
+  const std::string_view s = "A\xE3\x81\x82\xF0\x9F\x98\x80";
+  std::size_t i = 0;
+  std::size_t n = 0;
+  EXPECT_EQ(decode_utf8_step(s, i, &n), 0x41u);
+  i += n;
+  EXPECT_EQ(decode_utf8_step(s, i, &n), 0x3042u);
+  i += n;
+  EXPECT_EQ(decode_utf8_step(s, i, &n), 0x1F600u);
+  i += n;
+  EXPECT_EQ(i, s.size());
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

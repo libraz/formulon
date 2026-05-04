@@ -13,33 +13,13 @@
 #include <vector>
 
 #include "io/cell_parser.h"
+#include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 
 namespace formulon::io {
-namespace {
-
-/// Concatenates every `<t>` text node inside `node` (walking nested
-/// `<r>` runs in document order) into `out`. No formatting is
-/// preserved; this matches Excel's behaviour when a binding asks for
-/// the comment's plain text.
-void CollectPlainText(const pugi::xml_node& node, std::string& out) {
-  // Direct `<t>` child (the `<text><t>...</t></text>` form for plain
-  // comments). Append before walking runs so the document-order
-  // concatenation is preserved.
-  for (pugi::xml_node t = node.child("t"); t; t = t.next_sibling("t")) {
-    out.append(t.text().get());
-  }
-  for (pugi::xml_node r = node.child("r"); r; r = r.next_sibling("r")) {
-    for (pugi::xml_node t = r.child("t"); t; t = t.next_sibling("t")) {
-      out.append(t.text().get());
-    }
-  }
-}
-
-}  // namespace
 
 Expected<std::vector<CellComment>, Error> read_comments(const std::vector<std::uint8_t>& bytes) {
   std::vector<CellComment> out;
@@ -90,7 +70,10 @@ Expected<std::vector<CellComment>, Error> read_comments(const std::vector<std::u
       cc.author = authors[static_cast<std::size_t>(author_id)];
     }
     if (pugi::xml_node text = c.child("text"); text) {
-      CollectPlainText(text, cc.text);
+      // Comment XML never carries `<rPh>` in practice (kana phonetic
+      // guides only attach to shared-string entries), so the unified
+      // walker's rPh-skip is a no-op for this path.
+      (void)append_rich_text(text, cc.text);
     }
     out.push_back(std::move(cc));
   }

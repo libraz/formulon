@@ -21,7 +21,6 @@
 #include "eval/text_format/number_format_types.h"
 
 namespace formulon {
-namespace eval {
 namespace text_format {
 
 FormatStatus apply_format(double value, std::string_view format, std::string_view original_text, std::string& out) {
@@ -186,5 +185,4 @@ FormatStatus apply_format(double value, std::string_view format, std::string_vie
 }
 
 }  // namespace text_format
-}  // namespace eval
 }  // namespace formulon

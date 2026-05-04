@@ -26,7 +26,6 @@
 #include <vector>
 
 #include "parser/reference.h"
-#include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -34,6 +33,7 @@
 namespace formulon {
 
 class Arena;
+class Sheet;
 class Workbook;
 
 namespace eval {
@@ -225,6 +225,20 @@ class EvalContext {
     return copy;
   }
 
+  class Builder;
+
+  /// Returns a fluent builder pre-bound to the workbook-aware,
+  /// state-carrying shape `(workbook, current_sheet, state)`. Successive
+  /// calls (`with_*`) layer on the optional bindings — name environment,
+  /// formula-cell anchor, mutable sheet — without forcing each call site
+  /// to remember which constructor overload pairs with which combination
+  /// of bindings.
+  ///
+  /// The builder is the recommended construction surface for new call
+  /// sites; the legacy public constructors are retained for backward
+  /// compatibility and may be migrated incrementally.
+  static Builder builder(const Workbook& workbook, const Sheet& current_sheet, EvalState& state) noexcept;
+
   /// Sentinel row / column value meaning "no formula cell is bound". Chosen
   /// beyond `Sheet::kMaxRows` / `kMaxCols` so it never collides with a valid
   /// 0-based address.
@@ -306,6 +320,58 @@ class EvalContext {
   std::uint32_t formula_row_ = kNoFormulaCell;
   std::uint32_t formula_col_ = kNoFormulaCell;
 };
+
+/// Fluent builder for the workbook-aware, state-carrying flavour of
+/// `EvalContext`. Construct via `EvalContext::builder(...)` and chain
+/// `with_*` calls before terminating with `build()`.
+///
+/// Rationale: `EvalContext` exposes four public constructors plus the
+/// `workbook_only` factory (five distinct shapes). Most call sites need
+/// the most-bound shape — workbook + current sheet + state + a name
+/// env + a formula-cell anchor + a mutable sheet — and the existing
+/// surface forces them to remember the chained `with_*` calls separate
+/// from the constructor overload. The builder unifies that into one
+/// linear, self-documenting expression. Existing constructor call sites
+/// continue to compile unchanged; migration is incremental.
+class EvalContext::Builder {
+ public:
+  Builder(const Workbook& workbook, const Sheet& current_sheet, EvalState& state) noexcept
+      : ctx_(workbook, current_sheet, state) {}
+
+  /// Binds the active lexical-scope environment for bare name references
+  /// (LET / LAMBDA). Mirrors `EvalContext::with_name_env`.
+  Builder& with_name_env(const NameEnv* env) noexcept {
+    ctx_ = ctx_.with_name_env(env);
+    return *this;
+  }
+
+  /// Anchors the context at the formula cell located at `(row, col)` on
+  /// the current sheet. Mirrors `EvalContext::with_formula_cell`.
+  Builder& with_formula_cell(std::uint32_t row, std::uint32_t col) noexcept {
+    ctx_ = ctx_.with_formula_cell(row, col);
+    return *this;
+  }
+
+  /// Authorises spill commits on `sheet`. Mirrors
+  /// `EvalContext::with_mutable_sheet`.
+  Builder& with_mutable_sheet(Sheet& sheet) noexcept {
+    ctx_ = ctx_.with_mutable_sheet(sheet);
+    return *this;
+  }
+
+  /// Returns the finished context. The builder may be discarded after
+  /// this; further `with_*` calls would have no effect on the returned
+  /// value.
+  EvalContext build() const noexcept { return ctx_; }
+
+ private:
+  EvalContext ctx_;
+};
+
+inline EvalContext::Builder EvalContext::builder(const Workbook& workbook, const Sheet& current_sheet,
+                                                 EvalState& state) noexcept {
+  return Builder(workbook, current_sheet, state);
+}
 
 }  // namespace eval
 }  // namespace formulon

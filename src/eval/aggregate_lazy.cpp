@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <iterator>
+#include <utility>
 #include <vector>
 
 #include "eval/coerce.h"
@@ -15,6 +17,7 @@
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
+#include "utils/expected.h"
 #include "value.h"
 
 namespace formulon {
@@ -48,26 +51,26 @@ constexpr int kFnMin = 1;
 constexpr int kFnMax = 19;
 constexpr int kFnKArgFirst = 14;  // 14..19 take a trailing k arg.
 
-// Reads a required scalar metadata argument (function_num / options / k).
-// Errors propagate verbatim; non-coercible values surface `#VALUE!`. The
-// error path writes through `*out_err` and returns NaN; callers must check
-// `out_err->is_error()` before consuming the numeric result.
-double read_scalar(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
-                   Value* out_err) {
+// Reads a required scalar metadata argument (function_num / options /
+// k). Errors propagate verbatim; non-coercible values surface
+// `#VALUE!`; non-finite results (e.g. coercion overflow) surface
+// `#NUM!`. The Expected return type avoids the previous in-band
+// `0.0`-on-error sentinel, which collided with legitimate zero
+// arguments (e.g. `AGGREGATE(2, 0, range)` -> COUNT mode + clear-flags
+// option) and risked silent-wrong-result bugs.
+Expected<double, ErrorCode> read_scalar(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                                        const EvalContext& ctx) {
   const Value v = eval_node(node, arena, registry, ctx);
   if (v.is_error()) {
-    *out_err = v;
-    return 0.0;
+    return v.as_error();
   }
   auto coerced = coerce_to_number(v);
   if (!coerced) {
-    *out_err = Value::error(coerced.error());
-    return 0.0;
+    return coerced.error();
   }
   const double x = coerced.value();
   if (!std::isfinite(x)) {
-    *out_err = Value::error(ErrorCode::Num);
-    return 0.0;
+    return ErrorCode::Num;
   }
   return x;
 }
@@ -96,13 +99,14 @@ bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRe
 
   // Range / Ref / SpillRef / RangeOp -> use the canonical resolver.
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || k == parser::NodeKind::SpillRef) {
-    std::vector<Value> cells;
-    ErrorCode range_err = ErrorCode::Value;
-    if (!resolve_range_arg(node, arena, registry, ctx, &cells, &range_err)) {
-      *out_err = Value::error(range_err);
+    auto resolved = resolve_range_arg(node, arena, registry, ctx);
+    if (!resolved) {
+      *out_err = Value::error(resolved.error());
       return false;
     }
-    out_cells->insert(out_cells->end(), cells.begin(), cells.end());
+    auto& rr = resolved.value();
+    out_cells->insert(out_cells->end(), std::make_move_iterator(rr.cells.begin()),
+                      std::make_move_iterator(rr.cells.end()));
     return true;
   }
 
@@ -444,20 +448,20 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
   }
 
   Value err = Value::blank();
-  const double fn_raw = read_scalar(call.as_call_arg(0), arena, registry, ctx, &err);
-  if (err.is_error()) {
-    return err;
+  auto fn_raw_or = read_scalar(call.as_call_arg(0), arena, registry, ctx);
+  if (!fn_raw_or) {
+    return Value::error(fn_raw_or.error());
   }
-  const int code = static_cast<int>(std::trunc(fn_raw));
+  const int code = static_cast<int>(std::trunc(fn_raw_or.value()));
   if (code < kFnMin || code > kFnMax) {
     return Value::error(ErrorCode::Value);
   }
 
-  const double opts_raw = read_scalar(call.as_call_arg(1), arena, registry, ctx, &err);
-  if (err.is_error()) {
-    return err;
+  auto opts_raw_or = read_scalar(call.as_call_arg(1), arena, registry, ctx);
+  if (!opts_raw_or) {
+    return Value::error(opts_raw_or.error());
   }
-  const int options = static_cast<int>(std::trunc(opts_raw));
+  const int options = static_cast<int>(std::trunc(opts_raw_or.value()));
   if (options < 0 || options > 7) {
     return Value::error(ErrorCode::Value);
   }
@@ -482,10 +486,11 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
     }
     // k is a scalar metadata arg: errors propagate regardless of the
     // options bit (matches the function_num / options contract).
-    const double k_raw = read_scalar(call.as_call_arg(3), arena, registry, ctx, &err);
-    if (err.is_error()) {
-      return err;
+    auto k_raw_or = read_scalar(call.as_call_arg(3), arena, registry, ctx);
+    if (!k_raw_or) {
+      return Value::error(k_raw_or.error());
     }
+    const double k_raw = k_raw_or.value();
     std::vector<double> xs = to_numbers(cells);
     switch (code) {
       case kCodeLarge:

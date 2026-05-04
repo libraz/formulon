@@ -13,7 +13,6 @@
 #include "gtest/gtest.h"
 
 namespace formulon {
-namespace eval {
 namespace text_format {
 namespace {
 
@@ -391,5 +390,4 @@ TEST(NumberFormatFraction, ImproperFractionNoIntegerGroup) {
 
 }  // namespace
 }  // namespace text_format
-}  // namespace eval
 }  // namespace formulon

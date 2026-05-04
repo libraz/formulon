@@ -52,11 +52,15 @@ namespace {
 bool resolve_table_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx, std::vector<Value>* out_cells, std::uint32_t* out_rows,
                        std::uint32_t* out_cols, Value* out_err) {
-  ErrorCode err_code = ErrorCode::Value;
-  if (!resolve_range_arg(arg_node, arena, registry, ctx, out_cells, &err_code, out_rows, out_cols)) {
-    *out_err = Value::error(err_code);
+  auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
+  if (!resolved) {
+    *out_err = Value::error(resolved.error());
     return false;
   }
+  auto& rr = resolved.value();
+  *out_rows = rr.rows;
+  *out_cols = rr.cols;
+  *out_cells = std::move(rr.cells);
   if (*out_rows == 0U || *out_cols == 0U) {
     *out_err = Value::error(ErrorCode::Value);
     return false;

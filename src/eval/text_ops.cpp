@@ -137,6 +137,55 @@ std::string encode_utf8_codepoint(std::uint32_t codepoint) {
   return out;
 }
 
+std::uint32_t decode_utf8_step(std::string_view text, std::size_t i, std::size_t* out_bytes) noexcept {
+  // Pre-bounds check: callers (e.g. the byte-mode wildcard matcher) may
+  // probe positions past the end. Returning U+FFFD with a zero-byte
+  // advance preserves the original `criteria.cpp` contract; the other
+  // sites guarantee `i < text.size()` so the branch is dead-code there
+  // and folds out at -O2.
+  if (i >= text.size()) {
+    *out_bytes = 0;
+    return 0xFFFDu;
+  }
+  const auto lead = static_cast<unsigned char>(text[i]);
+  if ((lead & 0x80u) == 0x00u) {
+    *out_bytes = 1;
+    return lead;
+  }
+  std::size_t need = 0;
+  std::uint32_t value = 0;
+  if ((lead & 0xE0u) == 0xC0u) {
+    need = 1;
+    value = lead & 0x1Fu;
+  } else if ((lead & 0xF0u) == 0xE0u) {
+    need = 2;
+    value = lead & 0x0Fu;
+  } else if ((lead & 0xF8u) == 0xF0u) {
+    need = 3;
+    value = lead & 0x07u;
+  } else {
+    // Malformed leading byte (continuation byte or 5+ byte form):
+    // replacement codepoint, advance one byte.
+    *out_bytes = 1;
+    return 0xFFFDu;
+  }
+  if (i + need >= text.size()) {
+    // Truncated multi-byte sequence: replacement codepoint, advance one.
+    *out_bytes = 1;
+    return 0xFFFDu;
+  }
+  for (std::size_t k = 0; k < need; ++k) {
+    const auto ck = static_cast<unsigned char>(text[i + 1 + k]);
+    if ((ck & 0xC0u) != 0x80u) {
+      *out_bytes = 1;
+      return 0xFFFDu;
+    }
+    value = (value << 6) | (ck & 0x3Fu);
+  }
+  *out_bytes = need + 1;
+  return value;
+}
+
 Utf8DecodeResult decode_first_utf8_codepoint(std::string_view text) noexcept {
   if (text.empty()) {
     return {false, 0u, 0u};

@@ -17,6 +17,7 @@
 #ifndef FORMULON_EVAL_LOOKUPS_CLASSIC_H_
 #define FORMULON_EVAL_LOOKUPS_CLASSIC_H_
 
+#include "eval/lazy_impls.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -43,6 +44,12 @@ Value eval_hlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
                         const EvalContext& ctx);
 Value eval_lookup_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx);
+
+// Compile-time guard: every lazy impl declared above must convert
+// implicitly to the shared `LazyImpl` function-pointer type published in
+// `eval/lazy_impls.h`. Picking `eval_choose_lazy` as a witness is
+// sufficient because every sibling shares the same parameter list.
+inline constexpr LazyImpl kClassicLookupsLazySignatureWitness = &eval_choose_lazy;
 
 }  // namespace eval
 }  // namespace formulon

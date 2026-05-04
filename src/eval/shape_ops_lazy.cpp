@@ -21,7 +21,8 @@
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
-#include "eval/reference_lazy.h"
+#include "eval/range_expanders.h"
+#include "eval/range_resolvers.h"
 #include "eval/scalar_ops.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
@@ -62,12 +63,13 @@ bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionR
   const parser::AstNode& arg_node = *effective;
   const parser::NodeKind k = arg_node.kind();
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
-    std::vector<Value> scratch;
-    ErrorCode err_code = ErrorCode::Value;
-    if (!resolve_range_arg(arg_node, arena, registry, ctx, &scratch, &err_code, out_rows, out_cols)) {
-      *out_err = Value::error(err_code);
+    auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
+    if (!resolved) {
+      *out_err = Value::error(resolved.error());
       return false;
     }
+    *out_rows = resolved.value().rows;
+    *out_cols = resolved.value().cols;
     return true;
   }
   if (k == parser::NodeKind::ArrayLiteral) {
@@ -365,18 +367,26 @@ Value eval_sumproduct_lazy(const parser::AstNode& call, Arena& arena, const Func
     const parser::NodeKind k = arg_node.kind();
     ArgArray a{};
     if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
-      ErrorCode err_code = ErrorCode::Value;
-      if (!resolve_range_arg(arg_node, arena, registry, ctx, &a.cells, &err_code, &a.rows, &a.cols)) {
-        return Value::error(err_code);
+      auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
+      if (!resolved) {
+        return Value::error(resolved.error());
       }
+      auto& rr = resolved.value();
+      a.rows = rr.rows;
+      a.cols = rr.cols;
+      a.cells = std::move(rr.cells);
     } else if (k == parser::NodeKind::Call) {
       // OFFSET / CHOOSE / IF call after LET passthrough — route through
       // `resolve_range_arg` so the rectangle (and its row/col shape) is
       // expanded the same way as a literal `RangeOp` argument.
-      ErrorCode err_code = ErrorCode::Value;
-      if (!resolve_range_arg(arg_node, arena, registry, ctx, &a.cells, &err_code, &a.rows, &a.cols)) {
-        return Value::error(err_code);
+      auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
+      if (!resolved) {
+        return Value::error(resolved.error());
       }
+      auto& rr = resolved.value();
+      a.rows = rr.rows;
+      a.cols = rr.cols;
+      a.cells = std::move(rr.cells);
     } else if (k == parser::NodeKind::ArrayLiteral) {
       Value err = Value::blank();
       if (!flatten_array_literal(arg_node, arena, registry, ctx, &a.cells, &a.rows, &a.cols, &err)) {
@@ -504,14 +514,12 @@ Value eval_node_as_array(const parser::AstNode& node, Arena& arena, const Functi
   // flat row-major vector + shape, so reuse it to keep the expansion path
   // identical to the conditional-aggregator and lookup families.
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || is_range_producing_call(target)) {
-    std::vector<Value> cells;
-    std::uint32_t rows = 0;
-    std::uint32_t cols = 0;
-    ErrorCode err = ErrorCode::Value;
-    if (!resolve_range_arg(target, arena, registry, ctx, &cells, &err, &rows, &cols)) {
-      return Value::error(err);
+    auto resolved = resolve_range_arg(target, arena, registry, ctx);
+    if (!resolved) {
+      return Value::error(resolved.error());
     }
-    return Value::array(make_array_value(arena, rows, cols, cells));
+    auto& rr = resolved.value();
+    return Value::array(make_array_value(arena, rr.rows, rr.cols, rr.cells));
   }
 
   // ArrayLiteral: walk the literal via the existing flatten helper.

@@ -13,6 +13,7 @@
 #ifndef FORMULON_EVAL_SPECIAL_FORMS_LAZY_H_
 #define FORMULON_EVAL_SPECIAL_FORMS_LAZY_H_
 
+#include "eval/lazy_impls.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -64,6 +65,16 @@ Value eval_count_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
 // a NameRef into the active environment) the result is FALSE.
 Value eval_isomitted_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                           const EvalContext& ctx);
+
+// Compile-time guard: every lazy impl declared above must convert
+// implicitly to the shared `LazyImpl` function-pointer type published in
+// `eval/lazy_impls.h`. If a future edit drifts a parameter list the
+// dispatch table in `tree_walker.cpp` would have to coerce the symbol
+// through a non-matching cast — this `static_cast` makes that drift a
+// header-level compile error instead. Picking `eval_if_lazy` as a witness
+// is sufficient because every sibling in this header shares the same
+// parameter list.
+inline constexpr LazyImpl kSpecialFormsLazySignatureWitness = &eval_if_lazy;
 
 }  // namespace eval
 }  // namespace formulon

@@ -399,6 +399,50 @@ TEST(BuiltinsAverageIf, ArityViolations) {
 }
 
 // ---------------------------------------------------------------------------
+// Range shape edge cases — reverse-ordered endpoints
+// ---------------------------------------------------------------------------
+
+// `A3:A1` and `A1:A3` describe the same rectangle in Excel; the parser
+// produces RangeOp(Ref{A3}, Ref{A1}) for the former and the resolver must
+// normalise endpoint ordering so the reported `(rows, cols)` shape stays
+// positive. A regression here would surface as a giant unsigned underflow
+// in `*out_rows = union_rhs.row - union_lhs.row + 1U` (or a hard crash
+// when SUM iterates a 4-billion-cell phantom rectangle).
+TEST(BuiltinsCountIf, ReverseRowRangeNormalises) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(5.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(3.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(5.0));
+  // Reverse: A3:A1 — same rectangle as A1:A3.
+  const Value v = EvalSourceIn("=COUNTIF(A3:A1, 5)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
+TEST(BuiltinsCountIf, ReverseColumnRangeNormalises) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(5.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(3.0));
+  wb.sheet(0).set_cell_value(0, 2, Value::number(5.0));
+  // Reverse: C1:A1 — same rectangle as A1:C1.
+  const Value v = EvalSourceIn("=COUNTIF(C1:A1, 5)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
+TEST(BuiltinsCountIf, ReverseDiagonalRangeNormalises) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(7.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(7.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(7.0));
+  wb.sheet(0).set_cell_value(1, 1, Value::number(7.0));
+  // Bottom-right -> top-left ordering must yield the same 2x2 rectangle.
+  const Value v = EvalSourceIn("=COUNTIF(B2:A1, 7)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
+}
+
+// ---------------------------------------------------------------------------
 // Dispatcher pins
 // ---------------------------------------------------------------------------
 

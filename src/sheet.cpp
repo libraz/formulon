@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "cf/cf_types.h"
 #include "pivot/pivot_table.h"
 #include "value.h"
 

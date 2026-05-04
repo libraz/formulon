@@ -126,10 +126,8 @@ bool xlookup_exact_eq(const Value& cell, const Value& lookup, bool wildcards) {
     // XLOOKUP / XMATCH exact mode treats kana / full-width variants
     // identically to Mac Excel. Full-width digits are NOT folded for
     // lookups (Mac asymmetry — see jp_fold.h).
-    const std::string pat_lower =
-        strings::to_ascii_lower(fold_jp_text(lookup.as_text(), /*fold_fullwidth_digits=*/false));
-    const std::string cell_lower =
-        strings::to_ascii_lower(fold_jp_text(cell.as_text(), /*fold_fullwidth_digits=*/false));
+    const std::string pat_lower = fold_and_lower(lookup.as_text(), /*fold_fullwidth_digits=*/false);
+    const std::string cell_lower = fold_and_lower(cell.as_text(), /*fold_fullwidth_digits=*/false);
     if (wildcards) {
       return wildcard_match(pat_lower, cell_lower);
     }
@@ -377,13 +375,13 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   }
 
   // 2) lookup_array — must be a 1-D range.
-  std::vector<Value> lookup_cells;
-  std::uint32_t l_rows = 0;
-  std::uint32_t l_cols = 0;
-  ErrorCode l_err = ErrorCode::Value;
-  if (!resolve_range_arg(call.as_call_arg(1), arena, registry, ctx, &lookup_cells, &l_err, &l_rows, &l_cols)) {
-    return Value::error(l_err);
+  auto lookup_resolved = resolve_range_arg(call.as_call_arg(1), arena, registry, ctx);
+  if (!lookup_resolved) {
+    return Value::error(lookup_resolved.error());
   }
+  const std::uint32_t l_rows = lookup_resolved.value().rows;
+  const std::uint32_t l_cols = lookup_resolved.value().cols;
+  std::vector<Value> lookup_cells = std::move(lookup_resolved.value().cells);
   if (l_rows != 1U && l_cols != 1U) {
     return Value::error(ErrorCode::Value);
   }
@@ -393,13 +391,13 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
   // 3) return_array — shape must be compatible with the match axis. Any
   //    mismatch or 2-D return (which would require spill) yields #VALUE!.
-  std::vector<Value> return_cells;
-  std::uint32_t r_rows = 0;
-  std::uint32_t r_cols = 0;
-  ErrorCode r_err = ErrorCode::Value;
-  if (!resolve_range_arg(call.as_call_arg(2), arena, registry, ctx, &return_cells, &r_err, &r_rows, &r_cols)) {
-    return Value::error(r_err);
+  auto return_resolved = resolve_range_arg(call.as_call_arg(2), arena, registry, ctx);
+  if (!return_resolved) {
+    return Value::error(return_resolved.error());
   }
+  const std::uint32_t r_rows = return_resolved.value().rows;
+  const std::uint32_t r_cols = return_resolved.value().cols;
+  std::vector<Value> return_cells = std::move(return_resolved.value().cells);
   if (r_rows != 1U && r_cols != 1U) {
     // 2-D return_array implies a spill result; scalar context only.
     return Value::error(ErrorCode::Value);
@@ -488,13 +486,13 @@ Value eval_xmatch_lazy(const parser::AstNode& call, Arena& arena, const Function
     return lookup;
   }
 
-  std::vector<Value> cells;
-  std::uint32_t rows = 0;
-  std::uint32_t cols = 0;
-  ErrorCode range_err = ErrorCode::Value;
-  if (!resolve_range_arg(call.as_call_arg(1), arena, registry, ctx, &cells, &range_err, &rows, &cols)) {
-    return Value::error(range_err);
+  auto resolved = resolve_range_arg(call.as_call_arg(1), arena, registry, ctx);
+  if (!resolved) {
+    return Value::error(resolved.error());
   }
+  const std::uint32_t rows = resolved.value().rows;
+  const std::uint32_t cols = resolved.value().cols;
+  std::vector<Value> cells = std::move(resolved.value().cells);
   if (rows != 1U && cols != 1U) {
     return Value::error(ErrorCode::Value);
   }

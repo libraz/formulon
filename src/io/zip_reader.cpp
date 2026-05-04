@@ -22,6 +22,19 @@
 namespace formulon {
 namespace io {
 
+namespace {
+
+// Hard cap on the uncompressed size of any single ZIP entry. Excel parts
+// rarely exceed a few MB; 100 MiB is well above any realistic per-part
+// payload (sharedStrings.xml and large sheets are the worst offenders and
+// stay under ~30 MB even on million-cell workbooks). The cap blunts ZIP
+// bombs whose 99:1 compression ratio would otherwise allow a few KB of
+// archive bytes to expand into multi-GiB allocations and trigger OOM /
+// DoS during `read_entry`.
+constexpr std::size_t kMaxExtractedBytesPerEntry = 100ULL * 1024ULL * 1024ULL;
+
+}  // namespace
+
 struct ZipReader::Impl {
   mz_zip_archive archive{};
   bool open = false;
@@ -158,6 +171,31 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
   if (located < 0) {
     return make_error(FormulonErrorCode::kIoFileNotFound, "ZipReader::read_entry: entry not found",
                       "context=zip_reader entry=" + c_name);
+  }
+
+  // Probe the central directory entry first so we can reject ZIP bombs
+  // before miniz allocates the full uncompressed size on the heap. A
+  // crafted entry can claim 99:1 compression: a few KB of archive bytes
+  // expanding into hundreds of MB of memory. Refuse anything past
+  // `kMaxExtractedBytesPerEntry`.
+  mz_zip_archive_file_stat stat{};
+  if (mz_zip_reader_file_stat(&impl_->archive, static_cast<mz_uint>(located), &stat) == MZ_FALSE) {
+    const mz_zip_error err = mz_zip_get_last_error(&impl_->archive);
+    std::string ctx("context=zip_reader entry=");
+    ctx.append(c_name);
+    ctx.append(" miniz_error=");
+    ctx.append(std::to_string(static_cast<int>(err)));
+    return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::read_entry: stat failed", std::move(ctx));
+  }
+  if (stat.m_uncomp_size > static_cast<mz_uint64>(kMaxExtractedBytesPerEntry)) {
+    std::string ctx("context=zip_reader entry=");
+    ctx.append(c_name);
+    ctx.append(" uncompressed_size=");
+    ctx.append(std::to_string(static_cast<std::uint64_t>(stat.m_uncomp_size)));
+    ctx.append(" cap=");
+    ctx.append(std::to_string(static_cast<std::uint64_t>(kMaxExtractedBytesPerEntry)));
+    return make_error(FormulonErrorCode::kIoZipBomb, "ZipReader::read_entry: uncompressed size exceeds per-entry cap",
+                      std::move(ctx));
   }
 
   std::size_t extracted_size = 0;

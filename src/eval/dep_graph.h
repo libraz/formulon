@@ -32,6 +32,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <unordered_map>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace formulon::eval {
@@ -154,7 +156,8 @@ class DepGraph {
   std::vector<CellNodeId> topological_order() const;
 
   /// Number of cells with at least one outgoing or incoming edge.
-  std::size_t node_count() const noexcept;
+  /// O(1) — backed by a counter kept in sync by every mutator.
+  std::size_t node_count() const noexcept { return node_count_; }
 
   /// Whether the graph has no recorded edges.
   bool empty() const noexcept { return forward_.empty() && reverse_.empty(); }
@@ -162,10 +165,38 @@ class DepGraph {
  private:
   using AdjacencyMap = std::unordered_map<CellNodeId, std::vector<CellNodeId>, CellNodeIdHash>;
 
+  /// Hash for an ordered pair of `CellNodeId`s. Used to dedupe directed
+  /// edges in O(1) on `add_dependency`. Combines the two component
+  /// hashes with a boost-style mix so swapping the endpoints produces a
+  /// different hash (the relation is asymmetric: `a -> b` is a
+  /// different edge from `b -> a`). The golden-ratio constant is sized
+  /// to `size_t` so the WASM 32-bit build stays warning-clean alongside
+  /// the 64-bit native build.
+  struct EdgeHash {
+    std::size_t operator()(const std::pair<CellNodeId, CellNodeId>& edge) const noexcept {
+      const std::size_t h1 = CellNodeIdHash{}(edge.first);
+      const std::size_t h2 = CellNodeIdHash{}(edge.second);
+      // Boost's `hash_combine` mix: stable, well-known, no platform
+      // dependence on hash strength. The golden-ratio constant is
+      // truncated to whatever `size_t` can hold (32 bits on WASM, 64
+      // bits on native) — the mix is still avalanche-correct.
+      constexpr std::size_t kGolden = static_cast<std::size_t>(0x9e3779b97f4a7c15ULL);
+      return h1 ^ (h2 + kGolden + (h1 << 6) + (h1 >> 2));
+    }
+  };
+
   // Forward edges: `forward_[a]` is the list of cells `a` reads.
   AdjacencyMap forward_;
   // Reverse edges: `reverse_[b]` is the list of cells that read `b`.
   AdjacencyMap reverse_;
+  // Parallel edge index for O(1) dedup on `add_dependency`. Each entry
+  // is `(dependent, dependency)`; mirrors `forward_` exactly.
+  std::unordered_set<std::pair<CellNodeId, CellNodeId>, EdgeHash> edges_;
+  // Distinct-node counter kept in sync by `add_dependency` /
+  // `clear_dependencies_of` / `remove_node`. Backs the `noexcept` /
+  // O(1) `node_count()` accessor; without it, that accessor would
+  // need to allocate and walk both adjacency maps every call.
+  std::size_t node_count_ = 0;
 };
 
 }  // namespace formulon::eval

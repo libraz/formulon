@@ -281,6 +281,37 @@ TEST(CellParser, NumberWithUnparseableValue) {
   EXPECT_EQ(result.error().code, FormulonErrorCode::kIoSheetCorrupt);
 }
 
+TEST(CellParser, SharedStringIndexLargeIsExact) {
+  // Regression: SST indices >= 2^24 + 1 used to be parsed via `double`
+  // and silently rounded onto an even neighbour, surfacing the wrong
+  // shared string. Verify the boundary value 16777217 (= 2^24 + 1)
+  // round-trips exactly.
+  pugi::xml_document doc;
+  std::deque<std::string> storage;
+  ASSERT_PARSE_OK(parsed, "<c r=\"A1\" t=\"s\"><v>16777217</v></c>", doc, storage);
+  EXPECT_TRUE(parsed.is_sst_index);
+  EXPECT_EQ(parsed.sst_index, 16777217U);
+}
+
+TEST(CellParser, SharedStringIndexNegativeIsRejected) {
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string("<c r=\"A1\" t=\"s\"><v>-1</v></c>"));
+  std::deque<std::string> storage;
+  auto result = parse_cell_element(doc.first_child(), storage);
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoSheetCorrupt);
+}
+
+TEST(CellParser, SharedStringIndexOverflowIsRejected) {
+  // 4294967296 (= 2^32) overflows uint32; must be rejected, not wrapped.
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string("<c r=\"A1\" t=\"s\"><v>4294967296</v></c>"));
+  std::deque<std::string> storage;
+  auto result = parse_cell_element(doc.first_child(), storage);
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoSheetCorrupt);
+}
+
 TEST(CellParser, LegacyStrTypeIsTextFromValue) {
   // t="str" is the legacy formula-result-as-string shape. The cached
   // text lives in <v> rather than <is>.

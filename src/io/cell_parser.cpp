@@ -29,6 +29,8 @@
 #include <string_view>
 #include <utility>
 
+#include "io/a1_ref.h"
+#include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "utils/error.h"
@@ -114,72 +116,32 @@ bool ParseErrorDisplay(std::string_view text, ErrorCode* out) {
   return false;
 }
 
-/// Parses an unsigned decimal integer at `text[*i]`. Advances `*i` past
-/// the digits. Returns the parsed value, or `0` when no digit was
-/// consumed (a row index of 0 is invalid in Excel — rows are 1-based —
-/// so callers can use 0 as a sentinel). Caps at 32-bit unsigned.
+/// Thin wrappers over the shared A1 helpers in `io/a1_ref.h`, preserving
+/// the legacy "0 = error" sentinel that the original local helpers used.
+/// Excel rows are 1-based so a 0 result is unambiguously an error.
 std::uint32_t ParseUintAdvance(std::string_view text, std::size_t* i) {
-  std::uint64_t v = 0;
-  bool any = false;
-  while (*i < text.size()) {
-    const char c = text[*i];
-    if (c < '0' || c > '9') {
-      break;
-    }
-    v = v * 10U + static_cast<std::uint64_t>(c - '0');
-    if (v > 0xFFFFFFFFULL) {
-      // Overflow guard. Caller treats 0 as "invalid" already.
-      return 0;
-    }
-    ++(*i);
-    any = true;
+  std::uint32_t v = 0;
+  if (!parse_uint(text, i, &v)) {
+    return 0U;
   }
-  return any ? static_cast<std::uint32_t>(v) : 0U;
+  return v;
 }
 
-/// Parses Excel column letters (A-Z, AA-XFD) starting at `text[*i]` into
-/// a 1-based column index. Returns 0 on error (no letter consumed) or on
-/// overflow past `XFD`. Advances `*i`.
 std::uint32_t ParseColumnLetters(std::string_view text, std::size_t* i) {
   std::uint32_t col = 0;
-  std::size_t consumed = 0;
-  while (*i < text.size()) {
-    const char c = text[*i];
-    if (c < 'A' || c > 'Z') {
-      break;
-    }
-    if (consumed >= 3U) {
-      // Excel max is XFD (3 letters); reject 4+ letter columns.
-      return 0U;
-    }
-    col = col * 26U + static_cast<std::uint32_t>(c - 'A' + 1);
-    ++(*i);
-    ++consumed;
-  }
-  if (consumed == 0U) {
+  if (!parse_column_letters(text, i, &col)) {
     return 0U;
   }
   return col;
 }
 
 /// Walks `is_node`'s descendants and concatenates every `<t>` text node
-/// payload into `out`, in document order. `<r><t>...</t></r>` rich-text
-/// runs are flattened: this slice does not preserve formatting because
-/// the workbook model has no rich-text storage yet. `<rPh>` (phonetic
-/// guides) are intentionally skipped; `ConcatInlinePhoneticText`
-/// captures them separately.
+/// payload into `out`, in document order. Thin wrapper over the shared
+/// `append_rich_text` helper (which skips `<rPh>` so phonetic guides do
+/// not leak into the surface string; `ConcatInlinePhoneticText` walks
+/// them separately).
 void ConcatInlineStringText(const pugi::xml_node& is_node, std::string& out) {
-  // Direct `<t>` (the simple inlineStr shape).
-  for (pugi::xml_node t = is_node.child("t"); t; t = t.next_sibling("t")) {
-    out.append(t.text().get());
-  }
-  // `<r><t>...</t></r>` rich-text runs. Walked in document order so the
-  // catenation matches the original visual order.
-  for (pugi::xml_node r = is_node.child("r"); r; r = r.next_sibling("r")) {
-    for (pugi::xml_node rt = r.child("t"); rt; rt = rt.next_sibling("t")) {
-      out.append(rt.text().get());
-    }
-  }
+  (void)append_rich_text(is_node, out);
 }
 
 /// Walks every `<rPh>` direct child of `is_node` and concatenates their
@@ -315,14 +277,22 @@ Expected<ParsedCell, Error> decode_cell_payload(std::string_view t, std::string_
       return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: t='s' without <v> child",
                         "context=cell_parser");
     }
-    double idx = 0.0;
-    if (!ParseDouble(v_text, &idx) || idx < 0.0 || idx > 4294967295.0) {
+    // Parse the SST index directly as a 32-bit unsigned integer. Going
+    // through `double` here would silently round indices >= 2^24+1 onto
+    // even neighbours and surface the wrong shared string. The pugixml
+    // text() payload is NUL-terminated so strtoul is safe.
+    std::size_t i = 0;
+    const std::uint32_t parsed_idx = ParseUintAdvance(v_text, &i);
+    // ParseUintAdvance returns 0 both for "no digits consumed" and for
+    // overflow past 2^32-1. Distinguish: empty / non-digit / overflow
+    // leaves `i == 0` or `i < v_text.size()`.
+    if (i == 0U || i != v_text.size()) {
       std::string ctx("context=cell_parser v=");
       ctx.append(v_text);
       return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: t='s' has unparseable index", std::move(ctx));
     }
     out.is_sst_index = true;
-    out.sst_index = static_cast<std::uint32_t>(idx);
+    out.sst_index = parsed_idx;
     out.value = Value::text(std::string_view{});
     return out;
   }

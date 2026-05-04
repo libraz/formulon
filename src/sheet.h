@@ -27,10 +27,13 @@
 #include <vector>
 
 #include "cell.h"
-#include "cf/cf_types.h"
 #include "value.h"
 
 namespace formulon {
+
+namespace cf {
+struct ConditionalFormat;
+}  // namespace cf
 
 namespace pivot {
 class PivotTable;

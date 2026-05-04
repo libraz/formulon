@@ -34,6 +34,7 @@
 #include "io/cf_reader.h"
 #include "io/comments_reader.h"
 #include "io/defined_names.h"
+#include "io/defined_names_internal.h"
 #include "io/external_links.h"
 #include "io/pivot_cache_reader.h"
 #include "io/pivot_table_reader.h"
@@ -261,17 +262,27 @@ struct OverrideEntry {
 /// elements together with its content type. `<Default>` entries are
 /// ignored: they describe extensions rather than specific parts and the
 /// passthrough flow only carries Override-registered parts.
-std::vector<OverrideEntry> ListOverridePartEntries(const std::vector<std::uint8_t>& ct_bytes) {
+///
+/// Returns an error when the bytes do not parse as XML or carry no
+/// `<Types>` root: silently substituting an empty list would erase every
+/// passthrough part on round-trip and produce a corrupt package without
+/// surfacing the cause. `VerifyContentTypes` runs over the same buffer
+/// and detects the same defects, but this slice may be invoked
+/// independently in future code paths, so we make it self-consistent.
+Expected<std::vector<OverrideEntry>, Error> ListOverridePartEntries(const std::vector<std::uint8_t>& ct_bytes) {
   std::vector<OverrideEntry> out;
   pugi::xml_document doc;
   pugi::xml_parse_result parse =
       doc.load_buffer(ct_bytes.data(), ct_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
   if (!parse) {
-    return out;
+    std::string ctx("context=ooxml_reader part=[Content_Types].xml desc=");
+    ctx.append(parse.description());
+    return make_error(FormulonErrorCode::kIoXmlParse, "[Content_Types].xml: pugixml parse failed", std::move(ctx));
   }
   pugi::xml_node root = doc.child("Types");
   if (!root) {
-    return out;
+    return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: missing <Types> root",
+                      "context=ooxml_reader part=[Content_Types].xml");
   }
   for (pugi::xml_node node = root.first_child(); node; node = node.next_sibling()) {
     if (std::string_view(node.name()) == "Override") {
@@ -294,10 +305,28 @@ std::vector<OverrideEntry> ListOverridePartEntries(const std::vector<std::uint8_
 /// has its Targets resolved against `xl/`). We collapse `..` segments so
 /// `worksheets/sheet1.xml` resolved against `xl/` yields `xl/worksheets/sheet1.xml`,
 /// and `../theme/theme1.xml` resolved against `xl/` would yield `theme/theme1.xml`.
-std::string ResolveRelativePath(std::string_view base_dir, std::string_view target) {
-  // Absolute-path targets short-circuit the relative resolution.
+///
+/// Path-traversal hardening: a hostile rels file may carry a `Target` like
+/// `../../../etc/passwd` whose `..` segments outnumber the prefix
+/// directories and thus escape the package root. The resolver rejects any
+/// such input — including absolute-path targets that begin with `/`
+/// (those are package-relative by spec, but a writer that emits one is
+/// signalling a non-portable path that we treat as malformed) — by
+/// surfacing `kIoZipSlip`. Callers must propagate the error and refuse to
+/// open the package.
+Expected<std::string, Error> ResolveRelativePath(std::string_view base_dir, std::string_view target) {
+  // Absolute-path targets are not permitted in well-formed OOXML rels
+  // files. A writer that emits `Target="/xl/..."` is either misbehaving
+  // or attempting path traversal; in either case the result is not safe
+  // to consume because the path no longer participates in `..`-segment
+  // accounting that defends the package root.
   if (!target.empty() && target.front() == '/') {
-    return std::string(target.substr(1));
+    std::string ctx("context=ooxml_reader base_dir=");
+    ctx.append(base_dir);
+    ctx.append(" target=");
+    ctx.append(target);
+    return make_error(FormulonErrorCode::kIoZipSlip, "rels target uses package-absolute path; refusing to resolve",
+                      std::move(ctx));
   }
 
   std::vector<std::string> stack;
@@ -311,7 +340,9 @@ std::string ResolveRelativePath(std::string_view base_dir, std::string_view targ
       start = i + 1;
     }
   }
-  // Append the target, applying `.` / `..` normalisation.
+  // Append the target, applying `.` / `..` normalisation. Track whether
+  // any `..` segment failed to find a directory to pop so we can refuse
+  // a target that escapes the package root.
   start = 0;
   for (std::size_t i = 0; i <= target.size(); ++i) {
     if (i == target.size() || target[i] == '/') {
@@ -320,9 +351,15 @@ std::string ResolveRelativePath(std::string_view base_dir, std::string_view targ
         if (seg == ".") {
           // skip
         } else if (seg == "..") {
-          if (!stack.empty()) {
-            stack.pop_back();
+          if (stack.empty()) {
+            std::string ctx("context=ooxml_reader base_dir=");
+            ctx.append(base_dir);
+            ctx.append(" target=");
+            ctx.append(target);
+            return make_error(FormulonErrorCode::kIoZipSlip, "rels target escapes package root via '..' traversal",
+                              std::move(ctx));
           }
+          stack.pop_back();
         } else {
           stack.emplace_back(seg);
         }
@@ -336,6 +373,13 @@ std::string ResolveRelativePath(std::string_view base_dir, std::string_view targ
       out.push_back('/');
     }
     out.append(stack[i]);
+  }
+  if (out.empty()) {
+    std::string ctx("context=ooxml_reader base_dir=");
+    ctx.append(base_dir);
+    ctx.append(" target=");
+    ctx.append(target);
+    return make_error(FormulonErrorCode::kIoZipSlip, "rels target resolves to empty path", std::move(ctx));
   }
   return out;
 }
@@ -429,25 +473,45 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
       if (id.empty()) {
         continue;
       }
-      rels.sheet_targets.emplace(id, ResolveRelativePath(base_dir, target));
+      auto resolved = ResolveRelativePath(base_dir, target);
+      if (!resolved) {
+        return resolved.error();
+      }
+      rels.sheet_targets.emplace(id, std::move(resolved).value());
     } else if (type == kRelSharedStrings) {
       // Last writer wins on duplicates (Excel never emits more than one,
       // but defending against malformed inputs costs almost nothing).
-      rels.sst_path = ResolveRelativePath(base_dir, target);
+      auto resolved = ResolveRelativePath(base_dir, target);
+      if (!resolved) {
+        return resolved.error();
+      }
+      rels.sst_path = std::move(resolved).value();
     } else if (type == kRelStyles) {
-      rels.styles_path = ResolveRelativePath(base_dir, target);
+      auto resolved = ResolveRelativePath(base_dir, target);
+      if (!resolved) {
+        return resolved.error();
+      }
+      rels.styles_path = std::move(resolved).value();
     } else if (type == kRelPivotCacheDefinition) {
       const std::string id = rel.attribute("Id").value();
       if (id.empty()) {
         continue;
       }
-      rels.pivot_cache_definition_paths_by_rid.emplace(id, ResolveRelativePath(base_dir, target));
+      auto resolved = ResolveRelativePath(base_dir, target);
+      if (!resolved) {
+        return resolved.error();
+      }
+      rels.pivot_cache_definition_paths_by_rid.emplace(id, std::move(resolved).value());
     } else if (type == kRelExternalLink) {
       const std::string id = rel.attribute("Id").value();
       if (id.empty()) {
         continue;
       }
-      rels.external_link_paths_by_rid.emplace(id, ResolveRelativePath(base_dir, target));
+      auto resolved = ResolveRelativePath(base_dir, target);
+      if (!resolved) {
+        return resolved.error();
+      }
+      rels.external_link_paths_by_rid.emplace(id, std::move(resolved).value());
     }
   }
   return rels;
@@ -638,7 +702,11 @@ Expected<std::vector<std::string>, Error> LoadSheetTableTargets(const ZipReader&
       continue;
     }
     if (type == kRelTable) {
-      targets.push_back(ResolveRelativePath(sheet_dir, target));
+      auto resolved = ResolveRelativePath(sheet_dir, target);
+      if (!resolved) {
+        return resolved.error();
+      }
+      targets.push_back(std::move(resolved).value());
     }
     // Other rel types (printerSettings, drawings, comments, ...) are
     // out of scope for Bundle 2.4. A future bundle may widen this
@@ -706,9 +774,17 @@ Expected<SheetAuxRels, Error> LoadSheetAuxRels(const ZipReader& zip, std::string
       // the OOXML producer wrote them (no relative-path resolution).
       out.hyperlink_rid_to_target.emplace(id, std::string(target));
     } else if (type == kRelComments) {
-      out.comments_path = ResolveRelativePath(sheet_dir, target);
+      auto resolved = ResolveRelativePath(sheet_dir, target);
+      if (!resolved) {
+        return resolved.error();
+      }
+      out.comments_path = std::move(resolved).value();
     } else if (type == kRelVmlDrawing) {
-      out.vml_path = ResolveRelativePath(sheet_dir, target);
+      auto resolved = ResolveRelativePath(sheet_dir, target);
+      if (!resolved) {
+        return resolved.error();
+      }
+      out.vml_path = std::move(resolved).value();
     }
   }
   return out;
@@ -752,7 +828,11 @@ Expected<std::vector<std::string>, Error> LoadSheetPivotTableTargets(const ZipRe
       continue;
     }
     if (type == kRelPivotTable) {
-      targets.push_back(ResolveRelativePath(sheet_dir, target));
+      auto resolved = ResolveRelativePath(sheet_dir, target);
+      if (!resolved) {
+        return resolved.error();
+      }
+      targets.push_back(std::move(resolved).value());
     }
   }
   return targets;
@@ -819,6 +899,16 @@ Expected<std::string, Error> LoadPivotCacheRecordsTarget(const ZipReader& zip, s
 
 }  // namespace
 
+namespace internal {
+
+Expected<std::string, Error> ResolveRelativePathForTesting(std::string_view base_dir, std::string_view target) {
+  return ResolveRelativePath(base_dir, target);
+}
+
+}  // namespace internal
+
+namespace {}  // namespace
+
 Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   ZipReader zip;
   {
@@ -843,7 +933,11 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     return kind_or.error();
   }
   const io::WorkbookKind workbook_kind = kind_or.value();
-  const std::vector<OverrideEntry> override_part_entries = ListOverridePartEntries(ct_bytes);
+  auto override_part_entries_or = ListOverridePartEntries(ct_bytes);
+  if (!override_part_entries_or) {
+    return override_part_entries_or.error();
+  }
+  const std::vector<OverrideEntry> override_part_entries = std::move(override_part_entries_or.value());
 
   // 2. _rels/.rels — locate the workbook part path.
   if (!zip.has_entry("_rels/.rels")) {
@@ -1018,13 +1112,13 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     wb.set_iterative_options(opts);
   }
 
-  // result_text_storage is the workbook-lifetime backing store for every
-  // string the reader owns: inline-string `<is>` payloads decoded by the
-  // sheet reader AND every entry in the shared-string table loaded
-  // below. A `std::deque` (pointer-stable across appends) is required so
-  // the `string_view`s handed to cells remain valid as later strings are
-  // appended.
-  std::deque<std::string> result_text_storage;
+  // The workbook owns the text-storage deque; readers append directly
+  // into `wb.mutable_text_storage()`. This keeps `Value::text` views
+  // valid for the full workbook lifetime — including after the caller
+  // moves `wb` out of the read result and discards the result. A
+  // `std::deque` (pointer-stable across appends) is required so the
+  // views handed to cells remain valid as later strings are appended.
+  std::deque<std::string>& result_text_storage = wb.mutable_text_storage();
 
   // 4a. Shared strings — must load BEFORE the sheet read loop because
   // the sheet reader queues `(row, col, sst_index)` tuples that we
@@ -1084,10 +1178,11 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
 
   // 5. Read each sheet's <sheetData> via the cell-aware sheet reader.
   // The sheet reader appends every inline-string payload directly into
-  // `result_text_storage`, a pointer-stable `std::deque` whose lifetime
-  // is the read result. Cells therefore hold `Value::text` views that
-  // remain valid as long as the `OoxmlReadResult` is alive — no
-  // post-load repointing is needed.
+  // the workbook-owned text-storage deque, a pointer-stable
+  // `std::deque` whose lifetime is the workbook's. Cells therefore
+  // hold `Value::text` views that remain valid for the workbook's
+  // lifetime — even after the `OoxmlReadResult` is destroyed and the
+  // workbook is moved out.
   //
   // We retain each sheet's `pending_sst_cells` so the SST resolution
   // pass below can rewrite the placeholder text values without rerunning
@@ -1508,7 +1603,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   // tooling that want to inspect what was preserved.
   wb.set_passthrough_parts(unknown_parts);
 
-  OoxmlReadResult result{std::move(wb), std::move(unknown_parts), pending_sst_count, std::move(result_text_storage)};
+  OoxmlReadResult result{std::move(wb), std::move(unknown_parts), pending_sst_count};
   return result;
 }
 

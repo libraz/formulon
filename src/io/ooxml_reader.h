@@ -42,8 +42,6 @@
 #define FORMULON_IO_OOXML_READER_H_
 
 #include <cstdint>
-#include <deque>
-#include <string>
 #include <vector>
 
 #include "io/passthrough_part.h"
@@ -66,19 +64,19 @@ namespace io {
 /// counts; with the SST reader wired in, every reference is resolved
 /// in-pipeline and the field is purely an audit counter.) Cells that
 /// previously held a `Text("")` placeholder now carry a `Value::text`
-/// view into the corresponding SST entry, which is itself owned by
-/// `text_storage`.
+/// view into the corresponding SST entry, owned by the workbook's
+/// `text_storage()` deque.
 ///
-/// `text_storage` holds the inline-string payloads decoded from
-/// `<is><t>...</t></is>` cells. `Value::text` is non-owning, so the
-/// engine-wide rule is "the workbook's text views are valid for as long
-/// as their backing storage is alive". `text_storage` is that backing
-/// storage for cells loaded via the OOXML reader: callers must keep the
-/// `OoxmlReadResult` alive at least as long as they read text values
-/// from `workbook`. (The recalc engine has the same per-pass arena
-/// constraint internally — see the note in
-/// `eval/recalc_engine.cpp` Phase 4b.) Once Bundle 2.3 introduces a
-/// workbook-owned shared-string pool the storage will move there.
+/// Text payloads (inline strings from `<is><t>...</t></is>`, SST
+/// entries, phonetic runs) are interned into the workbook itself
+/// (`Workbook::intern_text` / `mutable_text_storage`) so that
+/// `Value::text` views remain valid for the lifetime of the workbook
+/// even after the `OoxmlReadResult` is destroyed and the workbook is
+/// moved out. Earlier slices stored the deque on this struct, which
+/// caused a use-after-free when callers wrote
+/// `Workbook wb = std::move(read_ooxml(...).value().workbook);` — the
+/// result (and its deque) went out of scope at the end of the
+/// statement while text views were still aliasing it.
 ///
 /// `unknown_parts` carries the same passthrough payload that is also
 /// copied onto the workbook via `set_passthrough_parts`. Both views are
@@ -88,21 +86,6 @@ struct OoxmlReadResult {
   Workbook workbook;
   std::vector<PassthroughPart> unknown_parts;
   std::uint32_t pending_sst_count = 0;
-  // `std::deque` is intentional: we need pointer/iterator stability so
-  // cell `Value::text` views into earlier entries do not invalidate
-  // when later strings are appended. `std::vector` would reallocate.
-  // Using a list-of-strings instead of a single concatenated buffer
-  // keeps lookup-free O(1) appends and avoids rebasing string_views on
-  // every push_back.
-  // (Public C++17 has no `pmr::monotonic_buffer_resource` portability
-  // story we can lean on across all targets, so this stays simple.)
-  // Iterator stability is the only guarantee we rely on; ordering and
-  // duplicate-merging are explicitly NOT promised.
-  // NOTE: header field is intentionally a plain forwarded type to keep
-  // ABI surface predictable; if dependence on `<deque>` becomes a size
-  // concern (per backup/plans/18-wasm-size-optimization.md) we can
-  // PIMPL it later.
-  std::deque<std::string> text_storage;
 };
 
 /// Reads an OOXML (.xlsx) package from in-memory bytes.
@@ -125,7 +108,8 @@ struct OoxmlReadResult {
 ///     for table relationships; non-table relationships are deferred to
 ///     a later bundle.
 ///   * `xl/sharedStrings.xml`        — flat shared-string list; entries
-///     are owned by `text_storage` and aliased by the resolved cells.
+///     are interned into `Workbook::text_storage()` and aliased by the
+///     resolved cells.
 ///   * `xl/styles.xml`               — parsed for validation only (this
 ///     slice does not yet build a runtime style model).
 ///   * `xl/tables/table*.xml`        — table metadata (id, name, ref,
@@ -138,6 +122,18 @@ struct OoxmlReadResult {
 /// are missing. `kIoSheetCorrupt` surfaces for an empty sheet list, a
 /// malformed `<c>` element, or an unresolved shared-formula reference.
 Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes);
+
+namespace internal {
+
+/// Test hook for the OOXML rels-target path normaliser. Resolves `target`
+/// against `base_dir`, collapsing `.` / `..` segments, and refuses any
+/// input that escapes the package root (multi-level `..`, leading `/`).
+/// Returned errors carry `kIoZipSlip`. Callers in production code use the
+/// in-TU helper directly; this entry exists solely so the unit tests can
+/// exercise the safety predicate in isolation.
+Expected<std::string, Error> ResolveRelativePathForTesting(std::string_view base_dir, std::string_view target);
+
+}  // namespace internal
 
 }  // namespace io
 }  // namespace formulon

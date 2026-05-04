@@ -137,7 +137,11 @@ bool Tokenizer::is_ascii_digit(char c) noexcept {
 }
 
 bool Tokenizer::is_ident_start_byte(unsigned char c) noexcept {
-  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_' || c >= 0x80;
+  // Only UTF-8 leading bytes (>= 0xC0) are valid identifier starts.
+  // U+0080..U+00BF are continuation bytes; treating them as start bytes
+  // lets a stray continuation slip into the identifier slot and pulls
+  // subsequent token boundaries off by one byte.
+  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_' || c >= 0xC0;
 }
 
 bool Tokenizer::is_ident_cont_byte(unsigned char c) noexcept {

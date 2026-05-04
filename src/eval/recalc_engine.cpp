@@ -15,17 +15,14 @@
 #include <vector>
 
 #include "cell.h"
+#include "eval/cell_evaluator.h"
 #include "eval/dep_extractor.h"
 #include "eval/dep_graph.h"
 #include "eval/dirty_set.h"
-#include "eval/eval_context.h"
-#include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
-#include "eval/tree_walker.h"
 #include "eval/volatile_tracker.h"
 #include "parser/ast.h"
-#include "parser/parser.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -49,63 +46,6 @@ bool is_cyclic_component(const std::vector<CellNodeId>& component, const DepGrap
   return std::find(deps.begin(), deps.end(), only) != deps.end();
 }
 
-// Re-parses and evaluates the formula at `cell` on `sheet`. Returns the
-// result (or an Excel error sentinel on parse failure). The caller is
-// responsible for writing the result back to the cell.
-//
-// When `iterative_mode` is true the EvalContext is built WITHOUT an
-// EvalState binding. The 3-arg `EvalContext::resolve_ref` overload then
-// short-circuits every formula-cell read to `cell->cached_value` instead
-// of recursing into the cell's formula text. This is exactly what the
-// iterative solver wants: each member of the SCC reads its peers'
-// most-recently-committed values rather than triggering re-entrant
-// evaluation (which would surface `#REF!` for any back-edge inside the
-// cycle and break the fixed-point search). Cross-sheet resolution
-// still works because the workbook pointer is bound regardless.
-Value evaluate_cell(Workbook& workbook, Sheet& sheet, const Cell& cell_data, std::uint32_t row, std::uint32_t col,
-                    const FunctionRegistry& registry, Arena& arena, bool iterative_mode = false) {
-  // Strip the leading '=' before parsing (the parser expects an expression,
-  // not an assignment). `formula_text` is guaranteed non-empty by the
-  // caller because we only feed formula cells through here.
-  std::string_view src = cell_data.formula_text;
-  if (!src.empty() && src.front() == '=') {
-    src.remove_prefix(1);
-  }
-
-  parser::Parser parser(src, arena);
-  parser::AstNode* root = parser.parse();
-  if (root == nullptr) {
-    // Parser failure beyond panic-mode recovery (typically empty input or
-    // arena exhaustion). #NAME? matches the existing recursive resolver
-    // behaviour in `EvalContext::resolve_ref`.
-    return Value::error(ErrorCode::Name);
-  }
-
-  // Build an EvalContext that authorises spill writes on `sheet` and
-  // anchors the formula at the cell being evaluated. Outside of iterative
-  // mode each cell gets its own EvalState so the recursion stack / memo
-  // are scoped to one top-level evaluate() call — the dep graph already
-  // handles the workbook-wide ordering.
-  EvalState state;
-  EvalContext ctx;
-  if (iterative_mode) {
-    // Workbook-bound, state-less context: formula refs short-circuit to
-    // their cached values, which is what the solver iterates against.
-    ctx = EvalContext::workbook_only(workbook, sheet).with_mutable_sheet(sheet).with_formula_cell(row, col);
-  } else {
-    ctx = EvalContext(workbook, sheet, state).with_mutable_sheet(sheet).with_formula_cell(row, col);
-  }
-
-  Value result = evaluate(*root, arena, registry, ctx);
-  // If the top-level evaluator produced an Array (e.g. a SEQUENCE() at the
-  // anchor), commit the spill and return the anchor scalar. Mirrors the
-  // logic in `EvalContext::resolve_ref` for recursive Array results.
-  if (result.is_array()) {
-    result = ctx.dispatch_array_result(result);
-  }
-  return result;
-}
-
 }  // namespace
 
 // ----------------------------------------------------------------------------
@@ -115,7 +55,19 @@ Value evaluate_cell(Workbook& workbook, Sheet& sheet, const Cell& cell_data, std
 RecalcEngine::RecalcEngine() : arena_(std::make_unique<Arena>()) {}
 RecalcEngine::~RecalcEngine() = default;
 
+// ---------------------------------------------------------------------------
+// Public mutating API: each entry acquires `mutex_` and delegates to the
+// `_locked` body. Internal callers (notably the parallel scheduler) take
+// `mutex_` themselves and call the `_locked` helpers directly to avoid
+// re-locking.
+// ---------------------------------------------------------------------------
+
 void RecalcEngine::register_formula(CellNodeId cell, const parser::AstNode& ast, const Workbook& workbook) {
+  std::lock_guard<std::mutex> guard(mutex_);
+  register_formula_locked(cell, ast, workbook);
+}
+
+void RecalcEngine::register_formula_locked(CellNodeId cell, const parser::AstNode& ast, const Workbook& workbook) {
   // Drop the cell's previous outgoing edges so re-registration is a clean
   // rewrite (the new dependency set may differ from the old one).
   graph_.clear_dependencies_of(cell);
@@ -133,20 +85,40 @@ void RecalcEngine::register_formula(CellNodeId cell, const parser::AstNode& ast,
 }
 
 void RecalcEngine::unregister_formula(CellNodeId cell) {
+  std::lock_guard<std::mutex> guard(mutex_);
+  unregister_formula_locked(cell);
+}
+
+void RecalcEngine::unregister_formula_locked(CellNodeId cell) {
   graph_.remove_node(cell);
   volatiles_.unregister_cell(cell);
 }
 
 void RecalcEngine::clear_cell_dependencies(CellNodeId cell) {
+  std::lock_guard<std::mutex> guard(mutex_);
+  clear_cell_dependencies_locked(cell);
+}
+
+void RecalcEngine::clear_cell_dependencies_locked(CellNodeId cell) {
   graph_.clear_dependencies_of(cell);
   volatiles_.unregister_cell(cell);
 }
 
 void RecalcEngine::mark_dirty(CellNodeId cell) {
+  std::lock_guard<std::mutex> guard(mutex_);
+  mark_dirty_locked(cell);
+}
+
+void RecalcEngine::mark_dirty_locked(CellNodeId cell) {
   dirty_.mark(cell);
 }
 
 Expected<RecalcStats, Error> RecalcEngine::recalc(Workbook& workbook, const FunctionRegistry& registry) {
+  std::lock_guard<std::mutex> guard(mutex_);
+  return recalc_locked(workbook, registry);
+}
+
+Expected<RecalcStats, Error> RecalcEngine::recalc_locked(Workbook& workbook, const FunctionRegistry& registry) {
   RecalcStats stats;
 
   // ---- Phase 1: seed the dirty set with every volatile cell. ----
@@ -259,8 +231,9 @@ Expected<RecalcStats, Error> RecalcEngine::recalc(Workbook& workbook, const Func
         // similarly deep-copied into `SpillRegion::owned_strings` by
         // `Sheet::commit_spill`.
         arena_->reset();
-        return evaluate_cell(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_,
-                             /*iterative_mode=*/true);
+        EvaluateCellOptions opts;
+        opts.iterative_mode = true;
+        return evaluate_cell_for_recalc(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_, opts);
       };
       auto commit = [&](CellNodeId c, Value v) {
         if (c.sheet_id >= sheet_count) {
@@ -337,7 +310,7 @@ Expected<RecalcStats, Error> RecalcEngine::recalc(Workbook& workbook, const Func
     //     the write below, so the cached `string_view` does not dangle
     //     when the next cell's evaluation resets the arena.
     arena_->reset();
-    Value result = evaluate_cell(workbook, sheet, *cell_data, only.row, only.col, registry, *arena_);
+    Value result = evaluate_cell_for_recalc(workbook, sheet, *cell_data, only.row, only.col, registry, *arena_);
     sheet.set_cell_cached_value(only.row, only.col, result);
     ++stats.cells_evaluated;
   }
@@ -364,7 +337,7 @@ Expected<RecalcStats, Error> RecalcEngine::recalc(Workbook& workbook, const Func
       continue;
     }
     arena_->reset();
-    Value result = evaluate_cell(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_);
+    Value result = evaluate_cell_for_recalc(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_);
     sheet.set_cell_cached_value(c.row, c.col, result);
     ++stats.cells_evaluated;
   }
@@ -376,6 +349,12 @@ Expected<RecalcStats, Error> RecalcEngine::recalc(Workbook& workbook, const Func
 
 Expected<RecalcStats, Error> RecalcEngine::partial_recalc(Workbook& workbook, const FunctionRegistry& registry,
                                                           const SheetCellRange& viewport) {
+  std::lock_guard<std::mutex> guard(mutex_);
+  return partial_recalc_locked(workbook, registry, viewport);
+}
+
+Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workbook, const FunctionRegistry& registry,
+                                                                 const SheetCellRange& viewport) {
   RecalcStats stats;
 
   // ---- Phase 0: validate the viewport. ----
@@ -542,8 +521,9 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc(Workbook& workbook, co
           return Value::blank();
         }
         arena_->reset();
-        return evaluate_cell(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_,
-                             /*iterative_mode=*/true);
+        EvaluateCellOptions opts;
+        opts.iterative_mode = true;
+        return evaluate_cell_for_recalc(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_, opts);
       };
       auto commit = [&](CellNodeId c, Value v) {
         if (c.sheet_id >= sheet_count) {
@@ -595,7 +575,7 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc(Workbook& workbook, co
       continue;
     }
     arena_->reset();
-    Value result = evaluate_cell(workbook, sheet, *cell_data, only.row, only.col, registry, *arena_);
+    Value result = evaluate_cell_for_recalc(workbook, sheet, *cell_data, only.row, only.col, registry, *arena_);
     sheet.set_cell_cached_value(only.row, only.col, result);
     ++stats.cells_evaluated;
   }
@@ -620,7 +600,7 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc(Workbook& workbook, co
       continue;
     }
     arena_->reset();
-    Value result = evaluate_cell(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_);
+    Value result = evaluate_cell_for_recalc(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_);
     sheet.set_cell_cached_value(c.row, c.col, result);
     ++stats.cells_evaluated;
   }

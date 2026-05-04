@@ -19,7 +19,7 @@
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
-#include "eval/reference_lazy.h"
+#include "eval/range_resolvers.h"
 #include "io/ooxml_writer_cell.h"
 #include "parser/ast.h"
 #include "parser/reference.h"

@@ -16,7 +16,7 @@
 #include "eval/text_format/number_format_types.h"
 
 namespace formulon {
-namespace eval {
+namespace text_format {
 namespace number_format_detail {
 namespace {
 
@@ -1032,5 +1032,5 @@ void classify(Section& section, std::string_view fmt) noexcept {
 }
 
 }  // namespace number_format_detail
-}  // namespace eval
+}  // namespace text_format
 }  // namespace formulon

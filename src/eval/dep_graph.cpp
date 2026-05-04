@@ -25,13 +25,28 @@ void erase_first(std::vector<CellNodeId>& vec, CellNodeId target) {
 }  // namespace
 
 void DepGraph::add_dependency(CellNodeId dependent, CellNodeId dependency) {
-  auto& forward_neighbors = forward_[dependent];
-  if (std::find(forward_neighbors.begin(), forward_neighbors.end(), dependency) != forward_neighbors.end()) {
-    // Already present — keep the call idempotent.
+  // O(1) dedup via the parallel edge index. Idempotent on a duplicate
+  // edge so the surrounding recalc engine can re-record dependencies
+  // freely without quadratic blow-up on dense formulas (`SUM(A1:Z99)`
+  // would otherwise scan ~26*99 entries per duplicate insertion).
+  if (!edges_.insert(std::make_pair(dependent, dependency)).second) {
     return;
   }
-  forward_neighbors.push_back(dependency);
+  // Record key existence BEFORE mutation so the counter sees a
+  // monotone delta. A key counts as "present" if it lives in either
+  // adjacency map; the union models the conceptual node set.
+  const bool dependent_was_known = forward_.count(dependent) != 0U || reverse_.count(dependent) != 0U;
+  const bool dependency_was_known = forward_.count(dependency) != 0U || reverse_.count(dependency) != 0U;
+  forward_[dependent].push_back(dependency);
   reverse_[dependency].push_back(dependent);
+  if (!dependent_was_known) {
+    ++node_count_;
+  }
+  // Avoid double-counting the self-loop case where dependent ==
+  // dependency: it is a single new node, not two.
+  if (!dependency_was_known && dependent != dependency) {
+    ++node_count_;
+  }
 }
 
 void DepGraph::clear_dependencies_of(CellNodeId dependent) {
@@ -42,8 +57,10 @@ void DepGraph::clear_dependencies_of(CellNodeId dependent) {
   // Drop the matching reverse entry from each former dependency, and
   // erase that node's reverse bucket entirely if it becomes empty AND the
   // node itself has no outgoing edges either (i.e. it would otherwise be
-  // an orphan).
+  // an orphan). Track each dependency that becomes unreferenced so the
+  // node-count counter can be adjusted exactly once at the end.
   for (CellNodeId dependency : fwd_pos->second) {
+    edges_.erase(std::make_pair(dependent, dependency));
     auto rev_pos = reverse_.find(dependency);
     if (rev_pos == reverse_.end()) {
       continue;
@@ -51,16 +68,32 @@ void DepGraph::clear_dependencies_of(CellNodeId dependent) {
     erase_first(rev_pos->second, dependent);
     if (rev_pos->second.empty() && forward_.find(dependency) == forward_.end()) {
       reverse_.erase(rev_pos);
+      // `dependency` is fully gone from both maps. Skip the self-loop
+      // case (`dependency == dependent`) because the dependent's own
+      // node-count delta is handled below.
+      if (dependency != dependent) {
+        --node_count_;
+      }
     }
   }
   forward_.erase(fwd_pos);
+  // `dependent` may still be referenced by `reverse_` (someone reads
+  // it). Only decrement when it has truly left the node set.
+  if (reverse_.find(dependent) == reverse_.end()) {
+    --node_count_;
+  }
 }
 
 void DepGraph::remove_node(CellNodeId node) {
+  // Capture pre-state so the final node-count adjustment knows whether
+  // `node` was ever in the graph.
+  const bool node_was_known = forward_.count(node) != 0U || reverse_.count(node) != 0U;
+
   // Outgoing edges: drop `node` from each former dependency's reverse list.
   auto fwd_pos = forward_.find(node);
   if (fwd_pos != forward_.end()) {
     for (CellNodeId dependency : fwd_pos->second) {
+      edges_.erase(std::make_pair(node, dependency));
       auto rev_pos = reverse_.find(dependency);
       if (rev_pos == reverse_.end()) {
         continue;
@@ -68,6 +101,9 @@ void DepGraph::remove_node(CellNodeId node) {
       erase_first(rev_pos->second, node);
       if (rev_pos->second.empty() && forward_.find(dependency) == forward_.end()) {
         reverse_.erase(rev_pos);
+        if (dependency != node) {
+          --node_count_;
+        }
       }
     }
     forward_.erase(fwd_pos);
@@ -77,6 +113,7 @@ void DepGraph::remove_node(CellNodeId node) {
   auto rev_pos = reverse_.find(node);
   if (rev_pos != reverse_.end()) {
     for (CellNodeId dependent : rev_pos->second) {
+      edges_.erase(std::make_pair(dependent, node));
       auto fwd_other = forward_.find(dependent);
       if (fwd_other == forward_.end()) {
         continue;
@@ -84,9 +121,19 @@ void DepGraph::remove_node(CellNodeId node) {
       erase_first(fwd_other->second, node);
       if (fwd_other->second.empty() && reverse_.find(dependent) == reverse_.end()) {
         forward_.erase(fwd_other);
+        if (dependent != node) {
+          --node_count_;
+        }
       }
     }
     reverse_.erase(rev_pos);
+  }
+
+  // Final adjustment: `node` itself is now absent from both maps. The
+  // per-edge erasures above only decrement when *other* nodes become
+  // unreferenced, never `node` itself, so do that here.
+  if (node_was_known) {
+    --node_count_;
   }
 }
 
@@ -104,21 +151,6 @@ std::vector<CellNodeId> DepGraph::dependencies_of(CellNodeId node) const {
     return {};
   }
   return pos->second;
-}
-
-std::size_t DepGraph::node_count() const noexcept {
-  // A node may live in either map exclusively (a sink with no outgoing
-  // edges only appears in `reverse_`; a pure source only appears in
-  // `forward_`), so we union the two key sets.
-  std::unordered_map<CellNodeId, char, CellNodeIdHash> seen;
-  seen.reserve(forward_.size() + reverse_.size());
-  for (const auto& entry : forward_) {
-    seen[entry.first] = 1;
-  }
-  for (const auto& entry : reverse_) {
-    seen[entry.first] = 1;
-  }
-  return seen.size();
 }
 
 std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc() const {

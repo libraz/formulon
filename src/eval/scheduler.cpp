@@ -13,7 +13,6 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
-#include <string_view>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
@@ -21,17 +20,13 @@
 #include <vector>
 
 #include "cell.h"
+#include "eval/cell_evaluator.h"
 #include "eval/dep_graph.h"
 #include "eval/dirty_set.h"
-#include "eval/eval_context.h"
-#include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
-#include "eval/tree_walker.h"
 #include "eval/volatile_tracker.h"
-#include "parser/ast.h"
-#include "parser/parser.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -82,41 +77,6 @@ bool is_cyclic_component(const std::vector<CellNodeId>& component, const DepGrap
   const CellNodeId only = component.front();
   std::vector<CellNodeId> deps = graph.dependencies_of(only);
   return std::find(deps.begin(), deps.end(), only) != deps.end();
-}
-
-// Re-parses and evaluates the formula at `cell` on `sheet`. Logically
-// identical to `recalc_engine.cpp`'s private `evaluate_cell`; duplicated
-// here so the scheduler does not depend on private TU symbols.
-//
-// Each invocation owns its own `EvalState` so memoisation / cycle
-// detection are scoped to the call. `arena` MUST be a per-thread arena
-// so concurrent invocations do not race on its bump pointer.
-Value evaluate_cell_local(Workbook& workbook, Sheet& sheet, const Cell& cell_data, std::uint32_t row, std::uint32_t col,
-                          const FunctionRegistry& registry, Arena& arena, bool iterative_mode = false) {
-  std::string_view src = cell_data.formula_text;
-  if (!src.empty() && src.front() == '=') {
-    src.remove_prefix(1);
-  }
-
-  parser::Parser parser(src, arena);
-  parser::AstNode* root = parser.parse();
-  if (root == nullptr) {
-    return Value::error(ErrorCode::Name);
-  }
-
-  EvalState state;
-  EvalContext ctx;
-  if (iterative_mode) {
-    ctx = EvalContext::workbook_only(workbook, sheet).with_mutable_sheet(sheet).with_formula_cell(row, col);
-  } else {
-    ctx = EvalContext(workbook, sheet, state).with_mutable_sheet(sheet).with_formula_cell(row, col);
-  }
-
-  Value result = evaluate(*root, arena, registry, ctx);
-  if (result.is_array()) {
-    result = ctx.dispatch_array_result(result);
-  }
-  return result;
 }
 
 // Maps each cell in the dirty SCC list to its 0-based super-node id. SCC
@@ -272,7 +232,9 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
         return Value::blank();
       }
       arena.reset();
-      return evaluate_cell_local(wb, sheet, *cell_data, c.row, c.col, registry, arena, /*iterative_mode=*/true);
+      EvaluateCellOptions opts;
+      opts.iterative_mode = true;
+      return evaluate_cell_for_recalc(wb, sheet, *cell_data, c.row, c.col, registry, arena, opts);
     };
     auto commit = [&](CellNodeId c, Value v) {
       if (c.sheet_id >= sheet_count) {
@@ -314,7 +276,7 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
     return out;
   }
   arena.reset();
-  Value result = evaluate_cell_local(wb, sheet, *cell_data, only.row, only.col, registry, arena);
+  Value result = evaluate_cell_for_recalc(wb, sheet, *cell_data, only.row, only.col, registry, arena);
   {
     std::lock_guard<std::mutex> guard(write_mutex);
     sheet.set_cell_cached_value(only.row, only.col, result);
@@ -344,10 +306,19 @@ struct LayerWork {
 // preallocated so each worker writes into its own slot without a
 // result-side lock. `write_mutex` serialises only the per-cell store
 // mutation, not the evaluation itself.
+//
+// `next_index` is updated with `acq_rel`: the acquire half ensures any
+// writes a peer worker performed before claiming its task (in particular,
+// the `outcomes[idx] = ...` store) are visible to subsequent observers
+// of `next_index`; the release half publishes this worker's own writes
+// before the next claim. `relaxed` would have been correct only because
+// the join below provides the happens-before edge to the caller, but a
+// future change that observes `next_index` outside the join would silently
+// race; `acq_rel` keeps the invariant local to this loop.
 void worker_loop(std::size_t worker_id, LayerWork* work) {
   Arena& arena = *(*work->arenas)[worker_id];
   while (true) {
-    const std::size_t idx = work->next_index.fetch_add(1U, std::memory_order_relaxed);
+    const std::size_t idx = work->next_index.fetch_add(1U, std::memory_order_acq_rel);
     if (idx >= work->tasks->size()) {
       return;
     }
@@ -356,20 +327,37 @@ void worker_loop(std::size_t worker_id, LayerWork* work) {
   }
 }
 
-// Runs the worker pool for a single layer. Returns true when every
-// requested worker started; false signals that at least one
-// `std::thread` constructor failed and the caller should serial-fallback
-// for the unprocessed task tail. All started threads are joined before
-// returning — `detach()` is forbidden by project policy.
-bool run_layer_pool(std::uint32_t num_threads, LayerWork& work) {
+// Result of a single layer pool drive. Distinguishes "all workers
+// started, every task processed" from "thread spawn failed mid-pool"
+// so the caller can serial-fallback only the unprocessed tail rather
+// than blindly re-running every task.
+struct LayerPoolResult {
+  /// True iff every requested worker thread started successfully.
+  bool spawn_ok = false;
+  /// Number of tasks the worker pool actually claimed via `next_index`,
+  /// clamped to the total task count. Tasks `[claimed, total)` were
+  /// never picked up and must be processed by the caller's fallback.
+  std::size_t claimed = 0U;
+};
+
+// Runs the worker pool for a single layer. All started threads are
+// joined before returning — `detach()` is forbidden by project policy.
+//
+// On a partial spawn failure (a `std::thread` constructor returned a
+// non-joinable handle, typically because the OS refused another
+// thread), the started workers still drain as much of the queue as
+// they can; `next_index` reports how many tasks they collectively
+// claimed so the caller can resume from there.
+LayerPoolResult run_layer_pool(std::uint32_t num_threads, LayerWork& work) {
   work.outcomes->assign(work.tasks->size(), SccOutcome{});
   std::vector<std::thread> workers;
   workers.reserve(num_threads);
-  bool spawn_ok = true;
+  LayerPoolResult result;
+  result.spawn_ok = true;
   for (std::uint32_t i = 0; i < num_threads; ++i) {
     std::thread t(worker_loop, static_cast<std::size_t>(i), &work);
     if (!t.joinable()) {
-      spawn_ok = false;
+      result.spawn_ok = false;
       break;
     }
     workers.push_back(std::move(t));
@@ -379,7 +367,14 @@ bool run_layer_pool(std::uint32_t num_threads, LayerWork& work) {
       t.join();
     }
   }
-  return spawn_ok;
+  // Snapshot `next_index` AFTER every worker has joined. The acq_rel
+  // updates inside the loop pair with this load, so we observe the
+  // last-claimed-plus-one count published by whichever worker drained
+  // the queue last. Clamp to the task total because the final claim
+  // may have stepped past the end (workers fetch then check).
+  const std::size_t raw_claimed = work.next_index.load(std::memory_order_acquire);
+  result.claimed = std::min(raw_claimed, work.tasks->size());
+  return result;
 }
 
 std::uint32_t resolve_thread_count(std::uint32_t requested) {
@@ -411,6 +406,17 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
                       "the scheduler does not support nested recalc; the inner call is rejected");
   }
   ReentrantGuard guard;
+
+  // Acquire the engine mutex for the entire pass. Workers spawned below
+  // operate on `Sheet` storage (guarded by `write_mutex` for the cell
+  // store) and read-only views of the engine's internal state, so a
+  // single critical section over the whole recalc keeps the dep graph /
+  // dirty set / volatile tracker consistent against any concurrent
+  // `register_formula` / `mark_dirty` issued by another thread. Same-
+  // thread re-entry is already short-circuited by `g_in_recalc` above,
+  // so a non-recursive `std::mutex` is sufficient — UDFs invoked during
+  // evaluation must not call back into mutating `RecalcEngine` APIs.
+  std::lock_guard<std::mutex> engine_guard(engine.mutex_);
 
   // Phase 1 + 2: seed the dirty set with volatile cells, BFS-propagate
   // dirtiness through reverse edges. Mirrors `RecalcEngine::recalc`.
@@ -504,33 +510,30 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
     work.arenas = &arenas;
     work.write_mutex = &write_mutex;
     work.outcomes = &outcomes;
-    const bool spawn_ok = run_layer_pool(threads_for_layer, work);
+    const LayerPoolResult pool_result = run_layer_pool(threads_for_layer, work);
 
     for (const SccOutcome& o : outcomes) {
       cells_evaluated += o.cells_evaluated;
       cycle_recoveries += o.cycle_recoveries;
     }
-    if (spawn_ok) {
+    if (pool_result.spawn_ok) {
       ++parallel_steps;
     } else {
-      // Serial fallback contribution if the pool failed to start: the
-      // task slots that the started workers did not claim still hold
-      // default-initialised outcomes (cells_evaluated == 0). Drain the
-      // unfinished tail synchronously here. The worker queue's
-      // `next_index` cannot be inspected from outside, so we
-      // conservatively re-process every task whose outcome slot is
-      // still zeroed when no work would have produced an empty result
-      // — for the simple safety case (no thread started at all) this
-      // re-evaluates every cell once on the calling thread.
+      // Partial spawn failure: drain the unprocessed tail synchronously
+      // on the calling thread. `pool_result.claimed` is the exact count
+      // of tasks the started workers picked up via `next_index`, so we
+      // process `[claimed, layer.size())` without re-running anything
+      // the pool already finished. This relies on workers honouring
+      // their fetch_add bookkeeping even when peers failed to spawn,
+      // which they do: the failure mode aborts only the pool builder,
+      // not the workers already in flight.
       ++serial_fallback_steps;
       Arena& arena = *arenas[0U];
-      for (std::size_t i = 0; i < layer.size(); ++i) {
-        if (outcomes[i].cells_evaluated == 0U && outcomes[i].cycle_recoveries == 0U) {
-          const SccOutcome o =
-              process_scc(idx.components[layer[i]], wb, engine.graph_, registry, iter_opts, arena, write_mutex);
-          cells_evaluated += o.cells_evaluated;
-          cycle_recoveries += o.cycle_recoveries;
-        }
+      for (std::size_t i = pool_result.claimed; i < layer.size(); ++i) {
+        const SccOutcome o =
+            process_scc(idx.components[layer[i]], wb, engine.graph_, registry, iter_opts, arena, write_mutex);
+        cells_evaluated += o.cells_evaluated;
+        cycle_recoveries += o.cycle_recoveries;
       }
     }
   }
@@ -557,7 +560,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
         continue;
       }
       arena.reset();
-      Value result = evaluate_cell_local(wb, sheet, *cell_data, c.row, c.col, registry, arena);
+      Value result = evaluate_cell_for_recalc(wb, sheet, *cell_data, c.row, c.col, registry, arena);
       sheet.set_cell_cached_value(c.row, c.col, result);
       ++cells_evaluated;
       ++sccs_processed;  // Treat a standalone formula as its own component.

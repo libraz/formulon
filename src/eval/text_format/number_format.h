@@ -34,7 +34,6 @@
 #include <string_view>
 
 namespace formulon {
-namespace eval {
 namespace text_format {
 
 /// Return codes for `apply_format`. The engine surfaces `Value` / `Num`
@@ -69,7 +68,6 @@ inline FormatStatus apply_format(double value, std::string_view format, std::str
 }
 
 }  // namespace text_format
-}  // namespace eval
 }  // namespace formulon
 
 #endif  // FORMULON_EVAL_TEXT_FORMAT_NUMBER_FORMAT_H_

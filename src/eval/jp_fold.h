@@ -74,6 +74,17 @@ namespace eval {
 /// two-codepoint sequence rather than composing to ガ.
 std::string fold_jp_text(std::string_view input, bool fold_fullwidth_digits = true, bool fold_halfwidth_kana = true);
 
+/// Convenience wrapper that composes `fold_jp_text` with
+/// `strings::to_ascii_lower` in a single pass-allocation. Used by every
+/// case-insensitive lookup-family text comparison (VLOOKUP / HLOOKUP /
+/// MATCH / XLOOKUP / XMATCH) so the kana-fold + ASCII-lowercase pair
+/// stays in lockstep across `lookups/classic.cpp` and `lookups/xlookup.cpp`.
+///
+/// `fold_fullwidth_digits` matches the underlying `fold_jp_text` flag —
+/// pass `false` for lookup-family parity with Mac Excel 365 (full-width
+/// digits stay unfolded), pass `true` for COUNTIF / SUMIF parity.
+std::string fold_and_lower(std::string_view input, bool fold_fullwidth_digits = false);
+
 }  // namespace eval
 }  // namespace formulon
 

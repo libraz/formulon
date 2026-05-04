@@ -30,12 +30,14 @@
 // implementation.
 #if !defined(FORMULON_WASM) || defined(FORMULON_WASM_ENABLE_SAX)
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <string>
 #include <string_view>
 #include <utility>
 
+#include "io/a1_ref.h"
 #include "io/zip_reader.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -43,8 +45,6 @@
 namespace formulon {
 namespace io {
 namespace {
-
-constexpr std::size_t kMaxColumnLetters = 3U;  // Excel max column = XFD.
 
 /// Returns true for ASCII whitespace per the XML spec (S production).
 bool IsXmlSpace(char c) noexcept {
@@ -68,73 +68,21 @@ Error MakeXmlParseError(std::size_t /*offset*/, const char* /*what*/) {
   return make_error(FormulonErrorCode::kIoXmlParse, "sax: malformed sheet xml", "context=sax_xml_reader");
 }
 
-/// Decodes an Excel A1 column reference at `text[*i]` into a 1-based
-/// column index. Returns 0 when no letter is present or the column
-/// exceeds Excel's XFD limit (3 letters). Advances `*i` over the
-/// consumed letters.
-std::uint32_t DecodeColumnLetters(std::string_view text, std::size_t* i) noexcept {
-  std::uint32_t col = 0;
-  std::size_t consumed = 0;
-  while (*i < text.size()) {
-    const char c = text[*i];
-    if (c < 'A' || c > 'Z') {
-      break;
-    }
-    if (consumed >= kMaxColumnLetters) {
-      return 0U;  // Past XFD.
-    }
-    col = col * 26U + static_cast<std::uint32_t>(c - 'A' + 1);
-    ++(*i);
-    ++consumed;
-  }
-  if (consumed == 0U) {
+/// Decodes an unsigned decimal integer at `text[*i]`. Wraps the shared
+/// `parse_uint` helper, returning 0 (a sentinel because Excel rows are
+/// 1-based) on no-digit or overflow input.
+std::uint32_t DecodeUnsigned(std::string_view text, std::size_t* i) noexcept {
+  std::uint32_t v = 0;
+  if (!parse_uint(text, i, &v)) {
     return 0U;
   }
-  return col;
+  return v;
 }
 
-/// Decodes an unsigned decimal integer at `text[*i]`. Advances `*i`
-/// past the digits. Returns 0 when no digit was consumed (callers treat
-/// 0 as a sentinel because Excel rows are 1-based).
-std::uint32_t DecodeUnsigned(std::string_view text, std::size_t* i) noexcept {
-  std::uint64_t v = 0;
-  bool any = false;
-  while (*i < text.size()) {
-    const char c = text[*i];
-    if (c < '0' || c > '9') {
-      break;
-    }
-    v = v * 10U + static_cast<std::uint64_t>(c - '0');
-    if (v > 0xFFFFFFFFULL) {
-      return 0U;  // overflow guard
-    }
-    ++(*i);
-    any = true;
-  }
-  return any ? static_cast<std::uint32_t>(v) : 0U;
-}
-
-/// Decodes an A1-shaped cell reference (e.g. `"AB12"`) into 0-based row
-/// + 0-based column. Returns false on malformed input.
+/// Wraps the shared `parse_a1_ref` helper. Preserved as a local thin
+/// shim so the rest of this TU keeps reading naturally.
 bool DecodeA1(std::string_view ref, std::uint32_t* row_out, std::uint32_t* col_out) noexcept {
-  if (ref.empty()) {
-    return false;
-  }
-  std::size_t i = 0;
-  const std::uint32_t col_1based = DecodeColumnLetters(ref, &i);
-  if (col_1based == 0U) {
-    return false;
-  }
-  const std::uint32_t row_1based = DecodeUnsigned(ref, &i);
-  if (row_1based == 0U) {
-    return false;
-  }
-  if (i != ref.size()) {
-    return false;
-  }
-  *row_out = row_1based - 1U;
-  *col_out = col_1based - 1U;
-  return true;
+  return parse_a1_ref(ref, row_out, col_out);
 }
 
 // ---------------------------------------------------------------------------
@@ -266,6 +214,20 @@ bool ParseTagHeader(const char* begin, const char* end, const char** p, TagHeade
   return false;
 }
 
+/// Forward declaration: decodes the five predefined XML entity references
+/// (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`) plus numeric character
+/// references (`&#N;` / `&#xN;`) into `out`. The full implementation lives
+/// further down with the `<v>` / `<t>` text-node helpers.
+void DecodeEntitiesInto(std::string_view src, std::string* out);
+
+/// True when `src` contains at least one `&` character — i.e. the byte
+/// span needs entity decoding before it can be exposed to callers as
+/// canonical text. Cheap O(N) scan; used as a fast-path gate before the
+/// (relatively expensive) full decoder kicks in.
+bool ContainsEntities(std::string_view src) noexcept {
+  return src.find('&') != std::string_view::npos;
+}
+
 /// Reads attribute "key=\"value\"" pairs out of `raw_attrs`. Quotes may
 /// be `"` or `'`. Stops on first malformed input and returns the
 /// captured pair count so far (callers tolerate partial sets — the
@@ -324,9 +286,12 @@ struct AttrIterator {
   }
 };
 
-/// Looks up `name` among the attributes of `header` and returns its
-/// value, or an empty `string_view` when absent.
-std::string_view AttrOf(const TagHeader& header, std::string_view name) noexcept {
+/// Looks up `name` among the attributes of `header` and returns its raw
+/// value, or an empty `string_view` when absent. The returned view aliases
+/// into the input buffer and may carry XML entity references such as
+/// `&amp;` or `&#xNN;` verbatim — callers that need canonical text must
+/// route the result through `AttrOfDecoded` instead.
+std::string_view AttrOfRaw(const TagHeader& header, std::string_view name) noexcept {
   AttrIterator it{header.raw_attrs};
   std::string_view k;
   std::string_view v;
@@ -336,6 +301,31 @@ std::string_view AttrOf(const TagHeader& header, std::string_view name) noexcept
     }
   }
   return {};
+}
+
+/// Same as `AttrOfRaw` but transparently decodes XML entity references
+/// (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`, `&#N;`, `&#xN;`) into
+/// canonical UTF-8 text. When decoding is required the result is
+/// materialised into `*scratch` and the returned view aliases into that
+/// buffer; the caller must keep `*scratch` alive for the lifetime of the
+/// returned view. When the value contains no `&`, the function returns a
+/// zero-copy view into the input buffer (and `*scratch` is not touched).
+///
+/// Excel-emitted worksheet output rarely needs decoding here — `r="A1"`,
+/// `t="n"` and friends are pure ASCII — but third-party producers and
+/// hand-rolled fixtures do exercise the entity path (e.g. `r="A&amp;amp;
+/// B1"`-shaped pathological cases that, while ill-typed, are still
+/// well-formed XML). Skipping decoding produces a `kIoSheetCorrupt` parse
+/// failure that masquerades as a bad reference; decoding here keeps the
+/// SAX path symmetric with the text-node path (`<v>` / `<t>`) which has
+/// always run through `DecodeEntitiesInto`.
+std::string_view AttrOfDecoded(const TagHeader& header, std::string_view name, std::string* scratch) {
+  const std::string_view raw = AttrOfRaw(header, name);
+  if (!ContainsEntities(raw)) {
+    return raw;
+  }
+  DecodeEntitiesInto(raw, scratch);
+  return std::string_view(*scratch);
 }
 
 // ---------------------------------------------------------------------------
@@ -393,11 +383,49 @@ bool ScanTextContent(const char* begin, const char* end, const char** p, std::st
   return false;
 }
 
-/// Decodes the five predefined XML entity references (`&amp; &lt;
-/// &gt; &quot; &apos;`) into `out`. Numeric character references and
-/// any other `&...;` form pass through verbatim — Excel does not emit
-/// numeric refs into worksheet payloads, so a strict five-name table
-/// keeps the SAX reader compact.
+/// Encodes a Unicode code point into UTF-8 bytes and appends them to
+/// `out`. Returns false when `cp` is outside the legal Unicode range
+/// (> 0x10FFFF) or falls inside the surrogate band — the caller leaves
+/// the original `&...;` text in place when this happens. The branchy
+/// shape mirrors the canonical UTF-8 encoder; an encoding-table fallback
+/// would not be cheaper at this size and would cost rodata.
+bool AppendUtf8(std::uint32_t cp, std::string* out) {
+  if (cp <= 0x7FU) {
+    out->push_back(static_cast<char>(cp));
+    return true;
+  }
+  if (cp <= 0x7FFU) {
+    out->push_back(static_cast<char>(0xC0U | (cp >> 6U)));
+    out->push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
+    return true;
+  }
+  if (cp <= 0xFFFFU) {
+    if (cp >= 0xD800U && cp <= 0xDFFFU) {
+      return false;  // Surrogate halves are not legal in UTF-8.
+    }
+    out->push_back(static_cast<char>(0xE0U | (cp >> 12U)));
+    out->push_back(static_cast<char>(0x80U | ((cp >> 6U) & 0x3FU)));
+    out->push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
+    return true;
+  }
+  if (cp <= 0x10FFFFU) {
+    out->push_back(static_cast<char>(0xF0U | (cp >> 18U)));
+    out->push_back(static_cast<char>(0x80U | ((cp >> 12U) & 0x3FU)));
+    out->push_back(static_cast<char>(0x80U | ((cp >> 6U) & 0x3FU)));
+    out->push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
+    return true;
+  }
+  return false;
+}
+
+/// Decodes the five predefined XML entity references (`&amp; &lt; &gt;
+/// &quot; &apos;`) plus decimal (`&#N;`) and hex (`&#xN;`) numeric
+/// character references into `out`. Unknown / malformed `&...;` forms
+/// are emitted verbatim — Excel does not exercise this path in
+/// well-formed output, but third-party producers occasionally emit
+/// numeric refs, and some hand-rolled fixtures use entity-encoded
+/// attribute values that the attribute iterator now plumbs through this
+/// helper.
 void DecodeEntitiesInto(std::string_view src, std::string* out) {
   out->clear();
   out->reserve(src.size());
@@ -408,8 +436,19 @@ void DecodeEntitiesInto(std::string_view src, std::string* out) {
       ++i;
       continue;
     }
-    const std::size_t semi = src.find(';', i + 1);
-    if (semi == std::string_view::npos || semi > i + 8) {
+    // Numeric character references can be longer than the longest named
+    // entity; bound the search so a stray `&` followed by hostile junk
+    // does not scan to end-of-buffer. 12 chars covers `&#x10FFFF;`.
+    constexpr std::size_t kMaxEntityScan = 12U;
+    const std::size_t scan_end = std::min(src.size(), i + 1U + kMaxEntityScan);
+    std::size_t semi = std::string_view::npos;
+    for (std::size_t j = i + 1; j < scan_end; ++j) {
+      if (src[j] == ';') {
+        semi = j;
+        break;
+      }
+    }
+    if (semi == std::string_view::npos) {
       out->push_back('&');
       ++i;
       continue;
@@ -429,9 +468,57 @@ void DecodeEntitiesInto(std::string_view src, std::string* out) {
     }
     if (repl != 0) {
       out->push_back(repl);
-    } else {
-      out->append(src.data() + i, semi - i + 1);
+      i = semi + 1;
+      continue;
     }
+    if (!ent.empty() && ent.front() == '#') {
+      std::uint32_t cp = 0;
+      bool ok = false;
+      if (ent.size() >= 2 && (ent[1] == 'x' || ent[1] == 'X')) {
+        // Hex numeric reference: &#xNN;.
+        ok = ent.size() > 2;
+        for (std::size_t j = 2; j < ent.size() && ok; ++j) {
+          const char d = ent[j];
+          std::uint32_t v = 0;
+          if (d >= '0' && d <= '9') {
+            v = static_cast<std::uint32_t>(d - '0');
+          } else if (d >= 'a' && d <= 'f') {
+            v = static_cast<std::uint32_t>(d - 'a' + 10);
+          } else if (d >= 'A' && d <= 'F') {
+            v = static_cast<std::uint32_t>(d - 'A' + 10);
+          } else {
+            ok = false;
+            break;
+          }
+          cp = (cp << 4U) | v;
+          if (cp > 0x10FFFFU) {
+            ok = false;
+            break;
+          }
+        }
+      } else {
+        // Decimal numeric reference: &#N;.
+        ok = ent.size() > 1;
+        for (std::size_t j = 1; j < ent.size() && ok; ++j) {
+          const char d = ent[j];
+          if (d < '0' || d > '9') {
+            ok = false;
+            break;
+          }
+          cp = cp * 10U + static_cast<std::uint32_t>(d - '0');
+          if (cp > 0x10FFFFU) {
+            ok = false;
+            break;
+          }
+        }
+      }
+      if (ok && AppendUtf8(cp, out)) {
+        i = semi + 1;
+        continue;
+      }
+    }
+    // Unknown entity: pass through verbatim.
+    out->append(src.data() + i, semi - i + 1);
     i = semi + 1;
   }
 }
@@ -510,6 +597,16 @@ struct CellScratch {
   /// scanning an `<is>` body. Cleared at the start of each
   /// `ScanInlineString` call.
   std::string inline_string_phonetic;
+  /// Scratch buffers for entity-decoded `<c>` / `<row>` attribute values.
+  /// Each buffer is owned by the surrounding cell / row scan, so the
+  /// `string_view`s returned by `AttrOfDecoded` remain valid for the
+  /// duration of the dispatching callback. Three slots cover every
+  /// attribute the SAX vocabulary inspects (`r=`, `t=`, `s=` on `<c>`,
+  /// plus `r=` on `<row>`); the row attribute reuses the cell's `r`
+  /// slot because the two never overlap in time.
+  std::string decoded_attr_r;
+  std::string decoded_attr_t;
+  std::string decoded_attr_s;
 };
 
 /// Reads `<is> ... </is>` content, concatenating every `<t>` body
@@ -606,8 +703,10 @@ bool ScanInlineString(const char* begin, const char* end, const char** p, CellSc
 /// `<c .../>` we just emit the record with empty `formula` / `value`.
 bool ScanCell(const char* begin, const char* end, const char** p, const TagHeader& cell_header, CellRecord* record,
               CellScratch* scratch, Error* err) {
-  // Decode r=, t=, s=.
-  const std::string_view r_attr = AttrOf(cell_header, "r");
+  // Decode r=, t=, s=. Attributes are routed through `AttrOfDecoded` so
+  // entity-encoded values (e.g. `r="A&amp;1"`) decode to canonical text
+  // before the A1 / type-token validation runs.
+  const std::string_view r_attr = AttrOfDecoded(cell_header, "r", &scratch->decoded_attr_r);
   if (r_attr.empty()) {
     *err = MakeXmlParseError(cell_header.end_offset, "<c> missing r= attribute");
     return false;
@@ -622,8 +721,8 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
   }
   record->row = row;
   record->col = col;
-  record->t = AttrOf(cell_header, "t");
-  record->s = AttrOf(cell_header, "s");
+  record->t = AttrOfDecoded(cell_header, "t", &scratch->decoded_attr_t);
+  record->s = AttrOfDecoded(cell_header, "s", &scratch->decoded_attr_s);
   record->formula = std::string_view{};
   record->value = std::string_view{};
   record->is_inline_string = false;
@@ -732,9 +831,11 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
 /// `header`.
 bool ScanRow(const char* begin, const char* end, const char** p, const TagHeader& row_header,
              const SheetSaxCallbacks& cb, CellScratch* scratch, Error* err) {
-  // Decode r= (1-based).
+  // Decode r= (1-based). The row's `r` attribute reuses the cell-level
+  // `decoded_attr_r` scratch because the row scan is single-shot before
+  // any cell scan begins.
   std::uint32_t row_1based = 0;
-  const std::string_view r_attr = AttrOf(row_header, "r");
+  const std::string_view r_attr = AttrOfDecoded(row_header, "r", &scratch->decoded_attr_r);
   if (!r_attr.empty()) {
     std::size_t i = 0;
     row_1based = DecodeUnsigned(r_attr, &i);

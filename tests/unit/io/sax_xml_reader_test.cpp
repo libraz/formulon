@@ -448,19 +448,36 @@ TEST(SaxXmlReader, EntityDecodingInInlineString) {
   EXPECT_EQ(cap.cells[0].value, "x & y");
 }
 
-TEST(SaxXmlReader, NumericEntityPassesThroughVerbatim) {
-  // Numeric character references are intentionally not decoded: Excel
-  // never emits them into worksheet payloads, and the WASM size
-  // budget rules out the UTF-8 encoder. Round-trip is preserved by
-  // writing the original sequence back out unchanged.
+TEST(SaxXmlReader, NumericEntityDecodes) {
+  // Numeric character references decode through the same UTF-8 encoder
+  // that the attribute path uses (added alongside attribute entity
+  // decoding so the two surfaces stay symmetric). `&#65;` -> 'A',
+  // `&#x41;` -> 'A', and a non-ASCII reference exercises the multi-byte
+  // path.
   const std::string xml =
       "<worksheet><sheetData>"
-      "<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>&#65;</t></is></c></row>"
+      "<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>&#65;-&#x41;-&#x3042;</t></is></c></row>"
       "</sheetData></worksheet>";
   Capture cap;
   ASSERT_TRUE(static_cast<bool>(scan_sheet_data(SpanOf(xml), MakeCallbacks(&cap))));
   ASSERT_EQ(cap.cells.size(), 1U);
-  EXPECT_EQ(cap.cells[0].value, "&#65;");
+  // Hiragana A (U+3042) encodes to UTF-8 0xE3 0x81 0x82.
+  EXPECT_EQ(cap.cells[0].value, std::string("A-A-") + "\xE3\x81\x82");
+}
+
+TEST(SaxXmlReader, MalformedEntityPassesThroughVerbatim) {
+  // Stray `&` without a matching `;`, and unknown named entities, are
+  // emitted verbatim — the decoder is permissive on malformed input
+  // because Excel-emitted payloads never trip these branches and
+  // hand-rolled fixtures occasionally rely on the raw bytes.
+  const std::string xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>raw&amp;and&unknown;</t></is></c></row>"
+      "</sheetData></worksheet>";
+  Capture cap;
+  ASSERT_TRUE(static_cast<bool>(scan_sheet_data(SpanOf(xml), MakeCallbacks(&cap))));
+  ASSERT_EQ(cap.cells.size(), 1U);
+  EXPECT_EQ(cap.cells[0].value, "raw&and&unknown;");
 }
 
 // ---------------------------------------------------------------------------
@@ -613,6 +630,89 @@ TEST(SaxXmlReader, RowWithoutAttributeStillFiresCallbacks) {
   EXPECT_EQ(cap.row_starts[0], 0U);  // sentinel for "no r= attr"
   ASSERT_EQ(cap.cells.size(), 1U);
   EXPECT_EQ(cap.cells[0].col, 0U);
+}
+
+// ---------------------------------------------------------------------------
+// Attribute entity decoding. The `<c>` / `<row>` attribute values must
+// route through the same predefined-entity + numeric-character-reference
+// decoder as `<v>` / `<t>` text content. Hand-rolled fixtures (and some
+// non-Excel producers) emit values like `t="&quot;str&quot;"` or
+// `r="A&#x31;"` that must canonicalise before A1 / type-token decoding.
+// ---------------------------------------------------------------------------
+
+TEST(SaxXmlReader, AttributeAmpEntityDecodes) {
+  // `t="inlineStr"` written as `t="inline&amp;Str"` would not be a
+  // recognised t-token after decoding ("inline&Str"), but the decoded
+  // text must reach the record so a downstream check can diagnose it.
+  const std::string xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"A1\" t=\"inline&amp;Str\"><v>1</v></c></row>"
+      "</sheetData></worksheet>";
+  Capture cap;
+  ASSERT_TRUE(static_cast<bool>(scan_sheet_data(SpanOf(xml), MakeCallbacks(&cap))));
+  ASSERT_EQ(cap.cells.size(), 1U);
+  EXPECT_EQ(cap.cells[0].t, "inline&Str");
+}
+
+TEST(SaxXmlReader, AttributeAllPredefinedEntitiesDecode) {
+  // Cell's s= attribute is a free-form string in our SAX layer (callers
+  // parse the integer index later); use it as a transport for the five
+  // predefined entities to assert end-to-end decoding without tripping
+  // r= validation.
+  const std::string xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"A1\" s=\"&amp;&lt;&gt;&quot;&apos;\"><v>1</v></c></row>"
+      "</sheetData></worksheet>";
+  Capture cap;
+  ASSERT_TRUE(static_cast<bool>(scan_sheet_data(SpanOf(xml), MakeCallbacks(&cap))));
+  ASSERT_EQ(cap.cells.size(), 1U);
+  EXPECT_EQ(cap.cells[0].s, "&<>\"'");
+}
+
+TEST(SaxXmlReader, AttributeNumericCharRefHexDecodes) {
+  // `&#x31;` -> '1'. The cell reference `r="A&#x31;"` must canonicalise
+  // to `A1` before A1 decoding runs, otherwise the parser rejects the
+  // cell with a malformed-r= error.
+  const std::string xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"A&#x31;\"><v>42</v></c></row>"
+      "</sheetData></worksheet>";
+  Capture cap;
+  auto rs = scan_sheet_data(SpanOf(xml), MakeCallbacks(&cap));
+  ASSERT_TRUE(static_cast<bool>(rs)) << "scan failed: " << rs.error().message;
+  ASSERT_EQ(cap.cells.size(), 1U);
+  EXPECT_EQ(cap.cells[0].row, 0U);
+  EXPECT_EQ(cap.cells[0].col, 0U);
+}
+
+TEST(SaxXmlReader, AttributeNumericCharRefDecimalDecodes) {
+  // `&#65;` -> 'A'. Pair with a literal digit so the resulting cell
+  // reference is `A1`.
+  const std::string xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"&#65;1\"><v>7</v></c></row>"
+      "</sheetData></worksheet>";
+  Capture cap;
+  ASSERT_TRUE(static_cast<bool>(scan_sheet_data(SpanOf(xml), MakeCallbacks(&cap))));
+  ASSERT_EQ(cap.cells.size(), 1U);
+  EXPECT_EQ(cap.cells[0].col, 0U);
+  EXPECT_EQ(cap.cells[0].row, 0U);
+}
+
+TEST(SaxXmlReader, AttributeWithoutEntitiesIsZeroCopy) {
+  // Sanity check: pure-ASCII attribute values do not invoke the decoder
+  // (and the resulting view aliases the input). The observable behaviour
+  // is identical either way; the test exists to lock down the common
+  // path.
+  const std::string xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"A1\" t=\"n\" s=\"3\"><v>9</v></c></row>"
+      "</sheetData></worksheet>";
+  Capture cap;
+  ASSERT_TRUE(static_cast<bool>(scan_sheet_data(SpanOf(xml), MakeCallbacks(&cap))));
+  ASSERT_EQ(cap.cells.size(), 1U);
+  EXPECT_EQ(cap.cells[0].t, "n");
+  EXPECT_EQ(cap.cells[0].s, "3");
 }
 
 TEST(SaxXmlReader, MixedFormulaAndLiteralCellsInOneRow) {

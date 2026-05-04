@@ -17,7 +17,7 @@
 #include <vector>
 
 namespace formulon {
-namespace eval {
+namespace text_format {
 namespace number_format_detail {
 
 // --- Token representation ----------------------------------------------
@@ -215,7 +215,7 @@ void render_date(const Section& section, std::string_view fmt, double serial, st
 void render_text_section(const Section& section, std::string_view fmt, std::string_view original, std::string& out);
 
 }  // namespace number_format_detail
-}  // namespace eval
+}  // namespace text_format
 }  // namespace formulon
 
 #endif  // FORMULON_EVAL_TEXT_FORMAT_NUMBER_FORMAT_TYPES_H_

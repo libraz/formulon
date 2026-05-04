@@ -13,6 +13,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -82,13 +83,19 @@ Value Len(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 
 // --- Aggregates ---------------------------------------------------------
 
-// MIN(value, ...) - smallest of the coerced numbers. A literal non-numeric
-// argument coerces via `coerce_to_number` and surfaces `#VALUE!` on failure.
-// The caller's pre-evaluation has already short-circuited any argument that
-// was itself an error. When every argument is filtered out by the
-// range-vs-direct provenance rule (e.g. `=MIN(A1:A3)` over an empty / all-
-// text range), Excel returns 0 rather than an error.
-Value Min(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+// Shared kernel for MIN / MAX. A literal non-numeric argument coerces via
+// `coerce_to_number` and surfaces `#VALUE!` on failure. The caller's
+// pre-evaluation has already short-circuited any argument that was itself
+// an error. When every argument is filtered out by the range-vs-direct
+// provenance rule (e.g. `=MIN(A1:A3)` over an empty / all-text range),
+// Excel returns 0 rather than an error.
+//
+// `Cmp` is invoked as `Cmp{}(candidate, current_best)` and must return
+// true when `candidate` should replace `current_best`. Passing
+// `std::less<>` therefore selects the minimum; `std::greater<>` selects
+// the maximum.
+template <typename Cmp>
+Value extreme(const Value* args, std::uint32_t arity) {
   if (arity == 0) {
     return Value::number(0.0);
   }
@@ -102,7 +109,7 @@ Value Min(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     if (!coerced) {
       return Value::error(coerced.error());
     }
-    if (coerced.value() < best) {
+    if (Cmp{}(coerced.value(), best)) {
       best = coerced.value();
     }
   }
@@ -112,29 +119,14 @@ Value Min(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return Value::number(best);
 }
 
+// MIN(value, ...) - smallest of the coerced numbers.
+Value Min(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  return extreme<std::less<double>>(args, arity);
+}
+
 // MAX(value, ...) - symmetric to MIN. Empty post-filter arity also returns 0.
 Value Max(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  if (arity == 0) {
-    return Value::number(0.0);
-  }
-  auto first = coerce_to_number(args[0]);
-  if (!first) {
-    return Value::error(first.error());
-  }
-  double best = first.value();
-  for (std::uint32_t i = 1; i < arity; ++i) {
-    auto coerced = coerce_to_number(args[i]);
-    if (!coerced) {
-      return Value::error(coerced.error());
-    }
-    if (coerced.value() > best) {
-      best = coerced.value();
-    }
-  }
-  if (std::isnan(best) || std::isinf(best)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(best);
+  return extreme<std::greater<double>>(args, arity);
 }
 
 // AVERAGE(value, ...) - arithmetic mean. The registry enforces min_arity=1
@@ -303,14 +295,13 @@ bool sum_arg_for_percentof(const parser::AstNode& raw_arg, Arena& arena, const F
                                       strings::case_insensitive_eq(arg_node.as_call_name(), "COLUMN"));
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || k == parser::NodeKind::SpillRef ||
       is_range_call) {
-    std::vector<Value> cells;
-    ErrorCode range_err = ErrorCode::Value;
-    if (!resolve_range_arg(arg_node, arena, registry, ctx, &cells, &range_err)) {
-      *out_err = Value::error(range_err);
+    auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
+    if (!resolved) {
+      *out_err = Value::error(resolved.error());
       return false;
     }
     double total = 0.0;
-    for (const Value& v : cells) {
+    for (const Value& v : resolved.value().cells) {
       if (v.is_error()) {
         *out_err = v;
         return false;

@@ -12,6 +12,7 @@
 #define FORMULON_EVAL_COERCE_H_
 
 #include <string>
+#include <string_view>
 
 #include "utils/expected.h"
 #include "value.h"
@@ -36,6 +37,17 @@ namespace eval {
 /// * `Array`, `Ref`, and `Lambda` are unsupported in scalar contexts and
 ///   yield `#VALUE!` defensively.
 Expected<double, ErrorCode> coerce_to_number(const Value& v);
+
+/// Allocation-free overload that runs the same `Text`-branch coercion logic
+/// as `coerce_to_number(const Value&)` directly against a `string_view`.
+/// Used by hot paths (criterion parsing in COUNTIFS / SUMIFS) that would
+/// otherwise wrap a `string_view` in a temporary `Value::text(...)` solely
+/// to satisfy the Value-shaped overload, paying for a heap allocation per
+/// criterion × cell. The behaviour matches the `ValueKind::Text` arm of
+/// the Value-shaped overload byte-for-byte: empty / whitespace-only input
+/// yields `#VALUE!`, plain numerics / percent / currency / date strings
+/// pass through their respective fallbacks.
+Expected<double, ErrorCode> coerce_text_to_number(std::string_view text);
 
 /// Coerces `v` to its Excel-visible string representation.
 ///

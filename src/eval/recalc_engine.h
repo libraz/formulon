@@ -38,6 +38,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 
 #include "eval/dep_graph.h"
 #include "eval/dirty_set.h"
@@ -124,6 +125,28 @@ struct RecalcStats {
 
 /// Single-threaded incremental recalc orchestrator. Owned 1:1 by a
 /// `Workbook`; not copyable, not movable across workbooks.
+///
+/// Threading model
+/// ---------------
+/// Mutating public APIs (`register_formula`, `unregister_formula`,
+/// `clear_cell_dependencies`, `mark_dirty`, every `recalc*` entry) acquire
+/// the internal `mutex_` for the full duration of the call. Internal
+/// `*_locked` helpers assume the lock is already held by the caller; the
+/// parallel scheduler reaches them through `friend` access after taking
+/// `mutex_` itself, so workers within a single recalc pass run while the
+/// engine state is held under one continuous critical section.
+///
+/// During a recalc pass user-supplied callbacks (UDFs, the iterative-solver
+/// progress callback) MUST NOT invoke any mutating `RecalcEngine` API or
+/// any `Workbook` method that would route into one — doing so would deadlock
+/// (`mutex_` is a non-recursive `std::mutex`). Same-thread re-entry into
+/// `recalc_parallel` is additionally rejected up-front by the scheduler's
+/// `thread_local` re-entrancy guard.
+///
+/// Workbook-wide lock order: Workbook -> Sheet -> DependencyGraph ->
+/// RecalcEngine -> SharedStrings. RecalcEngine never calls back into
+/// Workbook / Sheet mutators while holding `mutex_`, which keeps the order
+/// acyclic.
 class RecalcEngine {
  public:
   RecalcEngine();
@@ -256,6 +279,22 @@ class RecalcEngine {
   // single-threaded contract intact for every other caller.
   friend Expected<void, Error> recalc_parallel_impl(Workbook&, const FunctionRegistry&, const SchedulerConfig&,
                                                     SchedulerStats*, RecalcEngine&);
+
+  // Internal helpers that assume `mutex_` is already held. Public
+  // counterparts above lock and delegate; the scheduler reaches them
+  // through friend access after taking `mutex_` itself.
+  void register_formula_locked(CellNodeId cell, const parser::AstNode& ast, const Workbook& workbook);
+  void unregister_formula_locked(CellNodeId cell);
+  void clear_cell_dependencies_locked(CellNodeId cell);
+  void mark_dirty_locked(CellNodeId cell);
+  Expected<RecalcStats, Error> recalc_locked(Workbook& workbook, const FunctionRegistry& registry);
+  Expected<RecalcStats, Error> partial_recalc_locked(Workbook& workbook, const FunctionRegistry& registry,
+                                                     const SheetCellRange& viewport);
+
+  // Serialises every mutating access to `graph_`, `volatiles_`, `dirty_`,
+  // and `arena_`. Held for the full duration of each public entry; the
+  // parallel scheduler also acquires it once at recalc entry.
+  mutable std::mutex mutex_;
 
   DepGraph graph_;
   VolatileTracker volatiles_;
