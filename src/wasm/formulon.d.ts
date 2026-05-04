@@ -609,13 +609,12 @@ export const enum ExternalLinkKind {
   Dde = 3,
 }
 
-/** Return type of `Workbook.getExternalLink(index)`. Mirrors
+/** Element type returned by `Workbook.getExternalLinks()`. Mirrors
  *  `formulon::io::ExternalLinkRecord`. The body part itself is not
  *  exposed (it round-trips through the OOXML passthrough mechanism);
  *  this surface only enumerates the cross-workbook references and
  *  their resolved target URLs. */
-export interface ExternalLinkResult {
-  status: Status;
+export interface ExternalLinkRecord {
   /** 1-based document order matching `<externalReferences>` in
    *  `xl/workbook.xml`. */
   index: number;
@@ -880,14 +879,11 @@ export interface Workbook {
    *  `getCellXf`. */
   getCellStyleXf(index: number): CellXfResult;
 
-  /** Returns the number of external-link records carried by the
-   *  workbook. Zero for fresh workbooks and any package whose source
-   *  archive had no `<externalReferences>` block. */
-  externalLinkCount(): number;
-  /** Returns the external-link record at `index` (0-based, mapped onto
-   *  the 1-based `<externalReferences>` document order). Out-of-range
-   *  indices surface `kInvalidArgument` via `status`. */
-  getExternalLink(index: number): ExternalLinkResult;
+  /** Returns every external-link record carried by the workbook in
+   *  `<externalReferences>` document order. Empty for fresh workbooks
+   *  and any package whose source archive had no `<externalReferences>`
+   *  block. */
+  getExternalLinks(): ReadonlyArray<ExternalLinkRecord>;
 
   /** Adds a merge range to `sheet`. */
   addMerge(sheet: number, range: MergeRange): Status;

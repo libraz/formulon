@@ -1661,41 +1661,32 @@ class JsWorkbook {
     return o;
   }
 
-  /// Returns the number of external-link records carried by the
-  /// workbook. Always 0 for fresh workbooks.
-  uint32_t externalLinkCount() const {
+  /// `getExternalLinks() -> Array<ExternalLinkRecord>`. Document order
+  /// matches `<externalReferences>` in `xl/workbook.xml`.
+  emscripten::val getExternalLinks() const {
+    emscripten::val arr = emscripten::val::array();
     if (handle_ == nullptr) {
-      return 0U;
+      return arr;
     }
-    uint32_t n = 0;
-    if (fm_workbook_external_link_count(handle_, &n) != 0) {
-      return 0U;
+    uint32_t count = 0;
+    if (fm_workbook_external_link_count(handle_, &count) != 0) {
+      return arr;
     }
-    return n;
-  }
-
-  /// Returns the `index`-th external-link record. The result object
-  /// follows the same `{ status, ... }` envelope as the styles getters.
-  emscripten::val getExternalLink(uint32_t index) const {
-    emscripten::val o = emscripten::val::object();
-    if (handle_ == nullptr) {
-      o.set("status", error_status(7000));
-      return o;
+    for (uint32_t i = 0; i < count; ++i) {
+      fm_external_link_record_t rec{};
+      if (fm_workbook_external_link_at(handle_, i, &rec) != 0) {
+        continue;
+      }
+      emscripten::val item = emscripten::val::object();
+      item.set("index", rec.index);
+      item.set("relId", std::string(rec.rel_id != nullptr ? rec.rel_id : ""));
+      item.set("partPath", std::string(rec.part_path != nullptr ? rec.part_path : ""));
+      item.set("target", std::string(rec.target != nullptr ? rec.target : ""));
+      item.set("targetExternal", rec.target_external != 0);
+      item.set("kind", rec.kind);
+      arr.set(i, item);
     }
-    fm_external_link_record_t rec{};
-    fm_status_t rc = fm_workbook_external_link_at(handle_, index, &rec);
-    if (rc != 0) {
-      o.set("status", error_status(rc));
-      return o;
-    }
-    o.set("status", ok_status());
-    o.set("index", rec.index);
-    o.set("relId", std::string(rec.rel_id != nullptr ? rec.rel_id : ""));
-    o.set("partPath", std::string(rec.part_path != nullptr ? rec.part_path : ""));
-    o.set("target", std::string(rec.target != nullptr ? rec.target : ""));
-    o.set("targetExternal", rec.target_external != 0);
-    o.set("kind", rec.kind);
-    return o;
+    return arr;
   }
 
   // ---- Sheet UI features (merges, hyperlinks, comments, validations) ------
@@ -2563,7 +2554,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("deleteRows", &JsWorkbook::deleteRows)
       .function("dependents", &JsWorkbook::dependents)
       .function("evaluateCfRange", &JsWorkbook::evaluateCfRange)
-      .function("externalLinkCount", &JsWorkbook::externalLinkCount)
       .function("fillCount", &JsWorkbook::fillCount)
       .function("fontCount", &JsWorkbook::fontCount)
       .function("functionMetadata", &JsWorkbook::functionMetadata)
@@ -2575,7 +2565,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getCellXfIndex", &JsWorkbook::getCellXfIndex)
       .function("getComment", &JsWorkbook::getComment)
       .function("getConditionalFormats", &JsWorkbook::getConditionalFormats)
-      .function("getExternalLink", &JsWorkbook::getExternalLink)
+      .function("getExternalLinks", &JsWorkbook::getExternalLinks)
       .function("getFill", &JsWorkbook::getFill)
       .function("getFont", &JsWorkbook::getFont)
       .function("getHyperlinks", &JsWorkbook::getHyperlinks)
