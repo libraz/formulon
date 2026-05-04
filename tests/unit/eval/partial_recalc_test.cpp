@@ -74,8 +74,8 @@ TEST(PartialRecalc, SingleCellViewportRecomputesAncestorsOnly) {
   // are in the closure. C1 should remain unevaluated this pass.
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(10.0))));
-  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=A1+1")));   // B1
-  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=A1*2")));   // C1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=A1+1")));  // B1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=A1*2")));  // C1
 
   // Viewport: B1 only.
   auto stats = wb.partial_recalc(default_registry(), SingleCell(0U, 1U));
@@ -105,10 +105,10 @@ TEST(PartialRecalc, MultiCellViewportUnionsClosures) {
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(2.0))));
-  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=A1")));    // B1
-  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 1U, "=A2")));    // B2
-  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=B1+1")));  // C1
-  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 2U, "=B2+1")));  // C2
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=A1")));      // B1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 1U, "=A2")));      // B2
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=B1+1")));    // C1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 2U, "=B2+1")));    // C2
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 3U, "=A1*100")));  // D1
 
   // Viewport: B1:B2.

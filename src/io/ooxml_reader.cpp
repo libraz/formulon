@@ -527,7 +527,7 @@ struct SheetAuxRels {
 };
 
 Expected<SheetAuxRels, Error> LoadSheetAuxRels(const ZipReader& zip, std::string_view sheet_rels_path,
-                                                std::string_view sheet_dir) {
+                                               std::string_view sheet_dir) {
   SheetAuxRels out;
   auto rels_bytes_or = zip.read_entry(sheet_rels_path);
   if (!rels_bytes_or) {

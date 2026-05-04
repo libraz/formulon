@@ -44,8 +44,7 @@ void CollectPlainText(const pugi::xml_node& node, std::string& out) {
 Expected<std::vector<CellComment>, Error> read_comments(const std::vector<std::uint8_t>& bytes) {
   std::vector<CellComment> out;
   pugi::xml_document doc;
-  pugi::xml_parse_result parse =
-      doc.load_buffer(bytes.data(), bytes.size(), pugi::parse_default, pugi::encoding_utf8);
+  pugi::xml_parse_result parse = doc.load_buffer(bytes.data(), bytes.size(), pugi::parse_default, pugi::encoding_utf8);
   if (!parse) {
     std::string ctx("context=comments_reader desc=");
     ctx.append(parse.description());
@@ -75,8 +74,7 @@ Expected<std::vector<CellComment>, Error> read_comments(const std::vector<std::u
   for (pugi::xml_node c = list.child("comment"); c; c = c.next_sibling("comment")) {
     const std::string_view ref = c.attribute("ref").value();
     if (ref.empty()) {
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "comment: missing/empty ref",
-                        "context=comments_reader");
+      return make_error(FormulonErrorCode::kIoSheetCorrupt, "comment: missing/empty ref", "context=comments_reader");
     }
     auto rc = parse_a1(ref);
     if (!rc) {

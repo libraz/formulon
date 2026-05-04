@@ -32,12 +32,11 @@ TEST(HyperlinkRoundTrip, EmptyHyperlinks) {
 
 TEST(HyperlinkRoundTrip, ExternalLinkPreservesRid) {
   pugi::xml_document doc;
-  auto ws = ParseWorksheet(
-      doc,
-      "<hyperlinks>"
-      "<hyperlink xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\""
-      " ref=\"A1\" r:id=\"rId7\" tooltip=\"open site\" display=\"Click\"/>"
-      "</hyperlinks>");
+  auto ws = ParseWorksheet(doc,
+                           "<hyperlinks>"
+                           "<hyperlink xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\""
+                           " ref=\"A1\" r:id=\"rId7\" tooltip=\"open site\" display=\"Click\"/>"
+                           "</hyperlinks>");
   auto out = read_hyperlinks(ws);
   ASSERT_TRUE(static_cast<bool>(out));
   ASSERT_EQ(out.value().size(), 1U);
@@ -53,8 +52,7 @@ TEST(HyperlinkRoundTrip, ExternalLinkPreservesRid) {
 
 TEST(HyperlinkRoundTrip, InternalLinkUsesLocation) {
   pugi::xml_document doc;
-  auto ws = ParseWorksheet(doc,
-                            "<hyperlinks><hyperlink ref=\"B5\" location=\"Sheet2!A1\"/></hyperlinks>");
+  auto ws = ParseWorksheet(doc, "<hyperlinks><hyperlink ref=\"B5\" location=\"Sheet2!A1\"/></hyperlinks>");
   auto out = read_hyperlinks(ws);
   ASSERT_TRUE(static_cast<bool>(out));
   ASSERT_EQ(out.value().size(), 1U);

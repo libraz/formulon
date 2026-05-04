@@ -36,9 +36,9 @@ TEST(MergeRoundTrip, NoMergesYieldsEmptyVector) {
 TEST(MergeRoundTrip, SingleMergeRectangle) {
   pugi::xml_document doc;
   auto ws = ParseWorksheet(doc,
-                            "<mergeCells count=\"1\">"
-                            "<mergeCell ref=\"A1:B2\"/>"
-                            "</mergeCells>");
+                           "<mergeCells count=\"1\">"
+                           "<mergeCell ref=\"A1:B2\"/>"
+                           "</mergeCells>");
   auto out = read_merges(ws);
   ASSERT_TRUE(static_cast<bool>(out));
   ASSERT_EQ(out.value().size(), 1U);
@@ -52,11 +52,11 @@ TEST(MergeRoundTrip, SingleMergeRectangle) {
 TEST(MergeRoundTrip, MultipleRanges) {
   pugi::xml_document doc;
   auto ws = ParseWorksheet(doc,
-                            "<mergeCells count=\"3\">"
-                            "<mergeCell ref=\"A1:A3\"/>"
-                            "<mergeCell ref=\"B5:D5\"/>"
-                            "<mergeCell ref=\"E10\"/>"
-                            "</mergeCells>");
+                           "<mergeCells count=\"3\">"
+                           "<mergeCell ref=\"A1:A3\"/>"
+                           "<mergeCell ref=\"B5:D5\"/>"
+                           "<mergeCell ref=\"E10\"/>"
+                           "</mergeCells>");
   auto out = read_merges(ws);
   ASSERT_TRUE(static_cast<bool>(out));
   ASSERT_EQ(out.value().size(), 3U);

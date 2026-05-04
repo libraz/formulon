@@ -489,13 +489,12 @@ TEST(WorkbookRowColEdits, InsertRowsRewritesDefinedName) {
   EXPECT_EQ(wb.defined_names()[0].formula, "Sheet1!$A$7:$A$12");
 }
 
-
 TEST(WorkbookRowColEdits, InsertRowsRecomputesShiftedFormulasAndAggregates) {
   Workbook wb = Workbook::create();
   // Items: qty (col 1), unit (col 2), subtotal=qty*unit (col 3), tax=sub*0.08 (col 4).
   // Row 0 reserved for headers (left empty).
   // Item rows 1..5.
-  const double qty[]  = {24, 30,  4, 12,  5};
+  const double qty[] = {24, 30, 4, 12, 5};
   const double unit[] = {0.42, 2.5, 4.45, 2.0, 0.75};
   for (std::uint32_t i = 0; i < 5; ++i) {
     const std::uint32_t r = i + 1;
@@ -539,11 +538,11 @@ TEST(WorkbookRowColEdits, InsertRowsRecomputesShiftedFormulasAndAggregates) {
   EXPECT_EQ(s.cell_at(8, 3)->cached_value.as_number(), 24 * 0.42 + 30 * 2.5 + 4 * 4.45 + 12 * 2.0 + 5 * 0.75)
       << "post-shift SUM mismatch (should NOT be #REF!)";
   ASSERT_NE(s.cell_at(8, 4), nullptr);
-  EXPECT_NEAR(s.cell_at(8, 4)->cached_value.as_number(),
-              (24 * 0.42 + 30 * 2.5 + 4 * 4.45 + 12 * 2.0 + 5 * 0.75) * 0.08, 1e-9);
+  EXPECT_NEAR(s.cell_at(8, 4)->cached_value.as_number(), (24 * 0.42 + 30 * 2.5 + 4 * 4.45 + 12 * 2.0 + 5 * 0.75) * 0.08,
+              1e-9);
   ASSERT_NE(s.cell_at(9, 3), nullptr);
-  EXPECT_NEAR(s.cell_at(9, 3)->cached_value.as_number(),
-              (24 * 0.42 + 30 * 2.5 + 4 * 4.45 + 12 * 2.0 + 5 * 0.75) * 1.08, 1e-9);
+  EXPECT_NEAR(s.cell_at(9, 3)->cached_value.as_number(), (24 * 0.42 + 30 * 2.5 + 4 * 4.45 + 12 * 2.0 + 5 * 0.75) * 1.08,
+              1e-9);
 }
 
 // Mirror of the row regression on the column axis. Items live in cols B..F,

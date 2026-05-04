@@ -30,13 +30,13 @@ TEST(DataValidationRoundTrip, EmptyYieldsEmptyVector) {
 TEST(DataValidationRoundTrip, ListValidation) {
   pugi::xml_document doc;
   auto ws = ParseWorksheet(doc,
-                            "<dataValidations count=\"1\">"
-                            "<dataValidation type=\"list\" allowBlank=\"1\" showErrorMessage=\"1\""
-                            " errorTitle=\"err\" error=\"pick from list\""
-                            " sqref=\"A1:A10\">"
-                            "<formula1>\"yes,no,maybe\"</formula1>"
-                            "</dataValidation>"
-                            "</dataValidations>");
+                           "<dataValidations count=\"1\">"
+                           "<dataValidation type=\"list\" allowBlank=\"1\" showErrorMessage=\"1\""
+                           " errorTitle=\"err\" error=\"pick from list\""
+                           " sqref=\"A1:A10\">"
+                           "<formula1>\"yes,no,maybe\"</formula1>"
+                           "</dataValidation>"
+                           "</dataValidations>");
   auto out = read_data_validations(ws);
   ASSERT_TRUE(static_cast<bool>(out));
   ASSERT_EQ(out.value().size(), 1U);
@@ -55,16 +55,16 @@ TEST(DataValidationRoundTrip, ListValidation) {
 TEST(DataValidationRoundTrip, BetweenWholeNumberOperator) {
   pugi::xml_document doc;
   auto ws = ParseWorksheet(doc,
-                            "<dataValidations>"
-                            "<dataValidation type=\"whole\" operator=\"between\" sqref=\"B1\">"
-                            "<formula1>1</formula1><formula2>100</formula2>"
-                            "</dataValidation>"
-                            "</dataValidations>");
+                           "<dataValidations>"
+                           "<dataValidation type=\"whole\" operator=\"between\" sqref=\"B1\">"
+                           "<formula1>1</formula1><formula2>100</formula2>"
+                           "</dataValidation>"
+                           "</dataValidations>");
   auto out = read_data_validations(ws);
   ASSERT_TRUE(static_cast<bool>(out));
   ASSERT_EQ(out.value().size(), 1U);
-  EXPECT_EQ(out.value()[0].type, 1U);   // whole
-  EXPECT_EQ(out.value()[0].op, 0U);     // between
+  EXPECT_EQ(out.value()[0].type, 1U);  // whole
+  EXPECT_EQ(out.value()[0].op, 0U);    // between
   EXPECT_EQ(out.value()[0].formula1, "1");
   EXPECT_EQ(out.value()[0].formula2, "100");
 }
@@ -72,11 +72,11 @@ TEST(DataValidationRoundTrip, BetweenWholeNumberOperator) {
 TEST(DataValidationRoundTrip, MultipleRanges) {
   pugi::xml_document doc;
   auto ws = ParseWorksheet(doc,
-                            "<dataValidations>"
-                            "<dataValidation type=\"custom\" sqref=\"A1:A5 C1:C5 E1\">"
-                            "<formula1>A1&gt;0</formula1>"
-                            "</dataValidation>"
-                            "</dataValidations>");
+                           "<dataValidations>"
+                           "<dataValidation type=\"custom\" sqref=\"A1:A5 C1:C5 E1\">"
+                           "<formula1>A1&gt;0</formula1>"
+                           "</dataValidation>"
+                           "</dataValidations>");
   auto out = read_data_validations(ws);
   ASSERT_TRUE(static_cast<bool>(out));
   ASSERT_EQ(out.value().size(), 1U);
@@ -86,17 +86,19 @@ TEST(DataValidationRoundTrip, MultipleRanges) {
 
 TEST(DataValidationRoundTrip, AllOperatorVariantsParse) {
   pugi::xml_document doc;
-  auto ws =
-      ParseWorksheet(doc,
-                     "<dataValidations>"
-                     "<dataValidation type=\"decimal\" operator=\"notBetween\" sqref=\"A1\"><formula1>1</formula1></dataValidation>"
-                     "<dataValidation type=\"decimal\" operator=\"equal\" sqref=\"A2\"><formula1>1</formula1></dataValidation>"
-                     "<dataValidation type=\"decimal\" operator=\"notEqual\" sqref=\"A3\"><formula1>1</formula1></dataValidation>"
-                     "<dataValidation type=\"decimal\" operator=\"greaterThan\" sqref=\"A4\"><formula1>1</formula1></dataValidation>"
-                     "<dataValidation type=\"decimal\" operator=\"lessThan\" sqref=\"A5\"><formula1>1</formula1></dataValidation>"
-                     "<dataValidation type=\"decimal\" operator=\"greaterThanOrEqual\" sqref=\"A6\"><formula1>1</formula1></dataValidation>"
-                     "<dataValidation type=\"decimal\" operator=\"lessThanOrEqual\" sqref=\"A7\"><formula1>1</formula1></dataValidation>"
-                     "</dataValidations>");
+  auto ws = ParseWorksheet(
+      doc,
+      "<dataValidations>"
+      "<dataValidation type=\"decimal\" operator=\"notBetween\" sqref=\"A1\"><formula1>1</formula1></dataValidation>"
+      "<dataValidation type=\"decimal\" operator=\"equal\" sqref=\"A2\"><formula1>1</formula1></dataValidation>"
+      "<dataValidation type=\"decimal\" operator=\"notEqual\" sqref=\"A3\"><formula1>1</formula1></dataValidation>"
+      "<dataValidation type=\"decimal\" operator=\"greaterThan\" sqref=\"A4\"><formula1>1</formula1></dataValidation>"
+      "<dataValidation type=\"decimal\" operator=\"lessThan\" sqref=\"A5\"><formula1>1</formula1></dataValidation>"
+      "<dataValidation type=\"decimal\" operator=\"greaterThanOrEqual\" "
+      "sqref=\"A6\"><formula1>1</formula1></dataValidation>"
+      "<dataValidation type=\"decimal\" operator=\"lessThanOrEqual\" "
+      "sqref=\"A7\"><formula1>1</formula1></dataValidation>"
+      "</dataValidations>");
   auto out = read_data_validations(ws);
   ASSERT_TRUE(static_cast<bool>(out));
   ASSERT_EQ(out.value().size(), 7U);
@@ -112,9 +114,9 @@ TEST(DataValidationRoundTrip, AllOperatorVariantsParse) {
 TEST(DataValidationRoundTrip, EmptySqrefRejected) {
   pugi::xml_document doc;
   auto ws = ParseWorksheet(doc,
-                            "<dataValidations>"
-                            "<dataValidation type=\"list\" sqref=\"\"><formula1>1</formula1></dataValidation>"
-                            "</dataValidations>");
+                           "<dataValidations>"
+                           "<dataValidation type=\"list\" sqref=\"\"><formula1>1</formula1></dataValidation>"
+                           "</dataValidations>");
   auto out = read_data_validations(ws);
   EXPECT_FALSE(static_cast<bool>(out));
   EXPECT_EQ(out.error().code, FormulonErrorCode::kIoSheetCorrupt);

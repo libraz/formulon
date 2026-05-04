@@ -58,8 +58,7 @@ std::string write_comments(const std::vector<CellComment>& comments) {
   std::string out;
   out.reserve(256 + comments.size() * 96 + authors.size() * 32);
   out.append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n");
-  out.append(
-      "<comments xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n");
+  out.append("<comments xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n");
   out.append("  <authors>\n");
   for (const std::string& a : authors) {
     out.append("    <author>");

@@ -6,12 +6,11 @@
 // suite (`tests/unit/eval/partial_recalc_test.cpp`,
 // `tests/unit/eval/iterative_progress_test.cpp`).
 
-#include "c_api/formulon_c.h"
-
 #include <atomic>
 #include <cstdint>
 #include <cstring>
 
+#include "c_api/formulon_c.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 

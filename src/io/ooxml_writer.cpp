@@ -84,8 +84,7 @@ constexpr std::string_view kRelComments =
 constexpr std::string_view kRelVmlDrawing =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
 
-constexpr std::string_view kCtComments =
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml";
+constexpr std::string_view kCtComments = "application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml";
 constexpr std::string_view kCtVmlDrawing = "application/vnd.openxmlformats-officedocument.vmlDrawing";
 
 // ---------------------------------------------------------------------------
@@ -138,8 +137,8 @@ struct EmissionPlan {
   // had none and as passthrough bytes otherwise.
   struct CommentsPlan {
     std::uint32_t numeric_id = 0;
-    std::string comments_path;                  // "xl/comments<N>.xml"
-    std::string vml_path;                       // "xl/drawings/vmlDrawing<N>.vml"
+    std::string comments_path;                    // "xl/comments<N>.xml"
+    std::string vml_path;                         // "xl/drawings/vmlDrawing<N>.vml"
     const PassthroughPart* vml_source = nullptr;  // non-null => use bytes verbatim
   };
   // One entry per sheet; engaged only for sheets with at least one
@@ -1295,7 +1294,8 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
     std::string part_path("xl/worksheets/sheet");
     part_path.append(std::to_string(i + 1));
     part_path.append(".xml");
-    auto wresult = AddPart(writer.get(), part_path, BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.hyperlink_rids));
+    auto wresult =
+        AddPart(writer.get(), part_path, BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.hyperlink_rids));
     if (!wresult) {
       return wresult.error();
     }
