@@ -62,6 +62,62 @@ try {
 }
 ```
 
+## Bundler integration (Vite, webpack, esbuild)
+
+The package ships a single ES module factory plus the companion
+`formulon.wasm`. Two consumer-side concerns are worth knowing about:
+
+**1. Pthread workers require ES module workers.** Internally the engine
+runs the recalc scheduler on Web Workers spawned by Emscripten with
+`new Worker(new URL("formulon.js", import.meta.url), {type: "module"})`.
+Bundlers default to classic (IIFE) workers and must be told otherwise:
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  worker: { format: 'es' },
+});
+```
+
+webpack 5 picks up the `{type: "module"}` automatically when
+`output.module: true`. esbuild requires `--format=esm` for the worker
+chunk.
+
+**2. Node bridging code is compiled in.** The factory contains a Node
+branch (lazy-loaded `node:module` / `node:worker_threads` for Node
+runtime support) that browser bundlers will warn about as
+"externalised". The warnings are harmless — the branch is dead code at
+runtime in browsers — but if you want to silence them, mark the imports
+external:
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  optimizeDeps: { exclude: ['@libraz/formulon'] },
+  build: {
+    rollupOptions: {
+      external: [/^node:/],
+    },
+  },
+});
+```
+
+If your bundler errors on the `await import("node:...")` form rather
+than just warning, raise the build target to `es2022` so the
+async-function-scoped `await` lexes cleanly:
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  build: { target: 'es2022' },
+});
+```
+
+**3. Workers + SharedArrayBuffer require cross-origin isolation.** When
+hosting in a browser, serve the page with `Cross-Origin-Opener-Policy:
+same-origin` and `Cross-Origin-Embedder-Policy: require-corp` headers,
+or pthread workers will refuse to start.
+
 ## API reference
 
 The full TypeScript surface is shipped as `dist/formulon.d.ts` and is the
