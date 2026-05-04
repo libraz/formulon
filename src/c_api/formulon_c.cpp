@@ -1204,6 +1204,82 @@ extern "C" fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, fm_calc_mode
   return 0;
 }
 
+extern "C" fm_status_t fm_sheet_get_protection(const fm_workbook_t* wb, uint32_t sheet_index,
+                                               fm_sheet_protection_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_sheet_get_protection: NULL argument");
+  }
+  if (sheet_index >= wb->workbook().sheet_count()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_get_protection: sheet_index out of range");
+  }
+  const formulon::SheetProtection& p = wb->workbook().sheet(sheet_index).protection();
+  out->enabled = p.enabled ? 1 : 0;
+  out->algorithm_name = p.algorithm_name.c_str();
+  out->hash_value = p.hash_value.c_str();
+  out->salt_value = p.salt_value.c_str();
+  out->spin_count = p.spin_count;
+  out->legacy_password = p.legacy_password.c_str();
+  out->sheet = p.sheet ? 1 : 0;
+  out->objects = p.objects ? 1 : 0;
+  out->scenarios = p.scenarios ? 1 : 0;
+  out->format_cells = p.format_cells ? 1 : 0;
+  out->format_columns = p.format_columns ? 1 : 0;
+  out->format_rows = p.format_rows ? 1 : 0;
+  out->insert_columns = p.insert_columns ? 1 : 0;
+  out->insert_rows = p.insert_rows ? 1 : 0;
+  out->insert_hyperlinks = p.insert_hyperlinks ? 1 : 0;
+  out->delete_columns = p.delete_columns ? 1 : 0;
+  out->delete_rows = p.delete_rows ? 1 : 0;
+  out->select_locked_cells = p.select_locked_cells ? 1 : 0;
+  out->select_unlocked_cells = p.select_unlocked_cells ? 1 : 0;
+  out->sort = p.sort ? 1 : 0;
+  out->auto_filter = p.auto_filter ? 1 : 0;
+  out->pivot_tables = p.pivot_tables ? 1 : 0;
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_protection(fm_workbook_t* wb, uint32_t sheet_index,
+                                               const fm_sheet_protection_t* in) {
+  clear_last_error();
+  if (wb == nullptr || in == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_sheet_set_protection: NULL argument");
+  }
+  if (sheet_index >= wb->workbook().sheet_count()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_set_protection: sheet_index out of range");
+  }
+  formulon::SheetProtection& p = wb->workbook().sheet(sheet_index).mutable_protection();
+  // Helper for pointer→string deep copy with NULL-as-empty semantics.
+  const auto copy_or_empty = [](const char* s) -> std::string { return s == nullptr ? std::string() : std::string(s); };
+  p.enabled = in->enabled != 0;
+  p.algorithm_name = copy_or_empty(in->algorithm_name);
+  p.hash_value = copy_or_empty(in->hash_value);
+  p.salt_value = copy_or_empty(in->salt_value);
+  p.spin_count = in->spin_count;
+  p.legacy_password = copy_or_empty(in->legacy_password);
+  p.sheet = in->sheet != 0;
+  p.objects = in->objects != 0;
+  p.scenarios = in->scenarios != 0;
+  p.format_cells = in->format_cells != 0;
+  p.format_columns = in->format_columns != 0;
+  p.format_rows = in->format_rows != 0;
+  p.insert_columns = in->insert_columns != 0;
+  p.insert_rows = in->insert_rows != 0;
+  p.insert_hyperlinks = in->insert_hyperlinks != 0;
+  p.delete_columns = in->delete_columns != 0;
+  p.delete_rows = in->delete_rows != 0;
+  p.select_locked_cells = in->select_locked_cells != 0;
+  p.select_unlocked_cells = in->select_unlocked_cells != 0;
+  p.sort = in->sort != 0;
+  p.auto_filter = in->auto_filter != 0;
+  p.pivot_tables = in->pivot_tables != 0;
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_partial_recalc(fm_workbook_t* wb, const fm_viewport* viewport,
                                                   uint32_t* out_recomputed_count) {
   clear_last_error();

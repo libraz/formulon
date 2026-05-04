@@ -836,5 +836,57 @@ Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::x
   return out;
 }
 
+SheetProtection read_sheet_protection(const pugi::xml_node& worksheet) {
+  SheetProtection out;
+  if (!worksheet) {
+    return out;
+  }
+  const pugi::xml_node node = worksheet.child("sheetProtection");
+  if (!node) {
+    return out;
+  }
+  out.enabled = true;
+
+  // Helper: read a boolean attribute. Defaults to false when the
+  // attribute is absent. "1" / "true" → true; anything else → false
+  // (matches the OOXML xsd:boolean lexical space pugixml exposes).
+  const auto read_bool = [&node](const char* name, bool default_value) {
+    const pugi::xml_attribute attr = node.attribute(name);
+    if (!attr) {
+      return default_value;
+    }
+    const std::string_view sv = attr.value();
+    return sv == "1" || sv == "true";
+  };
+
+  out.algorithm_name.assign(node.attribute("algorithmName").value());
+  out.hash_value.assign(node.attribute("hashValue").value());
+  out.salt_value.assign(node.attribute("saltValue").value());
+  if (pugi::xml_attribute sc = node.attribute("spinCount"); sc) {
+    const long long parsed = sc.as_llong(0);
+    out.spin_count = parsed < 0 ? 0U : static_cast<std::uint32_t>(parsed);
+  }
+  out.legacy_password.assign(node.attribute("password").value());
+
+  out.sheet = read_bool("sheet", false);
+  out.objects = read_bool("objects", false);
+  out.scenarios = read_bool("scenarios", false);
+  out.format_cells = read_bool("formatCells", false);
+  out.format_columns = read_bool("formatColumns", false);
+  out.format_rows = read_bool("formatRows", false);
+  out.insert_columns = read_bool("insertColumns", false);
+  out.insert_rows = read_bool("insertRows", false);
+  out.insert_hyperlinks = read_bool("insertHyperlinks", false);
+  out.delete_columns = read_bool("deleteColumns", false);
+  out.delete_rows = read_bool("deleteRows", false);
+  out.select_locked_cells = read_bool("selectLockedCells", false);
+  out.select_unlocked_cells = read_bool("selectUnlockedCells", false);
+  out.sort = read_bool("sort", false);
+  out.auto_filter = read_bool("autoFilter", false);
+  out.pivot_tables = read_bool("pivotTables", false);
+
+  return out;
+}
+
 }  // namespace io
 }  // namespace formulon

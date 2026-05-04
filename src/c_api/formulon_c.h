@@ -905,6 +905,84 @@ FM_API fm_status_t fm_workbook_calc_mode(const fm_workbook_t* wb, fm_calc_mode_t
  */
 FM_API fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, fm_calc_mode_t mode);
 
+/* -------------------------------------------------------------------------- */
+/* Sheet protection (per-sheet `<sheetProtection>`)                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Wide POD mirror of `formulon::SheetProtection` (ECMA-376
+ *        §18.3.1.85 `<sheetProtection>`).
+ *
+ * Strings are NUL-terminated UTF-8. On the read path
+ * (`fm_sheet_get_protection`) the pointers reference the workbook's
+ * own storage and remain valid until the next mutation of the same
+ * sheet's protection record. On the write path
+ * (`fm_sheet_set_protection`) the strings are copied into the
+ * workbook; the caller's buffers may be released after the call. Pass
+ * `NULL` for any string field to leave it empty.
+ *
+ * Boolean flags use `int32_t` for ABI stability: `0` = false,
+ * non-zero = true. The flag semantics follow the OOXML attribute
+ * names verbatim — ECMA-376 documents which flags grant or restrict a
+ * given operation under "Protect Sheet".
+ *
+ * `enabled` controls whether the `<sheetProtection>` element is
+ * emitted at all. Setting `enabled = 0` clears the protection block;
+ * the other fields are then preserved in memory but not written.
+ */
+typedef struct {
+  int32_t enabled;
+  const char* algorithm_name;
+  const char* hash_value;
+  const char* salt_value;
+  uint32_t spin_count;
+  const char* legacy_password;
+  int32_t sheet;
+  int32_t objects;
+  int32_t scenarios;
+  int32_t format_cells;
+  int32_t format_columns;
+  int32_t format_rows;
+  int32_t insert_columns;
+  int32_t insert_rows;
+  int32_t insert_hyperlinks;
+  int32_t delete_columns;
+  int32_t delete_rows;
+  int32_t select_locked_cells;
+  int32_t select_unlocked_cells;
+  int32_t sort;
+  int32_t auto_filter;
+  int32_t pivot_tables;
+} fm_sheet_protection_t;
+
+/**
+ * @brief Reads the sheet's protection state.
+ *
+ * @param wb           Workbook handle. Must not be NULL.
+ * @param sheet_index  Sheet index, 0-based.
+ * @param out          Populated on success. String pointers reference
+ *                     the workbook's storage and remain valid until
+ *                     the next protection mutation on this sheet.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out` is NULL;
+ *         `kInvalidArgument` if `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_protection(const fm_workbook_t* wb, uint32_t sheet_index, fm_sheet_protection_t* out);
+
+/**
+ * @brief Sets the sheet's protection state.
+ *
+ * Replaces the per-sheet `SheetProtection` record wholesale. Strings
+ * are deep-copied into the workbook; NULL strings are stored as
+ * empty.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `in` is NULL;
+ *         `kInvalidArgument` if `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_set_protection(fm_workbook_t* wb, uint32_t sheet_index, const fm_sheet_protection_t* in);
+
 /**
  * @brief Workbook-relative viewport rectangle, expressed in 0-based
  *        inclusive coordinates. Used by `fm_workbook_partial_recalc`.

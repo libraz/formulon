@@ -154,6 +154,59 @@ struct SheetView {
   bool tab_hidden = false;
 };
 
+/// Mirror of OOXML `<sheetProtection>` (ECMA-376 §18.3.1.85). Stored as
+/// passive round-trip metadata: the engine does not enforce locks at
+/// evaluation time. The host UI inspects these flags to mirror Excel's
+/// "Protect Sheet" dialog state.
+///
+/// Field semantics follow the OOXML attribute names verbatim. Each
+/// boolean represents the attribute's value as it appears in the
+/// document; `false` means "attribute absent or `0`". Each attribute's
+/// effect (whether `true` blocks or allows the operation) is dictated
+/// by the spec, not inverted here.
+///
+/// `enabled` is the only synthetic field: it tracks whether the
+/// `<sheetProtection>` element is present at all. A workbook with
+/// `enabled == false` round-trips with no element emitted, regardless
+/// of the other field values.
+struct SheetProtection {
+  /// True when the `<sheetProtection>` element is present.
+  bool enabled = false;
+  /// Hash algorithm name (e.g. "SHA-512"). Empty when no modern
+  /// password is set.
+  std::string algorithm_name;
+  /// Base64-encoded password hash. Empty when no modern password is
+  /// set.
+  std::string hash_value;
+  /// Base64-encoded salt for the password hash.
+  std::string salt_value;
+  /// Iteration count for the password hash.
+  std::uint32_t spin_count = 0;
+  /// Legacy 16-bit hashed password, written as a hex string (e.g.
+  /// `"CC53"`). Empty when no legacy password is set. Excel writes
+  /// either the legacy or the modern password attributes, not both.
+  std::string legacy_password;
+
+  // OOXML attribute flags. Names mirror the attributes verbatim; see
+  // ECMA-376 §18.3.1.85 for per-attribute defaults and effects.
+  bool sheet = false;
+  bool objects = false;
+  bool scenarios = false;
+  bool format_cells = false;
+  bool format_columns = false;
+  bool format_rows = false;
+  bool insert_columns = false;
+  bool insert_rows = false;
+  bool insert_hyperlinks = false;
+  bool delete_columns = false;
+  bool delete_rows = false;
+  bool select_locked_cells = false;
+  bool select_unlocked_cells = false;
+  bool sort = false;
+  bool auto_filter = false;
+  bool pivot_tables = false;
+};
+
 /// Layout overrides for a contiguous column span.
 ///
 /// Mirrors the OOXML `<col min="..." max="..." width="..." hidden="..."
@@ -544,6 +597,22 @@ class Sheet {
   std::vector<DataValidation>& mutable_validations() noexcept { return validations_; }
 
   // ---------------------------------------------------------------------------
+  // Sheet protection (passive round-trip)
+  // ---------------------------------------------------------------------------
+
+  /// Read-only access to the sheet's `<sheetProtection>` flags.
+  /// Populated by the OOXML reader; an absent element leaves
+  /// `enabled = false` and every other field at its default. The
+  /// engine does not enforce locks at evaluation time — these flags
+  /// are surfaced for the host UI's "Protect Sheet" dialog.
+  const SheetProtection& protection() const noexcept { return protection_; }
+
+  /// Mutable access to the sheet's protection flags. Exposed so the
+  /// OOXML reader and the C ABI mutator can populate fields without an
+  /// extra accessor pair per attribute.
+  SheetProtection& mutable_protection() noexcept { return protection_; }
+
+  // ---------------------------------------------------------------------------
   // Sheet view state
   // ---------------------------------------------------------------------------
 
@@ -625,6 +694,10 @@ class Sheet {
   std::vector<CellComment> comments_;
   // `<dataValidations>` blocks. Empty by default.
   std::vector<DataValidation> validations_;
+  // `<sheetProtection>` flags. `protection_.enabled = false` by
+  // default; the writer emits no element when the field stays at its
+  // default-constructed state.
+  SheetProtection protection_;
   // Per-sheet view state (zoom, frozen panes, tab visibility). Defaults
   // are populated inline; the OOXML reader overwrites them when present.
   SheetView view_;

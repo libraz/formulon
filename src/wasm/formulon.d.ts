@@ -205,6 +205,49 @@ export interface SheetViewResult {
   view: SheetView;
 }
 
+/**
+ * Mirror of OOXML `<sheetProtection>` (ECMA-376 §18.3.1.85).
+ *
+ * Round-trip metadata only — the engine does not enforce locks at
+ * evaluation time. The host UI inspects these flags to mirror Excel's
+ * "Protect Sheet" dialog state. Booleans are encoded as `0`/`1` to
+ * match the embind wire shape.
+ *
+ * `enabled` controls whether the `<sheetProtection>` element is
+ * emitted at all; setting it to `0` clears the protection block on
+ * save.
+ */
+export interface SheetProtection {
+  enabled: number;
+  algorithmName: string;
+  hashValue: string;
+  saltValue: string;
+  spinCount: number;
+  legacyPassword: string;
+  sheet: number;
+  objects: number;
+  scenarios: number;
+  formatCells: number;
+  formatColumns: number;
+  formatRows: number;
+  insertColumns: number;
+  insertRows: number;
+  insertHyperlinks: number;
+  deleteColumns: number;
+  deleteRows: number;
+  selectLockedCells: number;
+  selectUnlockedCells: number;
+  sort: number;
+  autoFilter: number;
+  pivotTables: number;
+}
+
+/** Return type of `Workbook.getSheetProtection(sheet)`. */
+export interface SheetProtectionResult {
+  status: Status;
+  protection: SheetProtection;
+}
+
 /** Per-column-range layout override. Inclusive `[first, last]` columns
  *  carry the same width / hidden / outline level. */
 export interface ColumnLayout {
@@ -681,6 +724,18 @@ export interface Workbook {
   setSheetFreeze(sheet: number, freezeRows: number, freezeCols: number): Status;
   /** Sets the sheet tab's hidden flag. */
   setSheetTabHidden(sheet: number, hidden: boolean): Status;
+
+  /**
+   * Reads the sheet's `<sheetProtection>` flags. Strings are
+   * deep-copied; the returned object is independent of the
+   * workbook's storage.
+   */
+  getSheetProtection(sheet: number): SheetProtectionResult;
+  /**
+   * Replaces the sheet's `<sheetProtection>` flags wholesale.
+   * Setting `enabled = 0` clears the protection block on save.
+   */
+  setSheetProtection(sheet: number, protection: SheetProtection): Status;
 
   /** Returns the column-layout overrides on `sheet` in storage order. */
   getSheetColumns(sheet: number): ColumnsResult;

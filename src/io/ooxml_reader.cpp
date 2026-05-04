@@ -1055,6 +1055,10 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
         return dvs_or.error();
       }
       wb.sheet(i).mutable_validations() = std::move(dvs_or.value());
+
+      // `<sheetProtection>` is a single optional element; the reader
+      // never fails for it (default-on-error). Empty = enabled false.
+      wb.sheet(i).mutable_protection() = read_sheet_protection(sheet_doc.child("worksheet"));
     }
 
     // Sheet rels file (`xl/worksheets/_rels/sheetN.xml.rels`) — drives

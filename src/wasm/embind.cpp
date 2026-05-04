@@ -161,6 +161,42 @@ struct JsSheetViewResult {
   JsSheetView view{};
 };
 
+/// JS-side mirror of `fm_sheet_protection_t`. Strings are passed as
+/// `std::string` so embind handles the lifetime; the pointers from
+/// `fm_sheet_get_protection` are copied into these fields before the
+/// value crosses the WASM boundary, so JS code can hold them
+/// indefinitely without aliasing the workbook's storage.
+struct JsSheetProtection {
+  int32_t enabled = 0;
+  std::string algorithmName;
+  std::string hashValue;
+  std::string saltValue;
+  uint32_t spinCount = 0U;
+  std::string legacyPassword;
+  int32_t sheet = 0;
+  int32_t objects = 0;
+  int32_t scenarios = 0;
+  int32_t formatCells = 0;
+  int32_t formatColumns = 0;
+  int32_t formatRows = 0;
+  int32_t insertColumns = 0;
+  int32_t insertRows = 0;
+  int32_t insertHyperlinks = 0;
+  int32_t deleteColumns = 0;
+  int32_t deleteRows = 0;
+  int32_t selectLockedCells = 0;
+  int32_t selectUnlockedCells = 0;
+  int32_t sort = 0;
+  int32_t autoFilter = 0;
+  int32_t pivotTables = 0;
+};
+
+/// Return envelope for `Workbook.getSheetProtection(...)`.
+struct JsSheetProtectionResult {
+  JsStatus status;
+  JsSheetProtection protection{};
+};
+
 /// JS-side mirror of `fm_column_layout_t`. Channel widths are normal
 /// JS numbers; the embind-side `int32_t` stand-in for booleans matches
 /// the rest of this binding surface.
@@ -973,6 +1009,79 @@ class JsWorkbook {
     r.view.tabHidden = v.tab_hidden;
     r.status = ok_status();
     return r;
+  }
+
+  /// Reads the per-sheet `<sheetProtection>` flags. Strings are
+  /// deep-copied so the returned object is independent of the
+  /// workbook's storage.
+  JsSheetProtectionResult getSheetProtection(uint32_t sheet) const {
+    JsSheetProtectionResult r;
+    if (handle_ == nullptr) {
+      r.status = error_status(7000);
+      return r;
+    }
+    fm_sheet_protection_t p{};
+    fm_status_t rc = fm_sheet_get_protection(handle_, sheet, &p);
+    if (rc != 0) {
+      r.status = error_status(rc);
+      return r;
+    }
+    r.protection.enabled = p.enabled;
+    r.protection.algorithmName = p.algorithm_name == nullptr ? std::string() : p.algorithm_name;
+    r.protection.hashValue = p.hash_value == nullptr ? std::string() : p.hash_value;
+    r.protection.saltValue = p.salt_value == nullptr ? std::string() : p.salt_value;
+    r.protection.spinCount = p.spin_count;
+    r.protection.legacyPassword = p.legacy_password == nullptr ? std::string() : p.legacy_password;
+    r.protection.sheet = p.sheet;
+    r.protection.objects = p.objects;
+    r.protection.scenarios = p.scenarios;
+    r.protection.formatCells = p.format_cells;
+    r.protection.formatColumns = p.format_columns;
+    r.protection.formatRows = p.format_rows;
+    r.protection.insertColumns = p.insert_columns;
+    r.protection.insertRows = p.insert_rows;
+    r.protection.insertHyperlinks = p.insert_hyperlinks;
+    r.protection.deleteColumns = p.delete_columns;
+    r.protection.deleteRows = p.delete_rows;
+    r.protection.selectLockedCells = p.select_locked_cells;
+    r.protection.selectUnlockedCells = p.select_unlocked_cells;
+    r.protection.sort = p.sort;
+    r.protection.autoFilter = p.auto_filter;
+    r.protection.pivotTables = p.pivot_tables;
+    r.status = ok_status();
+    return r;
+  }
+
+  /// Replaces the per-sheet `<sheetProtection>` flags wholesale.
+  JsStatus setSheetProtection(uint32_t sheet, JsSheetProtection in) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_sheet_protection_t p{};
+    p.enabled = in.enabled;
+    p.algorithm_name = in.algorithmName.c_str();
+    p.hash_value = in.hashValue.c_str();
+    p.salt_value = in.saltValue.c_str();
+    p.spin_count = in.spinCount;
+    p.legacy_password = in.legacyPassword.c_str();
+    p.sheet = in.sheet;
+    p.objects = in.objects;
+    p.scenarios = in.scenarios;
+    p.format_cells = in.formatCells;
+    p.format_columns = in.formatColumns;
+    p.format_rows = in.formatRows;
+    p.insert_columns = in.insertColumns;
+    p.insert_rows = in.insertRows;
+    p.insert_hyperlinks = in.insertHyperlinks;
+    p.delete_columns = in.deleteColumns;
+    p.delete_rows = in.deleteRows;
+    p.select_locked_cells = in.selectLockedCells;
+    p.select_unlocked_cells = in.selectUnlockedCells;
+    p.sort = in.sort;
+    p.auto_filter = in.autoFilter;
+    p.pivot_tables = in.pivotTables;
+    fm_status_t rc = fm_sheet_set_protection(handle_, sheet, &p);
+    return rc == 0 ? ok_status() : error_status(rc);
   }
 
   /// Sets the sheet's zoom percentage. Out-of-range values are clamped
@@ -2225,6 +2334,37 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .field("status", &JsSheetViewResult::status)
       .field("view", &JsSheetViewResult::view);
 
+  // @size-budget: 14 KB
+  // Covers the JsSheetProtection value_object, JsSheetProtectionResult,
+  // and the two bridge methods (getSheetProtection / setSheetProtection).
+  value_object<JsSheetProtection>("SheetProtection")
+      .field("enabled", &JsSheetProtection::enabled)
+      .field("algorithmName", &JsSheetProtection::algorithmName)
+      .field("hashValue", &JsSheetProtection::hashValue)
+      .field("saltValue", &JsSheetProtection::saltValue)
+      .field("spinCount", &JsSheetProtection::spinCount)
+      .field("legacyPassword", &JsSheetProtection::legacyPassword)
+      .field("sheet", &JsSheetProtection::sheet)
+      .field("objects", &JsSheetProtection::objects)
+      .field("scenarios", &JsSheetProtection::scenarios)
+      .field("formatCells", &JsSheetProtection::formatCells)
+      .field("formatColumns", &JsSheetProtection::formatColumns)
+      .field("formatRows", &JsSheetProtection::formatRows)
+      .field("insertColumns", &JsSheetProtection::insertColumns)
+      .field("insertRows", &JsSheetProtection::insertRows)
+      .field("insertHyperlinks", &JsSheetProtection::insertHyperlinks)
+      .field("deleteColumns", &JsSheetProtection::deleteColumns)
+      .field("deleteRows", &JsSheetProtection::deleteRows)
+      .field("selectLockedCells", &JsSheetProtection::selectLockedCells)
+      .field("selectUnlockedCells", &JsSheetProtection::selectUnlockedCells)
+      .field("sort", &JsSheetProtection::sort)
+      .field("autoFilter", &JsSheetProtection::autoFilter)
+      .field("pivotTables", &JsSheetProtection::pivotTables);
+
+  value_object<JsSheetProtectionResult>("SheetProtectionResult")
+      .field("status", &JsSheetProtectionResult::status)
+      .field("protection", &JsSheetProtectionResult::protection);
+
   value_object<JsColumnLayout>("ColumnLayout")
       .field("first", &JsColumnLayout::first)
       .field("last", &JsColumnLayout::last)
@@ -2301,6 +2441,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getMerges", &JsWorkbook::getMerges)
       .function("getNumFmt", &JsWorkbook::getNumFmt)
       .function("getSheetColumns", &JsWorkbook::getSheetColumns)
+      .function("getSheetProtection", &JsWorkbook::getSheetProtection)
       .function("getSheetRowOverrides", &JsWorkbook::getSheetRowOverrides)
       .function("getSheetView", &JsWorkbook::getSheetView)
       .function("getValidations", &JsWorkbook::getValidations)
@@ -2341,6 +2482,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("setRowHidden", &JsWorkbook::setRowHidden)
       .function("setRowOutline", &JsWorkbook::setRowOutline)
       .function("setSheetFreeze", &JsWorkbook::setSheetFreeze)
+      .function("setSheetProtection", &JsWorkbook::setSheetProtection)
       .function("setSheetTabHidden", &JsWorkbook::setSheetTabHidden)
       .function("setSheetZoom", &JsWorkbook::setSheetZoom)
       .function("setText", &JsWorkbook::setText)

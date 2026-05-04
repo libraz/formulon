@@ -179,6 +179,13 @@ void apply_hyperlink_rels(std::vector<Hyperlink>& hyperlinks,
 /// `sqref=`.
 Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::xml_node& worksheet);
 
+/// Reads `<sheetProtection>` from the sheet and returns the parsed
+/// `SheetProtection`. When the element is absent the result has
+/// `enabled = false` and every other field at its default. The reader
+/// never fails: malformed attribute values fall back to their default
+/// (matching pugixml's xsd:boolean conversion behaviour).
+SheetProtection read_sheet_protection(const pugi::xml_node& worksheet);
+
 }  // namespace io
 }  // namespace formulon
 

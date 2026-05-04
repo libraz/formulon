@@ -636,6 +636,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan)
 // can call them.
 std::string BuildSheetViewXml(const SheetView& view);
 std::string BuildColsXml(const SheetLayout& layout);
+std::string BuildSheetProtectionXml(const SheetProtection& p);
 
 /// Bijective base-26 column letters (`0 -> A`, `25 -> Z`, `26 -> AA`,
 /// ...). Mirrors `cli/render.cpp`'s helper; kept inline here so the
@@ -897,6 +898,17 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   out.append("  ");
   out.append(sheet_data);
   out.push_back('\n');
+  // <sheetProtection> sits between <sheetData> and <mergeCells> per
+  // ECMA-376 document order. Helper returns "" when protection is
+  // disabled, leaving no trailing whitespace in that case.
+  {
+    const std::string sp_xml = BuildSheetProtectionXml(sheet.protection());
+    if (!sp_xml.empty()) {
+      out.append("  ");
+      out.append(sp_xml);
+      out.push_back('\n');
+    }
+  }
   // Merge cells precede CF in ECMA-376 document order.
   if (!merges_xml.empty()) {
     out.append("  ");
@@ -1223,6 +1235,74 @@ std::string BuildSheetViewXml(const SheetView& view) {
     out.push_back('"');
   }
   out.append(" state=\"frozen\"/></sheetView></sheetViews>");
+  return out;
+}
+
+/// Emits `<sheetProtection .../>` matching the structure ECMA-376
+/// §18.3.1.85 prescribes. Returns an empty string when
+/// `p.enabled == false` so the caller can drop the surrounding
+/// indentation cleanly. Boolean attributes are emitted only when their
+/// value is `true`; the spec defaults absent attributes to `false`.
+std::string BuildSheetProtectionXml(const SheetProtection& p) {
+  if (!p.enabled) {
+    return std::string();
+  }
+  std::string out;
+  out.reserve(256);
+  out.append("<sheetProtection");
+  if (!p.algorithm_name.empty()) {
+    out.append(" algorithmName=\"");
+    AppendXmlEscaped(out, p.algorithm_name);
+    out.push_back('"');
+  }
+  if (!p.hash_value.empty()) {
+    out.append(" hashValue=\"");
+    AppendXmlEscaped(out, p.hash_value);
+    out.push_back('"');
+  }
+  if (!p.salt_value.empty()) {
+    out.append(" saltValue=\"");
+    AppendXmlEscaped(out, p.salt_value);
+    out.push_back('"');
+  }
+  if (p.spin_count != 0U) {
+    out.append(" spinCount=\"");
+    out.append(std::to_string(p.spin_count));
+    out.push_back('"');
+  }
+  if (!p.legacy_password.empty()) {
+    out.append(" password=\"");
+    AppendXmlEscaped(out, p.legacy_password);
+    out.push_back('"');
+  }
+  // Boolean attributes — only emit when `true`. Order mirrors Excel's
+  // own emission order so byte-identical round-trips are achievable
+  // for the common cases.
+  const auto append_bool = [&out](const char* name, bool v) {
+    if (!v) {
+      return;
+    }
+    out.push_back(' ');
+    out.append(name);
+    out.append("=\"1\"");
+  };
+  append_bool("sheet", p.sheet);
+  append_bool("objects", p.objects);
+  append_bool("scenarios", p.scenarios);
+  append_bool("formatCells", p.format_cells);
+  append_bool("formatColumns", p.format_columns);
+  append_bool("formatRows", p.format_rows);
+  append_bool("insertColumns", p.insert_columns);
+  append_bool("insertRows", p.insert_rows);
+  append_bool("insertHyperlinks", p.insert_hyperlinks);
+  append_bool("deleteColumns", p.delete_columns);
+  append_bool("deleteRows", p.delete_rows);
+  append_bool("selectLockedCells", p.select_locked_cells);
+  append_bool("sort", p.sort);
+  append_bool("autoFilter", p.auto_filter);
+  append_bool("pivotTables", p.pivot_tables);
+  append_bool("selectUnlockedCells", p.select_unlocked_cells);
+  out.append("/>");
   return out;
 }
 
