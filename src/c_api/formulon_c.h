@@ -1059,6 +1059,385 @@ FM_API fm_status_t fm_cf_results_match_at(const fm_cf_results_t* results, size_t
                                           fm_cf_match_t* out);
 
 /* -------------------------------------------------------------------------- */
+/* Conditional formatting — mutation                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Inclusive cell range used by the CF mutation API.
+ *
+ * Matches `formulon::cf::CFCellRange` (top-left + bottom-right corners,
+ * both 0-based). Single-cell rules use `first_row == last_row` and
+ * `first_col == last_col`.
+ */
+typedef struct {
+  uint32_t first_row;
+  uint32_t first_col;
+  uint32_t last_row;
+  uint32_t last_col;
+} fm_cf_cell_range_t;
+
+/**
+ * @brief CF rule wire format used by `fm_sheet_cf_*` APIs.
+ *
+ * Wide POD covering the non-visual rule subset. Visual rules
+ * (`ColorScale`, `DataBar`, `IconSet`) are stored verbatim by the OOXML
+ * reader / writer but are *not* creatable through this API in the
+ * current surface — `fm_sheet_cf_add_rule` returns `kInvalidArgument`
+ * for those `type` values. `fm_sheet_cf_get_at` reports them with the
+ * `type` field populated (so a UI can recognise them as "visual rule
+ * present, not editable here") but leaves the variant payload at its
+ * zero default.
+ *
+ * Active fields by `type`:
+ *   - `Expression` (0): `formula1`.
+ *   - `CellIs` (1): `op_engaged` + `op` + `formula1` (+ `formula2` for
+ *     `Between` / `NotBetween`).
+ *   - `Top10` (5): `rank_engaged` + `rank` + `percent` + `bottom`.
+ *   - `AboveAverage` (6): `above_average` + `equal_average`
+ *     + (optional) `std_dev_engaged` + `std_dev`.
+ *   - `ContainsText` / `NotContainsText` / `BeginsWith` / `EndsWith`
+ *     (7-10): `text`.
+ *   - `ContainsBlanks` / `NotContainsBlanks` / `ContainsErrors` /
+ *     `NotContainsErrors` (11-14): no extra payload.
+ *   - `TimePeriod` (15): `time_period_engaged` + `time_period`.
+ *   - `DuplicateValues` / `UniqueValues` (16-17): no extra payload.
+ *
+ * String fields use C-string convention: `NULL` means "absent",
+ * non-`NULL` is a NUL-terminated borrowed view. On the input path
+ * (`fm_sheet_cf_add_rule`) the caller owns the buffer until the call
+ * returns; on the output path (`fm_sheet_cf_get_at`) the engine owns
+ * the buffer and the view is valid until the next mutation that
+ * touches the sheet's CF list.
+ */
+typedef struct {
+  /* Stable rule id (matches OOXML `<x14:cfRule id="...">`). On input,
+   * pass `NULL` or `""` to auto-generate one. On output, always
+   * non-NULL. */
+  const char* id;
+  uint8_t type;        /* `formulon::cf::RuleType` ordinal */
+  uint8_t op;          /* `formulon::cf::CellIsOperator` ordinal */
+  uint8_t time_period; /* `formulon::cf::TimePeriod` ordinal */
+  uint8_t _pad0;       /* alignment */
+  int32_t priority;
+  int32_t stop_if_true;   /* 0/1 */
+  int32_t dxf_id_engaged; /* 0/1 */
+  uint32_t dxf_id;
+
+  /* sqref union — at least one entry. On input, must be non-NULL with
+   * range_count >= 1. On output, points to the engine's internal
+   * vector buffer for the containing block. */
+  const fm_cf_cell_range_t* sqref;
+  uint32_t sqref_count;
+
+  /* Formula sources (Expression / CellIs / containsText-derived). */
+  const char* formula1;
+  const char* formula2;
+  int32_t op_engaged; /* 0/1 (CellIs) */
+
+  /* Top10 payload */
+  int32_t rank_engaged; /* 0/1 */
+  int32_t rank;
+  int32_t percent; /* 0/1 */
+  int32_t bottom;  /* 0/1 */
+
+  /* AboveAverage payload */
+  int32_t above_average;   /* 0/1 (default 1) */
+  int32_t equal_average;   /* 0/1 */
+  int32_t std_dev_engaged; /* 0/1 */
+  double std_dev;
+
+  /* ContainsText / BeginsWith / EndsWith / NotContainsText literal */
+  const char* text;
+
+  /* TimePeriod */
+  int32_t time_period_engaged; /* 0/1 */
+} fm_cf_rule_t;
+
+/**
+ * @brief Returns the total number of CF rules on `sheet_index`.
+ *
+ * The count flattens across all `<conditionalFormatting>` blocks: a
+ * sheet with two blocks of two rules each reports `4`. Indexing into
+ * the flattened sequence is stable until the next mutation.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_cf_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
+
+/**
+ * @brief Reads the `idx`-th CF rule (in flattened order) into `out`.
+ *
+ * The string and sqref-array views in `*out` borrow from the engine's
+ * storage and are valid until the next CF mutation on the same sheet
+ * (`fm_sheet_cf_add_rule`, `fm_sheet_cf_remove_at`,
+ * `fm_sheet_cf_clear`, or any reader/writer round-trip).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` or `idx` is out of range.
+ */
+FM_API fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx, fm_cf_rule_t* out);
+
+/**
+ * @brief Appends a new single-rule `<conditionalFormatting>` block.
+ *
+ * The new block carries `rule.sqref` (deep-copied) and a single CF
+ * rule constructed from the remaining fields. The auto-generated
+ * priority (when `rule.priority <= 0`) is `existing_max + 1`. If
+ * `rule.id` is `NULL` or empty, a new id is synthesised from the
+ * priority.
+ *
+ * Visual rule types (`ColorScale`, `DataBar`, `IconSet`) are
+ * rejected — those payloads still round-trip through the OOXML
+ * reader / writer but are not creatable from this API yet.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when `wb` is `NULL` or `rule.sqref`
+ *           is `NULL` while `rule.sqref_count > 0`;
+ *         `kInvalidArgument` when `sheet_index` is out of range, when
+ *           `rule.sqref_count == 0`, or when `rule.type` denotes a
+ *           visual rule.
+ */
+FM_API fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, size_t sheet_index, fm_cf_rule_t rule);
+
+/**
+ * @brief Removes the `idx`-th CF rule (flattened order). When the
+ *        containing block becomes empty it is removed too.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when `wb` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` or `idx` is out of range.
+ */
+FM_API fm_status_t fm_sheet_cf_remove_at(fm_workbook_t* wb, size_t sheet_index, size_t idx);
+
+/**
+ * @brief Removes every CF block on `sheet_index`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when `wb` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_cf_clear(fm_workbook_t* wb, size_t sheet_index);
+
+/* -------------------------------------------------------------------------- */
+/* Trace precedents / dependents (dependency-graph reverse lookup)            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Workbook-wide cell coordinate used by the trace API.
+ *
+ * Mirrors `formulon::eval::CellNodeId`: `sheet` is the 0-based sheet
+ * index, `row` and `col` are 0-based cell coordinates.
+ */
+typedef struct {
+  uint32_t sheet;
+  uint32_t row;
+  uint32_t col;
+} fm_cell_node_t;
+
+/**
+ * @brief Opaque handle for a trace result.
+ *
+ * Owns the cell-node list produced by `fm_workbook_precedents` /
+ * `fm_workbook_dependents`. Index into it via `fm_cell_nodes_count` /
+ * `fm_cell_nodes_at`. Release with `fm_cell_nodes_destroy`.
+ */
+typedef struct fm_cell_nodes fm_cell_nodes_t;
+
+/**
+ * @brief Returns the cells `(sheet, row, col)` directly reads
+ *        (1-step precedents) when `depth <= 1`, or every cell reached
+ *        within `depth` BFS steps when `depth >= 2`. `depth` is capped
+ *        at 32 to avoid runaway expansion in cyclic graphs.
+ *
+ * The set excludes the seed cell itself. Order is unspecified but
+ * stable for a given graph state.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when `wb` or `out` is `NULL`;
+ *         `kInvalidArgument` when `sheet` is out of range.
+ *
+ * On success the caller owns `*out` and must free it with
+ * `fm_cell_nodes_destroy`.
+ */
+FM_API fm_status_t fm_workbook_precedents(const fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+                                          uint32_t depth, fm_cell_nodes_t** out);
+
+/**
+ * @brief Returns the cells that read `(sheet, row, col)` directly
+ *        (1-step dependents) when `depth <= 1`, or every cell reached
+ *        within `depth` BFS steps in the reverse graph when
+ *        `depth >= 2`. `depth` is capped at 32.
+ *
+ * Same semantics as `fm_workbook_precedents` for ownership and seed
+ * exclusion.
+ */
+FM_API fm_status_t fm_workbook_dependents(const fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+                                          uint32_t depth, fm_cell_nodes_t** out);
+
+/**
+ * @brief Releases a trace results handle. `nodes == NULL` is a no-op.
+ */
+FM_API void fm_cell_nodes_destroy(fm_cell_nodes_t* nodes);
+
+/**
+ * @brief Returns the number of cells in the result. Returns `0` when
+ *        `nodes == NULL`.
+ */
+FM_API size_t fm_cell_nodes_count(const fm_cell_nodes_t* nodes);
+
+/**
+ * @brief Reads cell `idx` from the result.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `idx` is out of range.
+ */
+FM_API fm_status_t fm_cell_nodes_at(const fm_cell_nodes_t* nodes, size_t idx, fm_cell_node_t* out);
+
+/* -------------------------------------------------------------------------- */
+/* Dynamic-array spill payload                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Result shape for `fm_workbook_spill_info`.
+ *
+ *   * `engaged` — `1` when `(row, col)` is part of a registered spill
+ *     region, `0` otherwise. The other fields carry meaning only when
+ *     `engaged == 1`.
+ *   * `anchor_row`, `anchor_col` — the region's anchor cell (the cell
+ *     that holds the dynamic-array formula).
+ *   * `rows`, `cols` — region dimensions including the anchor.
+ *
+ * Use `fm_workbook_get_value(sheet, anchor_row + r, anchor_col + c)`
+ * to read individual cells; `fm_workbook_get_value` is already
+ * spill-aware and returns the per-cell value verbatim.
+ */
+typedef struct {
+  uint32_t anchor_row;
+  uint32_t anchor_col;
+  uint32_t rows;
+  uint32_t cols;
+  int32_t engaged; /* 0/1 */
+} fm_spill_info_t;
+
+/**
+ * @brief Returns the spill-region info for `(sheet, row, col)`.
+ *
+ * If `(row, col)` is the anchor of a region, returns that region. If
+ * it is a phantom of a region, returns the same region. Otherwise sets
+ * `out->engaged = 0` and leaves the remaining fields zero.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet` is out of range.
+ */
+FM_API fm_status_t fm_workbook_spill_info(const fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+                                          fm_spill_info_t* out);
+
+/* -------------------------------------------------------------------------- */
+/* Function catalog metadata                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Result shape for `fm_function_metadata`.
+ *
+ * `canonical_name` is always populated when the function is known.
+ * `min_arity` / `max_arity` are pulled from `FunctionDef`; the latter
+ * is `0xFFFFFFFFu` (i.e. `eval::kVariadic`) for unbounded variadics.
+ * `description` and `signature_template` are populated when the
+ * locale-specific metadata table has an entry for this function;
+ * otherwise both are `NULL`.
+ *
+ * String storage is process-static (the catalog is initialised at
+ * static-init time); callers do not free the returned pointers.
+ */
+typedef struct {
+  const char* canonical_name;
+  uint32_t min_arity;
+  uint32_t max_arity;
+  /* `NULL` until the locale metadata table populates it. */
+  const char* signature_template;
+  /* `NULL` until the locale metadata table populates it. */
+  const char* description;
+} fm_function_metadata_t;
+
+/**
+ * @brief Locale codes for `fm_function_metadata`.
+ *
+ *   * `0` — `en-US` (default).
+ *   * `1` — `ja-JP`.
+ */
+typedef enum { FM_LOCALE_EN_US = 0, FM_LOCALE_JA_JP = 1 } fm_locale_t;
+
+/**
+ * @brief Returns metadata for the function `name` in `locale`.
+ *
+ * `name` is matched case-insensitively against the canonical name. On
+ * success, `*out` receives a view into the catalog's static storage;
+ * the views are valid for the lifetime of the process.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when `name` or `out` is `NULL`;
+ *         `kInvalidArgument` when no function matches `name`.
+ */
+FM_API fm_status_t fm_function_metadata(const char* name, fm_locale_t locale, fm_function_metadata_t* out);
+
+/**
+ * @brief Returns the total number of registered Formulon functions.
+ *
+ * Drives the canonical-name iterator (`fm_function_name_at`).
+ */
+FM_API size_t fm_function_count(void);
+
+/**
+ * @brief Returns the canonical name of the `idx`-th registered function.
+ *
+ * Order is sorted ascending so consumers can build deterministic UI
+ * lists. `*out_name` borrows the catalog's static storage.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when `out_name` is `NULL`;
+ *         `kInvalidArgument` when `idx` is out of range.
+ */
+FM_API fm_status_t fm_function_name_at(size_t idx, const char** out_name);
+
+/**
+ * @brief Returns the localized display name for `canonical_name` in
+ *        `locale`, or `canonical_name` itself when no alias is
+ *        registered.
+ *
+ * `*out_localized` borrows process-static storage and must not be
+ * freed. For locales that are not the workbook's primary locale
+ * (`FM_LOCALE_EN_US`), the alias table is currently empty (the
+ * `data/function_names_<locale>.csv` curation is pending) and the
+ * function falls through to `canonical_name`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `canonical_name` does not match a
+ *           registered function.
+ */
+FM_API fm_status_t fm_function_localize(const char* canonical_name, fm_locale_t locale, const char** out_localized);
+
+/**
+ * @brief Returns the canonical (English UPPERCASE) name for the
+ *        localized function `localized_name` in `locale`.
+ *
+ * `localized_name` is matched exactly (case-sensitive for non-ASCII
+ * locales). When the locale's alias table is empty (currently the case
+ * for non-`en-US` locales), this falls through to a case-insensitive
+ * match against the canonical name list.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when no function matches.
+ */
+FM_API fm_status_t fm_function_canonicalize(const char* localized_name, fm_locale_t locale, const char** out_canonical);
+
+/* -------------------------------------------------------------------------- */
 /* Sheet view / layout (viewport, frozen panes, column / row overrides)       */
 /* -------------------------------------------------------------------------- */
 

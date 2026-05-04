@@ -322,6 +322,119 @@ export interface DataValidationInput {
 /** @deprecated Use {@link DataValidationEntry} instead. */
 export type ValidationEntry = DataValidationEntry;
 
+/** Workbook-wide cell coordinate used by trace results. `sheet` is the
+ *  0-based sheet index. */
+export interface CellNode {
+  readonly sheet: number;
+  readonly row: number;
+  readonly col: number;
+}
+
+/** Result envelope for `functionMetadata(name, locale)`.
+ *
+ *  `ok` is `false` when no function matches `name`; the remaining
+ *  fields are absent. When `ok` is `true`, `name` / `minArity` /
+ *  `maxArity` are always populated; `signatureTemplate` and
+ *  `description` are populated only when the locale metadata table
+ *  has an entry for this function and locale. */
+export interface FunctionMetadataResult {
+  readonly ok: boolean;
+  readonly name?: string;
+  readonly minArity?: number;
+  /** `0xFFFFFFFF` (i.e. `4294967295`) denotes an unbounded variadic. */
+  readonly maxArity?: number;
+  readonly signatureTemplate?: string;
+  readonly description?: string;
+}
+
+/** Spill region info returned by `spillInfo(sheet, row, col)`. */
+export interface SpillInfo {
+  readonly engaged: boolean;
+  readonly anchorRow: number;
+  readonly anchorCol: number;
+  readonly rows: number;
+  readonly cols: number;
+}
+
+/** One inclusive cell-range entry inside a CF rule's `sqref` union. */
+export interface ConditionalFormatRange {
+  readonly firstRow: number;
+  readonly firstCol: number;
+  readonly lastRow: number;
+  readonly lastCol: number;
+}
+
+/** One CF rule as returned by `getConditionalFormats(sheet)`.
+ *
+ *  `type` ordinal mirrors `formulon::cf::RuleType`:
+ *    0 expression, 1 cellIs, 2 colorScale, 3 dataBar, 4 iconSet,
+ *    5 top10, 6 aboveAverage, 7 containsText, 8 notContainsText,
+ *    9 beginsWith, 10 endsWith, 11 containsBlanks, 12 notContainsBlanks,
+ *    13 containsErrors, 14 notContainsErrors, 15 timePeriod,
+ *    16 duplicateValues, 17 uniqueValues.
+ *
+ *  Visual rule kinds (`colorScale` / `dataBar` / `iconSet`) round-trip
+ *  through the OOXML reader / writer but their visual sub-spec fields
+ *  are not yet surfaced through this read API; only `id`, `type`,
+ *  `priority`, `stopIfTrue`, and `sqref` populate for those kinds.
+ */
+export interface ConditionalFormatEntry {
+  readonly id: string;
+  readonly type: number;
+  readonly priority: number;
+  readonly stopIfTrue: boolean;
+  readonly sqref: ReadonlyArray<ConditionalFormatRange>;
+  readonly dxfId?: number;
+  readonly formula1?: string;
+  readonly formula2?: string;
+  /** `formulon::cf::CellIsOperator` ordinal: 0 lt, 1 le, 2 eq, 3 ne,
+   *   4 ge, 5 gt, 6 between, 7 notBetween. Engaged for `cellIs` rules. */
+  readonly op?: number;
+  /** Engaged for `top10` rules. */
+  readonly rank?: number;
+  readonly percent?: boolean;
+  readonly bottom?: boolean;
+  /** Engaged for `aboveAverage` rules. */
+  readonly aboveAverage?: boolean;
+  readonly equalAverage?: boolean;
+  readonly stdDev?: number;
+  /** Engaged for `containsText` / `beginsWith` / `endsWith` /
+   *  `notContainsText` rules. */
+  readonly text?: string;
+  /** `formulon::cf::TimePeriod` ordinal. Engaged for `timePeriod` rules. */
+  readonly timePeriod?: number;
+}
+
+/** Argument shape accepted by `addConditionalFormat(sheet, rule)`.
+ *
+ *  Visual rule kinds (`colorScale` / `dataBar` / `iconSet`) are
+ *  rejected — their visual sub-specs are not yet creatable through this
+ *  API. The OOXML reader / writer continue to round-trip those rules
+ *  verbatim if they were authored elsewhere.
+ *
+ *  When `priority` is missing, zero, or negative, the engine assigns
+ *  `existing_max + 1`. When `id` is missing or empty, the engine
+ *  synthesises one. */
+export interface ConditionalFormatInput {
+  sqref: ReadonlyArray<ConditionalFormatRange>;
+  type: number;
+  priority?: number;
+  stopIfTrue?: boolean;
+  id?: string;
+  dxfId?: number;
+  formula1?: string;
+  formula2?: string;
+  op?: number;
+  rank?: number;
+  percent?: boolean;
+  bottom?: boolean;
+  aboveAverage?: boolean;
+  equalAverage?: boolean;
+  stdDev?: number;
+  text?: string;
+  timePeriod?: number;
+}
+
 /** Return type of `Workbook.getCellXfIndex(sheet, row, col)`. */
 export interface CellXfIndexResult {
   status: Status;
@@ -643,6 +756,60 @@ export interface Workbook {
   removeValidationAt(sheet: number, index: number): Status;
   /** Drops every validation rule on `sheet`. */
   clearValidations(sheet: number): Status;
+
+  /** Returns every CF rule on `sheet` in flattened priority order. The
+   *  returned entries borrow rule ids from the engine's storage; treat
+   *  them as immutable view objects. */
+  getConditionalFormats(sheet: number): ReadonlyArray<ConditionalFormatEntry>;
+  /** Appends a new single-rule `<conditionalFormatting>` block to
+   *  `sheet`. Visual rule types (`colorScale` / `dataBar` / `iconSet`)
+   *  are rejected with `kInvalidArgument` — those payloads are
+   *  preserved on round-trip but not yet creatable here. */
+  addConditionalFormat(sheet: number, rule: ConditionalFormatInput): Status;
+  /** Removes the CF rule at `index` (flattened order). When the
+   *  containing block becomes empty it is removed too. */
+  removeConditionalFormatAt(sheet: number, index: number): Status;
+  /** Drops every CF block on `sheet`. */
+  clearConditionalFormats(sheet: number): Status;
+
+  /** Returns the cells that `(sheet, row, col)` directly reads
+   *  (1-step precedents) when `depth <= 1`, or every cell reached
+   *  within `depth` BFS steps otherwise. `depth` is capped at 32 to
+   *  avoid runaway expansion in cyclic graphs. */
+  precedents(sheet: number, row: number, col: number, depth: number): ReadonlyArray<CellNode>;
+  /** Returns the cells that read `(sheet, row, col)` directly
+   *  (1-step dependents). Same depth semantics as `precedents`. */
+  dependents(sheet: number, row: number, col: number, depth: number): ReadonlyArray<CellNode>;
+
+  /** Returns metadata for the function `name` (case-insensitive). When
+   *  the function is unknown, returns `{ok: false}`. `locale` selects
+   *  the catalog locale (`0` = `en-US`, `1` = `ja-JP`); description /
+   *  signature fields are populated only when the locale metadata table
+   *  has an entry. */
+  functionMetadata(name: string, locale: number): FunctionMetadataResult;
+  /** Returns every registered function's canonical name in ascending
+   *  sort order. */
+  functionNames(): ReadonlyArray<string>;
+
+  /** Returns the localized display name for the canonical function
+   *  `canonicalName` in `locale`. Returns the canonical name unchanged
+   *  when the locale's alias table is empty (currently always for
+   *  non-`en-US` locales). Returns the empty string when the canonical
+   *  name does not match a registered function. */
+  localizeFunctionName(canonicalName: string, locale: number): string;
+  /** Inverse of `localizeFunctionName`: returns the canonical English
+   *  name for the localized function `localizedName`. Falls through to
+   *  case-insensitive canonical-name matching when no alias is
+   *  registered. Returns the empty string when no function matches. */
+  canonicalizeFunctionName(localizedName: string, locale: number): string;
+
+  /** Returns dynamic-array spill info for `(sheet, row, col)`.
+   *  When the cell is part of a spill region (anchor or phantom),
+   *  `engaged` is `true` and `(anchorRow, anchorCol)` + `(rows, cols)`
+   *  describe the region; the per-cell values are read via `getValue`,
+   *  which is already spill-aware. When the cell is not part of any
+   *  region, `engaged` is `false` and the other fields are zero. */
+  spillInfo(sheet: number, row: number, col: number): SpillInfo;
 }
 
 /** Static factories on the Workbook class. */

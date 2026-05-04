@@ -5,10 +5,13 @@
 
 set(FORMULON_C_API_TEST_SOURCES
   formulon_c_cf_test.cpp
+  formulon_c_function_metadata_test.cpp
   formulon_c_sheet_features_test.cpp
   formulon_c_sheet_layout_test.cpp
+  formulon_c_spill_test.cpp
   formulon_c_styles_test.cpp
   formulon_c_test.cpp
+  formulon_c_trace_test.cpp
   partial_recalc_test.cpp
   workbook_sheet_ops_test.cpp
 )

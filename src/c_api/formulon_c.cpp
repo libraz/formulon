@@ -49,6 +49,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -56,6 +57,7 @@
 #include "cf/cf_evaluator.h"
 #include "cf/cf_match.h"
 #include "cf/cf_types.h"
+#include "eval/dep_graph.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
@@ -1364,6 +1366,555 @@ extern "C" fm_status_t fm_cf_results_match_at(const fm_cf_results_t* results, si
         "match_idx=" + std::to_string(match_idx) + " match_count=" + std::to_string(entry.matches.size()));
   }
   fill_match(entry.matches[match_idx], out);
+  return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Conditional formatting — mutation
+// ---------------------------------------------------------------------------
+//
+// Each rule lives inside a `<conditionalFormatting>` block. The mutation
+// API exposes a flattened, per-rule view: `fm_sheet_cf_count` totals
+// rules across all blocks, `fm_sheet_cf_get_at` reaches into the
+// containing block to surface its sqref. Adds always create a fresh
+// single-rule block to keep insertion order deterministic and avoid
+// merging with semantically distinct sqref unions; removes prune the
+// block too when its rule list goes empty.
+
+// `fm_cf_cell_range_t` mirrors `cf::CFCellRange` so the OOXML reader's
+// pre-allocated vector buffer can be handed back as a borrowed
+// `const fm_cf_cell_range_t*` view without per-call repacking.
+static_assert(sizeof(fm_cf_cell_range_t) == sizeof(formulon::cf::CFCellRange),
+              "fm_cf_cell_range_t / cf::CFCellRange size mismatch");
+static_assert(alignof(fm_cf_cell_range_t) == alignof(formulon::cf::CFCellRange),
+              "fm_cf_cell_range_t / cf::CFCellRange align mismatch");
+static_assert(offsetof(fm_cf_cell_range_t, first_row) == offsetof(formulon::cf::CFCellRange, first),
+              "fm_cf_cell_range_t::first_row layout mismatch");
+static_assert(offsetof(fm_cf_cell_range_t, last_row) == offsetof(formulon::cf::CFCellRange, last),
+              "fm_cf_cell_range_t::last_row layout mismatch");
+
+namespace {
+
+// Returns `true` for the three visual rule types whose payloads
+// (color_scale / data_bar / icon_set sub-specs) are not yet creatable
+// through the C ABI. The OOXML reader / writer still round-trip them
+// verbatim — this gate only fires on the mutation entry point.
+bool is_visual_rule_type(std::uint8_t type) {
+  switch (static_cast<formulon::cf::RuleType>(type)) {
+    case formulon::cf::RuleType::ColorScale:
+    case formulon::cf::RuleType::DataBar:
+    case formulon::cf::RuleType::IconSet:
+      return true;
+    default:
+      return false;
+  }
+}
+
+// Walks the sheet's `conditional_formats` vector and resolves the
+// `flat_idx`-th rule into the (block_idx, rule_idx) pair. Returns
+// `true` on success; `false` when `flat_idx` is past the end.
+bool resolve_flat_index(const std::vector<formulon::cf::ConditionalFormat>& blocks, std::size_t flat_idx,
+                        std::size_t* out_block, std::size_t* out_rule) {
+  std::size_t cursor = 0;
+  for (std::size_t b = 0; b < blocks.size(); ++b) {
+    const auto& block = blocks[b];
+    if (flat_idx < cursor + block.rules.size()) {
+      *out_block = b;
+      *out_rule = flat_idx - cursor;
+      return true;
+    }
+    cursor += block.rules.size();
+  }
+  return false;
+}
+
+// Materialises a `cf::CFRule` view onto the wire-format `fm_cf_rule_t`.
+// All non-engaged variant fields are zero-initialised first so callers
+// observe deterministic defaults. String views borrow the engine's
+// storage; the contract documented in the header is "valid until the
+// next CF mutation".
+void fill_rule(const formulon::cf::ConditionalFormat& block, const formulon::cf::CFRule& rule, fm_cf_rule_t* out) {
+  *out = fm_cf_rule_t{};
+  out->id = rule.id.c_str();
+  out->type = static_cast<std::uint8_t>(rule.type);
+  out->priority = rule.priority;
+  out->stop_if_true = rule.stop_if_true ? 1 : 0;
+  if (rule.dxf_id.has_value()) {
+    out->dxf_id_engaged = 1;
+    out->dxf_id = *rule.dxf_id;
+  }
+  out->sqref = block.sqref.empty() ? nullptr : reinterpret_cast<const fm_cf_cell_range_t*>(block.sqref.data());
+  out->sqref_count = static_cast<std::uint32_t>(block.sqref.size());
+  out->formula1 = rule.formula1.has_value() ? rule.formula1->c_str() : nullptr;
+  out->formula2 = rule.formula2.has_value() ? rule.formula2->c_str() : nullptr;
+  if (rule.op.has_value()) {
+    out->op_engaged = 1;
+    out->op = static_cast<std::uint8_t>(*rule.op);
+  }
+  if (rule.rank.has_value()) {
+    out->rank_engaged = 1;
+    out->rank = *rule.rank;
+  }
+  out->percent = rule.percent ? 1 : 0;
+  out->bottom = rule.bottom ? 1 : 0;
+  out->above_average = rule.above_average ? 1 : 0;
+  out->equal_average = rule.equal_average ? 1 : 0;
+  if (rule.std_dev.has_value()) {
+    out->std_dev_engaged = 1;
+    out->std_dev = *rule.std_dev;
+  }
+  out->text = rule.text.has_value() ? rule.text->c_str() : nullptr;
+  if (rule.time_period.has_value()) {
+    out->time_period_engaged = 1;
+    out->time_period = static_cast<std::uint8_t>(*rule.time_period);
+  }
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_sheet_cf_count(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t* out_count) {
+  clear_last_error();
+  if (wb == nullptr || out_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_cf_count: NULL argument");
+  }
+  if (sheet_index >= wb->workbook().sheet_count()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_cf_count: sheet_index out of range",
+                             "sheet_index=" + std::to_string(sheet_index));
+  }
+  std::size_t total = 0;
+  for (const auto& block : wb->workbook().sheet(sheet_index).conditional_formats()) {
+    total += block.rules.size();
+  }
+  *out_count = total;
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t idx,
+                                          fm_cf_rule_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_cf_get_at: NULL argument");
+  }
+  if (sheet_index >= wb->workbook().sheet_count()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_cf_get_at: sheet_index out of range",
+                             "sheet_index=" + std::to_string(sheet_index));
+  }
+  const auto& blocks = wb->workbook().sheet(sheet_index).conditional_formats();
+  std::size_t b = 0;
+  std::size_t r = 0;
+  if (!resolve_flat_index(blocks, idx, &b, &r)) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_cf_get_at: idx out of range",
+                             "idx=" + std::to_string(idx));
+  }
+  fill_rule(blocks[b], blocks[b].rules[r], out);
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet_index, fm_cf_rule_t rule) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_cf_add_rule: wb is NULL");
+  }
+  if (sheet_index >= wb->workbook().sheet_count()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_cf_add_rule: sheet_index out of range",
+                             "sheet_index=" + std::to_string(sheet_index));
+  }
+  if (rule.sqref_count == 0) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_cf_add_rule: sqref_count must be >= 1");
+  }
+  if (rule.sqref == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_sheet_cf_add_rule: sqref is NULL while sqref_count > 0");
+  }
+  if (is_visual_rule_type(rule.type)) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_cf_add_rule: visual rule types (ColorScale/DataBar/IconSet) "
+                             "are not creatable through this API",
+                             "type=" + std::to_string(rule.type));
+  }
+  if (rule.type > static_cast<std::uint8_t>(formulon::cf::RuleType::UniqueValues)) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_cf_add_rule: unknown rule type",
+                             "type=" + std::to_string(rule.type));
+  }
+
+  formulon::cf::ConditionalFormat new_block;
+  new_block.sqref.reserve(rule.sqref_count);
+  for (std::uint32_t i = 0; i < rule.sqref_count; ++i) {
+    formulon::cf::CFCellRange r;
+    r.first = formulon::CellAddress{rule.sqref[i].first_row, rule.sqref[i].first_col};
+    r.last = formulon::CellAddress{rule.sqref[i].last_row, rule.sqref[i].last_col};
+    new_block.sqref.push_back(r);
+  }
+
+  formulon::cf::CFRule out_rule;
+  out_rule.type = static_cast<formulon::cf::RuleType>(rule.type);
+
+  // Auto-assign priority to (max_existing + 1) when caller passed <= 0.
+  std::int32_t max_priority = 0;
+  for (const auto& block : wb->workbook().sheet(sheet_index).conditional_formats()) {
+    for (const auto& existing : block.rules) {
+      if (existing.priority > max_priority) {
+        max_priority = existing.priority;
+      }
+    }
+  }
+  out_rule.priority = (rule.priority > 0) ? rule.priority : (max_priority + 1);
+  out_rule.stop_if_true = rule.stop_if_true != 0;
+  if (rule.dxf_id_engaged != 0) {
+    out_rule.dxf_id = rule.dxf_id;
+  }
+  if (rule.id != nullptr && rule.id[0] != '\0') {
+    out_rule.id = rule.id;
+  } else {
+    // Synthesize a stable id from priority. The format mirrors the
+    // x14:cfRule guid-like string Excel emits, but uses a priority
+    // suffix so add-then-list is deterministic.
+    out_rule.id = "{cf-" + std::to_string(out_rule.priority) + "}";
+  }
+  if (rule.formula1 != nullptr) {
+    out_rule.formula1 = std::string(rule.formula1);
+  }
+  if (rule.formula2 != nullptr) {
+    out_rule.formula2 = std::string(rule.formula2);
+  }
+  if (rule.op_engaged != 0) {
+    out_rule.op = static_cast<formulon::cf::CellIsOperator>(rule.op);
+  }
+  if (rule.rank_engaged != 0) {
+    out_rule.rank = rule.rank;
+  }
+  out_rule.percent = (rule.percent != 0);
+  out_rule.bottom = (rule.bottom != 0);
+  out_rule.above_average = (rule.above_average != 0);
+  out_rule.equal_average = (rule.equal_average != 0);
+  if (rule.std_dev_engaged != 0) {
+    out_rule.std_dev = rule.std_dev;
+  }
+  if (rule.text != nullptr) {
+    out_rule.text = std::string(rule.text);
+  }
+  if (rule.time_period_engaged != 0) {
+    out_rule.time_period = static_cast<formulon::cf::TimePeriod>(rule.time_period);
+  }
+
+  new_block.rules.push_back(std::move(out_rule));
+  wb->workbook().sheet(sheet_index).mutable_conditional_formats().push_back(std::move(new_block));
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_cf_remove_at(fm_workbook_t* wb, std::size_t sheet_index, std::size_t idx) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_cf_remove_at: wb is NULL");
+  }
+  if (sheet_index >= wb->workbook().sheet_count()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_cf_remove_at: sheet_index out of range",
+                             "sheet_index=" + std::to_string(sheet_index));
+  }
+  auto& blocks = wb->workbook().sheet(sheet_index).mutable_conditional_formats();
+  std::size_t b = 0;
+  std::size_t r = 0;
+  if (!resolve_flat_index(blocks, idx, &b, &r)) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_cf_remove_at: idx out of range",
+                             "idx=" + std::to_string(idx));
+  }
+  blocks[b].rules.erase(blocks[b].rules.begin() + static_cast<std::ptrdiff_t>(r));
+  if (blocks[b].rules.empty()) {
+    blocks.erase(blocks.begin() + static_cast<std::ptrdiff_t>(b));
+  }
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_cf_clear(fm_workbook_t* wb, std::size_t sheet_index) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_cf_clear: wb is NULL");
+  }
+  if (sheet_index >= wb->workbook().sheet_count()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_cf_clear: sheet_index out of range",
+                             "sheet_index=" + std::to_string(sheet_index));
+  }
+  wb->workbook().sheet(sheet_index).mutable_conditional_formats().clear();
+  return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Trace precedents / dependents
+// ---------------------------------------------------------------------------
+//
+// Bridges `RecalcEngine::dep_graph()` over the stable C ABI. The opaque
+// `fm_cell_nodes_t` owns the BFS-expanded result so the index accessors
+// can return data without re-walking the graph. Depth is capped at 32
+// to keep cyclic graphs from blowing up the queue.
+
+struct fm_cell_nodes {
+  std::vector<formulon::eval::CellNodeId> nodes;
+};
+
+namespace {
+
+constexpr std::uint32_t kMaxTraceDepth = 32U;
+
+// Effective depth: 0 / 1 → 1-step (direct neighbors only); larger
+// values are capped at `kMaxTraceDepth` to keep BFS bounded.
+std::uint32_t effective_depth(std::uint32_t depth) {
+  if (depth <= 1) {
+    return 1U;
+  }
+  return depth > kMaxTraceDepth ? kMaxTraceDepth : depth;
+}
+
+// BFS from `seed` using `next_neighbors(node) -> vector<CellNodeId>`
+// up to `depth` hops. The seed itself is excluded from the result. The
+// result preserves first-encountered order, which matches the
+// dependency-graph adjacency list order at depth 1 and stays
+// deterministic for deeper traversals.
+template <typename NextFn>
+std::vector<formulon::eval::CellNodeId> bfs_collect(formulon::eval::CellNodeId seed, std::uint32_t depth,
+                                                    NextFn&& next_neighbors) {
+  std::vector<formulon::eval::CellNodeId> ordered;
+  std::unordered_set<formulon::eval::CellNodeId, formulon::eval::CellNodeIdHash> seen;
+  std::vector<formulon::eval::CellNodeId> frontier;
+  std::vector<formulon::eval::CellNodeId> next_frontier;
+  seen.insert(seed);
+  frontier.push_back(seed);
+  for (std::uint32_t hop = 0; hop < depth; ++hop) {
+    next_frontier.clear();
+    for (formulon::eval::CellNodeId node : frontier) {
+      for (formulon::eval::CellNodeId nbr : next_neighbors(node)) {
+        if (seen.insert(nbr).second) {
+          ordered.push_back(nbr);
+          next_frontier.push_back(nbr);
+        }
+      }
+    }
+    if (next_frontier.empty()) {
+      break;
+    }
+    frontier.swap(next_frontier);
+  }
+  return ordered;
+}
+
+template <bool kPrecedents>
+fm_status_t trace_impl(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row, std::uint32_t col,
+                       std::uint32_t depth, fm_cell_nodes_t** out) {
+  clear_last_error();
+  constexpr const char* fn_name = kPrecedents ? "fm_workbook_precedents" : "fm_workbook_dependents";
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(
+        formulon::FormulonErrorCode::kBindingNullPointer,
+        kPrecedents ? "fm_workbook_precedents: NULL argument" : "fm_workbook_dependents: NULL argument");
+  }
+  if (sheet >= wb->workbook().sheet_count()) {
+    return set_binding_error(
+        formulon::FormulonErrorCode::kInvalidArgument,
+        kPrecedents ? "fm_workbook_precedents: sheet out of range" : "fm_workbook_dependents: sheet out of range",
+        "sheet=" + std::to_string(sheet));
+  }
+  (void)fn_name;
+  const auto& graph = wb->workbook().recalc_engine().dep_graph();
+  formulon::eval::CellNodeId seed{static_cast<std::uint16_t>(sheet), row, col};
+  auto neighbors = [&graph](formulon::eval::CellNodeId node) {
+    if constexpr (kPrecedents) {
+      return graph.dependencies_of(node);
+    } else {
+      return graph.dependents_of(node);
+    }
+  };
+  auto nodes = bfs_collect(seed, effective_depth(depth), neighbors);
+
+  auto handle = std::unique_ptr<fm_cell_nodes_t>(new fm_cell_nodes_t{});
+  handle->nodes = std::move(nodes);
+  *out = handle.release();
+  return 0;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_workbook_precedents(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
+                                              std::uint32_t col, std::uint32_t depth, fm_cell_nodes_t** out) {
+  return trace_impl<true>(wb, sheet, row, col, depth, out);
+}
+
+extern "C" fm_status_t fm_workbook_dependents(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
+                                              std::uint32_t col, std::uint32_t depth, fm_cell_nodes_t** out) {
+  return trace_impl<false>(wb, sheet, row, col, depth, out);
+}
+
+extern "C" void fm_cell_nodes_destroy(fm_cell_nodes_t* nodes) {
+  delete nodes;
+}
+
+extern "C" size_t fm_cell_nodes_count(const fm_cell_nodes_t* nodes) {
+  if (nodes == nullptr) {
+    return 0;
+  }
+  return nodes->nodes.size();
+}
+
+extern "C" fm_status_t fm_cell_nodes_at(const fm_cell_nodes_t* nodes, std::size_t idx, fm_cell_node_t* out) {
+  clear_last_error();
+  if (nodes == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_cell_nodes_at: NULL argument");
+  }
+  if (idx >= nodes->nodes.size()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_cell_nodes_at: idx out of range",
+                             "idx=" + std::to_string(idx) + " count=" + std::to_string(nodes->nodes.size()));
+  }
+  out->sheet = static_cast<std::uint32_t>(nodes->nodes[idx].sheet_id);
+  out->row = nodes->nodes[idx].row;
+  out->col = nodes->nodes[idx].col;
+  return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic-array spill payload
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Function catalog metadata
+// ---------------------------------------------------------------------------
+//
+// Surfaces the registry's canonical-name + arity data through the C ABI
+// so JS / Python autocomplete UIs can enumerate Formulon functions
+// without reaching into the engine internals. `description` /
+// `signature_template` are reserved for the locale metadata table
+// (data/function_metadata_<locale>.cpp) and stay `NULL` until that
+// table is wired up; the surface itself is shippable today.
+//
+// The sorted name list is computed on first use and cached for the
+// process lifetime — order matters for UIs that expect deterministic
+// enumeration, and the registry's `for_each_name` does not promise
+// any order.
+
+namespace {
+
+const std::vector<std::string>& sorted_function_names() {
+  static const std::vector<std::string> names = []() {
+    std::vector<std::string> out;
+    formulon::eval::default_registry().for_each_name(
+        [](std::string_view name, void* ctx) { static_cast<std::vector<std::string>*>(ctx)->emplace_back(name); },
+        &out);
+    std::sort(out.begin(), out.end());
+    return out;
+  }();
+  return names;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_function_metadata(const char* name, fm_locale_t /*locale*/, fm_function_metadata_t* out) {
+  clear_last_error();
+  if (name == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_function_metadata: NULL argument");
+  }
+  const auto& reg = formulon::eval::default_registry();
+  const auto* def = reg.lookup(std::string_view(name));
+  if (def == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_function_metadata: unknown function",
+                             std::string("name=") + name);
+  }
+  *out = fm_function_metadata_t{};
+  // `canonical_name` is held in static storage by the registry; surface
+  // a borrowed pointer so callers can hold the result indefinitely.
+  out->canonical_name = def->canonical_name.data();
+  out->min_arity = def->min_arity;
+  out->max_arity = def->max_arity;
+  // Locale metadata table (description / signature_template) is not
+  // yet populated — the public ABI documents these as nullable.
+  out->signature_template = nullptr;
+  out->description = nullptr;
+  return 0;
+}
+
+extern "C" std::size_t fm_function_count(void) {
+  return sorted_function_names().size();
+}
+
+extern "C" fm_status_t fm_function_name_at(std::size_t idx, const char** out_name) {
+  clear_last_error();
+  if (out_name == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_function_name_at: out_name is NULL");
+  }
+  const auto& names = sorted_function_names();
+  if (idx >= names.size()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_function_name_at: idx out of range",
+                             "idx=" + std::to_string(idx) + " count=" + std::to_string(names.size()));
+  }
+  *out_name = names[idx].c_str();
+  return 0;
+}
+
+extern "C" fm_status_t fm_function_localize(const char* canonical_name, fm_locale_t /*locale*/,
+                                            const char** out_localized) {
+  clear_last_error();
+  if (canonical_name == nullptr || out_localized == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_function_localize: NULL argument");
+  }
+  const auto* def = formulon::eval::default_registry().lookup(std::string_view(canonical_name));
+  if (def == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_function_localize: unknown function",
+                             std::string("canonical_name=") + canonical_name);
+  }
+  // Locale alias table not yet populated — fall through to the canonical
+  // name. Once `data/function_names_<locale>.csv` lands, this lookup
+  // will branch on `locale` and consult the alias table first.
+  *out_localized = def->canonical_name.data();
+  return 0;
+}
+
+extern "C" fm_status_t fm_function_canonicalize(const char* localized_name, fm_locale_t /*locale*/,
+                                                const char** out_canonical) {
+  clear_last_error();
+  if (localized_name == nullptr || out_canonical == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_function_canonicalize: NULL argument");
+  }
+  // Alias table not yet populated — fall through to a case-insensitive
+  // canonical-name match.
+  const auto* def = formulon::eval::default_registry().lookup(std::string_view(localized_name));
+  if (def == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_function_canonicalize: unknown function",
+                             std::string("localized_name=") + localized_name);
+  }
+  *out_canonical = def->canonical_name.data();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_spill_info(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
+                                              std::uint32_t col, fm_spill_info_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_spill_info: NULL argument");
+  }
+  if (sheet >= wb->workbook().sheet_count()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_spill_info: sheet out of range", "sheet=" + std::to_string(sheet));
+  }
+  *out = fm_spill_info_t{};
+  const auto& s = wb->workbook().sheet(sheet);
+  // Try anchor lookup first; fall back to phantom-coverage map.
+  const formulon::SpillRegion* region = s.spill_region_at_anchor(row, col);
+  if (region == nullptr) {
+    region = s.spill_region_covering(row, col);
+  }
+  if (region == nullptr) {
+    out->engaged = 0;
+    return 0;
+  }
+  out->anchor_row = region->anchor_row;
+  out->anchor_col = region->anchor_col;
+  out->rows = region->rows;
+  out->cols = region->cols;
+  out->engaged = 1;
   return 0;
 }
 

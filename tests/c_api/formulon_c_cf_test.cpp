@@ -241,3 +241,181 @@ TEST(FormulonCApiCf, OutOfRangeSheetIndexReturnsInvalidArgument) {
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   EXPECT_EQ(out, nullptr);
 }
+
+// ---------------------------------------------------------------------------
+// CF mutation API (fm_sheet_cf_count / get_at / add_rule / remove_at / clear)
+// ---------------------------------------------------------------------------
+
+TEST(FormulonCApiCfMutate, AddCellIsRuleRoundTrips) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_cf_cell_range_t sqref{};
+  sqref.first_row = 0;
+  sqref.first_col = 0;
+  sqref.last_row = 9;
+  sqref.last_col = 0;
+
+  fm_cf_rule_t rule{};
+  rule.type = 1;  // CellIs
+  rule.op_engaged = 1;
+  rule.op = 5;  // GreaterThan
+  std::string formula = "50";
+  rule.formula1 = formula.c_str();
+  rule.dxf_id_engaged = 1;
+  rule.dxf_id = 0;
+  rule.sqref = &sqref;
+  rule.sqref_count = 1;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule), 0);
+
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 1U);
+
+  fm_cf_rule_t out{};
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_EQ(out.type, 1U);
+  EXPECT_EQ(out.op_engaged, 1);
+  EXPECT_EQ(out.op, 5U);
+  EXPECT_EQ(out.priority, 1);  // auto-assigned since input <= 0
+  EXPECT_EQ(out.dxf_id_engaged, 1);
+  EXPECT_EQ(out.dxf_id, 0U);
+  ASSERT_NE(out.formula1, nullptr);
+  EXPECT_STREQ(out.formula1, "50");
+  ASSERT_NE(out.sqref, nullptr);
+  EXPECT_EQ(out.sqref_count, 1U);
+  EXPECT_EQ(out.sqref[0].first_row, 0U);
+  EXPECT_EQ(out.sqref[0].last_row, 9U);
+  ASSERT_NE(out.id, nullptr);
+  EXPECT_FALSE(std::string(out.id).empty());
+}
+
+TEST(FormulonCApiCfMutate, AddMultipleRulesAutoIncrementsPriority) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_cf_cell_range_t sqref{0, 0, 0, 0};
+  for (int i = 0; i < 3; ++i) {
+    fm_cf_rule_t rule{};
+    rule.type = 0;  // Expression
+    std::string f = "TRUE";
+    rule.formula1 = f.c_str();
+    rule.sqref = &sqref;
+    rule.sqref_count = 1;
+    ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule), 0);
+  }
+
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 3U);
+  for (std::size_t i = 0; i < 3; ++i) {
+    fm_cf_rule_t out{};
+    ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, i, &out), 0);
+    EXPECT_EQ(out.priority, static_cast<int32_t>(i + 1));
+  }
+}
+
+TEST(FormulonCApiCfMutate, RemoveAtFlattensIndices) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_cf_cell_range_t sqref{0, 0, 0, 0};
+  std::vector<std::string> formulas{"A1", "A2", "A3"};
+  for (const auto& f : formulas) {
+    fm_cf_rule_t rule{};
+    rule.type = 0;  // Expression
+    rule.formula1 = f.c_str();
+    rule.sqref = &sqref;
+    rule.sqref_count = 1;
+    ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule), 0);
+  }
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(count, 3U);
+
+  ASSERT_EQ(fm_sheet_cf_remove_at(wb.handle, 0, 1), 0);
+  ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 2U);
+
+  fm_cf_rule_t out0{};
+  fm_cf_rule_t out1{};
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, 0, &out0), 0);
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, 1, &out1), 0);
+  EXPECT_STREQ(out0.formula1, "A1");
+  EXPECT_STREQ(out1.formula1, "A3");
+}
+
+TEST(FormulonCApiCfMutate, ClearRemovesAllBlocks) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_cf_cell_range_t sqref{0, 0, 0, 0};
+  fm_cf_rule_t rule{};
+  rule.type = 0;
+  std::string f = "TRUE";
+  rule.formula1 = f.c_str();
+  rule.sqref = &sqref;
+  rule.sqref_count = 1;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule), 0);
+
+  ASSERT_EQ(fm_sheet_cf_clear(wb.handle, 0), 0);
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 0U);
+}
+
+TEST(FormulonCApiCfMutate, RejectsVisualRuleTypes) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_cf_cell_range_t sqref{0, 0, 0, 0};
+  fm_cf_rule_t rule{};
+  rule.type = 2;  // ColorScale
+  rule.sqref = &sqref;
+  rule.sqref_count = 1;
+  fm_status_t rc = fm_sheet_cf_add_rule(wb.handle, 0, rule);
+  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+}
+
+TEST(FormulonCApiCfMutate, EmptySqrefRejected) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_cf_rule_t rule{};
+  rule.type = 0;
+  rule.sqref = nullptr;
+  rule.sqref_count = 0;
+  fm_status_t rc = fm_sheet_cf_add_rule(wb.handle, 0, rule);
+  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+}
+
+TEST(FormulonCApiCfMutate, OutOfRangeIndexReturnsInvalidArgument) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_cf_rule_t out{};
+  fm_status_t rc = fm_sheet_cf_get_at(wb.handle, 0, 99, &out);
+  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  rc = fm_sheet_cf_remove_at(wb.handle, 0, 99);
+  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+}
+
+TEST(FormulonCApiCfMutate, PreLoadedRulesEnumerableViaFlatIndex) {
+  WorkbookGuard wb = WorkbookFromMutator([](formulon::Workbook& w) {
+    auto& sheet = w.sheet(0);
+    formulon::cf::ConditionalFormat block;
+    block.sqref = {MakeRange(0, 0, 9, 0)};
+    formulon::cf::CFRule r;
+    r.type = formulon::cf::RuleType::CellIs;
+    r.priority = 1;
+    r.op = formulon::cf::CellIsOperator::GreaterThan;
+    r.formula1 = "50";
+    r.dxf_id = 0;
+    block.rules.push_back(std::move(r));
+    sheet.mutable_conditional_formats().push_back(std::move(block));
+  });
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 1U);
+  fm_cf_rule_t out{};
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_EQ(out.type, 1U);
+  ASSERT_NE(out.formula1, nullptr);
+  EXPECT_STREQ(out.formula1, "50");
+}
