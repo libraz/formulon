@@ -198,9 +198,20 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     out.append("\"");
     AppendStyleAttr(out, cell.xf_index);
 
-    // If the anchor's cached value is an Error, surface it via t="e" so
-    // Excel renders the error glyph rather than a number.
-    if (cell.cached_value.is_error()) {
+    // The `t=` attribute on the formula <c> must agree with the cached
+    // <v> body so a save/load round-trip preserves the value's type.
+    // The default `n` (number) is omitted; everything else is named so
+    // cell_parser does not try to parse a non-numeric body as a double.
+    // Non-finite numbers are downgraded to t="e" because the <v> below
+    // emits #NUM! for that branch.
+    const Value& cached = cell.cached_value;
+    if (cached.is_error()) {
+      out.append(" t=\"e\">");
+    } else if (cached.is_text()) {
+      out.append(" t=\"str\">");
+    } else if (cached.is_boolean()) {
+      out.append(" t=\"b\">");
+    } else if (cached.is_number() && !std::isfinite(cached.as_number())) {
       out.append(" t=\"e\">");
     } else {
       out.append(">");
