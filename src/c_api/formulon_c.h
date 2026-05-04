@@ -1867,6 +1867,36 @@ typedef struct {
   int32_t diagonal_down; /* 0=false, 1=true */
 } fm_border_record;
 
+/** Sentinel for `fm_cell_style_record_t::builtin_id` indicating the
+ *  style is custom (no `builtinId` attribute on the OOXML element). */
+#define FM_CELL_STYLE_BUILTIN_ID_NONE 0xFFFFFFFFu
+
+/**
+ * @brief Plain-data projection of a `formulon::io::CellStyleRecord`
+ *        (one OOXML `<cellStyle>` entry).
+ *
+ * `name` is a NUL-terminated UTF-8 pointer borrowed from the workbook's
+ * styles table; it is valid until the next styles-replacing mutation
+ * or until the handle is destroyed. `xf_id` indexes into the parallel
+ * `<cellStyleXfs>` table (queryable via
+ * `fm_styles_get_cell_style_xf_count` / `fm_styles_get_cell_style_xf`).
+ *
+ * `builtin_id` carries the OOXML built-in style ordinal (`0..47`); the
+ * sentinel `FM_CELL_STYLE_BUILTIN_ID_NONE` indicates the entry is
+ * custom and the attribute was absent on the source document. `i_level`
+ * is the outline level for built-in heading styles (`0` for everything
+ * else). The boolean flags follow the wide-POD convention used
+ * elsewhere on this surface.
+ */
+typedef struct {
+  const char* name;       /* UTF-8, NUL-terminated; never NULL */
+  uint32_t xf_id;         /* index into cell_style_xfs */
+  uint32_t builtin_id;    /* 0..47, or FM_CELL_STYLE_BUILTIN_ID_NONE */
+  uint32_t i_level;       /* outline level for heading styles */
+  int32_t hidden;         /* 0=false, 1=true */
+  int32_t custom_builtin; /* 0=false, 1=true */
+} fm_cell_style_record_t;
+
 /**
  * @brief Reads the `xf_index` (style record id) attached to the cell at
  *        `(row, col)` on `sheet`.
@@ -1991,6 +2021,47 @@ FM_API fm_status_t fm_styles_get_border_count(fm_workbook_t* wb, uint32_t* out_c
  *         `kBindingNullPointer` if any pointer argument is `NULL`.
  */
 FM_API fm_status_t fm_styles_get_cell_xf_count(fm_workbook_t* wb, uint32_t* out_count);
+
+/**
+ * @brief Returns the number of named cell styles (`<cellStyle>` entries)
+ *        registered in the workbook. Zero for workbooks that do not
+ *        declare any named styles.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ */
+FM_API fm_status_t fm_styles_get_cell_style_count(fm_workbook_t* wb, uint32_t* out_count);
+
+/**
+ * @brief Reads the `index`-th named cell style. The returned `name`
+ *        borrows storage owned by the workbook; see
+ *        `fm_cell_style_record_t` for lifetime rules.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `index >= cell_styles.size()`.
+ */
+FM_API fm_status_t fm_styles_get_cell_style(fm_workbook_t* wb, uint32_t index, fm_cell_style_record_t* out);
+
+/**
+ * @brief Returns the number of `<cellStyleXfs>` records — the named-
+ *        style xf table. This table is independent of `cellXfs` and
+ *        is referenced by `fm_cell_style_record_t::xf_id`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ */
+FM_API fm_status_t fm_styles_get_cell_style_xf_count(fm_workbook_t* wb, uint32_t* out_count);
+
+/**
+ * @brief Reads the `index`-th `<cellStyleXfs>` record (named-style xf
+ *        table). Output shape mirrors `fm_styles_get_cell_xf`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `index >= cell_style_xfs.size()`.
+ */
+FM_API fm_status_t fm_styles_get_cell_style_xf(fm_workbook_t* wb, uint32_t index, fm_cell_xf* out);
 
 /**
  * @brief Adds a font record to the workbook's styles table, deduplicating

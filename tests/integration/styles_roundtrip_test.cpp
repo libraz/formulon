@@ -141,6 +141,79 @@ TEST(StylesRoundTrip, PreservesFontFillBorderAndCellXfs) {
   EXPECT_EQ(b2->xf_index, 2U);
 }
 
+TEST(StylesRoundTrip, PreservesNamedCellStyles) {
+  Workbook src = Workbook::create();
+  io::StylesTable styles;
+  // The cellXfs table needs at least one default record; the writer
+  // already inserts one for empty input but we exercise the named-style
+  // tables alongside the per-cell table here.
+  styles.fonts.emplace_back();
+  styles.fills.emplace_back();
+  styles.borders.emplace_back();
+  styles.cell_xfs.emplace_back();
+
+  // Two named-style xf records: default + one with bold font (font_index
+  // wraps to 0 because we did not push any extra fonts; we re-use the
+  // default font index just to verify the record persists).
+  io::CellXf style_xf0;
+  io::CellXf style_xf1;
+  style_xf1.horizontal_align = 2;  // center
+  style_xf1.wrap_text = true;
+  styles.cell_style_xfs.push_back(style_xf0);
+  styles.cell_style_xfs.push_back(style_xf1);
+
+  // Two named cell styles: built-in "Normal" pointing at xf 0, and a
+  // custom user style pointing at xf 1 with hidden=true.
+  io::CellStyleRecord normal;
+  normal.name = "Normal";
+  normal.xf_id = 0;
+  normal.builtin_id = 0;  // built-in "Normal"
+  styles.cell_styles.push_back(normal);
+  io::CellStyleRecord custom;
+  custom.name = "Project Heading";
+  custom.xf_id = 1;
+  custom.hidden = true;  // hidden from the style picker
+  custom.custom_builtin = true;
+  styles.cell_styles.push_back(custom);
+
+  src.set_styles(std::move(styles));
+
+  auto save_or = src.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << "save failed: " << save_or.error().message;
+
+  auto load_or = io::read_ooxml(SpanOf(save_or.value()));
+  ASSERT_TRUE(static_cast<bool>(load_or)) << "read failed: " << load_or.error().message;
+
+  const io::StylesTable& rt = load_or.value().workbook.styles();
+
+  ASSERT_EQ(rt.cell_style_xfs.size(), 2U);
+  EXPECT_EQ(rt.cell_style_xfs[1].horizontal_align, 2U);
+  EXPECT_TRUE(rt.cell_style_xfs[1].wrap_text);
+
+  ASSERT_EQ(rt.cell_styles.size(), 2U);
+  EXPECT_EQ(rt.cell_styles[0].name, "Normal");
+  EXPECT_EQ(rt.cell_styles[0].xf_id, 0U);
+  EXPECT_EQ(rt.cell_styles[0].builtin_id, 0U);
+  EXPECT_FALSE(rt.cell_styles[0].hidden);
+
+  EXPECT_EQ(rt.cell_styles[1].name, "Project Heading");
+  EXPECT_EQ(rt.cell_styles[1].xf_id, 1U);
+  EXPECT_EQ(rt.cell_styles[1].builtin_id, io::CellStyleRecord::kBuiltinIdNone);
+  EXPECT_TRUE(rt.cell_styles[1].hidden);
+  EXPECT_TRUE(rt.cell_styles[1].custom_builtin);
+}
+
+TEST(StylesRoundTrip, EmptyWorkbookHasNoNamedStyles) {
+  Workbook src = Workbook::create();
+  auto save_or = src.save();
+  ASSERT_TRUE(static_cast<bool>(save_or));
+  auto load_or = io::read_ooxml(SpanOf(save_or.value()));
+  ASSERT_TRUE(static_cast<bool>(load_or));
+  const io::StylesTable& rt = load_or.value().workbook.styles();
+  EXPECT_TRUE(rt.cell_styles.empty());
+  EXPECT_TRUE(rt.cell_style_xfs.empty());
+}
+
 TEST(StylesRoundTrip, EmptyWorkbookHasDefaultStyles) {
   Workbook src = Workbook::create();
   auto save_or = src.save();

@@ -8,7 +8,11 @@
 // inside `<numFmts>`).
 //
 // Section ordering matches the OOXML schema requirement:
-//   numFmts -> fonts -> fills -> borders -> cellXfs.
+//   numFmts -> fonts -> fills -> borders -> cellStyleXfs -> cellXfs ->
+//   cellStyles.
+//
+// `cellStyleXfs` and `cellStyles` are emitted only when non-empty;
+// freshly-created or never-named-styled workbooks omit both.
 //
 // Design references:
 //   * src/io/styles_reader.h (sister reader; canonical schema)

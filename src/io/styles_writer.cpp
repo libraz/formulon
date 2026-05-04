@@ -504,6 +504,56 @@ void AppendBorders(std::string& out, const StylesTable& table) {
   out.append("  </borders>\n");
 }
 
+void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id) {
+  out.append("    <xf numFmtId=\"");
+  AppendUint(out, xf.num_fmt_id);
+  out.append("\" fontId=\"");
+  AppendUint(out, xf.font_index);
+  out.append("\" fillId=\"");
+  AppendUint(out, xf.fill_index);
+  out.append("\" borderId=\"");
+  AppendUint(out, xf.border_index);
+  out.append("\"");
+  if (emit_xf_id) {
+    out.append(" xfId=\"0\"");
+  }
+  const char* halign = HorizontalAlignName(xf.horizontal_align);
+  const char* valign = VerticalAlignName(xf.vertical_align);
+  const bool has_alignment = halign != nullptr || valign != nullptr || xf.wrap_text;
+  if (has_alignment) {
+    out.append("><alignment");
+    if (halign != nullptr) {
+      out.append(" horizontal=\"");
+      out.append(halign);
+      out.append("\"");
+    }
+    if (valign != nullptr) {
+      out.append(" vertical=\"");
+      out.append(valign);
+      out.append("\"");
+    }
+    if (xf.wrap_text) {
+      out.append(" wrapText=\"1\"");
+    }
+    out.append("/></xf>\n");
+  } else {
+    out.append("/>\n");
+  }
+}
+
+void AppendCellStyleXfs(std::string& out, const StylesTable& table) {
+  if (table.cell_style_xfs.empty()) {
+    return;
+  }
+  out.append("  <cellStyleXfs count=\"");
+  AppendUint(out, table.cell_style_xfs.size());
+  out.append("\">\n");
+  for (const CellXf& xf : table.cell_style_xfs) {
+    AppendXfBody(out, xf, /*emit_xf_id=*/false);
+  }
+  out.append("  </cellStyleXfs>\n");
+}
+
 void AppendCellXfs(std::string& out, const StylesTable& table) {
   const std::size_t count = table.cell_xfs.empty() ? std::size_t{1} : table.cell_xfs.size();
   out.append("  <cellXfs count=\"");
@@ -513,40 +563,44 @@ void AppendCellXfs(std::string& out, const StylesTable& table) {
     out.append("    <xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/>\n");
   } else {
     for (const CellXf& xf : table.cell_xfs) {
-      out.append("    <xf numFmtId=\"");
-      AppendUint(out, xf.num_fmt_id);
-      out.append("\" fontId=\"");
-      AppendUint(out, xf.font_index);
-      out.append("\" fillId=\"");
-      AppendUint(out, xf.fill_index);
-      out.append("\" borderId=\"");
-      AppendUint(out, xf.border_index);
-      out.append("\" xfId=\"0\"");
-      const char* halign = HorizontalAlignName(xf.horizontal_align);
-      const char* valign = VerticalAlignName(xf.vertical_align);
-      const bool has_alignment = halign != nullptr || valign != nullptr || xf.wrap_text;
-      if (has_alignment) {
-        out.append("><alignment");
-        if (halign != nullptr) {
-          out.append(" horizontal=\"");
-          out.append(halign);
-          out.append("\"");
-        }
-        if (valign != nullptr) {
-          out.append(" vertical=\"");
-          out.append(valign);
-          out.append("\"");
-        }
-        if (xf.wrap_text) {
-          out.append(" wrapText=\"1\"");
-        }
-        out.append("/></xf>\n");
-      } else {
-        out.append("/>\n");
-      }
+      AppendXfBody(out, xf, /*emit_xf_id=*/true);
     }
   }
   out.append("  </cellXfs>\n");
+}
+
+void AppendCellStyles(std::string& out, const StylesTable& table) {
+  if (table.cell_styles.empty()) {
+    return;
+  }
+  out.append("  <cellStyles count=\"");
+  AppendUint(out, table.cell_styles.size());
+  out.append("\">\n");
+  for (const CellStyleRecord& cs : table.cell_styles) {
+    out.append("    <cellStyle name=\"");
+    AppendXmlEscaped(out, cs.name);
+    out.append("\" xfId=\"");
+    AppendUint(out, cs.xf_id);
+    out.append("\"");
+    if (cs.builtin_id != CellStyleRecord::kBuiltinIdNone) {
+      out.append(" builtinId=\"");
+      AppendUint(out, cs.builtin_id);
+      out.append("\"");
+    }
+    if (cs.i_level != 0U) {
+      out.append(" iLevel=\"");
+      AppendUint(out, cs.i_level);
+      out.append("\"");
+    }
+    if (cs.hidden) {
+      out.append(" hidden=\"1\"");
+    }
+    if (cs.custom_builtin) {
+      out.append(" customBuiltin=\"1\"");
+    }
+    out.append("/>\n");
+  }
+  out.append("  </cellStyles>\n");
 }
 
 }  // namespace
@@ -569,7 +623,9 @@ std::string write_styles(const StylesTable& table) {
   AppendFonts(out, table);
   AppendFills(out, table);
   AppendBorders(out, table);
+  AppendCellStyleXfs(out, table);
   AppendCellXfs(out, table);
+  AppendCellStyles(out, table);
   out.append("</styleSheet>\n");
   return out;
 }

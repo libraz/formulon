@@ -1563,6 +1563,81 @@ class JsWorkbook {
     return n;
   }
 
+  /// Returns the number of named cell styles registered.
+  uint32_t cellStyleCount() const {
+    if (handle_ == nullptr) {
+      return 0U;
+    }
+    uint32_t n = 0;
+    if (fm_styles_get_cell_style_count(handle_, &n) != 0) {
+      return 0U;
+    }
+    return n;
+  }
+
+  /// Returns the number of `<cellStyleXfs>` records (named-style xf table).
+  uint32_t cellStyleXfCount() const {
+    if (handle_ == nullptr) {
+      return 0U;
+    }
+    uint32_t n = 0;
+    if (fm_styles_get_cell_style_xf_count(handle_, &n) != 0) {
+      return 0U;
+    }
+    return n;
+  }
+
+  /// Returns the named cell style at `index`. Shape:
+  /// `{ status, name, xfId, builtinId, iLevel, hidden, customBuiltin }`.
+  /// `builtinId` is `0xFFFFFFFF` (`FM_CELL_STYLE_BUILTIN_ID_NONE`) for
+  /// custom (non-built-in) entries.
+  emscripten::val getCellStyle(uint32_t index) const {
+    emscripten::val o = emscripten::val::object();
+    if (handle_ == nullptr) {
+      o.set("status", error_status(7000));
+      return o;
+    }
+    fm_cell_style_record_t cs{};
+    fm_status_t rc = fm_styles_get_cell_style(handle_, index, &cs);
+    if (rc != 0) {
+      o.set("status", error_status(rc));
+      return o;
+    }
+    o.set("status", ok_status());
+    o.set("name", std::string(cs.name != nullptr ? cs.name : ""));
+    o.set("xfId", cs.xf_id);
+    o.set("builtinId", cs.builtin_id);
+    o.set("iLevel", cs.i_level);
+    o.set("hidden", cs.hidden != 0);
+    o.set("customBuiltin", cs.custom_builtin != 0);
+    return o;
+  }
+
+  /// Returns the `<cellStyleXfs>` record at `index`. Shape mirrors
+  /// `getCellXf`.
+  emscripten::val getCellStyleXf(uint32_t index) const {
+    emscripten::val o = emscripten::val::object();
+    if (handle_ == nullptr) {
+      o.set("status", error_status(7000));
+      return o;
+    }
+    fm_cell_xf xf{};
+    fm_status_t rc = fm_styles_get_cell_style_xf(handle_, index, &xf);
+    if (rc != 0) {
+      o.set("status", error_status(rc));
+      return o;
+    }
+    o.set("status", ok_status());
+    o.set("fontIndex", xf.font_index);
+    o.set("fillIndex", xf.fill_index);
+    o.set("borderIndex", xf.border_index);
+    o.set("numFmtId", static_cast<uint32_t>(xf.num_fmt_id));
+    o.set("horizontalAlign", static_cast<uint32_t>(xf.horizontal_align));
+    o.set("verticalAlign", static_cast<uint32_t>(xf.vertical_align));
+    o.set("wrapText", xf.wrap_text != 0);
+    return o;
+  }
+
   // ---- Sheet UI features (merges, hyperlinks, comments, validations) ------
   // Each accessor returns a JS-friendly value (Array<...> or null) so JS
   // callers don't need to step through count + getter pairs.
@@ -2416,6 +2491,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("canonicalizeFunctionName", &JsWorkbook::canonicalizeFunctionName)
       .function("cellAt", &JsWorkbook::cellAt)
       .function("cellCount", &JsWorkbook::cellCount)
+      .function("cellStyleCount", &JsWorkbook::cellStyleCount)
+      .function("cellStyleXfCount", &JsWorkbook::cellStyleXfCount)
       .function("clearConditionalFormats", &JsWorkbook::clearConditionalFormats)
       .function("clearHyperlinks", &JsWorkbook::clearHyperlinks)
       .function("clearMerges", &JsWorkbook::clearMerges)
@@ -2431,6 +2508,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("functionMetadata", &JsWorkbook::functionMetadata)
       .function("functionNames", &JsWorkbook::functionNames)
       .function("getBorder", &JsWorkbook::getBorder)
+      .function("getCellStyle", &JsWorkbook::getCellStyle)
+      .function("getCellStyleXf", &JsWorkbook::getCellStyleXf)
       .function("getCellXf", &JsWorkbook::getCellXf)
       .function("getCellXfIndex", &JsWorkbook::getCellXfIndex)
       .function("getComment", &JsWorkbook::getComment)

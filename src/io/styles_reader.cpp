@@ -334,6 +334,34 @@ void ReadNumFmts(const pugi::xml_node& root, StylesTable& table) {
   }
 }
 
+void ParseCellXfNode(const pugi::xml_node& xf, CellXf* rec) {
+  rec->font_index = xf.attribute("fontId").as_uint(0U);
+  rec->fill_index = xf.attribute("fillId").as_uint(0U);
+  rec->border_index = xf.attribute("borderId").as_uint(0U);
+  rec->num_fmt_id = static_cast<std::uint16_t>(xf.attribute("numFmtId").as_uint(0U));
+  pugi::xml_node align = xf.child("alignment");
+  if (align) {
+    rec->horizontal_align = ParseHorizontalAlign(align.attribute("horizontal").value());
+    rec->vertical_align = ParseVerticalAlign(align.attribute("vertical").value());
+    rec->wrap_text = align.attribute("wrapText").as_bool(false);
+  } else {
+    // Default vertical alignment is "bottom" (ordinal 2) per OOXML.
+    rec->vertical_align = 2;
+  }
+}
+
+void ReadCellStyleXfs(const pugi::xml_node& root, StylesTable& table) {
+  pugi::xml_node xfs = root.child("cellStyleXfs");
+  if (!xfs) {
+    return;
+  }
+  for (pugi::xml_node xf = xfs.child("xf"); xf; xf = xf.next_sibling("xf")) {
+    CellXf rec;
+    ParseCellXfNode(xf, &rec);
+    table.cell_style_xfs.push_back(rec);
+  }
+}
+
 void ReadCellXfs(const pugi::xml_node& root, StylesTable& table) {
   pugi::xml_node xfs = root.child("cellXfs");
   if (!xfs) {
@@ -342,25 +370,32 @@ void ReadCellXfs(const pugi::xml_node& root, StylesTable& table) {
   }
   for (pugi::xml_node xf = xfs.child("xf"); xf; xf = xf.next_sibling("xf")) {
     CellXf rec;
-    rec.font_index = xf.attribute("fontId").as_uint(0U);
-    rec.fill_index = xf.attribute("fillId").as_uint(0U);
-    rec.border_index = xf.attribute("borderId").as_uint(0U);
-    rec.num_fmt_id = static_cast<std::uint16_t>(xf.attribute("numFmtId").as_uint(0U));
-    pugi::xml_node align = xf.child("alignment");
-    if (align) {
-      rec.horizontal_align = ParseHorizontalAlign(align.attribute("horizontal").value());
-      rec.vertical_align = ParseVerticalAlign(align.attribute("vertical").value());
-      rec.wrap_text = align.attribute("wrapText").as_bool(false);
-    } else {
-      // Default vertical alignment is "bottom" (ordinal 2) per OOXML.
-      rec.vertical_align = 2;
-    }
+    ParseCellXfNode(xf, &rec);
     table.cell_xfs.push_back(rec);
   }
   if (table.cell_xfs.empty()) {
     CellXf def;
     def.vertical_align = 2;
     table.cell_xfs.push_back(def);
+  }
+}
+
+void ReadCellStyles(const pugi::xml_node& root, StylesTable& table) {
+  pugi::xml_node styles = root.child("cellStyles");
+  if (!styles) {
+    return;
+  }
+  for (pugi::xml_node cs = styles.child("cellStyle"); cs; cs = cs.next_sibling("cellStyle")) {
+    CellStyleRecord rec;
+    rec.name = cs.attribute("name").value();
+    rec.xf_id = cs.attribute("xfId").as_uint(0U);
+    if (pugi::xml_attribute builtin_attr = cs.attribute("builtinId"); builtin_attr) {
+      rec.builtin_id = builtin_attr.as_uint(CellStyleRecord::kBuiltinIdNone);
+    }
+    rec.i_level = cs.attribute("iLevel").as_uint(0U);
+    rec.hidden = cs.attribute("hidden").as_bool(false);
+    rec.custom_builtin = cs.attribute("customBuiltin").as_bool(false);
+    table.cell_styles.push_back(std::move(rec));
   }
 }
 
@@ -386,7 +421,9 @@ Expected<StylesTable, Error> read_styles(const std::vector<std::uint8_t>& styles
   ReadFonts(root, table);
   ReadFills(root, table);
   ReadBorders(root, table);
+  ReadCellStyleXfs(root, table);
   ReadCellXfs(root, table);
+  ReadCellStyles(root, table);
   return table;
 }
 

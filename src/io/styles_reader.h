@@ -101,6 +101,27 @@ struct CellXf {
   bool wrap_text = false;
 };
 
+/// One `<cellStyle>` entry inside `<cellStyles>`. Defines a named cell
+/// style ("Normal", "Heading 1", custom user names, etc.) that points
+/// at a record in the parallel `<cellStyleXfs>` table via `xf_id`.
+///
+/// `builtin_id` is the OOXML built-in style ordinal (`0..47`); the
+/// sentinel `kBuiltinIdNone` indicates the style is custom and the
+/// attribute should be omitted on write. `i_level` is the outline level
+/// for built-in heading styles (0 for everything else).
+struct CellStyleRecord {
+  /// Sentinel for "no `builtinId` attribute" — picked above the OOXML
+  /// 0..47 built-in range so it cannot collide with a real id.
+  static constexpr std::uint32_t kBuiltinIdNone = 0xFFFFFFFFU;
+
+  std::string name;
+  std::uint32_t xf_id = 0;
+  std::uint32_t builtin_id = kBuiltinIdNone;
+  std::uint32_t i_level = 0;
+  bool hidden = false;
+  bool custom_builtin = false;
+};
+
 /// Flat in-memory representation of the parsed `xl/styles.xml`.
 ///
 /// Empty-document semantics: a `<styleSheet/>` (or any document missing
@@ -118,6 +139,16 @@ struct StylesTable {
   /// points into this vector.
   std::vector<std::string> num_fmt_strings;
   std::vector<CellXf> cell_xfs;
+  /// `<cellStyleXfs>` records — the named-style xf table. Empty when
+  /// the workbook does not use named cell styles. Same shape as
+  /// `cell_xfs`; the two tables are kept distinct because OOXML
+  /// indexes them independently.
+  std::vector<CellXf> cell_style_xfs;
+  /// `<cellStyles>` records — named cell styles ("Normal", "Heading 1",
+  /// custom user styles). Each entry's `xf_id` indexes into
+  /// `cell_style_xfs`. Empty when the workbook does not declare any
+  /// named cell styles.
+  std::vector<CellStyleRecord> cell_styles;
 };
 
 /// Parses an OOXML styles part.
@@ -129,9 +160,9 @@ struct StylesTable {
 ///   * Sections present but empty (`<fonts count="0"/>`) similarly fall
 ///     back to the single-default-record shape.
 ///   * Children other than the recognised set (`numFmts`, `fonts`,
-///     `fills`, `borders`, `cellXfs`) are accepted but ignored —
-///     forward compatibility for `<dxfs>`, `<tableStyles>`, `<extLst>`,
-///     `<cellStyleXfs>`, and so on.
+///     `fills`, `borders`, `cellStyleXfs`, `cellXfs`, `cellStyles`)
+///     are accepted but ignored — forward compatibility for `<dxfs>`,
+///     `<tableStyles>`, `<extLst>`, and so on.
 ///   * Unknown attributes inside a recognised element are ignored.
 ///
 /// Errors:

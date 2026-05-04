@@ -589,6 +589,24 @@ export interface NumFmtResult {
   formatCode: string;
 }
 
+/** Return type of `Workbook.getCellStyle(index)`. Mirrors
+ *  `formulon::io::CellStyleRecord`. `xfId` indexes into the named-style
+ *  xf table reachable via `Workbook.getCellStyleXf(...)`. */
+export interface CellStyleResult {
+  status: Status;
+  /** Display name (e.g. "Normal", "Heading 1", or a user-defined label). */
+  name: string;
+  /** Index into the `<cellStyleXfs>` table. */
+  xfId: number;
+  /** OOXML built-in style ordinal (`0..47`), or `0xFFFFFFFF` for custom
+   *  entries that did not carry a `builtinId` attribute. */
+  builtinId: number;
+  /** Outline level for built-in heading styles (0 otherwise). */
+  iLevel: number;
+  hidden: boolean;
+  customBuiltin: boolean;
+}
+
 /** Return type of `Workbook.addFont/Fill/Border/Xf(...)`. The
  *  add-functions deduplicate against existing entries via linear
  *  search; `index` is either the matched index or the freshly-appended
@@ -795,6 +813,21 @@ export interface Workbook {
   borderCount(): number;
   /** Returns the number of `<xf>` records currently registered. */
   xfCount(): number;
+
+  /** Returns the number of named cell styles (`<cellStyle>` entries)
+   *  registered. Zero for workbooks that do not declare any named
+   *  styles. */
+  cellStyleCount(): number;
+  /** Returns the number of `<cellStyleXfs>` records — the named-style
+   *  xf table referenced by `CellStyleResult.xfId`. Independent of the
+   *  per-cell `cellXfs` table. */
+  cellStyleXfCount(): number;
+  /** Returns the named cell style at `index`. Out-of-range indices
+   *  surface `kInvalidArgument` via `status`. */
+  getCellStyle(index: number): CellStyleResult;
+  /** Returns the named-style xf record at `index`. Output shape mirrors
+   *  `getCellXf`. */
+  getCellStyleXf(index: number): CellXfResult;
 
   /** Adds a merge range to `sheet`. */
   addMerge(sheet: number, range: MergeRange): Status;

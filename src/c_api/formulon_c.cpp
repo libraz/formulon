@@ -2589,6 +2589,71 @@ extern "C" fm_status_t fm_styles_get_cell_xf_count(fm_workbook_t* wb, uint32_t* 
   return 0;
 }
 
+extern "C" fm_status_t fm_styles_get_cell_style_count(fm_workbook_t* wb, uint32_t* out_count) {
+  clear_last_error();
+  if (wb == nullptr || out_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_styles_get_cell_style_count: NULL argument");
+  }
+  *out_count = static_cast<uint32_t>(wb->workbook().styles().cell_styles.size());
+  return 0;
+}
+
+extern "C" fm_status_t fm_styles_get_cell_style(fm_workbook_t* wb, uint32_t index, fm_cell_style_record_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_styles_get_cell_style: NULL argument");
+  }
+  const formulon::io::StylesTable& styles = wb->workbook().styles();
+  if (index >= styles.cell_styles.size()) {
+    return set_binding_error(
+        formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_get_cell_style: index out of range",
+        "index=" + std::to_string(index) + " cell_styles_count=" + std::to_string(styles.cell_styles.size()));
+  }
+  const formulon::io::CellStyleRecord& cs = styles.cell_styles[index];
+  out->name = cs.name.c_str();
+  out->xf_id = cs.xf_id;
+  out->builtin_id = cs.builtin_id;
+  out->i_level = cs.i_level;
+  out->hidden = cs.hidden ? 1 : 0;
+  out->custom_builtin = cs.custom_builtin ? 1 : 0;
+  return 0;
+}
+
+extern "C" fm_status_t fm_styles_get_cell_style_xf_count(fm_workbook_t* wb, uint32_t* out_count) {
+  clear_last_error();
+  if (wb == nullptr || out_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_styles_get_cell_style_xf_count: NULL argument");
+  }
+  *out_count = static_cast<uint32_t>(wb->workbook().styles().cell_style_xfs.size());
+  return 0;
+}
+
+extern "C" fm_status_t fm_styles_get_cell_style_xf(fm_workbook_t* wb, uint32_t index, fm_cell_xf* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_styles_get_cell_style_xf: NULL argument");
+  }
+  const formulon::io::StylesTable& styles = wb->workbook().styles();
+  if (index >= styles.cell_style_xfs.size()) {
+    return set_binding_error(
+        formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_get_cell_style_xf: index out of range",
+        "index=" + std::to_string(index) + " cell_style_xfs_count=" + std::to_string(styles.cell_style_xfs.size()));
+  }
+  const formulon::io::CellXf& xf = styles.cell_style_xfs[index];
+  out->font_index = xf.font_index;
+  out->fill_index = xf.fill_index;
+  out->border_index = xf.border_index;
+  out->num_fmt_id = xf.num_fmt_id;
+  out->horizontal_align = xf.horizontal_align;
+  out->vertical_align = xf.vertical_align;
+  out->wrap_text = xf.wrap_text ? 1 : 0;
+  return 0;
+}
+
 namespace {
 
 /// Field-for-field equality for the C++ side `FontRecord`. Excluded
