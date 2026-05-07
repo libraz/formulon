@@ -119,6 +119,30 @@ std::string unescape_literal(std::string_view pattern) {
   return out;
 }
 
+std::string fold_fullwidth_digits_only(std::string_view input) {
+  std::string out;
+  out.reserve(input.size());
+  for (std::size_t i = 0; i < input.size();) {
+    std::size_t bytes = 0;
+    const std::uint32_t cp = decode_utf8_step(input, i, &bytes);
+    if (cp >= 0xFF10u && cp <= 0xFF19u) {
+      out.push_back(static_cast<char>('0' + (cp - 0xFF10u)));
+      i += bytes;
+      continue;
+    }
+    out.append(input.substr(i, bytes));
+    i += bytes;
+  }
+  return out;
+}
+
+std::string fold_criteria_text_for_profile(std::string_view input, ExcelProfile profile) {
+  if (uses_mac_jp_text_folding(profile)) {
+    return fold_jp_text(input);
+  }
+  return fold_fullwidth_digits_only(input);
+}
+
 }  // namespace
 
 bool scan_has_wildcard(std::string_view rhs) {
@@ -584,7 +608,7 @@ bool apply_ordering(CriteriaOp op, int cmp) {
   }
 }
 
-bool matches_text(const Value& cell, const ParsedCriterion& c) {
+bool matches_text(const Value& cell, const ParsedCriterion& c, ExcelProfile profile) {
   // Project the cell to its text rendering. `coerce_to_text` yields the
   // Excel-visible spelling for numbers / bools and passes Text through; a
   // failure (unsupported kind) falls back to non-match. Blank becomes "".
@@ -603,7 +627,7 @@ bool matches_text(const Value& cell, const ParsedCriterion& c) {
   // happened earlier on the original raw RHS, so a full-width ＊ stays
   // un-flagged and folds to a literal `*` byte for comparison rather than
   // gaining wildcard semantics.
-  const std::string cell_folded = fold_jp_text(cell_text);
+  const std::string cell_folded = fold_criteria_text_for_profile(cell_text, profile);
 
   switch (c.op) {
     case CriteriaOp::Eq: {
@@ -627,10 +651,11 @@ bool matches_text(const Value& cell, const ParsedCriterion& c) {
         if (cell_text.empty()) {
           return false;
         }
-        const std::string rhs_folded = fold_jp_text(rhs);
+        const std::string rhs_folded = fold_criteria_text_for_profile(rhs, profile);
         return wildcard_match(rhs_folded, cell_folded);
       }
-      const std::string literal = fold_jp_text(unescape_literal(rhs));
+      const std::string unescaped = unescape_literal(rhs);
+      const std::string literal = fold_criteria_text_for_profile(unescaped, profile);
       if (c.prefix_match) {
         // D-function "begins-with" semantics: cell text starts with
         // the literal (case-insensitive ASCII). Per Excel docs, the
@@ -655,10 +680,11 @@ bool matches_text(const Value& cell, const ParsedCriterion& c) {
         if (cell_text.empty()) {
           return true;
         }
-        const std::string rhs_folded = fold_jp_text(rhs);
+        const std::string rhs_folded = fold_criteria_text_for_profile(rhs, profile);
         return !wildcard_match(rhs_folded, cell_folded);
       }
-      const std::string literal = fold_jp_text(unescape_literal(rhs));
+      const std::string unescaped = unescape_literal(rhs);
+      const std::string literal = fold_criteria_text_for_profile(unescaped, profile);
       if (c.prefix_match) {
         // D-function "does-NOT-begin-with" semantics: negation of the
         // prefix test. Reachable only via `parse_criterion_dfunc`, and
@@ -681,7 +707,7 @@ bool matches_text(const Value& cell, const ParsedCriterion& c) {
       // Wildcards in ordering ops are literal — Excel does not interpret
       // `*`/`?` for comparison. Fold both sides for ja-JP parity, then
       // pass through the case-insensitive compare.
-      const std::string rhs_folded = fold_jp_text(rhs);
+      const std::string rhs_folded = fold_criteria_text_for_profile(rhs, profile);
       const int cmp = strings::case_insensitive_compare(cell_folded, rhs_folded);
       return apply_ordering(c.op, cmp);
     }
@@ -752,7 +778,7 @@ bool matches_numeric(const Value& cell, const ParsedCriterion& c) {
 
 }  // namespace
 
-bool matches_criterion(const Value& cell, const ParsedCriterion& c) {
+bool matches_criterion(const Value& cell, const ParsedCriterion& c, ExcelProfile profile) {
   // Error criterion (e.g. `COUNTIF(range, #N/A)`): match only cells whose
   // error code is identical. Mirrors Excel 365 which treats an error value
   // passed as the criterion as a filter over error cells rather than
@@ -825,7 +851,11 @@ bool matches_criterion(const Value& cell, const ParsedCriterion& c) {
   if (c.rhs_is_number) {
     return matches_numeric(cell, c);
   }
-  return matches_text(cell, c);
+  return matches_text(cell, c, profile);
+}
+
+bool matches_criterion(const Value& cell, const ParsedCriterion& c) {
+  return matches_criterion(cell, c, default_excel_profile());
 }
 
 }  // namespace eval

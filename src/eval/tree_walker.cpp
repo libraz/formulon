@@ -189,6 +189,24 @@ std::string_view strip_future_prefix(std::string_view name) noexcept {
   return name;
 }
 
+bool is_win_unavailable_function(std::string_view name) noexcept {
+  constexpr std::string_view kNames[] = {
+      "BYCOL",      "BYROW",       "CHOOSECOLS", "CHOOSEROWS", "DROP",         "EXPAND",
+      "FILTER",     "GROUPBY",     "HSTACK",      "ISOMITTED",    "MAKEARRAY", "MAP",
+      "PERCENTOF",  "PIVOTBY",     "REDUCE",      "REGEXEXTRACT", "REGEXREPLACE",
+      "REGEXTEST",  "SCAN",        "SEQUENCE",    "SORT",         "SORTBY",    "TAKE",
+      "TEXTAFTER",  "TEXTBEFORE",  "TEXTSPLIT",   "TOCOL",        "TOROW",     "TRIMRANGE",
+      "UNIQUE",     "VALUETOTEXT", "VSTACK",      "WRAPCOLS",     "WRAPROWS",  "XMATCH",
+      "XLOOKUP",
+  };
+  for (std::string_view candidate : kNames) {
+    if (strings::case_insensitive_eq(name, candidate)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Invokes a runtime LambdaValue with the given argument-AST accessor and
 // arity. Shared between the `LambdaCall` AST case (a parser-emitted IIFE or
 // curried call) and the name-bound dispatch path in `dispatch_call` (where
@@ -249,6 +267,10 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
                     const EvalContext& ctx) {
   const std::string_view name = strip_future_prefix(node.as_call_name());
   const std::uint32_t arity = node.as_call_arity();
+
+  if (ctx.excel_profile().host == ExcelHost::kWin365 && is_win_unavailable_function(name)) {
+    return Value::error(ErrorCode::Name);
+  }
 
   // Name-bound lambda dispatch: when the formula text reads `f(x)` and `f`
   // resolves to a runtime `LambdaValue` via the lexical name environment
@@ -1185,6 +1207,16 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
             target.col = fc;
             return ctx.resolve_ref(target, arena, registry);
           }
+        } else if (ctx.excel_profile().host == ExcelHost::kWin365) {
+          if (fr >= r1 && fr <= r2 && fc >= c1 && fc <= c2) {
+            target.row = fr;
+            target.col = fc;
+            return ctx.resolve_ref(target, arena, registry);
+          }
+          return Value::error(ErrorCode::Value);
+        }
+        if (ctx.excel_profile().host == ExcelHost::kWin365) {
+          return Value::error(ErrorCode::Value);
         }
         // 2D range: alignment requires both axes; fall through to top-left.
       }
@@ -1362,6 +1394,9 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
     }
 
     case parser::NodeKind::LetBinding: {
+      if (ctx.excel_profile().host == ExcelHost::kWin365) {
+        return Value::error(ErrorCode::Name);
+      }
       // Sequential (left-to-right) bind-then-body. Excel semantics:
       //   * Each binding initialiser evaluates in the scope of previously
       //     bound names, so `LET(x, 1, y, x+2, y)` returns 3.
@@ -1497,6 +1532,9 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
     }
 
     case parser::NodeKind::Lambda: {
+      if (ctx.excel_profile().host == ExcelHost::kWin365) {
+        return Value::error(ErrorCode::Name);
+      }
       // Build a runtime closure capturing the current name environment so a
       // body using outer LET-bound names (e.g. `LET(y, 100, LAMBDA(x, x+y))`)
       // sees `y` at call time even though the LET frame has gone out of
@@ -1543,6 +1581,9 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
     }
 
     case parser::NodeKind::LambdaCall: {
+      if (ctx.excel_profile().host == ExcelHost::kWin365) {
+        return Value::error(ErrorCode::Name);
+      }
       // Evaluate the callee expression. Excel rejects calling a non-lambda
       // with #VALUE! (e.g. `(1+2)(3)` — when the parser admits the form).
       const Value callee = eval_node(node.as_lambda_call_callee(), arena, registry, ctx);

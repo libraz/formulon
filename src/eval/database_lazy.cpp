@@ -82,7 +82,7 @@ bool resolve_table_arg(const parser::AstNode& arg_node, Arena& arena, const Func
 // `*out_col_index`. On failure writes the propagating error Value to
 // `*out_err` and returns `false`.
 bool resolve_field_column(const Value& field_value, const std::vector<Value>& db_cells, std::uint32_t db_cols,
-                          std::uint32_t* out_col_index, Value* out_err) {
+                          ExcelProfile profile, std::uint32_t* out_col_index, Value* out_err) {
   if (field_value.is_error()) {
     *out_err = field_value;
     return false;
@@ -112,8 +112,10 @@ bool resolve_field_column(const Value& field_value, const std::vector<Value>& db
     // `dsum_field_arg_halfwidth_vs_fullwidth_header` (expects #VALUE!,
     // i.e. no match) versus the hira/full-width-Latin/full-width-digit
     // sibling cases (which all match).
+    const bool jp_fold = uses_mac_jp_text_folding(profile);
     const std::string folded_needle =
-        fold_jp_text(field_value.as_text(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false);
+        jp_fold ? fold_jp_text(field_value.as_text(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false)
+                : std::string(field_value.as_text());
     for (std::uint32_t c = 0; c < db_cols; ++c) {
       const Value& hdr = db_cells[c];
       // Error / Blank / Bool / Number headers: use the text coercion for
@@ -124,7 +126,8 @@ bool resolve_field_column(const Value& field_value, const std::vector<Value>& db
         continue;
       }
       const std::string folded_hdr =
-          fold_jp_text(coerced.value(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false);
+          jp_fold ? fold_jp_text(coerced.value(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false)
+                  : coerced.value();
       if (strings::case_insensitive_eq(std::string_view(folded_hdr), std::string_view(folded_needle))) {
         *out_col_index = c;
         return true;
@@ -142,7 +145,8 @@ bool resolve_field_column(const Value& field_value, const std::vector<Value>& db
 // text matches `header_needle` (a single criteria-header cell) under
 // case-insensitive ASCII equality. Returns `db_cols` as a sentinel for
 // "no match"; callers treat that as a disjunct that cannot be satisfied.
-std::uint32_t find_db_column(const Value& header_needle, const std::vector<Value>& db_cells, std::uint32_t db_cols) {
+std::uint32_t find_db_column(const Value& header_needle, const std::vector<Value>& db_cells, std::uint32_t db_cols,
+                             ExcelProfile profile) {
   if (header_needle.is_blank()) {
     return db_cols;
   }
@@ -159,15 +163,18 @@ std::uint32_t find_db_column(const Value& header_needle, const std::vector<Value
   // `dsum_criteria_header_halfwidth_vs_fullwidth_db_header` (expects 0,
   // i.e. no match) versus the hira and full-width-Latin sibling cases
   // (which both match).
+  const bool jp_fold = uses_mac_jp_text_folding(profile);
   const std::string folded_needle =
-      fold_jp_text(needle_coerced.value(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false);
+      jp_fold ? fold_jp_text(needle_coerced.value(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false)
+              : needle_coerced.value();
   for (std::uint32_t c = 0; c < db_cols; ++c) {
     auto hdr_coerced = coerce_to_text(db_cells[c]);
     if (!hdr_coerced) {
       continue;
     }
     const std::string folded_hdr =
-        fold_jp_text(hdr_coerced.value(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false);
+        jp_fold ? fold_jp_text(hdr_coerced.value(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/false)
+                : hdr_coerced.value();
     if (strings::case_insensitive_eq(std::string_view(folded_hdr), std::string_view(folded_needle))) {
       return c;
     }
@@ -190,14 +197,14 @@ std::uint32_t find_db_column(const Value& header_needle, const std::vector<Value
 // (empty AND is true).
 bool record_matches_criterion_row(std::uint32_t r, std::uint32_t cr, const std::vector<Value>& db_cells,
                                   std::uint32_t db_cols, const std::vector<Value>& crit_cells,
-                                  std::uint32_t crit_cols) {
+                                  std::uint32_t crit_cols, ExcelProfile profile) {
   for (std::uint32_t j = 0; j < crit_cols; ++j) {
     const Value& cell = crit_cells[(static_cast<std::size_t>(cr) * crit_cols) + j];
     if (cell.is_blank()) {
       continue;
     }
     const Value& header = crit_cells[j];
-    const std::uint32_t db_col = find_db_column(header, db_cells, db_cols);
+    const std::uint32_t db_col = find_db_column(header, db_cells, db_cols, profile);
     if (db_col == db_cols) {
       // Criterion references a column the database does not have, and
       // the cell is non-blank. This disjunct cannot be satisfied.
@@ -210,7 +217,7 @@ bool record_matches_criterion_row(std::uint32_t r, std::uint32_t cr, const std::
     // other criterion shape (numeric, comparator-prefixed, wildcard,
     // error, blank).
     const ParsedCriterion parsed = parse_criterion_dfunc(cell);
-    if (!matches_criterion(db_cell, parsed)) {
+    if (!matches_criterion(db_cell, parsed, profile)) {
       return false;
     }
   }
@@ -224,12 +231,13 @@ bool record_matches_criterion_row(std::uint32_t r, std::uint32_t cr, const std::
 // 365 surfaces `#VALUE!` for that shape — see the `crit_rows < 2U` guard
 // in `resolve_common()`.
 bool record_matches(std::uint32_t r, const std::vector<Value>& db_cells, std::uint32_t db_cols,
-                    const std::vector<Value>& crit_cells, std::uint32_t crit_rows, std::uint32_t crit_cols) {
+                    const std::vector<Value>& crit_cells, std::uint32_t crit_rows, std::uint32_t crit_cols,
+                    ExcelProfile profile) {
   if (crit_rows < 2U) {
     return false;
   }
   for (std::uint32_t cr = 1; cr < crit_rows; ++cr) {
-    if (record_matches_criterion_row(r, cr, db_cells, db_cols, crit_cells, crit_cols)) {
+    if (record_matches_criterion_row(r, cr, db_cells, db_cols, crit_cells, crit_cols, profile)) {
       return true;
     }
   }
@@ -282,7 +290,7 @@ bool resolve_common(const parser::AstNode& call, Arena& arena, const FunctionReg
   // The `field` argument is a scalar; evaluate it eagerly so any error
   // in the subtree propagates with its real code.
   const Value field_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
-  if (!resolve_field_column(field_val, *out_db, *out_db_cols, out_field_col, out_err)) {
+  if (!resolve_field_column(field_val, *out_db, *out_db_cols, ctx.excel_profile(), out_field_col, out_err)) {
     return false;
   }
   if (!resolve_table_arg(call.as_call_arg(2), arena, registry, ctx, out_crit, out_crit_rows, out_crit_cols, out_err)) {
@@ -306,14 +314,14 @@ bool resolve_common(const parser::AstNode& call, Arena& arena, const FunctionReg
 std::vector<Value> collect_matching_field_values(const std::vector<Value>& db_cells, std::uint32_t db_rows,
                                                  std::uint32_t db_cols, const std::vector<Value>& crit_cells,
                                                  std::uint32_t crit_rows, std::uint32_t crit_cols,
-                                                 std::uint32_t field_col) {
+                                                 std::uint32_t field_col, ExcelProfile profile) {
   std::vector<Value> out;
   if (db_rows <= 1U) {
     return out;
   }
   out.reserve(db_rows - 1U);
   for (std::uint32_t r = 1; r < db_rows; ++r) {
-    if (record_matches(r, db_cells, db_cols, crit_cells, crit_rows, crit_cols)) {
+    if (record_matches(r, db_cells, db_cols, crit_cells, crit_rows, crit_cols, profile)) {
       out.push_back(db_cells[(static_cast<std::size_t>(r) * db_cols) + field_col]);
     }
   }
@@ -374,7 +382,7 @@ Value eval_dsum_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return err;
   }
   const std::vector<Value> vals =
-      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col);
+      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col, ctx.excel_profile());
   const std::vector<double> nums = collect_matching_numbers(vals);
   double sum = 0.0;
   for (double x : nums) {
@@ -398,7 +406,7 @@ Value eval_dcount_lazy(const parser::AstNode& call, Arena& arena, const Function
     return err;
   }
   const std::vector<Value> vals =
-      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col);
+      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col, ctx.excel_profile());
   const std::vector<double> nums = collect_matching_numbers(vals);
   return Value::number(static_cast<double>(nums.size()));
 }
@@ -418,7 +426,7 @@ Value eval_dcounta_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return err;
   }
   const std::vector<Value> vals =
-      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col);
+      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col, ctx.excel_profile());
   double count = 0.0;
   for (const Value& v : vals) {
     if (!v.is_blank()) {
@@ -443,7 +451,7 @@ Value eval_daverage_lazy(const parser::AstNode& call, Arena& arena, const Functi
     return err;
   }
   const std::vector<Value> vals =
-      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col);
+      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col, ctx.excel_profile());
   const std::vector<double> nums = collect_matching_numbers(vals);
   if (nums.empty()) {
     return Value::error(ErrorCode::Div0);
@@ -470,7 +478,7 @@ Value eval_dmax_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return err;
   }
   const std::vector<Value> vals =
-      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col);
+      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col, ctx.excel_profile());
   const std::vector<double> nums = collect_matching_numbers(vals);
   if (nums.empty()) {
     return Value::number(0.0);
@@ -499,7 +507,7 @@ Value eval_dmin_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return err;
   }
   const std::vector<Value> vals =
-      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col);
+      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col, ctx.excel_profile());
   const std::vector<double> nums = collect_matching_numbers(vals);
   if (nums.empty()) {
     return Value::number(0.0);
@@ -528,7 +536,7 @@ Value eval_dproduct_lazy(const parser::AstNode& call, Arena& arena, const Functi
     return err;
   }
   const std::vector<Value> vals =
-      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col);
+      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col, ctx.excel_profile());
   const std::vector<double> nums = collect_matching_numbers(vals);
   if (nums.empty()) {
     return Value::number(0.0);
@@ -595,7 +603,7 @@ Value aggregate_variance(const parser::AstNode& call, Arena& arena, const Functi
     return err;
   }
   const std::vector<Value> vals =
-      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col);
+      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col, ctx.excel_profile());
   const std::vector<double> nums = collect_matching_numbers(vals);
   double var = 0.0;
   if (!compute_variance(nums, sample, &var, &err)) {
@@ -648,7 +656,7 @@ Value eval_dget_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return err;
   }
   const std::vector<Value> vals =
-      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col);
+      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col, ctx.excel_profile());
   if (vals.empty()) {
     return Value::error(ErrorCode::Value);
   }

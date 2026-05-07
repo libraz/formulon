@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "eval/compat.h"
 #include "parser/reference.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -215,6 +216,16 @@ class EvalContext {
   /// scope is not yet wired.
   const NameEnv* name_env() const noexcept { return name_env_; }
 
+  /// Returns the active Excel formula compatibility profile.
+  ExcelProfile excel_profile() const noexcept { return excel_profile_; }
+
+  /// Returns a copy of `*this` with a different Excel formula profile.
+  EvalContext with_excel_profile(ExcelProfile profile) const noexcept {
+    EvalContext copy = *this;
+    copy.excel_profile_ = profile;
+    return copy;
+  }
+
   /// Returns a copy of `*this` whose `name_env()` is `env`. Used by the LET
   /// evaluator to extend scope for each binding initialiser and the body
   /// without touching the parent context (which may be shared between
@@ -339,6 +350,7 @@ class EvalContext {
   EvalState* state_ = nullptr;
   const Workbook* workbook_ = nullptr;
   const NameEnv* name_env_ = nullptr;
+  ExcelProfile excel_profile_ = default_excel_profile();
   // Spill-write authority for the current `evaluate()` call. Decoupled from
   // `current_sheet_` so that ad-hoc / read-only contexts (CLI eval, tests
   // that only resolve refs) cannot accidentally mutate the sheet.
@@ -390,6 +402,13 @@ class EvalContext::Builder {
   /// `EvalContext::with_mutable_sheet`.
   Builder& with_mutable_sheet(Sheet& sheet) noexcept {
     ctx_ = ctx_.with_mutable_sheet(sheet);
+    return *this;
+  }
+
+  /// Selects the full Excel formula compatibility profile. Mirrors
+  /// `EvalContext::with_excel_profile`.
+  Builder& with_excel_profile(ExcelProfile profile) noexcept {
+    ctx_ = ctx_.with_excel_profile(profile);
     return *this;
   }
 

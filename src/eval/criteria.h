@@ -31,6 +31,7 @@
 #include <string>
 #include <string_view>
 
+#include "eval/compat.h"
 #include "value.h"
 
 namespace formulon {
@@ -188,6 +189,11 @@ ParsedCriterion parse_criterion_dfunc(const Value& criterion);
 /// only matches one byte of a multibyte UTF-8 character. ASCII-only text
 /// behaves exactly like Excel.
 bool matches_criterion(const Value& cell, const ParsedCriterion& criterion);
+
+/// Profile-aware variant of `matches_criterion`. Windows Excel 365 ja-JP and
+/// Mac Excel 365 ja-JP differ for text folding in criteria comparisons;
+/// callers with an `EvalContext` should use this overload.
+bool matches_criterion(const Value& cell, const ParsedCriterion& criterion, ExcelProfile profile);
 
 /// Byte-level wildcard matcher. `pattern` may contain unescaped `*` / `?`
 /// and `~`-escaped literals; `text` is matched verbatim. Shared between

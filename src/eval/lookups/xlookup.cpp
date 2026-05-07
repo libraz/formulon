@@ -53,7 +53,7 @@ enum class XSearchMode : std::int8_t { FirstToLast = 1, LastToFirst = -1, Binary
 // Ref, Lambda) is incomparable and the function returns `false` so callers
 // can decide how to handle it. On success writes the sign to `*out_cmp` and
 // returns `true`.
-bool xlookup_cmp(const Value& cell, const Value& lookup, int* out_cmp) {
+bool xlookup_cmp(const Value& cell, const Value& lookup, ExcelProfile profile, int* out_cmp) {
   auto cmp_numeric = [](double x, double y) -> int {
     if (x < y) {
       return -1;
@@ -93,8 +93,12 @@ bool xlookup_cmp(const Value& cell, const Value& lookup, int* out_cmp) {
     // case-insensitive compare so kana variants order together in
     // XLOOKUP / XMATCH approximate paths. Full-width digits are NOT
     // folded for lookups (Mac asymmetry — see jp_fold.h).
-    *out_cmp = strings::case_insensitive_compare(fold_jp_text(cell.as_text(), /*fold_fullwidth_digits=*/false),
-                                                 fold_jp_text(lookup.as_text(), /*fold_fullwidth_digits=*/false));
+    if (uses_mac_jp_text_folding(profile)) {
+      *out_cmp = strings::case_insensitive_compare(fold_jp_text(cell.as_text(), /*fold_fullwidth_digits=*/false),
+                                                   fold_jp_text(lookup.as_text(), /*fold_fullwidth_digits=*/false));
+    } else {
+      *out_cmp = strings::case_insensitive_compare(cell.as_text(), lookup.as_text());
+    }
     return true;
   }
   if (cell_rank == 2) {
@@ -117,7 +121,7 @@ bool xlookup_cmp(const Value& cell, const Value& lookup, int* out_cmp) {
 // always routed through `wildcard_match` so that `~*` continues to mean
 // "literal *". See the VLOOKUP comment at the top of `lookup_scan` for why
 // we deliberately do not gate on `scan_has_wildcard`.
-bool xlookup_exact_eq(const Value& cell, const Value& lookup, bool wildcards) {
+bool xlookup_exact_eq(const Value& cell, const Value& lookup, bool wildcards, ExcelProfile profile) {
   if (lookup.is_text()) {
     if (!cell.is_text()) {
       return false;
@@ -126,8 +130,11 @@ bool xlookup_exact_eq(const Value& cell, const Value& lookup, bool wildcards) {
     // XLOOKUP / XMATCH exact mode treats kana / full-width variants
     // identically to Mac Excel. Full-width digits are NOT folded for
     // lookups (Mac asymmetry — see jp_fold.h).
-    const std::string pat_lower = fold_and_lower(lookup.as_text(), /*fold_fullwidth_digits=*/false);
-    const std::string cell_lower = fold_and_lower(cell.as_text(), /*fold_fullwidth_digits=*/false);
+    const bool jp_fold = uses_mac_jp_text_folding(profile);
+    const std::string pat_lower = jp_fold ? fold_and_lower(lookup.as_text(), /*fold_fullwidth_digits=*/false)
+                                          : strings::to_ascii_lower(lookup.as_text());
+    const std::string cell_lower = jp_fold ? fold_and_lower(cell.as_text(), /*fold_fullwidth_digits=*/false)
+                                           : strings::to_ascii_lower(cell.as_text());
     if (wildcards) {
       return wildcard_match(pat_lower, cell_lower);
     }
@@ -161,7 +168,7 @@ bool xlookup_exact_eq(const Value& cell, const Value& lookup, bool wildcards) {
 // XMatchMode::Wildcard`; in every other mode `*` / `?` in the pattern are
 // treated as literal characters.
 std::size_t xlookup_scan(const std::vector<Value>& cells, const Value& lookup_value, XMatchMode match_mode,
-                         XSearchMode search_mode) {
+                         XSearchMode search_mode, ExcelProfile profile) {
   const std::size_t n = cells.size();
   if (n == 0) {
     return SIZE_MAX;
@@ -179,7 +186,7 @@ std::size_t xlookup_scan(const std::vector<Value>& cells, const Value& lookup_va
     if (match_mode == XMatchMode::Exact || match_mode == XMatchMode::Wildcard) {
       for (std::size_t k = 0; k < n; ++k) {
         const std::size_t i = idx_at(k);
-        if (xlookup_exact_eq(cells[i], lookup_value, wildcards)) {
+        if (xlookup_exact_eq(cells[i], lookup_value, wildcards, profile)) {
           return i;
         }
       }
@@ -194,7 +201,7 @@ std::size_t xlookup_scan(const std::vector<Value>& cells, const Value& lookup_va
     for (std::size_t k = 0; k < n; ++k) {
       const std::size_t i = idx_at(k);
       int cmp = 0;
-      if (!xlookup_cmp(cells[i], lookup_value, &cmp)) {
+      if (!xlookup_cmp(cells[i], lookup_value, profile, &cmp)) {
         continue;
       }
       if (cmp == 0) {
@@ -209,7 +216,7 @@ std::size_t xlookup_scan(const std::vector<Value>& cells, const Value& lookup_va
           continue;
         }
         int pair_cmp = 0;
-        if (xlookup_cmp(cells[i], cells[best], &pair_cmp) && pair_cmp > 0) {
+        if (xlookup_cmp(cells[i], cells[best], profile, &pair_cmp) && pair_cmp > 0) {
           // New candidate is larger than the current best (and still <= lookup).
           best = i;
         }
@@ -222,7 +229,7 @@ std::size_t xlookup_scan(const std::vector<Value>& cells, const Value& lookup_va
           continue;
         }
         int pair_cmp = 0;
-        if (xlookup_cmp(cells[i], cells[best], &pair_cmp) && pair_cmp < 0) {
+        if (xlookup_cmp(cells[i], cells[best], profile, &pair_cmp) && pair_cmp < 0) {
           // New candidate is smaller than the current best (and still >= lookup).
           best = i;
         }
@@ -246,7 +253,7 @@ std::size_t xlookup_scan(const std::vector<Value>& cells, const Value& lookup_va
     while (lo < hi) {
       const std::size_t mid = lo + ((hi - lo) / 2U);
       int cmp = 0;
-      const bool cmp_ok = xlookup_cmp(cells[mid], lookup_value, &cmp);
+      const bool cmp_ok = xlookup_cmp(cells[mid], lookup_value, profile, &cmp);
       if (!cmp_ok) {
         // Incomparable — treat as greater than target.
         cmp = 1;
@@ -271,7 +278,7 @@ std::size_t xlookup_scan(const std::vector<Value>& cells, const Value& lookup_va
     if (hi_eff == 0) {
       return SIZE_MAX;
     }
-    if (xlookup_exact_eq(cells[hi_eff - 1U], lookup_value, wildcards)) {
+    if (xlookup_exact_eq(cells[hi_eff - 1U], lookup_value, wildcards, profile)) {
       return hi_eff - 1U;
     }
     return SIZE_MAX;
@@ -281,7 +288,7 @@ std::size_t xlookup_scan(const std::vector<Value>& cells, const Value& lookup_va
   // LAST duplicate wins (matches Excel 365).
   if (hi_eff > 0) {
     int cmp = 0;
-    if (xlookup_cmp(cells[hi_eff - 1U], lookup_value, &cmp) && cmp == 0) {
+    if (xlookup_cmp(cells[hi_eff - 1U], lookup_value, profile, &cmp) && cmp == 0) {
       return hi_eff - 1U;
     }
   }
@@ -362,6 +369,9 @@ bool coerce_mode_int(const Value& v, const int* allowed, std::size_t n_allowed, 
 /// lands with dynamic arrays.
 Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
+  if (ctx.excel_profile().host == ExcelHost::kWin365) {
+    return Value::error(ErrorCode::Name);
+  }
   const std::uint32_t arity = call.as_call_arity();
   if (arity < 3U || arity > 6U) {
     return Value::error(ErrorCode::Value);
@@ -444,7 +454,7 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return Value::error(ErrorCode::Value);
   }
 
-  const std::size_t off = xlookup_scan(lookup_cells, lookup, match_mode, search_mode);
+  const std::size_t off = xlookup_scan(lookup_cells, lookup, match_mode, search_mode, ctx.excel_profile());
 
   // 7) No match: evaluate if_not_found lazily, else #N/A. A blank-literal
   //    slot (`XLOOKUP(..., ..., ..., , , -1)`) is treated as "no
@@ -476,6 +486,9 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
 /// search mode codes is identical (invalid codes -> `#VALUE!`).
 Value eval_xmatch_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
+  if (ctx.excel_profile().host == ExcelHost::kWin365) {
+    return Value::error(ErrorCode::Name);
+  }
   const std::uint32_t arity = call.as_call_arity();
   if (arity < 2U || arity > 4U) {
     return Value::error(ErrorCode::Value);
@@ -535,7 +548,7 @@ Value eval_xmatch_lazy(const parser::AstNode& call, Arena& arena, const Function
     return Value::error(ErrorCode::Value);
   }
 
-  const std::size_t off = xlookup_scan(cells, lookup, match_mode, search_mode);
+  const std::size_t off = xlookup_scan(cells, lookup, match_mode, search_mode, ctx.excel_profile());
   if (off == SIZE_MAX) {
     return Value::error(ErrorCode::NA);
   }

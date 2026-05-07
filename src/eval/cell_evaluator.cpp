@@ -53,9 +53,15 @@ Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cel
   if (opts.iterative_mode) {
     // Workbook-bound, state-less context: formula refs short-circuit to
     // their cached values, which is what the solver iterates against.
-    ctx = EvalContext::workbook_only(workbook, sheet).with_mutable_sheet(sheet).with_formula_cell(row, col);
+    ctx = EvalContext::workbook_only(workbook, sheet)
+              .with_excel_profile(workbook.excel_profile())
+              .with_mutable_sheet(sheet)
+              .with_formula_cell(row, col);
   } else {
-    ctx = EvalContext(workbook, sheet, state).with_mutable_sheet(sheet).with_formula_cell(row, col);
+    ctx = EvalContext(workbook, sheet, state)
+              .with_excel_profile(workbook.excel_profile())
+              .with_mutable_sheet(sheet)
+              .with_formula_cell(row, col);
   }
 
   Value result = evaluate(*root, arena, registry, ctx);

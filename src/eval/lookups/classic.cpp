@@ -112,7 +112,7 @@ bool resolve_table_array(const parser::AstNode& arg_node, Arena& arena, const Fu
 // match" - the scanned cell is skipped. This is the same accepted divergence
 // MATCH documents for its approximate path.
 std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std::uint32_t cols, LookupAxis axis,
-                        const Value& lookup_value, bool approximate) {
+                        const Value& lookup_value, bool approximate, ExcelProfile profile) {
   const std::size_t n = axis == LookupAxis::Column ? rows : cols;
   if (n == 0) {
     return SIZE_MAX;
@@ -138,13 +138,16 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
       // on both sides BEFORE ASCII-lowercasing so e.g. `ｶﾞ` -> `ガ`,
       // `Ａ` -> `a`. Full-width digits are deliberately NOT folded for
       // lookups (Mac asymmetry — see jp_fold.h).
-      const std::string pat_lower = fold_and_lower(lookup_value.as_text(), /*fold_fullwidth_digits=*/false);
+      const bool jp_fold = uses_mac_jp_text_folding(profile);
+      const std::string pat_lower = jp_fold ? fold_and_lower(lookup_value.as_text(), /*fold_fullwidth_digits=*/false)
+                                            : strings::to_ascii_lower(lookup_value.as_text());
       for (std::size_t i = 0; i < n; ++i) {
         const Value& cell = cell_at(i);
         if (!cell.is_text()) {
           continue;
         }
-        const std::string cell_lower = fold_and_lower(cell.as_text(), /*fold_fullwidth_digits=*/false);
+        const std::string cell_lower = jp_fold ? fold_and_lower(cell.as_text(), /*fold_fullwidth_digits=*/false)
+                                               : strings::to_ascii_lower(cell.as_text());
         if (wildcard_match(pat_lower, cell_lower)) {
           return i;
         }
@@ -202,8 +205,12 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
     if (lookup_value.is_text() && cell.is_text()) {
       // ja-JP fold (see exact-mode branch above) before the ASCII
       // case-insensitive compare so kana variants order together.
-      cmp = strings::case_insensitive_compare(fold_jp_text(cell.as_text(), /*fold_fullwidth_digits=*/false),
-                                              fold_jp_text(lookup_value.as_text(), /*fold_fullwidth_digits=*/false));
+      if (uses_mac_jp_text_folding(profile)) {
+        cmp = strings::case_insensitive_compare(fold_jp_text(cell.as_text(), /*fold_fullwidth_digits=*/false),
+                                                fold_jp_text(lookup_value.as_text(), /*fold_fullwidth_digits=*/false));
+      } else {
+        cmp = strings::case_insensitive_compare(cell.as_text(), lookup_value.as_text());
+      }
       comparable = true;
     } else if ((lookup_value.is_number() || lookup_value.is_blank()) && cell.is_number()) {
       // Blank cells in the scanned axis are NOT treated as numeric 0 in
@@ -447,6 +454,9 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
         return Value::error(ErrorCode::Value);
       }
       if (col_idx == 0U) {
+        if (ctx.excel_profile().host == ExcelHost::kWin365) {
+          return Value::error(ErrorCode::Value);
+        }
         // Whole-row spill: collapse to the first cell of the selected
         // row, matching Mac Excel's non-spilling placement anchor (the
         // oracle case `index_zero_col` reads this back as the first
@@ -560,13 +570,16 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       // Excel's case-insensitive ASCII equality.
       // ja-JP fold (see classic.cpp::lookup_scan) before lower-casing so
       // MATCH agrees with Mac Excel on kana / full-width variants.
-      const std::string pat_lower = fold_and_lower(lookup.as_text(), /*fold_fullwidth_digits=*/false);
+      const bool jp_fold = uses_mac_jp_text_folding(ctx.excel_profile());
+      const std::string pat_lower = jp_fold ? fold_and_lower(lookup.as_text(), /*fold_fullwidth_digits=*/false)
+                                            : strings::to_ascii_lower(lookup.as_text());
       for (std::size_t i = 0; i < n; ++i) {
         const Value& cell = cells[i];
         if (!cell.is_text()) {
           continue;
         }
-        const std::string cell_lower = fold_and_lower(cell.as_text(), /*fold_fullwidth_digits=*/false);
+        const std::string cell_lower = jp_fold ? fold_and_lower(cell.as_text(), /*fold_fullwidth_digits=*/false)
+                                               : strings::to_ascii_lower(cell.as_text());
         if (wildcard_match(pat_lower, cell_lower)) {
           return Value::number(static_cast<double>(i + 1));
         }
@@ -614,11 +627,14 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     }
     return 0;
   };
-  auto cmp_text = [](std::string_view a, std::string_view b) -> int {
+  auto cmp_text = [&](std::string_view a, std::string_view b) -> int {
     // ja-JP fold (see classic.cpp::lookup_scan) so kana variants order
     // together in MATCH approximate mode.
-    return strings::case_insensitive_compare(fold_jp_text(a, /*fold_fullwidth_digits=*/false),
-                                             fold_jp_text(b, /*fold_fullwidth_digits=*/false));
+    if (uses_mac_jp_text_folding(ctx.excel_profile())) {
+      return strings::case_insensitive_compare(fold_jp_text(a, /*fold_fullwidth_digits=*/false),
+                                               fold_jp_text(b, /*fold_fullwidth_digits=*/false));
+    }
+    return strings::case_insensitive_compare(a, b);
   };
 
   // `last_valid_pos` is the running best position under the ordering rule.
@@ -738,7 +754,7 @@ Value eval_vlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
     approximate = rl_bool.value();
   }
 
-  const std::size_t off = lookup_scan(cells, rows, cols, LookupAxis::Column, lookup, approximate);
+  const std::size_t off = lookup_scan(cells, rows, cols, LookupAxis::Column, lookup, approximate, ctx.excel_profile());
   if (off == SIZE_MAX) {
     return Value::error(ErrorCode::NA);
   }
@@ -809,7 +825,7 @@ Value eval_hlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
     approximate = rl_bool.value();
   }
 
-  const std::size_t off = lookup_scan(cells, rows, cols, LookupAxis::Row, lookup, approximate);
+  const std::size_t off = lookup_scan(cells, rows, cols, LookupAxis::Row, lookup, approximate, ctx.excel_profile());
   if (off == SIZE_MAX) {
     return Value::error(ErrorCode::NA);
   }
@@ -883,7 +899,8 @@ Value eval_lookup_lazy(const parser::AstNode& call, Arena& arena, const Function
   }
 
   const LookupAxis axis = lrows >= lcols ? LookupAxis::Column : LookupAxis::Row;
-  const std::size_t off = lookup_scan(lookup_cells, lrows, lcols, axis, lookup, /*approximate=*/true);
+  const std::size_t off = lookup_scan(lookup_cells, lrows, lcols, axis, lookup, /*approximate=*/true,
+                                      ctx.excel_profile());
   if (off == SIZE_MAX) {
     return Value::error(ErrorCode::NA);
   }

@@ -20,6 +20,7 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/compat.h"
 #include "io/calc_mode.h"
 #include "io/defined_names.h"
 #include "io/external_links.h"
@@ -418,6 +419,20 @@ class Workbook {
   void set_calc_mode(CalcMode mode) noexcept { calc_mode_ = mode; }
 
   // ---------------------------------------------------------------------------
+  // Excel host compatibility
+  // ---------------------------------------------------------------------------
+  //
+  // Some formula behaviours are host-specific even for the same Microsoft 365
+  // channel and locale. The default runtime profile tracks Windows Excel 365
+  // ja-JP; oracle tests can override this per golden set.
+
+  /// Returns the full formula-behaviour profile. Defaults to `win-365-ja_JP`.
+  eval::ExcelProfile excel_profile() const noexcept { return excel_profile_; }
+
+  /// Sets the full formula-behaviour profile used by future recalc calls.
+  void set_excel_profile(eval::ExcelProfile profile) noexcept { excel_profile_ = profile; }
+
+  // ---------------------------------------------------------------------------
   // Styles
   // ---------------------------------------------------------------------------
   //
@@ -571,6 +586,8 @@ class Workbook {
   // calcMode=...>`. Default `kAuto` matches a freshly created
   // workbook in Excel.
   CalcMode calc_mode_ = CalcMode::kAuto;
+  // Formula compatibility profile. Runtime default is Windows Excel 365 ja-JP.
+  eval::ExcelProfile excel_profile_ = eval::default_excel_profile();
   // Workbook-scoped style records (fonts, fills, borders, num fmts,
   // and the cellXfs index that ties them together). The default table
   // is empty and the writer falls back to a minimal-but-valid styles

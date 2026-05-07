@@ -57,6 +57,7 @@ struct LazyEntry {
 // duplicates. Comments preserved verbatim from the prior in-place table.
 constexpr LazyEntry kLazyDispatch[] = {
     {"AGGREGATE", &eval_aggregate_lazy},
+    {"AND", &eval_and_lazy},
     // ANCHORARRAY is the OOXML internal encoding of the postfix `#`
     // spill operator. The xlsx-only `_xlfn.` prefix is stripped by
     // `strip_future_prefix`, so callers register the canonical bare name.
@@ -74,6 +75,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"CHOOSE", &eval_choose_lazy},
     {"CHOOSECOLS", &eval_choosecols_lazy},
     {"CHOOSEROWS", &eval_chooserows_lazy},
+    {"CODE", &eval_code_lazy},
     {"COLUMN", &eval_column_lazy},
     {"COLUMNS", &eval_columns_lazy},
     {"CORREL", &eval_correl_lazy},
@@ -144,6 +146,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"ISOMITTED", &eval_isomitted_lazy},
     {"ISREF", &eval_isref_lazy},
     {"IRR", &eval_irr_lazy},
+    {"LENB", &eval_lenb_lazy},
     {"LINEST", &eval_linest_lazy},
     {"LOGEST", &eval_logest_lazy},
     {"LOOKUP", &eval_lookup_lazy},
@@ -159,6 +162,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"NETWORKDAYS", &eval_networkdays_lazy},
     {"NETWORKDAYS.INTL", &eval_networkdays_intl_lazy},
     {"OFFSET", &eval_offset_lazy},
+    {"OR", &eval_or_lazy},
     // PEARSON is mathematically identical to CORREL (Pearson product-moment
     // correlation coefficient); Excel keeps both names for back-compat.
     {"PEARSON", &eval_correl_lazy},
@@ -209,6 +213,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"SWITCH", &eval_switch_lazy},
     {"T.TEST", &eval_t_test_lazy},
     {"TAKE", &eval_take_lazy},
+    {"TEXT", &eval_text_lazy},
     {"TEXTSPLIT", &eval_textsplit_lazy},
     {"TOCOL", &eval_tocol_lazy},
     {"TOROW", &eval_torow_lazy},
@@ -220,6 +225,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"UNIQUE", &eval_unique_lazy},
     {"VLOOKUP", &eval_vlookup_lazy},
     {"VSTACK", &eval_vstack_lazy},
+    {"WEEKNUM", &eval_weeknum_lazy},
     {"WORKDAY", &eval_workday_lazy},
     {"WORKDAY.INTL", &eval_workday_intl_lazy},
     {"WRAPCOLS", &eval_wrapcols_lazy},

@@ -33,6 +33,10 @@ Value eval_iferror_lazy(const parser::AstNode& call, Arena& arena, const Functio
                         const EvalContext& ctx);
 Value eval_ifna_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx);
+Value eval_and_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                    const EvalContext& ctx);
+Value eval_or_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                   const EvalContext& ctx);
 
 // IFS(cond1, val1, cond2, val2, ...) - multi-branch short-circuit. Each
 // condition is evaluated in turn; the first TRUE wins and the paired value

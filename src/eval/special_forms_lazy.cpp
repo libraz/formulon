@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <string_view>
+#include <vector>
 
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
@@ -17,6 +18,7 @@
 #include "eval/logical_coerce.h"
 #include "eval/name_env.h"
 #include "eval/name_env_resolve.h"
+#include "eval/range_args.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/strings.h"
@@ -24,6 +26,82 @@
 
 namespace formulon {
 namespace eval {
+namespace {
+
+LogicalCoerce logical_coerce_for_host(const Value& v, const EvalContext& ctx, bool* out_bool,
+                                      ErrorCode* out_err) noexcept {
+  if (ctx.excel_profile().host != ExcelHost::kWin365 || !v.is_text()) {
+    return logical_coerce(v, out_bool, out_err);
+  }
+  const std::string_view text = v.as_text();
+  if (text.empty()) {
+    return LogicalCoerce::Skip;
+  }
+  if (strings::case_insensitive_eq(text, "TRUE")) {
+    *out_bool = true;
+    return LogicalCoerce::HasValue;
+  }
+  if (strings::case_insensitive_eq(text, "FALSE")) {
+    *out_bool = false;
+    return LogicalCoerce::HasValue;
+  }
+  *out_err = ErrorCode::Value;
+  return LogicalCoerce::Error;
+}
+
+Value eval_and_or_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx, bool is_and) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 1U) {
+    return Value::error(ErrorCode::Value);
+  }
+  bool result = is_and;
+  bool any_value = false;
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    const parser::AstNode& arg = call.as_call_arg(i);
+    std::vector<Value> range_cells;
+    const bool range_arg = arg.kind() == parser::NodeKind::Ref || arg.kind() == parser::NodeKind::RangeOp;
+    if (range_arg) {
+      auto resolved = resolve_range_arg(arg, arena, registry, ctx);
+      if (!resolved) {
+        return Value::error(resolved.error());
+      }
+      range_cells = std::move(resolved.value().cells);
+    }
+
+    const std::size_t n = range_arg ? range_cells.size() : 1U;
+    for (std::size_t j = 0; j < n; ++j) {
+      const Value v = range_arg ? range_cells[j] : eval_node(arg, arena, registry, ctx);
+      if (v.is_error()) {
+        return v;
+      }
+      if (range_arg && (v.is_text() || v.is_blank())) {
+        continue;
+      }
+      bool coerced = false;
+      ErrorCode err = ErrorCode::Value;
+      const LogicalCoerce lc = logical_coerce_for_host(v, ctx, &coerced, &err);
+      if (lc == LogicalCoerce::Error) {
+        return Value::error(err);
+      }
+      if (lc == LogicalCoerce::Skip) {
+        continue;
+      }
+      any_value = true;
+      if (is_and) {
+        result = result && coerced;
+      } else {
+        result = result || coerced;
+      }
+    }
+  }
+  if (!any_value) {
+    return Value::error(ErrorCode::Value);
+  }
+  return Value::boolean(result);
+}
+
+}  // namespace
 
 // IF(cond, then, else?) - then is evaluated iff cond coerces to true; else
 // is evaluated iff cond coerces to false. When the third argument is
@@ -91,6 +169,16 @@ Value eval_ifna_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return Value::number(0.0);
   }
   return fallback;
+}
+
+Value eval_and_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                    const EvalContext& ctx) {
+  return eval_and_or_lazy(call, arena, registry, ctx, /*is_and=*/true);
+}
+
+Value eval_or_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                   const EvalContext& ctx) {
+  return eval_and_or_lazy(call, arena, registry, ctx, /*is_and=*/false);
 }
 
 // COUNT(value, ...) - Excel's rule is provenance-sensitive, so the per-arg

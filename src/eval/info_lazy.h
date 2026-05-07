@@ -87,6 +87,17 @@ Value eval_sheets_lazy(const parser::AstNode& call, Arena& arena, const Function
 Value eval_single_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx);
 
+/// `CODE(text)` — routed lazily only so profile-specific codepage
+/// fallbacks can see `EvalContext::excel_profile()`.
+Value eval_code_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx);
+Value eval_lenb_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx);
+Value eval_weeknum_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx);
+Value eval_text_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx);
+
 }  // namespace eval
 }  // namespace formulon
 

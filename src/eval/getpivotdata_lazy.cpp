@@ -373,10 +373,11 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
   // would otherwise reject the bare `=GETPIVOTDATA("Sum of Amount", A3)`
   // shape because the row-axis path slot is unset. Mac's surface for
   // the bare call is the grand total even when axis fields are
-  // configured. The evaluator currently emits a single `grand_total`
-  // value (the first data field's aggregation); we honour it for
-  // `df_idx == 0` and refuse the lookup for other data fields.
+  // configured.
   if (pair_count == 0 && (!table->row_field_order().empty() || !table->col_field_order().empty())) {
+    if (df_idx < result.grand_totals.size() && !result.grand_totals[df_idx].is_blank()) {
+      return reify_in_arena(result.grand_totals[df_idx], arena);
+    }
     if (df_idx == 0 && !result.grand_total.is_blank()) {
       return reify_in_arena(result.grand_total, arena);
     }

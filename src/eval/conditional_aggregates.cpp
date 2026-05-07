@@ -89,10 +89,11 @@ bool resolve_criteria_pairs(const parser::AstNode& call, std::uint32_t first_pai
 /// Tests whether position `i` in the parallel criteria-range arrays
 /// satisfies every parsed criterion. Short-circuits on the first failure.
 bool all_criteria_match(const std::vector<std::vector<Value>>& criteria_cells,
-                        const std::vector<std::unique_ptr<ParsedCriterion>>& parsed, std::size_t i) {
+                        const std::vector<std::unique_ptr<ParsedCriterion>>& parsed, std::size_t i,
+                        ExcelProfile profile) {
   const std::size_t n = parsed.size();
   for (std::size_t k = 0; k < n; ++k) {
-    if (!matches_criterion(criteria_cells[k][i], *parsed[k])) {
+    if (!matches_criterion(criteria_cells[k][i], *parsed[k], profile)) {
       return false;
     }
   }
@@ -134,7 +135,7 @@ Value eval_countif_lazy(const parser::AstNode& call, Arena& arena, const Functio
   const ParsedCriterion parsed = parse_criterion(criterion_val);
   double count = 0.0;
   for (const Value& cell : cells) {
-    if (matches_criterion(cell, parsed)) {
+    if (matches_criterion(cell, parsed, ctx.excel_profile())) {
       count += 1.0;
     }
   }
@@ -225,7 +226,7 @@ Value eval_sumif_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   const std::size_t n = criteria_cells.size() < sum_cells.size() ? criteria_cells.size() : sum_cells.size();
   double sum = 0.0;
   for (std::size_t i = 0; i < n; ++i) {
-    if (!matches_criterion(criteria_cells[i], parsed)) {
+    if (!matches_criterion(criteria_cells[i], parsed, ctx.excel_profile())) {
       continue;
     }
     const Value& sv = sum_cells[i];
@@ -314,7 +315,7 @@ Value eval_averageif_lazy(const parser::AstNode& call, Arena& arena, const Funct
   double sum = 0.0;
   double count = 0.0;
   for (std::size_t i = 0; i < n; ++i) {
-    if (!matches_criterion(criteria_cells[i], parsed)) {
+    if (!matches_criterion(criteria_cells[i], parsed, ctx.excel_profile())) {
       continue;
     }
     const Value& av = avg_cells[i];
@@ -372,7 +373,7 @@ Value eval_countifs_lazy(const parser::AstNode& call, Arena& arena, const Functi
 
   double count = 0.0;
   for (std::size_t i = 0; i < expected_size; ++i) {
-    if (all_criteria_match(criteria_cells, parsed, i)) {
+    if (all_criteria_match(criteria_cells, parsed, i, ctx.excel_profile())) {
       count += 1.0;
     }
   }
@@ -410,7 +411,7 @@ Value eval_sumifs_lazy(const parser::AstNode& call, Arena& arena, const Function
 
   double sum = 0.0;
   for (std::size_t i = 0; i < expected_size; ++i) {
-    if (!all_criteria_match(criteria_cells, parsed, i)) {
+    if (!all_criteria_match(criteria_cells, parsed, i, ctx.excel_profile())) {
       continue;
     }
     const Value& sv = sum_cells[i];
@@ -456,7 +457,7 @@ Value eval_averageifs_lazy(const parser::AstNode& call, Arena& arena, const Func
   double sum = 0.0;
   double count = 0.0;
   for (std::size_t i = 0; i < expected_size; ++i) {
-    if (!all_criteria_match(criteria_cells, parsed, i)) {
+    if (!all_criteria_match(criteria_cells, parsed, i, ctx.excel_profile())) {
       continue;
     }
     const Value& av = avg_cells[i];
@@ -506,7 +507,7 @@ Value eval_maxifs_lazy(const parser::AstNode& call, Arena& arena, const Function
   bool any = false;
   double best = 0.0;
   for (std::size_t i = 0; i < expected_size; ++i) {
-    if (!all_criteria_match(criteria_cells, parsed, i)) {
+    if (!all_criteria_match(criteria_cells, parsed, i, ctx.excel_profile())) {
       continue;
     }
     const Value& mv = max_cells[i];
@@ -557,7 +558,7 @@ Value eval_minifs_lazy(const parser::AstNode& call, Arena& arena, const Function
   bool any = false;
   double best = 0.0;
   for (std::size_t i = 0; i < expected_size; ++i) {
-    if (!all_criteria_match(criteria_cells, parsed, i)) {
+    if (!all_criteria_match(criteria_cells, parsed, i, ctx.excel_profile())) {
       continue;
     }
     const Value& mv = min_cells[i];

@@ -15,14 +15,18 @@
 #include "eval/info_lazy.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 
 #include "eval/a1_parse.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
+#include "eval/function_registry.h"
 #include "eval/lazy_impls.h"
+#include "eval/text_ops.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
@@ -360,6 +364,9 @@ Value eval_single_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (call.as_call_arity() != 1U) {
     return Value::error(ErrorCode::Value);
   }
+  if (ctx.excel_profile().host == ExcelHost::kWin365) {
+    return Value::error(ErrorCode::Name);
+  }
   const parser::AstNode& arg = call.as_call_arg(0);
 
   // Mirror the `@`-operator (NodeKind::ImplicitIntersection) projection
@@ -446,7 +453,160 @@ Value eval_sheets_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (v.is_error()) {
     return v;
   }
+  if (ctx.excel_profile().host == ExcelHost::kWin365 && v.is_text()) {
+    return Value::error(ErrorCode::Value);
+  }
   return Value::error(ErrorCode::NA);
+}
+
+Value eval_code_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx) {
+  if (call.as_call_arity() != 1U) {
+    return Value::error(ErrorCode::Value);
+  }
+  const Value arg = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (arg.is_error()) {
+    return arg;
+  }
+  if (ctx.excel_profile().host == ExcelHost::kWin365) {
+    auto text = coerce_to_text(arg);
+    if (!text) {
+      return Value::error(text.error());
+    }
+    if (text.value().empty()) {
+      return Value::error(ErrorCode::Value);
+    }
+    const Utf8DecodeResult decoded = decode_first_utf8_codepoint(text.value());
+    if (!decoded.valid) {
+      return Value::error(ErrorCode::Value);
+    }
+    if (decoded.codepoint == 0x9AD9u) {
+      return Value::number(38526.0);
+    }
+    if (decoded.codepoint > 0xFFFFu) {
+      return Value::number(63.0);
+    }
+  }
+  const FunctionDef* def = registry.lookup("CODE");
+  if (def == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return def->impl(&arg, 1U, arena);
+}
+
+Value eval_lenb_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx) {
+  if (call.as_call_arity() != 1U) {
+    return Value::error(ErrorCode::Value);
+  }
+  const Value arg = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (arg.is_error()) {
+    return arg;
+  }
+  if (ctx.excel_profile().host == ExcelHost::kWin365) {
+    auto text = coerce_to_text(arg);
+    if (!text) {
+      return Value::error(text.error());
+    }
+    std::uint64_t bytes = 0;
+    std::size_t i = 0;
+    while (i < text.value().size()) {
+      std::size_t step = 0;
+      const std::uint32_t cp = decode_utf8_step(text.value(), i, &step);
+      if (step == 0U) {
+        break;
+      }
+      if (step == 1U && cp == 0xFFFDu) {
+        bytes += 1U;
+      } else if (cp <= 0x00FFu || (cp >= 0xFF61u && cp <= 0xFF9Fu)) {
+        bytes += 1U;
+      } else {
+        bytes += 2U;
+      }
+      i += step;
+    }
+    return Value::number(static_cast<double>(bytes));
+  }
+  const FunctionDef* def = registry.lookup("LENB");
+  if (def == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return def->impl(&arg, 1U, arena);
+}
+
+Value eval_weeknum_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 1U || arity > 2U) {
+    return Value::error(ErrorCode::Value);
+  }
+  Value args[2] = {eval_node(call.as_call_arg(0), arena, registry, ctx), Value::number(1.0)};
+  if (args[0].is_error()) {
+    return args[0];
+  }
+  if (arity == 2U) {
+    args[1] = eval_node(call.as_call_arg(1), arena, registry, ctx);
+    if (args[1].is_error()) {
+      return args[1];
+    }
+    if (ctx.excel_profile().host == ExcelHost::kWin365) {
+      auto rt = coerce_to_number(args[1]);
+      if (!rt) {
+        return Value::error(rt.error());
+      }
+      const int return_type = static_cast<int>(std::trunc(rt.value()));
+      const bool valid = return_type == 1 || return_type == 2 || return_type == 21 ||
+                         (return_type >= 11 && return_type <= 17);
+      if (!valid) {
+        args[1] = Value::number(1.0);
+      }
+    }
+  }
+  const FunctionDef* def = registry.lookup("WEEKNUM");
+  if (def == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return def->impl(args, arity, arena);
+}
+
+Value eval_text_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx) {
+  if (call.as_call_arity() != 2U) {
+    return Value::error(ErrorCode::Value);
+  }
+  Value args[2] = {eval_node(call.as_call_arg(0), arena, registry, ctx),
+                   eval_node(call.as_call_arg(1), arena, registry, ctx)};
+  if (args[0].is_error()) {
+    return args[0];
+  }
+  if (args[1].is_error()) {
+    return args[1];
+  }
+  if (ctx.excel_profile().host == ExcelHost::kWin365) {
+    auto fmt = coerce_to_text(args[1]);
+    if (!fmt) {
+      return Value::error(fmt.error());
+    }
+    std::string rewritten;
+    rewritten.reserve(fmt.value().size());
+    bool changed = false;
+    for (char ch : fmt.value()) {
+      if (ch == '\\') {
+        rewritten += "\xC2\xA5";
+        changed = true;
+      } else {
+        rewritten.push_back(ch);
+      }
+    }
+    if (changed) {
+      args[1] = Value::text(arena.intern(rewritten));
+    }
+  }
+  const FunctionDef* def = registry.lookup("TEXT");
+  if (def == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return def->impl(args, 2U, arena);
 }
 
 }  // namespace eval

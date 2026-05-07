@@ -586,6 +586,11 @@ bool compute_offset_rect(const parser::AstNode& call, Arena& arena, const Functi
     *out_err = ErrorCode::Ref;
     return false;
   }
+  if (ctx.excel_profile().host == ExcelHost::kWin365 &&
+      ((neg_height && abs_height > 1U) || (neg_width && abs_width > 1U))) {
+    *out_err = ErrorCode::Value;
+    return false;
+  }
 
   *out_top_row = static_cast<std::uint32_t>(top_row);
   *out_left_col = static_cast<std::uint32_t>(left_col);
@@ -672,6 +677,9 @@ Value eval_offset_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (!refs_internal::compute_offset_rect(call, arena, registry, ctx, &base, &top_row, &left_col, &height, &width,
                                           &err)) {
     return Value::error(err);
+  }
+  if (ctx.excel_profile().host == ExcelHost::kWin365 && (height != 1U || width != 1U)) {
+    return Value::error(ErrorCode::Value);
   }
   // Scalar context for a multi-cell OFFSET: Excel 365 dynamic-array
   // semantics spill the rectangle, and a reader that samples only the
@@ -947,6 +955,16 @@ bool expand_row_or_column_call(const parser::AstNode& call, Arena& arena, const 
 
   if (resolved_rect) {
     if (want_row) {
+      if (ctx.excel_profile().host == ExcelHost::kWin365) {
+        out_cells->push_back(Value::number(static_cast<double>(top + 1U)));
+        if (out_rows != nullptr) {
+          *out_rows = 1U;
+        }
+        if (out_cols != nullptr) {
+          *out_cols = 1U;
+        }
+        return true;
+      }
       const std::uint32_t height = bottom - top + 1U;
       out_cells->reserve(height);
       for (std::uint32_t r = top; r <= bottom; ++r) {
