@@ -65,7 +65,10 @@ make oracle-setup
 ### WSL2 → Windows variant (opt-in, for divergence research)
 
 Prerequisites:
-- Windows host with Office 365 (ja-JP locale) installed and signed in.
+- Windows host with Office 365 installed, signed in, and activated. The
+  Office display language can be any locale we ship a target for — the
+  driver detects it via `Application.International(xlCountryCode)` and
+  records it in `ENVIRONMENT.md`.
 - WSL2 (Ubuntu / Debian / etc.) with `python.exe` reachable from `$PATH`.
 
 One-time on Windows (PowerShell):
@@ -79,8 +82,15 @@ One-time on WSL2:
 
 ```bash
 make oracle-setup            # auto-detects WSL2; runs rye sync
-# Edit tools/oracle/targets.yaml -> set win_python under win-365-ja_JP, e.g.
-#   win_python: "/mnt/c/Users/<you>/AppData/Local/Programs/Python/Python312/python.exe"
+
+# Tell the bridge where Windows-side python.exe lives. Two options:
+#   (a) preferred — export an env var so your per-machine path never
+#       lands in a committed file:
+export FORMULON_WIN_PYTHON="/mnt/c/Users/<you>/AppData/Local/Programs/Python/Python312/python.exe"
+#   (b) for a private fork — add `win_python:` under the variant target
+#       in tools/oracle/targets.yaml (note: this is .gitignored from
+#       upstream; do not commit author-specific paths).
+
 make oracle-setup            # re-run; all preflight checks should now PASS
 ```
 
@@ -211,6 +221,7 @@ between WSL Python and Windows Python via `wslpath -w`. Wire format:
 |---|---|---|
 | `oracle-setup-mac: rye not found` | rye not installed | `brew install rye` or `curl -sSf https://rye.astral.sh/get \| bash` |
 | `target driver 'windows_excel' needs Windows or WSL2 host, got Darwin` | trying to gen variant from wrong host | Run on the right host, or use `cli.py list` to see what's compatible |
-| `WSL bridge requires `win_python` in targets.yaml` | targets.yaml not configured | Edit `tools/oracle/targets.yaml`, set `win_python` under the variant target |
+| `WSL bridge requires `win_python` in targets.yaml` | neither `$FORMULON_WIN_PYTHON` nor `targets.yaml` `win_python:` is set | `export FORMULON_WIN_PYTHON=/mnt/c/.../python.exe` (preferred), or set `win_python:` under the variant target for a private fork |
+| `oracle-gen: warning: target 'X' declares locale='Y' but Excel reports 'Z'` | host Excel's display language differs from the target's `locale:` | Pick the matching `--target` (or change Excel's display language and restart) — goldens record the **detected** locale, so a mismatch tags them as the wrong target |
 | `windows_excel subprocess failed (rc=...)` | Win Python missing xlwings/pywin32, or Excel not activated | Re-run `make oracle-setup-wsl`, then `cli.py setup --target win-365-ja_JP` |
 | Variant tests not appearing in ctest | CMake variant flag off | `cmake -B build -DFORMULON_ORACLE_VARIANTS=ON` |

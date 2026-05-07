@@ -59,6 +59,7 @@ from .base import (
     _datetime_to_serial,
     _ERR_DISPLAY_NAMES,
 )
+from ._locale import detect_locale_from_app, normalise_error_token
 
 try:
     import xlwings as xw  # type: ignore
@@ -138,12 +139,27 @@ def _error_display_from_cell(cell) -> Optional[str]:
     except Exception:  # pragma: no cover - older xlwings without CVErr
         pass
 
-    if isinstance(raw, str) and raw in _ERR_DISPLAY_NAMES:
-        return raw
+    if isinstance(raw, str):
+        if raw in _ERR_DISPLAY_NAMES:
+            return raw
+        # ja-JP / de-DE / fr-FR builds occasionally surface the localized
+        # token directly through cell.value (when the bridge has already
+        # decoded the CVErr to a string). Normalise here so the golden
+        # JSON always carries the canonical English form.
+        canon = normalise_error_token(raw)
+        if canon is not None:
+            return canon
 
     text = _cell_displayed_text(cell)
     if text in _ERR_DISPLAY_NAMES:
         return text
+    # Range.Text is locale-bound: de-DE returns "#WERT!" for #VALUE!,
+    # fr-FR returns "#VALEUR!", and so on. Normalise through the shared
+    # localisation map before falling back to the prefix heuristic.
+    if text:
+        canon = normalise_error_token(text)
+        if canon is not None:
+            return canon
     if text and text.startswith("#") and (text.endswith("!") or text.endswith("?") or text == "#N/A"):
         for name in _ERR_DISPLAY_NAMES:
             if text == name:
@@ -214,19 +230,15 @@ class WindowsExcelOracle(OracleDriver):
     def __init__(self, visible: bool = False) -> None:
         _ensure_windows()
         self._app = xw.App(visible=visible, add_book=False)
-        self._app.calculation = "manual"
+        # Several Application properties are workbook-gated on Excel
+        # 16.0 / Office 365: assigning to them while no book is open
+        # either raises a generic COM error (Calculation) or makes the
+        # COM bridge hang indefinitely (EnableIterativeCalculation; we
+        # observed 200+ CPU seconds of busy wait). We therefore set
+        # only the workbook-independent properties here and re-apply
+        # the gated ones inside run_suite() once books.add() succeeds.
         self._app.screen_updating = False
         self._app.display_alerts = False
-        try:
-            self._app.api.EnableIterativeCalculation = False
-        except Exception:
-            # Older COM proxies expose the same property under the Mac
-            # snake_case spelling; tolerate either rather than failing
-            # the whole batch on a property name mismatch.
-            try:
-                self._app.api.enable_iterative_calculation = False
-            except Exception:
-                pass
 
     def __enter__(self) -> "WindowsExcelOracle":
         return self
@@ -245,11 +257,12 @@ class WindowsExcelOracle(OracleDriver):
 
         ``app.version`` is a string property on recent xlwings on
         Windows; the fallback path queries the raw COM ``Version`` /
-        ``Build`` properties. The locale is hard-coded to ``ja-JP`` for
-        parity with the Mac driver -- we expect the operator to run a
-        ja-JP-localised Office install when targeting ``win-365-ja_JP``.
-        Future work: cross-check ``Application.International`` against
-        the targets.yaml ``locale`` field and warn on mismatch.
+        ``Build`` properties. The locale is detected via
+        ``Application.International(xlCountryCode)`` (see
+        :func:`tools.oracle.drivers._locale.detect_locale_from_app`); a
+        probe failure or unmapped country code yields an empty string,
+        which the generator surfaces as a missing locale in
+        ENVIRONMENT.md so the operator can investigate.
         """
 
         version = ""
@@ -267,9 +280,10 @@ class WindowsExcelOracle(OracleDriver):
                     version = f"{version} (Build {b})"
             except Exception:
                 pass
+        locale = detect_locale_from_app(self._app) or ""
         return EnvironmentInfo(
             excel_version=version.strip(),
-            excel_locale="ja-JP",  # pinned per CLAUDE.md policy
+            excel_locale=locale,
             date1904=False,
             iterative=False,
         )
@@ -293,6 +307,13 @@ class WindowsExcelOracle(OracleDriver):
 
         wb = self._app.books.add()
         try:
+            # Application.Calculation can only be assigned with a workbook
+            # open; the __init__ attempt is suppressed for that reason, so
+            # apply it here once books.add() has succeeded.
+            try:
+                self._app.calculation = "manual"
+            except Exception:
+                pass
             try:
                 wb.api.Date1904 = date1904
             except Exception:
@@ -313,6 +334,14 @@ class WindowsExcelOracle(OracleDriver):
 
             first_sheet = wb.sheets[0]
             case_sheets: List[object] = []
+            # Per-case write failures are recorded here so the rest of
+            # the batch keeps moving. Without isolation, a single
+            # rejected formula (e.g. dynamic-array syntax that this
+            # build's COM bridge refuses on both Formula and Formula2)
+            # raises out of the loop and aborts the whole suite -- 90+
+            # adjacent cases that would have evaluated cleanly are then
+            # silently lost.
+            write_errors: Dict[str, str] = {}
             for i, case in enumerate(cases):
                 if i == 0:
                     sht = first_sheet
@@ -322,24 +351,51 @@ class WindowsExcelOracle(OracleDriver):
                 sht.name = f"c{i + 1:03d}_{safe_id}"[:31]
                 case_sheets.append(sht)
 
-                setup = case.get("setup") or {}
-                for addr, rec in setup.items():
-                    _write_cell(sht, addr, rec)
-                result_cell = sht.range("Z1")
                 try:
-                    result_cell.number_format = "General"
-                except Exception:
-                    pass
-                result_cell.formula2 = case["formula"]
+                    setup = case.get("setup") or {}
+                    for addr, rec in setup.items():
+                        _write_cell(sht, addr, rec)
+                    result_cell = sht.range("Z1")
+                    try:
+                        result_cell.number_format = "General"
+                    except Exception:
+                        pass
+                    # Prefer Formula2 (Excel 2019+ dynamic-array
+                    # semantics), but fall back to Formula on builds
+                    # whose COM bridge rejects Formula2 with a generic
+                    # COM error. The fallback adds an implicit @ to
+                    # dynamic-array formulas; tests whose oracle
+                    # behavior depends on spill output should be
+                    # guarded by tests/divergence.yaml.
+                    try:
+                        result_cell.formula2 = case["formula"]
+                    except Exception:
+                        result_cell.formula = case["formula"]
+                except Exception as exc:
+                    write_errors[case["id"]] = _format_com_error(exc)
 
             self._app.calculate()
 
             out: List[CaseResult] = []
             for case, sht in zip(cases, case_sheets):
-                cell = sht.range("Z1")
-                result = _classify_value(cell)
-                result.id = case["id"]
-                out.append(result)
+                if case["id"] in write_errors:
+                    out.append(CaseResult(
+                        id=case["id"],
+                        kind="skipped",
+                        value=write_errors[case["id"]],
+                    ))
+                    continue
+                try:
+                    cell = sht.range("Z1")
+                    result = _classify_value(cell)
+                    result.id = case["id"]
+                    out.append(result)
+                except Exception as exc:
+                    out.append(CaseResult(
+                        id=case["id"],
+                        kind="skipped",
+                        value=_format_com_error(exc),
+                    ))
             return out
         finally:
             try:
@@ -374,13 +430,42 @@ def _write_cell(sht, addr: str, rec: Dict[str, Any]) -> None:
         rng.value = str(rec["value"])
         return
     if kind == "formula":
-        rng.formula2 = rec["formula"]
+        try:
+            rng.formula2 = rec["formula"]
+        except Exception:
+            rng.formula = rec["formula"]
         return
     if kind == "error":
         trigger = _error_trigger(rec.get("code", "#VALUE!"))
-        rng.formula2 = trigger
+        try:
+            rng.formula2 = trigger
+        except Exception:
+            rng.formula = trigger
         return
     raise ValueError(f"unknown cell kind: {kind}")
+
+
+def _format_com_error(exc: BaseException) -> str:
+    """Returns a one-line summary of a pywin32 / xlwings exception.
+
+    Includes the COM HRESULT and Excel's localised description when
+    present, so per-target divergence triage can match on the actual
+    failure (e.g. ``COM -2147352567: 例外が発生しました。``) rather
+    than a generic Python traceback. Falls back to ``repr(exc)`` for
+    non-COM exceptions.
+    """
+
+    try:
+        args = getattr(exc, "args", ()) or ()
+        if args and isinstance(args[0], int):
+            hresult = args[0]
+            descr = ""
+            if len(args) >= 2 and isinstance(args[1], str):
+                descr = args[1]
+            return f"COM {hresult}: {descr}".strip().rstrip(":")
+    except Exception:
+        pass
+    return f"{type(exc).__name__}: {exc}"[:200]
 
 
 _SHEET_FORBIDDEN = set("\\/?*[]:")

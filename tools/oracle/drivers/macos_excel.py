@@ -46,6 +46,7 @@ from .base import (
     _datetime_to_serial,
     _ERR_DISPLAY_NAMES,
 )
+from ._locale import detect_locale_from_app, normalise_error_token
 
 try:
     import xlwings as xw  # type: ignore
@@ -115,16 +116,27 @@ def _error_display_from_cell(cell) -> Optional[str]:
     except Exception:  # pragma: no cover - older xlwings without CVErr
         pass
 
-    if isinstance(raw, str) and raw in _ERR_DISPLAY_NAMES:
-        return raw
+    if isinstance(raw, str):
+        if raw in _ERR_DISPLAY_NAMES:
+            return raw
+        canon = normalise_error_token(raw)
+        if canon is not None:
+            return canon
 
     text = _cell_displayed_text(cell)
     if text in _ERR_DISPLAY_NAMES:
         return text
+    # AppleScript `string_value` is locale-bound: de-DE returns "#WERT!",
+    # fr-FR "#VALEUR!", and so on. Normalise through the shared
+    # localisation map before falling back to the prefix heuristic.
+    if text:
+        canon = normalise_error_token(text)
+        if canon is not None:
+            return canon
     # Last-ditch: match by prefix (`#DIV/0!...` in an ex-format-localised
-    # ja-JP build, for example). All Excel errors start with `#` and end
-    # with `!` or `?`; we don't want to catch text that happens to start
-    # with '#'.
+    # build, for example). All Excel errors start with `#` and end with
+    # `!` or `?`; we don't want to catch text that happens to start with
+    # '#'.
     if text and text.startswith("#") and (text.endswith("!") or text.endswith("?") or text == "#N/A"):
         for name in _ERR_DISPLAY_NAMES:
             if text == name:
@@ -255,9 +267,10 @@ class ExcelOracle(OracleDriver):
                     version = f"{version} (Build {b})"
             except Exception:
                 pass
+        locale = detect_locale_from_app(self._app) or ""
         return EnvironmentInfo(
             excel_version=version.strip(),
-            excel_locale="ja-JP",  # pinned per CLAUDE.md policy
+            excel_locale=locale,
             date1904=False,
             iterative=False,
         )

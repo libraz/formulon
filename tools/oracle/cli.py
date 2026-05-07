@@ -40,9 +40,13 @@ from typing import Any, Dict, List, Optional, Tuple
 # and `python3 -m tools.oracle.cli` (package-style).
 try:  # pragma: no cover - trivial fallback
     from tools.oracle import oracle_gen
+    from tools.oracle.drivers import resolve_win_python
+    from tools.oracle.drivers._locale import COUNTRY_CODE_TO_BCP47
 except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import oracle_gen  # type: ignore
+    from drivers import resolve_win_python  # type: ignore
+    from drivers._locale import COUNTRY_CODE_TO_BCP47  # type: ignore
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -253,16 +257,19 @@ def _check_win_python_path(target: Dict[str, Any]) -> Tuple[str, str, Optional[P
     decide whether dependent checks can run or must SKIP.
     """
 
-    win_python = target.get("win_python")
-    if not isinstance(win_python, str) or not win_python.strip():
+    win_python = resolve_win_python(target)
+    if not win_python:
         return (
             _STATUS_FAIL,
-            "target.win_python is empty\n"
-            "Hint: install Python on Windows (winget install Python.Python.3.12)\n"
-            "      then add this line to tools/oracle/targets.yaml under\n"
-            "      the win-365-ja_JP entry:\n"
-            "        win_python: \"/mnt/c/Users/<you>/AppData/Local/Programs/"
-            "Python/Python312/python.exe\"",
+            "win_python not configured\n"
+            "Hint: install Python on Windows (winget install Python.Python.3.12),\n"
+            "      then either export FORMULON_WIN_PYTHON pointing at the\n"
+            "      Windows-side python.exe (preferred for OSS contributors so\n"
+            "      no per-machine path lands in targets.yaml) or, for a\n"
+            "      private fork, add a win_python: line under the target.\n"
+            "      Example:\n"
+            "        export FORMULON_WIN_PYTHON=\"/mnt/c/Users/<you>/AppData/"
+            "Local/Programs/Python/Python312/python.exe\"",
             None,
         )
     p = Path(win_python)
@@ -375,7 +382,10 @@ def _check_target(target_name: str, target: Dict[str, Any], host: str) -> bool:
     if driver_name == "windows_excel":
         # Three legal hosts: Windows (direct COM), WSL2 (bridge), or
         # anything else (skip with a host-mismatch FAIL).
-        is_wsl2 = host == "Linux" and "(WSL2)" in _platform_label()
+        # `host` here is the label from `_platform_label()` -- on WSL2 it
+        # carries the "(WSL2)" suffix, so we cannot compare against the
+        # bare `platform.system()` value.
+        is_wsl2 = "(WSL2)" in host
         if host == "Windows":
             ok = True
             # On Windows we can only verify import; the actual COM probe
@@ -426,7 +436,7 @@ def _check_target(target_name: str, target: Dict[str, Any], host: str) -> bool:
         return False
 
     if driver_name == "wsl_bridge":
-        is_wsl2 = host == "Linux" and "(WSL2)" in _platform_label()
+        is_wsl2 = "(WSL2)" in host
         if not is_wsl2:
             _print_check(
                 target_name,
@@ -499,51 +509,11 @@ _CONTRIBUTE_BANNER = """\
 
 
 # Excel `Application.International(xlCountryCode)` (xlCountryCode = 1) maps
-# the host's region setting to a phone-style country code. We map the
-# common ones to BCP 47 locales we publish wanted-target slots for. Codes
-# we don't know fall through to `_locale_from_country_code -> None`,
-# at which point the contribute flow asks the operator to pass --target
-# explicitly.
-_COUNTRY_TO_LOCALE: Dict[int, str] = {
-    1: "en-US",
-    2: "en-CA",
-    7: "ru-RU",
-    27: "en-ZA",
-    31: "nl-NL",
-    32: "nl-BE",
-    33: "fr-FR",
-    34: "es-ES",
-    36: "hu-HU",
-    39: "it-IT",
-    41: "de-CH",
-    44: "en-GB",
-    45: "da-DK",
-    46: "sv-SE",
-    47: "no-NO",
-    48: "pl-PL",
-    49: "de-DE",
-    52: "es-MX",
-    55: "pt-BR",
-    58: "es-VE",
-    60: "ms-MY",
-    61: "en-AU",
-    62: "id-ID",
-    64: "en-NZ",
-    65: "en-SG",
-    66: "th-TH",
-    81: "ja-JP",
-    82: "ko-KR",
-    84: "vi-VN",
-    86: "zh-CN",
-    90: "tr-TR",
-    91: "hi-IN",
-    351: "pt-PT",
-    358: "fi-FI",
-    420: "cs-CZ",
-    886: "zh-TW",
-    966: "ar-SA",
-    972: "he-IL",
-}
+# the host's region setting to a phone-style country code. The shared
+# `COUNTRY_CODE_TO_BCP47` map under tools/oracle/drivers/_locale.py is the
+# single source of truth -- alias it locally so existing call sites and
+# any external scripts that import `_COUNTRY_TO_LOCALE` keep working.
+_COUNTRY_TO_LOCALE: Dict[int, str] = COUNTRY_CODE_TO_BCP47
 
 
 def _short_host(host: str, label: Optional[str] = None) -> Optional[str]:

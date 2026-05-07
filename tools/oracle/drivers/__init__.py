@@ -18,13 +18,20 @@ are also fine for callers that already know which platform they are on
 
 from __future__ import annotations
 
+import os
 import platform
 from pathlib import Path
 from typing import Any, Dict
 
 from .base import CaseResult, EnvironmentInfo, OracleDriver
 
-__all__ = ["CaseResult", "EnvironmentInfo", "OracleDriver", "select_driver"]
+__all__ = [
+    "CaseResult",
+    "EnvironmentInfo",
+    "OracleDriver",
+    "resolve_win_python",
+    "select_driver",
+]
 
 
 def _is_wsl2() -> bool:
@@ -36,6 +43,30 @@ def _is_wsl2() -> bool:
         return "microsoft" in Path("/proc/version").read_text(encoding="utf-8").lower()
     except OSError:
         return False
+
+
+def resolve_win_python(target: Dict[str, Any]) -> str:
+    """Resolves the Windows-side python.exe path for `target`.
+
+    Resolution order:
+
+      1. ``$FORMULON_WIN_PYTHON`` -- per-machine override that lets
+         contributors run the Windows oracle without committing their
+         user-specific path to ``targets.yaml``.
+      2. ``target['win_python']`` -- the value baked into targets.yaml,
+         if any.
+
+    Returns the resolved string (possibly empty); callers raise on empty
+    when the bridge is actually about to launch.
+    """
+
+    env_override = os.environ.get("FORMULON_WIN_PYTHON")
+    if env_override and env_override.strip():
+        return env_override.strip()
+    win_python = target.get("win_python")
+    if isinstance(win_python, str) and win_python.strip():
+        return win_python.strip()
+    return ""
 
 
 def select_driver(target: Dict[str, Any], *, visible: bool = False) -> OracleDriver:
@@ -79,7 +110,7 @@ def select_driver(target: Dict[str, Any], *, visible: bool = False) -> OracleDri
             from .wsl_bridge import WSLBridgeOracle
 
             return WSLBridgeOracle(
-                win_python=str(target.get("win_python") or ""),
+                win_python=resolve_win_python(target),
                 visible=visible,
             )
         raise RuntimeError(
@@ -92,7 +123,7 @@ def select_driver(target: Dict[str, Any], *, visible: bool = False) -> OracleDri
         from .wsl_bridge import WSLBridgeOracle
 
         return WSLBridgeOracle(
-            win_python=str(target.get("win_python") or ""),
+            win_python=resolve_win_python(target),
             visible=visible,
         )
 

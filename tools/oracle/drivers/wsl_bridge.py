@@ -130,13 +130,40 @@ class WSLBridgeOracle(OracleDriver):
         in_path = tmp / "input.json"
         out_path = tmp / "output.json"
         in_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        # `-X utf8=1` enables Python's UTF-8 mode on the Windows side
+        # without relying on env-var inheritance. Why we need this:
+        #
+        #   - The Windows console default code page is locale-bound:
+        #     CP932 (ja-JP), CP1252 (de-DE/fr-FR), GBK (zh-CN), and so
+        #     on. Without UTF-8 mode the subprocess writes
+        #     traceback/error text in that code page; decoding it as
+        #     utf-8 on the WSL side produces mojibake (e.g. the COM
+        #     error "例外が発生しました。" comes back as "??O...").
+        #
+        #   - WSL2 does NOT forward arbitrary env vars to Windows .exe
+        #     processes; only names listed in $WSLENV cross. So setting
+        #     `PYTHONUTF8=1` via `env=` would silently be lost --
+        #     measured: subprocess sees an empty PYTHONUTF8 and
+        #     sys.stdout.encoding stays at cp932.
+        #
+        #   - The `-X utf8=1` flag is a command-line equivalent of
+        #     `PYTHONUTF8=1` (Python 3.7+ "UTF-8 mode"). Because it's
+        #     an argv element it bypasses the WSLENV gate entirely and
+        #     reliably forces sys.stdout/stderr to utf-8 across every
+        #     Windows locale.
         cmd = [
             self._win_python,
+            "-X", "utf8=1",
             "-m", "tools.oracle.drivers.windows_excel",
             "--input", _to_windows_path(in_path),
             "--output", _to_windows_path(out_path),
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+        )
         if result.returncode != 0:
             raise RuntimeError(
                 f"windows_excel subprocess failed (rc={result.returncode}):\n"

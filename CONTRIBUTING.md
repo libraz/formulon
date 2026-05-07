@@ -84,7 +84,7 @@ If your locale isn't on this list, see
 |---|---|---|
 | **macOS 12+** | Excel 365 (any locale) | Python 3.10+ available; `make oracle-contribute` will bootstrap a venv with `xlwings`. macOS will prompt for **Automation permission** the first time — grant it under System Settings → Privacy & Security → Automation → (your terminal) → Microsoft Excel. |
 | **Windows 10/11** | Excel 365 (any locale) | Python 3.10+ from `winget install Python.Python.3.12`; install `xlwings pywin32 pyyaml` in that interpreter. |
-| **WSL2 on Windows** | Excel 365 on the Windows side | Same as Windows for the Windows-side Python. WSL2 Python only orchestrates and ferries JSON. |
+| **WSL2 on Windows** | Excel 365 on the Windows side | Same as Windows for the Windows-side Python. WSL2 Python only orchestrates and ferries JSON. Export `FORMULON_WIN_PYTHON` pointing at the Windows-side `python.exe` so your per-machine path never lands in `targets.yaml` (e.g. `export FORMULON_WIN_PYTHON=/mnt/c/Users/<you>/AppData/Local/Programs/Python/Python312/python.exe`). |
 
 ### One-command flow
 

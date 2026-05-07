@@ -362,6 +362,40 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     with oracle_cm as oracle:
         env = oracle.probe_environment()
+
+        # Reconcile detected vs declared locale:
+        #   detected != "" and == declared  -> happy path, use detected
+        #   detected != "" and != declared  -> warn + use detected (the
+        #       Excel install really is in a different language; the
+        #       goldens should reflect that, not the target's wishful
+        #       thinking)
+        #   detected == "" and declared set -> probe failed (unknown
+        #       country code, attached to a non-localised build, etc.);
+        #       silently fall back to declared so contributors aren't
+        #       blocked while we wait to extend the country-code map.
+        target_locale = target.get("locale")
+        if (
+            isinstance(target_locale, str)
+            and target_locale
+            and env.excel_locale
+            and env.excel_locale != target_locale
+        ):
+            print(
+                f"oracle-gen: warning: target {target['_name']!r} declares "
+                f"locale={target_locale!r} but Excel reports "
+                f"{env.excel_locale!r}; goldens will record the detected "
+                "locale. Re-run with the matching --target if this is "
+                "unexpected.",
+                file=sys.stderr,
+            )
+        if not env.excel_locale and isinstance(target_locale, str) and target_locale:
+            env = EnvironmentInfo(
+                excel_version=env.excel_version,
+                excel_locale=target_locale,
+                date1904=env.date1904,
+                iterative=env.iterative,
+            )
+
         env_json = _env_to_json(env, iso_now)
 
         exit_code = 0
@@ -388,13 +422,39 @@ def main(argv: Optional[List[str]] = None) -> int:
                     date1904=env_copy.date1904,
                     iterative=env_copy.iterative,
                 )
+                # Drivers may report per-case runtime skips (e.g. a
+                # formula that the COM bridge refused on this build);
+                # merge those into the divergence-derived skip set so
+                # the golden carries the actual reason rather than a
+                # generic "no result captured".
+                merged_skips: Dict[str, str] = {
+                    c.id: skips[c.id]
+                    for c in suite.cases
+                    if c.id in skips
+                }
+                runtime_results: List[CaseResult] = []
+                runtime_skipped = 0
+                for r in results:
+                    if r.kind == "skipped":
+                        merged_skips.setdefault(
+                            r.id,
+                            f"driver skip: {r.value or 'unknown reason'}",
+                        )
+                        runtime_skipped += 1
+                    else:
+                        runtime_results.append(r)
+                if runtime_skipped:
+                    print(
+                        f"  ! {runtime_skipped} case(s) skipped by driver "
+                        f"(see golden 'skipped' fields)"
+                    )
                 out_path = golden_dir / f"{suite.name}.golden.json"
                 _write_golden(
                     out_path,
                     suite,
                     this_env_json,
-                    results,
-                    skipped={c.id: skips[c.id] for c in suite.cases if c.id in skips},
+                    runtime_results,
+                    skipped=merged_skips,
                 )
                 print(f"  -> {out_path.relative_to(REPO_ROOT)}")
             except Exception as exc:

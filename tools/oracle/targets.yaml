@@ -36,10 +36,17 @@ targets:
     output_dir: tests/oracle/variants/win-365-ja_JP/golden
     environment_md: tests/oracle/variants/win-365-ja_JP/ENVIRONMENT.md
     divergence: tests/oracle/variants/win-365-ja_JP/divergence.yaml
-    # win_python: filled in by `make oracle-setup` once it learns to
-    # discover a usable Windows Python from WSL2. Until then, set it
-    # manually, e.g.:
-    #   win_python: "/mnt/c/Users/<you>/AppData/Local/Programs/Python/Python312/python.exe"
+    # win_python: not set by default to keep author-specific paths out
+    # of the committed manifest. Two ways to point the bridge at a
+    # Windows-side python.exe:
+    #   (a) preferred for OSS contributors -- export FORMULON_WIN_PYTHON,
+    #       e.g.:
+    #         export FORMULON_WIN_PYTHON="/mnt/c/Users/<you>/AppData/\
+    #           Local/Programs/Python/Python312/python.exe"
+    #   (b) for a private fork -- add a `win_python:` line here.
+    # The driver detects the Excel locale via Application.International,
+    # so this same target also fits any other locale you happen to run;
+    # see the win-365-<other> entries below for canonical names.
 
   # ----------------------------------------------------------------------
   # Wanted targets. These slots are reserved so contributors and the core
