@@ -27,9 +27,189 @@ const VAL = Object.freeze({
   LAMBDA: 7,
 });
 
+// fm_pivot_cell_kind_t mirror (see src/c_api/formulon_c.h).
+const PIVOT = Object.freeze({
+  HEADER: 0,
+  ROW_LABEL: 1,
+  COL_LABEL: 2,
+  DATA: 3,
+  ROW_SUBTOTAL: 4,
+  COL_SUBTOTAL: 5,
+  GRAND_TOTAL: 6,
+  BLANK: 7,
+});
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const moduleUrl = path.resolve(__dirname, '..', '..', 'build-wasm', 'formulon.js');
+
+const utf8 = new TextEncoder();
+let crcTable = null;
+
+function crc32(bytes) {
+  if (crcTable === null) {
+    crcTable = new Uint32Array(256);
+    for (let i = 0; i < 256; i += 1) {
+      let c = i;
+      for (let j = 0; j < 8; j += 1) {
+        c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+      }
+      crcTable[i] = c >>> 0;
+    }
+  }
+  let c = 0xffffffff;
+  for (const b of bytes) {
+    c = crcTable[(c ^ b) & 0xff] ^ (c >>> 8);
+  }
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function pushU16(out, n) {
+  out.push(n & 0xff, (n >>> 8) & 0xff);
+}
+
+function pushU32(out, n) {
+  out.push(n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff, (n >>> 24) & 0xff);
+}
+
+function pushBytes(out, bytes) {
+  for (const b of bytes) out.push(b);
+}
+
+function zipStore(parts) {
+  const out = [];
+  const central = [];
+  const entries = parts.map(([name, body]) => ({
+    name: utf8.encode(name),
+    body: utf8.encode(body),
+  }));
+
+  for (const entry of entries) {
+    entry.offset = out.length;
+    entry.crc = crc32(entry.body);
+    pushU32(out, 0x04034b50);
+    pushU16(out, 20);
+    pushU16(out, 0);
+    pushU16(out, 0);
+    pushU16(out, 0);
+    pushU16(out, 0);
+    pushU32(out, entry.crc);
+    pushU32(out, entry.body.length);
+    pushU32(out, entry.body.length);
+    pushU16(out, entry.name.length);
+    pushU16(out, 0);
+    pushBytes(out, entry.name);
+    pushBytes(out, entry.body);
+  }
+
+  const centralOffset = out.length;
+  for (const entry of entries) {
+    pushU32(central, 0x02014b50);
+    pushU16(central, 20);
+    pushU16(central, 20);
+    pushU16(central, 0);
+    pushU16(central, 0);
+    pushU16(central, 0);
+    pushU16(central, 0);
+    pushU32(central, entry.crc);
+    pushU32(central, entry.body.length);
+    pushU32(central, entry.body.length);
+    pushU16(central, entry.name.length);
+    pushU16(central, 0);
+    pushU16(central, 0);
+    pushU16(central, 0);
+    pushU16(central, 0);
+    pushU32(central, 0);
+    pushU32(central, entry.offset);
+    pushBytes(central, entry.name);
+  }
+  pushBytes(out, central);
+
+  pushU32(out, 0x06054b50);
+  pushU16(out, 0);
+  pushU16(out, 0);
+  pushU16(out, entries.length);
+  pushU16(out, entries.length);
+  pushU32(out, central.length);
+  pushU32(out, centralOffset);
+  pushU16(out, 0);
+  return new Uint8Array(out);
+}
+
+function buildPivotWorkbookBytes() {
+  const sheetXml =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">\n' +
+    '  <sheetData/>\n' +
+    '</worksheet>\n';
+
+  return zipStore([
+    ['[Content_Types].xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n' +
+      '  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n' +
+      '  <Default Extension="xml" ContentType="application/xml"/>\n' +
+      '  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>\n' +
+      '  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>\n' +
+      '  <Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>\n' +
+      '  <Override PartName="/xl/pivotCache/pivotCacheDefinition1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml"/>\n' +
+      '  <Override PartName="/xl/pivotCache/pivotCacheRecords1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml"/>\n' +
+      '  <Override PartName="/xl/pivotTables/pivotTable1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml"/>\n' +
+      '</Types>\n'],
+    ['_rels/.rels',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
+      '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>\n' +
+      '</Relationships>\n'],
+    ['xl/workbook.xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">\n' +
+      '  <sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/><sheet name="Sheet2" sheetId="2" r:id="rId2"/></sheets>\n' +
+      '  <pivotCaches><pivotCache cacheId="0" r:id="rId3"/></pivotCaches>\n' +
+      '</workbook>\n'],
+    ['xl/_rels/workbook.xml.rels',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
+      '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>\n' +
+      '  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>\n' +
+      '  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition" Target="pivotCache/pivotCacheDefinition1.xml"/>\n' +
+      '</Relationships>\n'],
+    ['xl/worksheets/sheet1.xml', sheetXml],
+    ['xl/worksheets/sheet2.xml', sheetXml],
+    ['xl/worksheets/_rels/sheet2.xml.rels',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
+      '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable" Target="../pivotTables/pivotTable1.xml"/>\n' +
+      '</Relationships>\n'],
+    ['xl/pivotCache/pivotCacheDefinition1.xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      '<pivotCacheDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId1" recordCount="3">\n' +
+      '  <cacheSource type="worksheet"/>\n' +
+      '  <cacheFields count="2"><cacheField name="Region"><sharedItems count="2"><s v="North"/><s v="South"/></sharedItems></cacheField><cacheField name="Amount"><sharedItems containsNumber="1"/></cacheField></cacheFields>\n' +
+      '</pivotCacheDefinition>\n'],
+    ['xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
+      '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords" Target="pivotCacheRecords1.xml"/>\n' +
+      '</Relationships>\n'],
+    ['xl/pivotCache/pivotCacheRecords1.xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      '<pivotCacheRecords xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="3">\n' +
+      '  <r><x v="0"/><n v="100"/></r><r><x v="1"/><n v="200"/></r><r><x v="0"/><n v="300"/></r>\n' +
+      '</pivotCacheRecords>\n'],
+    ['xl/pivotTables/pivotTable1.xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      '<pivotTableDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" name="PivotTable1" cacheId="0">\n' +
+      '  <location ref="D1:E5"/>\n' +
+      '  <pivotFields count="2"><pivotField axis="axisRow" name="Region"><items count="3"><item x="0"/><item x="1"/><item t="default"/></items></pivotField><pivotField dataField="1" name="Amount"/></pivotFields>\n' +
+      '  <rowFields count="1"><field x="0"/></rowFields><dataFields count="1"><dataField name="Sum of Amount" fld="1" subtotal="sum"/></dataFields>\n' +
+      '</pivotTableDefinition>\n'],
+  ]);
+}
+
+function findPivotCell(layout, row, col) {
+  return layout.cells.find((cell) => cell.row === row && cell.col === col);
+}
 
 const cases = [];
 function test(name, fn) {
@@ -316,6 +496,67 @@ async function run() {
       assert.equal(c0.formula, null);
       assert.equal(c0.value.kind, VAL.NUMBER);
       assert.equal(c0.value.number, 1);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('pivotCount + pivotLayout expose PivotTable projection status', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.equal(wb.pivotCount(0), 0);
+
+      const missing = wb.pivotLayout(0, 0);
+      assert.equal(missing.status.ok, false);
+      assert.notEqual(missing.status.status, 0);
+      assert.equal(missing.top, 0);
+      assert.equal(missing.left, 0);
+      assert.equal(missing.rows, 0);
+      assert.equal(missing.cols, 0);
+      assert.deepEqual(missing.cells, []);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('pivotLayout projects loaded PivotTable cells for grid rendering', () => {
+    const wb = Module.Workbook.loadBytes(buildPivotWorkbookBytes());
+    try {
+      assert.ok(wb.isValid(), Module.lastErrorMessage());
+      assert.equal(wb.pivotCount(0), 0);
+      assert.equal(wb.pivotCount(1), 1);
+
+      const layout = wb.pivotLayout(1, 0);
+      assert.ok(layout.status.ok, `status=${JSON.stringify(layout.status)}`);
+      assert.equal(layout.top, 0);
+      assert.equal(layout.left, 3);
+      assert.equal(layout.rows, 5);
+      assert.equal(layout.cols, 3);
+      assert.ok(layout.cells.length > 0);
+
+      const region = findPivotCell(layout, 1, 3);
+      assert.ok(region);
+      assert.equal(region.kind, PIVOT.HEADER);
+      assert.equal(region.value.kind, VAL.TEXT);
+      assert.equal(region.value.text, 'Region');
+
+      const northLabel = findPivotCell(layout, 2, 3);
+      assert.ok(northLabel);
+      assert.equal(northLabel.kind, PIVOT.ROW_LABEL);
+      assert.equal(northLabel.value.text, 'North');
+
+      const northSum = findPivotCell(layout, 2, 4);
+      assert.ok(northSum);
+      assert.equal(northSum.kind, PIVOT.DATA);
+      assert.equal(northSum.value.kind, VAL.NUMBER);
+      assert.equal(northSum.value.number, 400);
+      assert.equal(northSum.fieldName, 'Sum of Amount');
+
+      const grandTotal = findPivotCell(layout, 4, 5);
+      assert.ok(grandTotal);
+      assert.equal(grandTotal.kind, PIVOT.GRAND_TOTAL);
+      assert.equal(grandTotal.value.kind, VAL.NUMBER);
+      assert.equal(grandTotal.value.number, 600);
     } finally {
       wb.delete();
     }

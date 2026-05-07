@@ -82,10 +82,12 @@ Thumbs.db
 .cache/
 
 # AI / Agent tools
+.codex/
 .claude/
 .serena/
 .wrangler/
 .act/
+agent.md
 
 # Config (local customizations)
 CLAUDE.md

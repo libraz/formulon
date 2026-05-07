@@ -78,6 +78,37 @@ TEST(FormulonCApiCalcMode, UnknownModeRejected) {
   EXPECT_EQ(mode, FM_CALC_MODE_AUTO);
 }
 
+TEST(FormulonCApiCalcMode, ExcelProfileIdDefaultsToWinJaAndRoundTrips) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  const char* profile = nullptr;
+  ASSERT_EQ(fm_workbook_excel_profile_id(wb.handle, &profile), 0);
+  ASSERT_STREQ(profile, "win-365-ja_JP");
+
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_excel_profile_id(wb.handle, &profile), 0);
+  EXPECT_STREQ(profile, "mac-365-ja_JP");
+
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_excel_profile_id(wb.handle, &profile), 0);
+  EXPECT_STREQ(profile, "win-365-ja_JP");
+}
+
+TEST(FormulonCApiCalcMode, UnknownExcelProfileIdRejected) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_status_t rc = fm_workbook_set_excel_profile_id(wb.handle, "linux-365-ja_JP");
+  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  rc = fm_workbook_set_excel_profile_id(wb.handle, "mac-365-en_US");
+  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+
+  const char* profile = nullptr;
+  ASSERT_EQ(fm_workbook_excel_profile_id(wb.handle, &profile), 0);
+  EXPECT_STREQ(profile, "win-365-ja_JP");
+}
+
 TEST(FormulonCApiCalcMode, NullArgsReturnBindingNullPointer) {
   fm_calc_mode_t mode = FM_CALC_MODE_AUTO;
   EXPECT_EQ(fm_workbook_calc_mode(nullptr, &mode),
@@ -89,6 +120,16 @@ TEST(FormulonCApiCalcMode, NullArgsReturnBindingNullPointer) {
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 
   EXPECT_EQ(fm_workbook_set_calc_mode(nullptr, FM_CALC_MODE_AUTO),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+
+  const char* profile = nullptr;
+  EXPECT_EQ(fm_workbook_excel_profile_id(nullptr, &profile),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  EXPECT_EQ(fm_workbook_excel_profile_id(wb.handle, nullptr),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  EXPECT_EQ(fm_workbook_set_excel_profile_id(nullptr, "mac-365-ja_JP"),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  EXPECT_EQ(fm_workbook_set_excel_profile_id(wb.handle, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
 

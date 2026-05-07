@@ -17,6 +17,7 @@
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -58,7 +59,7 @@ TEST(BuiltinsUnique, OneColumnNumbersDedupedInOrder) {
   sheet.set_cell_value(5, 0, Value::number(1));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=UNIQUE(A1:A6)", &parse_arena, &eval_arena, ctx);
@@ -86,7 +87,7 @@ TEST(BuiltinsUnique, MultiColumnRowDedupRequiresFullRowMatch) {
   sheet.set_cell_value(3, 1, Value::number(10));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=UNIQUE(A1:B4)", &parse_arena, &eval_arena, ctx);
@@ -121,7 +122,7 @@ TEST(BuiltinsUnique, ByColTrueDedupsColumns) {
   sheet.set_cell_value(1, 3, Value::number(30));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=UNIQUE(A1:D2, TRUE)", &parse_arena, &eval_arena, ctx);
@@ -147,7 +148,7 @@ TEST(BuiltinsUnique, ByColFalseExplicitMatchesDefault) {
   sheet.set_cell_value(2, 0, Value::number(8));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=UNIQUE(A1:A3, FALSE)", &parse_arena, &eval_arena, ctx);
@@ -175,7 +176,7 @@ TEST(BuiltinsUnique, ExactlyOnceKeepsSingletonsOnly) {
   sheet.set_cell_value(5, 0, Value::number(1));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=UNIQUE(A1:A6, FALSE, TRUE)", &parse_arena, &eval_arena, ctx);
@@ -195,7 +196,7 @@ TEST(BuiltinsUnique, ExactlyOnceAllDuplicatedYieldsCalc) {
   sheet.set_cell_value(3, 0, Value::number(7));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=UNIQUE(A1:A4, FALSE, TRUE)", &parse_arena, &eval_arena, ctx);
@@ -217,7 +218,7 @@ TEST(BuiltinsUnique, NumberAndTextOfSameDigitsAreDistinct) {
   sheet.set_cell_value(2, 0, Value::number(1));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=UNIQUE(A1:A3)", &parse_arena, &eval_arena, ctx);
@@ -239,7 +240,7 @@ TEST(BuiltinsUnique, BoolAndOneAreDistinct) {
   sheet.set_cell_value(2, 0, Value::boolean(true));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=UNIQUE(A1:A3)", &parse_arena, &eval_arena, ctx);
@@ -261,7 +262,7 @@ TEST(BuiltinsUnique, TextEqualityIsCaseInsensitive) {
   sheet.set_cell_value(3, 0, Value::text("xyz"));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=UNIQUE(A1:A4)", &parse_arena, &eval_arena, ctx);
@@ -282,7 +283,7 @@ TEST(BuiltinsUnique, ErrorsWithSameCodeCollapse) {
   sheet.set_cell_value(2, 0, Value::error(ErrorCode::NA));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=UNIQUE(A1:A3)", &parse_arena, &eval_arena, ctx);
@@ -309,7 +310,7 @@ TEST(BuiltinsUnique, ScalarInputReturnsScalarRoundTrip) {
   sheet.set_cell_value(0, 0, Value::number(42));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=UNIQUE(A1:A1)", &parse_arena, &eval_arena, ctx);
@@ -323,7 +324,7 @@ TEST(BuiltinsUnique, ZeroArgsRejected) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=UNIQUE()", &parse_arena, &eval_arena, ctx);
@@ -336,7 +337,7 @@ TEST(BuiltinsUnique, FourArgsRejected) {
   Sheet& sheet = wb.sheet(0);
   sheet.set_cell_value(0, 0, Value::number(1));
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=UNIQUE(A1:A1, FALSE, FALSE, FALSE)", &parse_arena, &eval_arena, ctx);
@@ -354,7 +355,7 @@ TEST(BuiltinsUnique, ScalarErrorArrayArgPreservedAsCell) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=UNIQUE(1/0)", &parse_arena, &eval_arena, ctx);

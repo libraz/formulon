@@ -4,8 +4,8 @@
 > APIs, file layout, and packaging may change without notice until the first tagged release.
 
 Formulon is a headless, Excel-compatible calculation engine — a C++17 core
-that aims to be **bit-exact against Mac Excel 365 (ja-JP)**, with every known
-divergence explicitly tracked. The same engine is packaged for the browser
+that defaults to the **Windows Excel 365 (ja-JP)** behavior profile, with every
+known divergence explicitly tracked against Excel oracle data. The same engine is packaged for the browser
 (WebAssembly), for Python, and for native command-line use, so a workbook
 recalculates to the same values wherever it runs.
 
@@ -14,9 +14,12 @@ Runs on macOS, Linux, Windows, in the browser, and in Node.
 
 ## Why Formulon
 
-- **Strict oracle, not aspirational compatibility.** Mac Excel 365 (ja-JP)
-  is the behavioral oracle. Outputs are checked for bit-level parity against
-  golden data regenerated from the real product; every accepted divergence
+- **Strict oracle, not aspirational compatibility.** The runtime default is
+  `win-365-ja_JP`, and profile-specific oracle suites pin observed Excel
+  behavior. The primary checked-in oracle remains Mac Excel 365 (ja-JP), while
+  Windows Excel 365 (ja-JP) is verified through variant goldens. Outputs are
+  checked for bit-level parity against golden data regenerated from the real
+  product; every accepted divergence
   (transcendental ulp drift, volatile-function snapshots, Excel quirks where
   Formulon deliberately keeps a saner answer) is recorded case-by-case in
   [`tests/divergence.yaml`](tests/divergence.yaml) with a reason and the
@@ -74,7 +77,12 @@ As of 2026-05: **all 522 catalogued Excel functions are implemented
 Lookup, Financial, Engineering, Information, Database, Cube, and the
 2024/2025 additions (GROUPBY, PIVOTBY, TRANSLATE, COPILOT, ...).
 **92 oracle categories** are defined and regenerated from Mac Excel 365
-ja-JP. A bytecode compiler and stack-machine VM run in parallel with the
+ja-JP, with Windows Excel 365 ja-JP covered by the `win-365-ja_JP` variant
+goldens. New workbooks use the `win-365-ja_JP` formula profile by default;
+callers can switch with the profile-id API (`mac-365-ja_JP`,
+`win-365-ja_JP`). English-locale profiles are intentionally not exposed until
+matching EN oracle data and verified locale-specific behavior are available.
+A bytecode compiler and stack-machine VM run in parallel with the
 tree-walker for parity verification. The OOXML reader/writer round-trips
 sheets, styles, conditional formatting, comments, hyperlinks, merges,
 data validations, defined names, tables, and pivot tables; an MS-XLSB

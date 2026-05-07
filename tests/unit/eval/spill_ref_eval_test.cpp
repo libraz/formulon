@@ -17,6 +17,7 @@
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -53,7 +54,7 @@ TEST(SpillRefEval, ResolvesCommittedSpill) {
   ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 1U, std::move(cells)));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -74,7 +75,7 @@ TEST(SpillRefEval, NoSpillReturnsRef) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -92,7 +93,7 @@ TEST(SpillRefEval, SumOverSpillRef) {
   ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 1U, std::move(cells)));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -113,7 +114,7 @@ TEST(SpillRefEval, SpillRefArithmeticBroadcasts1x1) {
   ASSERT_TRUE(sheet.commit_spill(0U, 1U, 1U, 1U, std::vector<Value>{Value::number(8.0)}));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -145,7 +146,7 @@ TEST(SpillRefBroadcast, EqualShapeArraysAddCellwise) {
                                  std::vector<Value>{Value::number(1.0), Value::number(2.0), Value::number(3.0)}));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -167,7 +168,7 @@ TEST(SpillRefBroadcast, ScalarOnRightBroadcastsAcrossArray) {
                                  std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -188,7 +189,7 @@ TEST(SpillRefBroadcast, ScalarOnLeftBroadcastsAcrossArray) {
                                  std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -212,7 +213,7 @@ TEST(SpillRefBroadcast, ShapeMismatchYieldsValue) {
   ASSERT_TRUE(sheet.commit_spill(0U, 1U, 2U, 1U, std::vector<Value>{Value::number(1.0), Value::number(2.0)}));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -230,7 +231,7 @@ TEST(SpillRefBroadcast, UnaryMinusBroadcastsAcrossArray) {
                                  std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -251,7 +252,7 @@ TEST(SpillRefBroadcast, ConcatBroadcastsAcrossArray) {
   ASSERT_TRUE(sheet.commit_spill(0U, 0U, 2U, 1U, std::vector<Value>{Value::number(10.0), Value::number(20.0)}));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -272,7 +273,7 @@ TEST(SpillRefBroadcast, ComparisonBroadcastsAcrossArray) {
                                  std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -295,7 +296,7 @@ TEST(SpillRefBroadcast, PerCellErrorPropagatesPerCell) {
       0U, 0U, 3U, 1U, std::vector<Value>{Value::number(10.0), Value::error(ErrorCode::Div0), Value::number(30.0)}));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -317,7 +318,7 @@ TEST(SpillRefBroadcast, ArrayMinusArrayBroadcastsViaSubtraction) {
   ASSERT_TRUE(sheet.commit_spill(0U, 1U, 2U, 1U, std::vector<Value>{Value::number(40.0), Value::number(20.0)}));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -337,7 +338,7 @@ TEST(SpillRefEval, SpillRefAnchorOnPhantomReturnsRef) {
   ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 1U, std::move(cells)));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -352,7 +353,7 @@ TEST(SpillRefEval, UnboundContextReturnsName) {
   // resolution path.
   Arena parse_arena;
   Arena eval_arena;
-  const Value v = EvalUnder("=A1#", &parse_arena, &eval_arena, EvalContext{});
+  const Value v = EvalUnder("=A1#", &parse_arena, &eval_arena, test::mac_context());
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Name);
 }
@@ -367,7 +368,7 @@ TEST(SpillRefEval, QualifiedSpillRef) {
   ASSERT_TRUE(s2.commit_spill(0U, 0U, 2U, 1U, std::vector<Value>{Value::number(7.0), Value::number(11.0)}));
 
   EvalState state;
-  const EvalContext ctx(wb, s1, state);
+  const EvalContext ctx = test::mac_context(wb, s1, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -399,7 +400,7 @@ TEST(SpillRefLet, SumOverLetBoundSpill) {
                                  std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -418,7 +419,7 @@ TEST(SpillRefLet, BroadcastOverLetBoundSpill) {
                                  std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -442,7 +443,7 @@ TEST(SpillRefLet, CountIfOverLetBoundSpill) {
       std::vector<Value>{Value::number(5.0), Value::number(20.0), Value::number(30.0), Value::number(15.0)}));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -461,7 +462,7 @@ TEST(SpillRefLet, TransitiveLetBindingPreservesShape) {
                                  std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -485,7 +486,7 @@ TEST(AnchorArrayLazy, RefOverCommittedSpill) {
   ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 1U, std::move(cells)));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -508,7 +509,7 @@ TEST(AnchorArrayLazy, BareNameWithoutXlfnPrefix) {
   ASSERT_TRUE(sheet.commit_spill(0U, 0U, 1U, 1U, std::vector<Value>{Value::number(7.0)}));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -526,7 +527,7 @@ TEST(AnchorArrayLazy, NoSpillReturnsRef) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -545,7 +546,7 @@ TEST(AnchorArrayLazy, SumOverAnchorArray) {
                                  std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -565,7 +566,7 @@ TEST(AnchorArrayLazy, SumOverSequenceCallFlattens) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   const Value v = EvalUnder("=SUM(SEQUENCE(3))", &parse_arena, &eval_arena, ctx);
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 6.0);
@@ -583,7 +584,7 @@ TEST(AnchorArrayLazy, NestedOffsetCallResolvesAnchor) {
       std::vector<Value>{Value::number(12.0), Value::number(24.0), Value::number(34.0), Value::number(1245.0)}));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -596,7 +597,7 @@ TEST(AnchorArrayLazy, WrongArityIsValueError) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -617,7 +618,7 @@ TEST(AnchorArrayLazy, NonReferenceArgIsValueError) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;

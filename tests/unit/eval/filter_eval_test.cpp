@@ -18,6 +18,7 @@
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -71,7 +72,7 @@ TEST(BuiltinsFilter, FilterRowsByColumnVectorMask) {
   sheet.set_cell_value(3, 3, Value::boolean(false));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -96,7 +97,7 @@ TEST(BuiltinsFilter, FilterRowsWithComputedMask) {
   }
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -133,7 +134,7 @@ TEST(BuiltinsFilter, FilterColsByRowVectorMask) {
   sheet.set_cell_value(3, 3, Value::boolean(false));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -161,7 +162,7 @@ TEST(BuiltinsFilter, NoMatchWithIfEmptyReturnsScalar) {
   }
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -179,7 +180,7 @@ TEST(BuiltinsFilter, NoMatchWithoutIfEmptyReturnsCalc) {
   }
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -203,7 +204,7 @@ TEST(BuiltinsFilter, ShapeMismatchYieldsValue) {
   sheet.set_cell_value(1, 1, Value::boolean(false));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -229,7 +230,7 @@ TEST(BuiltinsFilter, ErrorInArrayPropagatesPerCell) {
   sheet.set_cell_value(2, 1, Value::boolean(false));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -255,7 +256,7 @@ TEST(BuiltinsFilter, ErrorInIncludeShortCircuits) {
   sheet.set_cell_value(2, 1, Value::boolean(true));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -272,7 +273,7 @@ TEST(BuiltinsFilter, ArityMismatchReturnsValue) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   // Only 1 arg provided -> #VALUE!.

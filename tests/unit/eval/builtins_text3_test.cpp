@@ -12,8 +12,10 @@
 #include <string>
 #include <string_view>
 
+#include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -35,7 +37,7 @@ Value EvalSource(std::string_view src) {
   if (root == nullptr) {
     return Value::error(ErrorCode::Name);
   }
-  return evaluate(*root, eval_arena);
+  return evaluate(*root, eval_arena, default_registry(), test::mac_context());
 }
 
 // ---------------------------------------------------------------------------

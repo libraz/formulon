@@ -15,6 +15,7 @@
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -57,7 +58,7 @@ Value EvalSourceIn(std::string_view src, const Workbook& wb, const Sheet& curren
     return Value::error(ErrorCode::Name);
   }
   EvalState state;
-  const EvalContext ctx(wb, current, state);
+  const EvalContext ctx = test::workbook_context(wb, current, state);
   return evaluate(*root, eval_arena, default_registry(), ctx);
 }
 
@@ -457,11 +458,11 @@ TEST(BuiltinsOffset, NegativeHeightEndsAtAnchor) {
   EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
 }
 
-TEST(BuiltinsOffset, NegativeHeightWalksUpTwoRows) {
+TEST(BuiltinsOffset, MacHostNegativeHeightWalksUpTwoRows) {
   // `OFFSET(C3, 0, 0, -2, 1)` anchors at C3 and walks up one row, so the
   // rectangle spans C2:C3. In scalar context Excel 365 samples the
   // top-left = C2.
-  Workbook wb = Workbook::create();
+  Workbook wb = test::mac_workbook();
   wb.sheet(0).set_cell_value(1, 2, Value::number(42.0));  // C2
   wb.sheet(0).set_cell_value(2, 2, Value::number(99.0));  // C3
   const Value v = EvalSourceIn("=OFFSET(C3,0,0,-2,1)", wb, wb.sheet(0));
@@ -485,11 +486,11 @@ TEST(BuiltinsOffset, ZeroHeightIsRef) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
-TEST(BuiltinsOffset, MultiCellInScalarContextReturnsTopLeft) {
+TEST(BuiltinsOffset, MacHostMultiCellInScalarContextReturnsTopLeft) {
   // Excel 365 dynamic-array spill: a multi-cell OFFSET in scalar context
   // spills the rectangle and readers sampling only the anchor cell
   // observe the top-left. Match the oracle.
-  Workbook wb = Workbook::create();
+  Workbook wb = test::mac_workbook();
   wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
   wb.sheet(0).set_cell_value(0, 1, Value::number(2.0));
   wb.sheet(0).set_cell_value(1, 0, Value::number(3.0));
@@ -499,12 +500,22 @@ TEST(BuiltinsOffset, MultiCellInScalarContextReturnsTopLeft) {
   EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
 }
 
-TEST(BuiltinsOffset, BaseIsRangeCollapsedToTopLeft) {
+TEST(BuiltinsOffset, WinHostRejectsMultiCellScalarContext) {
+  Workbook wb = test::win_workbook();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(2.0));
+
+  const Value v = EvalSourceIn("=OFFSET(A1,0,0,1,2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsOffset, MacHostBaseRangeInScalarContextReturnsTopLeft) {
   // `OFFSET(A1:B2, 0, 0)` defaults height/width from the base -> a 2x2
   // rectangle starting at A1. Scalar context samples A1 (dynamic-array
   // spill). Passing explicit `(1,1)` dimensions confirms the top-left
   // path.
-  Workbook wb = Workbook::create();
+  Workbook wb = test::mac_workbook();
   wb.sheet(0).set_cell_value(0, 0, Value::number(100.0));
   wb.sheet(0).set_cell_value(0, 1, Value::number(200.0));
   wb.sheet(0).set_cell_value(1, 0, Value::number(300.0));
@@ -515,6 +526,19 @@ TEST(BuiltinsOffset, BaseIsRangeCollapsedToTopLeft) {
   const Value v_scalar = EvalSourceIn("=OFFSET(A1:B2,0,0,1,1)", wb, wb.sheet(0));
   ASSERT_TRUE(v_scalar.is_number());
   EXPECT_DOUBLE_EQ(v_scalar.as_number(), 100.0);
+}
+
+TEST(BuiltinsOffset, WinHostRejectsNegativeHeightAndWidth) {
+  Workbook wb = test::win_workbook();
+  wb.sheet(0).set_cell_value(1, 2, Value::number(42.0));
+
+  Value v = EvalSourceIn("=OFFSET(C3,0,0,-2,1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+
+  v = EvalSourceIn("=OFFSET(C3,0,0,1,-2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsOffset, ArityBelowMinIsError) {

@@ -15,6 +15,7 @@
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -59,7 +60,7 @@ Value EvalSourceIn(std::string_view src, const Workbook& wb, const Sheet& curren
     return Value::error(ErrorCode::Name);
   }
   EvalState state;
-  const EvalContext ctx(wb, current, state);
+  const EvalContext ctx = test::workbook_context(wb, current, state);
   return evaluate(*root, eval_arena, default_registry(), ctx);
 }
 
@@ -108,6 +109,24 @@ TEST(BuiltinsCountIf, RangeWithNotEqNumericCriterion) {
   const Value v = EvalSourceIn("=COUNTIF(A1:A4, \"<>0\")", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
+TEST(BuiltinsCountIf, MacAndWinProfilesControlJapaneseTextFolding) {
+  Workbook mac = test::mac_workbook();
+  mac.sheet(0).set_cell_value(0, 0, Value::text("あ"));
+  mac.sheet(0).set_cell_value(1, 0, Value::text("ア"));
+
+  Value v = EvalSourceIn("=COUNTIF(A1:A2, \"あ\")", mac, mac.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+
+  Workbook win = test::win_workbook();
+  win.sheet(0).set_cell_value(0, 0, Value::text("あ"));
+  win.sheet(0).set_cell_value(1, 0, Value::text("ア"));
+
+  v = EvalSourceIn("=COUNTIF(A1:A2, \"あ\")", win, win.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
 }
 
 // ---------------------------------------------------------------------------

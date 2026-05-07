@@ -14,6 +14,7 @@
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -57,7 +58,7 @@ TEST(BuiltinsSortby, SingleKeyAscending) {
   sheet.set_cell_value(3, 1, Value::number(2));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORTBY(A1:A4, B1:B4)", &parse_arena, &eval_arena, ctx);
@@ -84,7 +85,7 @@ TEST(BuiltinsSortby, SingleKeyDescending) {
   sheet.set_cell_value(3, 1, Value::number(2));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORTBY(A1:A4, B1:B4, -1)", &parse_arena, &eval_arena, ctx);
@@ -121,7 +122,7 @@ TEST(BuiltinsSortby, TwoKeysTiebreaker) {
   sheet.set_cell_value(3, 2, Value::number(40));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORTBY(A1:A4, B1:B4, 1, C1:C4, 1)", &parse_arena, &eval_arena, ctx);
@@ -152,7 +153,7 @@ TEST(BuiltinsSortby, TwoKeysWithMixedOrders) {
   sheet.set_cell_value(3, 2, Value::number(40));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORTBY(A1:A4, B1:B4, 1, C1:C4, -1)", &parse_arena, &eval_arena, ctx);
@@ -177,7 +178,7 @@ TEST(BuiltinsSortby, AllKeysEqualPreservesInputOrder) {
   sheet.set_cell_value(2, 1, Value::number(7));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORTBY(A1:A3, B1:B3)", &parse_arena, &eval_arena, ctx);
@@ -212,7 +213,7 @@ TEST(BuiltinsSortby, RowVectorKeySortsColumns) {
   sheet.set_cell_value(3, 3, Value::number(2));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORTBY(A1:D2, A4:D4)", &parse_arena, &eval_arena, ctx);
@@ -242,7 +243,7 @@ TEST(BuiltinsSortby, KeyLengthMismatchReturnsValue) {
   }
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORTBY(A1:A4, B1:B3)", &parse_arena, &eval_arena, ctx);
@@ -267,7 +268,7 @@ TEST(BuiltinsSortby, SecondKeyAxisMismatchReturnsValue) {
   }
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORTBY(A1:A4, B1:B4, 1, A6:D6)", &parse_arena, &eval_arena, ctx);
@@ -284,7 +285,7 @@ TEST(BuiltinsSortby, OneArgRejected) {
   Sheet& sheet = wb.sheet(0);
   sheet.set_cell_value(0, 0, Value::number(1));
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORTBY(A1:A1)", &parse_arena, &eval_arena, ctx);
@@ -299,7 +300,7 @@ TEST(BuiltinsSortby, InvalidOrderReturnsValue) {
   sheet.set_cell_value(0, 1, Value::number(1));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORTBY(A1:A1, B1:B1, 2)", &parse_arena, &eval_arena, ctx);

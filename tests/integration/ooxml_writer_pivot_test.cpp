@@ -22,6 +22,7 @@
 #include "io/ooxml_writer.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
+#include "pivot/pivot_layout.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -259,7 +260,73 @@ TEST(OoxmlWriterPivot, EvaluatorRoundTripProducesSameAggregates) {
 }
 
 // ---------------------------------------------------------------------------
-// 5. Two pivot caches survive with distinct cache_ids and distinct
+// 5. The frontend-facing layout projection survives the same
+//    write -> read path: absolute cells, semantic cell kinds, and
+//    aggregate values remain stable after reloading from OOXML.
+// ---------------------------------------------------------------------------
+
+TEST(OoxmlWriterPivot, LayoutProjectionRoundTripsForGridRendering) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+  wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(BuildRegionAmountCache(/*cache_id=*/0U)));
+  wb.sheet(1).add_pivot_table(BuildRegionAmountTable(/*cache_id=*/0U, /*anchor_row=*/0U, /*anchor_col=*/3U));
+
+  auto bytes_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << "write_ooxml: " << bytes_or.error().message;
+  auto read_or = io::read_ooxml(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << "read_ooxml: " << read_or.error().message;
+
+  const Workbook& reloaded = read_or.value().workbook;
+  ASSERT_EQ(reloaded.pivot_caches().size(), 1U);
+  const pivot::PivotCache* cache = reloaded.pivot_caches()[0].get();
+  ASSERT_NE(cache, nullptr);
+  ASSERT_EQ(reloaded.sheet(1).pivot_tables().size(), 1U);
+  const pivot::PivotTable* table = reloaded.sheet(1).pivot_tables()[0].get();
+  ASSERT_NE(table, nullptr);
+
+  auto eval_or = pivot::evaluate(*table, *cache);
+  ASSERT_TRUE(static_cast<bool>(eval_or)) << "pivot::evaluate: " << eval_or.error().message;
+  auto layout_or = pivot::layout(*table, eval_or.value());
+  ASSERT_TRUE(static_cast<bool>(layout_or)) << "pivot::layout: " << layout_or.error().message;
+  const pivot::PivotCells& cells = layout_or.value();
+
+  EXPECT_EQ(cells.top, 0U);
+  EXPECT_EQ(cells.left, 3U);
+  EXPECT_EQ(cells.rows, 5U);
+  EXPECT_EQ(cells.cols, 3U);
+
+  const auto find_cell = [&](std::uint32_t row, std::uint32_t col) -> const pivot::PivotCell* {
+    for (const pivot::PivotCell& cell : cells.cells) {
+      if (cell.row == row && cell.col == col) {
+        return &cell;
+      }
+    }
+    return nullptr;
+  };
+
+  const pivot::PivotCell* region = find_cell(1U, 3U);
+  ASSERT_NE(region, nullptr);
+  EXPECT_EQ(region->kind, pivot::PivotCellKind::Header);
+  ASSERT_TRUE(region->value.is_text());
+  EXPECT_EQ(region->value.as_text(), "Region");
+
+  const pivot::PivotCell* north_sum = find_cell(2U, 4U);
+  ASSERT_NE(north_sum, nullptr);
+  EXPECT_EQ(north_sum->kind, pivot::PivotCellKind::Data);
+  ASSERT_TRUE(north_sum->value.is_number());
+  EXPECT_DOUBLE_EQ(north_sum->value.as_number(), 400.0);
+  EXPECT_EQ(north_sum->field_name, "Sum of Amount");
+
+  const pivot::PivotCell* grand_total = find_cell(4U, 5U);
+  ASSERT_NE(grand_total, nullptr);
+  EXPECT_EQ(grand_total->kind, pivot::PivotCellKind::GrandTotal);
+  ASSERT_TRUE(grand_total->value.is_number());
+  EXPECT_DOUBLE_EQ(grand_total->value.as_number(), 600.0);
+}
+
+// ---------------------------------------------------------------------------
+// 6. Two pivot caches survive with distinct cache_ids and distinct
 //    package paths. We verify both ends of that contract via the reader:
 //    the reloaded workbook reports two caches whose cache_ids match the
 //    originals, and each cache carries its own field/record payload.

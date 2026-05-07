@@ -15,6 +15,7 @@
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -53,7 +54,7 @@ TEST(BuiltinsSort, AscendingNumbers) {
   sheet.set_cell_value(3, 0, Value::number(2));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORT(A1:A4)", &parse_arena, &eval_arena, ctx);
@@ -76,7 +77,7 @@ TEST(BuiltinsSort, DescendingNumbers) {
   sheet.set_cell_value(3, 0, Value::number(2));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORT(A1:A4, 1, -1)", &parse_arena, &eval_arena, ctx);
@@ -100,7 +101,7 @@ TEST(BuiltinsSort, TextCaseInsensitiveLex) {
   sheet.set_cell_value(3, 0, Value::text("apple"));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORT(A1:A4)", &parse_arena, &eval_arena, ctx);
@@ -134,7 +135,7 @@ TEST(BuiltinsSort, MultiColumnSortByIndex2) {
   sheet.set_cell_value(3, 1, Value::number(2));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORT(A1:B4, 2)", &parse_arena, &eval_arena, ctx);
@@ -171,7 +172,7 @@ TEST(BuiltinsSort, ByColTrueSortsColumnsByRowKey) {
   sheet.set_cell_value(1, 3, Value::number(20));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORT(A1:D2, 1, 1, TRUE)", &parse_arena, &eval_arena, ctx);
@@ -208,7 +209,7 @@ TEST(BuiltinsSort, CrossKindOrderingFollowsExcelRanks) {
   sheet.set_cell_value(7, 0, Value::number(1));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORT(A1:A8)", &parse_arena, &eval_arena, ctx);
@@ -243,7 +244,7 @@ TEST(BuiltinsSort, BlanksStayLastInDescending) {
   sheet.set_cell_value(3, 0, Value::number(2));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORT(A1:A4, 1, -1)", &parse_arena, &eval_arena, ctx);
@@ -269,7 +270,7 @@ TEST(BuiltinsSort, ErrorCellsParticipateInOrdering) {
   sheet.set_cell_value(2, 0, Value::number(2));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORT(A1:A3)", &parse_arena, &eval_arena, ctx);
@@ -295,7 +296,7 @@ TEST(BuiltinsSort, SortIndexOutOfRangeReturnsValue) {
   sheet.set_cell_value(1, 0, Value::number(2));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORT(A1:A2, 2)", &parse_arena, &eval_arena, ctx);
@@ -310,7 +311,7 @@ TEST(BuiltinsSort, SortIndexZeroReturnsValue) {
   sheet.set_cell_value(0, 0, Value::number(1));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORT(A1:A1, 0)", &parse_arena, &eval_arena, ctx);
@@ -325,7 +326,7 @@ TEST(BuiltinsSort, InvalidSortOrderReturnsValue) {
   sheet.set_cell_value(0, 0, Value::number(1));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORT(A1:A1, 1, 2)", &parse_arena, &eval_arena, ctx);
@@ -337,7 +338,7 @@ TEST(BuiltinsSort, ZeroArgsRejected) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORT()", &parse_arena, &eval_arena, ctx);
@@ -350,7 +351,7 @@ TEST(BuiltinsSort, FiveArgsRejected) {
   Sheet& sheet = wb.sheet(0);
   sheet.set_cell_value(0, 0, Value::number(1));
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORT(A1:A1, 1, 1, FALSE, FALSE)", &parse_arena, &eval_arena, ctx);
@@ -375,7 +376,7 @@ TEST(BuiltinsSort, StableSortPreservesEqualKeyOrder) {
   sheet.set_cell_value(3, 1, Value::text("d"));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORT(A1:B4)", &parse_arena, &eval_arena, ctx);

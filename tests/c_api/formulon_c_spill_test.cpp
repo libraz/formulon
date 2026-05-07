@@ -32,6 +32,7 @@ TEST(FormulonCApiSpill, SequenceSpillReportsAnchorAndShape) {
   // A1 = =SEQUENCE(2,3) spills 2 rows × 3 cols starting at A1.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-ja_JP"), 0);
   ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(2,3)"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 

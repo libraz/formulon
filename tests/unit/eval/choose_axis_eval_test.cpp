@@ -12,6 +12,7 @@
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -60,7 +61,7 @@ TEST(BuiltinsChoosecols, SinglePositiveIndex) {
   Sheet& sheet = wb.sheet(0);
   Populate2x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=CHOOSECOLS(A1:D2, 2)", &parse_arena, &eval_arena, ctx);
@@ -77,7 +78,7 @@ TEST(BuiltinsChoosecols, MultiplePositiveIndicesPreserveOrder) {
   Sheet& sheet = wb.sheet(0);
   Populate2x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=CHOOSECOLS(A1:D2, 3, 1)", &parse_arena, &eval_arena, ctx);
@@ -97,7 +98,7 @@ TEST(BuiltinsChoosecols, DuplicatedIndicesYieldDuplicatedColumns) {
   Sheet& sheet = wb.sheet(0);
   Populate2x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=CHOOSECOLS(A1:D2, 2, 2, 2)", &parse_arena, &eval_arena, ctx);
@@ -119,7 +120,7 @@ TEST(BuiltinsChoosecols, NegativeIndexCountsFromEnd) {
   Sheet& sheet = wb.sheet(0);
   Populate2x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=CHOOSECOLS(A1:D2, -1, -4)", &parse_arena, &eval_arena, ctx);
@@ -139,7 +140,7 @@ TEST(BuiltinsChoosecols, FractionalIndexTruncates) {
   Sheet& sheet = wb.sheet(0);
   Populate2x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=CHOOSECOLS(A1:D2, 2.9, -1.7)", &parse_arena, &eval_arena, ctx);
@@ -155,7 +156,7 @@ TEST(BuiltinsChoosecols, ZeroIndexReturnsValue) {
   Sheet& sheet = wb.sheet(0);
   Populate2x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=CHOOSECOLS(A1:D2, 0)", &parse_arena, &eval_arena, ctx);
@@ -168,7 +169,7 @@ TEST(BuiltinsChoosecols, OutOfRangePositiveReturnsValue) {
   Sheet& sheet = wb.sheet(0);
   Populate2x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=CHOOSECOLS(A1:D2, 5)", &parse_arena, &eval_arena, ctx);
@@ -181,7 +182,7 @@ TEST(BuiltinsChoosecols, OutOfRangeNegativeReturnsValue) {
   Sheet& sheet = wb.sheet(0);
   Populate2x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=CHOOSECOLS(A1:D2, -5)", &parse_arena, &eval_arena, ctx);
@@ -194,7 +195,7 @@ TEST(BuiltinsChoosecols, MissingIndexArgRejected) {
   Sheet& sheet = wb.sheet(0);
   Populate2x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=CHOOSECOLS(A1:D2)", &parse_arena, &eval_arena, ctx);
@@ -212,7 +213,7 @@ TEST(BuiltinsChooserows, SinglePositiveIndex) {
   Sheet& sheet = wb.sheet(0);
   Populate2x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=CHOOSEROWS(A1:D2, 2)", &parse_arena, &eval_arena, ctx);
@@ -232,7 +233,7 @@ TEST(BuiltinsChooserows, MultipleIndicesIncludingDuplicateAndNegative) {
   Sheet& sheet = wb.sheet(0);
   Populate2x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=CHOOSEROWS(A1:D2, 2, 1, -1)", &parse_arena, &eval_arena, ctx);
@@ -256,7 +257,7 @@ TEST(BuiltinsChooserows, OutOfRangeReturnsValue) {
   Sheet& sheet = wb.sheet(0);
   Populate2x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=CHOOSEROWS(A1:D2, 3)", &parse_arena, &eval_arena, ctx);
@@ -269,7 +270,7 @@ TEST(BuiltinsChooserows, ZeroIndexReturnsValue) {
   Sheet& sheet = wb.sheet(0);
   Populate2x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=CHOOSEROWS(A1:D2, 0)", &parse_arena, &eval_arena, ctx);
@@ -282,7 +283,7 @@ TEST(BuiltinsChooserows, ScalarArrayTreatedAsOneByOne) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=CHOOSEROWS(42, 1)", &parse_arena, &eval_arena, ctx);

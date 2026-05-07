@@ -22,6 +22,7 @@
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -247,15 +248,15 @@ EvalResult EvalAndDispatch(std::string_view src, Arena* parse_arena, Arena* eval
   return {ctx.dispatch_array_result(raw)};
 }
 
-TEST(SpillPipeline, SequenceCommitsThreeByOne) {
+TEST(SpillPipeline, MacHostSequenceCommitsThreeByOne) {
   // `=SEQUENCE(3)` typed at A1 spills to A1:A3. The dispatcher returns
   // the anchor scalar (1); the spill region carries the full [1, 2, 3]
   // vector and phantom reads through `resolve_cell_value` find the spilled
   // values at A2 / A3.
-  Workbook wb = Workbook::create();
+  Workbook wb = test::mac_workbook();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext base_ctx(wb, sheet, state);
+  const EvalContext base_ctx = test::workbook_context(wb, sheet, state);
   const EvalContext ctx = base_ctx.with_mutable_sheet(sheet).with_formula_cell(0U, 0U);
 
   Arena parse_arena;
@@ -278,14 +279,14 @@ TEST(SpillPipeline, SequenceCommitsThreeByOne) {
   EXPECT_EQ(sheet.resolve_cell_value(2U, 0U), Value::number(3.0));
 }
 
-TEST(SpillPipeline, SequenceCommitsTwoByThreeGrid) {
+TEST(SpillPipeline, MacHostSequenceCommitsTwoByThreeGrid) {
   // `=SEQUENCE(2, 3)` at A1 spills to a 2x3 rectangle A1:C2 with the
   // row-major fill 1..6. Verifies the dispatcher handles non-degenerate
   // 2D shapes, not just column vectors.
-  Workbook wb = Workbook::create();
+  Workbook wb = test::mac_workbook();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext base_ctx(wb, sheet, state);
+  const EvalContext base_ctx = test::workbook_context(wb, sheet, state);
   const EvalContext ctx = base_ctx.with_mutable_sheet(sheet).with_formula_cell(0U, 0U);
 
   Arena parse_arena;
@@ -307,15 +308,15 @@ TEST(SpillPipeline, SequenceCommitsTwoByThreeGrid) {
   EXPECT_EQ(sheet.resolve_cell_value(1U, 2U), Value::number(6.0));
 }
 
-TEST(SpillPipeline, SequenceCollisionEmitsSpillError) {
+TEST(SpillPipeline, MacHostSequenceCollisionEmitsSpillError) {
   // Pre-populate A2 (in the proposed spill footprint) with a literal.
   // Dispatch must return #SPILL!, leave the literal intact, and register
   // no spill region.
-  Workbook wb = Workbook::create();
+  Workbook wb = test::mac_workbook();
   Sheet& sheet = wb.sheet(0);
   sheet.set_cell_value(1U, 0U, Value::number(99.0));
   EvalState state;
-  const EvalContext base_ctx(wb, sheet, state);
+  const EvalContext base_ctx = test::workbook_context(wb, sheet, state);
   const EvalContext ctx = base_ctx.with_mutable_sheet(sheet).with_formula_cell(0U, 0U);
 
   Arena parse_arena;
@@ -332,17 +333,17 @@ TEST(SpillPipeline, SequenceCollisionEmitsSpillError) {
   EXPECT_DOUBLE_EQ(literal->cached_value.as_number(), 99.0);
 }
 
-TEST(SpillPipeline, PostSpillCellReadObservesPhantom) {
+TEST(SpillPipeline, MacHostPostSpillCellReadObservesPhantom) {
   // After SEQUENCE(3) spills to A1:A3, evaluating `=A2` from a separate
   // formula cell observes the phantom value at A2 (=2). This exercises
   // Phase 3's spill-aware read switch wired into `EvalContext::resolve_ref`.
-  Workbook wb = Workbook::create();
+  Workbook wb = test::mac_workbook();
   Sheet& sheet = wb.sheet(0);
 
   // Step 1: commit the spill at A1 by evaluating the producer formula.
   {
     EvalState state;
-    const EvalContext base_ctx(wb, sheet, state);
+    const EvalContext base_ctx = test::workbook_context(wb, sheet, state);
     const EvalContext ctx = base_ctx.with_mutable_sheet(sheet).with_formula_cell(0U, 0U);
     Arena parse_arena;
     Arena eval_arena;
@@ -354,7 +355,7 @@ TEST(SpillPipeline, PostSpillCellReadObservesPhantom) {
   // Step 2: evaluate `=A2` from C1 (anchor at row 0, col 2). The reference
   // resolver must observe the phantom at A2 = 2, NOT the underlying blank.
   EvalState state;
-  const EvalContext base_ctx(wb, sheet, state);
+  const EvalContext base_ctx = test::workbook_context(wb, sheet, state);
   const EvalContext c1_ctx = base_ctx.with_formula_cell(0U, 2U);
 
   Arena parse_arena;
@@ -397,7 +398,7 @@ TEST(BuiltinsTranspose, Transpose_2x3ArrayLiteral) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -414,7 +415,7 @@ TEST(BuiltinsTranspose, Transpose_2x3ArrayLiteral) {
   EXPECT_EQ(cells[5], Value::number(6.0));
 }
 
-TEST(BuiltinsTranspose, Transpose_RangeArg) {
+TEST(BuiltinsTranspose, MacHostTransposeRangeArg) {
   // `=TRANSPOSE(A1:B2)` over A1:B2 = {{1, 2}; {3, 4}} -> {{1, 3}; {2, 4}}.
   // This exercises the lazy-dispatch seam: a Range argument retains its
   // 2D shape via `eval_node_as_array` rather than collapsing to a vector.
@@ -425,7 +426,7 @@ TEST(BuiltinsTranspose, Transpose_RangeArg) {
   sheet.set_cell_value(1U, 0U, Value::number(3.0));
   sheet.set_cell_value(1U, 1U, Value::number(4.0));
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -440,6 +441,23 @@ TEST(BuiltinsTranspose, Transpose_RangeArg) {
   EXPECT_EQ(cells[3], Value::number(4.0));
 }
 
+TEST(BuiltinsTranspose, WinHostRangeArgReturnsValue) {
+  Workbook wb = test::win_workbook();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0U, 0U, Value::number(1.0));
+  sheet.set_cell_value(0U, 1U, Value::number(2.0));
+  sheet.set_cell_value(1U, 0U, Value::number(3.0));
+  sheet.set_cell_value(1U, 1U, Value::number(4.0));
+  EvalState state;
+  const EvalContext ctx = test::workbook_context(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalNoDispatch("=TRANSPOSE(A1:B2)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 TEST(BuiltinsTranspose, Transpose_Scalar) {
   // `=TRANSPOSE(42)` -> 1x1 array with the scalar wrapped. Mac Excel
   // returns the same scalar; the engine wraps it in a degenerate 1x1
@@ -447,7 +465,7 @@ TEST(BuiltinsTranspose, Transpose_Scalar) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -465,7 +483,7 @@ TEST(BuiltinsTranspose, Transpose_PreservesErrors) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -488,7 +506,7 @@ TEST(BuiltinsTranspose, Transpose_Twice) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -509,7 +527,7 @@ TEST(BuiltinsTranspose, Transpose_PropagatesArgError) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;
@@ -526,7 +544,7 @@ TEST(BuiltinsTranspose, Transpose_TextValuesPassThrough) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
 
   Arena parse_arena;
   Arena eval_arena;

@@ -13,6 +13,7 @@
 
 #include "cell.h"
 #include "eval/function_registry.h"
+#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
 #include "utils/arena.h"
@@ -77,7 +78,7 @@ TEST(EvaluateCellForRecalc, ArrayResultSpillsAndReturnsAnchor) {
   // SEQUENCE returns an Array at the top level; the helper should
   // commit the spill via `dispatch_array_result` and surface the
   // anchor scalar (the first cell of the spill region).
-  Workbook wb = MakeWorkbookWithSheet();
+  Workbook wb = test::mac_workbook();
   Sheet& sheet = wb.sheet(0U);
   Cell cell;
   cell.formula_text = "=SEQUENCE(3)";

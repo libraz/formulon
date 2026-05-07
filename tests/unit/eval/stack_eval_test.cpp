@@ -12,6 +12,7 @@
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -50,7 +51,7 @@ TEST(BuiltinsHstack, TwoColumnVectorsSameLength) {
   sheet.set_cell_value(1, 1, Value::number(20));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=HSTACK(A1:A2, B1:B2)", &parse_arena, &eval_arena, ctx);
@@ -76,7 +77,7 @@ TEST(BuiltinsHstack, ThreeArraysVariadic) {
   sheet.set_cell_value(1, 2, Value::number(6));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=HSTACK(A1:A2, B1:B2, C1:C2)", &parse_arena, &eval_arena, ctx);
@@ -104,7 +105,7 @@ TEST(BuiltinsHstack, RowCountMismatchPadsWithNa) {
   sheet.set_cell_value(1, 1, Value::number(20));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=HSTACK(A1:A3, B1:B2)", &parse_arena, &eval_arena, ctx);
@@ -130,7 +131,7 @@ TEST(BuiltinsHstack, ScalarTreatedAsOneByOne) {
   sheet.set_cell_value(1, 0, Value::number(2));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=HSTACK(A1:A2, 99)", &parse_arena, &eval_arena, ctx);
@@ -157,7 +158,7 @@ TEST(BuiltinsHstack, MixedShapesSumsColumns) {
   sheet.set_cell_value(1, 2, Value::number(6));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=HSTACK(A1:B2, C1:C2)", &parse_arena, &eval_arena, ctx);
@@ -177,7 +178,7 @@ TEST(BuiltinsHstack, ZeroArgsRejected) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=HSTACK()", &parse_arena, &eval_arena, ctx);
@@ -193,7 +194,7 @@ TEST(BuiltinsHstack, ScalarErrorArgPropagates) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=HSTACK({1;2}, NA())", &parse_arena, &eval_arena, ctx);
@@ -212,7 +213,7 @@ TEST(BuiltinsHstack, ErrorCellInArrayArgPreserved) {
   sheet.set_cell_value(1, 1, Value::number(20));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=HSTACK(A1:A2, B1:B2)", &parse_arena, &eval_arena, ctx);
@@ -241,7 +242,7 @@ TEST(BuiltinsVstack, TwoRowVectorsSameWidth) {
   sheet.set_cell_value(1, 1, Value::number(4));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=VSTACK(A1:B1, A2:B2)", &parse_arena, &eval_arena, ctx);
@@ -266,7 +267,7 @@ TEST(BuiltinsVstack, ColumnCountMismatchPadsWithNa) {
   sheet.set_cell_value(1, 1, Value::number(20));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=VSTACK(A1:C1, A2:B2)", &parse_arena, &eval_arena, ctx);
@@ -295,7 +296,7 @@ TEST(BuiltinsVstack, ThreeArraysVariadic) {
   sheet.set_cell_value(2, 1, Value::number(6));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=VSTACK(A1:B1, A2:B2, A3:B3)", &parse_arena, &eval_arena, ctx);
@@ -316,7 +317,7 @@ TEST(BuiltinsVstack, ScalarTreatedAsOneByOne) {
   sheet.set_cell_value(0, 1, Value::number(2));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=VSTACK(A1:B1, 99)", &parse_arena, &eval_arena, ctx);
@@ -335,7 +336,7 @@ TEST(BuiltinsVstack, ZeroArgsRejected) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=VSTACK()", &parse_arena, &eval_arena, ctx);
@@ -353,7 +354,7 @@ TEST(BuiltinsVstack, PreservesTextCells) {
   sheet.set_cell_value(1, 1, Value::text("delta"));
 
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=VSTACK(A1:B1, A2:B2)", &parse_arena, &eval_arena, ctx);

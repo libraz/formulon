@@ -15,6 +15,7 @@
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -61,7 +62,7 @@ TEST(BuiltinsTake, PositiveRowsLeadingEdge) {
   Sheet& sheet = wb.sheet(0);
   Populate3x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=TAKE(A1:D3, 2)", &parse_arena, &eval_arena, ctx);
@@ -78,7 +79,7 @@ TEST(BuiltinsTake, NegativeRowsTrailingEdge) {
   Sheet& sheet = wb.sheet(0);
   Populate3x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=TAKE(A1:D3, -2)", &parse_arena, &eval_arena, ctx);
@@ -95,7 +96,7 @@ TEST(BuiltinsTake, PositiveRowsAndColumns) {
   Sheet& sheet = wb.sheet(0);
   Populate3x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=TAKE(A1:D3, 2, 3)", &parse_arena, &eval_arena, ctx);
@@ -117,7 +118,7 @@ TEST(BuiltinsTake, NegativeRowsAndColumnsTrailingCorner) {
   Sheet& sheet = wb.sheet(0);
   Populate3x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=TAKE(A1:D3, -2, -2)", &parse_arena, &eval_arena, ctx);
@@ -137,7 +138,7 @@ TEST(BuiltinsTake, RowsExceedingClampsToFullAxis) {
   Sheet& sheet = wb.sheet(0);
   Populate3x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=TAKE(A1:D3, 100)", &parse_arena, &eval_arena, ctx);
@@ -152,7 +153,7 @@ TEST(BuiltinsTake, FractionalCountTruncates) {
   Sheet& sheet = wb.sheet(0);
   Populate3x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=TAKE(A1:D3, 2.7)", &parse_arena, &eval_arena, ctx);
@@ -166,7 +167,7 @@ TEST(BuiltinsTake, ZeroRowsReturnsCalc) {
   Sheet& sheet = wb.sheet(0);
   Populate3x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=TAKE(A1:D3, 0)", &parse_arena, &eval_arena, ctx);
@@ -179,7 +180,7 @@ TEST(BuiltinsTake, ZeroColumnsReturnsCalc) {
   Sheet& sheet = wb.sheet(0);
   Populate3x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=TAKE(A1:D3, 1, 0)", &parse_arena, &eval_arena, ctx);
@@ -192,7 +193,7 @@ TEST(BuiltinsTake, OneArgRejected) {
   Sheet& sheet = wb.sheet(0);
   Populate3x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=TAKE(A1:D3)", &parse_arena, &eval_arena, ctx);
@@ -210,7 +211,7 @@ TEST(BuiltinsDrop, PositiveRowsDropsFromTop) {
   Sheet& sheet = wb.sheet(0);
   Populate3x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=DROP(A1:D3, 1)", &parse_arena, &eval_arena, ctx);
@@ -227,7 +228,7 @@ TEST(BuiltinsDrop, NegativeRowsDropsFromBottom) {
   Sheet& sheet = wb.sheet(0);
   Populate3x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=DROP(A1:D3, -1)", &parse_arena, &eval_arena, ctx);
@@ -244,7 +245,7 @@ TEST(BuiltinsDrop, ZeroDoesNothing) {
   Sheet& sheet = wb.sheet(0);
   Populate3x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=DROP(A1:D3, 0)", &parse_arena, &eval_arena, ctx);
@@ -259,7 +260,7 @@ TEST(BuiltinsDrop, BothAxesPositive) {
   Sheet& sheet = wb.sheet(0);
   Populate3x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=DROP(A1:D3, 1, 1)", &parse_arena, &eval_arena, ctx);
@@ -281,7 +282,7 @@ TEST(BuiltinsDrop, OverDropRowsReturnsCalc) {
   Sheet& sheet = wb.sheet(0);
   Populate3x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=DROP(A1:D3, 3)", &parse_arena, &eval_arena, ctx);
@@ -294,7 +295,7 @@ TEST(BuiltinsDrop, OverDropColumnsReturnsCalc) {
   Sheet& sheet = wb.sheet(0);
   Populate3x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=DROP(A1:D3, 0, 4)", &parse_arena, &eval_arena, ctx);
@@ -308,7 +309,7 @@ TEST(BuiltinsDrop, NegativeColumnsDropsFromRight) {
   Sheet& sheet = wb.sheet(0);
   Populate3x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=DROP(A1:D3, 0, -2)", &parse_arena, &eval_arena, ctx);
@@ -329,7 +330,7 @@ TEST(BuiltinsDrop, OneArgRejected) {
   Sheet& sheet = wb.sheet(0);
   Populate3x4(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=DROP(A1:D3)", &parse_arena, &eval_arena, ctx);

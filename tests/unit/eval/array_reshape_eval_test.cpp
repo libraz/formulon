@@ -13,6 +13,7 @@
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -59,7 +60,7 @@ TEST(BuiltinsExpand, GrowsRowsAndColumnsWithDefaultPadNa) {
   Sheet& sheet = wb.sheet(0);
   Populate2x3(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=EXPAND(A1:C2, 4, 5)", &parse_arena, &eval_arena, ctx);
@@ -85,7 +86,7 @@ TEST(BuiltinsExpand, ColumnsArgOmittedKeepsExistingColumnCount) {
   Sheet& sheet = wb.sheet(0);
   Populate2x3(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=EXPAND(A1:C2, 5)", &parse_arena, &eval_arena, ctx);
@@ -100,7 +101,7 @@ TEST(BuiltinsExpand, ExplicitPadValueIsUsed) {
   Sheet& sheet = wb.sheet(0);
   Populate2x3(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=EXPAND(A1:C2, 3, 4, 0)", &parse_arena, &eval_arena, ctx);
@@ -121,7 +122,7 @@ TEST(BuiltinsExpand, ShrinkingRowsReturnsValue) {
   Sheet& sheet = wb.sheet(0);
   Populate2x3(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=EXPAND(A1:C2, 1, 3)", &parse_arena, &eval_arena, ctx);
@@ -134,7 +135,7 @@ TEST(BuiltinsExpand, ShrinkingColumnsReturnsValue) {
   Sheet& sheet = wb.sheet(0);
   Populate2x3(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=EXPAND(A1:C2, 2, 1)", &parse_arena, &eval_arena, ctx);
@@ -147,7 +148,7 @@ TEST(BuiltinsExpand, OneArgRejected) {
   Sheet& sheet = wb.sheet(0);
   Populate2x3(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=EXPAND(A1:C2)", &parse_arena, &eval_arena, ctx);
@@ -165,7 +166,7 @@ TEST(BuiltinsTocol, FlattensRowMajorByDefault) {
   Sheet& sheet = wb.sheet(0);
   Populate2x3(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=TOCOL(A1:C2)", &parse_arena, &eval_arena, ctx);
@@ -183,7 +184,7 @@ TEST(BuiltinsTocol, ScanByColumnReordersToColumnMajor) {
   Sheet& sheet = wb.sheet(0);
   Populate2x3(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=TOCOL(A1:C2, 0, TRUE)", &parse_arena, &eval_arena, ctx);
@@ -207,7 +208,7 @@ TEST(BuiltinsTocol, IgnoreOneSkipsBlanks) {
   // B1 left blank.
   sheet.set_cell_value(0, 2, Value::number(3));
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=TOCOL(A1:C1, 1)", &parse_arena, &eval_arena, ctx);
@@ -225,7 +226,7 @@ TEST(BuiltinsTocol, IgnoreTwoSkipsErrors) {
   sheet.set_cell_value(0, 1, Value::error(ErrorCode::NA));
   sheet.set_cell_value(0, 2, Value::number(3));
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=TOCOL(A1:C1, 2)", &parse_arena, &eval_arena, ctx);
@@ -245,7 +246,7 @@ TEST(BuiltinsTocol, IgnoreThreeSkipsBothBlanksAndErrors) {
   sheet.set_cell_value(1, 0, Value::number(4));
   sheet.set_cell_value(1, 2, Value::number(6));
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=TOCOL(A1:C2, 3)", &parse_arena, &eval_arena, ctx);
@@ -264,7 +265,7 @@ TEST(BuiltinsTocol, AllSkippedReturnsCalc) {
   Sheet& sheet = wb.sheet(0);
   // A1:A3 left blank intentionally.
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=TOCOL(A1:A3, 1)", &parse_arena, &eval_arena, ctx);
@@ -277,7 +278,7 @@ TEST(BuiltinsTocol, OutOfRangeIgnoreMaskReturnsValue) {
   Sheet& sheet = wb.sheet(0);
   Populate2x3(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=TOCOL(A1:C2, 4)", &parse_arena, &eval_arena, ctx);
@@ -294,7 +295,7 @@ TEST(BuiltinsTorow, FlattensRowMajorByDefault) {
   Sheet& sheet = wb.sheet(0);
   Populate2x3(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=TOROW(A1:C2)", &parse_arena, &eval_arena, ctx);
@@ -311,7 +312,7 @@ TEST(BuiltinsTorow, ScanByColumnFlag) {
   Sheet& sheet = wb.sheet(0);
   Populate2x3(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=TOROW(A1:C2, 0, TRUE)", &parse_arena, &eval_arena, ctx);
@@ -336,7 +337,7 @@ TEST(BuiltinsWraprows, BasicWrapWithDefaultPad) {
     sheet.set_cell_value(0, c, Value::number(static_cast<double>(c + 1)));
   }
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=WRAPROWS(A1:G1, 3)", &parse_arena, &eval_arena, ctx);
@@ -363,7 +364,7 @@ TEST(BuiltinsWraprows, ExactDivisionNoPadding) {
     sheet.set_cell_value(0, c, Value::number(static_cast<double>(c + 1)));
   }
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=WRAPROWS(A1:F1, 3)", &parse_arena, &eval_arena, ctx);
@@ -379,7 +380,7 @@ TEST(BuiltinsWraprows, ExplicitPadValueIsUsed) {
     sheet.set_cell_value(0, c, Value::number(static_cast<double>(c + 1)));
   }
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=WRAPROWS(A1:E1, 3, 99)", &parse_arena, &eval_arena, ctx);
@@ -398,7 +399,7 @@ TEST(BuiltinsWraprows, ColumnVectorIsAllowed) {
     sheet.set_cell_value(r, 0, Value::number(static_cast<double>(r + 1)));
   }
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=WRAPROWS(A1:A4, 2)", &parse_arena, &eval_arena, ctx);
@@ -415,7 +416,7 @@ TEST(BuiltinsWraprows, TwoDimensionalSourceReturnsValue) {
   Sheet& sheet = wb.sheet(0);
   Populate2x3(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=WRAPROWS(A1:C2, 2)", &parse_arena, &eval_arena, ctx);
@@ -428,7 +429,7 @@ TEST(BuiltinsWraprows, ZeroWrapCountReturnsNum) {
   Sheet& sheet = wb.sheet(0);
   sheet.set_cell_value(0, 0, Value::number(1));
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=WRAPROWS(A1:A1, 0)", &parse_arena, &eval_arena, ctx);
@@ -451,7 +452,7 @@ TEST(BuiltinsWrapcols, WrapsIntoColumnMajor) {
     sheet.set_cell_value(0, c, Value::number(static_cast<double>(c + 1)));
   }
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=WRAPCOLS(A1:G1, 3)", &parse_arena, &eval_arena, ctx);
@@ -480,7 +481,7 @@ TEST(BuiltinsWrapcols, ExactDivisionNoPadding) {
     sheet.set_cell_value(0, c, Value::number(static_cast<double>(c + 1)));
   }
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=WRAPCOLS(A1:F1, 2)", &parse_arena, &eval_arena, ctx);
@@ -502,7 +503,7 @@ TEST(BuiltinsWrapcols, TwoDimensionalSourceReturnsValue) {
   Sheet& sheet = wb.sheet(0);
   Populate2x3(sheet);
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=WRAPCOLS(A1:C2, 2)", &parse_arena, &eval_arena, ctx);
@@ -517,7 +518,7 @@ TEST(BuiltinsWrapcols, ExplicitPadValueIsUsed) {
     sheet.set_cell_value(0, c, Value::number(static_cast<double>(c + 1)));
   }
   EvalState state;
-  const EvalContext ctx(wb, sheet, state);
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=WRAPCOLS(A1:E1, 3, 0)", &parse_arena, &eval_arena, ctx);

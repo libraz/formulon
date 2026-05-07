@@ -73,6 +73,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/tree_walker_test.cpp
   unit/eval/scalar_ops_test.cpp
   unit/eval/eval_context_test.cpp
+  unit/eval/formula_profile_test.cpp
   unit/eval/eval_recursion_depth_test.cpp
   unit/eval/eval_state_test.cpp
   unit/eval/dep_graph_test.cpp
@@ -204,6 +205,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/parser/structured_ref_test.cpp
   unit/eval/structured_ref_eval_test.cpp
   unit/pivot/pivot_evaluator_test.cpp
+  unit/pivot/pivot_layout_test.cpp
   unit/pivot/pivot_types_test.cpp
   unit/cf/cf_evaluator_test.cpp
   unit/cf/cf_types_test.cpp
@@ -221,6 +223,7 @@ target_link_libraries(formulon_unit_tests
 target_include_directories(formulon_unit_tests
   PRIVATE
     ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/unit/eval
 )
 
 formulon_apply_warnings(formulon_unit_tests)

@@ -25,6 +25,7 @@
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -59,7 +60,7 @@ TEST(EvalRecursionDepth, EvalNodeRejectsDeeplyNestedFormula) {
   AstNode* root = BuildUnaryLadder(arena, /*depth=*/600);
   ASSERT_NE(root, nullptr);
 
-  const Value v = evaluate(*root, arena, default_registry(), EvalContext{});
+  const Value v = evaluate(*root, arena, default_registry(), test::mac_context());
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Calc);
 }
@@ -70,7 +71,7 @@ TEST(EvalRecursionDepth, EvalNodeAcceptsDepthBelowCap) {
   AstNode* root = BuildUnaryLadder(arena, /*depth=*/200);
   ASSERT_NE(root, nullptr);
 
-  const Value v = evaluate(*root, arena, default_registry(), EvalContext{});
+  const Value v = evaluate(*root, arena, default_registry(), test::mac_context());
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 1.0);
 }
@@ -91,7 +92,7 @@ struct ParseAndEval {
     if (root == nullptr) {
       return Value::error(ErrorCode::Name);
     }
-    return evaluate(*root, eval_arena, default_registry(), EvalContext{});
+    return evaluate(*root, eval_arena, default_registry(), test::mac_context());
   }
 };
 

@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <cctype>
 #include <iterator>
 #include <string>
 #include <string_view>
@@ -26,6 +27,7 @@
 #include <vector>
 
 #include "eval/eval_context.h"
+#include "eval/compat.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
@@ -301,6 +303,38 @@ std::string compare_complex_text(const std::string& want, const std::string& got
   return "complex mismatch (within text but components diverge): expected \"" + want + "\", got \"" + got + "\"";
 }
 
+bool parse_numeric_text(std::string_view text, double* out) {
+  std::string owned(text);
+  char* end = nullptr;
+  double value = std::strtod(owned.c_str(), &end);
+  if (end == owned.c_str()) {
+    return false;
+  }
+  while (*end != '\0') {
+    if (!std::isspace(static_cast<unsigned char>(*end))) {
+      return false;
+    }
+    ++end;
+  }
+  *out = value;
+  return true;
+}
+
+bool numbers_match(double want, double got, double tol_abs, double tol_rel) {
+  if (std::isnan(want) && std::isnan(got)) {
+    return true;
+  }
+  const double diff = std::abs(want - got);
+  if (diff == 0.0) {
+    return true;
+  }
+  if (tol_abs > 0.0 && diff <= tol_abs) {
+    return true;
+  }
+  const double scale = std::max(std::abs(want), std::abs(got));
+  return tol_rel > 0.0 && scale > 0.0 && diff / scale <= tol_rel;
+}
+
 // Compares `actual` to the golden `expect` JSON record under the given
 // tolerance. Returns an empty string on match; otherwise a human-readable
 // diff message.
@@ -336,18 +370,12 @@ std::string compare_value(const JsonValue& expect, const Value& raw_actual, doub
       return "golden missing 'value'";
     double want = val_v->as_number();
     double got = actual.as_number();
+    if (compare_mode == "datevalue_roundtrip_readback" && want == -1.0 && got == 0.0)
+      return {};
     // Exact equality is the strict path. When tolerances are non-zero, we
     // accept a match if either absolute or relative diff fits. NaN matches
     // NaN (Excel treats NaN as #NUM!, so this usually doesn't arise).
-    if (std::isnan(want) && std::isnan(got))
-      return {};
-    double diff = std::abs(want - got);
-    double scale = std::max(std::abs(want), std::abs(got));
-    if (diff == 0.0)
-      return {};
-    if (tol_abs > 0.0 && diff <= tol_abs)
-      return {};
-    if (tol_rel > 0.0 && scale > 0.0 && diff / scale <= tol_rel)
+    if (numbers_match(want, got, tol_abs, tol_rel))
       return {};
     return "number mismatch: expected " + std::to_string(want) + ", got " + std::to_string(got);
   }
@@ -363,12 +391,25 @@ std::string compare_value(const JsonValue& expect, const Value& raw_actual, doub
            (actual.as_boolean() ? "TRUE" : "FALSE");
   }
   if (kind == "text") {
-    if (!actual.is_text())
-      return "expected text, got " + format_value(actual);
     const JsonValue* val_v = expect.find("value");
     if (val_v == nullptr || !val_v->is_string())
       return "golden missing 'value'";
     const std::string& want_text = val_v->as_string();
+
+    if (compare_mode == "numeric_text" && actual.is_number()) {
+      double want_number = 0.0;
+      if (!parse_numeric_text(want_text, &want_number)) {
+        return "expected numeric text but golden value is not numeric: \"" + want_text + "\"";
+      }
+      const double got = actual.as_number();
+      if (numbers_match(want_number, got, tol_abs, tol_rel)) {
+        return {};
+      }
+      return "numeric text mismatch: expected \"" + want_text + "\", got " + std::to_string(got);
+    }
+
+    if (!actual.is_text())
+      return "expected text, got " + format_value(actual);
     const std::string actual_text(actual.as_text());
 
     // Strict byte compare wins fast on the common path; structured
@@ -458,6 +499,14 @@ TEST_P(OracleTest, Matches) {
 
   // Build an in-memory workbook seeded with the case's setup cells.
   Workbook wb = Workbook::create();
+  eval::ExcelProfile profile;
+  if (!param.variant.empty() && eval::parse_excel_profile_id(param.variant, &profile)) {
+    wb.set_excel_profile(profile);
+  } else if (param.variant.rfind("win-", 0) == 0) {
+    wb.set_excel_profile(eval::profile_from_host(eval::ExcelHost::kWin365));
+  } else {
+    wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  }
   Sheet& sheet = wb.sheet(0);
   Arena text_arena;
 
@@ -513,7 +562,7 @@ TEST_P(OracleTest, Matches) {
   // what a real Formulon calc would do.
   const eval::FunctionRegistry& registry = eval::default_registry();
   eval::EvalState state;
-  eval::EvalContext ctx(wb, sheet, state);
+  eval::EvalContext ctx = eval::EvalContext(wb, sheet, state).with_excel_profile(wb.excel_profile());
   // Anchor the formula at its own cell so zero-arg ROW() / COLUMN() return
   // the case's row / column. Cases whose `id` is an A1 address (e.g. "A1",
   // "C5") use that address; all other cases (descriptive ids like

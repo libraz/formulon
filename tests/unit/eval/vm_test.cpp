@@ -20,6 +20,7 @@
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -53,7 +54,7 @@ Value RunVmOrDie(std::string_view src, Arena& arena) {
   if (!bc.has_value()) {
     return Value::error(ErrorCode::Name);
   }
-  auto out = execute(bc.value(), arena, default_registry(), EvalContext{});
+  auto out = execute(bc.value(), arena, default_registry(), test::mac_context());
   EXPECT_TRUE(out.has_value()) << "VM error for: " << src;
   if (!out.has_value()) {
     return Value::error(ErrorCode::Value);
@@ -88,7 +89,7 @@ Value RunTreeOrDie(std::string_view src, Arena& arena) {
   if (root == nullptr) {
     return Value::error(ErrorCode::Name);
   }
-  return evaluate(*root, arena);
+  return evaluate(*root, arena, default_registry(), test::mac_context());
 }
 
 bool ValuesAgreeBitExact(const Value& a, const Value& b) {
@@ -413,7 +414,7 @@ TEST(Vm, RefArithmetic) {
 TEST(Vm, EmptyBytecodeReturnsError) {
   ByteCode bc;  // no code
   Arena a;
-  auto out = execute(bc, a, default_registry(), EvalContext{});
+  auto out = execute(bc, a, default_registry(), test::mac_context());
   ASSERT_FALSE(out.has_value());
   EXPECT_EQ(out.error().code, FormulonErrorCode::kVmEmptyBytecode);
 }
@@ -428,7 +429,7 @@ TEST(Vm, StackUnderflowReturnsError) {
   bc.code.push_back(ret);
   bc.source_pos.push_back(0U);
   Arena a;
-  auto out = execute(bc, a, default_registry(), EvalContext{});
+  auto out = execute(bc, a, default_registry(), test::mac_context());
   ASSERT_FALSE(out.has_value());
   EXPECT_EQ(out.error().code, FormulonErrorCode::kVmStackUnderflow);
 }
@@ -448,7 +449,7 @@ TEST(Vm, BinaryOpUnderflowReturnsError) {
   bc.code.push_back(bo);
   bc.source_pos.push_back(0U);
   Arena a;
-  auto out = execute(bc, a, default_registry(), EvalContext{});
+  auto out = execute(bc, a, default_registry(), test::mac_context());
   ASSERT_FALSE(out.has_value());
   EXPECT_EQ(out.error().code, FormulonErrorCode::kVmStackUnderflow);
 }

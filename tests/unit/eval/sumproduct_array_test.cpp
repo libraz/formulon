@@ -26,6 +26,7 @@
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -53,7 +54,7 @@ Value EvalSourceIn(std::string_view src, const Workbook& wb, const Sheet& curren
     return Value::error(ErrorCode::Name);
   }
   EvalState state;
-  const EvalContext ctx(wb, current, state);
+  const EvalContext ctx = test::mac_context(wb, current, state);
   return evaluate(*root, eval_arena, default_registry(), ctx);
 }
 

@@ -8,7 +8,10 @@
 
 #include <string_view>
 
+#include "eval/eval_context.h"
+#include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -32,7 +35,22 @@ Value EvalSource(std::string_view src) {
   if (root == nullptr) {
     return Value::error(ErrorCode::Name);
   }
-  return evaluate(*root, eval_arena);
+  return evaluate(*root, eval_arena, default_registry(), test::mac_context());
+}
+
+Value EvalSourceWithHost(std::string_view src, ExcelHost host) {
+  static thread_local Arena parse_arena;
+  static thread_local Arena eval_arena;
+  parse_arena.reset();
+  eval_arena.reset();
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  const EvalContext ctx = test::host_context(host);
+  return evaluate(*root, eval_arena, default_registry(), ctx);
 }
 
 // ---------------------------------------------------------------------------
@@ -347,7 +365,7 @@ TEST(TextCode, UsesFirstCharOnly) {
   EXPECT_DOUBLE_EQ(v.as_number(), 65.0);
 }
 
-TEST(TextCode, HiraganaReturnsJisRowCell) {
+TEST(TextCode, MacHostHiraganaReturnsJisRowCell) {
   // "あ" = U+3042. Mac Excel ja-JP returns the JIS X 0208 row-cell
   // encoding (row 4, cell 2) -> ((4+0x20)<<8) | (2+0x20) = 0x2422 = 9250.
   const Value v = EvalSource("=CODE(\"あ\")");
@@ -355,12 +373,22 @@ TEST(TextCode, HiraganaReturnsJisRowCell) {
   EXPECT_DOUBLE_EQ(v.as_number(), 9250.0);
 }
 
-TEST(TextCode, EmojiFallsBackToUnderscore) {
+TEST(TextCode, MacHostEmojiFallsBackToUnderscore) {
   // Codepoints outside JIS X 0208 (here U+1F600) fall back to 95 (the
   // underscore byte) per Mac Excel's empirically confirmed behaviour.
   const Value v = EvalSource("=CODE(\"\xF0\x9F\x98\x80\")");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 95.0);
+}
+
+TEST(TextCode, WinHostUsesCp932Fallbacks) {
+  Value v = EvalSourceWithHost("=CODE(\"髙\")", ExcelHost::kWin365);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 38526.0);
+
+  v = EvalSourceWithHost("=CODE(\"\xF0\x9F\x98\x80\")", ExcelHost::kWin365);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 63.0);
 }
 
 TEST(TextCode, ErrorPropagates) {

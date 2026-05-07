@@ -21,6 +21,7 @@
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -48,7 +49,7 @@ Value EvalSourceIn(std::string_view src, const Workbook& wb, const Sheet& curren
     return Value::error(ErrorCode::Name);
   }
   EvalState state;
-  const EvalContext ctx(wb, current, state);
+  const EvalContext ctx = test::workbook_context(wb, current, state);
   return evaluate(*root, eval_arena, default_registry(), ctx);
 }
 
@@ -68,7 +69,7 @@ Value EvalSourceAt(std::string_view src, const Workbook& wb, const Sheet& curren
     return Value::error(ErrorCode::Name);
   }
   EvalState state;
-  const EvalContext ctx = EvalContext(wb, current, state).with_formula_cell(row, col);
+  const EvalContext ctx = test::workbook_context(wb, current, state).with_formula_cell(row, col);
   return evaluate(*root, eval_arena, default_registry(), ctx);
 }
 
@@ -228,10 +229,10 @@ TEST(RangeOp, ScalarRowAlignedReturnsAlignedCell) {
   EXPECT_EQ(v.as_number(), 30.0);
 }
 
-TEST(RangeOp, ScalarOutOfRangeFallsBackToTopLeft) {
+TEST(RangeOp, MacHostScalarOutOfRangeFallsBackToTopLeft) {
   // Single-column range A3:A8, formula bound to row 1 (0-based 0).
   // Row 0 is NOT in [2..7], so we fall back to the top-left A3.
-  Workbook wb = Workbook::create();
+  Workbook wb = test::mac_workbook();
   wb.sheet(0).set_cell_value(2, 0, Value::number(33.0));  // A3 = top-left
   wb.sheet(0).set_cell_value(3, 0, Value::number(44.0));
   wb.sheet(0).set_cell_value(7, 0, Value::number(88.0));
@@ -241,9 +242,18 @@ TEST(RangeOp, ScalarOutOfRangeFallsBackToTopLeft) {
   EXPECT_EQ(v.as_number(), 33.0);
 }
 
-TEST(RangeOp, Scalar2DRangeFallsBackToTopLeft) {
+TEST(RangeOp, WinHostScalarOutOfRangeIsValue) {
+  Workbook wb = test::win_workbook();
+  wb.sheet(0).set_cell_value(2, 0, Value::number(33.0));
+
+  const Value v = EvalSourceAt("=A3:A8", wb, wb.sheet(0), 0U, 11U);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(RangeOp, MacHostScalar2DRangeFallsBackToTopLeft) {
   // 2D range A1:B5 -- alignment requires both axes; we fall back to A1.
-  Workbook wb = Workbook::create();
+  Workbook wb = test::mac_workbook();
   wb.sheet(0).set_cell_value(0, 0, Value::number(11.0));  // A1
   wb.sheet(0).set_cell_value(0, 1, Value::number(12.0));
   wb.sheet(0).set_cell_value(1, 0, Value::number(21.0));
@@ -252,6 +262,22 @@ TEST(RangeOp, Scalar2DRangeFallsBackToTopLeft) {
   const Value v = EvalSourceAt("=A1:B5", wb, wb.sheet(0), 0U, 25U);
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 11.0);
+}
+
+TEST(RangeOp, WinHost2DRequiresBothAxesAligned) {
+  Workbook wb = test::win_workbook();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(11.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(12.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(21.0));
+  wb.sheet(0).set_cell_value(1, 1, Value::number(22.0));
+
+  Value v = EvalSourceAt("=A1:B5", wb, wb.sheet(0), 0U, 25U);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+
+  v = EvalSourceAt("=A1:B5", wb, wb.sheet(0), 1U, 1U);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 22.0);
 }
 
 TEST(RangeOp, ScalarNoFormulaCellFallsBackToTopLeft) {
@@ -276,6 +302,15 @@ TEST(RangeOp, ScalarAtPrefixStrictUnchanged) {
   const Value v = EvalSourceAt("=@A3:A8", wb, wb.sheet(0), 0U, 11U);
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(RangeOp, WinHostSingleFunctionIsNameError) {
+  Workbook wb = test::win_workbook();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(42.0));
+
+  const Value v = EvalSourceAt("=_xlfn.SINGLE(A1:A5)", wb, wb.sheet(0), 0U, 11U);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
 }
 
 }  // namespace

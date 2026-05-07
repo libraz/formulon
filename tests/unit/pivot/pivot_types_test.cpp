@@ -104,7 +104,10 @@ TEST(PivotResult, Defaults) {
   EXPECT_TRUE(r.cols.empty());
   EXPECT_TRUE(r.values.empty());
   EXPECT_TRUE(r.subtotals.empty());
+  EXPECT_TRUE(r.row_subtotals.empty());
+  EXPECT_TRUE(r.col_subtotals.empty());
   EXPECT_EQ(r.grand_total.kind(), ValueKind::Blank);
+  EXPECT_TRUE(r.grand_totals.empty());
 }
 
 TEST(PivotTable, IdentityDefaults) {
@@ -198,11 +201,14 @@ TEST(PivotTable, MutableLastResultRoundTrip) {
 
   PivotResult r;
   r.grand_total = Value::number(42.0);
+  r.grand_totals.push_back(Value::number(42.0));
   t.mutable_last_result() = std::move(r);
 
   ASSERT_TRUE(t.last_result().has_value());
   EXPECT_EQ(t.last_result()->grand_total.kind(), ValueKind::Number);
   EXPECT_EQ(t.last_result()->grand_total.as_number(), 42.0);
+  ASSERT_EQ(t.last_result()->grand_totals.size(), 1U);
+  EXPECT_EQ(t.last_result()->grand_totals[0].as_number(), 42.0);
 }
 
 }  // namespace

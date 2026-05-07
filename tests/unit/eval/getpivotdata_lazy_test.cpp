@@ -155,6 +155,19 @@ Workbook BuildBasicWorkbook() {
   return wb;
 }
 
+Workbook BuildMultiDataWorkbook() {
+  Workbook wb = Workbook::create();
+  wb.add_pivot_cache(BuildBasicCache());
+  auto table = BuildBasicTable();
+  pivot::PivotDataField count_amount;
+  count_amount.name = "Count of Amount";
+  count_amount.field_index = 1U;
+  count_amount.aggregation = pivot::Aggregation::Count;
+  table->mutable_data_fields().push_back(std::move(count_amount));
+  wb.sheet(0).add_pivot_table(std::move(table));
+  return wb;
+}
+
 // ---------------------------------------------------------------------------
 // Happy path
 // ---------------------------------------------------------------------------
@@ -166,6 +179,15 @@ TEST(GetPivotDataLazy, AnchorOnlyReturnsGrandTotal) {
   const Value v = EvalWith("=GETPIVOTDATA(\"Sum of Amount\", A3)", ctx);
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 1000.0);
+}
+
+TEST(GetPivotDataLazy, AnchorOnlyReturnsGrandTotalForSecondDataField) {
+  Workbook wb = BuildMultiDataWorkbook();
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = EvalWith("=GETPIVOTDATA(\"Count of Amount\", A3)", ctx);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 4.0);
 }
 
 TEST(GetPivotDataLazy, RowFieldNorthReturnsLeafSum) {

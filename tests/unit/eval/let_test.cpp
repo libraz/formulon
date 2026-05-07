@@ -6,7 +6,10 @@
 
 #include <string_view>
 
+#include "eval/eval_context.h"
 #include "eval/tree_walker.h"
+#include "eval/function_registry.h"
+#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -28,7 +31,22 @@ Value EvalSource(std::string_view src) {
   if (root == nullptr) {
     return Value::error(ErrorCode::Name);
   }
-  return evaluate(*root, eval_arena);
+  return evaluate(*root, eval_arena, default_registry(), test::mac_context());
+}
+
+Value EvalSourceWithHost(std::string_view src, ExcelHost host) {
+  static thread_local Arena parse_arena;
+  static thread_local Arena eval_arena;
+  parse_arena.reset();
+  eval_arena.reset();
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  const EvalContext ctx = test::host_context(host);
+  return evaluate(*root, eval_arena, default_registry(), ctx);
 }
 
 // ---------------------------------------------------------------------------
@@ -76,6 +94,32 @@ TEST(EvalLet, FunctionCallOnBoundValue) {
   const Value v = EvalSource("=LET(x, 3, MAX(x, 5))");
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 5.0);
+}
+
+TEST(EvalHostProfile, WinHostUnavailableSpecialFormsAndFutureFunctionsAreNameErrors) {
+  Value v = EvalSourceWithHost("=LET(x, 1, x)", ExcelHost::kWin365);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+
+  v = EvalSourceWithHost("=LAMBDA(x, x+1)(5)", ExcelHost::kWin365);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+
+  v = EvalSourceWithHost("=SEQUENCE(3)", ExcelHost::kWin365);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+
+  v = EvalSourceWithHost("=VALUETOTEXT(1)", ExcelHost::kWin365);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+
+  v = EvalSourceWithHost("=UNIQUE({1;1}, FALSE, TRUE)", ExcelHost::kWin365);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+
+  v = EvalSourceWithHost("=TEXTSPLIT(\"a,b\", \",\")", ExcelHost::kWin365);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
 }
 
 // ---------------------------------------------------------------------------

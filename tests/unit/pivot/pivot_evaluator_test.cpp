@@ -475,6 +475,32 @@ TEST(PivotEvaluator, GrandTotalWhenFlagged) {
 
   ASSERT_TRUE(r.grand_total.is_number());
   EXPECT_DOUBLE_EQ(r.grand_total.as_number(), 675.0);  // 100 + 50 + 200 + 300 + 25
+  ASSERT_EQ(r.grand_totals.size(), 1U);
+  ASSERT_TRUE(r.grand_totals[0].is_number());
+  EXPECT_DOUBLE_EQ(r.grand_totals[0].as_number(), 675.0);
+}
+
+TEST(PivotEvaluator, GrandTotalsCarryOneValuePerDataField) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  PivotDataField count_amount;
+  count_amount.name = "Count of Amount";
+  count_amount.field_index = 2;
+  count_amount.aggregation = Aggregation::Count;
+  table.mutable_data_fields().push_back(std::move(count_amount));
+  table.set_grand_totals(/*rows=*/true, /*cols=*/true);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  ASSERT_EQ(r.grand_totals.size(), 2U);
+  ASSERT_TRUE(r.grand_totals[0].is_number());
+  EXPECT_DOUBLE_EQ(r.grand_totals[0].as_number(), 675.0);
+  ASSERT_TRUE(r.grand_totals[1].is_number());
+  EXPECT_DOUBLE_EQ(r.grand_totals[1].as_number(), 5.0);
+  ASSERT_TRUE(r.grand_total.is_number());
+  EXPECT_DOUBLE_EQ(r.grand_total.as_number(), r.grand_totals[0].as_number());
 }
 
 // ---------------------------------------------------------------------------
@@ -583,13 +609,38 @@ TEST(PivotEvaluator, RowSubtotalEmittedWhenRequested) {
 
   // Two regions -> two subtotal rows, each with one data field slot.
   ASSERT_EQ(r.subtotals.size(), 2U);
+  ASSERT_EQ(r.row_subtotals.size(), 2U);
   ASSERT_EQ(r.subtotals[0].size(), 1U);
+  EXPECT_EQ(r.row_subtotals[0].depth, 0U);
+  ASSERT_EQ(r.row_subtotals[0].labels.size(), 1U);
   // Subtotals appear in row-hierarchy DFS order (post-order at each
   // non-leaf), matching how Excel walks the tree to position them.
   std::vector<double> totals{r.subtotals[0][0].as_number(), r.subtotals[1][0].as_number()};
   std::sort(totals.begin(), totals.end());
   EXPECT_DOUBLE_EQ(totals[0], 175.0);  // North subtotal: 100 + 50 + 25
   EXPECT_DOUBLE_EQ(totals[1], 500.0);  // South subtotal: 200 + 300
+}
+
+TEST(PivotEvaluator, ColSubtotalEmittedWhenRequested) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{}, /*col=*/{0, 1});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  table.mutable_fields()[0].subtotal_top = true;
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  ASSERT_EQ(r.col_subtotals.size(), 2U);
+  ASSERT_EQ(r.col_subtotals[0].labels.size(), 1U);
+  EXPECT_EQ(r.col_subtotals[0].depth, 0U);
+  ASSERT_EQ(r.col_subtotals[0].values.size(), 1U);
+  ASSERT_EQ(r.col_subtotals[0].values[0].size(), 1U);
+
+  std::vector<double> totals{r.col_subtotals[0].values[0][0].as_number(), r.col_subtotals[1].values[0][0].as_number()};
+  std::sort(totals.begin(), totals.end());
+  EXPECT_DOUBLE_EQ(totals[0], 175.0);
+  EXPECT_DOUBLE_EQ(totals[1], 500.0);
 }
 
 }  // namespace

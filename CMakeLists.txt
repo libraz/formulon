@@ -141,6 +141,7 @@ set(FORMULON_CORE_SOURCES
   src/parser/ref_transforms.cpp
   src/pivot/pivot_evaluator.cpp
   src/pivot/pivot_index.cpp
+  src/pivot/pivot_layout.cpp
   src/eval/coerce.cpp
   src/eval/compiler.cpp
   src/eval/optimizer.cpp
