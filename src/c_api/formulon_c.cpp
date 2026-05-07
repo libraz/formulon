@@ -66,6 +66,10 @@
 #include "io/ooxml_reader.h"
 #include "io/styles_reader.h"
 #include "io/zip_reader.h"
+#include "pivot/pivot_cache.h"
+#include "pivot/pivot_evaluator.h"
+#include "pivot/pivot_layout.h"
+#include "pivot/pivot_table.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -1247,6 +1251,31 @@ extern "C" fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, fm_calc_mode
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_excel_profile_id(const fm_workbook_t* wb, const char** out_profile_id) {
+  clear_last_error();
+  if (wb == nullptr || out_profile_id == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_excel_profile_id: NULL argument");
+  }
+  *out_profile_id = formulon::eval::excel_profile_id(wb->workbook().excel_profile());
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_set_excel_profile_id(fm_workbook_t* wb, const char* profile_id) {
+  clear_last_error();
+  if (wb == nullptr || profile_id == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_set_excel_profile_id: NULL argument");
+  }
+  formulon::eval::ExcelProfile profile;
+  if (!formulon::eval::parse_excel_profile_id(profile_id, &profile)) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_set_excel_profile_id: unknown profile");
+  }
+  wb->workbook().set_excel_profile(profile);
+  return 0;
+}
+
 extern "C" fm_status_t fm_sheet_get_protection(const fm_workbook_t* wb, uint32_t sheet_index,
                                                fm_sheet_protection_t* out) {
   clear_last_error();
@@ -1944,6 +1973,173 @@ extern "C" fm_status_t fm_cell_nodes_at(const fm_cell_nodes_t* nodes, std::size_
   out->sheet = static_cast<std::uint32_t>(nodes->nodes[idx].sheet_id);
   out->row = nodes->nodes[idx].row;
   out->col = nodes->nodes[idx].col;
+  return 0;
+}
+
+// ---------------------------------------------------------------------------
+// PivotTable layout projection
+// ---------------------------------------------------------------------------
+
+struct fm_pivot_cells {
+  std::uint32_t top = 0;
+  std::uint32_t left = 0;
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  std::vector<fm_pivot_cell_t> cells;
+  TextStore text_store;
+};
+
+namespace {
+
+fm_pivot_cell_kind_t pivot_cell_kind_to_fm(formulon::pivot::PivotCellKind kind) {
+  switch (kind) {
+    case formulon::pivot::PivotCellKind::Header:
+      return FM_PIVOT_CELL_HEADER;
+    case formulon::pivot::PivotCellKind::RowLabel:
+      return FM_PIVOT_CELL_ROW_LABEL;
+    case formulon::pivot::PivotCellKind::ColLabel:
+      return FM_PIVOT_CELL_COL_LABEL;
+    case formulon::pivot::PivotCellKind::Data:
+      return FM_PIVOT_CELL_DATA;
+    case formulon::pivot::PivotCellKind::RowSubtotal:
+      return FM_PIVOT_CELL_ROW_SUBTOTAL;
+    case formulon::pivot::PivotCellKind::ColSubtotal:
+      return FM_PIVOT_CELL_COL_SUBTOTAL;
+    case formulon::pivot::PivotCellKind::GrandTotal:
+      return FM_PIVOT_CELL_GRAND_TOTAL;
+    case formulon::pivot::PivotCellKind::Blank:
+      return FM_PIVOT_CELL_BLANK;
+  }
+  return FM_PIVOT_CELL_BLANK;
+}
+
+const char* store_cstr(TextStore& store, std::string_view text) {
+  store.emplace_back(text.data(), text.size());
+  return store.back().c_str();
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_workbook_pivot_count(const fm_workbook_t* wb, std::size_t sheet_index,
+                                               std::size_t* out_count) {
+  clear_last_error();
+  if (wb == nullptr || out_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_count: NULL argument");
+  }
+  if (sheet_index >= wb->workbook().sheet_count()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_pivot_count: sheet_index out of range",
+                             "sheet_index=" + std::to_string(sheet_index));
+  }
+  *out_count = wb->workbook().sheet(sheet_index).pivot_tables().size();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_layout(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                std::size_t pivot_index, fm_pivot_cells_t** out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_layout: NULL argument");
+  }
+  *out = nullptr;
+  if (sheet_index >= wb->workbook().sheet_count()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_pivot_layout: sheet_index out of range",
+                             "sheet_index=" + std::to_string(sheet_index));
+  }
+  const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
+  if (pivot_index >= sheet.pivot_tables().size()) {
+    return set_binding_error(
+        formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_pivot_layout: pivot_index out of range",
+        "pivot_index=" + std::to_string(pivot_index) + " count=" + std::to_string(sheet.pivot_tables().size()));
+  }
+
+  const formulon::pivot::PivotTable* table = sheet.pivot_tables()[pivot_index].get();
+  if (table == nullptr) {
+    return set_binding_error(
+        formulon::FormulonErrorCode::kEvalPivotInvalid, "fm_workbook_pivot_layout: pivot table entry is NULL",
+        "sheet_index=" + std::to_string(sheet_index) + " pivot_index=" + std::to_string(pivot_index));
+  }
+
+  if (!table->last_result().has_value()) {
+    const formulon::pivot::PivotCache* cache = wb->workbook().find_pivot_cache(table->pivot_cache_id());
+    if (cache == nullptr) {
+      return set_binding_error(formulon::FormulonErrorCode::kEvalPivotMissing,
+                               "fm_workbook_pivot_layout: pivot cache not found",
+                               "cache_id=" + std::to_string(table->pivot_cache_id()));
+    }
+    auto eval_or = formulon::pivot::evaluate(*table, *cache);
+    if (!eval_or) {
+      return set_last_error(eval_or.error());
+    }
+    table->mutable_last_result().emplace(std::move(eval_or.value()));
+  }
+
+  auto layout_or = formulon::pivot::layout(*table, *table->last_result());
+  if (!layout_or) {
+    return set_last_error(layout_or.error());
+  }
+
+  auto handle = std::unique_ptr<fm_pivot_cells_t>(new fm_pivot_cells_t{});
+  const formulon::pivot::PivotCells& projected = layout_or.value();
+  handle->top = projected.top;
+  handle->left = projected.left;
+  handle->rows = projected.rows;
+  handle->cols = projected.cols;
+  handle->cells.reserve(projected.cells.size());
+  for (const formulon::pivot::PivotCell& src : projected.cells) {
+    fm_pivot_cell_t dst{};
+    dst.row = src.row;
+    dst.col = src.col;
+    value_to_fm(src.value, handle->text_store, &dst.value);
+    dst.kind = pivot_cell_kind_to_fm(src.kind);
+    dst.depth = src.depth;
+    dst.field_name = store_cstr(handle->text_store, src.field_name);
+    dst.number_format = store_cstr(handle->text_store, src.number_format);
+    handle->cells.push_back(dst);
+  }
+
+  *out = handle.release();
+  return 0;
+}
+
+extern "C" void fm_pivot_cells_destroy(fm_pivot_cells_t* cells) {
+  delete cells;
+}
+
+extern "C" std::size_t fm_pivot_cells_count(const fm_pivot_cells_t* cells) {
+  if (cells == nullptr) {
+    return 0;
+  }
+  return cells->cells.size();
+}
+
+extern "C" fm_status_t fm_pivot_cells_bounds(const fm_pivot_cells_t* cells, std::uint32_t* out_top,
+                                             std::uint32_t* out_left, std::uint32_t* out_rows,
+                                             std::uint32_t* out_cols) {
+  clear_last_error();
+  if (cells == nullptr || out_top == nullptr || out_left == nullptr || out_rows == nullptr || out_cols == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_pivot_cells_bounds: NULL argument");
+  }
+  *out_top = cells->top;
+  *out_left = cells->left;
+  *out_rows = cells->rows;
+  *out_cols = cells->cols;
+  return 0;
+}
+
+extern "C" fm_status_t fm_pivot_cells_at(const fm_pivot_cells_t* cells, std::size_t idx, fm_pivot_cell_t* out) {
+  clear_last_error();
+  if (cells == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_pivot_cells_at: NULL argument");
+  }
+  if (idx >= cells->cells.size()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_pivot_cells_at: idx out of range",
+                             "idx=" + std::to_string(idx) + " count=" + std::to_string(cells->cells.size()));
+  }
+  *out = cells->cells[idx];
   return 0;
 }
 

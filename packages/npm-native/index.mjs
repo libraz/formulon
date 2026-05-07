@@ -66,6 +66,18 @@ export const CfMatchKind = Object.freeze({
   IconSet: 3,
 });
 
+/** `fm_pivot_cell_kind_t` ordinals. */
+export const PivotCellKind = Object.freeze({
+  Header: 0,
+  RowLabel: 1,
+  ColLabel: 2,
+  Data: 3,
+  RowSubtotal: 4,
+  ColSubtotal: 5,
+  GrandTotal: 6,
+  Blank: 7,
+});
+
 export default {
   Workbook,
   evalFormula,
@@ -75,4 +87,5 @@ export default {
   statusString,
   ValueKind,
   CfMatchKind,
+  PivotCellKind,
 };

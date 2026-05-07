@@ -141,6 +141,29 @@ Napi::Object TranslateValue(Napi::Env env, const fm_value_t& v) {
   return o;
 }
 
+Napi::Object EmptyPivotLayoutResult(Napi::Env env, Napi::Object status) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("status", status);
+  out.Set("top", Napi::Number::New(env, 0));
+  out.Set("left", Napi::Number::New(env, 0));
+  out.Set("rows", Napi::Number::New(env, 0));
+  out.Set("cols", Napi::Number::New(env, 0));
+  out.Set("cells", Napi::Array::New(env));
+  return out;
+}
+
+Napi::Object TranslatePivotCell(Napi::Env env, const fm_pivot_cell_t& cell) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("row", Napi::Number::New(env, cell.row));
+  out.Set("col", Napi::Number::New(env, cell.col));
+  out.Set("value", TranslateValue(env, cell.value));
+  out.Set("kind", Napi::Number::New(env, static_cast<int32_t>(cell.kind)));
+  out.Set("depth", Napi::Number::New(env, cell.depth));
+  out.Set("fieldName", Napi::String::New(env, cell.field_name != nullptr ? cell.field_name : ""));
+  out.Set("numberFormat", Napi::String::New(env, cell.number_format != nullptr ? cell.number_format : ""));
+  return out;
+}
+
 /// `kBindingNullPointer` ordinal mirrors `formulon::FormulonErrorCode`
 /// in the 7000-7999 range allocated to bindings (see CLAUDE.md error
 /// code table). The C ABI itself returns this code when a NULL pointer
@@ -301,6 +324,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value TableAt(const Napi::CallbackInfo& info);
   Napi::Value PassthroughCount(const Napi::CallbackInfo& info);
   Napi::Value PassthroughAt(const Napi::CallbackInfo& info);
+  Napi::Value PivotCount(const Napi::CallbackInfo& info);
+  Napi::Value PivotLayout(const Napi::CallbackInfo& info);
 
   // Defined names.
   Napi::Value SetDefinedName(const Napi::CallbackInfo& info);
@@ -949,6 +974,64 @@ Napi::Value Workbook::PassthroughAt(const Napi::CallbackInfo& info) {
   }
   out.Set("status", MakeOkStatus(env));
   out.Set("path", Napi::String::New(env, path != nullptr ? path : ""));
+  return out;
+}
+
+Napi::Value Workbook::PivotCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::Number::New(env, 0);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  std::size_t count = 0;
+  if (fm_workbook_pivot_count(handle_, sheet, &count) != 0) {
+    return Napi::Number::New(env, 0);
+  }
+  return Napi::Number::New(env, static_cast<double>(count));
+}
+
+Napi::Value Workbook::PivotLayout(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return EmptyPivotLayoutResult(env, NullHandleError(env));
+  }
+
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
+  fm_pivot_cells_t* cells = nullptr;
+  fm_status_t rc = fm_workbook_pivot_layout(handle_, sheet, pivot_index, &cells);
+  if (rc != 0) {
+    return EmptyPivotLayoutResult(env, MakeErrorStatus(env, rc));
+  }
+
+  uint32_t top = 0;
+  uint32_t left = 0;
+  uint32_t rows = 0;
+  uint32_t cols = 0;
+  rc = fm_pivot_cells_bounds(cells, &top, &left, &rows, &cols);
+  if (rc != 0) {
+    fm_pivot_cells_destroy(cells);
+    return EmptyPivotLayoutResult(env, MakeErrorStatus(env, rc));
+  }
+
+  const std::size_t count = fm_pivot_cells_count(cells);
+  Napi::Array arr = Napi::Array::New(env, count);
+  for (std::size_t i = 0; i < count; ++i) {
+    fm_pivot_cell_t cell{};
+    if (fm_pivot_cells_at(cells, i, &cell) != 0) {
+      continue;
+    }
+    arr.Set(static_cast<uint32_t>(i), TranslatePivotCell(env, cell));
+  }
+  fm_pivot_cells_destroy(cells);
+
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("status", MakeOkStatus(env));
+  out.Set("top", Napi::Number::New(env, top));
+  out.Set("left", Napi::Number::New(env, left));
+  out.Set("rows", Napi::Number::New(env, rows));
+  out.Set("cols", Napi::Number::New(env, cols));
+  out.Set("cells", arr);
   return out;
 }
 
@@ -2040,6 +2123,8 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
                          InstanceMethod<&Workbook::PartialRecalc>("partialRecalc"),
                          InstanceMethod<&Workbook::PassthroughAt>("passthroughAt"),
                          InstanceMethod<&Workbook::PassthroughCount>("passthroughCount"),
+                         InstanceMethod<&Workbook::PivotCount>("pivotCount"),
+                         InstanceMethod<&Workbook::PivotLayout>("pivotLayout"),
                          InstanceMethod<&Workbook::Recalc>("recalc"),
                          InstanceMethod<&Workbook::RemoveHyperlink>("removeHyperlink"),
                          InstanceMethod<&Workbook::RemoveHyperlinkAt>("removeHyperlinkAt"),

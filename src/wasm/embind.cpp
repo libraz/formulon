@@ -378,6 +378,29 @@ JsValue translate_value(const fm_value_t& v) {
   return out;
 }
 
+emscripten::val empty_pivot_layout_result(JsStatus status) {
+  emscripten::val o = emscripten::val::object();
+  o.set("status", status);
+  o.set("top", static_cast<uint32_t>(0));
+  o.set("left", static_cast<uint32_t>(0));
+  o.set("rows", static_cast<uint32_t>(0));
+  o.set("cols", static_cast<uint32_t>(0));
+  o.set("cells", emscripten::val::array());
+  return o;
+}
+
+emscripten::val pivot_cell_to_val(const fm_pivot_cell_t& cell) {
+  emscripten::val item = emscripten::val::object();
+  item.set("row", cell.row);
+  item.set("col", cell.col);
+  item.set("value", translate_value(cell.value));
+  item.set("kind", static_cast<int32_t>(cell.kind));
+  item.set("depth", cell.depth);
+  item.set("fieldName", cell.field_name != nullptr ? std::string(cell.field_name) : std::string());
+  item.set("numberFormat", cell.number_format != nullptr ? std::string(cell.number_format) : std::string());
+  return item;
+}
+
 /// Copies the contents of a JS Uint8Array (passed via `emscripten::val`)
 /// into a `std::vector<uint8_t>`. Returns an empty vector when the
 /// argument is not a typed array.
@@ -777,6 +800,25 @@ class JsWorkbook {
     return rc == 0 ? ok_status() : error_status(rc);
   }
 
+  /// Returns the workbook's full Excel formula profile id.
+  std::string excelProfileId() const {
+    if (handle_ == nullptr) {
+      return "win-365-ja_JP";
+    }
+    const char* id = nullptr;
+    fm_workbook_excel_profile_id(handle_, &id);
+    return id == nullptr ? std::string("win-365-ja_JP") : std::string(id);
+  }
+
+  /// Sets the workbook's full Excel formula profile id for future recalc.
+  JsStatus setExcelProfileId(const std::string& profile_id) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_set_excel_profile_id(handle_, profile_id.c_str());
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
   /// Drives a viewport-bounded incremental recalc.
   ///
   /// `viewport` is a JS object of the shape
@@ -959,6 +1001,63 @@ class JsWorkbook {
     }
     o.set("status", ok_status());
     o.set("path", path != nullptr ? std::string(path) : std::string());
+    return o;
+  }
+
+  uint32_t pivotCount(uint32_t sheet) const {
+    if (handle_ == nullptr) {
+      return 0;
+    }
+    std::size_t count = 0;
+    if (fm_workbook_pivot_count(handle_, sheet, &count) != 0) {
+      return 0;
+    }
+    return static_cast<uint32_t>(count);
+  }
+
+  /// Projects the `pivotIndex`-th PivotTable on `sheet` into concrete
+  /// sheet cells. The result is already suitable for grid rendering:
+  /// absolute row/col coordinates, a flattened `Value`, semantic cell
+  /// kind, nesting depth, source field name, and number format.
+  emscripten::val pivotLayout(uint32_t sheet, uint32_t pivotIndex) const {
+    if (handle_ == nullptr) {
+      return empty_pivot_layout_result(error_status(7000));
+    }
+
+    fm_pivot_cells_t* cells = nullptr;
+    fm_status_t rc = fm_workbook_pivot_layout(handle_, sheet, pivotIndex, &cells);
+    if (rc != 0) {
+      return empty_pivot_layout_result(error_status(rc));
+    }
+
+    uint32_t top = 0;
+    uint32_t left = 0;
+    uint32_t rows = 0;
+    uint32_t cols = 0;
+    rc = fm_pivot_cells_bounds(cells, &top, &left, &rows, &cols);
+    if (rc != 0) {
+      fm_pivot_cells_destroy(cells);
+      return empty_pivot_layout_result(error_status(rc));
+    }
+
+    emscripten::val arr = emscripten::val::array();
+    const std::size_t count = fm_pivot_cells_count(cells);
+    for (std::size_t i = 0; i < count; ++i) {
+      fm_pivot_cell_t cell{};
+      if (fm_pivot_cells_at(cells, i, &cell) != 0) {
+        continue;
+      }
+      arr.set(i, pivot_cell_to_val(cell));
+    }
+
+    fm_pivot_cells_destroy(cells);
+    emscripten::val o = emscripten::val::object();
+    o.set("status", ok_status());
+    o.set("top", top);
+    o.set("left", left);
+    o.set("rows", rows);
+    o.set("cols", cols);
+    o.set("cells", arr);
     return o;
   }
 
@@ -2554,6 +2653,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("deleteRows", &JsWorkbook::deleteRows)
       .function("dependents", &JsWorkbook::dependents)
       .function("evaluateCfRange", &JsWorkbook::evaluateCfRange)
+      .function("excelProfileId", &JsWorkbook::excelProfileId)
       .function("fillCount", &JsWorkbook::fillCount)
       .function("fontCount", &JsWorkbook::fontCount)
       .function("functionMetadata", &JsWorkbook::functionMetadata)
@@ -2586,6 +2686,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("partialRecalc", &JsWorkbook::partialRecalc)
       .function("passthroughAt", &JsWorkbook::passthroughAt)
       .function("passthroughCount", &JsWorkbook::passthroughCount)
+      .function("pivotCount", &JsWorkbook::pivotCount)
+      .function("pivotLayout", &JsWorkbook::pivotLayout)
       .function("precedents", &JsWorkbook::precedents)
       .function("recalc", &JsWorkbook::recalc)
       .function("removeConditionalFormatAt", &JsWorkbook::removeConditionalFormatAt)
@@ -2606,6 +2708,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("setColumnWidth", &JsWorkbook::setColumnWidth)
       .function("setComment", &JsWorkbook::setComment)
       .function("setDefinedName", &JsWorkbook::setDefinedName)
+      .function("setExcelProfileId", &JsWorkbook::setExcelProfileId)
       .function("setFormula", &JsWorkbook::setFormula)
       .function("setIterative", &JsWorkbook::setIterative)
       .function("setIterativeProgress", &JsWorkbook::setIterativeProgress)

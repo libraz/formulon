@@ -931,6 +931,34 @@ FM_API fm_status_t fm_workbook_calc_mode(const fm_workbook_t* wb, fm_calc_mode_t
 FM_API fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, fm_calc_mode_t mode);
 
 /* -------------------------------------------------------------------------- */
+/* Excel formula compatibility profile                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Returns the workbook's active Excel formula profile id.
+ *
+ * The returned pointer is borrowed from Formulon's static profile table and
+ * remains valid for the process lifetime. Current ids are:
+ * `mac-365-ja_JP`, `win-365-ja_JP`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_profile_id` is NULL.
+ */
+FM_API fm_status_t fm_workbook_excel_profile_id(const fm_workbook_t* wb, const char** out_profile_id);
+
+/**
+ * @brief Sets the workbook's Excel formula profile by id.
+ *
+ * Existing cached formula values are not recomputed until the caller drives
+ * `fm_workbook_recalc` or an equivalent partial recalc.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `profile_id` is NULL`;
+ *         `kInvalidArgument` if `profile_id` is not a documented profile.
+ */
+FM_API fm_status_t fm_workbook_set_excel_profile_id(fm_workbook_t* wb, const char* profile_id);
+
+/* -------------------------------------------------------------------------- */
 /* Sheet protection (per-sheet `<sheetProtection>`)                           */
 /* -------------------------------------------------------------------------- */
 
@@ -1445,6 +1473,108 @@ FM_API size_t fm_cell_nodes_count(const fm_cell_nodes_t* nodes);
  *         `kInvalidArgument` when `idx` is out of range.
  */
 FM_API fm_status_t fm_cell_nodes_at(const fm_cell_nodes_t* nodes, size_t idx, fm_cell_node_t* out);
+
+/* -------------------------------------------------------------------------- */
+/* PivotTable layout projection                                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Pivot layout cell discriminator.
+ *
+ * Numbering mirrors `formulon::pivot::PivotCellKind`.
+ */
+typedef enum {
+  FM_PIVOT_CELL_HEADER = 0,
+  FM_PIVOT_CELL_ROW_LABEL = 1,
+  FM_PIVOT_CELL_COL_LABEL = 2,
+  FM_PIVOT_CELL_DATA = 3,
+  FM_PIVOT_CELL_ROW_SUBTOTAL = 4,
+  FM_PIVOT_CELL_COL_SUBTOTAL = 5,
+  FM_PIVOT_CELL_GRAND_TOTAL = 6,
+  FM_PIVOT_CELL_BLANK = 7
+} fm_pivot_cell_kind_t;
+
+/**
+ * @brief One projected PivotTable cell.
+ *
+ * `row` / `col` are absolute 0-based sheet coordinates. `field_name` and
+ * `number_format` are NUL-terminated UTF-8 strings owned by the containing
+ * `fm_pivot_cells_t` handle and remain valid until that handle is destroyed.
+ */
+typedef struct {
+  uint32_t row;
+  uint32_t col;
+  fm_value_t value;
+  fm_pivot_cell_kind_t kind;
+  uint32_t depth;
+  const char* field_name;
+  const char* number_format;
+} fm_pivot_cell_t;
+
+/**
+ * @brief Opaque handle for a projected PivotTable layout.
+ *
+ * Owns the projected cell list and every string pointer reachable from
+ * `fm_pivot_cell_t`. Index into it via `fm_pivot_cells_count` /
+ * `fm_pivot_cells_at`. Release with `fm_pivot_cells_destroy`.
+ */
+typedef struct fm_pivot_cells fm_pivot_cells_t;
+
+/**
+ * @brief Returns the number of pivot tables anchored on `sheet_index`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when `wb` or `out_count` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_workbook_pivot_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
+
+/**
+ * @brief Evaluates and projects the `pivot_index`-th PivotTable on a sheet.
+ *
+ * On success the caller owns `*out` and must free it with
+ * `fm_pivot_cells_destroy`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when `wb` or `out` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` or `pivot_index` is out of range;
+ *         a pivot evaluation/layout error when the table references a missing
+ *         or invalid cache.
+ */
+FM_API fm_status_t fm_workbook_pivot_layout(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                            fm_pivot_cells_t** out);
+
+/**
+ * @brief Releases a pivot layout handle. `cells == NULL` is a no-op.
+ */
+FM_API void fm_pivot_cells_destroy(fm_pivot_cells_t* cells);
+
+/**
+ * @brief Returns the number of projected cells. Returns `0` when
+ *        `cells == NULL`.
+ */
+FM_API size_t fm_pivot_cells_count(const fm_pivot_cells_t* cells);
+
+/**
+ * @brief Returns the projected layout bounds.
+ *
+ * `top` / `left` are absolute 0-based sheet coordinates; `rows` / `cols`
+ * are the rectangular layout span.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`.
+ */
+FM_API fm_status_t fm_pivot_cells_bounds(const fm_pivot_cells_t* cells, uint32_t* out_top, uint32_t* out_left,
+                                         uint32_t* out_rows, uint32_t* out_cols);
+
+/**
+ * @brief Reads projected cell `idx`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `idx` is out of range.
+ */
+FM_API fm_status_t fm_pivot_cells_at(const fm_pivot_cells_t* cells, size_t idx, fm_pivot_cell_t* out);
 
 /* -------------------------------------------------------------------------- */
 /* Dynamic-array spill payload                                                */

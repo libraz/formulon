@@ -105,6 +105,49 @@ export interface PassthroughEntry {
   path: string;
 }
 
+/** PivotTable layout cell kind. Mirrors `fm_pivot_cell_kind_t`. */
+export enum PivotCellKind {
+  Header = 0,
+  RowLabel = 1,
+  ColLabel = 2,
+  Data = 3,
+  RowSubtotal = 4,
+  ColSubtotal = 5,
+  GrandTotal = 6,
+  Blank = 7,
+}
+
+/** One concrete cell in a projected PivotTable layout. */
+export interface PivotCell {
+  /** Absolute 0-based sheet row. */
+  row: number;
+  /** Absolute 0-based sheet column. */
+  col: number;
+  value: Value;
+  kind: PivotCellKind;
+  /** Header nesting depth; 0 for data cells. */
+  depth: number;
+  /** Source field name when known. */
+  fieldName: string;
+  /** Excel number-format code when known. */
+  numberFormat: string;
+}
+
+/** Return type of `Workbook.pivotLayout(sheet, pivotIndex)`. */
+export interface PivotLayoutResult {
+  status: Status;
+  /** Absolute 0-based top row of the rectangular pivot layout. */
+  top: number;
+  /** Absolute 0-based left column of the rectangular pivot layout. */
+  left: number;
+  /** Rectangular layout row span. */
+  rows: number;
+  /** Rectangular layout column span. */
+  cols: number;
+  /** Sparse projected cells in row-major order. */
+  cells: ReadonlyArray<PivotCell>;
+}
+
 /** Conditional-format match kind. Mirrors `formulon::cf::CFMatchKind`. */
 export enum CfMatchKind {
   DifferentialFormat = 0,
@@ -128,6 +171,8 @@ export enum CalcMode {
   Manual = 1,
   AutoNoTable = 2,
 }
+
+export type ExcelProfileId = "mac-365-ja_JP" | "win-365-ja_JP";
 
 /** RGBA colour. Channels are 0-255 (sRGB). */
 export interface CfColor {
@@ -746,6 +791,12 @@ export interface Workbook {
   calcMode(): CalcMode;
   setCalcMode(mode: CalcMode): Status;
 
+  /**
+   * Full formula-behaviour profile id. Defaults to `win-365-ja_JP`.
+   */
+  excelProfileId(): ExcelProfileId;
+  setExcelProfileId(profileId: ExcelProfileId): Status;
+
   /** Inserts `count` rows at `row` on `sheet` and rewrites cross-workbook
    *  references to follow the shift. */
   insertRows(sheet: number, row: number, count: number): Status;
@@ -771,6 +822,11 @@ export interface Workbook {
 
   passthroughCount(): number;
   passthroughAt(idx: number): PassthroughEntry;
+
+  /** Returns the number of PivotTables anchored on `sheet`. */
+  pivotCount(sheet: number): number;
+  /** Evaluates and projects a PivotTable into concrete grid cells. */
+  pivotLayout(sheet: number, pivotIndex: number): PivotLayoutResult;
 
   /** Evaluates every CF block on `sheet` against the inclusive range
    *  `[(firstRow, firstCol), (lastRow, lastCol)]`. Pass `NaN` for

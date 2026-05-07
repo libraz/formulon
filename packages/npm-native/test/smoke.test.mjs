@@ -51,6 +51,7 @@ test('default export exposes Workbook + evalFormula + version', async () => {
   assert.equal(typeof mod.version, 'function');
   assert.equal(typeof mod.statusString, 'function');
   assert.equal(typeof mod.ValueKind, 'object');
+  assert.equal(typeof mod.PivotCellKind, 'object');
 });
 
 test('version() returns a non-empty string', async () => {
@@ -85,6 +86,21 @@ test('Workbook.createDefault + setNumber + getValue round-trip', async () => {
   assert.ok(r.status.ok, `getValue: ${JSON.stringify(r.status)}`);
   assert.equal(r.value.kind, mod.ValueKind.Number);
   assert.equal(r.value.number, 42);
+});
+
+test('pivotCount + pivotLayout expose PivotTable projection status', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.equal(wb.pivotCount(0), 0);
+
+  const missing = wb.pivotLayout(0, 0);
+  assert.equal(missing.status.ok, false);
+  assert.notEqual(missing.status.status, 0);
+  assert.equal(missing.top, 0);
+  assert.equal(missing.left, 0);
+  assert.equal(missing.rows, 0);
+  assert.equal(missing.cols, 0);
+  assert.deepEqual(missing.cells, []);
 });
 
 test("Workbook.createDefault + setFormula '=1+2' + recalc -> 3", async () => {

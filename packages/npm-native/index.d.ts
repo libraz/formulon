@@ -118,6 +118,49 @@ export interface PassthroughEntry {
   path: string;
 }
 
+/** PivotTable layout cell kind. Mirrors `fm_pivot_cell_kind_t`. */
+export const PivotCellKind: Readonly<{
+  Header: 0;
+  RowLabel: 1;
+  ColLabel: 2;
+  Data: 3;
+  RowSubtotal: 4;
+  ColSubtotal: 5;
+  GrandTotal: 6;
+  Blank: 7;
+}>;
+
+/** One concrete cell in a projected PivotTable layout. */
+export interface PivotCell {
+  /** Absolute 0-based sheet row. */
+  row: number;
+  /** Absolute 0-based sheet column. */
+  col: number;
+  value: Value;
+  kind: number;
+  /** Header nesting depth; 0 for data cells. */
+  depth: number;
+  /** Source field name when known. */
+  fieldName: string;
+  /** Excel number-format code when known. */
+  numberFormat: string;
+}
+
+/** Return type of `Workbook.pivotLayout(sheet, pivotIndex)`. */
+export interface PivotLayoutResult {
+  status: Status;
+  /** Absolute 0-based top row of the rectangular pivot layout. */
+  top: number;
+  /** Absolute 0-based left column of the rectangular pivot layout. */
+  left: number;
+  /** Rectangular layout row span. */
+  rows: number;
+  /** Rectangular layout column span. */
+  cols: number;
+  /** Sparse projected cells in row-major order. */
+  cells: ReadonlyArray<PivotCell>;
+}
+
 /** Conditional-format match kind. Mirrors `formulon::cf::CFMatchKind`. */
 export const CfMatchKind: Readonly<{
   DifferentialFormat: 0;
@@ -497,6 +540,10 @@ export interface Workbook {
   tableAt(idx: number): TableEntry;
   passthroughCount(): number;
   passthroughAt(idx: number): PassthroughEntry;
+  /** Returns the number of PivotTables anchored on `sheet`. */
+  pivotCount(sheet: number): number;
+  /** Evaluates and projects a PivotTable into concrete grid cells. */
+  pivotLayout(sheet: number, pivotIndex: number): PivotLayoutResult;
 
   // Defined names.
   setDefinedName(name: string, formula: string): Status;
@@ -662,5 +709,6 @@ declare const _default: {
   statusString: typeof statusString;
   ValueKind: typeof ValueKind;
   CfMatchKind: typeof CfMatchKind;
+  PivotCellKind: typeof PivotCellKind;
 };
 export default _default;
