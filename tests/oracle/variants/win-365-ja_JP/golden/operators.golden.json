@@ -1,0 +1,679 @@
+{
+  "suite": "operators",
+  "description": "Arithmetic / comparison / concatenation operators with coercion",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-07T15:19:09Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "add_integers",
+      "formula": "=1+2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "add_floats",
+      "formula": "=1.5+2.25",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.75
+      }
+    },
+    {
+      "id": "subtract",
+      "formula": "=10-3",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "multiply",
+      "formula": "=6*7",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "divide_exact",
+      "formula": "=10/4",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.5
+      }
+    },
+    {
+      "id": "divide_by_zero",
+      "formula": "=1/0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "power_op",
+      "formula": "=2^10",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1024.0
+      }
+    },
+    {
+      "id": "unary_negate",
+      "formula": "=-5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "unary_plus",
+      "formula": "=+5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "percent_unary",
+      "formula": "=50%",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "percent_in_expression",
+      "formula": "=20*10%",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "add_numeric_string",
+      "formula": "=\"3\"+4",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "add_non_numeric_string",
+      "formula": "=\"abc\"+4",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "add_bool_true_is_one",
+      "formula": "=TRUE+1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "add_bool_false_is_zero",
+      "formula": "=FALSE+5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "precedence_mul_over_add",
+      "formula": "=1+2*3",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "precedence_paren_overrides",
+      "formula": "=(1+2)*3",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "precedence_pow_over_mul",
+      "formula": "=2*3^2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 18.0
+      }
+    },
+    {
+      "id": "precedence_unary_over_pow",
+      "formula": "=-2^2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "cmp_eq_true",
+      "formula": "=3=3",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_eq_false",
+      "formula": "=3=4",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "cmp_ne",
+      "formula": "=3<>4",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_lt",
+      "formula": "=3<5",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_lte",
+      "formula": "=5<=5",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_gt",
+      "formula": "=5>3",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_gte",
+      "formula": "=3>=5",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "cmp_number_vs_text",
+      "formula": "=1<\"a\"",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_text_case_insensitive_eq",
+      "formula": "=\"ABC\"=\"abc\"",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_bool_greater_than_text",
+      "formula": "=TRUE>\"zzz\"",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "concat_text",
+      "formula": "=\"a\"&\"b\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ab"
+      }
+    },
+    {
+      "id": "concat_number_coerces",
+      "formula": "=1&\"x\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1x"
+      }
+    },
+    {
+      "id": "concat_bool",
+      "formula": "=TRUE&\"x\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "TRUEx"
+      }
+    },
+    {
+      "id": "concat_float",
+      "formula": "=3.14&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3.14"
+      }
+    },
+    {
+      "id": "empty_string_plus_number",
+      "formula": "=\"\"+1",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "empty_string_minus_number",
+      "formula": "=\"\"-1",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "empty_string_times_number",
+      "formula": "=\"\"*2",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "empty_string_divide_number",
+      "formula": "=\"\"/2",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "unary_minus_empty_string",
+      "formula": "=-\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "unary_plus_empty_string",
+      "formula": "=+\"\"",
+      "setup": {},
+      "skipped": "=+\"\" -> \"\" (unary plus is identity); xlwings reads the empty string back as blank. Formulon returns text(\"\")."
+    },
+    {
+      "id": "number_plus_empty_string",
+      "formula": "=1+\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "empty_string_concat_number",
+      "formula": "=\"\"&1",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "empty_string_eq_zero",
+      "formula": "=\"\"=0",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "error_propagates_through_add",
+      "formula": "=1/0+1",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "error_leftmost_wins",
+      "formula": "=1/0+NA()",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "blank_cell_plus_number",
+      "formula": "=A1+5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "blank_cell_times_number",
+      "formula": "=A1*5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "blank_cell_concat_text",
+      "formula": "=A1&\"x\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x"
+      }
+    },
+    {
+      "id": "blank_cell_eq_zero",
+      "formula": "=A1=0",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "blank_cell_eq_empty_string",
+      "formula": "=A1=\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "blank_cell_lt_zero",
+      "formula": "=A1<0",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "cmp_true_gt_text",
+      "formula": "=TRUE>\"zzz\"",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_true_gt_number",
+      "formula": "=TRUE>1E300",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_text_gt_number",
+      "formula": "=\"a\">1E300",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_false_gt_zero",
+      "formula": "=FALSE>0",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_text_number_eq_is_false",
+      "formula": "=\"5\"=5",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "cmp_numeric_text_lt_number",
+      "formula": "=\"5\"<5",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "cmp_neg_zero_eq_zero",
+      "formula": "=-0=0",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_neg_zero_text_eq_text_zero",
+      "formula": "=TEXT(-0,\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "percent_compounded",
+      "formula": "=100%%",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.01
+      }
+    },
+    {
+      "id": "percent_after_arithmetic",
+      "formula": "=5+10%",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.1
+      }
+    },
+    {
+      "id": "power_zero_to_zero",
+      "formula": "=0^0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "power_negative_base_fractional_exp",
+      "formula": "=(-2)^0.5",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "power_overflow",
+      "formula": "=10^309",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "date_string_plus_number",
+      "formula": "=\"2024-01-01\"+1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45293.0
+      }
+    },
+    {
+      "id": "time_string_times_number",
+      "formula": "=\"01:00\"*24",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "concat_error_propagates",
+      "formula": "=#REF!&\"x\"",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "concat_bool_to_text",
+      "formula": "=TRUE&\"x\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "TRUEx"
+      }
+    },
+    {
+      "id": "range_plus_scalar_at_aligned_row",
+      "formula": "=A1:A3+10",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "range_plus_scalar_at_excluded_row",
+      "formula": "=A3:A8+10",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tiny_subnormal_arithmetic",
+      "formula": "=1E-308/1E10",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "very_large_minus_self_is_zero",
+      "formula": "=1E15-1E15",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    }
+  ]
+}

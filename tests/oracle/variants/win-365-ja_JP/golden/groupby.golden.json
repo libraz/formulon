@@ -1,0 +1,65 @@
+{
+  "suite": "groupby",
+  "description": "GROUPBY dynamic-array group-and-aggregate (Excel 365). Six perspectives spanning bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name ->",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-07T15:19:09Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "groupby_bare_sum",
+      "formula": "=GROUPBY({\"A\";\"B\";\"A\"}, {10;20;30}, SUM, 0, 0, 0)",
+      "setup": {},
+      "skipped": "GROUPBY returns a 2D ArrayValue; oracle compare_value only handles scalars. Unit test GroupBy.BareSumName covers bare-name aggregator dispatch and grouping order."
+    },
+    {
+      "id": "groupby_lambda_sum",
+      "formula": "=GROUPBY({\"A\";\"B\";\"A\";\"C\"}, {10;20;30;40}, LAMBDA(v, SUM(v)), 0, 0, 0)",
+      "setup": {},
+      "skipped": "GROUPBY with a LAMBDA aggregator returns a 2D ArrayValue; oracle compare_value only handles scalars. Unit test GroupBy.SingleKeyLambdaAggregatorSum covers inline-LAMBDA dispatch."
+    },
+    {
+      "id": "groupby_unknown_name_error",
+      "formula": "=GROUPBY({\"A\";\"B\"}, {1;2}, NOPE_THIS_IS_NOT_A_FUNCTION, 0, 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "groupby_field_headers_out_of_range",
+      "formula": "=GROUPBY({\"A\";\"B\"}, {1;2}, SUM, 5, 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "groupby_filter_array_length_mismatch",
+      "formula": "=GROUPBY({\"A\";\"B\";\"A\"}, {1;2;3}, SUM, 0, 0, 0, {TRUE;FALSE;TRUE;TRUE})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "groupby_filter_array_excludes_all",
+      "formula": "=GROUPBY({\"A\";\"B\"}, {1;2}, SUM, 0, 0, 0, {FALSE;FALSE})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    }
+  ]
+}

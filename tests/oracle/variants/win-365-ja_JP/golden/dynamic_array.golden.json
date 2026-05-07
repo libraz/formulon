@@ -1,0 +1,218 @@
+{
+  "suite": "dynamic_array",
+  "description": "Dynamic-array (spilling) functions. SEQUENCE is the first acceptance case for cell-level spill machinery; the oracle reads back the anchor scalar (top-left of the spill region) since xlwings does not surface phantom cells through a single-cell read.",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-07T15:19:09Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "sequence_3",
+      "formula": "=SEQUENCE(3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "sequence_2_3",
+      "formula": "=SEQUENCE(2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "sequence_2_2_10_5",
+      "formula": "=SEQUENCE(2,2,10,5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "sequence_3_1_10_neg2",
+      "formula": "=SEQUENCE(3,1,10,-2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "sequence_3_1_half_quarter",
+      "formula": "=SEQUENCE(3,1,0.5,0.25)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "sequence_zero_rows_value",
+      "formula": "=SEQUENCE(0)",
+      "setup": {},
+      "skipped": "SEQUENCE error path returns Error scalar but golden registers an array-shaped error in some configurations; re-verify after oracle-gen rerun captures the live Mac result post-anchor-unwrap landing."
+    },
+    {
+      "id": "sequence_negative_rows_value",
+      "formula": "=SEQUENCE(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "sequence_text_arg_value",
+      "formula": "=SEQUENCE(\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "transpose_array_literal",
+      "formula": "=TRANSPOSE({1,2,3;4,5,6})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "transpose_range",
+      "formula": "=TRANSPOSE(A1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "transpose_scalar",
+      "formula": "=TRANSPOSE(42)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "transpose_single_row_to_column",
+      "formula": "=TRANSPOSE({1,2,3,4})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "transpose_single_column_to_row",
+      "formula": "=TRANSPOSE({1;2;3;4})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "transpose_text_array",
+      "formula": "=TRANSPOSE({\"a\",\"b\";\"c\",\"d\"})",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a"
+      }
+    },
+    {
+      "id": "spill_ref_after_sequence_sum",
+      "formula": "=SUM(A1#)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "skipped": "Spill-ref `A1#` consumed by SUM requires the spill region to be materialized in the workbook, but the oracle harness evaluates the formula in isolation; SUM sees the bare Array reference and produces a different result than Excel's resolved spill region."
+    },
+    {
+      "id": "anchorarray_static_value_anchor",
+      "formula": "=_xlfn.ANCHORARRAY(B1)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 42.0
+        }
+      },
+      "skipped": "Mac probe via xlwings reads blank for `=_xlfn.ANCHORARRAY(B1)` typed via the formula2 API even when B1 holds a static value. This is a harness probe artefact (Mac may not fully evaluate the explicit `_xlfn.` form when injected through xlwings) rather than the documented `ref#` semantics. Formulon implements the documented #REF! return for non-spill anchors, covered by spill_ref_eval_test.cpp."
+    },
+    {
+      "id": "anchorarray_blank_anchor",
+      "formula": "=_xlfn.ANCHORARRAY(E1)",
+      "setup": {},
+      "skipped": "Mac probe via xlwings reads blank for `=_xlfn.ANCHORARRAY(E1)` typed via formula2 even when E1 is genuinely blank. Same probe artefact as anchorarray_static_value_anchor — Formulon's #REF! is the documented semantics for a non-spill anchor."
+    },
+    {
+      "id": "anchorarray_resolves_sequence_sum",
+      "formula": "=SUM(_xlfn.ANCHORARRAY(A1))",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "skipped": "_xlfn.ANCHORARRAY(A1) over a setup-formula spill source (A1=SEQUENCE(3)) requires the spill region to be materialized before the test formula is evaluated. The static oracle harness evaluates the test formula in isolation, so spill_region_at_anchor(A1) returns null and ANCHORARRAY surfaces #REF!. Same harness limitation as spill_ref_after_sequence_sum above."
+    },
+    {
+      "id": "anchorarray_resolves_sequence_rows",
+      "formula": "=ROWS(_xlfn.ANCHORARRAY(A1))",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "skipped": "_xlfn.ANCHORARRAY(A1) requires the A1=SEQUENCE(3) spill source to be materialized before the test formula evaluates. Same harness limitation as spill_ref_after_sequence_sum."
+    },
+    {
+      "id": "anchorarray_offset_resolved_anchor",
+      "formula": "=SUM(_xlfn.ANCHORARRAY(OFFSET(A1,1,0)))",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(2,2)"
+        }
+      },
+      "skipped": "_xlfn.ANCHORARRAY(OFFSET(A1,1,0)) requires the A2=SEQUENCE(2,2) spill source to be materialized before the test formula evaluates. Same harness limitation as spill_ref_after_sequence_sum."
+    }
+  ]
+}

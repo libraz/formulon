@@ -1,0 +1,467 @@
+{
+  "suite": "financial_rates",
+  "description": "Security-rate / T-Bill financial builtins — DISC / INTRATE / RECEIVED / TBILLPRICE / TBILLYIELD / TBILLEQ. See `eval/builtins/financial_rates.cpp`.",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-07T15:19:09Z"
+  },
+  "tolerance": {
+    "abs": 0.001,
+    "rel": 1e-06
+  },
+  "cases": [
+    {
+      "id": "disc_basis_actual_actual",
+      "formula": "=DISC(DATE(2018,1,25), DATE(2018,6,15), 97.975, 100, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.05242021276595771
+      }
+    },
+    {
+      "id": "disc_default_basis",
+      "formula": "=DISC(DATE(2018,1,25), DATE(2018,6,15), 97.975, 100)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.05207142857142884
+      }
+    },
+    {
+      "id": "disc_basis_actual_360",
+      "formula": "=DISC(DATE(2018,1,25), DATE(2018,6,15), 97.975, 100, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.05170212765957473
+      }
+    },
+    {
+      "id": "disc_invalid_basis_is_num",
+      "formula": "=DISC(DATE(2018,1,25), DATE(2018,6,15), 97.975, 100, 5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "intrate_basis_actual_360",
+      "formula": "=INTRATE(DATE(2008,2,15), DATE(2008,5,15), 1000000, 1014420, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.05768
+      }
+    },
+    {
+      "id": "intrate_default_basis",
+      "formula": "=INTRATE(DATE(2008,2,15), DATE(2008,5,15), 1000000, 1014420)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.05768
+      }
+    },
+    {
+      "id": "intrate_settlement_after_maturity_is_num",
+      "formula": "=INTRATE(DATE(2008,5,15), DATE(2008,2,15), 1000000, 1014420, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "received_basis_actual_360",
+      "formula": "=RECEIVED(DATE(2008,2,15), DATE(2008,5,15), 1000000, 0.0575, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1014584.6544071021
+      }
+    },
+    {
+      "id": "received_default_basis",
+      "formula": "=RECEIVED(DATE(2008,2,15), DATE(2008,5,15), 1000000, 0.0575)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1014584.6544071021
+      }
+    },
+    {
+      "id": "tbillprice_basic",
+      "formula": "=TBILLPRICE(DATE(2008,3,31), DATE(2008,6,1), 0.09)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 98.45
+      }
+    },
+    {
+      "id": "tbillprice_dsm_over_365_is_num",
+      "formula": "=TBILLPRICE(DATE(2008,3,31), DATE(2010,3,31), 0.09)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "tbillyield_basic",
+      "formula": "=TBILLYIELD(DATE(2008,3,31), DATE(2008,6,1), 98.45)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.09141696292534264
+      }
+    },
+    {
+      "id": "tbilleq_short_branch",
+      "formula": "=TBILLEQ(DATE(2008,3,31), DATE(2008,6,1), 0.0914)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.09415149356594302
+      }
+    },
+    {
+      "id": "tbilleq_long_branch",
+      "formula": "=TBILLEQ(DATE(2020,1,1), DATE(2020,10,27), 0.05)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.052361626651950016
+      }
+    },
+    {
+      "id": "tbilleq_dsm_over_365_is_num",
+      "formula": "=TBILLEQ(DATE(2008,3,31), DATE(2010,3,31), 0.09)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "pricedisc_basis_actual_360",
+      "formula": "=PRICEDISC(DATE(2018,2,16), DATE(2018,3,1), 0.0525, 100, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 99.81041666666667
+      }
+    },
+    {
+      "id": "pricedisc_default_basis",
+      "formula": "=PRICEDISC(DATE(2018,2,16), DATE(2018,3,1), 0.0525, 100)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 99.78125
+      }
+    },
+    {
+      "id": "pricedisc_invalid_basis_is_num",
+      "formula": "=PRICEDISC(DATE(2018,2,16), DATE(2018,3,1), 0.0525, 100, 5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "pricemat_basis_zero",
+      "formula": "=PRICEMAT(DATE(2008,2,15), DATE(2008,4,13), DATE(2007,11,11), 0.061, 0.061, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 99.98449887555694
+      }
+    },
+    {
+      "id": "pricemat_default_basis",
+      "formula": "=PRICEMAT(DATE(2008,2,15), DATE(2008,4,13), DATE(2007,11,11), 0.061, 0.061)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 99.98449887555694
+      }
+    },
+    {
+      "id": "pricemat_issue_after_settlement_is_num",
+      "formula": "=PRICEMAT(DATE(2008,2,15), DATE(2008,4,13), DATE(2008,3,1), 0.061, 0.061, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "yielddisc_basis_actual_360",
+      "formula": "=YIELDDISC(DATE(2008,2,16), DATE(2008,3,1), 99.795, 100, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.05282257198685834
+      }
+    },
+    {
+      "id": "yielddisc_default_basis",
+      "formula": "=YIELDDISC(DATE(2008,2,16), DATE(2008,3,1), 99.795, 100)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.04930106718773444
+      }
+    },
+    {
+      "id": "yieldmat_basis_zero",
+      "formula": "=YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2007,11,8), 0.0625, 100.0123, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.06095433369153867
+      }
+    },
+    {
+      "id": "yieldmat_default_basis",
+      "formula": "=YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2007,11,8), 0.0625, 100.0123)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.06095433369153867
+      }
+    },
+    {
+      "id": "disc_settlement_after_maturity_is_num",
+      "formula": "=DISC(DATE(2018,6,15), DATE(2018,1,25), 97.975, 100, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "intrate_basis_european_30_360",
+      "formula": "=INTRATE(DATE(2008,2,15), DATE(2008,5,15), 1000000, 1014420, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.05768
+      }
+    },
+    {
+      "id": "intrate_zero_investment_is_num",
+      "formula": "=INTRATE(DATE(2008,2,15), DATE(2008,5,15), 0, 1014420, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "received_basis_actual_actual",
+      "formula": "=RECEIVED(DATE(2008,2,15), DATE(2008,5,15), 1000000, 0.0575, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1014342.1326127625
+      }
+    },
+    {
+      "id": "received_settlement_after_maturity_is_num",
+      "formula": "=RECEIVED(DATE(2008,5,15), DATE(2008,2,15), 1000000, 0.0575, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "received_zero_discount_is_num",
+      "formula": "=RECEIVED(DATE(2008,2,15), DATE(2008,5,15), 1000000, 0, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "tbilleq_zero_discount_is_num",
+      "formula": "=TBILLEQ(DATE(2008,3,31), DATE(2008,6,1), 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "tbilleq_settlement_after_maturity_is_num",
+      "formula": "=TBILLEQ(DATE(2008,6,1), DATE(2008,3,31), 0.0914)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "tbillprice_short_dated_next_day",
+      "formula": "=TBILLPRICE(DATE(2020,1,1), DATE(2020,1,2), 0.09)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 99.97500000000001
+      }
+    },
+    {
+      "id": "tbillprice_zero_discount_is_num",
+      "formula": "=TBILLPRICE(DATE(2008,3,31), DATE(2008,6,1), 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "tbillprice_settlement_after_maturity_is_num",
+      "formula": "=TBILLPRICE(DATE(2008,6,1), DATE(2008,3,31), 0.09)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "tbillyield_short_dated_next_day",
+      "formula": "=TBILLYIELD(DATE(2020,1,1), DATE(2020,1,2), 99.975)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.09002250562642708
+      }
+    },
+    {
+      "id": "tbillyield_dsm_over_365_is_num",
+      "formula": "=TBILLYIELD(DATE(2008,3,31), DATE(2010,3,31), 98.45)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "tbillyield_zero_price_is_num",
+      "formula": "=TBILLYIELD(DATE(2008,3,31), DATE(2008,6,1), 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "tbillyield_settlement_after_maturity_is_num",
+      "formula": "=TBILLYIELD(DATE(2008,6,1), DATE(2008,3,31), 98.45)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "pricedisc_settlement_after_maturity_is_num",
+      "formula": "=PRICEDISC(DATE(2018,3,1), DATE(2018,2,16), 0.0525, 100, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "pricedisc_zero_discount_is_num",
+      "formula": "=PRICEDISC(DATE(2018,2,16), DATE(2018,3,1), 0, 100, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "pricemat_basis_actual_360",
+      "formula": "=PRICEMAT(DATE(2008,2,15), DATE(2008,4,13), DATE(2007,11,11), 0.061, 0.061, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 99.9841690643986
+      }
+    },
+    {
+      "id": "pricemat_zero_rate_is_num",
+      "formula": "=PRICEMAT(DATE(2008,2,15), DATE(2008,4,13), DATE(2007,11,11), -0.01, 0.061, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "yielddisc_basis_actual_actual",
+      "formula": "=YIELDDISC(DATE(2008,2,16), DATE(2008,3,1), 99.795, 100, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.05370294818663931
+      }
+    },
+    {
+      "id": "yielddisc_settlement_after_maturity_is_num",
+      "formula": "=YIELDDISC(DATE(2008,3,1), DATE(2008,2,16), 99.795, 100, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "yielddisc_zero_price_is_num",
+      "formula": "=YIELDDISC(DATE(2008,2,16), DATE(2008,3,1), 0, 100, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "yieldmat_basis_actual_360",
+      "formula": "=YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2007,11,8), 0.0625, 100.0123, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.060948059155698044
+      }
+    },
+    {
+      "id": "yieldmat_issue_after_settlement_is_num",
+      "formula": "=YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2008,4,1), 0.0625, 100.0123, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "yieldmat_zero_price_is_num",
+      "formula": "=YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2007,11,8), 0.0625, 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    }
+  ]
+}

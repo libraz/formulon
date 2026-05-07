@@ -1,0 +1,140 @@
+{
+  "suite": "external_stubs",
+  "description": "External / stub-only cluster (IMAGE / PY / RTD / STOCKHISTORY / WEBSERVICE / COPILOT / DETECTLANGUAGE / TRANSLATE / ARRAYTOTEXT / FILTERXML / INFO / CUBE×7 / GETPIVOTDATA / PHONETIC). Every member dispatches to an external service or out-of-band workbook metadata that Formulon does not embed; closure is a divergence-only declaration with each case marked skip-oracle in tests/divergence.yaml.",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-07T15:19:09Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "external_stub_image",
+      "formula": "=IMAGE(\"https://example.com/img.png\")",
+      "setup": {},
+      "skipped": "IMAGE fetches a network image; Formulon does no network I/O and stubs to #VALUE!. Oracle parity requires an embedded image client."
+    },
+    {
+      "id": "external_stub_py",
+      "formula": "=PY(\"import math\")",
+      "setup": {},
+      "skipped": "PY runs Python in the cloud; Formulon does not embed a Python runtime and stubs to #NAME!. Oracle parity requires the Microsoft 365 PY service."
+    },
+    {
+      "id": "external_stub_rtd",
+      "formula": "=RTD(\"server\", \"topic\", \"p1\")",
+      "setup": {},
+      "skipped": "RTD reads from a real-time data COM server; Formulon has no provider runtime and stubs to #N/A. Oracle parity requires a registered COM RTD server."
+    },
+    {
+      "id": "external_stub_stockhistory",
+      "formula": "=STOCKHISTORY(\"MSFT\", DATE(2024,1,1))",
+      "setup": {},
+      "skipped": "STOCKHISTORY pulls live market data; Formulon does no network I/O. Oracle parity requires Microsoft 365 stock data subscription."
+    },
+    {
+      "id": "external_stub_webservice",
+      "formula": "=WEBSERVICE(\"https://example.com\")",
+      "setup": {},
+      "skipped": "WEBSERVICE makes an HTTP request; Formulon does no network I/O and stubs to #VALUE!. Oracle parity requires an HTTP client."
+    },
+    {
+      "id": "external_stub_copilot",
+      "formula": "=COPILOT(\"hello\")",
+      "setup": {},
+      "skipped": "COPILOT dispatches to an LLM backend; Formulon does not embed one and stubs to #NAME!. Oracle parity requires the Microsoft 365 Copilot service."
+    },
+    {
+      "id": "external_stub_detectlanguage",
+      "formula": "=DETECTLANGUAGE(\"hello world\")",
+      "setup": {},
+      "skipped": "DETECTLANGUAGE calls a translation cloud; Formulon does no network I/O and stubs to #NAME!."
+    },
+    {
+      "id": "external_stub_translate",
+      "formula": "=TRANSLATE(\"hello\", \"en\", \"ja\")",
+      "setup": {},
+      "skipped": "TRANSLATE calls a translation cloud; Formulon does no network I/O and stubs to #NAME!."
+    },
+    {
+      "id": "external_stub_arraytotext",
+      "formula": "=ARRAYTOTEXT({1;2;3})",
+      "setup": {},
+      "skipped": "ARRAYTOTEXT impl exists but full Excel-format parity (escape rules, locale separators) is unverified; closure deferred to a dedicated suite."
+    },
+    {
+      "id": "external_stub_filterxml",
+      "formula": "=FILTERXML(\"<r><a>1</a><a>2</a></r>\", \"//a\")",
+      "setup": {},
+      "skipped": "FILTERXML uses pugixml's XPath 1.0; Excel's XPath dialect has minor quirks that may diverge. Closure deferred to a dedicated XPath suite."
+    },
+    {
+      "id": "external_stub_info",
+      "formula": "=INFO(\"system\")",
+      "setup": {},
+      "skipped": "INFO returns environment-specific values (locale, version, paths); answers vary by host and are not portable across the oracle harness."
+    },
+    {
+      "id": "external_stub_cubekpimember",
+      "formula": "=CUBEKPIMEMBER(\"conn\", \"kpi\", 1)",
+      "setup": {},
+      "skipped": "CUBEKPIMEMBER requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
+    },
+    {
+      "id": "external_stub_cubemember",
+      "formula": "=CUBEMEMBER(\"conn\", \"[Measures].[Sales]\")",
+      "setup": {},
+      "skipped": "CUBEMEMBER requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
+    },
+    {
+      "id": "external_stub_cubememberproperty",
+      "formula": "=CUBEMEMBERPROPERTY(\"conn\", \"[Measures].[Sales]\", \"Caption\")",
+      "setup": {},
+      "skipped": "CUBEMEMBERPROPERTY requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
+    },
+    {
+      "id": "external_stub_cuberankedmember",
+      "formula": "=CUBERANKEDMEMBER(\"conn\", \"set\", 1)",
+      "setup": {},
+      "skipped": "CUBERANKEDMEMBER requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
+    },
+    {
+      "id": "external_stub_cubeset",
+      "formula": "=CUBESET(\"conn\", \"{[A].[B]}\")",
+      "setup": {},
+      "skipped": "CUBESET requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
+    },
+    {
+      "id": "external_stub_cubesetcount",
+      "formula": "=CUBESETCOUNT(A1)",
+      "setup": {},
+      "skipped": "CUBESETCOUNT requires a live cube set; Formulon has no OLAP layer and stubs to #NAME!."
+    },
+    {
+      "id": "external_stub_cubevalue",
+      "formula": "=CUBEVALUE(\"conn\", \"[Measures].[Sales]\")",
+      "setup": {},
+      "skipped": "CUBEVALUE requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
+    },
+    {
+      "id": "external_stub_getpivotdata",
+      "formula": "=GETPIVOTDATA(\"amount\", A1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "external_stub_phonetic",
+      "formula": "=PHONETIC(\"テスト\")",
+      "setup": {},
+      "skipped": "PHONETIC reads OOXML rPh annotations; Formulon's OOXML reader does not surface rPh into Value, so unannotated text passes through. Mac without rPh annotations behaves the same on text-cell input but diverges on annotated cells."
+    }
+  ]
+}

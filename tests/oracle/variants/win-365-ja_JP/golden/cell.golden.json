@@ -1,0 +1,216 @@
+{
+  "suite": "cell",
+  "description": "CELL(info_type, [reference]) — info_type dispatch covering address/col/row/contents/type and the metadata stubs (filename/format/color/parentheses/prefix/protect/width).",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-07T15:19:09Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "cell_address_simple",
+      "formula": "=CELL(\"address\", A1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "$A$1"
+      }
+    },
+    {
+      "id": "cell_address_other_cell",
+      "formula": "=CELL(\"address\", B5)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "$B$5"
+      }
+    },
+    {
+      "id": "cell_col_b5",
+      "formula": "=CELL(\"col\", B5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "cell_row_b5",
+      "formula": "=CELL(\"row\", B5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "cell_col_range_top_left",
+      "formula": "=CELL(\"col\", C3:E5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "cell_contents_number",
+      "formula": "=CELL(\"contents\", A1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "cell_contents_text",
+      "formula": "=CELL(\"contents\", A1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "hello"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "hello"
+      }
+    },
+    {
+      "id": "cell_contents_blank_returns_zero",
+      "formula": "=CELL(\"contents\", A1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "cell_type_blank",
+      "formula": "=CELL(\"type\", A1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "b"
+      }
+    },
+    {
+      "id": "cell_type_number",
+      "formula": "=CELL(\"type\", A1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.14
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "v"
+      }
+    },
+    {
+      "id": "cell_type_text",
+      "formula": "=CELL(\"type\", A1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "hello"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "l"
+      }
+    },
+    {
+      "id": "cell_type_empty_string",
+      "formula": "=CELL(\"type\", A1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": ""
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "b"
+      }
+    },
+    {
+      "id": "cell_format_general",
+      "formula": "=CELL(\"format\", A1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "G"
+      }
+    },
+    {
+      "id": "cell_color_default",
+      "formula": "=CELL(\"color\", A1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "cell_parentheses_default",
+      "formula": "=CELL(\"parentheses\", A1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "cell_prefix_default",
+      "formula": "=CELL(\"prefix\", A1)",
+      "setup": {},
+      "skipped": "Mac returns blank for a cell with no alignment-prefix character; Formulon stubs to empty text to dodge the top-level blank-as-zero rule. Will close when the cell-style subsystem lands."
+    },
+    {
+      "id": "cell_protect_default",
+      "formula": "=CELL(\"protect\", A1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "cell_filename_default",
+      "formula": "=CELL(\"filename\")",
+      "setup": {},
+      "skipped": "Mac returns blank for an unsaved workbook; Formulon stubs to empty text to dodge the top-level blank-as-zero rule. Will close when the workbook gains a path field."
+    },
+    {
+      "id": "cell_unknown_info_type",
+      "formula": "=CELL(\"nonsense\", A1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "cell_empty_info_type",
+      "formula": "=CELL(\"\", A1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

@@ -1,0 +1,352 @@
+{
+  "suite": "let",
+  "description": "LET(name, expr, [name, expr, ...], body) lexical-scope special form",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-07T15:19:09Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "single_binding_arithmetic",
+      "formula": "=LET(x, 10, x+5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "single_binding_identity",
+      "formula": "=LET(x, 7, x)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "single_binding_zero",
+      "formula": "=LET(x, 0, x)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "two_bindings_sequential",
+      "formula": "=LET(x, 10, y, x*2, y+1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "three_bindings_arithmetic",
+      "formula": "=LET(a, 1, b, a+1, c, b+1, a+b+c)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "nested_let_in_binding",
+      "formula": "=LET(x, LET(y, 5, y*y), x+1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "nested_let_in_body",
+      "formula": "=LET(x, 2, LET(y, x+1, y*y))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "inner_let_does_not_leak",
+      "formula": "=LET(x, 1, LET(x, 99, x) + x)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "case_insensitive_lookup",
+      "formula": "=LET(Foo, 3, FOO+1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "text_binding_upper",
+      "formula": "=LET(g, \"hello\", UPPER(g))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "bool_binding_if_branch",
+      "formula": "=LET(b, TRUE, IF(b, 1, 0))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "binding_error_catchable",
+      "formula": "=LET(x, 1/0, IFERROR(x, 99))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "binding_error_uncaught_propagates",
+      "formula": "=LET(x, 1/0, x+1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "range_binding_sum",
+      "formula": "=LET(r, A1:A3, SUM(r))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "range_binding_count",
+      "formula": "=LET(r, A1:A3, COUNT(r))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "range_binding_arithmetic_at_anchor",
+      "formula": "=LET(r, A1:A3, r+1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "range_binding_in_lookup",
+      "formula": "=LET(t, A1:B2, VLOOKUP(\"banana\", t, 2, FALSE))",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "apple"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "banana"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "function_result_binding",
+      "formula": "=LET(s, SQRT(16), s*2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "nested_function_in_binding",
+      "formula": "=LET(s, SUM(1,2,3,4), s/2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "binding_used_multiple_times",
+      "formula": "=LET(x, 5, x*x*x)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "binding_used_in_other_binding_chain",
+      "formula": "=LET(x, 2, y, x*x, z, y+x, z*10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "shadow_builtin_name",
+      "formula": "=LET(SUM, 100, SUM+1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "shadow_builtin_then_call",
+      "formula": "=LET(SUM, 100, SUM)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "many_bindings_chain",
+      "formula": "=LET(a,1,b,2,c,3,d,4,e,5,f,6,g,7,h,8,i,9,j,10,a+b+c+d+e+f+g+h+i+j)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "deeply_nested_let",
+      "formula": "=LET(a,1, LET(b,2, LET(c,3, LET(d,4, LET(e,5, a+b+c+d+e)))))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "identifier_ascii_underscore",
+      "formula": "=LET(_x, 5, _x*2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "identifier_japanese",
+      "formula": "=LET(りんご, 100, りんご*2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "bool_in_binding_arith",
+      "formula": "=LET(b, TRUE, b+10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "text_in_binding_arith_is_value",
+      "formula": "=LET(s, \"abc\", s+1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "body_returns_range_at_anchor",
+      "formula": "=LET(r, A1:A2, r)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 99.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    }
+  ]
+}

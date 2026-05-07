@@ -1,0 +1,140 @@
+{
+  "suite": "matrix",
+  "description": "Matrix-algebra family — MMULT, MDETERM, MINVERSE. Fifteen perspectives across the cluster (5 per function) covering shape products, identity neutrality, singularity, non-square errors, and non-numeric / error-cell propagation. Spill outputs from MMULT and MINVERSE flow through the same skip-oracle path as MUNIT and TEXTSPLIT (oracle compare_value cannot navigate ArrayValue).",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-07T15:19:09Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "mmult_basic_2x3_3x2",
+      "formula": "=MMULT({1,2,3;4,5,6}, {7,8;9,10;11,12})",
+      "setup": {},
+      "skipped": "MMULT returns a 2x2 ArrayValue; oracle compare_value only handles scalars, INDEX wrappers blocked by resolve_range_arg. Unit test BuiltinsMmult.BasicProductFromSheetRanges covers the canonical 2x3 * 3x2 product."
+    },
+    {
+      "id": "mmult_identity_right_neutral",
+      "formula": "=MMULT({7,8;9,10}, {1,0;0,1})",
+      "setup": {},
+      "skipped": "MMULT returns a 2x2 ArrayValue; oracle compare_value only handles scalars. Unit test BuiltinsMmult.IdentityIsLeftAndRightNeutral covers identity neutrality."
+    },
+    {
+      "id": "mmult_inner_dim_mismatch_value",
+      "formula": "=MMULT({1,2;3,4}, {1,2,3;4,5,6;7,8,9})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mmult_non_numeric_cell_value",
+      "formula": "=MMULT({1,\"a\";3,4}, {1,2;3,4})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mmult_error_cell_propagates",
+      "formula": "=MMULT({1,#N/A;3,4}, {1,2;3,4})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "mdeterm_2x2",
+      "formula": "=MDETERM({1,2;3,4})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "mdeterm_3x3",
+      "formula": "=MDETERM({1,2,3;4,5,6;7,8,10})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.9999999999999982
+      }
+    },
+    {
+      "id": "mdeterm_identity",
+      "formula": "=MDETERM({1,0;0,1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mdeterm_singular_zero",
+      "formula": "=MDETERM({1,2;2,4})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mdeterm_non_square_value",
+      "formula": "=MDETERM({1,2,3;4,5,6})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "minverse_identity",
+      "formula": "=MINVERSE({1,0;0,1})",
+      "setup": {},
+      "skipped": "MINVERSE returns a 2x2 ArrayValue; oracle compare_value only handles scalars. Unit test BuiltinsMinverse.IdentityIsItsOwnInverse covers the boundary."
+    },
+    {
+      "id": "minverse_2x2_basic",
+      "formula": "=MINVERSE({4,3;6,3})",
+      "setup": {},
+      "skipped": "MINVERSE returns a 2x2 ArrayValue; oracle compare_value only handles scalars. Unit test BuiltinsMinverse.TwoByTwoInverse covers a non-trivial inverse."
+    },
+    {
+      "id": "minverse_singular_num",
+      "formula": "=MINVERSE({1,2;2,4})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "minverse_non_square_value",
+      "formula": "=MINVERSE({1,2,3;4,5,6})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "minverse_error_cell_propagates",
+      "formula": "=MINVERSE({1,#N/A;3,4})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

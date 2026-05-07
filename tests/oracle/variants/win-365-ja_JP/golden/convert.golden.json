@@ -1,0 +1,62 @@
+{
+  "suite": "convert",
+  "description": "CONVERT unit-conversion lookup. Excel exposes a fixed table of constants spanning weight, distance, time, pressure, force, energy, power, magnetism, temperature, volume, area and information. The Formulon engine matches the documented Microsoft 365 unit list and constant table.\n",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-07T15:19:09Z"
+  },
+  "tolerance": {
+    "abs": 1e-09,
+    "rel": 1e-09
+  },
+  "cases": [
+    {
+      "id": "convert_meter_to_foot",
+      "formula": "=CONVERT(1,\"m\",\"ft\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.2808398950131235
+      }
+    },
+    {
+      "id": "convert_gram_to_kilogram",
+      "formula": "=CONVERT(1000,\"g\",\"kg\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "convert_kelvin_to_celsius",
+      "formula": "=CONVERT(273.15,\"K\",\"C\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "convert_joule_to_calorie",
+      "formula": "=CONVERT(1,\"J\",\"cal\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.23884589662749595
+      }
+    },
+    {
+      "id": "convert_invalid_unit_is_na",
+      "formula": "=CONVERT(1,\"m\",\"bogus\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

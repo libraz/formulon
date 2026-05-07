@@ -1,0 +1,395 @@
+{
+  "suite": "text_to_bool_probes",
+  "description": "Mac Excel 365 (ja-JP) probe for whether text strings \"TRUE\"/\"true\"/ \"FALSE\"/\"false\" coerce to bool when passed to a function argument that expects a logical value. IronCalc accepts these strings (e.g. BETA.DIST(..., \"TRUE\", ...)), but Formulon's `coerce_to_bool` currently rejects them and surfaces #VALUE! — based on a comment that claims Excel does the same. This probe settles the question by asking Mac directly across IF, NOT, AND, BETA.DIST cumulative, and direct coercion via N(). Mac's truth becomes the reference; we update `coerce_to_bool` only if Mac actually accepts these strings.\n",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-07T15:19:09Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "text_bool_if_uppercase_true",
+      "formula": "=IF(\"TRUE\", 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "text_bool_if_lowercase_true",
+      "formula": "=IF(\"true\", 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "text_bool_if_uppercase_false",
+      "formula": "=IF(\"FALSE\", 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "text_bool_if_mixed_case",
+      "formula": "=IF(\"True\", 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "text_bool_if_garbage",
+      "formula": "=IF(\"yes\", 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_not_uppercase_true",
+      "formula": "=NOT(\"TRUE\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "text_bool_not_lowercase_false",
+      "formula": "=NOT(\"false\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "text_bool_and_two_true",
+      "formula": "=AND(\"TRUE\", \"TRUE\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "text_bool_and_true_false",
+      "formula": "=AND(\"TRUE\", \"FALSE\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "text_bool_and_whitespace",
+      "formula": "=AND(\"  TRUE  \", TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_or_whitespace",
+      "formula": "=OR(\"  FALSE  \", FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_betadist_uppercase",
+      "formula": "=BETA.DIST(0.234, 2, 2.5, \"TRUE\", 0.15, 1.2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.02579396768034742
+      }
+    },
+    {
+      "id": "text_bool_betadist_lowercase",
+      "formula": "=BETA.DIST(0.234, 2, 2.5, \"true\", 0.15, 1.2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.02579396768034742
+      }
+    },
+    {
+      "id": "text_bool_betadist_pdf_text",
+      "formula": "=BETA.DIST(0.234, 2, 2.5, \"FALSE\", 0.15, 1.2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5882886668596937
+      }
+    },
+    {
+      "id": "text_bool_n_uppercase_true",
+      "formula": "=N(\"TRUE\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "text_bool_normdist_uppercase",
+      "formula": "=NORM.DIST(0, 0, 1, \"TRUE\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "text_num_if_zero_string",
+      "formula": "=IF(\"0\", 1, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_num_if_one_string",
+      "formula": "=IF(\"1\", 1, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_num_if_negative_string",
+      "formula": "=IF(\"-1\", 1, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_num_if_fractional_string",
+      "formula": "=IF(\"0.5\", 1, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_if_true_with_punct",
+      "formula": "=IF(\"TRUE!!\", 1, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_if_true_with_whitespace",
+      "formula": "=IF(\"  TRUE  \", 1, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_if_kanji_true",
+      "formula": "=IF(\"真\", 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_if_kanji_false",
+      "formula": "=IF(\"偽\", 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_if_hiragana_yes",
+      "formula": "=IF(\"はい\", 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_if_hiragana_no",
+      "formula": "=IF(\"いいえ\", 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_if_french_true",
+      "formula": "=IF(\"VRAI\", 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_if_german_true",
+      "formula": "=IF(\"WAHR\", 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_if_chinese_true",
+      "formula": "=IF(\"正\", 1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_not_zero_string",
+      "formula": "=NOT(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_not_one_string",
+      "formula": "=NOT(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_and_zero_one_strings",
+      "formula": "=AND(\"0\", \"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_and_numeric_direct",
+      "formula": "=AND(1, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "text_bool_or_mixed_textbool_number",
+      "formula": "=OR(\"FALSE\", 1)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "text_bool_text_of_true_text_format",
+      "formula": "=TEXT(TRUE, \"@\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "TRUE"
+      }
+    },
+    {
+      "id": "text_bool_n_uppercase_false",
+      "formula": "=N(\"FALSE\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "text_bool_sum_bool_and_number",
+      "formula": "=SUM(TRUE, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "text_bool_sum_textbool_and_number",
+      "formula": "=SUM(\"TRUE\", 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_arith_textbool_plus_number",
+      "formula": "=1 + \"TRUE\"",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_bool_compare_textbool_equals_bool",
+      "formula": "=\"TRUE\" = TRUE",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "text_bool_compare_bool_equals_one",
+      "formula": "=TRUE = 1",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "text_bool_compare_bool_gt_zero",
+      "formula": "=TRUE > 0",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    }
+  ]
+}

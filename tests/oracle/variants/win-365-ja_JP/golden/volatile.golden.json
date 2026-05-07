@@ -1,0 +1,47 @@
+{
+  "suite": "volatile",
+  "description": "Volatile / non-deterministic functions (NOW / TODAY / RAND / RANDBETWEEN / RANDARRAY). Each member draws from a wall-clock or PRNG source that is intrinsically non-reproducible, so every case is registered as skip-oracle in tests/divergence.yaml. The closure exists purely to declare the divergence cluster — there is no oracle comparison.",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-07T15:19:09Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "volatile_now_clock",
+      "formula": "=NOW()",
+      "setup": {},
+      "skipped": "NOW() depends on wall-clock time; oracle comparison is intrinsically non-reproducible."
+    },
+    {
+      "id": "volatile_today_clock",
+      "formula": "=TODAY()",
+      "setup": {},
+      "skipped": "TODAY() depends on wall-clock date; oracle comparison is intrinsically non-reproducible."
+    },
+    {
+      "id": "volatile_rand_uniform",
+      "formula": "=RAND()",
+      "setup": {},
+      "skipped": "RAND() draws from a non-seedable PRNG; oracle comparison is intrinsically non-reproducible."
+    },
+    {
+      "id": "volatile_randbetween_int",
+      "formula": "=RANDBETWEEN(1, 10)",
+      "setup": {},
+      "skipped": "RANDBETWEEN draws from a non-seedable PRNG; oracle comparison is intrinsically non-reproducible."
+    },
+    {
+      "id": "volatile_randarray_2x2",
+      "formula": "=RANDARRAY(2, 2)",
+      "setup": {},
+      "skipped": "RANDARRAY draws from a non-seedable PRNG; oracle comparison is intrinsically non-reproducible."
+    }
+  ]
+}

@@ -1,0 +1,809 @@
+{
+  "suite": "math_trig2",
+  "description": "Hyperbolic, reciprocal-trig, and parity-rounding builtins (SINH, COSH, TANH, ASINH, ACOSH, ATANH, SEC, CSC, COT, ACOT, SECH, CSCH, COTH, ACOTH, EVEN, ODD, QUOTIENT). Kept in a separate suite from math_trig so the existing golden JSON stays bit-stable and only the new cases need to be populated by `make oracle-gen` on macOS.\n",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-07T15:19:09Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "sinh_of_zero",
+      "formula": "=SINH(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sinh_of_one",
+      "formula": "=SINH(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.1752011936438014
+      }
+    },
+    {
+      "id": "sinh_of_negative_one",
+      "formula": "=SINH(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.1752011936438014
+      }
+    },
+    {
+      "id": "sinh_overflow_is_num",
+      "formula": "=SINH(1000)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "sinh_identity_with_cosh_equals_exp",
+      "formula": "=SINH(2)+COSH(2)-EXP(2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "cosh_of_zero",
+      "formula": "=COSH(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "cosh_of_one",
+      "formula": "=COSH(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5430806348152437
+      }
+    },
+    {
+      "id": "cosh_of_negative_one",
+      "formula": "=COSH(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5430806348152437
+      }
+    },
+    {
+      "id": "cosh_overflow_is_num",
+      "formula": "=COSH(1000)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "cosh_identity_squared_minus_sinh_squared_is_one",
+      "formula": "=COSH(1.5)^2-SINH(1.5)^2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000000000009
+      }
+    },
+    {
+      "id": "tanh_of_zero",
+      "formula": "=TANH(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "tanh_of_one",
+      "formula": "=TANH(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.7615941559557649
+      }
+    },
+    {
+      "id": "tanh_large_is_nearly_one",
+      "formula": "=TANH(100)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "tanh_negative_large_is_nearly_minus_one",
+      "formula": "=TANH(-100)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "tanh_identity_sinh_over_cosh",
+      "formula": "=TANH(0.5)-SINH(0.5)/COSH(0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "asinh_of_zero",
+      "formula": "=ASINH(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "asinh_of_one",
+      "formula": "=ASINH(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.8813735870195429
+      }
+    },
+    {
+      "id": "asinh_sinh_round_trip",
+      "formula": "=ASINH(SINH(0.75))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.75
+      }
+    },
+    {
+      "id": "asinh_of_negative_one",
+      "formula": "=ASINH(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.8813735870195429
+      }
+    },
+    {
+      "id": "asinh_large_grows_like_log",
+      "formula": "=ASINH(1000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.600902709541988
+      }
+    },
+    {
+      "id": "acosh_of_one",
+      "formula": "=ACOSH(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "acosh_of_two",
+      "formula": "=ACOSH(2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.3169578969248166
+      }
+    },
+    {
+      "id": "acosh_below_one_is_num",
+      "formula": "=ACOSH(0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "acosh_round_trip_with_cosh",
+      "formula": "=ACOSH(COSH(1.25))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.25
+      }
+    },
+    {
+      "id": "acosh_large_grows_like_log",
+      "formula": "=ACOSH(1000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.600902209541989
+      }
+    },
+    {
+      "id": "atanh_of_zero",
+      "formula": "=ATANH(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "atanh_of_half",
+      "formula": "=ATANH(0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5493061443340549
+      }
+    },
+    {
+      "id": "atanh_of_one_is_num",
+      "formula": "=ATANH(1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "atanh_above_one_is_num",
+      "formula": "=ATANH(2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "atanh_round_trip_with_tanh",
+      "formula": "=ATANH(TANH(0.6))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6
+      }
+    },
+    {
+      "id": "sec_of_zero",
+      "formula": "=SEC(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "sec_of_quarter_pi",
+      "formula": "=SEC(PI()/4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.414213562373095
+      }
+    },
+    {
+      "id": "sec_of_pi",
+      "formula": "=SEC(PI())",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "sec_of_third_pi",
+      "formula": "=SEC(PI()/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.9999999999999996
+      }
+    },
+    {
+      "id": "sec_identity_with_cos",
+      "formula": "=SEC(1.2)*COS(1.2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "csc_of_zero_is_div0",
+      "formula": "=CSC(0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "csc_of_half_pi",
+      "formula": "=CSC(PI()/2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "csc_of_quarter_pi",
+      "formula": "=CSC(PI()/4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.4142135623730951
+      }
+    },
+    {
+      "id": "csc_of_sixth_pi",
+      "formula": "=CSC(PI()/6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "csc_identity_with_sin",
+      "formula": "=CSC(0.7)*SIN(0.7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "cot_of_zero_is_div0",
+      "formula": "=COT(0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "cot_of_quarter_pi",
+      "formula": "=COT(PI()/4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "cot_of_negative_quarter_pi",
+      "formula": "=COT(-PI()/4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "cot_of_third_pi",
+      "formula": "=COT(PI()/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.577350269189626
+      }
+    },
+    {
+      "id": "cot_identity_with_tan",
+      "formula": "=COT(0.9)*TAN(0.9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "acot_of_zero",
+      "formula": "=ACOT(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      }
+    },
+    {
+      "id": "acot_of_one",
+      "formula": "=ACOT(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.7853981633974483
+      }
+    },
+    {
+      "id": "acot_of_negative_one",
+      "formula": "=ACOT(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.356194490192345
+      }
+    },
+    {
+      "id": "acot_large_approaches_zero",
+      "formula": "=ACOT(1000000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.999999999996666e-07
+      }
+    },
+    {
+      "id": "acot_round_trip_with_cot",
+      "formula": "=COT(ACOT(2.5))-2.5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sech_of_zero",
+      "formula": "=SECH(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "sech_large_is_zero",
+      "formula": "=SECH(1000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sech_of_one",
+      "formula": "=SECH(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6480542736638855
+      }
+    },
+    {
+      "id": "sech_negative_matches_positive",
+      "formula": "=SECH(-1.5)-SECH(1.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sech_identity_with_cosh",
+      "formula": "=SECH(0.8)*COSH(0.8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "csch_of_zero_is_div0",
+      "formula": "=CSCH(0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "csch_of_one",
+      "formula": "=CSCH(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.8509181282393216
+      }
+    },
+    {
+      "id": "csch_large_is_zero",
+      "formula": "=CSCH(1000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "csch_negative_is_odd",
+      "formula": "=CSCH(-1)+CSCH(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "csch_identity_with_sinh",
+      "formula": "=CSCH(0.6)*SINH(0.6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "coth_of_zero_is_div0",
+      "formula": "=COTH(0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "coth_of_one",
+      "formula": "=COTH(1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.3130352854993315
+      }
+    },
+    {
+      "id": "coth_large_approaches_one",
+      "formula": "=COTH(1000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "coth_negative_large_approaches_minus_one",
+      "formula": "=COTH(-1000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "coth_identity_with_tanh",
+      "formula": "=COTH(1.1)*TANH(1.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "acoth_of_two",
+      "formula": "=ACOTH(2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5493061443340549
+      }
+    },
+    {
+      "id": "acoth_of_one_is_num",
+      "formula": "=ACOTH(1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "acoth_inside_is_num",
+      "formula": "=ACOTH(0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "acoth_round_trip_with_coth",
+      "formula": "=COTH(ACOTH(2.5))-2.5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "acoth_negative_branch",
+      "formula": "=ACOTH(-3)+ACOTH(3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "even_of_one_point_five",
+      "formula": "=EVEN(1.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "even_of_three",
+      "formula": "=EVEN(3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "even_of_four",
+      "formula": "=EVEN(4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "even_of_negative_one_point_five",
+      "formula": "=EVEN(-1.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "even_of_negative_two_point_one",
+      "formula": "=EVEN(-2.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4.0
+      }
+    },
+    {
+      "id": "even_of_zero",
+      "formula": "=EVEN(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "odd_of_one_point_five",
+      "formula": "=ODD(1.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "odd_of_two",
+      "formula": "=ODD(2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "odd_of_three",
+      "formula": "=ODD(3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "odd_of_negative_one_point_five",
+      "formula": "=ODD(-1.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "odd_of_negative_two",
+      "formula": "=ODD(-2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "odd_of_zero",
+      "formula": "=ODD(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "quotient_positive_over_positive",
+      "formula": "=QUOTIENT(10, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "quotient_negative_over_positive",
+      "formula": "=QUOTIENT(-10, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "quotient_positive_over_negative",
+      "formula": "=QUOTIENT(10, -3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "quotient_both_negative",
+      "formula": "=QUOTIENT(-10, -3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "quotient_fractional_numerator",
+      "formula": "=QUOTIENT(5.9, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "quotient_zero_denominator_is_div0",
+      "formula": "=QUOTIENT(5, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    }
+  ]
+}

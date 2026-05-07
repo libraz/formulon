@@ -1,0 +1,47 @@
+{
+  "suite": "info_function",
+  "description": "INFO returns environment-specific strings (release version, OS version, system identifier, recalc mode, current directory, open file count). The values are intrinsically host-bound: Mac Excel 365 ja-JP returns Microsoft-version strings, Formulon returns its own engine identifier. Every probe is a documented divergence (`mode: skip-oracle`) — closure is a divergence-only declaration.\n",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-07T15:19:09Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "info_release",
+      "formula": "=INFO(\"release\")",
+      "setup": {},
+      "skipped": "INFO(\"release\") returns the host application's version string; intrinsically environment-bound. Mac Excel 365 returns its build number, Formulon returns the engine version."
+    },
+    {
+      "id": "info_osversion",
+      "formula": "=INFO(\"osversion\")",
+      "setup": {},
+      "skipped": "INFO(\"osversion\") returns the host OS version string; intrinsically environment-bound."
+    },
+    {
+      "id": "info_system",
+      "formula": "=INFO(\"system\")",
+      "setup": {},
+      "skipped": "INFO(\"system\") returns the host OS family (\"mac\" / \"pcdos\" on Excel); intrinsically environment-bound."
+    },
+    {
+      "id": "info_numfile",
+      "formula": "=INFO(\"numfile\")",
+      "setup": {},
+      "skipped": "INFO(\"numfile\") returns the count of currently open workbooks; varies with host state."
+    },
+    {
+      "id": "info_recalc",
+      "formula": "=INFO(\"recalc\")",
+      "setup": {},
+      "skipped": "INFO(\"recalc\") returns the host application's recalculation mode (\"Automatic\" / \"Manual\"); Formulon has no notion of recalc mode."
+    }
+  ]
+}

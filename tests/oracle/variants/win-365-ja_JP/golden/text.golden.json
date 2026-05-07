@@ -1,0 +1,1783 @@
+{
+  "suite": "text",
+  "description": "LEN / LEFT / RIGHT / MID / CONCAT / EXACT / FIND / SEARCH / UPPER / LOWER / PROPER / TRIM / CLEAN / SUBSTITUTE / REPT / TEXTJOIN / UNICHAR / UNICODE",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-07T15:19:09Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "len_ascii",
+      "formula": "=LEN(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "len_empty_string",
+      "formula": "=LEN(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "len_bmp_japanese",
+      "formula": "=LEN(\"あいう\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "len_mixed",
+      "formula": "=LEN(\"abcあいう\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "len_coerces_number",
+      "formula": "=LEN(123)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "len_coerces_bool",
+      "formula": "=LEN(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "left_first_three",
+      "formula": "=LEFT(\"abcdef\",3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abc"
+      }
+    },
+    {
+      "id": "left_default_count",
+      "formula": "=LEFT(\"abcdef\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a"
+      }
+    },
+    {
+      "id": "left_more_than_length",
+      "formula": "=LEFT(\"ab\",10)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ab"
+      }
+    },
+    {
+      "id": "left_zero_count",
+      "formula": "=LEFT(\"abcdef\",0)",
+      "setup": {},
+      "skipped": "LEFT(\"abcdef\",0) -> \"\"; xlwings read-back classifies as blank. Formulon returns text(\"\")."
+    },
+    {
+      "id": "left_negative_is_value",
+      "formula": "=LEFT(\"abcdef\",-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "right_last_three",
+      "formula": "=RIGHT(\"abcdef\",3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "def"
+      }
+    },
+    {
+      "id": "right_default_count",
+      "formula": "=RIGHT(\"abcdef\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "f"
+      }
+    },
+    {
+      "id": "right_zero_count",
+      "formula": "=RIGHT(\"abcdef\",0)",
+      "setup": {},
+      "skipped": "RIGHT() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    },
+    {
+      "id": "right_more_than_length",
+      "formula": "=RIGHT(\"ab\",10)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ab"
+      }
+    },
+    {
+      "id": "right_negative_is_value",
+      "formula": "=RIGHT(\"abcdef\",-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mid_middle",
+      "formula": "=MID(\"abcdef\",2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "bcd"
+      }
+    },
+    {
+      "id": "mid_start_beyond_length",
+      "formula": "=MID(\"ab\",10,3)",
+      "setup": {},
+      "skipped": "MID with start beyond length -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
+    },
+    {
+      "id": "mid_zero_length",
+      "formula": "=MID(\"abcdef\",2,0)",
+      "setup": {},
+      "skipped": "MID(...,n,0) -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
+    },
+    {
+      "id": "mid_start_zero_is_value",
+      "formula": "=MID(\"abcdef\",0,3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mid_negative_count_is_value",
+      "formula": "=MID(\"abcdef\",2,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "concat_two_strings",
+      "formula": "=CONCAT(\"a\",\"b\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ab"
+      }
+    },
+    {
+      "id": "concat_many_mixed",
+      "formula": "=CONCAT(\"a\",1,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a1TRUE"
+      }
+    },
+    {
+      "id": "concatenate_two_strings",
+      "formula": "=CONCATENATE(\"x\",\"y\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "xy"
+      }
+    },
+    {
+      "id": "concat_range",
+      "formula": "=CONCAT(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "c"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "abc"
+      }
+    },
+    {
+      "id": "concat_empty_args",
+      "formula": "=CONCAT(\"\",\"x\",\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x"
+      }
+    },
+    {
+      "id": "concat_error_propagates",
+      "formula": "=CONCAT(\"a\",1/0,\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "concatenate_with_number",
+      "formula": "=CONCATENATE(\"x\",1,\"y\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x1y"
+      }
+    },
+    {
+      "id": "concatenate_with_bool",
+      "formula": "=CONCATENATE(\"x\",TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "xTRUE"
+      }
+    },
+    {
+      "id": "concatenate_single_arg",
+      "formula": "=CONCATENATE(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hello"
+      }
+    },
+    {
+      "id": "concatenate_empty_strings",
+      "formula": "=CONCATENATE(\"\",\"\",\"\")",
+      "setup": {},
+      "skipped": "CONCATENATE() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    },
+    {
+      "id": "exact_same",
+      "formula": "=EXACT(\"abc\",\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "exact_different_case",
+      "formula": "=EXACT(\"ABC\",\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "exact_number_vs_text_number",
+      "formula": "=EXACT(1,\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "exact_trailing_space_differs",
+      "formula": "=EXACT(\"abc\",\"abc \")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "exact_both_empty",
+      "formula": "=EXACT(\"\",\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "find_substring",
+      "formula": "=FIND(\"c\",\"abcdef\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "find_not_found_is_value",
+      "formula": "=FIND(\"z\",\"abcdef\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "find_case_sensitive",
+      "formula": "=FIND(\"A\",\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "find_with_start",
+      "formula": "=FIND(\"a\",\"abcabc\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "search_substring",
+      "formula": "=SEARCH(\"C\",\"abcdef\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "search_wildcard_q",
+      "formula": "=SEARCH(\"a?c\",\"zabcabc\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "search_wildcard_star",
+      "formula": "=SEARCH(\"a*c\",\"zabbbbc\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "find_start_beyond_length_is_value",
+      "formula": "=FIND(\"a\",\"abc\",10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "search_not_found_is_value",
+      "formula": "=SEARCH(\"z\",\"abcdef\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "search_with_start",
+      "formula": "=SEARCH(\"a\",\"abcabc\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "upper_ascii",
+      "formula": "=UPPER(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "HELLO"
+      }
+    },
+    {
+      "id": "lower_ascii",
+      "formula": "=LOWER(\"HELLO\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hello"
+      }
+    },
+    {
+      "id": "proper_multiword",
+      "formula": "=PROPER(\"hello world\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Hello World"
+      }
+    },
+    {
+      "id": "trim_leading_trailing",
+      "formula": "=TRIM(\"  hello   world  \")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hello world"
+      }
+    },
+    {
+      "id": "clean_removes_ctrl",
+      "formula": "=CLEAN(\"ab\tcd\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abcd"
+      }
+    },
+    {
+      "id": "upper_empty",
+      "formula": "=UPPER(\"\")",
+      "setup": {},
+      "skipped": "UPPER() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    },
+    {
+      "id": "upper_already_upper",
+      "formula": "=UPPER(\"HELLO\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "HELLO"
+      }
+    },
+    {
+      "id": "upper_digits_unchanged",
+      "formula": "=UPPER(\"abc123\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ABC123"
+      }
+    },
+    {
+      "id": "upper_hiragana_passthrough",
+      "formula": "=UPPER(\"あいう\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "あいう"
+      }
+    },
+    {
+      "id": "lower_empty",
+      "formula": "=LOWER(\"\")",
+      "setup": {},
+      "skipped": "LOWER() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    },
+    {
+      "id": "lower_already_lower",
+      "formula": "=LOWER(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hello"
+      }
+    },
+    {
+      "id": "lower_digits_unchanged",
+      "formula": "=LOWER(\"ABC123\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abc123"
+      }
+    },
+    {
+      "id": "lower_mixed_case",
+      "formula": "=LOWER(\"HeLLo WoRLd\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hello world"
+      }
+    },
+    {
+      "id": "proper_empty",
+      "formula": "=PROPER(\"\")",
+      "setup": {},
+      "skipped": "PROPER() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    },
+    {
+      "id": "proper_single_word",
+      "formula": "=PROPER(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Hello"
+      }
+    },
+    {
+      "id": "proper_after_digit",
+      "formula": "=PROPER(\"abc123def\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Abc123Def"
+      }
+    },
+    {
+      "id": "proper_apostrophe",
+      "formula": "=PROPER(\"o'brien\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "O'Brien"
+      }
+    },
+    {
+      "id": "trim_internal_spaces_collapsed",
+      "formula": "=TRIM(\"a    b    c\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a b c"
+      }
+    },
+    {
+      "id": "trim_no_change",
+      "formula": "=TRIM(\"hello world\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hello world"
+      }
+    },
+    {
+      "id": "trim_only_spaces",
+      "formula": "=TRIM(\"     \")",
+      "setup": {},
+      "skipped": "TRIM() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    },
+    {
+      "id": "trim_strips_fullwidth_space",
+      "formula": "=TRIM(\"　a　\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a"
+      }
+    },
+    {
+      "id": "clean_strips_chr7",
+      "formula": "=CLEAN(\"a\" & CHAR(7) & \"b\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ab"
+      }
+    },
+    {
+      "id": "clean_no_op_on_plain",
+      "formula": "=CLEAN(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hello"
+      }
+    },
+    {
+      "id": "clean_strips_consecutive_ctrl",
+      "formula": "=CLEAN(CHAR(1) & CHAR(2) & \"x\" & CHAR(3))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x"
+      }
+    },
+    {
+      "id": "clean_keeps_tab_strips_others",
+      "formula": "=CLEAN(CHAR(9) & \"abc\" & CHAR(31))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abc"
+      }
+    },
+    {
+      "id": "substitute_all",
+      "formula": "=SUBSTITUTE(\"banana\",\"a\",\"o\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "bonono"
+      }
+    },
+    {
+      "id": "substitute_nth_only",
+      "formula": "=SUBSTITUTE(\"banana\",\"a\",\"o\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "banona"
+      }
+    },
+    {
+      "id": "substitute_no_match_passthrough",
+      "formula": "=SUBSTITUTE(\"banana\",\"x\",\"o\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "banana"
+      }
+    },
+    {
+      "id": "substitute_empty_replacement",
+      "formula": "=SUBSTITUTE(\"banana\",\"a\",\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "bnn"
+      }
+    },
+    {
+      "id": "substitute_instance_zero_is_value",
+      "formula": "=SUBSTITUTE(\"banana\",\"a\",\"o\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rept_three_times",
+      "formula": "=REPT(\"ab\",3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ababab"
+      }
+    },
+    {
+      "id": "rept_zero_count",
+      "formula": "=REPT(\"ab\",0)",
+      "setup": {},
+      "skipped": "REPT(s,0) -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
+    },
+    {
+      "id": "rept_negative_is_value",
+      "formula": "=REPT(\"ab\",-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rept_truncates_count",
+      "formula": "=REPT(\"ab\",3.9)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ababab"
+      }
+    },
+    {
+      "id": "rept_empty_string",
+      "formula": "=REPT(\"\",5)",
+      "setup": {},
+      "skipped": "REPT() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    },
+    {
+      "id": "textjoin_simple",
+      "formula": "=TEXTJOIN(\",\",TRUE,\"a\",\"b\",\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a,b,c"
+      }
+    },
+    {
+      "id": "textjoin_ignore_empty_true",
+      "formula": "=TEXTJOIN(\",\",TRUE,\"a\",\"\",\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a,c"
+      }
+    },
+    {
+      "id": "textjoin_ignore_empty_false",
+      "formula": "=TEXTJOIN(\",\",FALSE,\"a\",\"\",\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a,,c"
+      }
+    },
+    {
+      "id": "textjoin_range",
+      "formula": "=TEXTJOIN(\",\",TRUE,A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "c"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "a,b,c"
+      }
+    },
+    {
+      "id": "textjoin_multichar_delimiter",
+      "formula": "=TEXTJOIN(\" -- \",TRUE,\"a\",\"b\",\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a -- b -- c"
+      }
+    },
+    {
+      "id": "unichar_ascii_a",
+      "formula": "=UNICHAR(65)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "A"
+      }
+    },
+    {
+      "id": "unichar_japanese",
+      "formula": "=UNICHAR(12354)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "あ"
+      }
+    },
+    {
+      "id": "unichar_zero_is_value",
+      "formula": "=UNICHAR(0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "unicode_ascii",
+      "formula": "=UNICODE(\"A\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 65.0
+      }
+    },
+    {
+      "id": "unicode_japanese",
+      "formula": "=UNICODE(\"あ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12354.0
+      }
+    },
+    {
+      "id": "unichar_kanji_kan",
+      "formula": "=UNICHAR(28450)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "漢"
+      }
+    },
+    {
+      "id": "unichar_negative_is_value",
+      "formula": "=UNICHAR(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "unicode_multichar_first_only",
+      "formula": "=UNICODE(\"Apple\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 65.0
+      }
+    },
+    {
+      "id": "unicode_kanji_first",
+      "formula": "=UNICODE(\"漢字\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 28450.0
+      }
+    },
+    {
+      "id": "unicode_empty_is_value",
+      "formula": "=UNICODE(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "lenb_ascii",
+      "formula": "=LENB(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "lenb_empty",
+      "formula": "=LENB(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "lenb_hiragana",
+      "formula": "=LENB(\"あいう\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "lenb_mixed",
+      "formula": "=LENB(\"abcあ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "lenb_halfwidth_kana",
+      "formula": "=LENB(\"ｱｲｳ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "lenb_supplementary_plane",
+      "formula": "=LENB(\"😀\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "lenb_kanji_pair",
+      "formula": "=LENB(\"漢字\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "lenb_mixed_ascii_kanji",
+      "formula": "=LENB(\"漢ABC字\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "lenb_fullwidth_kana_dakuten_composed",
+      "formula": "=LENB(\"ガ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "lenb_halfwidth_kana_with_dakuten",
+      "formula": "=LENB(\"ｶﾞ\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "lenb_circled_digit",
+      "formula": "=LENB(\"①\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "lenb_latin_extended",
+      "formula": "=LENB(\"â\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "lenb_fullwidth_space",
+      "formula": "=LENB(\"　\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "lenb_halfwidth_space",
+      "formula": "=LENB(\" \")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "lenb_newline",
+      "formula": "=LENB(CHAR(10))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "lenb_combining_dakuten",
+      "formula": "=LENB(\"か\" & UNICHAR(12441))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "lenb_coerces_number",
+      "formula": "=LENB(123)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "lenb_coerces_bool",
+      "formula": "=LENB(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "leftb_ascii",
+      "formula": "=LEFTB(\"hello\", 3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hel"
+      }
+    },
+    {
+      "id": "leftb_default_count",
+      "formula": "=LEFTB(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "h"
+      }
+    },
+    {
+      "id": "leftb_hiragana_exact",
+      "formula": "=LEFTB(\"あいう\", 4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "あい"
+      }
+    },
+    {
+      "id": "leftb_hiragana_splits",
+      "formula": "=LEFTB(\"あいう\", 3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "あ "
+      }
+    },
+    {
+      "id": "leftb_negative_is_value",
+      "formula": "=LEFTB(\"hello\", -1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "leftb_zero_count",
+      "formula": "=LEFTB(\"hello\", 0)",
+      "setup": {},
+      "skipped": "LEFTB(\"hello\",0) -> \"\"; xlwings read-back classifies as blank. Formulon returns text(\"\")."
+    },
+    {
+      "id": "leftb_split_kanji_one_byte",
+      "formula": "=LEFTB(\"漢字\", 1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " "
+      }
+    },
+    {
+      "id": "leftb_kanji_exact_boundary",
+      "formula": "=LEFTB(\"漢字\", 2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "漢"
+      }
+    },
+    {
+      "id": "leftb_mixed_overshoots_into_kanji",
+      "formula": "=LEFTB(\"ABC漢\", 4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ABC "
+      }
+    },
+    {
+      "id": "leftb_over_budget",
+      "formula": "=LEFTB(\"hello\", 100)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hello"
+      }
+    },
+    {
+      "id": "leftb_split_composed_dakuten",
+      "formula": "=LEFTB(\"が\", 1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " "
+      }
+    },
+    {
+      "id": "rightb_ascii",
+      "formula": "=RIGHTB(\"hello\", 3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "llo"
+      }
+    },
+    {
+      "id": "rightb_hiragana_exact",
+      "formula": "=RIGHTB(\"あいう\", 4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "いう"
+      }
+    },
+    {
+      "id": "rightb_hiragana_splits",
+      "formula": "=RIGHTB(\"あいう\", 3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " う"
+      }
+    },
+    {
+      "id": "rightb_split_kanji_one_byte",
+      "formula": "=RIGHTB(\"漢字\", 1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " "
+      }
+    },
+    {
+      "id": "rightb_mixed_three_bytes",
+      "formula": "=RIGHTB(\"ABC漢\", 3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "C漢"
+      }
+    },
+    {
+      "id": "rightb_over_budget",
+      "formula": "=RIGHTB(\"hello\", 100)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hello"
+      }
+    },
+    {
+      "id": "midb_ascii",
+      "formula": "=MIDB(\"hello\", 2, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ell"
+      }
+    },
+    {
+      "id": "midb_hiragana_clean",
+      "formula": "=MIDB(\"あいうえお\", 3, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "いう"
+      }
+    },
+    {
+      "id": "midb_hiragana_start_mid_char",
+      "formula": "=MIDB(\"あいうえお\", 2, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " い "
+      }
+    },
+    {
+      "id": "midb_start_beyond",
+      "formula": "=MIDB(\"abc\", 10, 3)",
+      "setup": {},
+      "skipped": "MIDB with start beyond length -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
+    },
+    {
+      "id": "midb_start_zero_is_value",
+      "formula": "=MIDB(\"abc\", 0, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "midb_start_negative_is_value",
+      "formula": "=MIDB(\"hello\", -1, 3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "midb_kanji_clean_start",
+      "formula": "=MIDB(\"ABC漢XY\", 4, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "漢"
+      }
+    },
+    {
+      "id": "midb_kanji_split_length",
+      "formula": "=MIDB(\"ABC漢XY\", 4, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " "
+      }
+    },
+    {
+      "id": "midb_start_inside_kanji",
+      "formula": "=MIDB(\"ABC漢XY\", 5, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " "
+      }
+    },
+    {
+      "id": "midb_over_length",
+      "formula": "=MIDB(\"漢字\", 1, 100)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "漢字"
+      }
+    },
+    {
+      "id": "char_ascii_a",
+      "formula": "=CHAR(65)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "A"
+      }
+    },
+    {
+      "id": "char_space",
+      "formula": "=CHAR(32)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " "
+      }
+    },
+    {
+      "id": "char_high_byte",
+      "formula": "=CHAR(169)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ｩ"
+      }
+    },
+    {
+      "id": "char_zero_is_value",
+      "formula": "=CHAR(0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "char_256_is_value",
+      "formula": "=CHAR(256)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "code_ascii_a",
+      "formula": "=CODE(\"A\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 65.0
+      }
+    },
+    {
+      "id": "code_empty_is_value",
+      "formula": "=CODE(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "code_multi_char_uses_first",
+      "formula": "=CODE(\"Apple\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 65.0
+      }
+    },
+    {
+      "id": "code_hiragana_first",
+      "formula": "=CODE(\"あいう\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9250.0
+      }
+    },
+    {
+      "id": "code_space_char",
+      "formula": "=CODE(\" \")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 32.0
+      }
+    },
+    {
+      "id": "replace_middle",
+      "formula": "=REPLACE(\"abcdef\", 2, 3, \"XYZ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aXYZef"
+      }
+    },
+    {
+      "id": "replace_append",
+      "formula": "=REPLACE(\"abc\", 5, 2, \"XYZ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abcXYZ"
+      }
+    },
+    {
+      "id": "replace_empty_new",
+      "formula": "=REPLACE(\"abcdef\", 2, 3, \"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aef"
+      }
+    },
+    {
+      "id": "replace_zero_length_inserts",
+      "formula": "=REPLACE(\"abcdef\", 4, 0, \"XYZ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abcXYZdef"
+      }
+    },
+    {
+      "id": "replace_start_zero_is_value",
+      "formula": "=REPLACE(\"abcdef\", 0, 3, \"XYZ\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "replaceb_hiragana_middle",
+      "formula": "=REPLACEB(\"あいう\", 3, 2, \"X\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "あXう"
+      }
+    },
+    {
+      "id": "replaceb_head_pad",
+      "formula": "=REPLACEB(\"あい\", 2, 2, \"X\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": " X "
+      }
+    },
+    {
+      "id": "replaceb_tail_pad",
+      "formula": "=REPLACEB(\"あいう\", 1, 3, \"X\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "X う"
+      }
+    },
+    {
+      "id": "replaceb_ascii_zero_length",
+      "formula": "=REPLACEB(\"hello\", 3, 0, \"X\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "heXllo"
+      }
+    },
+    {
+      "id": "replaceb_ascii_full_swap",
+      "formula": "=REPLACEB(\"abcdef\", 2, 3, \"YYY\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aYYYef"
+      }
+    },
+    {
+      "id": "findb_hiragana",
+      "formula": "=FINDB(\"う\", \"あいう\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "findb_not_found_is_value",
+      "formula": "=FINDB(\"z\", \"abcdef\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "findb_empty_needle_returns_start",
+      "formula": "=FINDB(\"\", \"abc\", 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "searchb_hiragana_wildcard",
+      "formula": "=SEARCHB(\"い*\", \"あいう\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "searchb_case_insensitive",
+      "formula": "=SEARCHB(\"B\", \"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "findb_repeated_kanji_first",
+      "formula": "=FINDB(\"字\", \"漢字漢字\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "findb_repeated_kanji_with_start",
+      "formula": "=FINDB(\"字\", \"漢字漢字\", 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "findb_ascii_in_kanji_not_found",
+      "formula": "=FINDB(\"a\", \"漢字\", 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "findb_empty_needle_default_start",
+      "formula": "=FINDB(\"\", \"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "searchb_question_wildcard_in_kanji",
+      "formula": "=SEARCHB(\"?\", \"漢ABC\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "searchb_star_wildcard_default",
+      "formula": "=SEARCHB(\"*\", \"あいう\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "searchb_kanji_exact_byte_position",
+      "formula": "=SEARCHB(\"漢\", \"ABC漢\", 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "fixed_positive",
+      "formula": "=FIXED(1234567.891, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1,234,567.89"
+      }
+    },
+    {
+      "id": "fixed_default_two_decimals",
+      "formula": "=FIXED(1234.5678)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1,234.57"
+      }
+    },
+    {
+      "id": "fixed_negative_decimals",
+      "formula": "=FIXED(1234.56, -2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1,200"
+      }
+    },
+    {
+      "id": "fixed_no_commas",
+      "formula": "=FIXED(1234567.891, -3, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1235000"
+      }
+    },
+    {
+      "id": "fixed_zero_decimals",
+      "formula": "=FIXED(1234.5678, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1,235"
+      }
+    },
+    {
+      "id": "dollar_positive",
+      "formula": "=DOLLAR(1234.5)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "¥1,235"
+      }
+    },
+    {
+      "id": "dollar_negative_minus_sign",
+      "formula": "=DOLLAR(-1234.5)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "¥-1,235"
+      }
+    },
+    {
+      "id": "dollar_zero",
+      "formula": "=DOLLAR(0)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "¥0"
+      }
+    },
+    {
+      "id": "dollar_negative_decimals",
+      "formula": "=DOLLAR(1234.5, -2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "¥1,200"
+      }
+    },
+    {
+      "id": "dollar_explicit_two_decimals",
+      "formula": "=DOLLAR(1234.5, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "¥1,234.50"
+      }
+    },
+    {
+      "id": "textbefore_first",
+      "formula": "=TEXTBEFORE(\"abc-def-ghi\", \"-\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "textbefore_second",
+      "formula": "=TEXTBEFORE(\"abc-def-ghi\", \"-\", 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "textbefore_negative_instance",
+      "formula": "=TEXTBEFORE(\"abc-def-ghi\", \"-\", -1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "textbefore_not_found_is_na",
+      "formula": "=TEXTBEFORE(\"abc\", \"-\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "textbefore_if_not_found_custom",
+      "formula": "=TEXTBEFORE(\"abc\", \"-\", 1, 0, 0, \"NA\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "textafter_first",
+      "formula": "=TEXTAFTER(\"abc-def-ghi\", \"-\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "textafter_negative_instance",
+      "formula": "=TEXTAFTER(\"abc-def-ghi\", \"-\", -1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "textafter_match_end_at_end",
+      "formula": "=TEXTAFTER(\"abc\", \"-\", -1, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "textafter_second_instance",
+      "formula": "=TEXTAFTER(\"abc-def-ghi\", \"-\", 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "textafter_not_found_is_na",
+      "formula": "=TEXTAFTER(\"abc\", \"-\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "hyperlink_link_only",
+      "formula": "=HYPERLINK(\"http://example.com\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "http://example.com"
+      }
+    },
+    {
+      "id": "hyperlink_with_friendly",
+      "formula": "=HYPERLINK(\"http://example.com\", \"Click here\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Click here"
+      }
+    },
+    {
+      "id": "hyperlink_numeric_friendly",
+      "formula": "=HYPERLINK(\"x\", 42)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "hyperlink_numeric_link",
+      "formula": "=HYPERLINK(123)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "123"
+      }
+    },
+    {
+      "id": "hyperlink_empty_friendly",
+      "formula": "=HYPERLINK(\"http://example.com\", \"\")",
+      "setup": {},
+      "skipped": "HYPERLINK() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+    }
+  ]
+}
