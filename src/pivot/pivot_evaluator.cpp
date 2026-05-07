@@ -436,7 +436,7 @@ void finalize_hierarchy(HierNode& tree, std::vector<Node>& out, std::vector<Hier
 // Result-side text reification.
 // ---------------------------------------------------------------------------
 //
-// `PivotResult::values` / `subtotals` / `grand_total` must outlive the
+// `PivotResult::values` / `subtotals` / grand totals must outlive the
 // cache they were computed against (GETPIVOTDATA reads them outside of
 // any specific evaluation arena). Numbers, bools, errors, and blanks
 // are trivially copyable. Text is the only kind that needs storage —
@@ -573,6 +573,9 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   // tree mirror) is convenient for GETPIVOTDATA, which addresses
   // subtotals by the sequence in which they appear when walking the row
   // hierarchy in document order.
+  std::vector<std::vector<std::size_t>> row_subtotal_leaf_sets;
+  std::vector<std::vector<std::size_t>> col_subtotal_leaf_sets;
+
   if (!row_levels.empty() && data_field_count > 0) {
     // A reusable closure that walks the tree depth-first and emits
     // subtotal rows where appropriate.
@@ -598,10 +601,11 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
       std::map<Value, HierNode, ValueLess>::iterator it;
       std::size_t depth;
       std::size_t collected_start;  // index into `stack_row_leaves` at frame entry
+      std::vector<std::string> labels;
     };
 
     std::vector<Frame> stack;
-    stack.push_back({&row_tree, row_tree.children.begin(), 0, 0});
+    stack.push_back({&row_tree, row_tree.children.begin(), 0, 0, {}});
 
     while (!stack.empty()) {
       Frame& top = stack.back();
@@ -615,55 +619,180 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
             // Aggregate over all surviving records whose row-leaf
             // index is in [collected_start .. stack_row_leaves.size()).
             std::vector<Value> row_values(data_field_count, Value::blank());
+            std::vector<std::vector<Value>> col_values(col_leaf_count,
+                                                       std::vector<Value>(data_field_count, Value::blank()));
             for (std::size_t df_idx = 0; df_idx < data_field_count; ++df_idx) {
               const PivotDataField& df = table.data_fields()[df_idx];
               std::vector<Value> column;
+              std::vector<std::vector<Value>> columns_by_col(col_leaf_count);
               for (std::size_t leaf_idx_iter = top.collected_start; leaf_idx_iter < stack_row_leaves.size();
                    ++leaf_idx_iter) {
                 const std::size_t leaf_idx = stack_row_leaves[leaf_idx_iter];
                 for (std::size_t c = 0; c < col_leaf_count; ++c) {
                   for (std::size_t rec_idx : buckets[leaf_idx][c]) {
-                    column.push_back(cell_value(cache, cache.records()[rec_idx], df.field_index));
+                    Value v = cell_value(cache, cache.records()[rec_idx], df.field_index);
+                    column.push_back(v);
+                    columns_by_col[c].push_back(v);
                   }
                 }
               }
               row_values[df_idx] = reify(apply_aggregation(df.aggregation, column), result);
+              for (std::size_t c = 0; c < col_leaf_count; ++c) {
+                col_values[c][df_idx] = reify(apply_aggregation(df.aggregation, columns_by_col[c]), result);
+              }
             }
+            RowSubtotal subtotal;
+            subtotal.labels = top.labels;
+            subtotal.depth = static_cast<std::uint32_t>(top.depth - 1);
+            subtotal.values = row_values;
+            subtotal.col_values = std::move(col_values);
+            row_subtotal_leaf_sets.emplace_back(
+                stack_row_leaves.begin() + static_cast<std::ptrdiff_t>(top.collected_start), stack_row_leaves.end());
+            result.row_subtotals.push_back(std::move(subtotal));
             subtotals.push_back(std::move(row_values));
           }
         }
         stack.pop_back();
         continue;
       }
+      const std::string label = display_string(top.it->first);
       HierNode* child = &top.it->second;
       ++top.it;
       if (child->children.empty()) {
         // Leaf: contributes to its enclosing frames' subtotal.
         stack_row_leaves.push_back(child->leaf_index);
       } else {
-        stack.push_back({child, child->children.begin(), top.depth + 1, stack_row_leaves.size()});
+        std::vector<std::string> labels = top.labels;
+        labels.push_back(label);
+        stack.push_back({child, child->children.begin(), top.depth + 1, stack_row_leaves.size(), std::move(labels)});
       }
     }
   }
 
-  // 6. Grand total.
-  //
-  // MVP simplification: when grand totals are requested, surface the
-  // aggregation of every surviving record using the FIRST data field's
-  // aggregation. Excel's UI shows one grand-total cell per data field
-  // along the totals strip; the single-Value slot on `PivotResult`
-  // suffices for GETPIVOTDATA's `"Sum of Amount"` resolution path but
-  // not for rendering the full strip.
-  // TODO: extend `PivotResult::grand_total` to one Value per data field
-  // once the renderer needs it (likely as `std::vector<Value>`).
-  if ((table.grand_totals_rows() || table.grand_totals_cols()) && data_field_count > 0) {
-    const PivotDataField& df = table.data_fields()[0];
-    std::vector<Value> column;
-    column.reserve(surviving.size());
-    for (std::size_t rec_idx : surviving) {
-      column.push_back(cell_value(cache, cache.records()[rec_idx], df.field_index));
+  // 5b. Column-direction subtotals. The shape mirrors row_subtotals but each
+  // subtotal stores one row-leaf x data-field matrix because a rendered
+  // subtotal column has one value per row leaf.
+  if (!col_levels.empty() && data_field_count > 0) {
+    std::vector<std::size_t> stack_col_leaves;
+
+    auto field_at_depth = [&](std::size_t depth) -> const PivotField* {
+      if (depth >= col_levels.size()) {
+        return nullptr;
+      }
+      const std::uint32_t fi = col_levels[depth].field_index;
+      if (fi >= table.fields().size()) {
+        return nullptr;
+      }
+      return &table.fields()[fi];
+    };
+
+    struct Frame {
+      HierNode* node;
+      std::map<Value, HierNode, ValueLess>::iterator it;
+      std::size_t depth;
+      std::size_t collected_start;
+      std::vector<std::string> labels;
+    };
+
+    std::vector<Frame> stack;
+    stack.push_back({&col_tree, col_tree.children.begin(), 0, 0, {}});
+
+    while (!stack.empty()) {
+      Frame& top = stack.back();
+      if (top.it == top.node->children.end()) {
+        if (top.depth > 0 && !top.node->children.empty()) {
+          const PivotField* field = field_at_depth(top.depth - 1);
+          const bool wants_subtotal = field != nullptr && (field->subtotal_top || !field->subtotal_fns.empty());
+          if (wants_subtotal) {
+            ColSubtotal subtotal;
+            subtotal.labels = top.labels;
+            subtotal.depth = static_cast<std::uint32_t>(top.depth - 1);
+            subtotal.values.assign(row_leaf_count, std::vector<Value>(data_field_count, Value::blank()));
+
+            for (std::size_t r = 0; r < row_leaf_count; ++r) {
+              for (std::size_t df_idx = 0; df_idx < data_field_count; ++df_idx) {
+                const PivotDataField& df = table.data_fields()[df_idx];
+                std::vector<Value> column;
+                for (std::size_t leaf_idx_iter = top.collected_start; leaf_idx_iter < stack_col_leaves.size();
+                     ++leaf_idx_iter) {
+                  const std::size_t leaf_idx = stack_col_leaves[leaf_idx_iter];
+                  for (std::size_t rec_idx : buckets[r][leaf_idx]) {
+                    column.push_back(cell_value(cache, cache.records()[rec_idx], df.field_index));
+                  }
+                }
+                subtotal.values[r][df_idx] = reify(apply_aggregation(df.aggregation, column), result);
+              }
+            }
+            col_subtotal_leaf_sets.emplace_back(
+                stack_col_leaves.begin() + static_cast<std::ptrdiff_t>(top.collected_start), stack_col_leaves.end());
+            result.col_subtotals.push_back(std::move(subtotal));
+          }
+        }
+        stack.pop_back();
+        continue;
+      }
+      const std::string label = display_string(top.it->first);
+      HierNode* child = &top.it->second;
+      ++top.it;
+      if (child->children.empty()) {
+        stack_col_leaves.push_back(child->leaf_index);
+      } else {
+        std::vector<std::string> labels = top.labels;
+        labels.push_back(label);
+        stack.push_back({child, child->children.begin(), top.depth + 1, stack_col_leaves.size(), std::move(labels)});
+      }
     }
-    result.grand_total = reify(apply_aggregation(df.aggregation, column), result);
+  }
+
+  if (!result.row_subtotals.empty() && !result.col_subtotals.empty() && data_field_count > 0) {
+    for (std::size_t rs = 0; rs < result.row_subtotals.size(); ++rs) {
+      RowSubtotal& row_subtotal = result.row_subtotals[rs];
+      row_subtotal.col_subtotal_values.assign(result.col_subtotals.size(),
+                                              std::vector<Value>(data_field_count, Value::blank()));
+      if (rs >= row_subtotal_leaf_sets.size()) {
+        continue;
+      }
+      for (std::size_t cs = 0; cs < result.col_subtotals.size(); ++cs) {
+        if (cs >= col_subtotal_leaf_sets.size()) {
+          continue;
+        }
+        for (std::size_t df_idx = 0; df_idx < data_field_count; ++df_idx) {
+          const PivotDataField& df = table.data_fields()[df_idx];
+          std::vector<Value> column;
+          for (std::size_t row_leaf : row_subtotal_leaf_sets[rs]) {
+            if (row_leaf >= row_leaf_count) {
+              continue;
+            }
+            for (std::size_t col_leaf : col_subtotal_leaf_sets[cs]) {
+              if (col_leaf >= col_leaf_count) {
+                continue;
+              }
+              for (std::size_t rec_idx : buckets[row_leaf][col_leaf]) {
+                column.push_back(cell_value(cache, cache.records()[rec_idx], df.field_index));
+              }
+            }
+          }
+          row_subtotal.col_subtotal_values[cs][df_idx] = reify(apply_aggregation(df.aggregation, column), result);
+        }
+      }
+    }
+  }
+
+  // 6. Grand totals, one slot per data field. The legacy single-value
+  // `grand_total` mirrors slot 0 for existing GETPIVOTDATA callers.
+  if ((table.grand_totals_rows() || table.grand_totals_cols()) && data_field_count > 0) {
+    result.grand_totals.reserve(data_field_count);
+    for (const PivotDataField& df : table.data_fields()) {
+      std::vector<Value> column;
+      column.reserve(surviving.size());
+      for (std::size_t rec_idx : surviving) {
+        column.push_back(cell_value(cache, cache.records()[rec_idx], df.field_index));
+      }
+      result.grand_totals.push_back(reify(apply_aggregation(df.aggregation, column), result));
+    }
+    if (!result.grand_totals.empty()) {
+      result.grand_total = result.grand_totals[0];
+    }
   }
 
   return result;
