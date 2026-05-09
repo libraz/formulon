@@ -16,18 +16,18 @@
 // consulted by the Python generator (it can skip or widen tolerance) — the
 // C++ side verifies what the goldens actually commit to.
 
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
-#include <cctype>
 #include <iterator>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
-#include "eval/eval_context.h"
 #include "eval/compat.h"
+#include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"

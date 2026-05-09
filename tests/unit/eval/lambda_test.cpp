@@ -44,10 +44,10 @@
 #include "eval/function_registry.h"
 #include "eval/lambda_value.h"
 #include "eval/tree_walker.h"
-#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "test_eval_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
 

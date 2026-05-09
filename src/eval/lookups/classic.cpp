@@ -899,8 +899,8 @@ Value eval_lookup_lazy(const parser::AstNode& call, Arena& arena, const Function
   }
 
   const LookupAxis axis = lrows >= lcols ? LookupAxis::Column : LookupAxis::Row;
-  const std::size_t off = lookup_scan(lookup_cells, lrows, lcols, axis, lookup, /*approximate=*/true,
-                                      ctx.excel_profile());
+  const std::size_t off =
+      lookup_scan(lookup_cells, lrows, lcols, axis, lookup, /*approximate=*/true, ctx.excel_profile());
   if (off == SIZE_MAX) {
     return Value::error(ErrorCode::NA);
   }

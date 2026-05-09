@@ -191,13 +191,11 @@ std::string_view strip_future_prefix(std::string_view name) noexcept {
 
 bool is_win_unavailable_function(std::string_view name) noexcept {
   constexpr std::string_view kNames[] = {
-      "BYCOL",      "BYROW",       "CHOOSECOLS", "CHOOSEROWS", "DROP",         "EXPAND",
-      "FILTER",     "GROUPBY",     "HSTACK",      "ISOMITTED",    "MAKEARRAY", "MAP",
-      "PERCENTOF",  "PIVOTBY",     "REDUCE",      "REGEXEXTRACT", "REGEXREPLACE",
-      "REGEXTEST",  "SCAN",        "SEQUENCE",    "SORT",         "SORTBY",    "TAKE",
-      "TEXTAFTER",  "TEXTBEFORE",  "TEXTSPLIT",   "TOCOL",        "TOROW",     "TRIMRANGE",
-      "UNIQUE",     "VALUETOTEXT", "VSTACK",      "WRAPCOLS",     "WRAPROWS",  "XMATCH",
-      "XLOOKUP",
+      "BYCOL",        "BYROW",     "CHOOSECOLS", "CHOOSEROWS", "DROP",      "EXPAND",  "FILTER",      "GROUPBY",
+      "HSTACK",       "ISOMITTED", "MAKEARRAY",  "MAP",        "PERCENTOF", "PIVOTBY", "REDUCE",      "REGEXEXTRACT",
+      "REGEXREPLACE", "REGEXTEST", "SCAN",       "SEQUENCE",   "SORT",      "SORTBY",  "TAKE",        "TEXTAFTER",
+      "TEXTBEFORE",   "TEXTSPLIT", "TOCOL",      "TOROW",      "TRIMRANGE", "UNIQUE",  "VALUETOTEXT", "VSTACK",
+      "WRAPCOLS",     "WRAPROWS",  "XMATCH",     "XLOOKUP",
   };
   for (std::string_view candidate : kNames) {
     if (strings::case_insensitive_eq(name, candidate)) {

@@ -555,8 +555,8 @@ Value eval_weeknum_lazy(const parser::AstNode& call, Arena& arena, const Functio
         return Value::error(rt.error());
       }
       const int return_type = static_cast<int>(std::trunc(rt.value()));
-      const bool valid = return_type == 1 || return_type == 2 || return_type == 21 ||
-                         (return_type >= 11 && return_type <= 17);
+      const bool valid =
+          return_type == 1 || return_type == 2 || return_type == 21 || (return_type >= 11 && return_type <= 17);
       if (!valid) {
         args[1] = Value::number(1.0);
       }

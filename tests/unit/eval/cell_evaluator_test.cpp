@@ -13,9 +13,9 @@
 
 #include "cell.h"
 #include "eval/function_registry.h"
-#include "test_eval_helpers.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
+#include "test_eval_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
 #include "workbook.h"

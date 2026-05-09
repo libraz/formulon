@@ -7,12 +7,12 @@
 #include <string_view>
 
 #include "eval/eval_context.h"
-#include "eval/tree_walker.h"
 #include "eval/function_registry.h"
-#include "test_eval_helpers.h"
+#include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "test_eval_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
 

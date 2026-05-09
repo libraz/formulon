@@ -196,8 +196,8 @@ std::uint32_t find_db_column(const Value& header_needle, const std::vector<Value
 // the row fails. An entirely-blank criterion row matches every record
 // (empty AND is true).
 bool record_matches_criterion_row(std::uint32_t r, std::uint32_t cr, const std::vector<Value>& db_cells,
-                                  std::uint32_t db_cols, const std::vector<Value>& crit_cells,
-                                  std::uint32_t crit_cols, ExcelProfile profile) {
+                                  std::uint32_t db_cols, const std::vector<Value>& crit_cells, std::uint32_t crit_cols,
+                                  ExcelProfile profile) {
   for (std::uint32_t j = 0; j < crit_cols; ++j) {
     const Value& cell = crit_cells[(static_cast<std::size_t>(cr) * crit_cols) + j];
     if (cell.is_blank()) {
