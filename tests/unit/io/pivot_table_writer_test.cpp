@@ -266,5 +266,35 @@ TEST(PivotTableWriter, EmptyOptionalElementsAreOmitted) {
   EXPECT_EQ(xml.find("<items"), std::string::npos);
 }
 
+// ---------------------------------------------------------------------------
+// Round-trip preservation of unmodelled OOXML extensions
+// (calculatedItems / pivotTableStyleInfo / etc.)
+// ---------------------------------------------------------------------------
+
+TEST(PivotTableWriter, PassthroughRoundTrips) {
+  std::string xml(
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<pivotTableDefinition xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\""
+      " name=\"P\" cacheId=\"7\">"
+      "<location ref=\"A1:B2\"/>"
+      "<calculatedItems count=\"1\"><calculatedItem name=\"Avg\" formula=\"=A1/B1\"/></calculatedItems>"
+      "<pivotTableStyleInfo name=\"PivotStyleLight16\" showRowHeaders=\"1\"/>"
+      "</pivotTableDefinition>");
+  auto first_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(first_or)) << first_or.error().message;
+  const std::string written = write_pivot_table_definition(first_or.value());
+
+  // The unmodelled extensions must reappear verbatim in the writer output.
+  EXPECT_NE(written.find("<calculatedItems"), std::string::npos) << "written=" << written;
+  EXPECT_NE(written.find("formula=\"=A1/B1\""), std::string::npos);
+  EXPECT_NE(written.find("<pivotTableStyleInfo"), std::string::npos);
+  EXPECT_NE(written.find("PivotStyleLight16"), std::string::npos);
+
+  // A second round trip must remain stable (idempotency).
+  auto second_or = read_pivot_table_definition(Bytes(written));
+  ASSERT_TRUE(static_cast<bool>(second_or)) << second_or.error().message;
+  EXPECT_EQ(write_pivot_table_definition(second_or.value()), written);
+}
+
 }  // namespace
 }  // namespace formulon::io

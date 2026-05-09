@@ -241,10 +241,15 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table) {
     AppendDataFields(out, table.data_fields());
   }
 
-  // `<pageFields>`, `<formats>`, `<conditionalFormats>`, `<chartFormats>`,
-  // `<pivotTableStyleInfo>`, and `<extLst>` are intentionally not emitted.
-  // The reader silently skips them today; a future-passthrough writer
-  // PR will preserve them as bytes.
+  // Re-emit any unmodelled child elements the reader captured during the
+  // last load (`<pageFields>`, `<formats>`, `<calculatedFields>`,
+  // `<calculatedItems>`, `<pivotTableStyleInfo>`, `<extLst>`, ...). The
+  // bytes are owned by the table and re-appended verbatim so a
+  // read -> write round trip preserves features v1.0 does not model
+  // structurally. Tables built from scratch leave the buffer empty.
+  if (!table.raw_passthrough_xml().empty()) {
+    out.append(table.raw_passthrough_xml());
+  }
 
   out.append("</pivotTableDefinition>");
   return out;

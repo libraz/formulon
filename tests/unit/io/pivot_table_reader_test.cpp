@@ -299,5 +299,40 @@ TEST(PivotTableReader, MalformedXmlIsParseError) {
   EXPECT_EQ(table_or.error().code, FormulonErrorCode::kIoXmlParse);
 }
 
+// ---------------------------------------------------------------------------
+// Passthrough capture for unmodelled extensions.
+// ---------------------------------------------------------------------------
+
+TEST(PivotTableReader, UnmodelledChildrenCapturedAsPassthrough) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<calculatedItems count=\"1\"><calculatedItem name=\"Avg\" formula=\"=A1/B1\"/></calculatedItems>");
+  xml.append("<pivotTableStyleInfo name=\"PivotStyleLight16\" showRowHeaders=\"1\"/>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  const std::string& passthrough = table_or.value().raw_passthrough_xml();
+  // Both unrecognised elements survive verbatim (order-preserving).
+  EXPECT_NE(passthrough.find("<calculatedItems"), std::string::npos);
+  EXPECT_NE(passthrough.find("formula=\"=A1/B1\""), std::string::npos);
+  EXPECT_NE(passthrough.find("<pivotTableStyleInfo"), std::string::npos);
+  EXPECT_NE(passthrough.find("PivotStyleLight16"), std::string::npos);
+  // Recognised elements (location) are NOT in the passthrough.
+  EXPECT_EQ(passthrough.find("<location"), std::string::npos);
+}
+
+TEST(PivotTableReader, EmptyPassthroughWhenNoExtensionsPresent) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<pivotFields count=\"0\"/>");
+  xml.append("</pivotTableDefinition>");
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or));
+  EXPECT_TRUE(table_or.value().raw_passthrough_xml().empty());
+}
+
 }  // namespace
 }  // namespace formulon::io

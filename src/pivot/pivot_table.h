@@ -111,6 +111,20 @@ class PivotTable {
   /// memoisation (see the `mutable` rationale on `last_result_`).
   std::optional<PivotResult>& mutable_last_result() const { return last_result_; }
 
+  // OOXML round-trip passthrough --------------------------------------------
+  //
+  // OOXML pivot definitions can carry several elements that v1.0 does
+  // not model structurally — `<calculatedFields>`, `<calculatedItems>`,
+  // `<pivotTableStyleInfo>`, `<chartFormats>`, `<formats>`, etc. The
+  // reader captures them as concatenated raw XML so the writer can emit
+  // them back verbatim, keeping a round trip stable for files that
+  // depend on those features (e.g. user-authored calculated items that
+  // Excel re-evaluates on open). Mutating the structured state does not
+  // invalidate the passthrough buffer; consumers that need exact bit
+  // parity should regenerate the buffer or strip it.
+  const std::string& raw_passthrough_xml() const { return raw_passthrough_xml_; }
+  std::string& mutable_raw_passthrough_xml() { return raw_passthrough_xml_; }
+
   // Grand totals layout flags -----------------------------------------------
 
   bool grand_totals_rows() const { return grand_totals_rows_; }
@@ -135,6 +149,7 @@ class PivotTable {
   bool grand_totals_rows_ = true;
   bool grand_totals_cols_ = true;
   std::vector<PivotFilter> active_filters_;
+  std::string raw_passthrough_xml_;
   // Logical-const memoisation slot for the most recent evaluation result.
   // GETPIVOTDATA refreshes this through `const PivotTable&` so the field
   // must be `mutable`; see the docstring on `last_result()` /

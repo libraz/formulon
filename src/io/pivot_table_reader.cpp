@@ -279,10 +279,41 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
       return status.error();
     }
   }
-  // `<pageFields>`, `<formats>`, `<conditionalFormats>`, `<chartFormats>`,
-  // `<calculatedFields>`, `<calculatedItems>`, `<pivotTableStyleInfo>`,
-  // and other extension elements are intentionally skipped here. A
-  // future writer will preserve them via a separate passthrough path.
+  // Capture any remaining direct children of <pivotTableDefinition> that
+  // we do not model structurally (`<pageFields>`, `<formats>`,
+  // `<conditionalFormats>`, `<chartFormats>`, `<calculatedFields>`,
+  // `<calculatedItems>`, `<pivotTableStyleInfo>`, `<extLst>`, ...) into
+  // a single raw-XML buffer. The writer re-emits the buffer verbatim
+  // between the structured tail and `</pivotTableDefinition>`, so
+  // unmodelled features survive a read -> write round trip even when
+  // v1.0 cannot evaluate them.
+  static const std::string_view kRecognized[] = {"location",  "pivotFields", "rowFields",
+                                                 "colFields", "dataFields",  "rowItems",
+                                                 "colItems"};
+  struct StringXmlWriter : pugi::xml_writer {
+    std::string* dst;
+    void write(const void* data, std::size_t size) override {
+      dst->append(static_cast<const char*>(data), size);
+    }
+  };
+  StringXmlWriter sink{};
+  sink.dst = &table.mutable_raw_passthrough_xml();
+  for (pugi::xml_node child = root.first_child(); child; child = child.next_sibling()) {
+    if (child.type() != pugi::node_element) {
+      continue;
+    }
+    bool recognised = false;
+    for (std::string_view name : kRecognized) {
+      if (name == child.name()) {
+        recognised = true;
+        break;
+      }
+    }
+    if (recognised) {
+      continue;
+    }
+    child.print(sink, /*indent=*/"", pugi::format_raw);
+  }
 
   return table;
 }
