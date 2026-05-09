@@ -2355,6 +2355,653 @@ class JsWorkbook {
     return rc == 0 ? ok_status() : error_status(rc);
   }
 
+  // ---- PivotCache mutation -----------------------------------------------
+  //
+  // Thin wrappers over `fm_workbook_pivot_cache_*`. The same pattern as the
+  // existing pivotCount / pivotLayout pair: numeric / boolean / string args
+  // map straight through; the result envelope is the same `JsStatus` /
+  // `JsAddStyleResult` value-objects already exported above. See
+  // `c_api/formulon_c.h` "Pivot cache mutation" for the underlying contract.
+
+  uint32_t pivotCacheCount() const {
+    if (handle_ == nullptr) {
+      return 0;
+    }
+    std::size_t count = 0;
+    if (fm_workbook_pivot_cache_count(handle_, &count) != 0) {
+      return 0;
+    }
+    return static_cast<uint32_t>(count);
+  }
+
+  JsAddStyleResult pivotCacheIdAt(uint32_t idx) const {
+    JsAddStyleResult r;
+    if (handle_ == nullptr) {
+      r.status = error_status(7000);
+      return r;
+    }
+    uint32_t out = 0;
+    fm_status_t rc = fm_workbook_pivot_cache_id_at(handle_, idx, &out);
+    if (rc != 0) {
+      r.status = error_status(rc);
+      return r;
+    }
+    r.status = ok_status();
+    r.index = out;
+    return r;
+  }
+
+  JsAddStyleResult pivotCacheCreate(uint32_t requestedId) {
+    JsAddStyleResult r;
+    if (handle_ == nullptr) {
+      r.status = error_status(7000);
+      return r;
+    }
+    uint32_t out = 0;
+    fm_status_t rc = fm_workbook_pivot_cache_create(handle_, requestedId, &out);
+    if (rc != 0) {
+      r.status = error_status(rc);
+      return r;
+    }
+    r.status = ok_status();
+    r.index = out;
+    return r;
+  }
+
+  JsStatus pivotCacheRemove(uint32_t cacheId) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_cache_remove(handle_, cacheId);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  uint32_t pivotCacheFieldCount(uint32_t cacheId) const {
+    if (handle_ == nullptr) {
+      return 0;
+    }
+    std::size_t count = 0;
+    if (fm_workbook_pivot_cache_field_count(handle_, cacheId, &count) != 0) {
+      return 0;
+    }
+    return static_cast<uint32_t>(count);
+  }
+
+  JsStringResult pivotCacheFieldName(uint32_t cacheId, uint32_t fieldIdx) const {
+    JsStringResult r;
+    if (handle_ == nullptr) {
+      r.status = error_status(7000);
+      return r;
+    }
+    const char* name = nullptr;
+    fm_status_t rc = fm_workbook_pivot_cache_field_name(handle_, cacheId, fieldIdx, &name);
+    if (rc != 0) {
+      r.status = error_status(rc);
+      return r;
+    }
+    r.status = ok_status();
+    r.value = (name != nullptr) ? std::string(name) : std::string();
+    return r;
+  }
+
+  JsAddStyleResult pivotCacheFieldAdd(uint32_t cacheId, const std::string& name) {
+    JsAddStyleResult r;
+    if (handle_ == nullptr) {
+      r.status = error_status(7000);
+      return r;
+    }
+    std::size_t out = 0;
+    fm_status_t rc = fm_workbook_pivot_cache_field_add(handle_, cacheId, name.c_str(), &out);
+    if (rc != 0) {
+      r.status = error_status(rc);
+      return r;
+    }
+    r.status = ok_status();
+    r.index = static_cast<uint32_t>(out);
+    return r;
+  }
+
+  JsStatus pivotCacheFieldClear(uint32_t cacheId) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_cache_field_clear(handle_, cacheId);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  uint32_t pivotCacheFieldSharedItemCount(uint32_t cacheId, uint32_t fieldIdx) const {
+    if (handle_ == nullptr) {
+      return 0;
+    }
+    std::size_t count = 0;
+    if (fm_workbook_pivot_cache_field_shared_item_count(handle_, cacheId, fieldIdx, &count) != 0) {
+      return 0;
+    }
+    return static_cast<uint32_t>(count);
+  }
+
+  JsStatus pivotCacheFieldAddSharedItemNumber(uint32_t cacheId, uint32_t fieldIdx, double value) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_number(handle_, cacheId, fieldIdx, value);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotCacheFieldAddSharedItemText(uint32_t cacheId, uint32_t fieldIdx, const std::string& utf8) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_text(handle_, cacheId, fieldIdx, utf8.c_str());
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotCacheFieldAddSharedItemBool(uint32_t cacheId, uint32_t fieldIdx, bool value) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_bool(handle_, cacheId, fieldIdx, value ? 1 : 0);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotCacheFieldAddSharedItemBlank(uint32_t cacheId, uint32_t fieldIdx) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_blank(handle_, cacheId, fieldIdx);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotCacheFieldClearSharedItems(uint32_t cacheId, uint32_t fieldIdx) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_cache_field_clear_shared_items(handle_, cacheId, fieldIdx);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  uint32_t pivotCacheRecordCount(uint32_t cacheId) const {
+    if (handle_ == nullptr) {
+      return 0;
+    }
+    std::size_t count = 0;
+    if (fm_workbook_pivot_cache_record_count(handle_, cacheId, &count) != 0) {
+      return 0;
+    }
+    return static_cast<uint32_t>(count);
+  }
+
+  JsAddStyleResult pivotCacheRecordAdd(uint32_t cacheId) {
+    JsAddStyleResult r;
+    if (handle_ == nullptr) {
+      r.status = error_status(7000);
+      return r;
+    }
+    std::size_t out = 0;
+    fm_status_t rc = fm_workbook_pivot_cache_record_add(handle_, cacheId, &out);
+    if (rc != 0) {
+      r.status = error_status(rc);
+      return r;
+    }
+    r.status = ok_status();
+    r.index = static_cast<uint32_t>(out);
+    return r;
+  }
+
+  JsStatus pivotCacheRecordClear(uint32_t cacheId) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_cache_record_clear(handle_, cacheId);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotCacheRecordSetNumber(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, double value) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_cache_record_set_number(handle_, cacheId, recordIdx, fieldIdx, value);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotCacheRecordSetText(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, const std::string& utf8) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_cache_record_set_text(handle_, cacheId, recordIdx, fieldIdx, utf8.c_str());
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotCacheRecordSetBool(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, bool value) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_cache_record_set_bool(handle_, cacheId, recordIdx, fieldIdx, value ? 1 : 0);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotCacheRecordSetBlank(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_cache_record_set_blank(handle_, cacheId, recordIdx, fieldIdx);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotCacheRecordSetError(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, int32_t errorCode) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_cache_record_set_error(handle_, cacheId, recordIdx, fieldIdx,
+                                                              static_cast<fm_error_code_t>(errorCode));
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  // ---- PivotTable mutation -----------------------------------------------
+  //
+  // The spec-style mutators accept an `emscripten::val` and unpack the
+  // fields into the matching `fm_pivot_*_spec_t`. The std::string locals
+  // keep ownership for the borrowed `const char*` pointers handed to the
+  // C ABI; the spec is never retained beyond the call.
+
+  JsAddStyleResult pivotCreate(uint32_t sheet, const std::string& name, uint32_t cacheId, uint32_t anchorRow,
+                               uint32_t anchorCol) {
+    JsAddStyleResult r;
+    if (handle_ == nullptr) {
+      r.status = error_status(7000);
+      return r;
+    }
+    std::size_t out = 0;
+    fm_status_t rc = fm_workbook_pivot_create(handle_, sheet, name.c_str(), cacheId, anchorRow, anchorCol, &out);
+    if (rc != 0) {
+      r.status = error_status(rc);
+      return r;
+    }
+    r.status = ok_status();
+    r.index = static_cast<uint32_t>(out);
+    return r;
+  }
+
+  JsStatus pivotRemove(uint32_t sheet, uint32_t pivotIdx) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_remove(handle_, sheet, pivotIdx);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotSetName(uint32_t sheet, uint32_t pivotIdx, const std::string& name) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_set_name(handle_, sheet, pivotIdx, name.c_str());
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotSetAnchor(uint32_t sheet, uint32_t pivotIdx, uint32_t anchorRow, uint32_t anchorCol, uint32_t spanRows,
+                          uint32_t spanCols) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_set_anchor(handle_, sheet, pivotIdx, anchorRow, anchorCol, spanRows, spanCols);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotSetGrandTotals(uint32_t sheet, uint32_t pivotIdx, bool rowsEnabled, bool colsEnabled) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc =
+        fm_workbook_pivot_set_grand_totals(handle_, sheet, pivotIdx, rowsEnabled ? 1 : 0, colsEnabled ? 1 : 0);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  uint32_t pivotFieldCount(uint32_t sheet, uint32_t pivotIdx) const {
+    if (handle_ == nullptr) {
+      return 0;
+    }
+    std::size_t count = 0;
+    if (fm_workbook_pivot_field_count(handle_, sheet, pivotIdx, &count) != 0) {
+      return 0;
+    }
+    return static_cast<uint32_t>(count);
+  }
+
+  JsAddStyleResult pivotFieldAdd(uint32_t sheet, uint32_t pivotIdx, emscripten::val spec) {
+    JsAddStyleResult r;
+    if (handle_ == nullptr) {
+      r.status = error_status(7000);
+      return r;
+    }
+    const std::string source_name = js_pull_string(spec, "sourceName");
+    const bool has_custom = !spec["customName"].isUndefined() && !spec["customName"].isNull();
+    const std::string custom_name = has_custom ? spec["customName"].as<std::string>() : std::string();
+    const bool has_nfmt = !spec["numberFormat"].isUndefined() && !spec["numberFormat"].isNull();
+    const std::string number_format = has_nfmt ? spec["numberFormat"].as<std::string>() : std::string();
+
+    fm_pivot_field_spec_t c_spec{};
+    c_spec.source_name = source_name.c_str();
+    c_spec.custom_name = has_custom ? custom_name.c_str() : nullptr;
+    c_spec.axis = static_cast<fm_pivot_axis_t>(js_pull_u32(spec, "axis", 0U));
+    c_spec.subtotal_top = js_pull_bool(spec, "subtotalTop", false) ? 1 : 0;
+    c_spec.number_format = has_nfmt ? number_format.c_str() : nullptr;
+
+    std::size_t out = 0;
+    fm_status_t rc = fm_workbook_pivot_field_add(handle_, sheet, pivotIdx, &c_spec, &out);
+    if (rc != 0) {
+      r.status = error_status(rc);
+      return r;
+    }
+    r.status = ok_status();
+    r.index = static_cast<uint32_t>(out);
+    return r;
+  }
+
+  JsStatus pivotFieldClear(uint32_t sheet, uint32_t pivotIdx) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_field_clear(handle_, sheet, pivotIdx);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotFieldSetAxis(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t axis) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc =
+        fm_workbook_pivot_field_set_axis(handle_, sheet, pivotIdx, fieldIdx, static_cast<fm_pivot_axis_t>(axis));
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotFieldSetSort(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool ascending,
+                             const std::string& byField) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    const char* by = byField.empty() ? nullptr : byField.c_str();
+    fm_status_t rc = fm_workbook_pivot_field_set_sort(handle_, sheet, pivotIdx, fieldIdx, ascending ? 1 : 0, by);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotFieldSetSubtotalTop(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool top) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_field_set_subtotal_top(handle_, sheet, pivotIdx, fieldIdx, top ? 1 : 0);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotFieldAddAggregation(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t agg) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_field_add_aggregation(handle_, sheet, pivotIdx, fieldIdx,
+                                                             static_cast<fm_pivot_aggregation_t>(agg));
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotFieldClearAggregations(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_field_clear_aggregations(handle_, sheet, pivotIdx, fieldIdx);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotFieldAddItem(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, const std::string& name,
+                             bool visible) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc =
+        fm_workbook_pivot_field_add_item(handle_, sheet, pivotIdx, fieldIdx, name.c_str(), visible ? 1 : 0);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotFieldClearItems(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_field_clear_items(handle_, sheet, pivotIdx, fieldIdx);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotFieldSetItemVisible(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t itemIdx,
+                                    bool visible) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc =
+        fm_workbook_pivot_field_set_item_visible(handle_, sheet, pivotIdx, fieldIdx, itemIdx, visible ? 1 : 0);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotFieldAddSubtotalFn(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t agg) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_field_add_subtotal_fn(handle_, sheet, pivotIdx, fieldIdx,
+                                                             static_cast<fm_pivot_aggregation_t>(agg));
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotFieldClearSubtotalFns(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_field_clear_subtotal_fns(handle_, sheet, pivotIdx, fieldIdx);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotFieldSetDateGroup(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t granularity,
+                                  uint32_t calendar, int32_t startYear, int32_t endYear) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_field_set_date_group(
+        handle_, sheet, pivotIdx, fieldIdx, static_cast<fm_pivot_date_grouping_t>(granularity),
+        static_cast<fm_pivot_calendar_t>(calendar), startYear, endYear);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotFieldClearDateGroup(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_field_clear_date_group(handle_, sheet, pivotIdx, fieldIdx);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotFieldSetNumberFormat(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, const std::string& utf8) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_field_set_number_format(handle_, sheet, pivotIdx, fieldIdx, utf8.c_str());
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotSetRowFieldOrder(uint32_t sheet, uint32_t pivotIdx, emscripten::val indices) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    std::vector<uint32_t> v;
+    if (!indices.isUndefined() && !indices.isNull()) {
+      const uint32_t len = indices["length"].as<uint32_t>();
+      v.reserve(len);
+      for (uint32_t i = 0; i < len; ++i) {
+        v.push_back(indices[i].as<uint32_t>());
+      }
+    }
+    fm_status_t rc =
+        fm_workbook_pivot_set_row_field_order(handle_, sheet, pivotIdx, v.empty() ? nullptr : v.data(), v.size());
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotSetColFieldOrder(uint32_t sheet, uint32_t pivotIdx, emscripten::val indices) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    std::vector<uint32_t> v;
+    if (!indices.isUndefined() && !indices.isNull()) {
+      const uint32_t len = indices["length"].as<uint32_t>();
+      v.reserve(len);
+      for (uint32_t i = 0; i < len; ++i) {
+        v.push_back(indices[i].as<uint32_t>());
+      }
+    }
+    fm_status_t rc =
+        fm_workbook_pivot_set_col_field_order(handle_, sheet, pivotIdx, v.empty() ? nullptr : v.data(), v.size());
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  uint32_t pivotDataFieldCount(uint32_t sheet, uint32_t pivotIdx) const {
+    if (handle_ == nullptr) {
+      return 0;
+    }
+    std::size_t count = 0;
+    if (fm_workbook_pivot_data_field_count(handle_, sheet, pivotIdx, &count) != 0) {
+      return 0;
+    }
+    return static_cast<uint32_t>(count);
+  }
+
+  // Builds an `fm_pivot_data_field_spec_t` from a JS spec object. The
+  // `name_buf` / `nfmt_buf` out-parameters keep the borrowed C string
+  // pointers alive for the caller.
+  static void build_data_field_spec(emscripten::val spec, fm_pivot_data_field_spec_t& out, std::string& name_buf,
+                                    std::string& nfmt_buf, bool& has_nfmt) {
+    name_buf = js_pull_string(spec, "name");
+    has_nfmt = !spec["numberFormat"].isUndefined() && !spec["numberFormat"].isNull();
+    nfmt_buf = has_nfmt ? spec["numberFormat"].as<std::string>() : std::string();
+    out.name = name_buf.c_str();
+    out.field_index = js_pull_u32(spec, "fieldIndex", 0U);
+    out.aggregation = static_cast<fm_pivot_aggregation_t>(js_pull_u32(spec, "aggregation", 0U));
+    out.number_format = has_nfmt ? nfmt_buf.c_str() : nullptr;
+    out.show_as = static_cast<fm_pivot_show_as_t>(js_pull_u32(spec, "showAs", 0U));
+    // -1 sentinels are explicitly modelled as int32; treat absent/null as -1.
+    if (!spec["showAsBaseField"].isUndefined() && !spec["showAsBaseField"].isNull()) {
+      out.show_as_base_field = spec["showAsBaseField"].as<int32_t>();
+    } else {
+      out.show_as_base_field = -1;
+    }
+    if (!spec["showAsBaseItem"].isUndefined() && !spec["showAsBaseItem"].isNull()) {
+      out.show_as_base_item = spec["showAsBaseItem"].as<int32_t>();
+    } else {
+      out.show_as_base_item = -1;
+    }
+  }
+
+  JsAddStyleResult pivotDataFieldAdd(uint32_t sheet, uint32_t pivotIdx, emscripten::val spec) {
+    JsAddStyleResult r;
+    if (handle_ == nullptr) {
+      r.status = error_status(7000);
+      return r;
+    }
+    fm_pivot_data_field_spec_t c_spec{};
+    std::string name_buf;
+    std::string nfmt_buf;
+    bool has_nfmt = false;
+    build_data_field_spec(spec, c_spec, name_buf, nfmt_buf, has_nfmt);
+    std::size_t out = 0;
+    fm_status_t rc = fm_workbook_pivot_data_field_add(handle_, sheet, pivotIdx, &c_spec, &out);
+    if (rc != 0) {
+      r.status = error_status(rc);
+      return r;
+    }
+    r.status = ok_status();
+    r.index = static_cast<uint32_t>(out);
+    return r;
+  }
+
+  JsStatus pivotDataFieldClear(uint32_t sheet, uint32_t pivotIdx) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_data_field_clear(handle_, sheet, pivotIdx);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotDataFieldSet(uint32_t sheet, uint32_t pivotIdx, uint32_t dataFieldIdx, emscripten::val spec) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_pivot_data_field_spec_t c_spec{};
+    std::string name_buf;
+    std::string nfmt_buf;
+    bool has_nfmt = false;
+    build_data_field_spec(spec, c_spec, name_buf, nfmt_buf, has_nfmt);
+    fm_status_t rc = fm_workbook_pivot_data_field_set(handle_, sheet, pivotIdx, dataFieldIdx, &c_spec);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  uint32_t pivotFilterCount(uint32_t sheet, uint32_t pivotIdx) const {
+    if (handle_ == nullptr) {
+      return 0;
+    }
+    std::size_t count = 0;
+    if (fm_workbook_pivot_filter_count(handle_, sheet, pivotIdx, &count) != 0) {
+      return 0;
+    }
+    return static_cast<uint32_t>(count);
+  }
+
+  JsStatus pivotFilterAdd(uint32_t sheet, uint32_t pivotIdx, emscripten::val spec) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    const std::string field_name = js_pull_string(spec, "fieldName");
+    const bool has_text = !spec["valueText"].isUndefined() && !spec["valueText"].isNull();
+    const std::string value_text = has_text ? spec["valueText"].as<std::string>() : std::string();
+
+    fm_pivot_filter_spec_t c_spec{};
+    c_spec.axis = static_cast<fm_pivot_axis_t>(js_pull_u32(spec, "axis", 0U));
+    c_spec.field_name = field_name.c_str();
+    c_spec.type = static_cast<fm_pivot_filter_type_t>(js_pull_u32(spec, "type", 0U));
+    // valueKind defaults to NONE (-1) when omitted; the C ABI rejects NONE
+    // for non-range filters.
+    if (!spec["valueKind"].isUndefined() && !spec["valueKind"].isNull()) {
+      c_spec.value_kind = static_cast<fm_pivot_filter_value_kind_t>(spec["valueKind"].as<int32_t>());
+    } else {
+      c_spec.value_kind = FM_PIVOT_FILTER_VALUE_NONE;
+    }
+    c_spec.value_int =
+        (!spec["valueInt"].isUndefined() && !spec["valueInt"].isNull()) ? spec["valueInt"].as<int32_t>() : 0;
+    c_spec.value_double =
+        (!spec["valueDouble"].isUndefined() && !spec["valueDouble"].isNull()) ? spec["valueDouble"].as<double>() : 0.0;
+    c_spec.value_text = has_text ? value_text.c_str() : nullptr;
+    if (!spec["valueHighKind"].isUndefined() && !spec["valueHighKind"].isNull()) {
+      c_spec.value_high_kind = static_cast<fm_pivot_filter_value_kind_t>(spec["valueHighKind"].as<int32_t>());
+    } else {
+      c_spec.value_high_kind = FM_PIVOT_FILTER_VALUE_NONE;
+    }
+    c_spec.value_high_int = (!spec["valueHighInt"].isUndefined() && !spec["valueHighInt"].isNull())
+                                ? spec["valueHighInt"].as<int32_t>()
+                                : 0;
+    c_spec.value_high_double = (!spec["valueHighDouble"].isUndefined() && !spec["valueHighDouble"].isNull())
+                                   ? spec["valueHighDouble"].as<double>()
+                                   : 0.0;
+
+    fm_status_t rc = fm_workbook_pivot_filter_add(handle_, sheet, pivotIdx, &c_spec);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotFilterClear(uint32_t sheet, uint32_t pivotIdx) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_filter_clear(handle_, sheet, pivotIdx);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
+  JsStatus pivotFilterRemoveAt(uint32_t sheet, uint32_t pivotIdx, uint32_t filterIdx) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    fm_status_t rc = fm_workbook_pivot_filter_remove_at(handle_, sheet, pivotIdx, filterIdx);
+    return rc == 0 ? ok_status() : error_status(rc);
+  }
+
  private:
   // Shared bridge for `precedents` / `dependents`: invokes the C ABI
   // entry point, copies the result into a JS array of {sheet, row, col}
@@ -2686,8 +3333,61 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("partialRecalc", &JsWorkbook::partialRecalc)
       .function("passthroughAt", &JsWorkbook::passthroughAt)
       .function("passthroughCount", &JsWorkbook::passthroughCount)
+      .function("pivotCacheCount", &JsWorkbook::pivotCacheCount)
+      .function("pivotCacheCreate", &JsWorkbook::pivotCacheCreate)
+      .function("pivotCacheFieldAdd", &JsWorkbook::pivotCacheFieldAdd)
+      .function("pivotCacheFieldAddSharedItemBlank", &JsWorkbook::pivotCacheFieldAddSharedItemBlank)
+      .function("pivotCacheFieldAddSharedItemBool", &JsWorkbook::pivotCacheFieldAddSharedItemBool)
+      .function("pivotCacheFieldAddSharedItemNumber", &JsWorkbook::pivotCacheFieldAddSharedItemNumber)
+      .function("pivotCacheFieldAddSharedItemText", &JsWorkbook::pivotCacheFieldAddSharedItemText)
+      .function("pivotCacheFieldClear", &JsWorkbook::pivotCacheFieldClear)
+      .function("pivotCacheFieldClearSharedItems", &JsWorkbook::pivotCacheFieldClearSharedItems)
+      .function("pivotCacheFieldCount", &JsWorkbook::pivotCacheFieldCount)
+      .function("pivotCacheFieldName", &JsWorkbook::pivotCacheFieldName)
+      .function("pivotCacheFieldSharedItemCount", &JsWorkbook::pivotCacheFieldSharedItemCount)
+      .function("pivotCacheIdAt", &JsWorkbook::pivotCacheIdAt)
+      .function("pivotCacheRecordAdd", &JsWorkbook::pivotCacheRecordAdd)
+      .function("pivotCacheRecordClear", &JsWorkbook::pivotCacheRecordClear)
+      .function("pivotCacheRecordCount", &JsWorkbook::pivotCacheRecordCount)
+      .function("pivotCacheRecordSetBlank", &JsWorkbook::pivotCacheRecordSetBlank)
+      .function("pivotCacheRecordSetBool", &JsWorkbook::pivotCacheRecordSetBool)
+      .function("pivotCacheRecordSetError", &JsWorkbook::pivotCacheRecordSetError)
+      .function("pivotCacheRecordSetNumber", &JsWorkbook::pivotCacheRecordSetNumber)
+      .function("pivotCacheRecordSetText", &JsWorkbook::pivotCacheRecordSetText)
+      .function("pivotCacheRemove", &JsWorkbook::pivotCacheRemove)
       .function("pivotCount", &JsWorkbook::pivotCount)
+      .function("pivotCreate", &JsWorkbook::pivotCreate)
+      .function("pivotDataFieldAdd", &JsWorkbook::pivotDataFieldAdd)
+      .function("pivotDataFieldClear", &JsWorkbook::pivotDataFieldClear)
+      .function("pivotDataFieldCount", &JsWorkbook::pivotDataFieldCount)
+      .function("pivotDataFieldSet", &JsWorkbook::pivotDataFieldSet)
+      .function("pivotFieldAdd", &JsWorkbook::pivotFieldAdd)
+      .function("pivotFieldAddAggregation", &JsWorkbook::pivotFieldAddAggregation)
+      .function("pivotFieldAddItem", &JsWorkbook::pivotFieldAddItem)
+      .function("pivotFieldAddSubtotalFn", &JsWorkbook::pivotFieldAddSubtotalFn)
+      .function("pivotFieldClear", &JsWorkbook::pivotFieldClear)
+      .function("pivotFieldClearAggregations", &JsWorkbook::pivotFieldClearAggregations)
+      .function("pivotFieldClearDateGroup", &JsWorkbook::pivotFieldClearDateGroup)
+      .function("pivotFieldClearItems", &JsWorkbook::pivotFieldClearItems)
+      .function("pivotFieldClearSubtotalFns", &JsWorkbook::pivotFieldClearSubtotalFns)
+      .function("pivotFieldCount", &JsWorkbook::pivotFieldCount)
+      .function("pivotFieldSetAxis", &JsWorkbook::pivotFieldSetAxis)
+      .function("pivotFieldSetDateGroup", &JsWorkbook::pivotFieldSetDateGroup)
+      .function("pivotFieldSetItemVisible", &JsWorkbook::pivotFieldSetItemVisible)
+      .function("pivotFieldSetNumberFormat", &JsWorkbook::pivotFieldSetNumberFormat)
+      .function("pivotFieldSetSort", &JsWorkbook::pivotFieldSetSort)
+      .function("pivotFieldSetSubtotalTop", &JsWorkbook::pivotFieldSetSubtotalTop)
+      .function("pivotFilterAdd", &JsWorkbook::pivotFilterAdd)
+      .function("pivotFilterClear", &JsWorkbook::pivotFilterClear)
+      .function("pivotFilterCount", &JsWorkbook::pivotFilterCount)
+      .function("pivotFilterRemoveAt", &JsWorkbook::pivotFilterRemoveAt)
       .function("pivotLayout", &JsWorkbook::pivotLayout)
+      .function("pivotRemove", &JsWorkbook::pivotRemove)
+      .function("pivotSetAnchor", &JsWorkbook::pivotSetAnchor)
+      .function("pivotSetColFieldOrder", &JsWorkbook::pivotSetColFieldOrder)
+      .function("pivotSetGrandTotals", &JsWorkbook::pivotSetGrandTotals)
+      .function("pivotSetName", &JsWorkbook::pivotSetName)
+      .function("pivotSetRowFieldOrder", &JsWorkbook::pivotSetRowFieldOrder)
       .function("precedents", &JsWorkbook::precedents)
       .function("recalc", &JsWorkbook::recalc)
       .function("removeConditionalFormatAt", &JsWorkbook::removeConditionalFormatAt)

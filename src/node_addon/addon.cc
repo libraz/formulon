@@ -71,6 +71,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 
@@ -326,6 +327,63 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PassthroughAt(const Napi::CallbackInfo& info);
   Napi::Value PivotCount(const Napi::CallbackInfo& info);
   Napi::Value PivotLayout(const Napi::CallbackInfo& info);
+
+  // PivotCache mutation.
+  Napi::Value PivotCacheCount(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheIdAt(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheCreate(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheRemove(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheFieldCount(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheFieldName(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheFieldAdd(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheFieldClear(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheFieldSharedItemCount(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheFieldAddSharedItemNumber(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheFieldAddSharedItemText(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheFieldAddSharedItemBool(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheFieldAddSharedItemBlank(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheFieldClearSharedItems(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheRecordCount(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheRecordAdd(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheRecordClear(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheRecordSetNumber(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheRecordSetText(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheRecordSetBool(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheRecordSetBlank(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheRecordSetError(const Napi::CallbackInfo& info);
+
+  // PivotTable mutation.
+  Napi::Value PivotCreate(const Napi::CallbackInfo& info);
+  Napi::Value PivotRemove(const Napi::CallbackInfo& info);
+  Napi::Value PivotSetName(const Napi::CallbackInfo& info);
+  Napi::Value PivotSetAnchor(const Napi::CallbackInfo& info);
+  Napi::Value PivotSetGrandTotals(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldCount(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldAdd(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldClear(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldSetAxis(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldSetSort(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldSetSubtotalTop(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldAddAggregation(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldClearAggregations(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldAddItem(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldClearItems(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldSetItemVisible(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldAddSubtotalFn(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldClearSubtotalFns(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldSetDateGroup(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldClearDateGroup(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldSetNumberFormat(const Napi::CallbackInfo& info);
+  Napi::Value PivotSetRowFieldOrder(const Napi::CallbackInfo& info);
+  Napi::Value PivotSetColFieldOrder(const Napi::CallbackInfo& info);
+  Napi::Value PivotDataFieldCount(const Napi::CallbackInfo& info);
+  Napi::Value PivotDataFieldAdd(const Napi::CallbackInfo& info);
+  Napi::Value PivotDataFieldClear(const Napi::CallbackInfo& info);
+  Napi::Value PivotDataFieldSet(const Napi::CallbackInfo& info);
+  Napi::Value PivotFilterCount(const Napi::CallbackInfo& info);
+  Napi::Value PivotFilterAdd(const Napi::CallbackInfo& info);
+  Napi::Value PivotFilterClear(const Napi::CallbackInfo& info);
+  Napi::Value PivotFilterRemoveAt(const Napi::CallbackInfo& info);
 
   // Defined names.
   Napi::Value SetDefinedName(const Napi::CallbackInfo& info);
@@ -1033,6 +1091,891 @@ Napi::Value Workbook::PivotLayout(const Napi::CallbackInfo& info) {
   out.Set("cols", Napi::Number::New(env, cols));
   out.Set("cells", arr);
   return out;
+}
+
+// ---- PivotCache mutation --------------------------------------------
+//
+// Each method below is a thin wrapper over `fm_workbook_pivot_cache_*`.
+// The shape mirrors the embind binding: number / boolean / string args
+// map straight through; the return shape is the JS Status envelope or
+// an `{status, index}` pair (for entries that surface a freshly
+// assigned id / index). See `c_api/formulon_c.h` "Pivot cache mutation"
+// for the underlying contract.
+
+namespace {
+
+// Returns `{ status, index }` for the success path of a `*_create` /
+// `*_add` style entry that hands back a newly assigned index.
+Napi::Object MakeIndexResult(Napi::Env env, Napi::Object status, uint32_t index) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("status", status);
+  out.Set("index", Napi::Number::New(env, index));
+  return out;
+}
+
+// Pulls an optional int32 field from a JS spec object; returns `dflt`
+// when the field is missing / undefined / null.
+int32_t SpecPullInt32(const Napi::Object& spec, const char* key, int32_t dflt) {
+  if (!spec.Has(key)) {
+    return dflt;
+  }
+  Napi::Value v = spec.Get(key);
+  if (v.IsUndefined() || v.IsNull()) {
+    return dflt;
+  }
+  return v.As<Napi::Number>().Int32Value();
+}
+
+// Pulls an optional uint32 field; returns `dflt` when missing.
+uint32_t SpecPullU32(const Napi::Object& spec, const char* key, uint32_t dflt) {
+  if (!spec.Has(key)) {
+    return dflt;
+  }
+  Napi::Value v = spec.Get(key);
+  if (v.IsUndefined() || v.IsNull()) {
+    return dflt;
+  }
+  return v.As<Napi::Number>().Uint32Value();
+}
+
+double SpecPullDouble(const Napi::Object& spec, const char* key, double dflt) {
+  if (!spec.Has(key)) {
+    return dflt;
+  }
+  Napi::Value v = spec.Get(key);
+  if (v.IsUndefined() || v.IsNull()) {
+    return dflt;
+  }
+  return v.As<Napi::Number>().DoubleValue();
+}
+
+bool SpecPullBool(const Napi::Object& spec, const char* key, bool dflt) {
+  if (!spec.Has(key)) {
+    return dflt;
+  }
+  Napi::Value v = spec.Get(key);
+  if (v.IsUndefined() || v.IsNull()) {
+    return dflt;
+  }
+  return v.ToBoolean().Value();
+}
+
+// Returns whether the spec carries a non-null entry for `key`. Used to
+// decide whether a `const char*` field should be forwarded as nullptr.
+bool SpecHas(const Napi::Object& spec, const char* key) {
+  if (!spec.Has(key)) {
+    return false;
+  }
+  Napi::Value v = spec.Get(key);
+  return !v.IsUndefined() && !v.IsNull();
+}
+
+}  // namespace
+
+Napi::Value Workbook::PivotCacheCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::Number::New(env, 0);
+  }
+  std::size_t count = 0;
+  if (fm_workbook_pivot_cache_count(handle_, &count) != 0) {
+    return Napi::Number::New(env, 0);
+  }
+  return Napi::Number::New(env, static_cast<double>(count));
+}
+
+Napi::Value Workbook::PivotCacheIdAt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeIndexResult(env, NullHandleError(env), 0);
+  }
+  const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
+  uint32_t out = 0;
+  fm_status_t rc = fm_workbook_pivot_cache_id_at(handle_, idx, &out);
+  if (rc != 0) {
+    return MakeIndexResult(env, MakeErrorStatus(env, rc), 0);
+  }
+  return MakeIndexResult(env, MakeOkStatus(env), out);
+}
+
+Napi::Value Workbook::PivotCacheCreate(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeIndexResult(env, NullHandleError(env), 0);
+  }
+  const uint32_t requested = ArgU32(info, 0);
+  uint32_t out = 0;
+  fm_status_t rc = fm_workbook_pivot_cache_create(handle_, requested, &out);
+  if (rc != 0) {
+    return MakeIndexResult(env, MakeErrorStatus(env, rc), 0);
+  }
+  return MakeIndexResult(env, MakeOkStatus(env), out);
+}
+
+Napi::Value Workbook::PivotCacheRemove(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  fm_status_t rc = fm_workbook_pivot_cache_remove(handle_, cache_id);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotCacheFieldCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::Number::New(env, 0);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  std::size_t count = 0;
+  if (fm_workbook_pivot_cache_field_count(handle_, cache_id, &count) != 0) {
+    return Napi::Number::New(env, 0);
+  }
+  return Napi::Number::New(env, static_cast<double>(count));
+}
+
+Napi::Value Workbook::PivotCacheFieldName(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    out.Set("value", Napi::String::New(env, ""));
+    return out;
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const char* name = nullptr;
+  fm_status_t rc = fm_workbook_pivot_cache_field_name(handle_, cache_id, field_idx, &name);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    out.Set("value", Napi::String::New(env, ""));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("value", Napi::String::New(env, name != nullptr ? name : ""));
+  return out;
+}
+
+Napi::Value Workbook::PivotCacheFieldAdd(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeIndexResult(env, NullHandleError(env), 0);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  const std::string name = ArgString(info, 1);
+  std::size_t out = 0;
+  fm_status_t rc = fm_workbook_pivot_cache_field_add(handle_, cache_id, name.c_str(), &out);
+  if (rc != 0) {
+    return MakeIndexResult(env, MakeErrorStatus(env, rc), 0);
+  }
+  return MakeIndexResult(env, MakeOkStatus(env), static_cast<uint32_t>(out));
+}
+
+Napi::Value Workbook::PivotCacheFieldClear(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  fm_status_t rc = fm_workbook_pivot_cache_field_clear(handle_, cache_id);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotCacheFieldSharedItemCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::Number::New(env, 0);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  std::size_t count = 0;
+  if (fm_workbook_pivot_cache_field_shared_item_count(handle_, cache_id, field_idx, &count) != 0) {
+    return Napi::Number::New(env, 0);
+  }
+  return Napi::Number::New(env, static_cast<double>(count));
+}
+
+Napi::Value Workbook::PivotCacheFieldAddSharedItemNumber(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const double value = ArgDouble(info, 2);
+  fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_number(handle_, cache_id, field_idx, value);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotCacheFieldAddSharedItemText(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::string utf8 = ArgString(info, 2);
+  fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_text(handle_, cache_id, field_idx, utf8.c_str());
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotCacheFieldAddSharedItemBool(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const bool value = ArgBool(info, 2);
+  fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_bool(handle_, cache_id, field_idx, value ? 1 : 0);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotCacheFieldAddSharedItemBlank(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_blank(handle_, cache_id, field_idx);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotCacheFieldClearSharedItems(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  fm_status_t rc = fm_workbook_pivot_cache_field_clear_shared_items(handle_, cache_id, field_idx);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotCacheRecordCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::Number::New(env, 0);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  std::size_t count = 0;
+  if (fm_workbook_pivot_cache_record_count(handle_, cache_id, &count) != 0) {
+    return Napi::Number::New(env, 0);
+  }
+  return Napi::Number::New(env, static_cast<double>(count));
+}
+
+Napi::Value Workbook::PivotCacheRecordAdd(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeIndexResult(env, NullHandleError(env), 0);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  std::size_t out = 0;
+  fm_status_t rc = fm_workbook_pivot_cache_record_add(handle_, cache_id, &out);
+  if (rc != 0) {
+    return MakeIndexResult(env, MakeErrorStatus(env, rc), 0);
+  }
+  return MakeIndexResult(env, MakeOkStatus(env), static_cast<uint32_t>(out));
+}
+
+Napi::Value Workbook::PivotCacheRecordClear(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  fm_status_t rc = fm_workbook_pivot_cache_record_clear(handle_, cache_id);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotCacheRecordSetNumber(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  const std::size_t record_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const double value = ArgDouble(info, 3);
+  fm_status_t rc = fm_workbook_pivot_cache_record_set_number(handle_, cache_id, record_idx, field_idx, value);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotCacheRecordSetText(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  const std::size_t record_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const std::string utf8 = ArgString(info, 3);
+  fm_status_t rc = fm_workbook_pivot_cache_record_set_text(handle_, cache_id, record_idx, field_idx, utf8.c_str());
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotCacheRecordSetBool(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  const std::size_t record_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const bool value = ArgBool(info, 3);
+  fm_status_t rc = fm_workbook_pivot_cache_record_set_bool(handle_, cache_id, record_idx, field_idx, value ? 1 : 0);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotCacheRecordSetBlank(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  const std::size_t record_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  fm_status_t rc = fm_workbook_pivot_cache_record_set_blank(handle_, cache_id, record_idx, field_idx);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotCacheRecordSetError(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  const std::size_t record_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const int32_t error_code = info.Length() > 3 ? info[3].As<Napi::Number>().Int32Value() : 0;
+  fm_status_t rc = fm_workbook_pivot_cache_record_set_error(handle_, cache_id, record_idx, field_idx,
+                                                            static_cast<fm_error_code_t>(error_code));
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+// ---- PivotTable mutation --------------------------------------------
+
+Napi::Value Workbook::PivotCreate(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeIndexResult(env, NullHandleError(env), 0);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::string name = ArgString(info, 1);
+  const uint32_t cache_id = ArgU32(info, 2);
+  const uint32_t anchor_row = ArgU32(info, 3);
+  const uint32_t anchor_col = ArgU32(info, 4);
+  std::size_t out = 0;
+  fm_status_t rc = fm_workbook_pivot_create(handle_, sheet, name.c_str(), cache_id, anchor_row, anchor_col, &out);
+  if (rc != 0) {
+    return MakeIndexResult(env, MakeErrorStatus(env, rc), 0);
+  }
+  return MakeIndexResult(env, MakeOkStatus(env), static_cast<uint32_t>(out));
+}
+
+Napi::Value Workbook::PivotRemove(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  fm_status_t rc = fm_workbook_pivot_remove(handle_, sheet, pivot_idx);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotSetName(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::string name = ArgString(info, 2);
+  fm_status_t rc = fm_workbook_pivot_set_name(handle_, sheet, pivot_idx, name.c_str());
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotSetAnchor(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const uint32_t anchor_row = ArgU32(info, 2);
+  const uint32_t anchor_col = ArgU32(info, 3);
+  const uint32_t span_rows = ArgU32(info, 4);
+  const uint32_t span_cols = ArgU32(info, 5);
+  fm_status_t rc =
+      fm_workbook_pivot_set_anchor(handle_, sheet, pivot_idx, anchor_row, anchor_col, span_rows, span_cols);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotSetGrandTotals(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const bool rows_enabled = ArgBool(info, 2);
+  const bool cols_enabled = ArgBool(info, 3);
+  fm_status_t rc =
+      fm_workbook_pivot_set_grand_totals(handle_, sheet, pivot_idx, rows_enabled ? 1 : 0, cols_enabled ? 1 : 0);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotFieldCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::Number::New(env, 0);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  std::size_t count = 0;
+  if (fm_workbook_pivot_field_count(handle_, sheet, pivot_idx, &count) != 0) {
+    return Napi::Number::New(env, 0);
+  }
+  return Napi::Number::New(env, static_cast<double>(count));
+}
+
+Napi::Value Workbook::PivotFieldAdd(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeIndexResult(env, NullHandleError(env), 0);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  if (info.Length() < 3 || !info[2].IsObject()) {
+    return MakeIndexResult(env, MakeErrorStatus(env, kBindingNullPointer), 0);
+  }
+  Napi::Object spec = info[2].As<Napi::Object>();
+
+  const bool has_custom = SpecHas(spec, "customName");
+  const std::string source_name = spec.Get("sourceName").ToString().Utf8Value();
+  const std::string custom_name = has_custom ? spec.Get("customName").ToString().Utf8Value() : std::string();
+  const bool has_nfmt = SpecHas(spec, "numberFormat");
+  const std::string number_format = has_nfmt ? spec.Get("numberFormat").ToString().Utf8Value() : std::string();
+
+  fm_pivot_field_spec_t c_spec{};
+  c_spec.source_name = source_name.c_str();
+  c_spec.custom_name = has_custom ? custom_name.c_str() : nullptr;
+  c_spec.axis = static_cast<fm_pivot_axis_t>(SpecPullU32(spec, "axis", 0U));
+  c_spec.subtotal_top = SpecPullBool(spec, "subtotalTop", false) ? 1 : 0;
+  c_spec.number_format = has_nfmt ? number_format.c_str() : nullptr;
+
+  std::size_t out = 0;
+  fm_status_t rc = fm_workbook_pivot_field_add(handle_, sheet, pivot_idx, &c_spec, &out);
+  if (rc != 0) {
+    return MakeIndexResult(env, MakeErrorStatus(env, rc), 0);
+  }
+  return MakeIndexResult(env, MakeOkStatus(env), static_cast<uint32_t>(out));
+}
+
+Napi::Value Workbook::PivotFieldClear(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  fm_status_t rc = fm_workbook_pivot_field_clear(handle_, sheet, pivot_idx);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotFieldSetAxis(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const uint32_t axis = ArgU32(info, 3);
+  fm_status_t rc =
+      fm_workbook_pivot_field_set_axis(handle_, sheet, pivot_idx, field_idx, static_cast<fm_pivot_axis_t>(axis));
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotFieldSetSort(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const bool ascending = ArgBool(info, 3);
+  const std::string by_field = ArgString(info, 4);
+  const char* by = by_field.empty() ? nullptr : by_field.c_str();
+  fm_status_t rc = fm_workbook_pivot_field_set_sort(handle_, sheet, pivot_idx, field_idx, ascending ? 1 : 0, by);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotFieldSetSubtotalTop(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const bool top = ArgBool(info, 3);
+  fm_status_t rc = fm_workbook_pivot_field_set_subtotal_top(handle_, sheet, pivot_idx, field_idx, top ? 1 : 0);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotFieldAddAggregation(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const uint32_t agg = ArgU32(info, 3);
+  fm_status_t rc = fm_workbook_pivot_field_add_aggregation(handle_, sheet, pivot_idx, field_idx,
+                                                           static_cast<fm_pivot_aggregation_t>(agg));
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotFieldClearAggregations(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  fm_status_t rc = fm_workbook_pivot_field_clear_aggregations(handle_, sheet, pivot_idx, field_idx);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotFieldAddItem(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const std::string name = ArgString(info, 3);
+  const bool visible = ArgBool(info, 4);
+  fm_status_t rc =
+      fm_workbook_pivot_field_add_item(handle_, sheet, pivot_idx, field_idx, name.c_str(), visible ? 1 : 0);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotFieldClearItems(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  fm_status_t rc = fm_workbook_pivot_field_clear_items(handle_, sheet, pivot_idx, field_idx);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotFieldSetItemVisible(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const std::size_t item_idx = static_cast<std::size_t>(ArgU32(info, 3));
+  const bool visible = ArgBool(info, 4);
+  fm_status_t rc =
+      fm_workbook_pivot_field_set_item_visible(handle_, sheet, pivot_idx, field_idx, item_idx, visible ? 1 : 0);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotFieldAddSubtotalFn(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const uint32_t agg = ArgU32(info, 3);
+  fm_status_t rc = fm_workbook_pivot_field_add_subtotal_fn(handle_, sheet, pivot_idx, field_idx,
+                                                           static_cast<fm_pivot_aggregation_t>(agg));
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotFieldClearSubtotalFns(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  fm_status_t rc = fm_workbook_pivot_field_clear_subtotal_fns(handle_, sheet, pivot_idx, field_idx);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotFieldSetDateGroup(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const uint32_t granularity = ArgU32(info, 3);
+  const uint32_t calendar = ArgU32(info, 4);
+  const int32_t start_year = info.Length() > 5 ? info[5].As<Napi::Number>().Int32Value() : -1;
+  const int32_t end_year = info.Length() > 6 ? info[6].As<Napi::Number>().Int32Value() : -1;
+  fm_status_t rc = fm_workbook_pivot_field_set_date_group(
+      handle_, sheet, pivot_idx, field_idx, static_cast<fm_pivot_date_grouping_t>(granularity),
+      static_cast<fm_pivot_calendar_t>(calendar), start_year, end_year);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotFieldClearDateGroup(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  fm_status_t rc = fm_workbook_pivot_field_clear_date_group(handle_, sheet, pivot_idx, field_idx);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotFieldSetNumberFormat(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const std::string utf8 = ArgString(info, 3);
+  fm_status_t rc = fm_workbook_pivot_field_set_number_format(handle_, sheet, pivot_idx, field_idx, utf8.c_str());
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+namespace {
+
+// Pulls a numeric array from `info[idx]` into a `std::vector<uint32_t>`.
+// Returns an empty vector when the argument is missing / undefined / null
+// or not array-shaped.
+std::vector<uint32_t> ReadU32Array(const Napi::CallbackInfo& info, size_t idx) {
+  std::vector<uint32_t> out;
+  if (idx >= info.Length()) {
+    return out;
+  }
+  Napi::Value v = info[idx];
+  if (!v.IsArray()) {
+    return out;
+  }
+  Napi::Array arr = v.As<Napi::Array>();
+  const uint32_t len = arr.Length();
+  out.reserve(len);
+  for (uint32_t i = 0; i < len; ++i) {
+    out.push_back(arr.Get(i).As<Napi::Number>().Uint32Value());
+  }
+  return out;
+}
+
+}  // namespace
+
+Napi::Value Workbook::PivotSetRowFieldOrder(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::vector<uint32_t> indices = ReadU32Array(info, 2);
+  fm_status_t rc = fm_workbook_pivot_set_row_field_order(handle_, sheet, pivot_idx,
+                                                         indices.empty() ? nullptr : indices.data(), indices.size());
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotSetColFieldOrder(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::vector<uint32_t> indices = ReadU32Array(info, 2);
+  fm_status_t rc = fm_workbook_pivot_set_col_field_order(handle_, sheet, pivot_idx,
+                                                         indices.empty() ? nullptr : indices.data(), indices.size());
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotDataFieldCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::Number::New(env, 0);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  std::size_t count = 0;
+  if (fm_workbook_pivot_data_field_count(handle_, sheet, pivot_idx, &count) != 0) {
+    return Napi::Number::New(env, 0);
+  }
+  return Napi::Number::New(env, static_cast<double>(count));
+}
+
+namespace {
+
+// Builds an `fm_pivot_data_field_spec_t` from a JS spec object. The
+// `name_buf` / `nfmt_buf` strings keep the borrowed `const char*`
+// pointers alive for the caller; `has_nfmt` is set when the spec
+// carries a non-null `numberFormat`.
+void BuildDataFieldSpec(const Napi::Object& spec, fm_pivot_data_field_spec_t& out, std::string& name_buf,
+                        std::string& nfmt_buf, bool& has_nfmt) {
+  name_buf = spec.Get("name").ToString().Utf8Value();
+  has_nfmt = SpecHas(spec, "numberFormat");
+  nfmt_buf = has_nfmt ? spec.Get("numberFormat").ToString().Utf8Value() : std::string();
+  out.name = name_buf.c_str();
+  out.field_index = SpecPullU32(spec, "fieldIndex", 0U);
+  out.aggregation = static_cast<fm_pivot_aggregation_t>(SpecPullU32(spec, "aggregation", 0U));
+  out.number_format = has_nfmt ? nfmt_buf.c_str() : nullptr;
+  out.show_as = static_cast<fm_pivot_show_as_t>(SpecPullU32(spec, "showAs", 0U));
+  out.show_as_base_field = SpecPullInt32(spec, "showAsBaseField", -1);
+  out.show_as_base_item = SpecPullInt32(spec, "showAsBaseItem", -1);
+}
+
+}  // namespace
+
+Napi::Value Workbook::PivotDataFieldAdd(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeIndexResult(env, NullHandleError(env), 0);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  if (info.Length() < 3 || !info[2].IsObject()) {
+    return MakeIndexResult(env, MakeErrorStatus(env, kBindingNullPointer), 0);
+  }
+  Napi::Object spec = info[2].As<Napi::Object>();
+  fm_pivot_data_field_spec_t c_spec{};
+  std::string name_buf;
+  std::string nfmt_buf;
+  bool has_nfmt = false;
+  BuildDataFieldSpec(spec, c_spec, name_buf, nfmt_buf, has_nfmt);
+  std::size_t out = 0;
+  fm_status_t rc = fm_workbook_pivot_data_field_add(handle_, sheet, pivot_idx, &c_spec, &out);
+  if (rc != 0) {
+    return MakeIndexResult(env, MakeErrorStatus(env, rc), 0);
+  }
+  return MakeIndexResult(env, MakeOkStatus(env), static_cast<uint32_t>(out));
+}
+
+Napi::Value Workbook::PivotDataFieldClear(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  fm_status_t rc = fm_workbook_pivot_data_field_clear(handle_, sheet, pivot_idx);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotDataFieldSet(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t data_field_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  if (info.Length() < 4 || !info[3].IsObject()) {
+    return MakeErrorStatus(env, kBindingNullPointer);
+  }
+  Napi::Object spec = info[3].As<Napi::Object>();
+  fm_pivot_data_field_spec_t c_spec{};
+  std::string name_buf;
+  std::string nfmt_buf;
+  bool has_nfmt = false;
+  BuildDataFieldSpec(spec, c_spec, name_buf, nfmt_buf, has_nfmt);
+  fm_status_t rc = fm_workbook_pivot_data_field_set(handle_, sheet, pivot_idx, data_field_idx, &c_spec);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotFilterCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::Number::New(env, 0);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  std::size_t count = 0;
+  if (fm_workbook_pivot_filter_count(handle_, sheet, pivot_idx, &count) != 0) {
+    return Napi::Number::New(env, 0);
+  }
+  return Napi::Number::New(env, static_cast<double>(count));
+}
+
+Napi::Value Workbook::PivotFilterAdd(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  if (info.Length() < 3 || !info[2].IsObject()) {
+    return MakeErrorStatus(env, kBindingNullPointer);
+  }
+  Napi::Object spec = info[2].As<Napi::Object>();
+
+  const std::string field_name = spec.Get("fieldName").ToString().Utf8Value();
+  const bool has_text = SpecHas(spec, "valueText");
+  const std::string value_text = has_text ? spec.Get("valueText").ToString().Utf8Value() : std::string();
+
+  fm_pivot_filter_spec_t c_spec{};
+  c_spec.axis = static_cast<fm_pivot_axis_t>(SpecPullU32(spec, "axis", 0U));
+  c_spec.field_name = field_name.c_str();
+  c_spec.type = static_cast<fm_pivot_filter_type_t>(SpecPullU32(spec, "type", 0U));
+  c_spec.value_kind = static_cast<fm_pivot_filter_value_kind_t>(SpecPullInt32(spec, "valueKind", -1));
+  c_spec.value_int = SpecPullInt32(spec, "valueInt", 0);
+  c_spec.value_double = SpecPullDouble(spec, "valueDouble", 0.0);
+  c_spec.value_text = has_text ? value_text.c_str() : nullptr;
+  c_spec.value_high_kind = static_cast<fm_pivot_filter_value_kind_t>(SpecPullInt32(spec, "valueHighKind", -1));
+  c_spec.value_high_int = SpecPullInt32(spec, "valueHighInt", 0);
+  c_spec.value_high_double = SpecPullDouble(spec, "valueHighDouble", 0.0);
+
+  fm_status_t rc = fm_workbook_pivot_filter_add(handle_, sheet, pivot_idx, &c_spec);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotFilterClear(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  fm_status_t rc = fm_workbook_pivot_filter_clear(handle_, sheet, pivot_idx);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotFilterRemoveAt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t filter_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  fm_status_t rc = fm_workbook_pivot_filter_remove_at(handle_, sheet, pivot_idx, filter_idx);
+  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
 }
 
 // ---- Defined names --------------------------------------------------
@@ -2075,90 +3018,144 @@ Napi::Value Workbook::ClearValidations(const Napi::CallbackInfo& info) {
 // ---- Class registration ---------------------------------------------
 
 Napi::Function Workbook::GetClass(Napi::Env env) {
-  return DefineClass(env, "Workbook",
-                     {
-                         StaticMethod<&Workbook::CreateDefault>("createDefault"),
-                         StaticMethod<&Workbook::CreateEmpty>("createEmpty"),
-                         StaticMethod<&Workbook::LoadBytes>("loadBytes"),
-                         InstanceMethod<&Workbook::AddBorder>("addBorder"),
-                         InstanceMethod<&Workbook::AddFill>("addFill"),
-                         InstanceMethod<&Workbook::AddFont>("addFont"),
-                         InstanceMethod<&Workbook::AddHyperlink>("addHyperlink"),
-                         InstanceMethod<&Workbook::AddMerge>("addMerge"),
-                         InstanceMethod<&Workbook::AddNumFmt>("addNumFmt"),
-                         InstanceMethod<&Workbook::AddSheet>("addSheet"),
-                         InstanceMethod<&Workbook::AddValidation>("addValidation"),
-                         InstanceMethod<&Workbook::AddXf>("addXf"),
-                         InstanceMethod<&Workbook::BorderCount>("borderCount"),
-                         InstanceMethod<&Workbook::CellAt>("cellAt"),
-                         InstanceMethod<&Workbook::CellCount>("cellCount"),
-                         InstanceMethod<&Workbook::ClearHyperlinks>("clearHyperlinks"),
-                         InstanceMethod<&Workbook::ClearMerges>("clearMerges"),
-                         InstanceMethod<&Workbook::ClearValidations>("clearValidations"),
-                         InstanceMethod<&Workbook::DefinedNameAt>("definedNameAt"),
-                         InstanceMethod<&Workbook::DefinedNameCount>("definedNameCount"),
-                         InstanceMethod<&Workbook::DeleteCols>("deleteCols"),
-                         InstanceMethod<&Workbook::DeleteRows>("deleteRows"),
-                         InstanceMethod<&Workbook::EvaluateCfRange>("evaluateCfRange"),
-                         InstanceMethod<&Workbook::FillCount>("fillCount"),
-                         InstanceMethod<&Workbook::FontCount>("fontCount"),
-                         InstanceMethod<&Workbook::GetBorder>("getBorder"),
-                         InstanceMethod<&Workbook::GetCellXf>("getCellXf"),
-                         InstanceMethod<&Workbook::GetCellXfIndex>("getCellXfIndex"),
-                         InstanceMethod<&Workbook::GetComment>("getComment"),
-                         InstanceMethod<&Workbook::GetFill>("getFill"),
-                         InstanceMethod<&Workbook::GetFont>("getFont"),
-                         InstanceMethod<&Workbook::GetHyperlinks>("getHyperlinks"),
-                         InstanceMethod<&Workbook::GetMerges>("getMerges"),
-                         InstanceMethod<&Workbook::GetNumFmt>("getNumFmt"),
-                         InstanceMethod<&Workbook::GetSheetColumns>("getSheetColumns"),
-                         InstanceMethod<&Workbook::GetSheetRowOverrides>("getSheetRowOverrides"),
-                         InstanceMethod<&Workbook::GetSheetView>("getSheetView"),
-                         InstanceMethod<&Workbook::GetValidations>("getValidations"),
-                         InstanceMethod<&Workbook::GetValue>("getValue"),
-                         InstanceMethod<&Workbook::InsertCols>("insertCols"),
-                         InstanceMethod<&Workbook::InsertRows>("insertRows"),
-                         InstanceMethod<&Workbook::IsValid>("isValid"),
-                         InstanceMethod<&Workbook::MoveSheet>("moveSheet"),
-                         InstanceMethod<&Workbook::PartialRecalc>("partialRecalc"),
-                         InstanceMethod<&Workbook::PassthroughAt>("passthroughAt"),
-                         InstanceMethod<&Workbook::PassthroughCount>("passthroughCount"),
-                         InstanceMethod<&Workbook::PivotCount>("pivotCount"),
-                         InstanceMethod<&Workbook::PivotLayout>("pivotLayout"),
-                         InstanceMethod<&Workbook::Recalc>("recalc"),
-                         InstanceMethod<&Workbook::RemoveHyperlink>("removeHyperlink"),
-                         InstanceMethod<&Workbook::RemoveHyperlinkAt>("removeHyperlinkAt"),
-                         InstanceMethod<&Workbook::RemoveMerge>("removeMerge"),
-                         InstanceMethod<&Workbook::RemoveMergeAt>("removeMergeAt"),
-                         InstanceMethod<&Workbook::RemoveSheet>("removeSheet"),
-                         InstanceMethod<&Workbook::RemoveValidationAt>("removeValidationAt"),
-                         InstanceMethod<&Workbook::RenameSheet>("renameSheet"),
-                         InstanceMethod<&Workbook::Save>("save"),
-                         InstanceMethod<&Workbook::SetBlank>("setBlank"),
-                         InstanceMethod<&Workbook::SetBool>("setBool"),
-                         InstanceMethod<&Workbook::SetCellXfIndex>("setCellXfIndex"),
-                         InstanceMethod<&Workbook::SetColumnHidden>("setColumnHidden"),
-                         InstanceMethod<&Workbook::SetColumnOutline>("setColumnOutline"),
-                         InstanceMethod<&Workbook::SetColumnWidth>("setColumnWidth"),
-                         InstanceMethod<&Workbook::SetComment>("setComment"),
-                         InstanceMethod<&Workbook::SetDefinedName>("setDefinedName"),
-                         InstanceMethod<&Workbook::SetFormula>("setFormula"),
-                         InstanceMethod<&Workbook::SetIterative>("setIterative"),
-                         InstanceMethod<&Workbook::SetIterativeProgress>("setIterativeProgress"),
-                         InstanceMethod<&Workbook::SetNumber>("setNumber"),
-                         InstanceMethod<&Workbook::SetRowHeight>("setRowHeight"),
-                         InstanceMethod<&Workbook::SetRowHidden>("setRowHidden"),
-                         InstanceMethod<&Workbook::SetRowOutline>("setRowOutline"),
-                         InstanceMethod<&Workbook::SetSheetFreeze>("setSheetFreeze"),
-                         InstanceMethod<&Workbook::SetSheetTabHidden>("setSheetTabHidden"),
-                         InstanceMethod<&Workbook::SetSheetZoom>("setSheetZoom"),
-                         InstanceMethod<&Workbook::SetText>("setText"),
-                         InstanceMethod<&Workbook::SheetCount>("sheetCount"),
-                         InstanceMethod<&Workbook::SheetName>("sheetName"),
-                         InstanceMethod<&Workbook::TableAt>("tableAt"),
-                         InstanceMethod<&Workbook::TableCount>("tableCount"),
-                         InstanceMethod<&Workbook::XfCount>("xfCount"),
-                     });
+  return DefineClass(
+      env, "Workbook",
+      {
+          StaticMethod<&Workbook::CreateDefault>("createDefault"),
+          StaticMethod<&Workbook::CreateEmpty>("createEmpty"),
+          StaticMethod<&Workbook::LoadBytes>("loadBytes"),
+          InstanceMethod<&Workbook::AddBorder>("addBorder"),
+          InstanceMethod<&Workbook::AddFill>("addFill"),
+          InstanceMethod<&Workbook::AddFont>("addFont"),
+          InstanceMethod<&Workbook::AddHyperlink>("addHyperlink"),
+          InstanceMethod<&Workbook::AddMerge>("addMerge"),
+          InstanceMethod<&Workbook::AddNumFmt>("addNumFmt"),
+          InstanceMethod<&Workbook::AddSheet>("addSheet"),
+          InstanceMethod<&Workbook::AddValidation>("addValidation"),
+          InstanceMethod<&Workbook::AddXf>("addXf"),
+          InstanceMethod<&Workbook::BorderCount>("borderCount"),
+          InstanceMethod<&Workbook::CellAt>("cellAt"),
+          InstanceMethod<&Workbook::CellCount>("cellCount"),
+          InstanceMethod<&Workbook::ClearHyperlinks>("clearHyperlinks"),
+          InstanceMethod<&Workbook::ClearMerges>("clearMerges"),
+          InstanceMethod<&Workbook::ClearValidations>("clearValidations"),
+          InstanceMethod<&Workbook::DefinedNameAt>("definedNameAt"),
+          InstanceMethod<&Workbook::DefinedNameCount>("definedNameCount"),
+          InstanceMethod<&Workbook::DeleteCols>("deleteCols"),
+          InstanceMethod<&Workbook::DeleteRows>("deleteRows"),
+          InstanceMethod<&Workbook::EvaluateCfRange>("evaluateCfRange"),
+          InstanceMethod<&Workbook::FillCount>("fillCount"),
+          InstanceMethod<&Workbook::FontCount>("fontCount"),
+          InstanceMethod<&Workbook::GetBorder>("getBorder"),
+          InstanceMethod<&Workbook::GetCellXf>("getCellXf"),
+          InstanceMethod<&Workbook::GetCellXfIndex>("getCellXfIndex"),
+          InstanceMethod<&Workbook::GetComment>("getComment"),
+          InstanceMethod<&Workbook::GetFill>("getFill"),
+          InstanceMethod<&Workbook::GetFont>("getFont"),
+          InstanceMethod<&Workbook::GetHyperlinks>("getHyperlinks"),
+          InstanceMethod<&Workbook::GetMerges>("getMerges"),
+          InstanceMethod<&Workbook::GetNumFmt>("getNumFmt"),
+          InstanceMethod<&Workbook::GetSheetColumns>("getSheetColumns"),
+          InstanceMethod<&Workbook::GetSheetRowOverrides>("getSheetRowOverrides"),
+          InstanceMethod<&Workbook::GetSheetView>("getSheetView"),
+          InstanceMethod<&Workbook::GetValidations>("getValidations"),
+          InstanceMethod<&Workbook::GetValue>("getValue"),
+          InstanceMethod<&Workbook::InsertCols>("insertCols"),
+          InstanceMethod<&Workbook::InsertRows>("insertRows"),
+          InstanceMethod<&Workbook::IsValid>("isValid"),
+          InstanceMethod<&Workbook::MoveSheet>("moveSheet"),
+          InstanceMethod<&Workbook::PartialRecalc>("partialRecalc"),
+          InstanceMethod<&Workbook::PassthroughAt>("passthroughAt"),
+          InstanceMethod<&Workbook::PassthroughCount>("passthroughCount"),
+          InstanceMethod<&Workbook::PivotCacheCount>("pivotCacheCount"),
+          InstanceMethod<&Workbook::PivotCacheCreate>("pivotCacheCreate"),
+          InstanceMethod<&Workbook::PivotCacheFieldAdd>("pivotCacheFieldAdd"),
+          InstanceMethod<&Workbook::PivotCacheFieldAddSharedItemBlank>("pivotCacheFieldAddSharedItemBlank"),
+          InstanceMethod<&Workbook::PivotCacheFieldAddSharedItemBool>("pivotCacheFieldAddSharedItemBool"),
+          InstanceMethod<&Workbook::PivotCacheFieldAddSharedItemNumber>("pivotCacheFieldAddSharedItemNumber"),
+          InstanceMethod<&Workbook::PivotCacheFieldAddSharedItemText>("pivotCacheFieldAddSharedItemText"),
+          InstanceMethod<&Workbook::PivotCacheFieldClear>("pivotCacheFieldClear"),
+          InstanceMethod<&Workbook::PivotCacheFieldClearSharedItems>("pivotCacheFieldClearSharedItems"),
+          InstanceMethod<&Workbook::PivotCacheFieldCount>("pivotCacheFieldCount"),
+          InstanceMethod<&Workbook::PivotCacheFieldName>("pivotCacheFieldName"),
+          InstanceMethod<&Workbook::PivotCacheFieldSharedItemCount>("pivotCacheFieldSharedItemCount"),
+          InstanceMethod<&Workbook::PivotCacheIdAt>("pivotCacheIdAt"),
+          InstanceMethod<&Workbook::PivotCacheRecordAdd>("pivotCacheRecordAdd"),
+          InstanceMethod<&Workbook::PivotCacheRecordClear>("pivotCacheRecordClear"),
+          InstanceMethod<&Workbook::PivotCacheRecordCount>("pivotCacheRecordCount"),
+          InstanceMethod<&Workbook::PivotCacheRecordSetBlank>("pivotCacheRecordSetBlank"),
+          InstanceMethod<&Workbook::PivotCacheRecordSetBool>("pivotCacheRecordSetBool"),
+          InstanceMethod<&Workbook::PivotCacheRecordSetError>("pivotCacheRecordSetError"),
+          InstanceMethod<&Workbook::PivotCacheRecordSetNumber>("pivotCacheRecordSetNumber"),
+          InstanceMethod<&Workbook::PivotCacheRecordSetText>("pivotCacheRecordSetText"),
+          InstanceMethod<&Workbook::PivotCacheRemove>("pivotCacheRemove"),
+          InstanceMethod<&Workbook::PivotCount>("pivotCount"),
+          InstanceMethod<&Workbook::PivotCreate>("pivotCreate"),
+          InstanceMethod<&Workbook::PivotDataFieldAdd>("pivotDataFieldAdd"),
+          InstanceMethod<&Workbook::PivotDataFieldClear>("pivotDataFieldClear"),
+          InstanceMethod<&Workbook::PivotDataFieldCount>("pivotDataFieldCount"),
+          InstanceMethod<&Workbook::PivotDataFieldSet>("pivotDataFieldSet"),
+          InstanceMethod<&Workbook::PivotFieldAdd>("pivotFieldAdd"),
+          InstanceMethod<&Workbook::PivotFieldAddAggregation>("pivotFieldAddAggregation"),
+          InstanceMethod<&Workbook::PivotFieldAddItem>("pivotFieldAddItem"),
+          InstanceMethod<&Workbook::PivotFieldAddSubtotalFn>("pivotFieldAddSubtotalFn"),
+          InstanceMethod<&Workbook::PivotFieldClear>("pivotFieldClear"),
+          InstanceMethod<&Workbook::PivotFieldClearAggregations>("pivotFieldClearAggregations"),
+          InstanceMethod<&Workbook::PivotFieldClearDateGroup>("pivotFieldClearDateGroup"),
+          InstanceMethod<&Workbook::PivotFieldClearItems>("pivotFieldClearItems"),
+          InstanceMethod<&Workbook::PivotFieldClearSubtotalFns>("pivotFieldClearSubtotalFns"),
+          InstanceMethod<&Workbook::PivotFieldCount>("pivotFieldCount"),
+          InstanceMethod<&Workbook::PivotFieldSetAxis>("pivotFieldSetAxis"),
+          InstanceMethod<&Workbook::PivotFieldSetDateGroup>("pivotFieldSetDateGroup"),
+          InstanceMethod<&Workbook::PivotFieldSetItemVisible>("pivotFieldSetItemVisible"),
+          InstanceMethod<&Workbook::PivotFieldSetNumberFormat>("pivotFieldSetNumberFormat"),
+          InstanceMethod<&Workbook::PivotFieldSetSort>("pivotFieldSetSort"),
+          InstanceMethod<&Workbook::PivotFieldSetSubtotalTop>("pivotFieldSetSubtotalTop"),
+          InstanceMethod<&Workbook::PivotFilterAdd>("pivotFilterAdd"),
+          InstanceMethod<&Workbook::PivotFilterClear>("pivotFilterClear"),
+          InstanceMethod<&Workbook::PivotFilterCount>("pivotFilterCount"),
+          InstanceMethod<&Workbook::PivotFilterRemoveAt>("pivotFilterRemoveAt"),
+          InstanceMethod<&Workbook::PivotLayout>("pivotLayout"),
+          InstanceMethod<&Workbook::PivotRemove>("pivotRemove"),
+          InstanceMethod<&Workbook::PivotSetAnchor>("pivotSetAnchor"),
+          InstanceMethod<&Workbook::PivotSetColFieldOrder>("pivotSetColFieldOrder"),
+          InstanceMethod<&Workbook::PivotSetGrandTotals>("pivotSetGrandTotals"),
+          InstanceMethod<&Workbook::PivotSetName>("pivotSetName"),
+          InstanceMethod<&Workbook::PivotSetRowFieldOrder>("pivotSetRowFieldOrder"),
+          InstanceMethod<&Workbook::Recalc>("recalc"),
+          InstanceMethod<&Workbook::RemoveHyperlink>("removeHyperlink"),
+          InstanceMethod<&Workbook::RemoveHyperlinkAt>("removeHyperlinkAt"),
+          InstanceMethod<&Workbook::RemoveMerge>("removeMerge"),
+          InstanceMethod<&Workbook::RemoveMergeAt>("removeMergeAt"),
+          InstanceMethod<&Workbook::RemoveSheet>("removeSheet"),
+          InstanceMethod<&Workbook::RemoveValidationAt>("removeValidationAt"),
+          InstanceMethod<&Workbook::RenameSheet>("renameSheet"),
+          InstanceMethod<&Workbook::Save>("save"),
+          InstanceMethod<&Workbook::SetBlank>("setBlank"),
+          InstanceMethod<&Workbook::SetBool>("setBool"),
+          InstanceMethod<&Workbook::SetCellXfIndex>("setCellXfIndex"),
+          InstanceMethod<&Workbook::SetColumnHidden>("setColumnHidden"),
+          InstanceMethod<&Workbook::SetColumnOutline>("setColumnOutline"),
+          InstanceMethod<&Workbook::SetColumnWidth>("setColumnWidth"),
+          InstanceMethod<&Workbook::SetComment>("setComment"),
+          InstanceMethod<&Workbook::SetDefinedName>("setDefinedName"),
+          InstanceMethod<&Workbook::SetFormula>("setFormula"),
+          InstanceMethod<&Workbook::SetIterative>("setIterative"),
+          InstanceMethod<&Workbook::SetIterativeProgress>("setIterativeProgress"),
+          InstanceMethod<&Workbook::SetNumber>("setNumber"),
+          InstanceMethod<&Workbook::SetRowHeight>("setRowHeight"),
+          InstanceMethod<&Workbook::SetRowHidden>("setRowHidden"),
+          InstanceMethod<&Workbook::SetRowOutline>("setRowOutline"),
+          InstanceMethod<&Workbook::SetSheetFreeze>("setSheetFreeze"),
+          InstanceMethod<&Workbook::SetSheetTabHidden>("setSheetTabHidden"),
+          InstanceMethod<&Workbook::SetSheetZoom>("setSheetZoom"),
+          InstanceMethod<&Workbook::SetText>("setText"),
+          InstanceMethod<&Workbook::SheetCount>("sheetCount"),
+          InstanceMethod<&Workbook::SheetName>("sheetName"),
+          InstanceMethod<&Workbook::TableAt>("tableAt"),
+          InstanceMethod<&Workbook::TableCount>("tableCount"),
+          InstanceMethod<&Workbook::XfCount>("xfCount"),
+      });
 }
 
 // ---------------------------------------------------------------------

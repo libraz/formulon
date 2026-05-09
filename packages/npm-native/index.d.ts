@@ -161,6 +161,139 @@ export interface PivotLayoutResult {
   cells: ReadonlyArray<PivotCell>;
 }
 
+/** PivotTable axis enumeration. Mirrors `fm_pivot_axis_t`. */
+export const PivotAxis: Readonly<{
+  Row: 0;
+  Col: 1;
+  Value: 2;
+  Page: 3;
+}>;
+
+/** Aggregation function for a value-axis field. Mirrors
+ *  `fm_pivot_aggregation_t`. */
+export const PivotAggregation: Readonly<{
+  Sum: 0;
+  Count: 1;
+  Average: 2;
+  Max: 3;
+  Min: 4;
+  Product: 5;
+  CountNumbers: 6;
+  StdDev: 7;
+  StdDevP: 8;
+  Var: 9;
+  VarP: 10;
+}>;
+
+/** Show-values-as derivation applied to a data-field aggregate.
+ *  Mirrors `fm_pivot_show_as_t`. */
+export const PivotShowValuesAs: Readonly<{
+  Normal: 0;
+  PercentOfRow: 1;
+  PercentOfCol: 2;
+  PercentOfTotal: 3;
+  RunningTotalInRow: 4;
+  RunningTotalInCol: 5;
+  Index: 6;
+  DifferenceFrom: 7;
+  PercentDifferenceFrom: 8;
+  PercentOfParentRow: 9;
+  PercentOfParentCol: 10;
+  PercentOfParent: 11;
+}>;
+
+/** Sentinel value for `PivotDataFieldSpec.showAsBaseItem` meaning
+ *  "(previous)". */
+export const PIVOT_SHOW_AS_BASE_PREVIOUS = 1048828;
+/** Sentinel value for `PivotDataFieldSpec.showAsBaseItem` meaning
+ *  "(next)". */
+export const PIVOT_SHOW_AS_BASE_NEXT = 1048829;
+
+/** Filter type for an active (slicer-applied) filter. Mirrors
+ *  `fm_pivot_filter_type_t`. */
+export const PivotFilterType: Readonly<{
+  ValueTop10: 0;
+  ValueGreaterThan: 1;
+  ValueBetween: 2;
+  LabelContains: 3;
+  LabelBeginsWith: 4;
+  LabelDate: 5;
+}>;
+
+/** Date-grouping granularity. Mirrors `fm_pivot_date_grouping_t`. */
+export const PivotDateGrouping: Readonly<{
+  Day: 0;
+  Month: 1;
+  Quarter: 2;
+  Year: 3;
+  Week: 4;
+  Hour: 5;
+  Minute: 6;
+  Second: 7;
+}>;
+
+/** Calendar system used by date grouping. Mirrors
+ *  `fm_pivot_calendar_t`. */
+export const PivotCalendar: Readonly<{
+  Gregorian: 0;
+  Japanese: 1;
+}>;
+
+/** Discriminator for the variant payload carried by a pivot filter
+ *  spec. `None` (= -1) means the slot is unset. Mirrors
+ *  `fm_pivot_filter_value_kind_t`. */
+export const PivotFilterValueKind: Readonly<{
+  None: -1;
+  Int: 0;
+  Double: 1;
+  Text: 2;
+}>;
+
+/** Plain-data spec for `Workbook.pivotFieldAdd`. Mirrors
+ *  `fm_pivot_field_spec_t`. */
+export interface PivotFieldSpec {
+  sourceName: string;
+  customName?: string;
+  /** One of `PivotAxis.*`. */
+  axis: number;
+  subtotalTop?: boolean;
+  numberFormat?: string;
+}
+
+/** Plain-data spec for `Workbook.pivotDataFieldAdd` /
+ *  `pivotDataFieldSet`. Mirrors `fm_pivot_data_field_spec_t`. Pass
+ *  `-1` for `showAsBaseField` / `showAsBaseItem` to mean "unset". */
+export interface PivotDataFieldSpec {
+  name: string;
+  fieldIndex: number;
+  /** One of `PivotAggregation.*`. */
+  aggregation: number;
+  numberFormat?: string;
+  /** One of `PivotShowValuesAs.*`. */
+  showAs?: number;
+  showAsBaseField?: number;
+  showAsBaseItem?: number;
+}
+
+/** Plain-data spec for `Workbook.pivotFilterAdd`. Mirrors
+ *  `fm_pivot_filter_spec_t`. */
+export interface PivotFilterSpec {
+  /** One of `PivotAxis.*`. */
+  axis: number;
+  fieldName: string;
+  /** One of `PivotFilterType.*`. */
+  type: number;
+  /** One of `PivotFilterValueKind.*`. */
+  valueKind?: number;
+  valueInt?: number;
+  valueDouble?: number;
+  valueText?: string;
+  /** One of `PivotFilterValueKind.*`. */
+  valueHighKind?: number;
+  valueHighInt?: number;
+  valueHighDouble?: number;
+}
+
 /** Conditional-format match kind. Mirrors `formulon::cf::CFMatchKind`. */
 export const CfMatchKind: Readonly<{
   DifferentialFormat: 0;
@@ -544,6 +677,164 @@ export interface Workbook {
   pivotCount(sheet: number): number;
   /** Evaluates and projects a PivotTable into concrete grid cells. */
   pivotLayout(sheet: number, pivotIndex: number): PivotLayoutResult;
+
+  // ---- PivotCache mutation -----------------------------------------------
+  /** Returns the number of pivot caches owned by the workbook. */
+  pivotCacheCount(): number;
+  /** Returns `{ status, index: cacheId }` for the cache at flat
+   *  index `idx`. */
+  pivotCacheIdAt(idx: number): AddStyleResult;
+  /** Creates a new empty pivot cache. Pass `0` for `requestedId` to
+   *  auto-assign. Returns `{ status, index: cacheId }`. */
+  pivotCacheCreate(requestedId: number): AddStyleResult;
+  /** Removes the pivot cache with id `cacheId`. Fails if any pivot
+   *  table still references it. */
+  pivotCacheRemove(cacheId: number): Status;
+
+  /** Number of fields on the cache identified by `cacheId`. */
+  pivotCacheFieldCount(cacheId: number): number;
+  /** Reads the name of the cache field at `fieldIdx`. */
+  pivotCacheFieldName(cacheId: number, fieldIdx: number): StringResult;
+  /** Appends a new field with the given UTF-8 name to the cache.
+   *  `index` carries the new field's index. */
+  pivotCacheFieldAdd(cacheId: number, name: string): AddStyleResult;
+  /** Drops every field (and every record) from the cache. */
+  pivotCacheFieldClear(cacheId: number): Status;
+
+  /** Number of shared items configured on cache field `fieldIdx`. */
+  pivotCacheFieldSharedItemCount(cacheId: number, fieldIdx: number): number;
+  /** Appends a numeric shared item to cache field `fieldIdx`. */
+  pivotCacheFieldAddSharedItemNumber(cacheId: number, fieldIdx: number, value: number): Status;
+  /** Appends a text shared item to cache field `fieldIdx`. */
+  pivotCacheFieldAddSharedItemText(cacheId: number, fieldIdx: number, value: string): Status;
+  /** Appends a boolean shared item to cache field `fieldIdx`. */
+  pivotCacheFieldAddSharedItemBool(cacheId: number, fieldIdx: number, value: boolean): Status;
+  /** Appends a blank shared item to cache field `fieldIdx`. */
+  pivotCacheFieldAddSharedItemBlank(cacheId: number, fieldIdx: number): Status;
+  /** Drops every shared item from cache field `fieldIdx`. */
+  pivotCacheFieldClearSharedItems(cacheId: number, fieldIdx: number): Status;
+
+  /** Returns the number of records on the cache. */
+  pivotCacheRecordCount(cacheId: number): number;
+  /** Appends a new empty record. `index` carries the new record's index. */
+  pivotCacheRecordAdd(cacheId: number): AddStyleResult;
+  /** Drops every record from the cache. */
+  pivotCacheRecordClear(cacheId: number): Status;
+  /** Sets cell `(recordIdx, fieldIdx)` to a numeric value. */
+  pivotCacheRecordSetNumber(cacheId: number, recordIdx: number, fieldIdx: number, value: number): Status;
+  /** Sets cell `(recordIdx, fieldIdx)` to a UTF-8 text value. */
+  pivotCacheRecordSetText(cacheId: number, recordIdx: number, fieldIdx: number, value: string): Status;
+  /** Sets cell `(recordIdx, fieldIdx)` to a boolean value. */
+  pivotCacheRecordSetBool(cacheId: number, recordIdx: number, fieldIdx: number, value: boolean): Status;
+  /** Sets cell `(recordIdx, fieldIdx)` to Blank. */
+  pivotCacheRecordSetBlank(cacheId: number, recordIdx: number, fieldIdx: number): Status;
+  /** Sets cell `(recordIdx, fieldIdx)` to an Excel error value. */
+  pivotCacheRecordSetError(cacheId: number, recordIdx: number, fieldIdx: number, errorCode: number): Status;
+
+  // ---- PivotTable mutation -----------------------------------------------
+  /** Creates a new empty pivot table. Returns `{ status, index: pivotIdx }`. */
+  pivotCreate(sheet: number, name: string, cacheId: number, anchorRow: number, anchorCol: number): AddStyleResult;
+  /** Removes the pivot table at `pivotIdx`. */
+  pivotRemove(sheet: number, pivotIdx: number): Status;
+  /** Renames the pivot table. */
+  pivotSetName(sheet: number, pivotIdx: number, name: string): Status;
+  /** Updates the pivot's anchor cell and span. */
+  pivotSetAnchor(
+    sheet: number,
+    pivotIdx: number,
+    anchorRow: number,
+    anchorCol: number,
+    spanRows: number,
+    spanCols: number,
+  ): Status;
+  /** Toggles the row / column grand total bands on the pivot. */
+  pivotSetGrandTotals(sheet: number, pivotIdx: number, rowsEnabled: boolean, colsEnabled: boolean): Status;
+
+  /** Number of fields configured on the pivot. */
+  pivotFieldCount(sheet: number, pivotIdx: number): number;
+  /** Appends a new field. Returns `{ status, index: fieldIdx }`. */
+  pivotFieldAdd(sheet: number, pivotIdx: number, spec: PivotFieldSpec): AddStyleResult;
+  /** Drops every field from the pivot. */
+  pivotFieldClear(sheet: number, pivotIdx: number): Status;
+  /** Sets the axis of pivot field `fieldIdx`. */
+  pivotFieldSetAxis(sheet: number, pivotIdx: number, fieldIdx: number, axis: number): Status;
+  /** Sets the sort directive on pivot field `fieldIdx`. Pass an empty
+   *  `byField` to clear the by-field key. */
+  pivotFieldSetSort(
+    sheet: number,
+    pivotIdx: number,
+    fieldIdx: number,
+    ascending: boolean,
+    byField: string,
+  ): Status;
+  /** Sets the `subtotal_top` flag on pivot field `fieldIdx`. */
+  pivotFieldSetSubtotalTop(sheet: number, pivotIdx: number, fieldIdx: number, top: boolean): Status;
+  /** Appends an aggregation to pivot field `fieldIdx`. */
+  pivotFieldAddAggregation(sheet: number, pivotIdx: number, fieldIdx: number, agg: number): Status;
+  /** Drops every aggregation from pivot field `fieldIdx`. */
+  pivotFieldClearAggregations(sheet: number, pivotIdx: number, fieldIdx: number): Status;
+  /** Appends a manual-filter item to pivot field `fieldIdx`. */
+  pivotFieldAddItem(
+    sheet: number,
+    pivotIdx: number,
+    fieldIdx: number,
+    name: string,
+    visible: boolean,
+  ): Status;
+  /** Drops every manual-filter item from pivot field `fieldIdx`. */
+  pivotFieldClearItems(sheet: number, pivotIdx: number, fieldIdx: number): Status;
+  /** Toggles the visibility of item `itemIdx` on field `fieldIdx`. */
+  pivotFieldSetItemVisible(
+    sheet: number,
+    pivotIdx: number,
+    fieldIdx: number,
+    itemIdx: number,
+    visible: boolean,
+  ): Status;
+  /** Appends a subtotal-fn entry to pivot field `fieldIdx`. */
+  pivotFieldAddSubtotalFn(sheet: number, pivotIdx: number, fieldIdx: number, agg: number): Status;
+  /** Drops every subtotal-fn entry from pivot field `fieldIdx`. */
+  pivotFieldClearSubtotalFns(sheet: number, pivotIdx: number, fieldIdx: number): Status;
+  /** Configures date-grouping on pivot field `fieldIdx`. Pass `-1` for
+   *  `startYear` / `endYear` to leave the bound unset. */
+  pivotFieldSetDateGroup(
+    sheet: number,
+    pivotIdx: number,
+    fieldIdx: number,
+    granularity: number,
+    calendar: number,
+    startYear: number,
+    endYear: number,
+  ): Status;
+  /** Removes the date-grouping config from pivot field `fieldIdx`. */
+  pivotFieldClearDateGroup(sheet: number, pivotIdx: number, fieldIdx: number): Status;
+  /** Sets the OOXML number-format string on pivot field `fieldIdx`.
+   *  Pass an empty string to clear. */
+  pivotFieldSetNumberFormat(sheet: number, pivotIdx: number, fieldIdx: number, utf8: string): Status;
+
+  /** Replaces the row-axis field order with `indices`. Each entry must
+   *  be `< pivotFieldCount`. Pass an empty array to clear. */
+  pivotSetRowFieldOrder(sheet: number, pivotIdx: number, indices: ReadonlyArray<number>): Status;
+  /** Replaces the column-axis field order. Same contract as rows. */
+  pivotSetColFieldOrder(sheet: number, pivotIdx: number, indices: ReadonlyArray<number>): Status;
+
+  /** Number of `<dataField>` entries on the pivot. */
+  pivotDataFieldCount(sheet: number, pivotIdx: number): number;
+  /** Appends a new data-field entry. */
+  pivotDataFieldAdd(sheet: number, pivotIdx: number, spec: PivotDataFieldSpec): AddStyleResult;
+  /** Drops every data-field entry from the pivot. */
+  pivotDataFieldClear(sheet: number, pivotIdx: number): Status;
+  /** Replaces the data-field entry at `dataFieldIdx` in place. */
+  pivotDataFieldSet(sheet: number, pivotIdx: number, dataFieldIdx: number, spec: PivotDataFieldSpec): Status;
+
+  /** Number of active (slicer-applied) filters on the pivot. */
+  pivotFilterCount(sheet: number, pivotIdx: number): number;
+  /** Appends an active filter. */
+  pivotFilterAdd(sheet: number, pivotIdx: number, spec: PivotFilterSpec): Status;
+  /** Drops every active filter from the pivot. */
+  pivotFilterClear(sheet: number, pivotIdx: number): Status;
+  /** Removes the active filter at `filterIdx`. */
+  pivotFilterRemoveAt(sheet: number, pivotIdx: number, filterIdx: number): Status;
 
   // Defined names.
   setDefinedName(name: string, formula: string): Status;
