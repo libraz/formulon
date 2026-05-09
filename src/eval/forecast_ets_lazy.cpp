@@ -51,6 +51,7 @@
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/range_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -111,23 +112,6 @@ enum class AggregationMode : std::uint32_t {
 // ---------------------------------------------------------------------------
 // Array materialisation + strict numeric coercion
 // ---------------------------------------------------------------------------
-
-// Materialises an AST argument as an `ArrayValue`. Scalar inputs wrap to
-// 1x1. On failure returns the propagating error via `*out_err`.
-bool resolve_array(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
-                   const ArrayValue** out, Value* out_err) {
-  const Value v = eval_node_as_array(arg, arena, registry, ctx);
-  if (v.is_error()) {
-    *out_err = v;
-    return false;
-  }
-  if (!v.is_array()) {
-    *out_err = Value::error(ErrorCode::Value);
-    return false;
-  }
-  *out = v.as_array();
-  return true;
-}
 
 // Strict numeric reading for timeline / values cells.
 // Numbers pass through; Booleans coerce to 1/0; Blank fails as `#VALUE!`
@@ -1211,10 +1195,10 @@ bool preprocess(const parser::AstNode& values_node, const parser::AstNode& timel
   // Materialise both arrays.
   const ArrayValue* timeline_arr = nullptr;
   const ArrayValue* values_arr = nullptr;
-  if (!resolve_array(timeline_node, arena, registry, ctx, &timeline_arr, out_err)) {
+  if (!resolve_array_value(timeline_node, arena, registry, ctx, &timeline_arr, out_err)) {
     return false;
   }
-  if (!resolve_array(values_node, arena, registry, ctx, &values_arr, out_err)) {
+  if (!resolve_array_value(values_node, arena, registry, ctx, &values_arr, out_err)) {
     return false;
   }
   const std::size_t n_t = static_cast<std::size_t>(timeline_arr->rows) * timeline_arr->cols;

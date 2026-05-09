@@ -658,9 +658,7 @@ void render_numeric(const Section& section, std::string_view fmt, double value, 
   };
 
   // Helper: emit a single fractional digit with DBNum substitution.
-  auto emit_frac_digit_char = [&](char digit) {
-    append_digit_dbnum(result, section.dbnum_mode, digit);
-  };
+  auto emit_frac_digit_char = [&](char digit) { append_digit_dbnum(result, section.dbnum_mode, digit); };
 
   for (std::size_t i = 0; i < section.tokens.size(); ++i) {
     const Token& tk = section.tokens[i];

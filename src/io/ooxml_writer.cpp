@@ -95,10 +95,8 @@ constexpr std::string_view kRelExternalLink =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink";
 constexpr std::string_view kRelExternalLinkPath =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath";
-constexpr std::string_view kRelOleLink =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleLink";
-constexpr std::string_view kRelDdeLink =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/ddeLink";
+constexpr std::string_view kRelOleLink = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleLink";
+constexpr std::string_view kRelDdeLink = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/ddeLink";
 
 // ---------------------------------------------------------------------------
 // Per-package emission plan

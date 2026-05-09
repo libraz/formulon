@@ -160,6 +160,21 @@ MeanSS compute_mean_ss(const std::vector<double>& xs) {
   return {mean, ss};
 }
 
+Expected<CenteredScaled, ErrorCode> centered_and_scaled(const Value* args, std::uint32_t arity, std::size_t min_n,
+                                                        double sample_offset) {
+  std::vector<double> xs = collect_numerics(args, arity);
+  if (xs.size() < min_n) {
+    return ErrorCode::Div0;
+  }
+  const MeanSS ms = compute_mean_ss(xs);
+  const double n = static_cast<double>(xs.size());
+  const double variance = ms.ss / (n - sample_offset);
+  if (variance == 0.0) {
+    return ErrorCode::Div0;
+  }
+  return CenteredScaled{std::move(xs), n, ms.mean, std::sqrt(variance)};
+}
+
 double mean_of(const std::vector<double>& xs) noexcept {
   double s = 0.0;
   for (double x : xs) {
@@ -769,25 +784,18 @@ static Value TrimMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) 
 // sample stdev. Requires at least 3 distinct non-zero deviations; fewer
 // than 3 numeric inputs or zero sample variance yields `#DIV/0!`.
 static Value Skew(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_numerics(args, arity);
-  if (xs.size() < 3u) {
-    return Value::error(ErrorCode::Div0);
+  auto stat = centered_and_scaled(args, arity, 3u, 1.0);
+  if (!stat) {
+    return Value::error(stat.error());
   }
-  const MeanSS ms = compute_mean_ss(xs);
-  const double n = static_cast<double>(xs.size());
-  const double sample_var = ms.ss / (n - 1.0);
-  if (sample_var == 0.0) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const double s = std::sqrt(sample_var);
   double cubed_sum = 0.0;
-  for (double x : xs) {
-    const double z = (x - ms.mean) / s;
+  for (double x : stat.value().xs) {
+    const double z = (x - stat.value().mean) / stat.value().scale;
     cubed_sum += z * z * z;
   }
+  const double n = stat.value().n;
   const double coeff = n / ((n - 1.0) * (n - 2.0));
-  const double r = coeff * cubed_sum;
-  return finite_stats_number(r);
+  return finite_stats_number(coeff * cubed_sum);
 }
 
 // SKEW.P(value, ...) - population skewness,
@@ -796,24 +804,16 @@ static Value Skew(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // matching Excel, fewer than 3 numeric inputs also yields `#DIV/0!` so
 // callers never see a degenerate near-symmetric zero.
 static Value SkewP(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_numerics(args, arity);
-  if (xs.size() < 3u) {
-    return Value::error(ErrorCode::Div0);
+  auto stat = centered_and_scaled(args, arity, 3u, 0.0);
+  if (!stat) {
+    return Value::error(stat.error());
   }
-  const MeanSS ms = compute_mean_ss(xs);
-  const double n = static_cast<double>(xs.size());
-  const double pop_var = ms.ss / n;
-  if (pop_var == 0.0) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const double sigma = std::sqrt(pop_var);
   double cubed_sum = 0.0;
-  for (double x : xs) {
-    const double z = (x - ms.mean) / sigma;
+  for (double x : stat.value().xs) {
+    const double z = (x - stat.value().mean) / stat.value().scale;
     cubed_sum += z * z * z;
   }
-  const double r = cubed_sum / n;
-  return finite_stats_number(r);
+  return finite_stats_number(cubed_sum / stat.value().n);
 }
 
 // KURT(value, ...) - excess kurtosis (Fisher's definition),
@@ -822,50 +822,34 @@ static Value SkewP(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // Requires at least 4 numeric inputs (the cubic denominator collapses
 // otherwise) and non-zero sample variance; both failures yield `#DIV/0!`.
 static Value Kurt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_numerics(args, arity);
-  if (xs.size() < 4u) {
-    return Value::error(ErrorCode::Div0);
+  auto stat = centered_and_scaled(args, arity, 4u, 1.0);
+  if (!stat) {
+    return Value::error(stat.error());
   }
-  const MeanSS ms = compute_mean_ss(xs);
-  const double n = static_cast<double>(xs.size());
-  const double sample_var = ms.ss / (n - 1.0);
-  if (sample_var == 0.0) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const double s = std::sqrt(sample_var);
   double quartic_sum = 0.0;
-  for (double x : xs) {
-    const double z = (x - ms.mean) / s;
+  for (double x : stat.value().xs) {
+    const double z = (x - stat.value().mean) / stat.value().scale;
     quartic_sum += z * z * z * z;
   }
+  const double n = stat.value().n;
   const double coeff_a = (n * (n + 1.0)) / ((n - 1.0) * (n - 2.0) * (n - 3.0));
   const double coeff_b = (3.0 * (n - 1.0) * (n - 1.0)) / ((n - 2.0) * (n - 3.0));
-  const double r = coeff_a * quartic_sum - coeff_b;
-  return finite_stats_number(r);
+  return finite_stats_number(coeff_a * quartic_sum - coeff_b);
 }
 
 // STANDARDIZE(x, mean, standard_dev) - z-score, `(x - mean) / standard_dev`.
 // Scalar-only: `accepts_ranges` stays false so the dispatcher coerces each
 // argument directly. `standard_dev <= 0` yields `#NUM!`.
 static Value Standardize(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x_e = coerce_to_number(args[0]);
-  if (!x_e) {
-    return Value::error(x_e.error());
+  auto input = read_number_triple(args, 0, 1, 2);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto mean_e = coerce_to_number(args[1]);
-  if (!mean_e) {
-    return Value::error(mean_e.error());
-  }
-  auto sd_e = coerce_to_number(args[2]);
-  if (!sd_e) {
-    return Value::error(sd_e.error());
-  }
-  const double sd = sd_e.value();
+  const double sd = input.value().third;
   if (sd <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double r = (x_e.value() - mean_e.value()) / sd;
-  return finite_stats_number(r);
+  return finite_stats_number((input.value().first - input.value().second) / sd);
 }
 
 }  // namespace stats_detail

@@ -16,9 +16,11 @@
 #include <string_view>
 #include <utility>
 
+#include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 
 namespace formulon {
 namespace io {
@@ -403,13 +405,7 @@ void ReadCellStyles(const pugi::xml_node& root, StylesTable& table) {
 
 Expected<StylesTable, Error> read_styles(const std::vector<std::uint8_t>& styles_bytes) {
   pugi::xml_document doc;
-  pugi::xml_parse_result parse =
-      doc.load_buffer(styles_bytes.data(), styles_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-  if (!parse) {
-    std::string ctx("context=styles_reader part=xl/styles.xml desc=");
-    ctx.append(parse.description());
-    return make_error(FormulonErrorCode::kIoXmlParse, "styles.xml: pugixml parse failed", std::move(ctx));
-  }
+  RETURN_IF_ERROR(load_xml_buffer(doc, styles_bytes, "styles_reader", "styles.xml"));
   pugi::xml_node root = doc.child("styleSheet");
   if (!root) {
     return make_error(FormulonErrorCode::kIoContentTypeInvalid, "styles.xml: missing <styleSheet> root",

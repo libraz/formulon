@@ -30,6 +30,7 @@
 
 #include "io/cell_parser.h"
 #include "io/sax_xml_reader.h"
+#include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "utils/error.h"
@@ -119,9 +120,9 @@ Expected<void, Error> ResolveFormula(const pugi::xml_node& c_node,
   return Expected<void, Error>::Ok();
 }
 
-Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view formula_text,
-                                      std::uint32_t xf_index, std::string_view phonetic_text,
-                                      std::size_t sheet_index, Workbook& workbook, SheetReadContext& ctx) {
+Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view formula_text, std::uint32_t xf_index,
+                                      std::string_view phonetic_text, std::size_t sheet_index, Workbook& workbook,
+                                      SheetReadContext& ctx) {
   if (!formula_text.empty()) {
     // `Workbook::set_cell_formula` accepts both spellings, but to
     // match the parser/evaluator's expected input form (the existing
@@ -215,8 +216,8 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
         }
       }
 
-      auto applied = ApplyParsedCell(parsed, formula_text, parsed.xf_index, parsed.phonetic_text, sheet_index, workbook,
-                                     ctx);
+      auto applied =
+          ApplyParsedCell(parsed, formula_text, parsed.xf_index, parsed.phonetic_text, sheet_index, workbook, ctx);
       if (!applied) {
         return applied.error();
       }
@@ -780,12 +781,10 @@ Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::x
       v.allow_blank = !(sv == "0" || sv == "false");
     }
     if (pugi::xml_attribute sim = dv.attribute("showInputMessage"); sim) {
-      const std::string_view sv = sim.value();
-      v.show_input_message = (sv == "1" || sv == "true");
+      v.show_input_message = parse_xml_bool(sim.value());
     }
     if (pugi::xml_attribute sem = dv.attribute("showErrorMessage"); sem) {
-      const std::string_view sv = sem.value();
-      v.show_error_message = (sv == "1" || sv == "true");
+      v.show_error_message = parse_xml_bool(sem.value());
     }
 
     v.error_title.assign(dv.attribute("errorTitle").value());
@@ -830,8 +829,7 @@ SheetProtection read_sheet_protection(const pugi::xml_node& worksheet) {
     if (!attr) {
       return default_value;
     }
-    const std::string_view sv = attr.value();
-    return sv == "1" || sv == "true";
+    return parse_xml_bool(attr.value());
   };
 
   out.algorithm_name.assign(node.attribute("algorithmName").value());

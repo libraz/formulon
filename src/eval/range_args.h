@@ -63,6 +63,35 @@ struct RangeResult {
 Expected<RangeResult, ErrorCode> resolve_range_arg(const parser::AstNode& arg_node, Arena& arena,
                                                    const FunctionRegistry& registry, const EvalContext& ctx);
 
+/// Materialises an AST argument as an `ArrayValue` via the standard
+/// `eval_node_as_array` seam. Scalar inputs wrap to a 1x1 array. On
+/// failure writes the propagating error into `*out_err` and returns
+/// false; otherwise `*out` borrows from the caller arena.
+///
+/// Errors come in two flavours:
+///   * a pre-evaluated error subtree propagates verbatim;
+///   * a non-array, non-error result (e.g. an unexpected scalar) yields
+///     `#VALUE!`.
+///
+/// Callers that need a different error vocabulary (e.g. `#N/A` for the
+/// regression / hypothesis families) should layer their own remapping
+/// on top - this helper is the lowest-common-denominator path used by
+/// SUMPRODUCT-style families.
+bool resolve_array_value(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx, const ArrayValue** out, Value* out_err);
+
+/// Resolution variant for the regression and hypothesis-test families.
+/// Accepts `Ref` / `RangeOp` (delegated to `resolve_range_arg`),
+/// `ArrayLiteral` (each element is evaluated), and any other subtree
+/// (a pre-evaluated error propagates verbatim; otherwise the call is
+/// rejected with `#N/A`).
+///
+/// Excel uses `#N/A` rather than `#VALUE!` as the shape-error vocabulary
+/// for these families, so any `#VALUE!` from `resolve_range_arg`'s
+/// shape rejection is remapped to `#N/A`. `#REF!` passes through.
+Expected<RangeResult, ErrorCode> resolve_array_arg_na(const parser::AstNode& arg_node, Arena& arena,
+                                                      const FunctionRegistry& registry, const EvalContext& ctx);
+
 }  // namespace eval
 }  // namespace formulon
 

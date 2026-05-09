@@ -299,10 +299,9 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
   if (off == SIZE_MAX) {
     return Value::error(ErrorCode::NA);
   }
-  const std::size_t flat =
-      axis == LookupAxis::Column
-          ? (off * static_cast<std::size_t>(cols)) + static_cast<std::size_t>(result_index - 1U)
-          : (static_cast<std::size_t>(result_index - 1U) * static_cast<std::size_t>(cols)) + off;
+  const std::size_t flat = axis == LookupAxis::Column
+                               ? (off * static_cast<std::size_t>(cols)) + static_cast<std::size_t>(result_index - 1U)
+                               : (static_cast<std::size_t>(result_index - 1U) * static_cast<std::size_t>(cols)) + off;
   if (flat >= cells.size()) {
     return Value::error(ErrorCode::Ref);
   }

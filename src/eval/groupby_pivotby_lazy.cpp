@@ -200,8 +200,8 @@ bool read_int(const parser::AstNode& node, Arena& arena, const FunctionRegistry&
   return true;
 }
 
-bool read_optional_int_in_set(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity, int default_value,
-                              Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+bool read_optional_int_in_set(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity,
+                              int default_value, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
                               const int* allowed, std::size_t count, int* out, Value* out_err) {
   *out = default_value;
   if (arity <= arg_index) {
@@ -242,8 +242,9 @@ Expected<HeaderLayout, ErrorCode> resolve_header_layout(int field_headers, std::
   return Expected<HeaderLayout, ErrorCode>::Ok(layout);
 }
 
-bool read_filter_mask(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
-                      std::uint32_t data_row_count, std::vector<bool>* include_row, Value* out_err) {
+bool read_filter_mask(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx, std::uint32_t data_row_count, std::vector<bool>* include_row,
+                      Value* out_err) {
   const ArrayValue* mask = read_array_arg(node, arena, registry, ctx, out_err);
   if (mask == nullptr) {
     return false;

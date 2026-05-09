@@ -290,10 +290,10 @@ bool append_range_sourced_values(const FunctionDef& def, const Value* cells, std
 using RangeCallExpander = bool (*)(const parser::AstNode&, Arena&, const FunctionRegistry&, const EvalContext&,
                                    std::vector<Value>*, ErrorCode*, std::uint32_t*, std::uint32_t*);
 
-bool append_expanded_call_argument(const FunctionDef& def, const parser::AstNode& arg_node,
-                                   std::string_view call_name, RangeCallExpander expand, Arena& arena,
-                                   const FunctionRegistry& registry, const EvalContext& ctx,
-                                   std::vector<Value>* values, bool* handled, Value* immediate_return) {
+bool append_expanded_call_argument(const FunctionDef& def, const parser::AstNode& arg_node, std::string_view call_name,
+                                   RangeCallExpander expand, Arena& arena, const FunctionRegistry& registry,
+                                   const EvalContext& ctx, std::vector<Value>* values, bool* handled,
+                                   Value* immediate_return) {
   *handled = false;
   if (!def.accepts_ranges || arg_node.kind() != parser::NodeKind::Call ||
       !strings::case_insensitive_eq(arg_node.as_call_name(), call_name)) {

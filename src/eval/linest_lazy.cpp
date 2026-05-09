@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "eval/lazy_impls.h"
+#include "eval/range_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -27,23 +28,6 @@
 namespace formulon {
 namespace eval {
 namespace {
-
-/// Materialises an array argument as an `ArrayValue` (scalars wrap to
-/// 1x1). On failure writes the propagating error into `*out_err`.
-bool resolve_array(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
-                   const ArrayValue** out, Value* out_err) {
-  const Value v = eval_node_as_array(arg, arena, registry, ctx);
-  if (v.is_error()) {
-    *out_err = v;
-    return false;
-  }
-  if (!v.is_array()) {
-    *out_err = Value::error(ErrorCode::Value);
-    return false;
-  }
-  *out = v.as_array();
-  return true;
-}
 
 /// Strict numeric coercion for LINEST inputs. Numbers pass through;
 /// Booleans coerce to 1/0; Blank/Text/Error fail. Errors propagate
@@ -667,13 +651,13 @@ Value eval_linest_lazy(const parser::AstNode& call, Arena& arena, const Function
 
   const ArrayValue* y_arr = nullptr;
   Value err = Value::blank();
-  if (!resolve_array(call.as_call_arg(0), arena, registry, ctx, &y_arr, &err)) {
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &y_arr, &err)) {
     return err;
   }
 
   const ArrayValue* x_arr = nullptr;
   if (arity >= 2U) {
-    if (!resolve_array(call.as_call_arg(1), arena, registry, ctx, &x_arr, &err)) {
+    if (!resolve_array_value(call.as_call_arg(1), arena, registry, ctx, &x_arr, &err)) {
       return err;
     }
   }
@@ -805,18 +789,18 @@ Value eval_trend_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
 
   const ArrayValue* y_arr = nullptr;
   Value err = Value::blank();
-  if (!resolve_array(call.as_call_arg(0), arena, registry, ctx, &y_arr, &err)) {
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &y_arr, &err)) {
     return err;
   }
   const ArrayValue* x_arr = nullptr;
   if (arity >= 2U) {
-    if (!resolve_array(call.as_call_arg(1), arena, registry, ctx, &x_arr, &err)) {
+    if (!resolve_array_value(call.as_call_arg(1), arena, registry, ctx, &x_arr, &err)) {
       return err;
     }
   }
   const ArrayValue* new_x_arr = nullptr;
   if (arity >= 3U) {
-    if (!resolve_array(call.as_call_arg(2), arena, registry, ctx, &new_x_arr, &err)) {
+    if (!resolve_array_value(call.as_call_arg(2), arena, registry, ctx, &new_x_arr, &err)) {
       return err;
     }
   }
@@ -894,12 +878,12 @@ Value eval_logest_lazy(const parser::AstNode& call, Arena& arena, const Function
 
   const ArrayValue* y_arr = nullptr;
   Value err = Value::blank();
-  if (!resolve_array(call.as_call_arg(0), arena, registry, ctx, &y_arr, &err)) {
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &y_arr, &err)) {
     return err;
   }
   const ArrayValue* x_arr = nullptr;
   if (arity >= 2U) {
-    if (!resolve_array(call.as_call_arg(1), arena, registry, ctx, &x_arr, &err)) {
+    if (!resolve_array_value(call.as_call_arg(1), arena, registry, ctx, &x_arr, &err)) {
       return err;
     }
   }
@@ -963,18 +947,18 @@ Value eval_growth_lazy(const parser::AstNode& call, Arena& arena, const Function
 
   const ArrayValue* y_arr = nullptr;
   Value err = Value::blank();
-  if (!resolve_array(call.as_call_arg(0), arena, registry, ctx, &y_arr, &err)) {
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &y_arr, &err)) {
     return err;
   }
   const ArrayValue* x_arr = nullptr;
   if (arity >= 2U) {
-    if (!resolve_array(call.as_call_arg(1), arena, registry, ctx, &x_arr, &err)) {
+    if (!resolve_array_value(call.as_call_arg(1), arena, registry, ctx, &x_arr, &err)) {
       return err;
     }
   }
   const ArrayValue* new_x_arr = nullptr;
   if (arity >= 3U) {
-    if (!resolve_array(call.as_call_arg(2), arena, registry, ctx, &new_x_arr, &err)) {
+    if (!resolve_array_value(call.as_call_arg(2), arena, registry, ctx, &new_x_arr, &err)) {
       return err;
     }
   }

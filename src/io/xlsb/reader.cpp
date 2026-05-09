@@ -161,8 +161,8 @@ std::string RelsPathForPart(std::string_view part_path) {
 }
 
 template <typename Fn>
-Expected<void, Error> VisitRelationshipNodes(const ZipReader& zip, std::string_view rels_path,
-                                             std::string_view label, Fn&& fn) {
+Expected<void, Error> VisitRelationshipNodes(const ZipReader& zip, std::string_view rels_path, std::string_view label,
+                                             Fn&& fn) {
   auto rels_bytes_or = zip.read_entry(rels_path);
   if (!rels_bytes_or) {
     return rels_bytes_or.error();
@@ -291,38 +291,38 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
                       "context=xlsb_reader rels_path=" + rels_path);
   }
   const std::string base_dir = DirOf(workbook_path);
-  auto visit_status = VisitRelationshipNodes(zip, rels_path, "workbook rels",
-                                             [&](const pugi::xml_node& rel) -> Expected<void, Error> {
-    const std::string_view type = rel.attribute("Type").value();
-    const std::string_view target = rel.attribute("Target").value();
-    if (target.empty()) {
-      return Expected<void, Error>::Ok();
-    }
-    if (type == kRelWorksheet) {
-      const std::string id = rel.attribute("Id").value();
-      if (id.empty()) {
+  auto visit_status =
+      VisitRelationshipNodes(zip, rels_path, "workbook rels", [&](const pugi::xml_node& rel) -> Expected<void, Error> {
+        const std::string_view type = rel.attribute("Type").value();
+        const std::string_view target = rel.attribute("Target").value();
+        if (target.empty()) {
+          return Expected<void, Error>::Ok();
+        }
+        if (type == kRelWorksheet) {
+          const std::string id = rel.attribute("Id").value();
+          if (id.empty()) {
+            return Expected<void, Error>::Ok();
+          }
+          auto resolved = ResolveRelativePath(base_dir, target);
+          if (!resolved) {
+            return resolved.error();
+          }
+          rels.sheet_targets.emplace(id, std::move(resolved).value());
+        } else if (type == kRelSharedStrings) {
+          auto resolved = ResolveRelativePath(base_dir, target);
+          if (!resolved) {
+            return resolved.error();
+          }
+          rels.sst_path = std::move(resolved).value();
+        } else if (type == kRelStyles) {
+          auto resolved = ResolveRelativePath(base_dir, target);
+          if (!resolved) {
+            return resolved.error();
+          }
+          rels.styles_path = std::move(resolved).value();
+        }
         return Expected<void, Error>::Ok();
-      }
-      auto resolved = ResolveRelativePath(base_dir, target);
-      if (!resolved) {
-        return resolved.error();
-      }
-      rels.sheet_targets.emplace(id, std::move(resolved).value());
-    } else if (type == kRelSharedStrings) {
-      auto resolved = ResolveRelativePath(base_dir, target);
-      if (!resolved) {
-        return resolved.error();
-      }
-      rels.sst_path = std::move(resolved).value();
-    } else if (type == kRelStyles) {
-      auto resolved = ResolveRelativePath(base_dir, target);
-      if (!resolved) {
-        return resolved.error();
-      }
-      rels.styles_path = std::move(resolved).value();
-    }
-    return Expected<void, Error>::Ok();
-  });
+      });
   if (!visit_status) {
     return visit_status.error();
   }

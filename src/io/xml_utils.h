@@ -18,8 +18,11 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "pugixml.hpp"
+#include "utils/error.h"
+#include "utils/expected.h"
 
 namespace formulon {
 namespace io {
@@ -49,6 +52,29 @@ std::uint32_t parse_xml_u32_attr(const pugi::xml_attribute& attr, std::uint32_t 
 /// Parses a signed 32-bit decimal attribute body. Missing, empty,
 /// malformed, or out-of-range input returns `default_value`.
 std::int32_t parse_xml_i32_attr(const pugi::xml_attribute& attr, std::int32_t default_value);
+
+/// Parses an OOXML boolean attribute body. Returns true for "1" or
+/// "true", false for everything else (including a missing attribute).
+/// Matches the lexicon Excel emits for the majority of `xs:boolean`
+/// attributes. For the case-insensitive variant Excel uses on a small
+/// subset of sheet flags, see `sheet_reader.cpp`'s local helper.
+bool parse_xml_bool_attr(const pugi::xml_attribute& attr);
+
+/// String-view variant of `parse_xml_bool_attr`. Returns true for
+/// "1" or "true", false otherwise. Use when the caller already has
+/// the attribute value as `std::string_view`.
+bool parse_xml_bool(std::string_view value);
+
+/// Parses a UTF-8 OOXML part body into `doc`. On failure returns a
+/// `kIoXmlParse` error whose context records `<reader_module>` and
+/// `<part_name>` and includes pugixml's description. The standard
+/// message body is `"<part_name>: pugixml parse failed"`.
+///
+/// Centralises the parse-error envelope reproduced verbatim by every
+/// reader. Callers wishing to use a non-default parse mode or build a
+/// bespoke error message must continue to call `load_buffer` directly.
+Expected<void, Error> load_xml_buffer(pugi::xml_document& doc, const std::vector<std::uint8_t>& bytes,
+                                      std::string_view reader_module, std::string_view part_name);
 
 /// Appends every `<t>` text descendant of `node` (whether a direct child or
 /// inside a nested `<r>` rich-text run) to `out`, in document order.

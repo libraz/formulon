@@ -100,9 +100,9 @@ bool all_criteria_match(const std::vector<std::vector<Value>>& criteria_cells,
   return true;
 }
 
-bool resolve_optional_value_range(const parser::AstNode& arg, std::uint32_t criteria_rows,
-                                  std::uint32_t criteria_cols, Arena& arena, const FunctionRegistry& registry,
-                                  const EvalContext& ctx, std::vector<Value>* out_cells, Value* out_err_value) {
+bool resolve_optional_value_range(const parser::AstNode& arg, std::uint32_t criteria_rows, std::uint32_t criteria_cols,
+                                  Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                                  std::vector<Value>* out_cells, Value* out_err_value) {
   // Single-cell Ref value ranges get extended to the criteria range's shape,
   // anchored at the Ref. LET-binding passthrough mirrors `resolve_range_arg`'s
   // NameRef handling so `=LET(b, B1, SUMIF(A1:A3,"x",b))` extends identically

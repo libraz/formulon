@@ -1236,45 +1236,44 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
     std::vector<std::size_t> stack_row_leaves;  // current path's leaf indices
     std::vector<std::vector<Value>>& subtotals = result.subtotals;
 
-    walk_subtotal_tree(row_tree, row_levels, table, stack_row_leaves,
-                       [&](const std::vector<std::string>& labels, std::size_t depth, std::size_t collected_start,
-                           const std::vector<std::size_t>& leaves) {
-                         // Aggregate over all surviving records whose row-leaf
-                         // index is in [collected_start .. leaves.size()).
-                         std::vector<Value> row_values(data_field_count, Value::blank());
-                         std::vector<std::vector<Value>> col_values(
-                             col_leaf_count, std::vector<Value>(data_field_count, Value::blank()));
-                         for (std::size_t df_idx = 0; df_idx < data_field_count; ++df_idx) {
-                           const PivotDataField& df = table.data_fields()[df_idx];
-                           std::vector<Value> column;
-                           std::vector<std::vector<Value>> columns_by_col(col_leaf_count);
-                           for (std::size_t leaf_idx_iter = collected_start; leaf_idx_iter < leaves.size();
-                                ++leaf_idx_iter) {
-                             const std::size_t leaf_idx = leaves[leaf_idx_iter];
-                             for (std::size_t c = 0; c < col_leaf_count; ++c) {
-                               for (std::size_t rec_idx : buckets[leaf_idx][c]) {
-                                 Value v = cell_value(cache, cache.records()[rec_idx], df.field_index);
-                                 column.push_back(v);
-                                 columns_by_col[c].push_back(v);
-                               }
-                             }
-                           }
-                           row_values[df_idx] = reify(apply_aggregation(df.aggregation, column), result);
-                           for (std::size_t c = 0; c < col_leaf_count; ++c) {
-                             col_values[c][df_idx] =
-                                 reify(apply_aggregation(df.aggregation, columns_by_col[c]), result);
-                           }
-                         }
-                         RowSubtotal subtotal;
-                         subtotal.labels = labels;
-                         subtotal.depth = static_cast<std::uint32_t>(depth);
-                         subtotal.values = row_values;
-                         subtotal.col_values = std::move(col_values);
-                         row_subtotal_leaf_sets.emplace_back(
-                             leaves.begin() + static_cast<std::ptrdiff_t>(collected_start), leaves.end());
-                         result.row_subtotals.push_back(std::move(subtotal));
-                         subtotals.push_back(std::move(row_values));
-                       });
+    walk_subtotal_tree(
+        row_tree, row_levels, table, stack_row_leaves,
+        [&](const std::vector<std::string>& labels, std::size_t depth, std::size_t collected_start,
+            const std::vector<std::size_t>& leaves) {
+          // Aggregate over all surviving records whose row-leaf
+          // index is in [collected_start .. leaves.size()).
+          std::vector<Value> row_values(data_field_count, Value::blank());
+          std::vector<std::vector<Value>> col_values(col_leaf_count,
+                                                     std::vector<Value>(data_field_count, Value::blank()));
+          for (std::size_t df_idx = 0; df_idx < data_field_count; ++df_idx) {
+            const PivotDataField& df = table.data_fields()[df_idx];
+            std::vector<Value> column;
+            std::vector<std::vector<Value>> columns_by_col(col_leaf_count);
+            for (std::size_t leaf_idx_iter = collected_start; leaf_idx_iter < leaves.size(); ++leaf_idx_iter) {
+              const std::size_t leaf_idx = leaves[leaf_idx_iter];
+              for (std::size_t c = 0; c < col_leaf_count; ++c) {
+                for (std::size_t rec_idx : buckets[leaf_idx][c]) {
+                  Value v = cell_value(cache, cache.records()[rec_idx], df.field_index);
+                  column.push_back(v);
+                  columns_by_col[c].push_back(v);
+                }
+              }
+            }
+            row_values[df_idx] = reify(apply_aggregation(df.aggregation, column), result);
+            for (std::size_t c = 0; c < col_leaf_count; ++c) {
+              col_values[c][df_idx] = reify(apply_aggregation(df.aggregation, columns_by_col[c]), result);
+            }
+          }
+          RowSubtotal subtotal;
+          subtotal.labels = labels;
+          subtotal.depth = static_cast<std::uint32_t>(depth);
+          subtotal.values = row_values;
+          subtotal.col_values = std::move(col_values);
+          row_subtotal_leaf_sets.emplace_back(leaves.begin() + static_cast<std::ptrdiff_t>(collected_start),
+                                              leaves.end());
+          result.row_subtotals.push_back(std::move(subtotal));
+          subtotals.push_back(std::move(row_values));
+        });
   }
 
   // 5b. Column-direction subtotals. The shape mirrors row_subtotals but each
@@ -1375,7 +1374,8 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
       if (n == 0) {
         continue;
       }
-      const auto keep_or = build_value_filter_keep(f, score_row_axis(result, n, col_levels.empty() ? 1u : col_leaf_count));
+      const auto keep_or =
+          build_value_filter_keep(f, score_row_axis(result, n, col_levels.empty() ? 1u : col_leaf_count));
       if (!keep_or) {
         continue;
       }

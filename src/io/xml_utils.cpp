@@ -11,9 +11,13 @@
 #include <limits>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 #include "io/xml_escape.h"
 #include "pugixml.hpp"
+#include "utils/error.h"
+#include "utils/expected.h"
 
 namespace formulon {
 namespace io {
@@ -72,6 +76,34 @@ std::int32_t parse_xml_i32_attr(const pugi::xml_attribute& attr, std::int32_t de
     return default_value;
   }
   return static_cast<std::int32_t>(parsed);
+}
+
+bool parse_xml_bool(std::string_view value) {
+  return value == "1" || value == "true";
+}
+
+bool parse_xml_bool_attr(const pugi::xml_attribute& attr) {
+  if (!attr) {
+    return false;
+  }
+  return parse_xml_bool(attr.value());
+}
+
+Expected<void, Error> load_xml_buffer(pugi::xml_document& doc, const std::vector<std::uint8_t>& bytes,
+                                      std::string_view reader_module, std::string_view part_name) {
+  pugi::xml_parse_result parse = doc.load_buffer(bytes.data(), bytes.size(), pugi::parse_default, pugi::encoding_utf8);
+  if (!parse) {
+    std::string ctx("context=");
+    ctx.append(reader_module);
+    ctx.append(" part=");
+    ctx.append(part_name);
+    ctx.append(" desc=");
+    ctx.append(parse.description());
+    std::string msg(part_name);
+    msg.append(": pugixml parse failed");
+    return make_error(FormulonErrorCode::kIoXmlParse, std::move(msg), std::move(ctx));
+  }
+  return Expected<void, Error>::Ok();
 }
 
 std::size_t append_rich_text(const pugi::xml_node& node, std::string& out) {

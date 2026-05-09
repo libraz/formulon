@@ -13,6 +13,7 @@
 #define FORMULON_EVAL_BUILTINS_STATS_STATS_HELPERS_H_
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -118,6 +119,28 @@ inline Value finite_number_result(double value) {
 // Helper: compute `(mean, sum_of_squared_deviations)` over a numeric slice.
 // Empty input returns `{0, 0}` which the callers treat as a DIV/0! case.
 MeanSS compute_mean_ss(const std::vector<double>& xs);
+
+// Result of `centered_and_scaled`: holds the numeric slice + the
+// pre-computed mean / scale used by SKEW / SKEW.P / KURT after the
+// sample-size and variance-zero guards have already been applied.
+struct CenteredScaled {
+  std::vector<double> xs;
+  double n;  // xs.size() as double
+  double mean;
+  double scale;  // sqrt(variance), where variance = ss / (n - sample_offset)
+};
+
+// Collects the numeric arguments via `collect_numerics`, applies the
+// minimum-sample-size guard (`xs.size() < min_n` -> `#DIV/0!`),
+// computes the mean and sum-of-squared-deviations via `compute_mean_ss`,
+// derives variance with denominator `(n - sample_offset)` (1.0 for sample
+// variance, 0.0 for population variance), guards against zero variance
+// (also `#DIV/0!`), and returns the {xs, n, mean, sqrt(variance)} tuple.
+//
+// Both guard failures return `ErrorCode::Div0`. Callers convert that to
+// `Value::error(...)` and return.
+Expected<CenteredScaled, ErrorCode> centered_and_scaled(const Value* args, std::uint32_t arity, std::size_t min_n,
+                                                        double sample_offset);
 
 // Arithmetic-mean helper used by DEVSQ / AVEDEV / SKEW / KURT.
 double mean_of(const std::vector<double>& xs) noexcept;

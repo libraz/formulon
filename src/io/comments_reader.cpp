@@ -18,18 +18,14 @@
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 
 namespace formulon::io {
 
 Expected<std::vector<CellComment>, Error> read_comments(const std::vector<std::uint8_t>& bytes) {
   std::vector<CellComment> out;
   pugi::xml_document doc;
-  pugi::xml_parse_result parse = doc.load_buffer(bytes.data(), bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-  if (!parse) {
-    std::string ctx("context=comments_reader desc=");
-    ctx.append(parse.description());
-    return make_error(FormulonErrorCode::kIoXmlParse, "comments part: pugixml parse failed", std::move(ctx));
-  }
+  RETURN_IF_ERROR(load_xml_buffer(doc, bytes, "comments_reader", "comments part"));
   pugi::xml_node root = doc.child("comments");
   if (!root) {
     return make_error(FormulonErrorCode::kIoSheetCorrupt, "comments part: missing <comments> root",

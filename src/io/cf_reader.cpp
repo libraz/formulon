@@ -22,14 +22,6 @@
 namespace formulon::io {
 namespace {
 
-bool ParseBoolAttr(const pugi::xml_attribute& attr) {
-  if (!attr) {
-    return false;
-  }
-  const std::string_view text = attr.value();
-  return text == "1" || text == "true";
-}
-
 cf::RuleType ParseRuleType(std::string_view text) {
   if (text == "expression")
     return cf::RuleType::Expression;
@@ -359,7 +351,7 @@ void ReadDataBar(const pugi::xml_node& bar, cf::DataBarSpec* out) {
   }
   const pugi::xml_attribute show_value = bar.attribute("showValue");
   if (show_value) {
-    out->show_value = ParseBoolAttr(show_value);
+    out->show_value = parse_xml_bool_attr(show_value);
   }
 }
 
@@ -367,15 +359,15 @@ void ReadIconSet(const pugi::xml_node& iset, cf::IconSetSpec* out) {
   out->name = ParseIconSetName(iset.attribute("iconSet").value());
   const pugi::xml_attribute reverse = iset.attribute("reverse");
   if (reverse) {
-    out->reverse = ParseBoolAttr(reverse);
+    out->reverse = parse_xml_bool_attr(reverse);
   }
   const pugi::xml_attribute show_value = iset.attribute("showValue");
   if (show_value) {
-    out->show_value = ParseBoolAttr(show_value);
+    out->show_value = parse_xml_bool_attr(show_value);
   }
   const pugi::xml_attribute percent = iset.attribute("percent");
   if (percent) {
-    out->percent = ParseBoolAttr(percent);
+    out->percent = parse_xml_bool_attr(percent);
   }
   for (pugi::xml_node cfvo = iset.child("cfvo"); cfvo; cfvo = cfvo.next_sibling("cfvo")) {
     out->thresholds.push_back(ReadCfvo(cfvo));
@@ -387,7 +379,7 @@ cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
   const pugi::xml_attribute type_attr = rule.attribute("type");
   out.type = ParseRuleType(type_attr.value());
   out.priority = parse_xml_i32_attr(rule.attribute("priority"), 1);
-  out.stop_if_true = ParseBoolAttr(rule.attribute("stopIfTrue"));
+  out.stop_if_true = parse_xml_bool_attr(rule.attribute("stopIfTrue"));
   const pugi::xml_attribute dxf_attr = rule.attribute("dxfId");
   if (dxf_attr) {
     out.dxf_id = static_cast<std::uint32_t>(parse_xml_i32_attr(dxf_attr, 0));
@@ -405,13 +397,13 @@ cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
   }
   if (out.type == cf::RuleType::Top10) {
     out.rank = parse_xml_i32_attr(rule.attribute("rank"), 10);
-    out.percent = ParseBoolAttr(rule.attribute("percent"));
-    out.bottom = ParseBoolAttr(rule.attribute("bottom"));
+    out.percent = parse_xml_bool_attr(rule.attribute("percent"));
+    out.bottom = parse_xml_bool_attr(rule.attribute("bottom"));
   }
   if (out.type == cf::RuleType::AboveAverage) {
     const pugi::xml_attribute above_attr = rule.attribute("aboveAverage");
-    out.above_average = above_attr ? ParseBoolAttr(above_attr) : true;
-    out.equal_average = ParseBoolAttr(rule.attribute("equalAverage"));
+    out.above_average = above_attr ? parse_xml_bool_attr(above_attr) : true;
+    out.equal_average = parse_xml_bool_attr(rule.attribute("equalAverage"));
     const pugi::xml_attribute std_dev_attr = rule.attribute("stdDev");
     if (std_dev_attr) {
       out.std_dev = std::strtod(std_dev_attr.value(), nullptr);
@@ -477,7 +469,7 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
     }
     cf::ConditionalFormat cfmt;
     cfmt.sqref = std::move(ranges_or.value());
-    cfmt.pivot_scope = ParseBoolAttr(block.attribute("pivot"));
+    cfmt.pivot_scope = parse_xml_bool_attr(block.attribute("pivot"));
     for (pugi::xml_node rule = block.child("cfRule"); rule; rule = rule.next_sibling("cfRule")) {
       cfmt.rules.push_back(ReadCfRule(rule));
     }

@@ -582,8 +582,8 @@ void ShiftRangeList(std::vector<MergeRange>& ranges, std::uint32_t index, std::u
 }
 
 void ShiftSheetMetadata(std::vector<Hyperlink>& hyperlinks, std::vector<CellComment>& comments,
-                        std::vector<MergeRange>& merges, std::vector<DataValidation>& validations,
-                        std::uint32_t index, std::uint32_t count, bool is_delete, bool row_axis) {
+                        std::vector<MergeRange>& merges, std::vector<DataValidation>& validations, std::uint32_t index,
+                        std::uint32_t count, bool is_delete, bool row_axis) {
   if (row_axis) {
     ShiftRowAnchored(hyperlinks, index, count, is_delete);
     ShiftRowAnchored(comments, index, count, is_delete);

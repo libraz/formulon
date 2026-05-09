@@ -3,21 +3,15 @@
 // Implementation of the hypothesis-test / probability lazy impls: T.TEST
 // (TTEST), F.TEST (FTEST), CHISQ.TEST (CHITEST), Z.TEST (ZTEST), PROB.
 //
-// The argument-resolution machinery mirrors `eval/regression_lazy.cpp`:
-// a `ResolvedArray` struct captures `(rows, cols, cells)` for a single
-// array argument, `resolve_array_arg` walks a `Ref` / `RangeOp` /
-// `ArrayLiteral` / scalar subtree into that struct (remapping the
-// non-array rejection to `#N/A` to match Excel's hypothesis-test
-// conventions), and `collect_numeric_pairs` pairs two resolved arrays
-// for the shape-matched paths (T.TEST type==1, CHISQ.TEST, PROB). The
-// independent-collection paths (T.TEST types 2 and 3, F.TEST, Z.TEST)
+// The argument-resolution machinery is shared with `eval/regression_lazy.cpp`
+// via `resolve_array_arg_na` (in `eval/range_args.{h,cpp}`), which walks a
+// `Ref` / `RangeOp` / `ArrayLiteral` / scalar subtree into a `RangeResult`
+// (remapping the non-array rejection to `#N/A` to match Excel's
+// hypothesis-test conventions). `collect_numeric_pairs` pairs two resolved
+// arrays for the shape-matched paths (T.TEST type==1, CHISQ.TEST, PROB);
+// the independent-collection paths (T.TEST types 2 and 3, F.TEST, Z.TEST)
 // use `collect_single_array_numeric`, which does NOT shape-match and
 // silently drops non-numeric cells from whichever array it is handed.
-//
-// The helper duplication vs. `regression_lazy.cpp` is intentional: each
-// TU keeps its own in-`namespace`-anonymous copy so neither pays for the
-// other's specialisation, and promoting the helpers to a shared module is
-// deferred until a third family needs them.
 //
 // Distribution primitives come from `eval/stats/special_functions.h`
 // (`regularized_incomplete_beta`, `q_gamma`) and from `<cmath>`
@@ -44,67 +38,6 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// One resolved array argument: flat row-major cells plus the rectangle
-// shape used by the shape-match check. Mirrors the struct of the same
-// name in `regression_lazy.cpp`; kept in-TU to avoid a shared header.
-struct ResolvedArray {
-  std::uint32_t rows;
-  std::uint32_t cols;
-  std::vector<Value> cells;
-};
-
-// Resolves a single array argument. Accepts `Ref`, `RangeOp`, and
-// `ArrayLiteral`; any other shape (a scalar literal, a function call,
-// arithmetic) yields `#N/A` because Excel's hypothesis-test family uses
-// `#N/A` for shape errors rather than the `#VALUE!` used by
-// SUMPRODUCT. A pre-evaluated error subtree propagates with its real
-// code. Returns `true` on success; on failure writes the Excel error
-// into `*out_err` and returns `false`.
-bool resolve_array_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
-                       const EvalContext& ctx, ResolvedArray* out, Value* out_err) {
-  const parser::NodeKind k = arg_node.kind();
-  if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
-    auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
-    if (!resolved) {
-      // `resolve_range_arg` reports `#VALUE!` for non-Ref / non-RangeOp
-      // shapes and `#REF!` for expansion failures. Remap the shape
-      // rejection to `#N/A` to match Excel's hypothesis family.
-      const ErrorCode err_code = resolved.error();
-      *out_err = Value::error(err_code == ErrorCode::Value ? ErrorCode::NA : err_code);
-      return false;
-    }
-    auto& rr = resolved.value();
-    out->rows = rr.rows;
-    out->cols = rr.cols;
-    out->cells = std::move(rr.cells);
-    return true;
-  }
-  if (k == parser::NodeKind::ArrayLiteral) {
-    out->rows = arg_node.as_array_rows();
-    out->cols = arg_node.as_array_cols();
-    const std::size_t total = static_cast<std::size_t>(out->rows) * out->cols;
-    out->cells.clear();
-    out->cells.reserve(total);
-    for (std::uint32_t r = 0; r < out->rows; ++r) {
-      for (std::uint32_t c = 0; c < out->cols; ++c) {
-        Value v = eval_node(arg_node.as_array_element(r, c), arena, registry, ctx);
-        out->cells.push_back(v);
-      }
-    }
-    return true;
-  }
-  // A scalar / call / arithmetic subtree is not a valid array here.
-  // Evaluate it first so an error in the subtree propagates with its
-  // real code; otherwise reject with `#N/A`.
-  const Value v = eval_node(arg_node, arena, registry, ctx);
-  if (v.is_error()) {
-    *out_err = v;
-    return false;
-  }
-  *out_err = Value::error(ErrorCode::NA);
-  return false;
-}
-
 // Paired (x, y) numeric samples distilled from two resolved arrays.
 struct NumericPairs {
   std::vector<double> x;
@@ -122,15 +55,16 @@ struct NumericPairs {
 std::variant<Value, NumericPairs> collect_numeric_pairs(const parser::AstNode& a_arg, const parser::AstNode& b_arg,
                                                         Arena& arena, const FunctionRegistry& registry,
                                                         const EvalContext& ctx) {
-  ResolvedArray a{};
-  Value err = Value::blank();
-  if (!resolve_array_arg(a_arg, arena, registry, ctx, &a, &err)) {
-    return err;
+  auto a_resolved = resolve_array_arg_na(a_arg, arena, registry, ctx);
+  if (!a_resolved) {
+    return Value{Value::error(a_resolved.error())};
   }
-  ResolvedArray b{};
-  if (!resolve_array_arg(b_arg, arena, registry, ctx, &b, &err)) {
-    return err;
+  RangeResult a = std::move(a_resolved.value());
+  auto b_resolved = resolve_array_arg_na(b_arg, arena, registry, ctx);
+  if (!b_resolved) {
+    return Value{Value::error(b_resolved.error())};
   }
+  RangeResult b = std::move(b_resolved.value());
   if (a.rows != b.rows || a.cols != b.cols) {
     return Value{Value::error(ErrorCode::NA)};
   }
@@ -171,10 +105,12 @@ std::variant<Value, NumericPairs> collect_numeric_pairs(const parser::AstNode& a
 // `true` on success; `false` if `*out_err` was written.
 bool collect_single_array_numeric(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
                                   const EvalContext& ctx, std::vector<double>* out, Value* out_err) {
-  ResolvedArray r{};
-  if (!resolve_array_arg(arg_node, arena, registry, ctx, &r, out_err)) {
+  auto resolved = resolve_array_arg_na(arg_node, arena, registry, ctx);
+  if (!resolved) {
+    *out_err = Value::error(resolved.error());
     return false;
   }
+  RangeResult r = std::move(resolved.value());
   for (const Value& v : r.cells) {
     if (v.is_error()) {
       *out_err = v;
@@ -392,15 +328,16 @@ Value eval_chisq_test_lazy(const parser::AstNode& call, Arena& arena, const Func
   if (call.as_call_arity() != 2U) {
     return Value::error(ErrorCode::Value);
   }
-  ResolvedArray actual{};
-  Value err = Value::blank();
-  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, &actual, &err)) {
-    return err;
+  auto actual_resolved = resolve_array_arg_na(call.as_call_arg(0), arena, registry, ctx);
+  if (!actual_resolved) {
+    return Value::error(actual_resolved.error());
   }
-  ResolvedArray expected{};
-  if (!resolve_array_arg(call.as_call_arg(1), arena, registry, ctx, &expected, &err)) {
-    return err;
+  RangeResult actual = std::move(actual_resolved.value());
+  auto expected_resolved = resolve_array_arg_na(call.as_call_arg(1), arena, registry, ctx);
+  if (!expected_resolved) {
+    return Value::error(expected_resolved.error());
   }
+  RangeResult expected = std::move(expected_resolved.value());
   if (actual.rows != expected.rows || actual.cols != expected.cols) {
     return Value::error(ErrorCode::NA);
   }

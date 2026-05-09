@@ -24,6 +24,7 @@
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 
 namespace formulon {
 namespace io {
@@ -50,13 +51,7 @@ void AppendPhoneticText(const pugi::xml_node& si_node, std::string& out) {
 Expected<SharedStringTable, Error> read_shared_strings(const std::vector<std::uint8_t>& sst_bytes,
                                                        std::deque<std::string>& text_storage) {
   pugi::xml_document doc;
-  pugi::xml_parse_result parse =
-      doc.load_buffer(sst_bytes.data(), sst_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-  if (!parse) {
-    std::string ctx("context=sst_reader part=xl/sharedStrings.xml desc=");
-    ctx.append(parse.description());
-    return make_error(FormulonErrorCode::kIoXmlParse, "sharedStrings.xml: pugixml parse failed", std::move(ctx));
-  }
+  RETURN_IF_ERROR(load_xml_buffer(doc, sst_bytes, "sst_reader", "sharedStrings.xml"));
   pugi::xml_node root = doc.child("sst");
   if (!root) {
     return make_error(FormulonErrorCode::kIoXmlParse, "sharedStrings.xml: missing <sst> root",

@@ -247,9 +247,8 @@ double bracket_rate_root(EvalFn eval_at_rate, PolishFn polish_midpoint) noexcept
 }
 
 double irr_bracket(const std::vector<double>& flows) noexcept {
-  return bracket_rate_root(
-      [&](double rate) noexcept { return irr_npv(flows, rate); },
-      [&](double guess) noexcept { return irr_newton(flows, guess); });
+  return bracket_rate_root([&](double rate) noexcept { return irr_npv(flows, rate); },
+                           [&](double guess) noexcept { return irr_newton(flows, guess); });
 }
 
 // Closed-form MIRR helper. `flows` must already have been validated to
@@ -662,9 +661,8 @@ double xirr_newton(const std::vector<double>& values, const std::vector<double>&
 }
 
 double xirr_bracket(const std::vector<double>& values, const std::vector<double>& dates) noexcept {
-  return bracket_rate_root(
-      [&](double rate) noexcept { return xnpv_sum(values, dates, rate); },
-      [&](double guess) noexcept { return xirr_newton(values, dates, guess); });
+  return bracket_rate_root([&](double rate) noexcept { return xnpv_sum(values, dates, rate); },
+                           [&](double guess) noexcept { return xirr_newton(values, dates, guess); });
 }
 
 }  // namespace

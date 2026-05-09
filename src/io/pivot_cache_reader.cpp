@@ -15,10 +15,12 @@
 #include <utility>
 #include <vector>
 
+#include "io/xml_utils.h"
 #include "pivot/pivot_cache.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon::io {
@@ -174,14 +176,7 @@ bool IsTypedValueElement(std::string_view name) {
 
 Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector<std::uint8_t>& definition_bytes) {
   pugi::xml_document doc;
-  pugi::xml_parse_result parse =
-      doc.load_buffer(definition_bytes.data(), definition_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-  if (!parse) {
-    std::string ctx("context=pivot_cache_reader desc=");
-    ctx.append(parse.description());
-    return make_error(FormulonErrorCode::kIoXmlParse, "pivotCacheDefinition*.xml: pugixml parse failed",
-                      std::move(ctx));
-  }
+  RETURN_IF_ERROR(load_xml_buffer(doc, definition_bytes, "pivot_cache_reader", "pivotCacheDefinition*.xml"));
   pugi::xml_node root = doc.child("pivotCacheDefinition");
   if (!root) {
     return make_error(FormulonErrorCode::kIoContentTypeInvalid,
@@ -242,13 +237,7 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
 Expected<void, Error> read_pivot_cache_records(const std::vector<std::uint8_t>& records_bytes,
                                                pivot::PivotCache& cache) {
   pugi::xml_document doc;
-  pugi::xml_parse_result parse =
-      doc.load_buffer(records_bytes.data(), records_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-  if (!parse) {
-    std::string ctx("context=pivot_cache_reader desc=");
-    ctx.append(parse.description());
-    return make_error(FormulonErrorCode::kIoXmlParse, "pivotCacheRecords*.xml: pugixml parse failed", std::move(ctx));
-  }
+  RETURN_IF_ERROR(load_xml_buffer(doc, records_bytes, "pivot_cache_reader", "pivotCacheRecords*.xml"));
   pugi::xml_node root = doc.child("pivotCacheRecords");
   if (!root) {
     return make_error(FormulonErrorCode::kIoContentTypeInvalid,

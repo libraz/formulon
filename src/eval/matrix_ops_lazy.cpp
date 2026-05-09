@@ -23,6 +23,7 @@
 
 #include "eval/coerce.h"
 #include "eval/lazy_impls.h"
+#include "eval/range_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -33,24 +34,6 @@
 namespace formulon {
 namespace eval {
 namespace {
-
-/// Materialises a single array argument as an `ArrayValue` (scalars wrap to
-/// 1x1). Returns `true` on success; on failure writes the propagating error
-/// into `out_err`. The returned `ArrayValue` borrows from the caller arena.
-bool resolve_matrix_arg(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
-                        const EvalContext& ctx, const ArrayValue** out, Value* out_err) {
-  const Value v = eval_node_as_array(arg, arena, registry, ctx);
-  if (v.is_error()) {
-    *out_err = v;
-    return false;
-  }
-  if (!v.is_array()) {
-    *out_err = Value::error(ErrorCode::Value);
-    return false;
-  }
-  *out = v.as_array();
-  return true;
-}
 
 /// Per-cell numeric coercion. MMULT / MDETERM / MINVERSE require every
 /// matrix cell to be a `Number` (Booleans coerce to 1/0 via the standard
@@ -131,10 +114,10 @@ Value eval_mmult_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   const ArrayValue* a = nullptr;
   const ArrayValue* b = nullptr;
   Value err = Value::blank();
-  if (!resolve_matrix_arg(call.as_call_arg(0), arena, registry, ctx, &a, &err)) {
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &a, &err)) {
     return err;
   }
-  if (!resolve_matrix_arg(call.as_call_arg(1), arena, registry, ctx, &b, &err)) {
+  if (!resolve_array_value(call.as_call_arg(1), arena, registry, ctx, &b, &err)) {
     return err;
   }
 
@@ -244,7 +227,7 @@ Value eval_mdeterm_lazy(const parser::AstNode& call, Arena& arena, const Functio
   }
   const ArrayValue* a = nullptr;
   Value err = Value::blank();
-  if (!resolve_matrix_arg(call.as_call_arg(0), arena, registry, ctx, &a, &err)) {
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &a, &err)) {
     return err;
   }
   if (a->rows != a->cols) {
@@ -287,7 +270,7 @@ Value eval_minverse_lazy(const parser::AstNode& call, Arena& arena, const Functi
   }
   const ArrayValue* a = nullptr;
   Value err = Value::blank();
-  if (!resolve_matrix_arg(call.as_call_arg(0), arena, registry, ctx, &a, &err)) {
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &a, &err)) {
     return err;
   }
   if (a->rows != a->cols) {

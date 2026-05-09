@@ -15,19 +15,14 @@
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 
 namespace formulon {
 namespace io {
 
 Expected<TableMetadata, Error> read_table(const std::vector<std::uint8_t>& table_bytes, std::size_t sheet_index) {
   pugi::xml_document doc;
-  pugi::xml_parse_result parse =
-      doc.load_buffer(table_bytes.data(), table_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-  if (!parse) {
-    std::string ctx("context=tables_reader desc=");
-    ctx.append(parse.description());
-    return make_error(FormulonErrorCode::kIoXmlParse, "table*.xml: pugixml parse failed", std::move(ctx));
-  }
+  RETURN_IF_ERROR(load_xml_buffer(doc, table_bytes, "tables_reader", "table*.xml"));
   pugi::xml_node root = doc.child("table");
   if (!root) {
     return make_error(FormulonErrorCode::kIoContentTypeInvalid, "table*.xml: missing <table> root",

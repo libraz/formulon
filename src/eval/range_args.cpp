@@ -18,6 +18,7 @@
 #include "eval/name_env_resolve.h"
 #include "eval/range_expanders.h"
 #include "eval/range_resolvers.h"
+#include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
@@ -325,6 +326,58 @@ Expected<RangeResult, ErrorCode> resolve_range_arg(const parser::AstNode& arg_no
     return err;
   }
   return result;
+}
+
+bool resolve_array_value(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx, const ArrayValue** out, Value* out_err) {
+  const Value v = eval_node_as_array(arg, arena, registry, ctx);
+  if (v.is_error()) {
+    *out_err = v;
+    return false;
+  }
+  if (!v.is_array()) {
+    *out_err = Value::error(ErrorCode::Value);
+    return false;
+  }
+  *out = v.as_array();
+  return true;
+}
+
+Expected<RangeResult, ErrorCode> resolve_array_arg_na(const parser::AstNode& arg_node, Arena& arena,
+                                                      const FunctionRegistry& registry, const EvalContext& ctx) {
+  const parser::NodeKind k = arg_node.kind();
+  if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
+    auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
+    if (!resolved) {
+      // `resolve_range_arg` reports `#VALUE!` for non-Ref / non-RangeOp
+      // shapes and `#REF!` for expansion failures. The regression and
+      // hypothesis-test families use `#N/A` for shape errors, so remap
+      // the shape-rejection case while letting `#REF!` pass through.
+      const ErrorCode err_code = resolved.error();
+      return err_code == ErrorCode::Value ? ErrorCode::NA : err_code;
+    }
+    return std::move(resolved.value());
+  }
+  if (k == parser::NodeKind::ArrayLiteral) {
+    RangeResult out;
+    out.rows = arg_node.as_array_rows();
+    out.cols = arg_node.as_array_cols();
+    const std::size_t total = static_cast<std::size_t>(out.rows) * out.cols;
+    out.cells.reserve(total);
+    for (std::uint32_t r = 0; r < out.rows; ++r) {
+      for (std::uint32_t c = 0; c < out.cols; ++c) {
+        out.cells.push_back(eval_node(arg_node.as_array_element(r, c), arena, registry, ctx));
+      }
+    }
+    return out;
+  }
+  // Scalar / arithmetic / Call subtree. Evaluate so any pre-existing
+  // error propagates with its real code; otherwise reject with `#N/A`.
+  const Value v = eval_node(arg_node, arena, registry, ctx);
+  if (v.is_error()) {
+    return v.as_error();
+  }
+  return ErrorCode::NA;
 }
 
 }  // namespace eval

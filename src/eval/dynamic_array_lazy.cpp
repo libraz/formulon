@@ -12,6 +12,7 @@
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/range_args.h"
 #include "eval/range_resolvers.h"
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
@@ -27,21 +28,6 @@ namespace formulon {
 namespace eval {
 
 namespace {
-
-bool resolve_array_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                       const EvalContext& ctx, const ArrayValue*& out, Value& error_out) {
-  const Value v = eval_node_as_array(node, arena, registry, ctx);
-  if (v.is_error()) {
-    error_out = v;
-    return false;
-  }
-  if (!v.is_array()) {
-    error_out = Value::error(ErrorCode::Value);
-    return false;
-  }
-  out = v.as_array();
-  return true;
-}
 
 bool eval_truncated_number_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                                const EvalContext& ctx, double& out, Value& error_out) {
@@ -121,8 +107,8 @@ Value eval_filter_lazy(const parser::AstNode& call, Arena& arena, const Function
   const ArrayValue* array = nullptr;
   const ArrayValue* include = nullptr;
   Value err = Value::error(ErrorCode::Value);
-  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err) ||
-      !resolve_array_arg(call.as_call_arg(1), arena, registry, ctx, include, err)) {
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &array, &err) ||
+      !resolve_array_value(call.as_call_arg(1), arena, registry, ctx, &include, &err)) {
     return err;
   }
 
@@ -242,7 +228,7 @@ Value eval_unique_lazy(const parser::AstNode& call, Arena& arena, const Function
   // (Ref / RangeOp / OFFSET / CHOOSE / IF / SpillRef) keep their 2D shape.
   const ArrayValue* array = nullptr;
   Value err = Value::error(ErrorCode::Value);
-  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err)) {
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &array, &err)) {
     return err;
   }
   if (array->rows == 0U || array->cols == 0U) {
@@ -453,7 +439,7 @@ Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   // their 2D shape (matches FILTER / UNIQUE).
   const ArrayValue* array = nullptr;
   Value err = Value::error(ErrorCode::Value);
-  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err)) {
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &array, &err)) {
     return err;
   }
   if (array->rows == 0U || array->cols == 0U) {
@@ -544,7 +530,7 @@ Value eval_sortby_lazy(const parser::AstNode& call, Arena& arena, const Function
 
   const ArrayValue* array = nullptr;
   Value err = Value::error(ErrorCode::Value);
-  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err)) {
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &array, &err)) {
     return err;
   }
   if (array->rows == 0U || array->cols == 0U) {
@@ -649,7 +635,7 @@ bool resolve_stack_args(const parser::AstNode& call, std::uint32_t arity, Arena&
   out.reserve(arity);
   for (std::uint32_t i = 0; i < arity; ++i) {
     const ArrayValue* array = nullptr;
-    if (!resolve_array_arg(call.as_call_arg(i), arena, registry, ctx, array, error_out)) {
+    if (!resolve_array_value(call.as_call_arg(i), arena, registry, ctx, &array, &error_out)) {
       return false;
     }
     out.push_back(array);
@@ -797,7 +783,7 @@ Value eval_choosecols_lazy(const parser::AstNode& call, Arena& arena, const Func
 
   const ArrayValue* array = nullptr;
   Value err = Value::error(ErrorCode::Value);
-  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err)) {
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &array, &err)) {
     return err;
   }
 
@@ -830,7 +816,7 @@ Value eval_chooserows_lazy(const parser::AstNode& call, Arena& arena, const Func
 
   const ArrayValue* array = nullptr;
   Value err = Value::error(ErrorCode::Value);
-  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err)) {
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &array, &err)) {
     return err;
   }
 
@@ -951,7 +937,7 @@ Value eval_take_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
 
   const ArrayValue* array = nullptr;
   Value err = Value::error(ErrorCode::Value);
-  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err)) {
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &array, &err)) {
     return err;
   }
 
@@ -986,7 +972,7 @@ Value eval_drop_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
 
   const ArrayValue* array = nullptr;
   Value err = Value::error(ErrorCode::Value);
-  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err)) {
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &array, &err)) {
     return err;
   }
 
@@ -1021,7 +1007,7 @@ Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const Function
 
   const ArrayValue* array = nullptr;
   Value err = Value::error(ErrorCode::Value);
-  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err)) {
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &array, &err)) {
     return err;
   }
 
@@ -1192,7 +1178,7 @@ Value eval_tocol_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   }
   const ArrayValue* array = nullptr;
   Value err = Value::error(ErrorCode::Value);
-  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err)) {
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &array, &err)) {
     return err;
   }
 
@@ -1234,7 +1220,7 @@ Value eval_torow_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   }
   const ArrayValue* array = nullptr;
   Value err = Value::error(ErrorCode::Value);
-  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err)) {
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &array, &err)) {
     return err;
   }
 

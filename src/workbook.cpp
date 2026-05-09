@@ -787,12 +787,10 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   return Expected<void, Error>::Ok();
 }
 
-Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<Sheet>& sheets,
-                                                   eval::RecalcEngine& engine,
-                                                   std::vector<io::DefinedName>& defined_names,
-                                                   std::size_t sheet_index, parser::RowColAxis axis,
-                                                   parser::RowColEdit edit, std::uint32_t origin,
-                                                   std::uint32_t count, const char* op_name) {
+Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<Sheet>& sheets, eval::RecalcEngine& engine,
+                                                   std::vector<io::DefinedName>& defined_names, std::size_t sheet_index,
+                                                   parser::RowColAxis axis, parser::RowColEdit edit,
+                                                   std::uint32_t origin, std::uint32_t count, const char* op_name) {
   RETURN_IF_ERROR(apply_row_col_edit(wb, sheet_index, axis, origin, count, op_name));
   const std::string target_sheet_name = sheets[sheet_index].name();
   rewrite_formulas_for_row_col_edit(sheets, engine, wb, target_sheet_name, axis, edit, origin, count);

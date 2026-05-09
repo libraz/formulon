@@ -19,6 +19,7 @@
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 
 namespace formulon::io {
 namespace {
@@ -124,16 +125,6 @@ pivot::ShowValuesAs ParseShowDataAs(std::string_view text) {
   return pivot::ShowValuesAs::Normal;
 }
 
-/// Returns true iff the OOXML boolean attribute body is the literal `"1"`
-/// or `"true"`. Anything else (including missing) reads as false.
-bool ParseBoolAttr(const pugi::xml_attribute& attr) {
-  if (!attr) {
-    return false;
-  }
-  const std::string_view text = attr.value();
-  return text == "1" || text == "true";
-}
-
 /// Decodes one `<location ref="A3:D10"/>` (or single-cell `ref="A3"`)
 /// into 0-based anchor + spans. Defers cell-coordinate decoding to the
 /// shared `parse_a1` helper so the conventions match cell parsing
@@ -194,7 +185,7 @@ void ParseItems(const pugi::xml_node& items_node, pivot::PivotField* field) {
       continue;
     }
     pivot::PivotItem entry;
-    entry.visible = !ParseBoolAttr(it.attribute("h"));
+    entry.visible = !parse_xml_bool_attr(it.attribute("h"));
     field->items.push_back(std::move(entry));
   }
 }
@@ -208,7 +199,7 @@ void ParsePivotFields(const pugi::xml_node& fields_node, pivot::PivotTable* out)
     if (pugi::xml_attribute name_attr = f.attribute("name"); name_attr) {
       field.custom_name = name_attr.value();
     }
-    field.subtotal_top = ParseBoolAttr(f.attribute("subtotalTop"));
+    field.subtotal_top = parse_xml_bool_attr(f.attribute("subtotalTop"));
     if (pugi::xml_node items_node = f.child("items"); items_node) {
       ParseItems(items_node, &field);
     }
@@ -260,13 +251,7 @@ Expected<void, Error> ParseDataFields(const pugi::xml_node& parent, pivot::Pivot
 
 Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector<std::uint8_t>& definition_bytes) {
   pugi::xml_document doc;
-  pugi::xml_parse_result parse =
-      doc.load_buffer(definition_bytes.data(), definition_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-  if (!parse) {
-    std::string ctx("context=pivot_table_reader desc=");
-    ctx.append(parse.description());
-    return make_error(FormulonErrorCode::kIoXmlParse, "pivotTable*.xml: pugixml parse failed", std::move(ctx));
-  }
+  RETURN_IF_ERROR(load_xml_buffer(doc, definition_bytes, "pivot_table_reader", "pivotTable*.xml"));
   pugi::xml_node root = doc.child("pivotTableDefinition");
   if (!root) {
     return make_error(FormulonErrorCode::kIoContentTypeInvalid, "pivotTable*.xml: missing <pivotTableDefinition> root",
