@@ -296,5 +296,45 @@ TEST(PivotTableWriter, PassthroughRoundTrips) {
   EXPECT_EQ(write_pivot_table_definition(second_or.value()), written);
 }
 
+// ---------------------------------------------------------------------------
+// showDataAs / baseField / baseItem round-trip.
+// ---------------------------------------------------------------------------
+
+TEST(PivotTableWriter, ShowDataAsRoundTrips) {
+  pivot::PivotTable table;
+  table.set_name("T");
+  table.set_anchor(0U, 0U, 1U, 1U);
+  pivot::PivotField placeholder;
+  placeholder.axis = pivot::PivotAxis::Value;
+  placeholder.custom_name = "X";
+  table.mutable_fields().push_back(std::move(placeholder));
+
+  pivot::PivotDataField df;
+  df.name = "PoP";
+  df.field_index = 0U;
+  df.aggregation = pivot::Aggregation::Sum;
+  df.show_as = pivot::ShowValuesAs::PercentOfParentCol;
+  df.show_as_base_field = 2U;
+  df.show_as_base_item = pivot::kShowAsBasePrev;
+  table.mutable_data_fields().push_back(std::move(df));
+
+  const std::string xml = write_pivot_table_definition(table);
+  // Sanity: emitted attributes appear in the written bytes.
+  EXPECT_NE(xml.find("showDataAs=\"percentOfParentCol\""), std::string::npos) << "xml=" << xml;
+  EXPECT_NE(xml.find("baseField=\"2\""), std::string::npos);
+  EXPECT_NE(xml.find("baseItem=\"1048828\""), std::string::npos);
+
+  auto parsed_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(parsed_or)) << "read failed: " << parsed_or.error().message;
+  const pivot::PivotTable& parsed = parsed_or.value();
+  ASSERT_EQ(parsed.data_fields().size(), 1U);
+  const pivot::PivotDataField& got = parsed.data_fields()[0];
+  EXPECT_EQ(got.show_as, pivot::ShowValuesAs::PercentOfParentCol);
+  ASSERT_TRUE(got.show_as_base_field.has_value());
+  EXPECT_EQ(*got.show_as_base_field, 2U);
+  ASSERT_TRUE(got.show_as_base_item.has_value());
+  EXPECT_EQ(*got.show_as_base_item, pivot::kShowAsBasePrev);
+}
+
 }  // namespace
 }  // namespace formulon::io

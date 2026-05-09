@@ -105,6 +105,51 @@ pivot::Aggregation ParseAggregation(std::string_view text) {
   return pivot::Aggregation::Sum;
 }
 
+/// Maps an OOXML `showDataAs="..."` attribute body to a `ShowValuesAs`.
+/// Unknown spellings fold to `Normal` so the reader stays
+/// forward-compatible with Excel additions; the writer's inverse helper
+/// produces the same set of attribute names. The mapping for
+/// `RunningTotalInCol` uses the Excel-private `runTotalInCol` spelling
+/// since the standard OOXML schema only specifies a row-direction
+/// `runTotal`; this is documented as a known scoping in the round-trip
+/// table on the `ShowValuesAs` enum.
+pivot::ShowValuesAs ParseShowDataAs(std::string_view text) {
+  if (text == "percentOfRow") {
+    return pivot::ShowValuesAs::PercentOfRow;
+  }
+  if (text == "percentOfCol") {
+    return pivot::ShowValuesAs::PercentOfCol;
+  }
+  if (text == "percentOfTotal") {
+    return pivot::ShowValuesAs::PercentOfTotal;
+  }
+  if (text == "runTotal") {
+    return pivot::ShowValuesAs::RunningTotalInRow;
+  }
+  if (text == "runTotalInCol") {
+    return pivot::ShowValuesAs::RunningTotalInCol;
+  }
+  if (text == "index") {
+    return pivot::ShowValuesAs::Index;
+  }
+  if (text == "difference") {
+    return pivot::ShowValuesAs::DifferenceFrom;
+  }
+  if (text == "percentDiff") {
+    return pivot::ShowValuesAs::PercentDifferenceFrom;
+  }
+  if (text == "percentOfParentRow") {
+    return pivot::ShowValuesAs::PercentOfParentRow;
+  }
+  if (text == "percentOfParentCol") {
+    return pivot::ShowValuesAs::PercentOfParentCol;
+  }
+  if (text == "percentOfParent") {
+    return pivot::ShowValuesAs::PercentOfParent;
+  }
+  return pivot::ShowValuesAs::Normal;
+}
+
 /// Returns true iff the OOXML boolean attribute body is the literal `"1"`
 /// or `"true"`. Anything else (including missing) reads as false.
 bool ParseBoolAttr(const pugi::xml_attribute& attr) {
@@ -223,6 +268,15 @@ Expected<void, Error> ParseDataFields(const pugi::xml_node& parent, pivot::Pivot
     if (pugi::xml_attribute nf = df.attribute("numFmtId"); nf) {
       entry.number_format = nf.value();
     }
+    if (pugi::xml_attribute sa = df.attribute("showDataAs"); sa) {
+      entry.show_as = ParseShowDataAs(sa.as_string());
+    }
+    if (pugi::xml_attribute bf = df.attribute("baseField"); bf) {
+      entry.show_as_base_field = ParseU32Attr(bf, 0U);
+    }
+    if (pugi::xml_attribute bi = df.attribute("baseItem"); bi) {
+      entry.show_as_base_item = ParseU32Attr(bi, 0U);
+    }
     out->mutable_data_fields().push_back(std::move(entry));
   }
   return Expected<void, Error>::Ok();
@@ -287,14 +341,11 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   // between the structured tail and `</pivotTableDefinition>`, so
   // unmodelled features survive a read -> write round trip even when
   // v1.0 cannot evaluate them.
-  static const std::string_view kRecognized[] = {"location",  "pivotFields", "rowFields",
-                                                 "colFields", "dataFields",  "rowItems",
-                                                 "colItems"};
+  static const std::string_view kRecognized[] = {"location",   "pivotFields", "rowFields", "colFields",
+                                                 "dataFields", "rowItems",    "colItems"};
   struct StringXmlWriter : pugi::xml_writer {
     std::string* dst;
-    void write(const void* data, std::size_t size) override {
-      dst->append(static_cast<const char*>(data), size);
-    }
+    void write(const void* data, std::size_t size) override { dst->append(static_cast<const char*>(data), size); }
   };
   StringXmlWriter sink{};
   sink.dst = &table.mutable_raw_passthrough_xml();

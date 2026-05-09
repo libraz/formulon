@@ -323,6 +323,34 @@ TEST(PivotTableReader, UnmodelledChildrenCapturedAsPassthrough) {
   EXPECT_EQ(passthrough.find("<location"), std::string::npos);
 }
 
+TEST(PivotTableReader, ShowDataAsAttributesAreParsed) {
+  // <dataField> exercises showDataAs / baseField / baseItem decoding.
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<pivotFields count=\"2\">");
+  xml.append("  <pivotField axis=\"axisRow\" name=\"R\"/>");
+  xml.append("  <pivotField dataField=\"1\" name=\"V\"/>");
+  xml.append("</pivotFields>");
+  xml.append("<dataFields count=\"1\">");
+  xml.append(
+      "  <dataField name=\"X\" fld=\"0\" subtotal=\"sum\""
+      " showDataAs=\"difference\" baseField=\"1\" baseItem=\"3\"/>");
+  xml.append("</dataFields>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << "read failed: " << table_or.error().message;
+  const pivot::PivotTable& table = table_or.value();
+  ASSERT_EQ(table.data_fields().size(), 1U);
+  const pivot::PivotDataField& df = table.data_fields()[0];
+  EXPECT_EQ(df.show_as, pivot::ShowValuesAs::DifferenceFrom);
+  ASSERT_TRUE(df.show_as_base_field.has_value());
+  EXPECT_EQ(*df.show_as_base_field, 1U);
+  ASSERT_TRUE(df.show_as_base_item.has_value());
+  EXPECT_EQ(*df.show_as_base_item, 3U);
+}
+
 TEST(PivotTableReader, EmptyPassthroughWhenNoExtensionsPresent) {
   std::string xml(kXmlDecl);
   xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");

@@ -62,6 +62,40 @@ std::string_view AxisAttrName(pivot::PivotAxis axis) {
   return {};
 }
 
+/// Maps a `ShowValuesAs` to the OOXML `showDataAs="..."` attribute body.
+/// `Normal` returns an empty view; the caller skips emission in that
+/// case so the default attribute stays absent. Mirrors the reader's
+/// `ParseShowDataAs` table for round-trip parity.
+std::string_view ShowDataAsAttrName(pivot::ShowValuesAs s) {
+  switch (s) {
+    case pivot::ShowValuesAs::Normal:
+      return {};
+    case pivot::ShowValuesAs::PercentOfRow:
+      return "percentOfRow";
+    case pivot::ShowValuesAs::PercentOfCol:
+      return "percentOfCol";
+    case pivot::ShowValuesAs::PercentOfTotal:
+      return "percentOfTotal";
+    case pivot::ShowValuesAs::RunningTotalInRow:
+      return "runTotal";
+    case pivot::ShowValuesAs::RunningTotalInCol:
+      return "runTotalInCol";
+    case pivot::ShowValuesAs::Index:
+      return "index";
+    case pivot::ShowValuesAs::DifferenceFrom:
+      return "difference";
+    case pivot::ShowValuesAs::PercentDifferenceFrom:
+      return "percentDiff";
+    case pivot::ShowValuesAs::PercentOfParentRow:
+      return "percentOfParentRow";
+    case pivot::ShowValuesAs::PercentOfParentCol:
+      return "percentOfParentCol";
+    case pivot::ShowValuesAs::PercentOfParent:
+      return "percentOfParent";
+  }
+  return {};
+}
+
 /// Maps an `Aggregation` to the OOXML `subtotal="..."` attribute body.
 /// Mirrors the reader's `ParseAggregation` table exactly so the round
 /// trip is bit-stable.
@@ -183,6 +217,21 @@ void AppendDataFields(std::string& out, const std::vector<pivot::PivotDataField>
       // string form, but we do not enforce that here).
       out.append(" numFmtId=\"");
       AppendXmlEscaped(out, df.number_format);
+      out.append("\"");
+    }
+    if (df.show_as != pivot::ShowValuesAs::Normal) {
+      out.append(" showDataAs=\"");
+      out.append(ShowDataAsAttrName(df.show_as));
+      out.append("\"");
+    }
+    if (df.show_as_base_field.has_value()) {
+      out.append(" baseField=\"");
+      out.append(std::to_string(*df.show_as_base_field));
+      out.append("\"");
+    }
+    if (df.show_as_base_item.has_value()) {
+      out.append(" baseItem=\"");
+      out.append(std::to_string(*df.show_as_base_item));
       out.append("\"");
     }
     out.append("/>");
