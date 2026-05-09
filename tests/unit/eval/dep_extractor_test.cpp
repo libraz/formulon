@@ -7,7 +7,14 @@
 //     enumerating cells.
 //   * Detect Excel volatile functions inside any Call node.
 //   * Resolve sheet-qualified refs against the workbook.
-//   * Skip ExternalRef / NameRef / StructuredRef / Lambda body silently.
+//   * Resolve `NameRef` against the workbook's defined-name list (sheet-
+//     scoped beats workbook-scoped, case-insensitive, cycles broken
+//     silently, parser failures skipped).
+//   * Resolve `StructuredRef` against the workbook's table metadata,
+//     pinning the resulting rectangle on the table's owning sheet at
+//     extract time. Implicit-intersection (`Table[@Col]`), unknown
+//     tables, and unknown columns silently skip.
+//   * Skip ExternalRef / Lambda body silently.
 //   * Descend into LET binding initialisers and the LET body, so refs and
 //     volatile calls inside either surface as deps.
 
@@ -21,6 +28,8 @@
 
 #include "eval/dep_graph.h"
 #include "gtest/gtest.h"
+#include "io/defined_names.h"
+#include "io/tables_reader.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "utils/arena.h"
@@ -183,11 +192,12 @@ TEST(DepExtractor, WholeRowRefIsVolatileWithNoCells) {
   EXPECT_TRUE(deps.cell_deps.empty());
 }
 
-TEST(DepExtractor, NameRefIsSkipped) {
+TEST(DepExtractor, UnresolvedNameRefIsSkipped) {
   Workbook wb = Workbook::create();
   Arena arena;
-  // Bare identifier that is not a function call parses as NameRef. Defined
-  // names are out of scope at this stage; the walker skips them.
+  // Bare identifier that is not a function call parses as NameRef. With no
+  // matching defined name in the workbook the walker silently skips it,
+  // mirroring the policy used for unknown sheet qualifiers.
   const parser::AstNode* root = ParseFormula("MyName", arena);
   ASSERT_NE(root, nullptr);
   ExtractedDeps deps = extract_deps(*root, 0U, wb);
@@ -305,6 +315,403 @@ TEST(DepExtractor, LetNestedLetBodiesAreDescended) {
       CellNodeId{0U, 0U, 2U},  // C1
   };
   EXPECT_EQ(Sorted(deps.cell_deps), Sorted(expected));
+}
+
+// --- Defined-name resolution ------------------------------------------------
+
+TEST(DepExtractor, NameRefWorkbookScopedSingleCell) {
+  Workbook wb = Workbook::create();
+  // MyName -> =A1, workbook-scoped (local_sheet_id = -1).
+  std::vector<io::DefinedName> names;
+  names.push_back(io::DefinedName{"MyName", "=A1", -1, false, ""});
+  wb.set_defined_names(std::move(names));
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("MyName+1", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, /*current_sheet_id=*/0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+  ASSERT_EQ(deps.cell_deps.size(), 1u);
+  EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));
+}
+
+TEST(DepExtractor, NameRefWorkbookScopedRangeFlattens) {
+  Workbook wb = Workbook::create();
+  // MyRange -> =A1:B2, workbook-scoped. SUM(MyRange) should flatten to
+  // {A1, A2, B1, B2}.
+  std::vector<io::DefinedName> names;
+  names.push_back(io::DefinedName{"MyRange", "=A1:B2", -1, false, ""});
+  wb.set_defined_names(std::move(names));
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("SUM(MyRange)", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+  std::vector<CellNodeId> expected = {
+      CellNodeId{0U, 0U, 0U},  // A1
+      CellNodeId{0U, 0U, 1U},  // B1
+      CellNodeId{0U, 1U, 0U},  // A2
+      CellNodeId{0U, 1U, 1U},  // B2
+  };
+  EXPECT_EQ(Sorted(deps.cell_deps), Sorted(expected));
+}
+
+TEST(DepExtractor, NameRefIndirectionResolves) {
+  Workbook wb = Workbook::create();
+  // Name1 -> =Name2, Name2 -> =A1. =Name1 must surface A1 as a dep.
+  std::vector<io::DefinedName> names;
+  names.push_back(io::DefinedName{"Name1", "=Name2", -1, false, ""});
+  names.push_back(io::DefinedName{"Name2", "=A1", -1, false, ""});
+  wb.set_defined_names(std::move(names));
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("Name1", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+  ASSERT_EQ(deps.cell_deps.size(), 1u);
+  EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));
+}
+
+TEST(DepExtractor, NameRefSheetScopedBeatsWorkbookScoped) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");  // index 1
+  // Foo at workbook scope -> =A1; Foo at sheet 0 -> =B1. From sheet 0 the
+  // sheet-scoped definition wins (B1); from sheet 1 the workbook-scoped
+  // fallback applies (A1 on sheet 1, since unqualified refs resolve to the
+  // current sheet).
+  std::vector<io::DefinedName> names;
+  names.push_back(io::DefinedName{"Foo", "=A1", -1, false, ""});
+  names.push_back(io::DefinedName{"Foo", "=B1", 0, false, ""});
+  wb.set_defined_names(std::move(names));
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("Foo", arena);
+  ASSERT_NE(root, nullptr);
+
+  ExtractedDeps from_sheet0 = extract_deps(*root, /*current_sheet_id=*/0U, wb);
+  ASSERT_EQ(from_sheet0.cell_deps.size(), 1u);
+  EXPECT_EQ(from_sheet0.cell_deps[0], (CellNodeId{0U, 0U, 1U}));  // B1 on sheet 0
+
+  ExtractedDeps from_sheet1 = extract_deps(*root, /*current_sheet_id=*/1U, wb);
+  ASSERT_EQ(from_sheet1.cell_deps.size(), 1u);
+  EXPECT_EQ(from_sheet1.cell_deps[0], (CellNodeId{1U, 0U, 0U}));  // A1 on sheet 1
+}
+
+TEST(DepExtractor, NameRefCycleTerminates) {
+  Workbook wb = Workbook::create();
+  // Loop -> =Loop+1 — self-referential. The walker must not infinite-loop;
+  // policy is to break the cycle silently (no deps, no volatility flag).
+  std::vector<io::DefinedName> names;
+  names.push_back(io::DefinedName{"Loop", "=Loop+1", -1, false, ""});
+  wb.set_defined_names(std::move(names));
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("Loop", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  // The assertion that matters is that the test terminates. Cycle policy:
+  // silent skip on re-entry — no deps, not volatile.
+  EXPECT_FALSE(deps.is_volatile);
+  EXPECT_TRUE(deps.cell_deps.empty());
+}
+
+TEST(DepExtractor, NameRefMissingNameIsSilentSkip) {
+  Workbook wb = Workbook::create();
+  // No defined names registered: =MissingName must not crash and produces
+  // an empty dep set.
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("MissingName", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+  EXPECT_TRUE(deps.cell_deps.empty());
+}
+
+TEST(DepExtractor, NameRefVolatileBodyPropagates) {
+  Workbook wb = Workbook::create();
+  // RandName -> =RAND(). =RandName must propagate volatility.
+  std::vector<io::DefinedName> names;
+  names.push_back(io::DefinedName{"RandName", "=RAND()", -1, false, ""});
+  wb.set_defined_names(std::move(names));
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("RandName", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_TRUE(deps.is_volatile);
+  EXPECT_TRUE(deps.cell_deps.empty());
+}
+
+TEST(DepExtractor, NameRefCaseInsensitive) {
+  Workbook wb = Workbook::create();
+  // Defined name authored as `Foo`; the formula references `foo` (lowercase).
+  // Excel resolves names case-insensitively, so the walker must match.
+  std::vector<io::DefinedName> names;
+  names.push_back(io::DefinedName{"Foo", "=A1", -1, false, ""});
+  wb.set_defined_names(std::move(names));
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("foo+1", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+  ASSERT_EQ(deps.cell_deps.size(), 1u);
+  EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));
+}
+
+// --- Structured (table) references ------------------------------------------
+
+// Builds a `TableMetadata` with `display_name == name` and the given column
+// names. `ref` is the raw A1 footprint including header and totals rows.
+io::TableMetadata MakeTable(std::string name, std::string ref, std::size_t sheet_index, bool header_row,
+                            bool totals_row, std::vector<std::string> column_names) {
+  io::TableMetadata t;
+  t.id = 1;
+  t.name = name;
+  t.display_name = std::move(name);
+  t.ref = std::move(ref);
+  t.sheet_index = sheet_index;
+  t.header_row = header_row;
+  t.totals_row = totals_row;
+  t.columns.reserve(column_names.size());
+  std::uint32_t next_id = 1;
+  for (auto& cname : column_names) {
+    io::TableColumn col;
+    col.id = next_id++;
+    col.name = std::move(cname);
+    t.columns.push_back(std::move(col));
+  }
+  return t;
+}
+
+TEST(DepExtractor, StructuredRefDefaultModifierFlattensDataColumn) {
+  Workbook wb = Workbook::create();
+  // Sales table at A1:C10 with header, no totals, columns Region/Amount/Date.
+  // SUM(Sales[Amount]) defaults to the kData area on column 1 (Amount), so
+  // deps must be B2..B10.
+  std::vector<io::TableMetadata> tables;
+  tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/0, /*header_row=*/true, /*totals_row=*/false,
+                             {"Region", "Amount", "Date"}));
+  wb.set_tables(std::move(tables));
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("SUM(Sales[Amount])", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, /*current_sheet_id=*/0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+
+  std::vector<CellNodeId> expected;
+  for (std::uint32_t r = 1; r <= 9; ++r) {
+    expected.push_back(CellNodeId{0U, r, 1U});  // B2..B10
+  }
+  EXPECT_EQ(Sorted(deps.cell_deps), Sorted(expected));
+}
+
+TEST(DepExtractor, StructuredRefDataExcludesTotalsRow) {
+  Workbook wb = Workbook::create();
+  // Same table, now with a totals row. kData must skip both header (row 0)
+  // and totals (row 9), so deps are B2..B9.
+  std::vector<io::TableMetadata> tables;
+  tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/0, /*header_row=*/true, /*totals_row=*/true,
+                             {"Region", "Amount", "Date"}));
+  wb.set_tables(std::move(tables));
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("SUM(Sales[Amount])", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+
+  std::vector<CellNodeId> expected;
+  for (std::uint32_t r = 1; r <= 8; ++r) {
+    expected.push_back(CellNodeId{0U, r, 1U});  // B2..B9
+  }
+  EXPECT_EQ(Sorted(deps.cell_deps), Sorted(expected));
+}
+
+TEST(DepExtractor, StructuredRefHeadersOnly) {
+  Workbook wb = Workbook::create();
+  // Sales[#Headers] -> A1..C1.
+  std::vector<io::TableMetadata> tables;
+  tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/0, /*header_row=*/true, /*totals_row=*/false,
+                             {"Region", "Amount", "Date"}));
+  wb.set_tables(std::move(tables));
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("Sales[#Headers]", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+
+  std::vector<CellNodeId> expected = {
+      CellNodeId{0U, 0U, 0U},  // A1
+      CellNodeId{0U, 0U, 1U},  // B1
+      CellNodeId{0U, 0U, 2U},  // C1
+  };
+  EXPECT_EQ(Sorted(deps.cell_deps), Sorted(expected));
+}
+
+TEST(DepExtractor, StructuredRefTotalsOnly) {
+  Workbook wb = Workbook::create();
+  // Table with totals. Sales[#Totals] -> last row of `ref`, i.e. A10..C10.
+  std::vector<io::TableMetadata> tables;
+  tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/0, /*header_row=*/true, /*totals_row=*/true,
+                             {"Region", "Amount", "Date"}));
+  wb.set_tables(std::move(tables));
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("Sales[#Totals]", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+
+  std::vector<CellNodeId> expected = {
+      CellNodeId{0U, 9U, 0U},  // A10
+      CellNodeId{0U, 9U, 1U},  // B10
+      CellNodeId{0U, 9U, 2U},  // C10
+  };
+  EXPECT_EQ(Sorted(deps.cell_deps), Sorted(expected));
+}
+
+TEST(DepExtractor, StructuredRefAllCoversFullRectangle) {
+  Workbook wb = Workbook::create();
+  // Sales[#All] -> every row in the ref rect (A1..C10).
+  std::vector<io::TableMetadata> tables;
+  tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/0, /*header_row=*/true, /*totals_row=*/false,
+                             {"Region", "Amount", "Date"}));
+  wb.set_tables(std::move(tables));
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("Sales[#All]", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+
+  std::vector<CellNodeId> expected;
+  for (std::uint32_t r = 0; r < 10; ++r) {
+    for (std::uint32_t c = 0; c < 3; ++c) {
+      expected.push_back(CellNodeId{0U, r, c});
+    }
+  }
+  EXPECT_EQ(deps.cell_deps.size(), expected.size());
+  EXPECT_EQ(Sorted(deps.cell_deps), Sorted(expected));
+}
+
+TEST(DepExtractor, StructuredRefAllAreaWithSpecificColumn) {
+  Workbook wb = Workbook::create();
+  // Sales[[#All],[Amount]] -> column 1 (Amount) across every row of the ref
+  // rectangle, including header. Excel emits the bracket payload as
+  // `[#All],[Amount]` so the parser stores that verbatim.
+  std::vector<io::TableMetadata> tables;
+  tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/0, /*header_row=*/true, /*totals_row=*/false,
+                             {"Region", "Amount", "Date"}));
+  wb.set_tables(std::move(tables));
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("Sales[[#All],[Amount]]", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+
+  std::vector<CellNodeId> expected;
+  for (std::uint32_t r = 0; r < 10; ++r) {
+    expected.push_back(CellNodeId{0U, r, 1U});  // B1..B10
+  }
+  EXPECT_EQ(Sorted(deps.cell_deps), Sorted(expected));
+}
+
+TEST(DepExtractor, StructuredRefImplicitIntersectionSilentSkip) {
+  Workbook wb = Workbook::create();
+  // Sales[@Amount] resolves at evaluator time to a single cell on the
+  // formula's row. The dep extractor cannot know the formula's row, so
+  // it silently skips — the evaluator surfaces the actual dep when the
+  // implicit intersection resolves at eval time.
+  std::vector<io::TableMetadata> tables;
+  tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/0, /*header_row=*/true, /*totals_row=*/false,
+                             {"Region", "Amount", "Date"}));
+  wb.set_tables(std::move(tables));
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("Sales[@Amount]", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+  EXPECT_TRUE(deps.cell_deps.empty());
+}
+
+TEST(DepExtractor, StructuredRefUnknownTableSilentSkip) {
+  Workbook wb = Workbook::create();
+  // No tables registered: NoSuchTable[Col] cannot resolve and produces
+  // no deps. Same silent-skip policy as unknown sheet qualifiers.
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("NoSuchTable[Col]", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+  EXPECT_TRUE(deps.cell_deps.empty());
+}
+
+TEST(DepExtractor, StructuredRefUnknownColumnSilentSkip) {
+  Workbook wb = Workbook::create();
+  // Table exists, column does not: silent skip, no deps.
+  std::vector<io::TableMetadata> tables;
+  tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/0, /*header_row=*/true, /*totals_row=*/false,
+                             {"Region", "Amount", "Date"}));
+  wb.set_tables(std::move(tables));
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("Sales[NotAColumn]", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+  EXPECT_TRUE(deps.cell_deps.empty());
+}
+
+TEST(DepExtractor, StructuredRefCrossSheetTableLandsOnTableSheet) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");  // index 1
+  wb.add_sheet("Sheet3");  // index 2
+  // Table sits on sheet 2; formula is being analysed for a cell on sheet 0.
+  // Deps must land on sheet 2.
+  std::vector<io::TableMetadata> tables;
+  tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/2, /*header_row=*/true, /*totals_row=*/false,
+                             {"Region", "Amount", "Date"}));
+  wb.set_tables(std::move(tables));
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("SUM(Sales[Amount])", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, /*current_sheet_id=*/0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+
+  std::vector<CellNodeId> expected;
+  for (std::uint32_t r = 1; r <= 9; ++r) {
+    expected.push_back(CellNodeId{2U, r, 1U});  // Sheet3!B2..B10
+  }
+  EXPECT_EQ(Sorted(deps.cell_deps), Sorted(expected));
+  // Defensive: every dep must carry sheet_id == 2.
+  for (const CellNodeId& id : deps.cell_deps) {
+    EXPECT_EQ(id.sheet_id, 2U);
+  }
+}
+
+TEST(DepExtractor, StructuredRefHeadersOnHeaderlessTableSilentSkip) {
+  Workbook wb = Workbook::create();
+  // header_row=false: the table has no header band. Sales[#Headers] is
+  // unresolvable; the resolver returns ErrorCode::Ref and we silent-skip.
+  std::vector<io::TableMetadata> tables;
+  tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/0, /*header_row=*/false, /*totals_row=*/false,
+                             {"Region", "Amount", "Date"}));
+  wb.set_tables(std::move(tables));
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("Sales[#Headers]", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+  EXPECT_TRUE(deps.cell_deps.empty());
 }
 
 TEST(DepExtractor, RangeAcrossSheetQualifierOnLeft) {

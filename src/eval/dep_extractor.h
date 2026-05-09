@@ -19,10 +19,30 @@
 //      The recalc engine uses this to add the formula's cell to the
 //      always-dirty seed set.
 //
-// External / Defined-name / Structured (table) references are intentionally
-// out of scope at this stage: `extract_deps()` skips them silently. They
-// will be wired in once the workbook layer learns to resolve them; see the
-// `// TODO` markers in the implementation.
+// Defined-name (`NameRef`) nodes are resolved against the workbook's
+// `defined_names()` list: a sheet-scoped definition matching the current
+// sheet wins, otherwise the workbook-scoped definition (case-insensitive
+// match) is used. The matched formula is parsed in a transient arena and
+// walked recursively, so cells, ranges, volatility, and nested defined
+// names all surface naturally. Cycles (`Loop = Loop + 1`) are detected by
+// a name stack and broken silently.
+//
+// Structured (table) references (`Table[Col]`, `Table[#All]`,
+// `Table[[#Headers],[ColA]:[ColB]]`, ...) are resolved at extract time
+// against the workbook's `tables()` metadata: the bracket payload is
+// parsed by the same machinery the evaluator uses, the resulting
+// rectangle is pinned to the table's owning sheet, and the cells inside
+// are emitted as direct deps. The implicit-intersection shorthand
+// `Table[@Col]` is skipped statically because the row depends on the
+// formula cell's row context that this layer does not know — the
+// evaluator surfaces the actual dep when the implicit intersection
+// resolves at eval time. Table-resize events must trigger a dep
+// re-extraction at the recalc-engine layer; this layer does not maintain
+// a live "table-shape" dep, matching how `RangeOp` is treated. External
+// (cross-workbook) references remain out of scope at this stage:
+// `extract_deps()` skips them silently. They will be wired in once the
+// workbook layer learns to resolve them; see the `// TODO` markers in
+// the implementation.
 //
 // LAMBDA bodies are not descended into here. Captures and parameter lookups
 // happen at evaluator time via the LET / LAMBDA name environment, so static

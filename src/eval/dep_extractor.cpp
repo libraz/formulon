@@ -7,15 +7,24 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <unordered_set>
 #include <vector>
 
 #include "eval/dep_graph.h"
+#include "eval/formula_text_utils.h"
+#include "eval/structured_ref.h"
 #include "eval/volatile_tracker.h"
+#include "io/defined_names.h"
+#include "io/tables_reader.h"
 #include "parser/ast.h"
+#include "parser/parser.h"
 #include "parser/reference.h"
 #include "sheet.h"
+#include "utils/arena.h"
+#include "utils/expected.h"
+#include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -23,12 +32,19 @@ namespace formulon::eval {
 namespace {
 
 // Walker state: collects results into `out` and tracks already-emitted cells
-// in `seen` so the dedup runs in one O(N) pass.
+// in `seen` so the dedup runs in one O(N) pass. `name_stack` holds the
+// lowercase names currently being expanded so a self-referential or mutually
+// recursive defined name (`Loop = Loop + 1`) is broken silently rather than
+// driving the walker into unbounded recursion. `arena` owns the parsed ASTs
+// produced for defined-name expansion; it is local to a single
+// `extract_deps()` invocation and never escapes.
 struct WalkState {
   ExtractedDeps* out;
   std::unordered_set<CellNodeId, CellNodeIdHash> seen;
   std::uint16_t current_sheet_id;
   const Workbook* workbook;
+  Arena* name_arena;
+  std::vector<std::string> name_stack;
 };
 
 // Resolves the sheet id for a `Reference`. Returns true and writes
@@ -120,6 +136,151 @@ void emit_range_cells(WalkState& state, const parser::Reference& lhs, const pars
 // Forward decl for the recursive walker.
 void walk(const parser::AstNode& node, WalkState& state);
 
+// Resolves `name` against the workbook's defined-name list. Sheet-scoped
+// definitions matching `state.current_sheet_id` take priority over
+// workbook-scoped definitions; comparison is case-insensitive (matching
+// Excel's name resolution semantics). Returns `nullptr` when no match
+// exists — callers treat that as a silent skip.
+const io::DefinedName* find_defined_name(std::string_view name, const WalkState& state) noexcept {
+  const auto& names = state.workbook->defined_names();
+  const io::DefinedName* workbook_match = nullptr;
+  for (const auto& entry : names) {
+    if (!strings::case_insensitive_eq(entry.name, name)) {
+      continue;
+    }
+    if (entry.local_sheet_id >= 0 && static_cast<std::uint16_t>(entry.local_sheet_id) == state.current_sheet_id) {
+      // Sheet-scoped match wins immediately.
+      return &entry;
+    }
+    if (entry.local_sheet_id < 0 && workbook_match == nullptr) {
+      // Latch the first workbook-scoped match but keep scanning for a
+      // sheet-scoped one that should take priority.
+      workbook_match = &entry;
+    }
+  }
+  return workbook_match;
+}
+
+// Expands a defined-name reference: parses its formula text in the
+// extractor-local arena and recurses into the resulting AST through the
+// shared `walk()`. Cycles (`Loop = Loop + 1`, `A = B; B = A`) are detected
+// via `state.name_stack`: the lowercase form of every name currently being
+// expanded is pushed before recursion and popped after. A repeated entry
+// causes a silent skip — no volatility flag, no diagnostic — matching the
+// "graceful skip on unresolvable refs" policy already used for unknown
+// sheets and out-of-bounds coordinates. Parser failures on the defined-
+// name's formula are also silently skipped: malformed defined-name
+// formulas exist in the wild and the dep extractor is not the right layer
+// to surface them.
+void expand_defined_name(const io::DefinedName& def, WalkState& state) {
+  // Cycle detection. Lowercase the name for the stack comparison so a
+  // mixed-case re-entry (`Foo` -> `=foo+1`) is still caught.
+  std::string lowered = strings::to_ascii_lower(def.name);
+  for (const auto& active : state.name_stack) {
+    if (active == lowered) {
+      return;
+    }
+  }
+
+  // Strip the leading `=` if present; defined-name formulas are stored as
+  // expressions but Excel sometimes keeps the prefix on import.
+  const std::string_view src = strip_formula_prefix(def.formula);
+  if (src.empty()) {
+    return;
+  }
+
+  parser::Parser parser(src, *state.name_arena);
+  parser::AstNode* root = parser.parse();
+  if (root == nullptr) {
+    return;  // Unparseable formula: skip silently.
+  }
+
+  state.name_stack.push_back(std::move(lowered));
+  walk(*root, state);
+  state.name_stack.pop_back();
+}
+
+// Resolves a `StructuredRef` node into a static rectangle on the table's
+// owning sheet and emits one cell dep per cell in the rectangle.
+//
+// Design (pin-the-rect, mirroring `walk_range_op`):
+//   * The bracket payload is captured verbatim by the parser into the
+//     node's `column` slot; we re-parse it through
+//     `parse_structured_ref_payload` so multi-specifier (`#All`,
+//     `#Headers`, ...) and column-range (`[ColA]:[ColB]`) forms flow
+//     through a single resolver.
+//   * `parse_structured_ref_payload` failures, missing tables, missing
+//     columns, and `#Headers`/`#Totals` on tables that lack the
+//     corresponding band all surface as `Expected` errors from
+//     `resolve_structured_ref`. Every error path is a silent skip here:
+//     the recalc engine cares only about *cells the formula reads*; if
+//     the structured ref is unresolvable the evaluator will emit
+//     `#NAME?` / `#REF!` at eval time and there are no static deps to
+//     register.
+//   * Implicit intersection (`Table[@Col]`, the `kThisRow` bit) is
+//     statically unresolvable because the row depends on the formula
+//     cell's evaluation row context, which `extract_deps` does not have.
+//     We skip such references silently — the evaluator will surface the
+//     actual single-cell dep when the implicit intersection resolves.
+//     This mirrors the concession `walk_range_op` already makes for
+//     OFFSET / INDIRECT-shaped endpoints: dynamic shapes cannot be
+//     statically pinned.
+//   * Table-resize events must trigger a dep re-extraction at the recalc
+//     layer; this layer pins the rectangle once and never re-evaluates.
+//
+// Volatility is not affected: structured refs are not themselves
+// volatile. A calculated column's own formula may reference a volatile
+// function, but that volatility lives on the column's home cell and is
+// the dep extractor's concern when *that* cell is registered, not here.
+void walk_structured_ref(const parser::AstNode& node, WalkState& state) {
+  const std::string_view table_name = node.as_structured_ref_table();
+  const std::string_view payload = node.as_structured_ref_column();
+
+  auto sel_or = parse_structured_ref_payload(payload);
+  if (!sel_or) {
+    return;  // Malformed payload: silent skip.
+  }
+  StructuredRefSelector sel = std::move(sel_or).value();
+  sel.table_name = table_name;
+
+  // Implicit intersection: row context is the formula cell's row, which
+  // is not known here. The evaluator owns this dep at eval time.
+  if ((sel.specifiers & StructuredRefSpecifiers::kThisRow) != 0u) {
+    return;
+  }
+
+  // `resolve_structured_ref` only consults `current_sheet_index` for
+  // future cross-sheet contracts; the row argument is consumed only when
+  // `kThisRow` is set, which we already short-circuited above. Pass the
+  // walk's current sheet for `current_sheet_index` and 0 for the row to
+  // keep the call shape stable.
+  auto rect_or =
+      resolve_structured_ref(sel, *state.workbook, /*current_sheet_index=*/state.current_sheet_id, /*current_row=*/0u);
+  if (!rect_or) {
+    return;  // Unknown table / column / missing band: silent skip.
+  }
+  const StructuredRefRange rect = std::move(rect_or).value();
+
+  // Sheet ids fit in uint16_t per CellNodeId; Excel allows at most a few
+  // thousand sheets per workbook, well within range. Reject defensively
+  // if the workbook's sheet index ever overflows.
+  if (rect.sheet_index > 0xFFFFu) {
+    return;
+  }
+  const std::uint16_t target_sheet_id = static_cast<std::uint16_t>(rect.sheet_index);
+
+  if (rect.row_first >= Sheet::kMaxRows || rect.row_last >= Sheet::kMaxRows ||  //
+      rect.col_first >= Sheet::kMaxCols || rect.col_last >= Sheet::kMaxCols) {
+    return;
+  }
+
+  for (std::uint32_t r = rect.row_first; r <= rect.row_last; ++r) {
+    for (std::uint32_t c = rect.col_first; c <= rect.col_last; ++c) {
+      add_cell_dep(state, CellNodeId{target_sheet_id, r, c});
+    }
+  }
+}
+
 // Handles `NodeKind::RangeOp` specifically so the inner Ref endpoints are
 // not double-counted as scalar reads.
 void walk_range_op(const parser::AstNode& node, WalkState& state) {
@@ -194,12 +355,23 @@ void walk(const parser::AstNode& node, WalkState& state) {
       return;
 
     case parser::NodeKind::StructuredRef:
-      // TODO: structured (table) ref tracking once tables are wired in.
+      walk_structured_ref(node, state);
       return;
 
-    case parser::NodeKind::NameRef:
-      // TODO: defined-name ref tracking once the defined-name store exists.
+    case parser::NodeKind::NameRef: {
+      // Resolve against the workbook's defined-name list. A miss (the name
+      // is undefined, scoped to a different sheet, or hidden behind a cycle
+      // already on the expansion stack) is a silent skip — same policy as
+      // unknown sheet qualifiers and out-of-bounds coordinates. On a hit we
+      // re-enter `walk()` with the parsed body so cells, ranges, volatility,
+      // and nested NameRefs all surface naturally.
+      const io::DefinedName* def = find_defined_name(node.as_name(), state);
+      if (def == nullptr) {
+        return;
+      }
+      expand_defined_name(*def, state);
       return;
+    }
 
     case parser::NodeKind::UnaryOp:
       walk(node.as_unary_operand(), state);
@@ -267,16 +439,18 @@ void walk(const parser::AstNode& node, WalkState& state) {
     case parser::NodeKind::LetBinding: {
       // LET introduces local names that shadow workbook references inside
       // its body. Walking the binding initialisers is straightforward (they
-      // live in the outer scope). For the body, descending unconditionally
-      // is safe today because the `NameRef` case is a no-op pending
-      // defined-name support: a LET-bound name reaches `NameRef` and
-      // contributes nothing, while real cell `Ref` nodes and `Call` nodes
-      // inside the body emit their deps and volatile flags as usual.
-      // Skipping the body would under-approximate — `=LET(x, A1, x + B1)`
-      // would miss `B1`, and `=LET(x, 1, x + RAND())` would miss the
-      // volatile call. When defined-name tracking lands, this case will
-      // need a name-env stack so bound names short-circuit before reaching
-      // the `NameRef` resolver.
+      // live in the outer scope). The body is descended unconditionally so
+      // that `=LET(x, A1, x + B1)` records B1 and `=LET(x, 1, x + RAND())`
+      // records the volatile call. Bound names reach the `NameRef` case;
+      // when no workbook-scoped defined name shares the identifier the
+      // resolver returns null and the binding contributes nothing. A LET
+      // binding whose name *does* collide with a workbook-scoped defined
+      // name will currently over-approximate (the defined-name body is
+      // walked instead of being shadowed). A scoped name-environment stack
+      // that short-circuits the `NameRef` resolver inside LET bodies is the
+      // proper fix and is deferred — collisions of this shape are rare in
+      // practice and over-approximating cell deps is conservative for the
+      // recalc engine.
       const std::uint32_t binding_count = node.as_let_binding_count();
       for (std::uint32_t i = 0; i < binding_count; ++i) {
         walk(node.as_let_binding_expr(i), state);
@@ -302,7 +476,11 @@ void walk(const parser::AstNode& node, WalkState& state) {
 
 ExtractedDeps extract_deps(const parser::AstNode& node, std::uint16_t current_sheet_id, const Workbook& workbook) {
   ExtractedDeps deps;
-  WalkState state{&deps, {}, current_sheet_id, &workbook};
+  // The arena owns any ASTs parsed for defined-name expansion. It lives only
+  // as long as this call so the parsed nodes never outlive the walk; the
+  // caller-supplied `node` is unrelated and stays in its own arena.
+  Arena name_arena;
+  WalkState state{&deps, {}, current_sheet_id, &workbook, &name_arena, {}};
   walk(node, state);
   return deps;
 }
