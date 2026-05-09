@@ -75,6 +75,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "value.h"
+#include "version.h"
 #include "workbook.h"
 
 namespace {
@@ -3195,10 +3196,6 @@ extern "C" fm_status_t fm_workbook_external_link_at(fm_workbook_t* wb, uint32_t 
 // ---------------------------------------------------------------------------
 // Version
 // ---------------------------------------------------------------------------
-
-#ifndef FORMULON_VERSION_STRING
-#define FORMULON_VERSION_STRING "0.9.0"
-#endif
 
 extern "C" const char* fm_version_string(void) {
   return FORMULON_VERSION_STRING;
