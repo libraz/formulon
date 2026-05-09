@@ -30,7 +30,7 @@ ERROR_NULL = 0
 
 class VersionTests(unittest.TestCase):
     def test_package_version_constant(self) -> None:
-        self.assertEqual(formulon.__version__, "0.1.0")
+        self.assertEqual(formulon.__version__, "0.9.0")
 
     def test_library_version_non_empty(self) -> None:
         v = formulon.library_version()

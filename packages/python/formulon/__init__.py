@@ -31,7 +31,7 @@ from .workbook import (
 # packages/python/pyproject.toml. There is no portable way to read the
 # wheel metadata at runtime without `importlib.metadata`, which is fine
 # for installed packages but breaks for source-tree imports.
-__version__ = "0.1.0"
+__version__ = "0.9.0"
 
 __all__ = [
     "Cell",
