@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "eval/coerce.h"
 #include "eval/date_text_parse.h"
@@ -359,40 +360,18 @@ std::size_t wildcard_find_dbcs(std::string_view pattern, std::string_view text) 
   return std::string_view::npos;
 }
 
-ParsedCriterion::ParsedCriterion(const ParsedCriterion& other)
-    : op(other.op),
-      rhs_is_number(other.rhs_is_number),
-      rhs_number(other.rhs_number),
-      rhs_text(other.rhs_text),
-      has_wildcard(other.has_wildcard),
-      rhs_from_bool(other.rhs_from_bool),
-      rhs_is_error(other.rhs_is_error),
-      rhs_error_code(other.rhs_error_code),
-      prefix_match(other.prefix_match),
-      rhs_invalid_wildcard(other.rhs_invalid_wildcard),
-      rhs_storage(other.rhs_storage),
-      rhs_text_owns_storage_(other.rhs_text_owns_storage_) {
+void ParsedCriterion::rebind_rhs_text() noexcept {
   if (rhs_text_owns_storage_) {
     rhs_text = rhs_storage;
   }
 }
 
-ParsedCriterion::ParsedCriterion(ParsedCriterion&& other) noexcept
-    : op(other.op),
-      rhs_is_number(other.rhs_is_number),
-      rhs_number(other.rhs_number),
-      rhs_text(other.rhs_text),
-      has_wildcard(other.has_wildcard),
-      rhs_from_bool(other.rhs_from_bool),
-      rhs_is_error(other.rhs_is_error),
-      rhs_error_code(other.rhs_error_code),
-      prefix_match(other.prefix_match),
-      rhs_invalid_wildcard(other.rhs_invalid_wildcard),
-      rhs_storage(std::move(other.rhs_storage)),
-      rhs_text_owns_storage_(other.rhs_text_owns_storage_) {
-  if (rhs_text_owns_storage_) {
-    rhs_text = rhs_storage;
-  }
+ParsedCriterion::ParsedCriterion(const ParsedCriterion& other) {
+  *this = other;
+}
+
+ParsedCriterion::ParsedCriterion(ParsedCriterion&& other) noexcept {
+  *this = std::move(other);
 }
 
 ParsedCriterion& ParsedCriterion::operator=(const ParsedCriterion& other) {
@@ -408,7 +387,8 @@ ParsedCriterion& ParsedCriterion::operator=(const ParsedCriterion& other) {
     rhs_invalid_wildcard = other.rhs_invalid_wildcard;
     rhs_storage = other.rhs_storage;
     rhs_text_owns_storage_ = other.rhs_text_owns_storage_;
-    rhs_text = rhs_text_owns_storage_ ? std::string_view(rhs_storage) : other.rhs_text;
+    rhs_text = other.rhs_text;
+    rebind_rhs_text();
   }
   return *this;
 }
@@ -426,7 +406,8 @@ ParsedCriterion& ParsedCriterion::operator=(ParsedCriterion&& other) noexcept {
     rhs_invalid_wildcard = other.rhs_invalid_wildcard;
     rhs_storage = std::move(other.rhs_storage);
     rhs_text_owns_storage_ = other.rhs_text_owns_storage_;
-    rhs_text = rhs_text_owns_storage_ ? std::string_view(rhs_storage) : other.rhs_text;
+    rhs_text = other.rhs_text;
+    rebind_rhs_text();
   }
   return *this;
 }

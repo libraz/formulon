@@ -95,6 +95,8 @@ class Tokenizer {
 
   // Emits a token of `kind`, with `lexeme` covering [lex_start, byte_pos_).
   void emit(TokenKind kind, std::size_t lex_start);
+  // Emits a single-codepoint token at the current cursor.
+  void emit_single_char(TokenKind kind);
 
   // Emits a LexerError covering [err_start, byte_pos_).
   void record_error(LexerErrorCode code, std::size_t err_start);

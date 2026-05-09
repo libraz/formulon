@@ -578,6 +578,38 @@ bool SkipUntilClose(const char* begin, const char* end, const char** p, std::str
   return true;
 }
 
+/// Reads the next child element header inside an already-open parent.
+/// Whitespace and non-element markup are consumed transparently; text
+/// directly under the parent is treated as malformed input, matching the
+/// previous per-parent scanner behavior.
+bool ReadChildHeader(const char* begin, const char* end, const char** p, Error* err, TagHeader* out,
+                     std::size_t* lt_off) {
+  while (true) {
+    while (*p < end && IsXmlSpace(**p)) {
+      ++(*p);
+    }
+    if (*p >= end) {
+      *err = MakeXmlParseError(static_cast<std::size_t>(*p - begin), "unterminated parent element");
+      return false;
+    }
+    if (**p != '<') {
+      *err = MakeXmlParseError(static_cast<std::size_t>(*p - begin), "unexpected text inside parent element");
+      return false;
+    }
+    *lt_off = static_cast<std::size_t>(*p - begin);
+    ++(*p);  // past '<'
+    if (*p < end && (**p == '?' || **p == '!')) {
+      Error sub{};
+      if (!SkipMarkupNonElement(end, p, *lt_off, &sub)) {
+        *err = sub;
+        return false;
+      }
+      continue;
+    }
+    return ParseTagHeader(begin, end, p, out, err);
+  }
+}
+
 /// State carried across the per-cell scan so allocations amortise:
 ///   * `decoded_value`  - holds entity-decoded `<v>` body.
 ///   * `inline_string`  - holds the concatenation of `<is><t>` /
@@ -733,32 +765,9 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
   }
 
   while (*p < end) {
-    // Skip any whitespace between children.
-    while (*p < end && IsXmlSpace(**p)) {
-      ++(*p);
-    }
-    if (*p >= end) {
-      *err = MakeXmlParseError(static_cast<std::size_t>(*p - begin), "unterminated <c>");
-      return false;
-    }
-    if (**p != '<') {
-      // Excel never emits text directly inside <c>; if some producer
-      // does, treat as parse error rather than silently dropping it.
-      *err = MakeXmlParseError(static_cast<std::size_t>(*p - begin), "unexpected text inside <c>");
-      return false;
-    }
-    const std::size_t lt_off = static_cast<std::size_t>(*p - begin);
-    ++(*p);  // past '<'
-    if (*p < end && (**p == '?' || **p == '!')) {
-      Error sub{};
-      if (!SkipMarkupNonElement(end, p, lt_off, &sub)) {
-        *err = sub;
-        return false;
-      }
-      continue;
-    }
     TagHeader child;
-    if (!ParseTagHeader(begin, end, p, &child, err)) {
+    std::size_t lt_off = 0;
+    if (!ReadChildHeader(begin, end, p, err, &child, &lt_off)) {
       return false;
     }
     if (child.is_end_tag) {
@@ -860,29 +869,9 @@ bool ScanRow(const char* begin, const char* end, const char** p, const TagHeader
   }
 
   while (*p < end) {
-    while (*p < end && IsXmlSpace(**p)) {
-      ++(*p);
-    }
-    if (*p >= end) {
-      *err = MakeXmlParseError(static_cast<std::size_t>(*p - begin), "unterminated <row>");
-      return false;
-    }
-    if (**p != '<') {
-      *err = MakeXmlParseError(static_cast<std::size_t>(*p - begin), "unexpected text inside <row>");
-      return false;
-    }
-    const std::size_t lt_off = static_cast<std::size_t>(*p - begin);
-    ++(*p);
-    if (*p < end && (**p == '?' || **p == '!')) {
-      Error sub{};
-      if (!SkipMarkupNonElement(end, p, lt_off, &sub)) {
-        *err = sub;
-        return false;
-      }
-      continue;
-    }
     TagHeader child;
-    if (!ParseTagHeader(begin, end, p, &child, err)) {
+    std::size_t lt_off = 0;
+    if (!ReadChildHeader(begin, end, p, err, &child, &lt_off)) {
       return false;
     }
     if (child.is_end_tag) {
@@ -931,29 +920,9 @@ bool ScanSheetData(const char* begin, const char* end, const char** p, const Tag
     return true;
   }
   while (*p < end) {
-    while (*p < end && IsXmlSpace(**p)) {
-      ++(*p);
-    }
-    if (*p >= end) {
-      *err = MakeXmlParseError(static_cast<std::size_t>(*p - begin), "unterminated <sheetData>");
-      return false;
-    }
-    if (**p != '<') {
-      *err = MakeXmlParseError(static_cast<std::size_t>(*p - begin), "unexpected text inside <sheetData>");
-      return false;
-    }
-    const std::size_t lt_off = static_cast<std::size_t>(*p - begin);
-    ++(*p);
-    if (*p < end && (**p == '?' || **p == '!')) {
-      Error sub{};
-      if (!SkipMarkupNonElement(end, p, lt_off, &sub)) {
-        *err = sub;
-        return false;
-      }
-      continue;
-    }
     TagHeader child;
-    if (!ParseTagHeader(begin, end, p, &child, err)) {
+    std::size_t lt_off = 0;
+    if (!ReadChildHeader(begin, end, p, err, &child, &lt_off)) {
       return false;
     }
     if (child.is_end_tag) {

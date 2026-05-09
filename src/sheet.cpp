@@ -581,6 +581,22 @@ void ShiftRangeList(std::vector<MergeRange>& ranges, std::uint32_t index, std::u
   ranges = std::move(retained);
 }
 
+void ShiftSheetMetadata(std::vector<Hyperlink>& hyperlinks, std::vector<CellComment>& comments,
+                        std::vector<MergeRange>& merges, std::vector<DataValidation>& validations,
+                        std::uint32_t index, std::uint32_t count, bool is_delete, bool row_axis) {
+  if (row_axis) {
+    ShiftRowAnchored(hyperlinks, index, count, is_delete);
+    ShiftRowAnchored(comments, index, count, is_delete);
+  } else {
+    ShiftColAnchored(hyperlinks, index, count, is_delete);
+    ShiftColAnchored(comments, index, count, is_delete);
+  }
+  ShiftRangeList(merges, index, count, is_delete, row_axis);
+  for (DataValidation& dv : validations) {
+    ShiftRangeList(dv.ranges, index, count, is_delete, row_axis);
+  }
+}
+
 }  // namespace
 
 void Sheet::insert_rows(std::uint32_t row, std::uint32_t count) {
@@ -607,12 +623,8 @@ void Sheet::insert_rows(std::uint32_t row, std::uint32_t count) {
     node.key() = static_cast<std::uint32_t>(shifted);
     rows_.insert(std::move(node));
   }
-  ShiftRowAnchored(hyperlinks_, row, count, /*is_delete=*/false);
-  ShiftRowAnchored(comments_, row, count, /*is_delete=*/false);
-  ShiftRangeList(merges_, row, count, /*is_delete=*/false, /*row_axis=*/true);
-  for (DataValidation& dv : validations_) {
-    ShiftRangeList(dv.ranges, row, count, /*is_delete=*/false, /*row_axis=*/true);
-  }
+  ShiftSheetMetadata(hyperlinks_, comments_, merges_, validations_, row, count, /*is_delete=*/false,
+                     /*row_axis=*/true);
 }
 
 void Sheet::delete_rows(std::uint32_t row, std::uint32_t count) {
@@ -639,12 +651,8 @@ void Sheet::delete_rows(std::uint32_t row, std::uint32_t count) {
     node.key() = key - count;
     rows_.insert(std::move(node));
   }
-  ShiftRowAnchored(hyperlinks_, row, count, /*is_delete=*/true);
-  ShiftRowAnchored(comments_, row, count, /*is_delete=*/true);
-  ShiftRangeList(merges_, row, count, /*is_delete=*/true, /*row_axis=*/true);
-  for (DataValidation& dv : validations_) {
-    ShiftRangeList(dv.ranges, row, count, /*is_delete=*/true, /*row_axis=*/true);
-  }
+  ShiftSheetMetadata(hyperlinks_, comments_, merges_, validations_, row, count, /*is_delete=*/true,
+                     /*row_axis=*/true);
 }
 
 void Sheet::insert_cols(std::uint32_t col, std::uint32_t count) {
@@ -680,12 +688,8 @@ void Sheet::insert_cols(std::uint32_t col, std::uint32_t count) {
       cells[i] = Cell{};
     }
   }
-  ShiftColAnchored(hyperlinks_, col, count, /*is_delete=*/false);
-  ShiftColAnchored(comments_, col, count, /*is_delete=*/false);
-  ShiftRangeList(merges_, col, count, /*is_delete=*/false, /*row_axis=*/false);
-  for (DataValidation& dv : validations_) {
-    ShiftRangeList(dv.ranges, col, count, /*is_delete=*/false, /*row_axis=*/false);
-  }
+  ShiftSheetMetadata(hyperlinks_, comments_, merges_, validations_, col, count, /*is_delete=*/false,
+                     /*row_axis=*/false);
 }
 
 void Sheet::delete_cols(std::uint32_t col, std::uint32_t count) {
@@ -700,12 +704,8 @@ void Sheet::delete_cols(std::uint32_t col, std::uint32_t count) {
     const std::size_t del_end = std::min<std::size_t>(col + count, cells.size());
     cells.erase(cells.begin() + static_cast<std::ptrdiff_t>(col), cells.begin() + static_cast<std::ptrdiff_t>(del_end));
   }
-  ShiftColAnchored(hyperlinks_, col, count, /*is_delete=*/true);
-  ShiftColAnchored(comments_, col, count, /*is_delete=*/true);
-  ShiftRangeList(merges_, col, count, /*is_delete=*/true, /*row_axis=*/false);
-  for (DataValidation& dv : validations_) {
-    ShiftRangeList(dv.ranges, col, count, /*is_delete=*/true, /*row_axis=*/false);
-  }
+  ShiftSheetMetadata(hyperlinks_, comments_, merges_, validations_, col, count, /*is_delete=*/true,
+                     /*row_axis=*/false);
 }
 
 void Sheet::clear_spill(std::uint32_t anchor_row, std::uint32_t anchor_col) noexcept {

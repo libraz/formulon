@@ -617,39 +617,23 @@ class JsWorkbook {
   /// Inserts `count` rows at `row` on `sheet`. References across the
   /// workbook are rewritten to follow the shift.
   JsStatus insertRows(uint32_t sheet, uint32_t row, uint32_t count) {
-    if (handle_ == nullptr) {
-      return error_status(7000);
-    }
-    fm_status_t rc = fm_workbook_insert_rows(handle_, sheet, row, count);
-    return status_from_rc(rc);
+    return invoke_row_col_edit(fm_workbook_insert_rows, sheet, row, count);
   }
 
   /// Deletes `count` rows starting at `row` on `sheet`. References that
   /// fall inside the deleted interval collapse to `#REF!`.
   JsStatus deleteRows(uint32_t sheet, uint32_t row, uint32_t count) {
-    if (handle_ == nullptr) {
-      return error_status(7000);
-    }
-    fm_status_t rc = fm_workbook_delete_rows(handle_, sheet, row, count);
-    return status_from_rc(rc);
+    return invoke_row_col_edit(fm_workbook_delete_rows, sheet, row, count);
   }
 
   /// Inserts `count` columns at `col` on `sheet`.
   JsStatus insertCols(uint32_t sheet, uint32_t col, uint32_t count) {
-    if (handle_ == nullptr) {
-      return error_status(7000);
-    }
-    fm_status_t rc = fm_workbook_insert_cols(handle_, sheet, col, count);
-    return status_from_rc(rc);
+    return invoke_row_col_edit(fm_workbook_insert_cols, sheet, col, count);
   }
 
   /// Deletes `count` columns starting at `col` on `sheet`.
   JsStatus deleteCols(uint32_t sheet, uint32_t col, uint32_t count) {
-    if (handle_ == nullptr) {
-      return error_status(7000);
-    }
-    fm_status_t rc = fm_workbook_delete_cols(handle_, sheet, col, count);
-    return status_from_rc(rc);
+    return invoke_row_col_edit(fm_workbook_delete_cols, sheet, col, count);
   }
 
   /// Returns the number of sheets (0 when handle is invalid).
@@ -3008,6 +2992,14 @@ class JsWorkbook {
   }
 
  private:
+  using RowColEditFn = fm_status_t (*)(fm_workbook_t*, uint32_t, uint32_t, uint32_t);
+  JsStatus invoke_row_col_edit(RowColEditFn fn, uint32_t sheet, uint32_t index, uint32_t count) {
+    if (handle_ == nullptr) {
+      return error_status(7000);
+    }
+    return status_from_rc(fn(handle_, sheet, index, count));
+  }
+
   // Shared bridge for `precedents` / `dependents`: invokes the C ABI
   // entry point, copies the result into a JS array of {sheet, row, col}
   // value-objects, and frees the C-owned handle. Returns an empty array

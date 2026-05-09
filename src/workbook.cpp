@@ -556,6 +556,45 @@ void Workbook::set_iterative_progress(eval::IterativeProgressCb cb, void* user_d
 
 namespace {
 
+// Computes the post-edit coordinates of a cell on the edited sheet.
+// `kept == false` means the cell is dropped by the upcoming
+// `Sheet::delete_rows/cols` (deletion fully covers the cell) or pushed
+// past the sheet bound by an insert.
+struct CellShift {
+  bool kept = true;
+  std::uint32_t new_row = 0;
+  std::uint32_t new_col = 0;
+};
+
+CellShift shift_cell_coords_for_row_col_edit(parser::RowColAxis axis, parser::RowColEdit edit, std::uint32_t index,
+                                             std::uint32_t count, std::uint32_t row, std::uint32_t col) {
+  CellShift r;
+  r.new_row = row;
+  r.new_col = col;
+  std::uint32_t& target = (axis == parser::RowColAxis::kRow) ? r.new_row : r.new_col;
+  const std::uint32_t coord = target;
+  const std::uint32_t bound = (axis == parser::RowColAxis::kRow) ? Sheet::kMaxRows : Sheet::kMaxCols;
+
+  if (edit == parser::RowColEdit::kInsert) {
+    if (coord >= index) {
+      const std::uint64_t shifted = static_cast<std::uint64_t>(coord) + count;
+      if (shifted >= bound) {
+        r.kept = false;
+      } else {
+        target = static_cast<std::uint32_t>(shifted);
+      }
+    }
+    return r;
+  }
+
+  if (coord >= index + count) {
+    target = coord - count;
+  } else if (coord >= index) {
+    r.kept = false;
+  }
+  return r;
+}
+
 // Rewrites a single formula text through `transform`. Returns the
 // rewritten body alongside a flag indicating whether any reference was
 // actually changed; an unchanged body lets the caller skip the
@@ -626,57 +665,6 @@ FormulaRewriteResult rewrite_formula(std::string_view formula, const parser::Ref
 void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, eval::RecalcEngine& engine, const Workbook& workbook,
                                        std::string_view target_sheet, parser::RowColAxis axis, parser::RowColEdit edit,
                                        std::uint32_t index, std::uint32_t count) {
-  // Compute the post-shift coordinates of a cell on the target sheet.
-  // `kept == false` means the cell is dropped by the upcoming
-  // `Sheet::delete_rows/cols` (deletion fully covers the cell) or
-  // pushed past the sheet bound by an insert.
-  struct CellShift {
-    bool kept = true;
-    std::uint32_t new_row = 0;
-    std::uint32_t new_col = 0;
-  };
-  auto shift_cell_coords = [&](std::uint32_t row, std::uint32_t col) -> CellShift {
-    CellShift r;
-    r.new_row = row;
-    r.new_col = col;
-    if (axis == parser::RowColAxis::kRow) {
-      if (edit == parser::RowColEdit::kInsert) {
-        if (row >= index) {
-          const std::uint64_t shifted = static_cast<std::uint64_t>(row) + count;
-          if (shifted >= Sheet::kMaxRows) {
-            r.kept = false;
-          } else {
-            r.new_row = static_cast<std::uint32_t>(shifted);
-          }
-        }
-      } else {  // kDelete
-        if (row >= index + count) {
-          r.new_row = row - count;
-        } else if (row >= index) {
-          r.kept = false;
-        }
-      }
-    } else {  // kCol
-      if (edit == parser::RowColEdit::kInsert) {
-        if (col >= index) {
-          const std::uint64_t shifted = static_cast<std::uint64_t>(col) + count;
-          if (shifted >= Sheet::kMaxCols) {
-            r.kept = false;
-          } else {
-            r.new_col = static_cast<std::uint32_t>(shifted);
-          }
-        }
-      } else {  // kDelete
-        if (col >= index + count) {
-          r.new_col = col - count;
-        } else if (col >= index) {
-          r.kept = false;
-        }
-      }
-    }
-    return r;
-  };
-
   for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
     Sheet& sheet = sheets[sheet_idx];
     const bool local_means_target = strings::case_insensitive_eq(sheet.name(), target_sheet);
@@ -722,7 +710,8 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, eval::RecalcE
         std::uint32_t new_col = static_cast<std::uint32_t>(col);
         bool dropped = false;
         if (local_means_target) {
-          const CellShift sr = shift_cell_coords(row, static_cast<std::uint32_t>(col));
+          const CellShift sr =
+              shift_cell_coords_for_row_col_edit(axis, edit, index, count, row, static_cast<std::uint32_t>(col));
           if (!sr.kept) {
             dropped = true;
           } else {
@@ -798,58 +787,52 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   return Expected<void, Error>::Ok();
 }
 
+Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<Sheet>& sheets,
+                                                   eval::RecalcEngine& engine,
+                                                   std::vector<io::DefinedName>& defined_names,
+                                                   std::size_t sheet_index, parser::RowColAxis axis,
+                                                   parser::RowColEdit edit, std::uint32_t origin,
+                                                   std::uint32_t count, const char* op_name) {
+  RETURN_IF_ERROR(apply_row_col_edit(wb, sheet_index, axis, origin, count, op_name));
+  const std::string target_sheet_name = sheets[sheet_index].name();
+  rewrite_formulas_for_row_col_edit(sheets, engine, wb, target_sheet_name, axis, edit, origin, count);
+  const parser::RowColShiftTransform name_transform(target_sheet_name, axis, edit, origin, count);
+  rewrite_defined_names(defined_names, name_transform);
+  Sheet& target = sheets[sheet_index];
+  if (axis == parser::RowColAxis::kRow) {
+    if (edit == parser::RowColEdit::kInsert) {
+      target.insert_rows(origin, count);
+    } else {
+      target.delete_rows(origin, count);
+    }
+  } else if (edit == parser::RowColEdit::kInsert) {
+    target.insert_cols(origin, count);
+  } else {
+    target.delete_cols(origin, count);
+  }
+  return Expected<void, Error>::Ok();
+}
+
 }  // namespace
 
 Expected<void, Error> Workbook::insert_rows(std::size_t sheet_index, std::uint32_t row, std::uint32_t count) {
-  RETURN_IF_ERROR(apply_row_col_edit(*this, sheet_index, parser::RowColAxis::kRow, row, count, "insert_rows"));
-  const std::string target_sheet_name = sheets_[sheet_index].name();
-  rewrite_formulas_for_row_col_edit(sheets_, *engine_, *this, target_sheet_name, parser::RowColAxis::kRow,
-                                    parser::RowColEdit::kInsert, row, count);
-  // Defined-name formulas resolve sheet-qualified by their stored text;
-  // the target_sheet must be matched by name only (no local-means-target
-  // shortcut applies because defined names have no "owning sheet" by
-  // convention).
-  const parser::RowColShiftTransform name_transform(target_sheet_name, parser::RowColAxis::kRow,
-                                                    parser::RowColEdit::kInsert, row, count);
-  rewrite_defined_names(defined_names_, name_transform);
-  sheets_[sheet_index].insert_rows(row, count);
-  return Expected<void, Error>::Ok();
+  return apply_row_col_edit_operation(*this, sheets_, *engine_, defined_names_, sheet_index, parser::RowColAxis::kRow,
+                                      parser::RowColEdit::kInsert, row, count, "insert_rows");
 }
 
 Expected<void, Error> Workbook::delete_rows(std::size_t sheet_index, std::uint32_t row, std::uint32_t count) {
-  RETURN_IF_ERROR(apply_row_col_edit(*this, sheet_index, parser::RowColAxis::kRow, row, count, "delete_rows"));
-  const std::string target_sheet_name = sheets_[sheet_index].name();
-  rewrite_formulas_for_row_col_edit(sheets_, *engine_, *this, target_sheet_name, parser::RowColAxis::kRow,
-                                    parser::RowColEdit::kDelete, row, count);
-  const parser::RowColShiftTransform name_transform(target_sheet_name, parser::RowColAxis::kRow,
-                                                    parser::RowColEdit::kDelete, row, count);
-  rewrite_defined_names(defined_names_, name_transform);
-  sheets_[sheet_index].delete_rows(row, count);
-  return Expected<void, Error>::Ok();
+  return apply_row_col_edit_operation(*this, sheets_, *engine_, defined_names_, sheet_index, parser::RowColAxis::kRow,
+                                      parser::RowColEdit::kDelete, row, count, "delete_rows");
 }
 
 Expected<void, Error> Workbook::insert_cols(std::size_t sheet_index, std::uint32_t col, std::uint32_t count) {
-  RETURN_IF_ERROR(apply_row_col_edit(*this, sheet_index, parser::RowColAxis::kCol, col, count, "insert_cols"));
-  const std::string target_sheet_name = sheets_[sheet_index].name();
-  rewrite_formulas_for_row_col_edit(sheets_, *engine_, *this, target_sheet_name, parser::RowColAxis::kCol,
-                                    parser::RowColEdit::kInsert, col, count);
-  const parser::RowColShiftTransform name_transform(target_sheet_name, parser::RowColAxis::kCol,
-                                                    parser::RowColEdit::kInsert, col, count);
-  rewrite_defined_names(defined_names_, name_transform);
-  sheets_[sheet_index].insert_cols(col, count);
-  return Expected<void, Error>::Ok();
+  return apply_row_col_edit_operation(*this, sheets_, *engine_, defined_names_, sheet_index, parser::RowColAxis::kCol,
+                                      parser::RowColEdit::kInsert, col, count, "insert_cols");
 }
 
 Expected<void, Error> Workbook::delete_cols(std::size_t sheet_index, std::uint32_t col, std::uint32_t count) {
-  RETURN_IF_ERROR(apply_row_col_edit(*this, sheet_index, parser::RowColAxis::kCol, col, count, "delete_cols"));
-  const std::string target_sheet_name = sheets_[sheet_index].name();
-  rewrite_formulas_for_row_col_edit(sheets_, *engine_, *this, target_sheet_name, parser::RowColAxis::kCol,
-                                    parser::RowColEdit::kDelete, col, count);
-  const parser::RowColShiftTransform name_transform(target_sheet_name, parser::RowColAxis::kCol,
-                                                    parser::RowColEdit::kDelete, col, count);
-  rewrite_defined_names(defined_names_, name_transform);
-  sheets_[sheet_index].delete_cols(col, count);
-  return Expected<void, Error>::Ok();
+  return apply_row_col_edit_operation(*this, sheets_, *engine_, defined_names_, sheet_index, parser::RowColAxis::kCol,
+                                      parser::RowColEdit::kDelete, col, count, "delete_cols");
 }
 
 Expected<void, Error> Workbook::set_cell_xf_index(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,

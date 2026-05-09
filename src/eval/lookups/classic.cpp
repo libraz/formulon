@@ -241,6 +241,74 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
   return best;
 }
 
+Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                             const EvalContext& ctx, LookupAxis axis) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity != 3 && arity != 4) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  const Value lookup = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (lookup.is_error()) {
+    return lookup;
+  }
+
+  std::vector<Value> cells;
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  ErrorCode range_err = ErrorCode::Value;
+  if (!resolve_table_array(call.as_call_arg(1), arena, registry, ctx, &cells, &range_err, &rows, &cols)) {
+    return Value::error(range_err);
+  }
+  if (rows == 0U || cols == 0U) {
+    return Value::error(ErrorCode::Ref);
+  }
+
+  const Value index_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
+  if (index_val.is_error()) {
+    return index_val;
+  }
+  auto index_num = coerce_to_number(index_val);
+  if (!index_num) {
+    return Value::error(index_num.error());
+  }
+  const double index_raw = std::floor(index_num.value());
+  if (index_raw < 1.0) {
+    return Value::error(ErrorCode::Value);
+  }
+  const std::uint32_t result_extent = axis == LookupAxis::Column ? cols : rows;
+  if (index_raw > static_cast<double>(result_extent)) {
+    return Value::error(ErrorCode::Ref);
+  }
+  const auto result_index = static_cast<std::uint32_t>(index_raw);
+
+  bool approximate = true;
+  if (arity == 4) {
+    const Value rl_val = eval_node(call.as_call_arg(3), arena, registry, ctx);
+    if (rl_val.is_error()) {
+      return rl_val;
+    }
+    auto rl_bool = coerce_to_bool(rl_val);
+    if (!rl_bool) {
+      return Value::error(rl_bool.error());
+    }
+    approximate = rl_bool.value();
+  }
+
+  const std::size_t off = lookup_scan(cells, rows, cols, axis, lookup, approximate, ctx.excel_profile());
+  if (off == SIZE_MAX) {
+    return Value::error(ErrorCode::NA);
+  }
+  const std::size_t flat =
+      axis == LookupAxis::Column
+          ? (off * static_cast<std::size_t>(cols)) + static_cast<std::size_t>(result_index - 1U)
+          : (static_cast<std::size_t>(result_index - 1U) * static_cast<std::size_t>(cols)) + off;
+  if (flat >= cells.size()) {
+    return Value::error(ErrorCode::Ref);
+  }
+  return cells[flat];
+}
+
 }  // namespace
 
 // CHOOSE(index_num, value1, value2, ...)
@@ -702,68 +770,7 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
 // (accepted divergence, same as MATCH).
 Value eval_vlookup_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity != 3 && arity != 4) {
-    return Value::error(ErrorCode::Value);
-  }
-
-  const Value lookup = eval_node(call.as_call_arg(0), arena, registry, ctx);
-  if (lookup.is_error()) {
-    return lookup;
-  }
-
-  std::vector<Value> cells;
-  std::uint32_t rows = 0;
-  std::uint32_t cols = 0;
-  ErrorCode range_err = ErrorCode::Value;
-  if (!resolve_table_array(call.as_call_arg(1), arena, registry, ctx, &cells, &range_err, &rows, &cols)) {
-    return Value::error(range_err);
-  }
-  if (rows == 0U || cols == 0U) {
-    return Value::error(ErrorCode::Ref);
-  }
-
-  const Value col_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
-  if (col_val.is_error()) {
-    return col_val;
-  }
-  auto col_num_exp = coerce_to_number(col_val);
-  if (!col_num_exp) {
-    return Value::error(col_num_exp.error());
-  }
-  const double col_raw = std::floor(col_num_exp.value());
-  if (col_raw < 1.0) {
-    return Value::error(ErrorCode::Value);
-  }
-  if (col_raw > static_cast<double>(cols)) {
-    return Value::error(ErrorCode::Ref);
-  }
-  const auto col_idx = static_cast<std::uint32_t>(col_raw);
-
-  // range_lookup defaults to TRUE when omitted.
-  bool approximate = true;
-  if (arity == 4) {
-    const Value rl_val = eval_node(call.as_call_arg(3), arena, registry, ctx);
-    if (rl_val.is_error()) {
-      return rl_val;
-    }
-    auto rl_bool = coerce_to_bool(rl_val);
-    if (!rl_bool) {
-      return Value::error(rl_bool.error());
-    }
-    approximate = rl_bool.value();
-  }
-
-  const std::size_t off = lookup_scan(cells, rows, cols, LookupAxis::Column, lookup, approximate, ctx.excel_profile());
-  if (off == SIZE_MAX) {
-    return Value::error(ErrorCode::NA);
-  }
-  const std::size_t flat = (off * static_cast<std::size_t>(cols)) + static_cast<std::size_t>(col_idx - 1U);
-  if (flat >= cells.size()) {
-    // Defensive; the bounds checks above should already rule this out.
-    return Value::error(ErrorCode::Ref);
-  }
-  return cells[flat];
+  return eval_table_lookup_lazy(call, arena, registry, ctx, LookupAxis::Column);
 }
 
 // HLOOKUP(lookup_value, table_array, row_index_num, [range_lookup])
@@ -774,66 +781,7 @@ Value eval_vlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
 // cases) mirror VLOOKUP with rows/cols swapped.
 Value eval_hlookup_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity != 3 && arity != 4) {
-    return Value::error(ErrorCode::Value);
-  }
-
-  const Value lookup = eval_node(call.as_call_arg(0), arena, registry, ctx);
-  if (lookup.is_error()) {
-    return lookup;
-  }
-
-  std::vector<Value> cells;
-  std::uint32_t rows = 0;
-  std::uint32_t cols = 0;
-  ErrorCode range_err = ErrorCode::Value;
-  if (!resolve_table_array(call.as_call_arg(1), arena, registry, ctx, &cells, &range_err, &rows, &cols)) {
-    return Value::error(range_err);
-  }
-  if (rows == 0U || cols == 0U) {
-    return Value::error(ErrorCode::Ref);
-  }
-
-  const Value row_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
-  if (row_val.is_error()) {
-    return row_val;
-  }
-  auto row_num_exp = coerce_to_number(row_val);
-  if (!row_num_exp) {
-    return Value::error(row_num_exp.error());
-  }
-  const double row_raw = std::floor(row_num_exp.value());
-  if (row_raw < 1.0) {
-    return Value::error(ErrorCode::Value);
-  }
-  if (row_raw > static_cast<double>(rows)) {
-    return Value::error(ErrorCode::Ref);
-  }
-  const auto row_idx = static_cast<std::uint32_t>(row_raw);
-
-  bool approximate = true;
-  if (arity == 4) {
-    const Value rl_val = eval_node(call.as_call_arg(3), arena, registry, ctx);
-    if (rl_val.is_error()) {
-      return rl_val;
-    }
-    auto rl_bool = coerce_to_bool(rl_val);
-    if (!rl_bool) {
-      return Value::error(rl_bool.error());
-    }
-    approximate = rl_bool.value();
-  }
-
-  const std::size_t off = lookup_scan(cells, rows, cols, LookupAxis::Row, lookup, approximate, ctx.excel_profile());
-  if (off == SIZE_MAX) {
-    return Value::error(ErrorCode::NA);
-  }
-  const std::size_t flat = (static_cast<std::size_t>(row_idx - 1U) * static_cast<std::size_t>(cols)) + off;
-  if (flat >= cells.size()) {
-    return Value::error(ErrorCode::Ref);
-  }
-  return cells[flat];
+  return eval_table_lookup_lazy(call, arena, registry, ctx, LookupAxis::Row);
 }
 
 // LOOKUP(lookup_value, lookup_vector, [result_vector])   -- vector form.

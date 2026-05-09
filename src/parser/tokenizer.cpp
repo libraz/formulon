@@ -309,145 +309,69 @@ const std::vector<Token>& Tokenizer::tokens() {
       case '#':
         scan_error_literal();
         continue;
-      case '(': {
-        const std::size_t start = byte_pos_;
-        mark_start();
-        advance_one();
-        emit(TokenKind::LParen, start);
+      case '(':
+        emit_single_char(TokenKind::LParen);
         continue;
-      }
-      case ')': {
-        const std::size_t start = byte_pos_;
-        mark_start();
-        advance_one();
-        emit(TokenKind::RParen, start);
+      case ')':
+        emit_single_char(TokenKind::RParen);
         continue;
-      }
-      case '{': {
-        const std::size_t start = byte_pos_;
-        mark_start();
-        advance_one();
-        emit(TokenKind::LBrace, start);
+      case '{':
+        emit_single_char(TokenKind::LBrace);
         continue;
-      }
-      case '}': {
-        const std::size_t start = byte_pos_;
-        mark_start();
-        advance_one();
-        emit(TokenKind::RBrace, start);
+      case '}':
+        emit_single_char(TokenKind::RBrace);
         continue;
-      }
-      case '[': {
-        const std::size_t start = byte_pos_;
-        mark_start();
-        advance_one();
-        emit(TokenKind::LBracket, start);
+      case '[':
+        emit_single_char(TokenKind::LBracket);
         continue;
-      }
-      case ']': {
-        const std::size_t start = byte_pos_;
-        mark_start();
-        advance_one();
-        emit(TokenKind::RBracket, start);
+      case ']':
+        emit_single_char(TokenKind::RBracket);
         continue;
-      }
-      case ',': {
-        const std::size_t start = byte_pos_;
-        mark_start();
-        advance_one();
-        emit(TokenKind::Comma, start);
+      case ',':
+        emit_single_char(TokenKind::Comma);
         continue;
-      }
-      case ';': {
-        const std::size_t start = byte_pos_;
-        mark_start();
-        advance_one();
-        emit(TokenKind::Semicolon, start);
+      case ';':
+        emit_single_char(TokenKind::Semicolon);
         continue;
-      }
-      case ':': {
-        const std::size_t start = byte_pos_;
-        mark_start();
-        advance_one();
-        emit(TokenKind::Colon, start);
+      case ':':
+        emit_single_char(TokenKind::Colon);
         continue;
-      }
-      case '!': {
-        const std::size_t start = byte_pos_;
-        mark_start();
-        advance_one();
-        emit(TokenKind::Bang, start);
+      case '!':
+        emit_single_char(TokenKind::Bang);
         continue;
-      }
-      case '+': {
-        const std::size_t start = byte_pos_;
-        mark_start();
-        advance_one();
-        emit(TokenKind::Plus, start);
+      case '+':
+        emit_single_char(TokenKind::Plus);
         continue;
-      }
-      case '-': {
-        const std::size_t start = byte_pos_;
-        mark_start();
-        advance_one();
-        emit(TokenKind::Minus, start);
+      case '-':
+        emit_single_char(TokenKind::Minus);
         continue;
-      }
-      case '*': {
-        const std::size_t start = byte_pos_;
-        mark_start();
-        advance_one();
-        emit(TokenKind::Star, start);
+      case '*':
+        emit_single_char(TokenKind::Star);
         continue;
-      }
-      case '/': {
-        const std::size_t start = byte_pos_;
-        mark_start();
-        advance_one();
-        emit(TokenKind::Slash, start);
+      case '/':
+        emit_single_char(TokenKind::Slash);
         continue;
-      }
-      case '^': {
-        const std::size_t start = byte_pos_;
-        mark_start();
-        advance_one();
-        emit(TokenKind::Caret, start);
+      case '^':
+        emit_single_char(TokenKind::Caret);
         continue;
-      }
-      case '%': {
-        const std::size_t start = byte_pos_;
-        mark_start();
-        advance_one();
-        emit(TokenKind::Percent, start);
+      case '%':
+        emit_single_char(TokenKind::Percent);
         continue;
-      }
-      case '&': {
-        const std::size_t start = byte_pos_;
-        mark_start();
-        advance_one();
-        emit(TokenKind::Ampersand, start);
+      case '&':
+        emit_single_char(TokenKind::Ampersand);
         continue;
-      }
-      case '=': {
-        const std::size_t start = byte_pos_;
-        mark_start();
-        advance_one();
-        emit(TokenKind::Eq, start);
+      case '=':
+        emit_single_char(TokenKind::Eq);
         continue;
-      }
       case '<':
         scan_lt();
         continue;
       case '>':
         scan_gt();
         continue;
-      case '@': {
-        const std::size_t start = byte_pos_;
-        mark_start();
-        advance_one();
-        emit(TokenKind::At, start);
+      case '@':
+        emit_single_char(TokenKind::At);
         continue;
-      }
       default:
         break;
     }
@@ -605,6 +529,13 @@ void Tokenizer::emit(TokenKind kind, std::size_t lex_start) {
   t.range = make_range();
   t.lexeme = std::string_view(source_.data() + lex_start, byte_pos_ - lex_start);
   tokens_.push_back(t);
+}
+
+void Tokenizer::emit_single_char(TokenKind kind) {
+  const std::size_t start = byte_pos_;
+  mark_start();
+  advance_one();
+  emit(kind, start);
 }
 
 void Tokenizer::record_error(LexerErrorCode code, std::size_t err_start) {

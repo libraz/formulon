@@ -477,6 +477,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   static double ArgDouble(const Napi::CallbackInfo& info, size_t idx);
   static std::string ArgString(const Napi::CallbackInfo& info, size_t idx);
   static bool ArgBool(const Napi::CallbackInfo& info, size_t idx);
+  using RowColEditFn = fm_status_t (*)(fm_workbook_t*, uint32_t, uint32_t, uint32_t);
+  Napi::Value InvokeRowColEdit(const Napi::CallbackInfo& info, RowColEditFn fn);
 
   /// Builds an error-Status envelope when the wrapper has been
   /// finalized / destroyed but JS still holds a reference.
@@ -534,6 +536,17 @@ bool Workbook::ArgBool(const Napi::CallbackInfo& info, size_t idx) {
     return false;
   }
   return info[idx].ToBoolean().Value();
+}
+
+Napi::Value Workbook::InvokeRowColEdit(const Napi::CallbackInfo& info, RowColEditFn fn) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  const uint32_t index = ArgU32(info, 1);
+  const uint32_t count = ArgU32(info, 2);
+  return MakeStatus(env, fn(handle_, sheet, index, count));
 }
 
 // ---- Static factories -----------------------------------------------
@@ -859,51 +872,19 @@ Napi::Value Workbook::SheetName(const Napi::CallbackInfo& info) {
 // ---- Row / column structural edits ----------------------------------
 
 Napi::Value Workbook::InsertRows(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  const uint32_t row = ArgU32(info, 1);
-  const uint32_t count = ArgU32(info, 2);
-  fm_status_t rc = fm_workbook_insert_rows(handle_, sheet, row, count);
-  return MakeStatus(env, rc);
+  return InvokeRowColEdit(info, fm_workbook_insert_rows);
 }
 
 Napi::Value Workbook::DeleteRows(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  const uint32_t row = ArgU32(info, 1);
-  const uint32_t count = ArgU32(info, 2);
-  fm_status_t rc = fm_workbook_delete_rows(handle_, sheet, row, count);
-  return MakeStatus(env, rc);
+  return InvokeRowColEdit(info, fm_workbook_delete_rows);
 }
 
 Napi::Value Workbook::InsertCols(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  const uint32_t col = ArgU32(info, 1);
-  const uint32_t count = ArgU32(info, 2);
-  fm_status_t rc = fm_workbook_insert_cols(handle_, sheet, col, count);
-  return MakeStatus(env, rc);
+  return InvokeRowColEdit(info, fm_workbook_insert_cols);
 }
 
 Napi::Value Workbook::DeleteCols(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return NullHandleError(env);
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  const uint32_t col = ArgU32(info, 1);
-  const uint32_t count = ArgU32(info, 2);
-  fm_status_t rc = fm_workbook_delete_cols(handle_, sheet, col, count);
-  return MakeStatus(env, rc);
+  return InvokeRowColEdit(info, fm_workbook_delete_cols);
 }
 
 // ---- Iteration / metadata accessors ---------------------------------

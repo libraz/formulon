@@ -100,6 +100,117 @@ bool all_criteria_match(const std::vector<std::vector<Value>>& criteria_cells,
   return true;
 }
 
+bool resolve_optional_value_range(const parser::AstNode& arg, std::uint32_t criteria_rows,
+                                  std::uint32_t criteria_cols, Arena& arena, const FunctionRegistry& registry,
+                                  const EvalContext& ctx, std::vector<Value>* out_cells, Value* out_err_value) {
+  // Single-cell Ref value ranges get extended to the criteria range's shape,
+  // anchored at the Ref. LET-binding passthrough mirrors `resolve_range_arg`'s
+  // NameRef handling so `=LET(b, B1, SUMIF(A1:A3,"x",b))` extends identically
+  // to the literal-Ref form.
+  const parser::AstNode* value_arg = &arg;
+  if (arg.kind() == parser::NodeKind::NameRef) {
+    const parser::AstNode& resolved = resolve_name_ast(arg, ctx.name_env());
+    if (&resolved != &arg && resolved.kind() == parser::NodeKind::Ref) {
+      value_arg = &resolved;
+    }
+  }
+  if (value_arg->kind() == parser::NodeKind::Ref && (criteria_rows > 1U || criteria_cols > 1U)) {
+    const parser::Reference& anchor = value_arg->as_ref();
+    parser::Reference lhs = anchor;
+    parser::Reference rhs = anchor;
+    rhs.row = anchor.row + criteria_rows - 1U;
+    rhs.col = anchor.col + criteria_cols - 1U;
+    auto expanded = ctx.expand_range(lhs, rhs, arena, registry);
+    if (!expanded) {
+      *out_err_value = Value::error(expanded.error());
+      return false;
+    }
+    *out_cells = std::move(expanded.value());
+    return true;
+  }
+
+  auto resolved = resolve_range_arg(arg, arena, registry, ctx);
+  if (!resolved) {
+    *out_err_value = Value::error(resolved.error());
+    return false;
+  }
+  *out_cells = std::move(resolved.value().cells);
+  return true;
+}
+
+struct IfsInputs {
+  std::vector<Value> value_cells;
+  std::vector<std::vector<Value>> criteria_cells;
+  std::vector<std::unique_ptr<ParsedCriterion>> parsed;
+  std::size_t expected_size = 0;
+};
+
+bool resolve_ifs_inputs(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx, IfsInputs* out, Value* out_err_value) {
+  auto value_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
+  if (!value_resolved) {
+    *out_err_value = Value::error(value_resolved.error());
+    return false;
+  }
+  out->value_cells = std::move(value_resolved.value().cells);
+  out->expected_size = out->value_cells.size();
+
+  const std::uint32_t pair_count = (call.as_call_arity() - 1U) / 2U;
+  return resolve_criteria_pairs(call, /*first_pair_index=*/1, pair_count, out->expected_size, arena, registry, ctx,
+                                &out->criteria_cells, &out->parsed, out_err_value);
+}
+
+enum class IfsNumericAggregate { Sum, Average, Max, Min };
+
+Value aggregate_matching_numbers(const IfsInputs& inputs, ExcelProfile profile, IfsNumericAggregate aggregate) {
+  bool any = false;
+  double sum = 0.0;
+  double count = 0.0;
+  double best = 0.0;
+  for (std::size_t i = 0; i < inputs.expected_size; ++i) {
+    if (!all_criteria_match(inputs.criteria_cells, inputs.parsed, i, profile)) {
+      continue;
+    }
+    const Value& value = inputs.value_cells[i];
+    if (value.is_error()) {
+      return value;
+    }
+    if (!value.is_number()) {
+      continue;
+    }
+    const double x = value.as_number();
+    switch (aggregate) {
+      case IfsNumericAggregate::Sum:
+      case IfsNumericAggregate::Average:
+        sum += x;
+        break;
+      case IfsNumericAggregate::Max:
+        if (!any || x > best) {
+          best = x;
+        }
+        break;
+      case IfsNumericAggregate::Min:
+        if (!any || x < best) {
+          best = x;
+        }
+        break;
+    }
+    any = true;
+    count += 1.0;
+  }
+
+  switch (aggregate) {
+    case IfsNumericAggregate::Sum:
+      return Value::number(sum);
+    case IfsNumericAggregate::Average:
+      return count == 0.0 ? Value::error(ErrorCode::Div0) : Value::number(sum / count);
+    case IfsNumericAggregate::Max:
+    case IfsNumericAggregate::Min:
+      return any ? Value::number(best) : Value::number(0.0);
+  }
+  return Value::error(ErrorCode::Value);
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -186,36 +297,10 @@ Value eval_sumif_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   const std::vector<Value>* sum_cells_ptr = nullptr;
   std::vector<Value> explicit_sum_cells;
   if (arity == 3) {
-    // Single-cell-Ref sum_range gets extended to criteria_range's shape
-    // anchored at the Ref. See block comment above for the Mac rule.
-    // LET-binding passthrough mirrors `resolve_range_arg`'s NameRef
-    // handling so `=LET(b, B1, SUMIF(A1:A3,"x",b))` extends identically
-    // to the literal-Ref form.
-    const parser::AstNode& sum_arg_raw = call.as_call_arg(2);
-    const parser::AstNode* sum_arg = &sum_arg_raw;
-    if (sum_arg_raw.kind() == parser::NodeKind::NameRef) {
-      const parser::AstNode& resolved = resolve_name_ast(sum_arg_raw, ctx.name_env());
-      if (&resolved != &sum_arg_raw && resolved.kind() == parser::NodeKind::Ref) {
-        sum_arg = &resolved;
-      }
-    }
-    if (sum_arg->kind() == parser::NodeKind::Ref && (crit_rows > 1U || crit_cols > 1U)) {
-      const parser::Reference& anchor = sum_arg->as_ref();
-      parser::Reference lhs = anchor;
-      parser::Reference rhs = anchor;
-      rhs.row = anchor.row + crit_rows - 1U;
-      rhs.col = anchor.col + crit_cols - 1U;
-      auto expanded = ctx.expand_range(lhs, rhs, arena, registry);
-      if (!expanded) {
-        return Value::error(expanded.error());
-      }
-      explicit_sum_cells = std::move(expanded.value());
-    } else {
-      auto sum_resolved = resolve_range_arg(call.as_call_arg(2), arena, registry, ctx);
-      if (!sum_resolved) {
-        return Value::error(sum_resolved.error());
-      }
-      explicit_sum_cells = std::move(sum_resolved.value().cells);
+    Value err = Value::blank();
+    if (!resolve_optional_value_range(call.as_call_arg(2), crit_rows, crit_cols, arena, registry, ctx,
+                                      &explicit_sum_cells, &err)) {
+      return err;
     }
     sum_cells_ptr = &explicit_sum_cells;
   } else {
@@ -277,33 +362,10 @@ Value eval_averageif_lazy(const parser::AstNode& call, Arena& arena, const Funct
   const std::vector<Value>* avg_cells_ptr = nullptr;
   std::vector<Value> explicit_avg_cells;
   if (arity == 3) {
-    // Single-cell-Ref average_range gets extended to criteria_range's
-    // shape anchored at the Ref. Mirrors `eval_sumif_lazy`.
-    const parser::AstNode& avg_arg_raw = call.as_call_arg(2);
-    const parser::AstNode* avg_arg = &avg_arg_raw;
-    if (avg_arg_raw.kind() == parser::NodeKind::NameRef) {
-      const parser::AstNode& resolved = resolve_name_ast(avg_arg_raw, ctx.name_env());
-      if (&resolved != &avg_arg_raw && resolved.kind() == parser::NodeKind::Ref) {
-        avg_arg = &resolved;
-      }
-    }
-    if (avg_arg->kind() == parser::NodeKind::Ref && (crit_rows > 1U || crit_cols > 1U)) {
-      const parser::Reference& anchor = avg_arg->as_ref();
-      parser::Reference lhs = anchor;
-      parser::Reference rhs = anchor;
-      rhs.row = anchor.row + crit_rows - 1U;
-      rhs.col = anchor.col + crit_cols - 1U;
-      auto expanded = ctx.expand_range(lhs, rhs, arena, registry);
-      if (!expanded) {
-        return Value::error(expanded.error());
-      }
-      explicit_avg_cells = std::move(expanded.value());
-    } else {
-      auto avg_resolved = resolve_range_arg(call.as_call_arg(2), arena, registry, ctx);
-      if (!avg_resolved) {
-        return Value::error(avg_resolved.error());
-      }
-      explicit_avg_cells = std::move(avg_resolved.value().cells);
+    Value err = Value::blank();
+    if (!resolve_optional_value_range(call.as_call_arg(2), crit_rows, crit_cols, arena, registry, ctx,
+                                      &explicit_avg_cells, &err)) {
+      return err;
     }
     avg_cells_ptr = &explicit_avg_cells;
   } else {
@@ -393,37 +455,12 @@ Value eval_sumifs_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (arity < 3 || (arity % 2) != 1) {
     return Value::error(ErrorCode::Value);
   }
-  auto sum_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
-  if (!sum_resolved) {
-    return Value::error(sum_resolved.error());
-  }
-  std::vector<Value> sum_cells = std::move(sum_resolved.value().cells);
-  const std::size_t expected_size = sum_cells.size();
-
-  std::vector<std::vector<Value>> criteria_cells;
-  std::vector<std::unique_ptr<ParsedCriterion>> parsed;
-  const std::uint32_t pair_count = (arity - 1) / 2;
   Value err = Value::number(0.0);
-  if (!resolve_criteria_pairs(call, /*first_pair_index=*/1, pair_count, expected_size, arena, registry, ctx,
-                              &criteria_cells, &parsed, &err)) {
+  IfsInputs inputs;
+  if (!resolve_ifs_inputs(call, arena, registry, ctx, &inputs, &err)) {
     return err;
   }
-
-  double sum = 0.0;
-  for (std::size_t i = 0; i < expected_size; ++i) {
-    if (!all_criteria_match(criteria_cells, parsed, i, ctx.excel_profile())) {
-      continue;
-    }
-    const Value& sv = sum_cells[i];
-    if (sv.is_error()) {
-      return sv;
-    }
-    if (!sv.is_number()) {
-      continue;
-    }
-    sum += sv.as_number();
-  }
-  return Value::number(sum);
+  return aggregate_matching_numbers(inputs, ctx.excel_profile(), IfsNumericAggregate::Sum);
 }
 
 // AVERAGEIFS(avg_range, range1, crit1 [, range2, crit2, ...])
@@ -438,42 +475,12 @@ Value eval_averageifs_lazy(const parser::AstNode& call, Arena& arena, const Func
   if (arity < 3 || (arity % 2) != 1) {
     return Value::error(ErrorCode::Value);
   }
-  auto avg_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
-  if (!avg_resolved) {
-    return Value::error(avg_resolved.error());
-  }
-  std::vector<Value> avg_cells = std::move(avg_resolved.value().cells);
-  const std::size_t expected_size = avg_cells.size();
-
-  std::vector<std::vector<Value>> criteria_cells;
-  std::vector<std::unique_ptr<ParsedCriterion>> parsed;
-  const std::uint32_t pair_count = (arity - 1) / 2;
   Value err = Value::number(0.0);
-  if (!resolve_criteria_pairs(call, /*first_pair_index=*/1, pair_count, expected_size, arena, registry, ctx,
-                              &criteria_cells, &parsed, &err)) {
+  IfsInputs inputs;
+  if (!resolve_ifs_inputs(call, arena, registry, ctx, &inputs, &err)) {
     return err;
   }
-
-  double sum = 0.0;
-  double count = 0.0;
-  for (std::size_t i = 0; i < expected_size; ++i) {
-    if (!all_criteria_match(criteria_cells, parsed, i, ctx.excel_profile())) {
-      continue;
-    }
-    const Value& av = avg_cells[i];
-    if (av.is_error()) {
-      return av;
-    }
-    if (!av.is_number()) {
-      continue;
-    }
-    sum += av.as_number();
-    count += 1.0;
-  }
-  if (count == 0.0) {
-    return Value::error(ErrorCode::Div0);
-  }
-  return Value::number(sum / count);
+  return aggregate_matching_numbers(inputs, ctx.excel_profile(), IfsNumericAggregate::Average);
 }
 
 // MAXIFS(max_range, range1, crit1 [, range2, crit2, ...])
@@ -488,45 +495,12 @@ Value eval_maxifs_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (arity < 3 || (arity % 2) != 1) {
     return Value::error(ErrorCode::Value);
   }
-  auto max_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
-  if (!max_resolved) {
-    return Value::error(max_resolved.error());
-  }
-  std::vector<Value> max_cells = std::move(max_resolved.value().cells);
-  const std::size_t expected_size = max_cells.size();
-
-  std::vector<std::vector<Value>> criteria_cells;
-  std::vector<std::unique_ptr<ParsedCriterion>> parsed;
-  const std::uint32_t pair_count = (arity - 1) / 2;
   Value err = Value::number(0.0);
-  if (!resolve_criteria_pairs(call, /*first_pair_index=*/1, pair_count, expected_size, arena, registry, ctx,
-                              &criteria_cells, &parsed, &err)) {
+  IfsInputs inputs;
+  if (!resolve_ifs_inputs(call, arena, registry, ctx, &inputs, &err)) {
     return err;
   }
-
-  bool any = false;
-  double best = 0.0;
-  for (std::size_t i = 0; i < expected_size; ++i) {
-    if (!all_criteria_match(criteria_cells, parsed, i, ctx.excel_profile())) {
-      continue;
-    }
-    const Value& mv = max_cells[i];
-    if (mv.is_error()) {
-      return mv;
-    }
-    if (!mv.is_number()) {
-      continue;
-    }
-    const double x = mv.as_number();
-    if (!any || x > best) {
-      best = x;
-      any = true;
-    }
-  }
-  if (!any) {
-    return Value::number(0.0);
-  }
-  return Value::number(best);
+  return aggregate_matching_numbers(inputs, ctx.excel_profile(), IfsNumericAggregate::Max);
 }
 
 // MINIFS(min_range, range1, crit1 [, range2, crit2, ...])
@@ -539,45 +513,12 @@ Value eval_minifs_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (arity < 3 || (arity % 2) != 1) {
     return Value::error(ErrorCode::Value);
   }
-  auto min_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
-  if (!min_resolved) {
-    return Value::error(min_resolved.error());
-  }
-  std::vector<Value> min_cells = std::move(min_resolved.value().cells);
-  const std::size_t expected_size = min_cells.size();
-
-  std::vector<std::vector<Value>> criteria_cells;
-  std::vector<std::unique_ptr<ParsedCriterion>> parsed;
-  const std::uint32_t pair_count = (arity - 1) / 2;
   Value err = Value::number(0.0);
-  if (!resolve_criteria_pairs(call, /*first_pair_index=*/1, pair_count, expected_size, arena, registry, ctx,
-                              &criteria_cells, &parsed, &err)) {
+  IfsInputs inputs;
+  if (!resolve_ifs_inputs(call, arena, registry, ctx, &inputs, &err)) {
     return err;
   }
-
-  bool any = false;
-  double best = 0.0;
-  for (std::size_t i = 0; i < expected_size; ++i) {
-    if (!all_criteria_match(criteria_cells, parsed, i, ctx.excel_profile())) {
-      continue;
-    }
-    const Value& mv = min_cells[i];
-    if (mv.is_error()) {
-      return mv;
-    }
-    if (!mv.is_number()) {
-      continue;
-    }
-    const double x = mv.as_number();
-    if (!any || x < best) {
-      best = x;
-      any = true;
-    }
-  }
-  if (!any) {
-    return Value::number(0.0);
-  }
-  return Value::number(best);
+  return aggregate_matching_numbers(inputs, ctx.excel_profile(), IfsNumericAggregate::Min);
 }
 
 }  // namespace eval

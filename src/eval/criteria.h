@@ -127,6 +127,8 @@ struct ParsedCriterion {
   /// object's own `rhs_storage`. See comment above.
   bool rhs_text_owns_storage_ = false;
 
+  void rebind_rhs_text() noexcept;
+
   friend ParsedCriterion parse_criterion(const Value&);
   friend ParsedCriterion parse_criterion_dfunc(const Value&);
 };

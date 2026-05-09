@@ -119,17 +119,6 @@ Expected<void, Error> ResolveFormula(const pugi::xml_node& c_node,
   return Expected<void, Error>::Ok();
 }
 
-std::uint32_t ParseXfIndex(std::string_view text) {
-  std::uint32_t xf = 0;
-  for (char c : text) {
-    if (c < '0' || c > '9') {
-      return 0U;
-    }
-    xf = (xf * 10U) + static_cast<std::uint32_t>(c - '0');
-  }
-  return xf;
-}
-
 Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view formula_text,
                                       std::uint32_t xf_index, std::string_view phonetic_text,
                                       std::size_t sheet_index, Workbook& workbook, SheetReadContext& ctx) {
@@ -474,6 +463,17 @@ Expected<void, Error> read_sheet_view_and_layout(const pugi::xml_document& sheet
 #if !defined(FORMULON_WASM) || defined(FORMULON_WASM_ENABLE_SAX)
 
 namespace {
+
+std::uint32_t ParseXfIndex(std::string_view text) {
+  std::uint32_t xf = 0;
+  for (char c : text) {
+    if (c < '0' || c > '9') {
+      return 0U;
+    }
+    xf = (xf * 10U) + static_cast<std::uint32_t>(c - '0');
+  }
+  return xf;
+}
 
 /// Per-call state passed through `SheetSaxCallbacks::user_data`. The
 /// scanner's callbacks need access to the workbook, the sheet index,

@@ -93,6 +93,28 @@ bool collect_cash_flows(const parser::AstNode& arg, Arena& arena, const Function
   return false;
 }
 
+struct CashFlowSigns {
+  bool has_positive = false;
+  bool has_negative = false;
+};
+
+CashFlowSigns scan_cash_flow_signs(const std::vector<double>& flows) noexcept {
+  CashFlowSigns signs;
+  for (double v : flows) {
+    if (v > 0.0) {
+      signs.has_positive = true;
+    } else if (v < 0.0) {
+      signs.has_negative = true;
+    }
+  }
+  return signs;
+}
+
+bool has_opposite_cash_flow_signs(const std::vector<double>& flows) noexcept {
+  const CashFlowSigns signs = scan_cash_flow_signs(flows);
+  return signs.has_positive && signs.has_negative;
+}
+
 // Evaluates IRR's NPV function at `rate` for the cash flow sequence.
 // IRR uses period 0..n-1 indexing: the first cash flow is at time 0,
 // undiscounted, and the last is at time n-1.
@@ -152,20 +174,13 @@ double irr_newton(const std::vector<double>& flows, double guess) noexcept {
   return std::numeric_limits<double>::quiet_NaN();
 }
 
-// Bracketed fallback for IRR when Newton diverges or can't cross the
-// rate = -1 singularity. Mirrors `xirr_bracket`: samples f(rate) on a
-// log-linear grid spanning the domain rate > -1, looks for an adjacent
-// sign change, and bisects.
-//
-//   grid_near_minus_1 = { -1 + 10^k for k in [-10, -1] }   // [~-1, -0.9]
-//   grid_mid           = { -0.8, -0.5, -0.2, 0.0, 0.1, 0.2, 0.5, 1.0,
-//                          2.0, 5.0 }
-//   grid_large         = { 10^k for k in [1, 6] }          // [10, 1e6]
-//
-// Combined (sorted ascending), this catches the roots in schedules that
-// Newton-Raphson walks off from — typically short schedules whose root
-// lies near the rate = -1 boundary.
-double irr_bracket(const std::vector<double>& flows) noexcept {
+// Shared bracketed fallback for IRR/XIRR when Newton diverges or can't
+// cross the rate = -1 singularity. Samples f(rate) on a log-linear grid
+// spanning the domain rate > -1, looks for an adjacent sign change, and
+// bisects. The final midpoint is optionally polished by the caller's
+// Newton implementation for full double precision.
+template <typename EvalFn, typename PolishFn>
+double bracket_rate_root(EvalFn eval_at_rate, PolishFn polish_midpoint) noexcept {
   std::vector<double> grid;
   grid.reserve(40);
   for (int k = -10; k <= -1; ++k) {
@@ -180,13 +195,13 @@ double irr_bracket(const std::vector<double>& flows) noexcept {
   std::sort(grid.begin(), grid.end());
   // Scan for an adjacent sign change.
   double prev_r = grid[0];
-  double prev_f = irr_npv(flows, prev_r);
+  double prev_f = eval_at_rate(prev_r);
   if (std::isfinite(prev_f) && std::fabs(prev_f) < 1.0e-10) {
     return prev_r;
   }
   for (std::size_t i = 1; i < grid.size(); ++i) {
     const double r = grid[i];
-    const double f = irr_npv(flows, r);
+    const double f = eval_at_rate(r);
     if (!std::isfinite(f)) {
       prev_r = r;
       prev_f = f;
@@ -201,7 +216,7 @@ double irr_bracket(const std::vector<double>& flows) noexcept {
       double f_lo = prev_f;
       for (int iter = 0; iter < 200; ++iter) {
         const double mid = 0.5 * (lo + hi);
-        const double f_mid = irr_npv(flows, mid);
+        const double f_mid = eval_at_rate(mid);
         if (!std::isfinite(f_mid)) {
           hi = mid;
           continue;
@@ -219,8 +234,7 @@ double irr_bracket(const std::vector<double>& flows) noexcept {
           return 0.5 * (lo + hi);
         }
       }
-      // Polish the final bracket midpoint with Newton for full precision.
-      const double refined = irr_newton(flows, 0.5 * (lo + hi));
+      const double refined = polish_midpoint(0.5 * (lo + hi));
       if (std::isfinite(refined)) {
         return refined;
       }
@@ -230,6 +244,12 @@ double irr_bracket(const std::vector<double>& flows) noexcept {
     prev_f = f;
   }
   return std::numeric_limits<double>::quiet_NaN();
+}
+
+double irr_bracket(const std::vector<double>& flows) noexcept {
+  return bracket_rate_root(
+      [&](double rate) noexcept { return irr_npv(flows, rate); },
+      [&](double guess) noexcept { return irr_newton(flows, guess); });
 }
 
 // Closed-form MIRR helper. `flows` must already have been validated to
@@ -297,16 +317,7 @@ Value eval_irr_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
   // IRR requires at least one positive and one negative cash flow so the
   // NPV(r) function has a root. Otherwise the iteration would either
   // diverge or converge to a degenerate boundary (rate == -1).
-  bool has_positive = false;
-  bool has_negative = false;
-  for (double v : flows) {
-    if (v > 0.0) {
-      has_positive = true;
-    } else if (v < 0.0) {
-      has_negative = true;
-    }
-  }
-  if (!has_positive || !has_negative) {
+  if (!has_opposite_cash_flow_signs(flows)) {
     return Value::error(ErrorCode::Num);
   }
 
@@ -373,14 +384,7 @@ Value eval_mirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   // well-defined: `npv_pos == 0` makes `ratio == 0` and `pow(0, x) - 1`
   // yields exactly -1.0 for any positive x. We therefore pre-check only
   // the all-positive case and let the math carry for all-negative.
-  bool has_negative = false;
-  for (double v : flows) {
-    if (v < 0.0) {
-      has_negative = true;
-      break;
-    }
-  }
-  if (!has_negative) {
+  if (!scan_cash_flow_signs(flows).has_negative) {
     return Value::error(ErrorCode::Div0);
   }
 
@@ -657,89 +661,10 @@ double xirr_newton(const std::vector<double>& values, const std::vector<double>&
   return std::numeric_limits<double>::quiet_NaN();
 }
 
-// Bracketed fallback for XIRR when Newton diverges or can't cross the
-// r=-1 singularity. Samples f(rate) on a log-linear grid spanning the
-// domain rate > -1, looks for an adjacent sign change, and bisects.
-// The grid pattern is:
-//
-//   grid_near_minus_1 = { -1 + 10^k for k in [-10, -1] }   // [~-1, -0.9]
-//   grid_mid           = { -0.8, -0.5, -0.2, 0.0, 0.1, 0.2, 0.5, 1.0 }
-//   grid_large         = { 10^k for k in [1, 6] }          // [10, 1e6]
-//
-// Combined (sorted ascending), this produces ~30 samples which are
-// enough to bracket the XIRR root on every fixture in the oracle
-// corpus. Bisection then drives the bracket width below 1e-12 or
-// |f(mid)| below 1e-10, whichever comes first.
 double xirr_bracket(const std::vector<double>& values, const std::vector<double>& dates) noexcept {
-  // Build the sample grid once; numbers chosen so neighbouring samples
-  // are close enough to catch even the R17-style root at r ~= -0.912.
-  std::vector<double> grid;
-  grid.reserve(40);
-  for (int k = -10; k <= -1; ++k) {
-    grid.push_back(-1.0 + std::pow(10.0, static_cast<double>(k)));
-  }
-  for (double m : {-0.8, -0.5, -0.2, 0.0, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0}) {
-    grid.push_back(m);
-  }
-  for (int k = 1; k <= 6; ++k) {
-    grid.push_back(std::pow(10.0, static_cast<double>(k)));
-  }
-  std::sort(grid.begin(), grid.end());
-  // Scan for an adjacent sign change.
-  double prev_r = grid[0];
-  double prev_f = xnpv_sum(values, dates, prev_r);
-  if (std::isfinite(prev_f) && std::fabs(prev_f) < 1.0e-10) {
-    return prev_r;
-  }
-  for (std::size_t i = 1; i < grid.size(); ++i) {
-    const double r = grid[i];
-    const double f = xnpv_sum(values, dates, r);
-    if (!std::isfinite(f)) {
-      prev_r = r;
-      prev_f = f;
-      continue;
-    }
-    if (std::fabs(f) < 1.0e-10) {
-      return r;
-    }
-    if (std::isfinite(prev_f) && ((prev_f < 0.0 && f > 0.0) || (prev_f > 0.0 && f < 0.0))) {
-      // Bisect on [prev_r, r].
-      double lo = prev_r;
-      double hi = r;
-      double f_lo = prev_f;
-      for (int iter = 0; iter < 200; ++iter) {
-        const double mid = 0.5 * (lo + hi);
-        const double f_mid = xnpv_sum(values, dates, mid);
-        if (!std::isfinite(f_mid)) {
-          // Numerical blow-up mid-bracket; narrow from the other end.
-          hi = mid;
-          continue;
-        }
-        if (std::fabs(f_mid) < 1.0e-12) {
-          return mid;
-        }
-        if ((f_lo < 0.0 && f_mid < 0.0) || (f_lo > 0.0 && f_mid > 0.0)) {
-          lo = mid;
-          f_lo = f_mid;
-        } else {
-          hi = mid;
-        }
-        if (std::fabs(hi - lo) < 1.0e-14) {
-          return 0.5 * (lo + hi);
-        }
-      }
-      // Refine the final bracket midpoint with Newton; usually just
-      // polishes the converged root to full double precision.
-      const double refined = xirr_newton(values, dates, 0.5 * (lo + hi));
-      if (std::isfinite(refined)) {
-        return refined;
-      }
-      return 0.5 * (lo + hi);
-    }
-    prev_r = r;
-    prev_f = f;
-  }
-  return std::numeric_limits<double>::quiet_NaN();
+  return bracket_rate_root(
+      [&](double rate) noexcept { return xnpv_sum(values, dates, rate); },
+      [&](double guess) noexcept { return xirr_newton(values, dates, guess); });
 }
 
 }  // namespace
@@ -765,16 +690,7 @@ Value eval_xirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (values.size() < 2U) {
     return Value::error(ErrorCode::Num);
   }
-  bool has_positive = false;
-  bool has_negative = false;
-  for (double v : values) {
-    if (v > 0.0) {
-      has_positive = true;
-    } else if (v < 0.0) {
-      has_negative = true;
-    }
-  }
-  if (!has_positive || !has_negative) {
+  if (!has_opposite_cash_flow_signs(values)) {
     return Value::error(ErrorCode::Num);
   }
 

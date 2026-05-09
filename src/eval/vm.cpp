@@ -287,6 +287,12 @@ Expected<void, Error> push_value(VmState& s, Value v) {
   return {};
 }
 
+void pop_values(VmState& s, std::size_t n) noexcept {
+  for (std::size_t i = 0; i < n; ++i) {
+    s.stack.pop_back();
+  }
+}
+
 // Fetches the const pool entry; out-of-range surfaces invalid bytecode.
 Expected<const Value*, Error> const_at(const ByteCode& bc, std::uint32_t idx) {
   if (idx >= bc.constants.size()) {
@@ -472,8 +478,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
           if (arity != 2) {
             // Pop and replace with #VALUE! to match the tree-walker's
             // arity-check failure surface.
-            for (std::uint32_t i = 0; i < arity; ++i)
-              s.stack.pop_back();
+            pop_values(s, arity);
             FM_VM_RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Value)));
             ++pc;
             break;
@@ -509,15 +514,13 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         // tree-walker parity for those families.
         const FunctionDef* def = registry.lookup(name);
         if (def == nullptr) {
-          for (std::uint32_t i = 0; i < arity; ++i)
-            s.stack.pop_back();
+          pop_values(s, arity);
           FM_VM_RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Name)));
           ++pc;
           break;
         }
         if (arity < def->min_arity || arity > def->max_arity) {
-          for (std::uint32_t i = 0; i < arity; ++i)
-            s.stack.pop_back();
+          pop_values(s, arity);
           FM_VM_RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Value)));
           ++pc;
           break;
@@ -566,8 +569,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
             argv.push_back(slot);
           }
         }
-        for (std::uint32_t i = 0; i < arity; ++i)
-          s.stack.pop_back();
+        pop_values(s, arity);
         // Default tree-walker rule: short-circuit on the first error arg.
         // Functions that opt out (`propagate_errors == false`) must inspect
         // their error inputs; we pass the raw values through.
@@ -604,8 +606,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         for (std::uint32_t i = 0; i < arity; ++i) {
           args.push_back(s.stack[s.stack.size() - arity + i]);
         }
-        for (std::uint32_t i = 0; i < arity; ++i)
-          s.stack.pop_back();
+        pop_values(s, arity);
         const Value callee = s.stack.back();
         s.stack.pop_back();
         if (!callee.is_lambda()) {
@@ -770,8 +771,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         for (std::size_t i = 0; i < n; ++i) {
           buf[i] = s.stack[s.stack.size() - n + i];
         }
-        for (std::size_t i = 0; i < n; ++i)
-          s.stack.pop_back();
+        pop_values(s, n);
         ArrayValue* arr = arena.create<ArrayValue>();
         if (arr == nullptr) {
           return make_vm_error(FormulonErrorCode::kVmInvalidOpcode, "arena exhausted in MakeArray");
@@ -842,8 +842,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         // that by popping the operands and pushing #VALUE!.
         const std::uint32_t count = ins.a;
         FM_VM_RETURN_IF_ERROR(require_stack_depth(s, count));
-        for (std::uint32_t i = 0; i < count; ++i)
-          s.stack.pop_back();
+        pop_values(s, count);
         FM_VM_RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Value)));
         ++pc;
         break;
