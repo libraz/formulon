@@ -237,6 +237,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/coupon_schedule.cpp
   src/eval/date_time.cpp
   src/eval/date_text_parse.cpp
+  src/eval/japanese_era.cpp
   src/eval/range_args.cpp
   src/eval/scalar_ops.cpp
   src/eval/spill_committer.cpp
