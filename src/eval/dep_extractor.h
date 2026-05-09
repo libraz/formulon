@@ -38,11 +38,15 @@
 // evaluator surfaces the actual dep when the implicit intersection
 // resolves at eval time. Table-resize events must trigger a dep
 // re-extraction at the recalc-engine layer; this layer does not maintain
-// a live "table-shape" dep, matching how `RangeOp` is treated. External
-// (cross-workbook) references remain out of scope at this stage:
-// `extract_deps()` skips them silently. They will be wired in once the
-// workbook layer learns to resolve them; see the `// TODO` markers in
-// the implementation.
+// a live "table-shape" dep, matching how `RangeOp` is treated.
+//
+// External (cross-workbook) references contribute an opaque sentinel: the
+// referenced `book_id` is appended to `ExtractedDeps::external_book_ids`
+// (deduplicated). The cross-workbook cells are not enumerated because
+// their values live outside the dep graph today — the evaluator returns
+// `#NAME?` until the workbook registry can resolve external books — but
+// recording the link lets the recalc engine invalidate dependents when an
+// external link's stamp changes (consumer wiring is a separate task).
 //
 // LAMBDA bodies are not descended into here. Captures and parameter lookups
 // happen at evaluator time via the LET / LAMBDA name environment, so static
@@ -72,9 +76,16 @@ namespace eval {
 /// of the nine Excel Volatile functions, OR when the formula touches a
 /// whole-column / whole-row reference (those are conservatively treated as
 /// volatile because we cannot enumerate every cell on the sheet).
+/// `external_book_ids` is the deduplicated list of external workbook ids
+/// (`[N]Book!Sheet!A1`) the formula references. Order matches first
+/// encounter during the walk. The recalc engine consumes this list to
+/// invalidate dependents when an external link's stamp changes; today the
+/// evaluator returns `#NAME?` for ExternalRef nodes, so the field is
+/// forward-compatible plumbing.
 struct ExtractedDeps {
   std::vector<CellNodeId> cell_deps;
   bool is_volatile = false;
+  std::vector<std::uint32_t> external_book_ids;
 };
 
 /// Walks `node` and reports the cell dependencies and volatility status of

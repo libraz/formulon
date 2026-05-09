@@ -41,6 +41,7 @@ namespace {
 struct WalkState {
   ExtractedDeps* out;
   std::unordered_set<CellNodeId, CellNodeIdHash> seen;
+  std::unordered_set<std::uint32_t> seen_external_books;
   std::uint16_t current_sheet_id;
   const Workbook* workbook;
   Arena* name_arena;
@@ -350,9 +351,20 @@ void walk(const parser::AstNode& node, WalkState& state) {
       return;
     }
 
-    case parser::NodeKind::ExternalRef:
-      // TODO: cross-workbook ref tracking once the workbook registry exists.
+    case parser::NodeKind::ExternalRef: {
+      // Opaque-sentinel tracking: capture the referenced book id so the
+      // recalc engine can invalidate dependents when the external link's
+      // stamp changes. The cross-workbook cell is not flattened into a
+      // CellNodeId because external sheets live outside the dep graph
+      // (CellNodeId.sheet_id indexes the bound workbook). Today the
+      // evaluator returns `#NAME?` for ExternalRef so this is forward-
+      // compatible plumbing; consumer wiring is a separate task.
+      const std::uint32_t book_id = node.as_external_ref_book_id();
+      if (state.seen_external_books.insert(book_id).second) {
+        state.out->external_book_ids.push_back(book_id);
+      }
       return;
+    }
 
     case parser::NodeKind::StructuredRef:
       walk_structured_ref(node, state);
@@ -480,7 +492,7 @@ ExtractedDeps extract_deps(const parser::AstNode& node, std::uint16_t current_sh
   // as long as this call so the parsed nodes never outlive the walk; the
   // caller-supplied `node` is unrelated and stays in its own arena.
   Arena name_arena;
-  WalkState state{&deps, {}, current_sheet_id, &workbook, &name_arena, {}};
+  WalkState state{&deps, {}, {}, current_sheet_id, &workbook, &name_arena, {}};
   walk(node, state);
   return deps;
 }
