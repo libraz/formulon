@@ -10,6 +10,13 @@ CTEST ?= ctest
 CLANG_FORMAT ?= clang-format
 CLANG_TIDY ?= clang-tidy
 
+# Default test parallelism. Override with `make test CTEST_JOBS=N`. CTest
+# infers a reasonable number when the variable is empty (`-j 0` lets it
+# pick), but defaulting to the host CPU count keeps the fast loop near
+# 2 minutes on a modern workstation rather than the 10-15 minute serial
+# walk through the ~10k oracle parametric tests.
+CTEST_JOBS ?= 0
+
 SRC_DIRS := src tests
 CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 2>/dev/null)
 
@@ -36,13 +43,13 @@ release:
 	$(CMAKE) --build build-release --parallel
 
 test:
-	(cd $(BUILD_DIR) && $(CTEST) -LE "SLOW|LOAD" --output-on-failure --timeout 30)
+	(cd $(BUILD_DIR) && $(CTEST) -LE "SLOW|LOAD" -j $(CTEST_JOBS) --output-on-failure --timeout 30)
 
 test-slow:
-	(cd $(BUILD_DIR) && $(CTEST) -LE "LOAD" --output-on-failure --timeout 120)
+	(cd $(BUILD_DIR) && $(CTEST) -LE "LOAD" -j $(CTEST_JOBS) --output-on-failure --timeout 120)
 
 test-all:
-	(cd $(BUILD_DIR) && $(CTEST) --output-on-failure --timeout 300)
+	(cd $(BUILD_DIR) && $(CTEST) -j $(CTEST_JOBS) --output-on-failure --timeout 300)
 
 format:
 	@find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) -print0 \

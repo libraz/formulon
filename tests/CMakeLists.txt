@@ -236,6 +236,17 @@ target_compile_definitions(formulon_unit_tests
     FORMULON_CATALOG_PATH="${CMAKE_SOURCE_DIR}/tools/catalog/functions.txt"
 )
 
+# `gtest_discover_tests` registers the suite but cannot apply
+# per-case CTest labels at configure time — its discovery script runs
+# post-build, so `set_property(TEST ...)` would fail with "test does
+# not exist". To keep the slowest zip-bomb / cumulative-cap unit cases
+# (`ZipReader.ReadEntryRejectsZipBombSizedEntry`,
+# `ZipReader.ReadEntryRejectsCumulativeTotal`,
+# `ZipReader.ReadEntryRejectsHighRatioEntry`) out of the fast loop we
+# rely on the `-j N` parallelism added to `make test`; they run
+# alongside the rest in <2 s wall-clock on a modern workstation.
+# Separating them into a dedicated SLOW binary would force the gtest
+# fixture to be duplicated, which is a worse trade.
 gtest_discover_tests(formulon_unit_tests)
 
 # Behavior-vocabulary drift check. Parallel to RegistryCatalog.AllRegisteredInCatalog
@@ -260,6 +271,11 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/catalog/behaviors.py --check
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  # Marked SLOW because the YAML-vocabulary scan reads the whole behaviour
+  # corpus and is the single largest non-oracle test (~1 s in release).
+  # Behaviour drift is checked by `make test-slow` and CI's nightly tier
+  # rather than the fast-loop gate.
+  set_tests_properties(BehaviorDrift PROPERTIES LABELS "SLOW")
 endif()
 
 add_subdirectory(integration)
