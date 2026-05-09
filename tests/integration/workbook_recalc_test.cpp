@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "eval/compat.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
@@ -39,6 +40,7 @@ TEST(WorkbookRecalc, SmallChainEndToEnd) {
   // After recalc, A2 == 20 and A3 == 25. Also verify dirty propagation:
   // mutating A1 to 20 yields A2 == 40 and A3 == 45.
   Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(10.0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=A1*2")));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 2U, 0U, "=A2+5")));
@@ -69,6 +71,7 @@ TEST(WorkbookRecalc, SumAcrossRange) {
   // B1 = =SUM(A1:A3) — exercises the range-flattening path in the dep
   // extractor. Filling A1..A3 with 1..3 should produce B1 == 6.
   Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(2.0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 2U, 0U, Value::number(3.0))));
@@ -94,6 +97,7 @@ TEST(WorkbookRecalc, DynamicArraySpillsToAdjacentCells) {
   // B1, C1 with values 1, 2, 3. The anchor cached_value is the first
   // array cell; phantoms surface through `Sheet::resolve_cell_value`.
   Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(1,3)")));
 
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
@@ -117,6 +121,7 @@ TEST(WorkbookRecalc, SpillCollisionSurfacesSpillError) {
   // B1 = 99 (literal). A1 = =SEQUENCE(1,3) would normally spill into B1,
   // but the collision must surface as #SPILL! at the anchor.
   Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 1U, Value::number(99.0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(1,3)")));
 

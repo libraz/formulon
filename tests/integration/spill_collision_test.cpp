@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "eval/compat.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
@@ -54,6 +55,7 @@ TEST(SpillCollision, ScalarBlocksColumnSpillInMiddle) {
   // in the middle of the footprint -> #SPILL! at the anchor; the literal
   // at A2 is preserved.
   Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(7.0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(3,1)")));
 
@@ -76,6 +78,7 @@ TEST(SpillCollision, ScalarBlocksColumnSpillAtTail) {
   // A1 = =SEQUENCE(3,1); A3 = literal 99 (tail of footprint). Same
   // outcome as the middle-blocker case -> #SPILL!.
   Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 2U, 0U, Value::number(99.0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(3,1)")));
 
@@ -93,6 +96,7 @@ TEST(SpillCollision, ScalarBlocksRowSpill) {
   // A1 = =SEQUENCE(1,3) wants to spill A1, B1, C1. C1 = literal 5 ->
   // #SPILL!. Mirrors the column-spill case across the other axis.
   Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 2U, Value::number(5.0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(1,3)")));
 
@@ -115,6 +119,7 @@ TEST(SpillCollision, ScalarBlocks2DSpillInterior) {
   // A1 = =SEQUENCE(3,3) wants a 3x3 footprint A1:C3. C2 = literal 100
   // sits inside the footprint -> #SPILL!.
   Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 2U, Value::number(100.0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(3,3)")));
 
@@ -140,6 +145,7 @@ TEST(SpillCollision, ClearBlockerColumnRecoversSpill) {
   // Start with A2 blocking; recalc -> #SPILL!. Then set A2 to blank,
   // recalc again -> A1 spills cleanly with cells {1, 2, 3}.
   Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(7.0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(3,1)")));
 
@@ -182,6 +188,7 @@ TEST(SpillCollision, ClearBlockerColumnRecoversSpill) {
 TEST(SpillCollision, ClearBlocker2DRecoversSpill) {
   // 3x3 footprint; clear the interior blocker and re-spill.
   Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 2U, Value::number(100.0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(3,3)")));
 
@@ -221,6 +228,7 @@ TEST(SpillCollision, TwoArrayProducersConflictOnOverlappingFootprint) {
   // one of the two anchors holds #SPILL! and the other holds a
   // committed spill.
   Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(3,1)")));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=SEQUENCE(3,1)")));
 
@@ -254,6 +262,7 @@ TEST(SpillCollision, ScalarFromAnotherSpillBlocksSecondSpill) {
   // negative control for the conflict cases above: non-overlapping
   // 2D footprints both spill cleanly.
   Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(1,3)")));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 1U, "=SEQUENCE(3,1)")));
 
@@ -288,6 +297,7 @@ TEST(SpillCollision, SpillIntoTableHeaderRowCollides) {
   // The literal is the explicit blocker; the test confirms that the spill
   // surfaces #SPILL! and does NOT clobber the literal.
   Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
   Sheet& s = wb.sheet(0);
   s.set_cell_value(0U, 0U, Value::text("Region"));
   s.set_cell_value(0U, 1U, Value::text("Product"));
@@ -341,6 +351,7 @@ TEST(SpillCollision, SpillAdjacentToTableNoCollision) {
   // footprint. Spill must succeed; the table's `ref` does not extend a
   // no-spill zone past its declared right edge.
   Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
   Sheet& s = wb.sheet(0);
   s.set_cell_value(0U, 0U, Value::text("Region"));
   s.set_cell_value(0U, 1U, Value::text("Product"));
@@ -402,6 +413,7 @@ TEST(SpillCollision, SpillIntoTableDataCellCollides) {
   // Expectation: B3 -> #SPILL!; the table's existing values at C3 and C4
   // are preserved.
   Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
   Sheet& s = wb.sheet(0);
   s.set_cell_value(0U, 0U, Value::text("Region"));
   s.set_cell_value(0U, 1U, Value::text("Product"));
@@ -463,6 +475,7 @@ TEST(SpillCollision, SpillAtTableEdgeJustFitsNoCollision) {
   // Spill must succeed; this locks in that table footprints do NOT extend
   // any implicit no-spill margin past their declared `ref`.
   Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
   Sheet& s = wb.sheet(0);
   s.set_cell_value(0U, 0U, Value::text("Region"));
   s.set_cell_value(0U, 1U, Value::text("Product"));
