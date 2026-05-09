@@ -31,12 +31,6 @@
 // (`ooxml.reader.unknown_workbook_content_type`) and fall back to
 // `WorkbookKind::kXlsx` rather than failing the read; this is
 // intentional Excel-compatibility-first behaviour.
-//
-// Design references:
-//   * backup/plans/04-xlsx-io.md §4.2 (package structure)
-//   * backup/plans/04-xlsx-io.md §4.4 (Reader pipeline)
-//   * backup/plans/26-implementation-plan.md (Phase 2 sequencing,
-//     Phase 4.3 xlsm + xltx detection)
 
 #ifndef FORMULON_IO_OOXML_READER_H_
 #define FORMULON_IO_OOXML_READER_H_

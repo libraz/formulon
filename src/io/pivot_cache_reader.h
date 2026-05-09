@@ -16,7 +16,6 @@
 // enough to round-trip the workbook without losing data.
 //
 // Design references:
-//   * backup/plans/15-pivot-and-advanced.md §15.1.6
 //   * src/io/tables_reader.h (closest precedent)
 
 #ifndef FORMULON_IO_PIVOT_CACHE_READER_H_

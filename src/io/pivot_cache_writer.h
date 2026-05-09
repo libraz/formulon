@@ -17,7 +17,6 @@
 // remain out of scope at this layer, mirroring the reader's coverage.
 //
 // Design references:
-//   * backup/plans/15-pivot-and-advanced.md §15.1.6
 //   * src/io/pivot_cache_reader.h (sister reader; canonical grammar)
 
 #ifndef FORMULON_IO_PIVOT_CACHE_WRITER_H_

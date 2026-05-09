@@ -6,10 +6,6 @@
 // `set_cell_value` / `set_cell_formula` API so the recalc engine sees
 // the cell. Shared-formula bookkeeping (`<f t="shared" si="N">`) lives
 // here; SST and styles handoff is out of scope until later bundles.
-//
-// Design references:
-//   * backup/plans/04-xlsx-io.md §4.4 (Reader pipeline)
-//   * backup/plans/26-implementation-plan.md (Phase 2.2)
 
 #ifndef FORMULON_IO_SHEET_READER_H_
 #define FORMULON_IO_SHEET_READER_H_

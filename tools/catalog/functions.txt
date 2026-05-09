@@ -1,6 +1,5 @@
 # Excel 365 function catalog. Single source of truth for the
 # set of functions Formulon aims to recognise / implement.
-# Derived from backup/plans/11-function-catalog.md (2026-04).
 # One name per line. Lines starting with '#' are comments.
 # Blank lines separate categories.
 

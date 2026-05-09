@@ -30,8 +30,7 @@
 #   breaks the binding layer. Bundle 5+ size optimisation may revisit.
 #
 # * `INITIAL_MEMORY=33554432` (32 MiB) is the runtime heap, separate
-#   from the `.wasm` code-size budget tracked by
-#   `backup/plans/18-wasm-size-optimization.md`. `ALLOW_MEMORY_GROWTH=1`
+#   from the `.wasm` code-size budget. `ALLOW_MEMORY_GROWTH=1`
 #   lets large workbooks expand the heap up to the 4 GiB limit.
 
 if(NOT FM_BUILD_WASM)
@@ -67,10 +66,9 @@ target_link_libraries(formulon_wasm PRIVATE formulon_static)
 # runtime preallocates worker Web Workers up front. The 8-thread cap
 # matches `kMaxAutoThreads` in `src/eval/scheduler.cpp`.
 #
-# @size-budget-event: +~14 KB one-time pthread runtime (Bundle 5.4,
-# approved by wasm-size-guardian). Future scheduler additions will not
-# re-add this cost. See backup/plans/18-wasm-size-optimization.md
-# §18.6.4 for the formulon.pthread.wasm split-binary plan.
+# @size-budget-event: +~14 KB one-time pthread runtime (approved by
+# wasm-size-guardian). Future scheduler additions will not re-add this
+# cost.
 set(_FM_WASM_COMMON_LINK_FLAGS
   "-lembind"
   "-sWASM=1"

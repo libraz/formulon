@@ -17,10 +17,9 @@
 //
 // The graph is intentionally minimal: nodes are just `CellNodeId`
 // (sheet+row+col triples) and edges are stored as a forward + reverse
-// adjacency list. Range / DefinedName / TableColumn nodes mentioned in
-// `backup/plans/02-calc-engine.md §2.7` will be modeled as separate node
-// kinds in a follow-up bundle when the recalc engine starts wiring those
-// in; today every node is a cell.
+// adjacency list. Range / DefinedName / TableColumn nodes will be modeled
+// as separate node kinds in a follow-up bundle when the recalc engine
+// starts wiring those in; today every node is a cell.
 //
 // The implementation uses an iterative Tarjan to stay safe on the WASM
 // stack (Excel's 1,048,576-row maximum makes deep call chains plausible

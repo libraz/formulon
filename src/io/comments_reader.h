@@ -11,9 +11,6 @@
 // into a single plain-text payload (no per-run formatting is preserved).
 // The writer re-emits the same plain text on save; rich-text editing in
 // the engine is out of scope for this bundle.
-//
-// Design references:
-//   * backup/plans/04-xlsx-io.md §4.6 (Comment / VML round-trip)
 
 #ifndef FORMULON_IO_COMMENTS_READER_H_
 #define FORMULON_IO_COMMENTS_READER_H_

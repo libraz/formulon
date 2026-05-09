@@ -19,8 +19,8 @@
 //     `tables_reader` carry `display_name` and `ref` only; the formula
 //     contents of calculated columns are tracked at the cell layer.
 //
-// See `backup/plans/04-xlsx-io.md` (table parts) and the ECMA-376 §18.5.1.10
-// description of structured references for the full grammar.
+// See ECMA-376 §18.5.1.10 description of structured references for the
+// full grammar.
 
 #ifndef FORMULON_EVAL_STRUCTURED_REF_H_
 #define FORMULON_EVAL_STRUCTURED_REF_H_

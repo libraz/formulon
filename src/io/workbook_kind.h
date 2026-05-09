@@ -14,10 +14,7 @@
 // intact.
 //
 // Design references:
-//   * backup/plans/04-xlsx-io.md §4.2 (package structure)
 //   * [OPC] / [ECMA-376] for the canonical content-type strings
-//   * backup/plans/26-implementation-plan.md (Phase 4.3 — detection +
-//     passthrough; VBA execution is explicitly out of scope)
 
 #ifndef FORMULON_IO_WORKBOOK_KIND_H_
 #define FORMULON_IO_WORKBOOK_KIND_H_

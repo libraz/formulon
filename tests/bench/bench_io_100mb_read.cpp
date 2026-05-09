@@ -50,9 +50,8 @@ namespace {
 // resolution, per-sheet streaming) at a representative scale.
 //
 // To scale up once the SAX reader's streaming path is wired into
-// `read_ooxml` (see `backup/plans/26-implementation-plan.md` Phase 5
-// Bundle 5.5 follow-up) and once benches link against an optimised
-// formulon_static, bump the constants here and re-baseline.
+// `read_ooxml` and once benches link against an optimised formulon_static,
+// bump the constants here and re-baseline.
 constexpr std::uint32_t kDefaultSheets = 20U;
 constexpr std::uint32_t kDefaultRows = 500U;
 constexpr std::uint32_t kDefaultCols = 100U;

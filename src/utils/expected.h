@@ -2,8 +2,7 @@
 //
 // `Expected<T, E>` is Formulon's exclusive error-propagation primitive. The
 // engine is built with `-fno-exceptions -fno-rtti`; every fallible API signals
-// failure by returning `Expected<T, Error>` rather than throwing. See
-// backup/plans/23-error-codes.md for the full rationale.
+// failure by returning `Expected<T, Error>` rather than throwing.
 //
 // Key design points:
 //   * The internal state is a `std::variant<T, E>` so the same storage can

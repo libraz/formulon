@@ -18,9 +18,9 @@
 //
 // `EvalState` is intentionally not persisted across calls: iterative calc,
 // SCC pre-detection, and a persistent dependency graph live in a later
-// phase (see `backup/plans/02-calc-engine.md` §2.7.3). The Sheet is NOT
-// mutated by the evaluator — formula results only live inside this struct
-// for the duration of the surrounding `evaluate()` call.
+// phase. The Sheet is NOT mutated by the evaluator — formula results only
+// live inside this struct for the duration of the surrounding `evaluate()`
+// call.
 //
 // Memoised Text values store a `std::string_view` whose storage is the
 // caller's evaluation arena; the caller must keep that arena alive as long

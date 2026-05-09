@@ -13,10 +13,6 @@
 // `ParsedCell::sst_index` and sets `is_sst_index = true`; the consumer
 // records the (row, col, sst_index) triple in a side table for later
 // resolution and writes a `Text("")` placeholder into the cell.
-//
-// Design references:
-//   * backup/plans/04-xlsx-io.md §4.4 (Reader pipeline; cell parsing)
-//   * backup/plans/26-implementation-plan.md (Phase 2.2)
 
 #ifndef FORMULON_IO_CELL_PARSER_H_
 #define FORMULON_IO_CELL_PARSER_H_

@@ -5,7 +5,7 @@
 // parts the reader did not consume (unknown-part passthrough). Cells
 // are emitted with inline strings (`t="inlineStr"`); SST emission is
 // intentionally not done here — the inline form round-trips cleanly
-// already. See backup/plans/04-xlsx-io.md for the complete contract.
+// already.
 
 #ifndef FORMULON_IO_OOXML_WRITER_H_
 #define FORMULON_IO_OOXML_WRITER_H_

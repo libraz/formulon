@@ -14,7 +14,6 @@
 // writer logs `xlsb.writer.deferred` and skips them.
 //
 // Design references:
-//   * backup/plans/04-xlsx-io.md §4.6 (XLSB record stream layout)
 //   * [MS-XLSB] §2.4.x (BrtBeginSheet / BrtRowHdr / cell records)
 
 #ifndef FORMULON_IO_XLSB_SHEET_WRITER_H_

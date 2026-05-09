@@ -2,7 +2,7 @@
 //
 // Tracks the set of cells whose formula contains an Excel volatile
 // function (NOW / TODAY / RAND / RANDBETWEEN / RANDARRAY / OFFSET /
-// INDIRECT / INFO / CELL — see `backup/plans/02-calc-engine.md §2.7.2`).
+// INDIRECT / INFO / CELL).
 // On every recalc pass the engine seeds its `DirtySet` with this tracker
 // so volatile-bearing cells are re-evaluated even when nothing they
 // reference has changed.

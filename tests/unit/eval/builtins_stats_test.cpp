@@ -471,8 +471,8 @@ TEST(BuiltinsSmall, ArrayLiteralNonNumericSkipped) {
   // the ArrayLiteral dispatch branch. Here `{1, FALSE, TRUE}` reduces to
   // xs=[1.0], so SMALL(..., 1) -> 1.0. IronCalc's F10 fixture uses a Text
   // element (`{1, "-1"}`) which the parser does not yet accept inside a
-  // brace literal; see backup/plans/02-calc-engine.md on array literal
-  // grammar limits. When parser support for Text/scalar expressions in
+  // brace literal (array literal grammar does not yet allow scalar
+  // expressions). When parser support for Text/scalar expressions in
   // array literals lands, an equivalent `{1,"-1"}` case can be added.
   const Value v = EvalSource("=SMALL({1, FALSE, TRUE}, 1)");
   ASSERT_TRUE(v.is_number());

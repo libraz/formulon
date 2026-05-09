@@ -4,8 +4,7 @@
 // binding, field configuration, layout, anchor location, transient slicer
 // state, and the most recent evaluation result. One pivot table is owned
 // by exactly one sheet (the sheet supplies the sheet identity); it points
-// at a workbook-owned `PivotCache` by id. See
-// backup/plans/15-pivot-and-advanced.md §15.1.
+// at a workbook-owned `PivotCache` by id.
 
 #ifndef FORMULON_PIVOT_PIVOT_TABLE_H_
 #define FORMULON_PIVOT_PIVOT_TABLE_H_

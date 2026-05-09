@@ -16,8 +16,7 @@
 // parallelised — a regression in the layering algorithm would silently
 // degrade to serial dispatch otherwise.
 //
-// Target (per `backup/plans/26-implementation-plan.md` Phase 5 / M10):
-//   1,000,000 cells should recalc in <= 5 s wall clock with 8 workers.
+// Target: 1,000,000 cells should recalc in <= 5 s wall clock with 8 workers.
 //
 // As with `bench_recalc_1m_chain.cpp`, only the `recalc_parallel(...)` call
 // is timed; the per-cell `set_cell_formula` setup runs once outside the

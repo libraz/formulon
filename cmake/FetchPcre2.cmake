@@ -22,8 +22,7 @@
 # upstream as cache options, but in 10.43 they are *defaults* compiled
 # into the library and can be overridden at runtime via
 # pcre2_match_context_set_match_limit / set_depth_limit / set_heap_limit.
-# The Formulon REGEX impl sets these at runtime per
-# backup/plans/13-security-limits.md §13.3.3 (match_limit = 1_000_000,
+# The Formulon REGEX impl sets these at runtime (match_limit = 1_000_000,
 # depth_limit = 10_000), so the build-time defaults are immaterial.
 
 include(FetchContent)

@@ -49,7 +49,7 @@ TEST(ErrorTest, ErrorCodeNameRoundTrip) {
 }
 
 TEST(ErrorTest, ErrorCodesAreWithinDocumentedRanges) {
-  // Band boundaries per backup/plans/23-error-codes.md §23.3.
+  // Band boundaries per the documented error-code ranges.
   static_assert(static_cast<int32_t>(FormulonErrorCode::kOk) == 0, "kOk must be zero");
   static_assert(static_cast<int32_t>(FormulonErrorCode::kUnknownError) == 1, "kUnknownError must be 1");
   static_assert(static_cast<int32_t>(FormulonErrorCode::kParserUnexpectedToken) == 1000, "parser band starts at 1000");

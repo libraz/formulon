@@ -9,7 +9,6 @@
 // dependency root for header consumers that only need the enum.
 //
 // Design references:
-//   * backup/plans/04-xlsx-io.md (`<calcPr>` round-trip)
 //   * `workbook_kind.h` (sibling enum split-out)
 
 #ifndef FORMULON_IO_CALC_MODE_H_

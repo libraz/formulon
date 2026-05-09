@@ -12,9 +12,6 @@
 // VML round-trip from non-trivial sources is out of scope; the
 // passthrough mechanism on the workbook handles preservation when the
 // reader carries the original bytes through.
-//
-// Design references:
-//   * backup/plans/04-xlsx-io.md §4.6 (Comment / VML round-trip)
 
 #ifndef FORMULON_IO_COMMENTS_WRITER_H_
 #define FORMULON_IO_COMMENTS_WRITER_H_

@@ -16,8 +16,6 @@
 // bundle.
 //
 // Design references:
-//   * backup/plans/04-xlsx-io.md §4.6 (XLSB record stream layout)
-//   * backup/plans/21-xlsb-ptg.md (formula round-trip plan)
 //   * [MS-XLSB] §2.4.x (per-cell record types)
 
 #ifndef FORMULON_IO_XLSB_CELL_WRITER_H_

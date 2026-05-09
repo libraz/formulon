@@ -19,7 +19,6 @@
 // land in Bundle 4.1+ don't each re-derive them.
 //
 // Design references:
-//   * backup/plans/04-xlsx-io.md §4.6 (XLSB record stream layout)
 //   * [MS-XLSB] §2.1 (Record framing) and §2.5.121 (RkNumber)
 
 #ifndef FORMULON_IO_XLSB_RECORD_H_

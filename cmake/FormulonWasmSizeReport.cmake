@@ -6,7 +6,7 @@
 # Brotli-compressed size when `brotli` is available on PATH.
 #
 # Informational only: no enforcement here. The size gate is a separate
-# bundle (see backup/plans/18-wasm-size-optimization.md).
+# bundle.
 
 if(NOT WASM_FILE)
   message(STATUS "FormulonWasmSizeReport: WASM_FILE not provided; skipping")

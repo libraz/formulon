@@ -29,10 +29,6 @@
 // On a malformed stream the scanner returns `kIoXmlParse` with an
 // indicative offset / message; it never throws and never reads past the
 // supplied buffer.
-//
-// Design references:
-//   * backup/plans/04-xlsx-io.md §4.4 (Reader pipeline)
-//   * backup/plans/26-implementation-plan.md (Phase 5.5 SAX)
 
 #ifndef FORMULON_IO_SAX_XML_READER_H_
 #define FORMULON_IO_SAX_XML_READER_H_

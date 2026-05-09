@@ -214,9 +214,9 @@ Value FilterXml(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 //
 // Always returns #VALUE!. Formulon is a pure calculation engine and does
 // not perform network I/O under any circumstances; there is no HTTP client
-// in the dependency set (see `backup/plans/00-design-principles.md` and
-// the strict 6-library policy in CLAUDE.md). The argument is still
-// evaluated by the dispatcher so an error there propagates normally.
+// in the dependency set (see the strict dependency policy in CLAUDE.md).
+// The argument is still evaluated by the dispatcher so an error there
+// propagates normally.
 Value WebService(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return Value::error(ErrorCode::Value);
 }

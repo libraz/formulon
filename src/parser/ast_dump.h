@@ -22,9 +22,7 @@ namespace parser {
 
 /// Recursively dumps `node` as a single-line S-expression.
 ///
-/// See the table in `backup/plans/02-calc-engine.md` §2.3 for the per-kind
-/// format. Output is deterministic and contains no leading or trailing
-/// whitespace.
+/// Output is deterministic and contains no leading or trailing whitespace.
 std::string dump_sexpr(const AstNode& node);
 
 }  // namespace parser

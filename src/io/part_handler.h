@@ -17,8 +17,7 @@
 // This file currently introduces the interface only. The first wave of
 // part migrations (likely `comments` and `tables`, both small enough to
 // validate the contract) is scheduled as a follow-up; until then,
-// existing reader / writer pairs continue to work unchanged. See the
-// design plan in `backup/plans/04-xlsx-io.md` for the migration sequence.
+// existing reader / writer pairs continue to work unchanged.
 
 #ifndef FORMULON_IO_PART_HANDLER_H_
 #define FORMULON_IO_PART_HANDLER_H_

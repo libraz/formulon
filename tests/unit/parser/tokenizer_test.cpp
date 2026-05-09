@@ -1,8 +1,7 @@
 // Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the Excel formula tokenizer. Each group exercises a
-// specific syntactic family; see `backup/plans/02-calc-engine.md` §2.2
-// for the authoritative token catalog.
+// specific syntactic family.
 //
 // Note on token lifetimes: `Token::text` (for String / SheetName) references
 // arena memory owned by the producing `Tokenizer`. Tests therefore keep the

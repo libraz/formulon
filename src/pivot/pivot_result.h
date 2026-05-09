@@ -2,8 +2,7 @@
 //
 // Output shape of a single pivot evaluation. Stored on the owning
 // `PivotTable` so that `GETPIVOTDATA` can consult the most recent result
-// without re-running the aggregation pipeline. See
-// backup/plans/15-pivot-and-advanced.md §15.1.4.
+// without re-running the aggregation pipeline.
 
 #ifndef FORMULON_PIVOT_PIVOT_RESULT_H_
 #define FORMULON_PIVOT_PIVOT_RESULT_H_

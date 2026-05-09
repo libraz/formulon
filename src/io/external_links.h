@@ -14,7 +14,6 @@
 //
 // Design references:
 //   * ECMA-376 §18.14 (externalLink, externalBook, oleLink, ddeLink)
-//   * backup/plans/04-xlsx-io.md (workbook.xml.rels handling)
 
 #ifndef FORMULON_IO_EXTERNAL_LINKS_H_
 #define FORMULON_IO_EXTERNAL_LINKS_H_

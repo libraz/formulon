@@ -23,8 +23,6 @@
 // arena allocation fails. The `range_` field is left default-initialised by
 // the factories; the parser sets it via `set_range()` once it has scanned the
 // node's source span.
-//
-// See `backup/plans/02-calc-engine.md` §2.3 for the authoritative AST shape.
 
 #ifndef FORMULON_PARSER_AST_H_
 #define FORMULON_PARSER_AST_H_

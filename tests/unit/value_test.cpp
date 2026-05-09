@@ -184,7 +184,7 @@ TEST(ValueTest, DebugToStringFormats) {
 }
 
 TEST(ValueTest, OoxmlCodeMatchesSpec) {
-  // Authoritative table from backup/plans/02-calc-engine.md §2.1.
+  // Authoritative ECMA-376 / [MS-XLSB] error-code wire mapping.
   struct Expected {
     ErrorCode code;
     std::int32_t wire;

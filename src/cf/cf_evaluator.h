@@ -82,7 +82,6 @@
 // without changing the existing call signatures.
 //
 // Design references:
-//   * backup/plans/20-conditional-format-deep.md §20.4 / §20.5
 //   * src/cf/cf_match.h (return-type contract)
 
 #ifndef FORMULON_CF_CF_EVALUATOR_H_

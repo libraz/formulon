@@ -16,8 +16,7 @@
 // for TRANSPOSE go through the central `kLazyDispatch[]` table in
 // `tree_walker.cpp`.
 //
-// See `backup/plans/02-calc-engine.md` §2.6 for the wider dynamic-array
-// design and `sheet.h` for the spill-table contract.
+// See `sheet.h` for the spill-table contract.
 
 #include "eval/builtins/dynamic_array.h"
 

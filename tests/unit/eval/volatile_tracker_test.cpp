@@ -90,7 +90,7 @@ TEST(VolatileTracker, ForEachVisitsEveryRegisteredCell) {
 }
 
 TEST(VolatileTracker, IsVolatileFunctionMatchesAllNine) {
-  // Excel's nine volatile functions per backup/plans/02-calc-engine.md §2.7.2.
+  // Excel's nine volatile functions.
   EXPECT_TRUE(VolatileTracker::is_volatile_function("NOW"));
   EXPECT_TRUE(VolatileTracker::is_volatile_function("TODAY"));
   EXPECT_TRUE(VolatileTracker::is_volatile_function("RAND"));

@@ -26,12 +26,6 @@
 // Override-listed parts that the skeleton does not consume flow into
 // `XlsbReadResult::unknown_parts` and `Workbook::passthrough_parts()`,
 // matching the OOXML reader's contract.
-//
-// Design references:
-//   * backup/plans/04-xlsx-io.md §4.6 (XLSB record stream layout)
-//   * backup/plans/21-xlsb-ptg.md (Ptg overview; see Bundle 4.2 for
-//                                   the full Reader/Writer contract)
-//   * backup/plans/26-implementation-plan.md (Phase 4 sequencing)
 
 #ifndef FORMULON_IO_XLSB_READER_H_
 #define FORMULON_IO_XLSB_READER_H_

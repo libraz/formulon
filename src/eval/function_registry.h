@@ -8,8 +8,6 @@
 // each argument and short-circuits on the left-most error before invoking
 // the entry's `impl`; the callee remains responsible for any per-argument
 // coercion via the helpers in `eval/coerce.h`.
-//
-// See `backup/plans/02-calc-engine.md` §2.5.1 for the design rationale.
 
 #ifndef FORMULON_EVAL_FUNCTION_REGISTRY_H_
 #define FORMULON_EVAL_FUNCTION_REGISTRY_H_

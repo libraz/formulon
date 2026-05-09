@@ -10,9 +10,13 @@ compatibility with Mac Excel 365 (ja-JP locale).
 pip install formulon
 ```
 
-Requires Python 3.9 or newer. The wheel bundles a precompiled
-`libformulon.{so,dylib,dll}`; there is no Python build-time dependency on
-NumPy, Cython, or pybind11.
+Requires Python 3.9 or newer. PyPI publishes platform wheels only. Each wheel
+bundles a precompiled `libformulon.{so,dylib,dll}`; there is no Python
+build-time dependency on NumPy, Cython, or pybind11.
+
+Source distributions are intentionally not published for the 0.9 series.
+Building the native engine from source requires CMake and a C++17 compiler, so
+release artifacts are cut as verified wheels for supported platforms instead.
 
 ## Quick start
 
@@ -93,12 +97,18 @@ that would require CMake and a C++17 compiler on every host. Instead:
 # From the repository root:
 make python-package    # builds libformulon and stages it into _lib/
 make python-test       # runs the smoke tests against the staged package
-make python-wheel      # produces build-py/dist/formulon-*.whl
+make python-wheel      # produces a platform-tagged build-py/dist/formulon-*.whl
 ```
 
 `packages/python/scripts/stage.py` is the entry point; it shells out to
 CMake with `-DFM_BUILD_C_API_SHARED=ON` and copies the resulting library
 into `packages/python/formulon/_lib/`.
+
+Do not upload a `py3-none-any` wheel for this package. The binding is pure
+Python, but the wheel is platform-specific because it contains the native
+shared library. Linux release wheels should be built in a manylinux container
+and repaired with `auditwheel`; macOS release wheels should be checked with
+`delocate`.
 
 ## Project
 

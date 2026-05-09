@@ -7,7 +7,7 @@
 // The bundle is "emit-only": the resulting bytecode is not yet wired
 // into the tree-walk evaluator. The VM (Bundle 5.2) will consume it.
 //
-// Lowering rules (mirroring `backup/plans/02-calc-engine.md` §2.4):
+// Lowering rules:
 //
 //   * Literals, refs, name refs, structured refs, spill refs, external
 //     refs lower to a single `LoadConst` / `LoadRef` / ... opcode.

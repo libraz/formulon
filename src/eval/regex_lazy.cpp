@@ -7,10 +7,8 @@
 //
 // Spec / oracle references:
 //   * Excel REGEX function family signatures and shape semantics:
-//     backup/plans/02-calc-engine.md (text family) + Mac Excel oracle
-//     observations.
-//   * Resource limits (match_limit = 1_000_000, depth_limit = 10_000):
-//     backup/plans/13-security-limits.md §13.3.3.
+//     Mac Excel oracle observations.
+//   * Resource limits: match_limit = 1_000_000, depth_limit = 10_000.
 //   * Pattern length cap (32_767 bytes): matches Excel's worksheet
 //     formula text limit; longer patterns yield #VALUE! before
 //     pcre2_compile is invoked.
@@ -55,10 +53,9 @@ namespace {
 // and capping early gives a clean #VALUE! instead of a slow compile.
 constexpr std::size_t kMaxPatternBytes = 32767U;
 
-// Per backup/plans/13-security-limits.md §13.3.3. The match limit
-// bounds backtracking iterations; the depth limit bounds recursion in
-// the regex VM. Both are checked by pcre2_match itself; on overflow it
-// returns PCRE2_ERROR_MATCHLIMIT or PCRE2_ERROR_DEPTHLIMIT.
+// The match limit bounds backtracking iterations; the depth limit bounds
+// recursion in the regex VM. Both are checked by pcre2_match itself; on
+// overflow it returns PCRE2_ERROR_MATCHLIMIT or PCRE2_ERROR_DEPTHLIMIT.
 constexpr std::uint32_t kMatchLimit = 1000000U;
 constexpr std::uint32_t kDepthLimit = 10000U;
 

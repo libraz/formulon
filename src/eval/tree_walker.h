@@ -5,8 +5,7 @@
 // This is the simple recursive interpreter used during early development,
 // before the bytecode VM lands, and as the fallback evaluation path for
 // LAMBDA bodies. It supports scalar arithmetic, comparison, concatenation,
-// unary operators, and Excel error propagation as described in
-// `backup/plans/02-calc-engine.md` §2.1.1 and §2.5.
+// unary operators, and Excel error propagation.
 //
 // AST node kinds that need a `FunctionRegistry` or `Workbook` (calls,
 // references, ranges, arrays, lambdas, structured refs, defined names) are
@@ -49,7 +48,7 @@ class EvalContext;
 /// Numeric overflow, division by zero, and other runtime arithmetic faults
 /// are reported as Excel error sentinels (`#NUM!`, `#DIV/0!`, ...). Errors
 /// in either operand of a binary operator propagate left-to-right per the
-/// Excel rule documented in `backup/plans/02-calc-engine.md` §2.1.1.
+/// Excel left-most-wins rule.
 ///
 /// Unsupported node kinds return `Value::error` with an appropriate Excel
 /// error code: `#NAME?` for refs / lambdas / let bindings, and `#VALUE!`

@@ -11,9 +11,7 @@
 //
 // Each function follows Excel's time-value-of-money sign convention
 // (cash out = negative, cash in = positive) and defaults to
-// end-of-period payments (`type = 0`). See
-// `backup/plans/02-calc-engine.md` for the Excel-compatibility
-// reference.
+// end-of-period payments (`type = 0`).
 //
 // IRR is intentionally absent — it needs the un-flattened AST of its
 // values argument to walk range/Ref/ArrayLiteral shapes, so it lives on

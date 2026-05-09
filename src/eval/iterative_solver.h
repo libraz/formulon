@@ -28,8 +28,6 @@
 // restoring any state that should not be visible to the solver — once
 // `run_iterative_solve` returns, the cell store has been mutated either
 // to the converged values or to `#NUM!` sentinels.
-//
-// See backup/plans/02-calc-engine.md §2.7.3 for the design corpus entry.
 
 #ifndef FORMULON_EVAL_ITERATIVE_SOLVER_H_
 #define FORMULON_EVAL_ITERATIVE_SOLVER_H_

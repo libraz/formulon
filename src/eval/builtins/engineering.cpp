@@ -11,8 +11,7 @@
 // for negative results; for non-negative results the emission is
 // minimum-width unless `places` is supplied.
 //
-// Signed range per destination base (see backup/plans/02-calc-engine.md
-// §2.7.3 and Excel's own documentation):
+// Signed range per destination base (per Excel's own documentation):
 //   * 2 / "BIN":  -2^9  .. 2^9  - 1   = -512          .. 511
 //   * 8 / "OCT":  -2^29 .. 2^29 - 1   = -536870912    .. 536870911
 //   * 16 / "HEX": -2^39 .. 2^39 - 1   = -549755813888 .. 549755813887

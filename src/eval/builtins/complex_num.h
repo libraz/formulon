@@ -4,8 +4,7 @@
 //
 // Excel represents a complex number as a text value of the form "a+bi" (or
 // "a+bj"); the real part is elided when zero, the imaginary coefficient is
-// elided when +/-1, and the suffix is always `i` or `j`. See
-// backup/plans/02-calc-engine.md for the authoritative formatting table.
+// elided when +/-1, and the suffix is always `i` or `j`.
 //
 // The family covers:
 //   * Construction / inspection (6): COMPLEX, IMABS, IMAGINARY, IMREAL,

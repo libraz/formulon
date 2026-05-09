@@ -6,8 +6,8 @@
 // table metadata are preserved here as passive round-trip state so the
 // reader/writer pipeline can carry them through unchanged; named-range
 // resolution at evaluation time and structured-reference parsing arrive
-// in Phase 4. Styles, shared strings, pivots and the full cell store
-// will be layered on in follow-up work (see backup/plans/04-xlsx-io.md).
+// in a follow-up. Styles, shared strings, pivots and the full cell store
+// will be layered on in follow-up work.
 
 #ifndef FORMULON_WORKBOOK_H_
 #define FORMULON_WORKBOOK_H_

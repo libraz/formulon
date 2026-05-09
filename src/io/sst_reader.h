@@ -14,10 +14,6 @@
 // plain-text only. Phonetic guides (`<rPh>`) ARE preserved through a
 // parallel `phonetic_for_entries` vector so PHONETIC() can surface the
 // IME-typed kana attached to a cell's source `<si>` entry.
-//
-// Design references:
-//   * backup/plans/04-xlsx-io.md §4.4 (Reader pipeline)
-//   * backup/plans/26-implementation-plan.md (Phase 2.3)
 
 #ifndef FORMULON_IO_SST_READER_H_
 #define FORMULON_IO_SST_READER_H_

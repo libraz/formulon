@@ -2,8 +2,7 @@
 //
 // OOXML round-trip parity over a 20-book minimal corpus.
 //
-// This is the M6.core exit gate test (Phase 2 Bundle 2.6 in
-// `backup/plans/26-implementation-plan.md`). It builds 20 distinct
+// This is the M6.core exit gate test. It builds 20 distinct
 // synthetic workbooks programmatically (no committed binary fixtures)
 // covering the union of features the M6.core slice supports, and runs
 // each through a two-cycle round-trip pipeline:
@@ -444,8 +443,7 @@ Expected<std::vector<std::uint8_t>, Error> BuildArithmetic() {
   // (no `t="str"`), which the reader then parses as `t='n'` and
   // rejects. That is a writer bug to fix in a follow-up bundle; the
   // corpus avoids triggering it so the round-trip parity test stays
-  // green for the arithmetic surface itself. See the bundle report
-  // and `backup/plans/04-xlsx-io.md` for the deferred fix.
+  // green for the arithmetic surface itself.
   Workbook wb = Workbook::create();
   RETURN_IF_ERROR(wb.set_cell_value(0U, 0U, 0U, Value::number(10.0)));  // A1
   RETURN_IF_ERROR(wb.set_cell_value(0U, 1U, 0U, Value::number(3.0)));   // A2

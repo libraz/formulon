@@ -14,7 +14,6 @@
 // date grouping / slicer filters are deferred.
 //
 // Design references:
-//   * backup/plans/15-pivot-and-advanced.md §15.1.3
 //   * src/pivot/pivot_result.h (output structure)
 
 #ifndef FORMULON_PIVOT_PIVOT_EVALUATOR_H_

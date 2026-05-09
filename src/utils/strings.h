@@ -4,10 +4,9 @@
 //
 // The helpers in this header deliberately avoid locale-aware case folding and
 // Unicode normalisation. Those concerns belong to the text layer (see the
-// `text/` module and `backup/plans/11-text-layer.md`); the primitives below
-// are a small, dependency-free toolkit suitable for parser, tokenizer and
-// internal diagnostics work where all inputs are guaranteed to be 7-bit
-// ASCII or treated as opaque bytes.
+// `text/` module); the primitives below are a small, dependency-free toolkit
+// suitable for parser, tokenizer and internal diagnostics work where all
+// inputs are guaranteed to be 7-bit ASCII or treated as opaque bytes.
 
 #ifndef FORMULON_UTILS_STRINGS_H_
 #define FORMULON_UTILS_STRINGS_H_

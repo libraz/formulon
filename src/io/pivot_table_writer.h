@@ -15,7 +15,6 @@
 // for the subset both ends agree on.
 //
 // Design references:
-//   * backup/plans/15-pivot-and-advanced.md §15.1.1 / §15.1.4
 //   * src/io/pivot_table_reader.h (sister reader; canonical grammar)
 //   * src/io/pivot_cache_writer.h (style precedent)
 

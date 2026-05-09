@@ -8,8 +8,7 @@
 // available (each cell is its own layer of size 1) the wall-clock time is
 // dominated by per-cell tree-walker dispatch overhead.
 //
-// Target (per `backup/plans/26-implementation-plan.md` Phase 5 / M10):
-//   1,000,000 cells should recalc in <= 5 s wall clock.
+// Target: 1,000,000 cells should recalc in <= 5 s wall clock.
 //
 // On developer laptops the bench's setup phase (per-cell `set_cell_formula`
 // calls, each of which re-parses the formula and updates the dep graph) is

@@ -3,9 +3,8 @@
 // Bytecode IR for the (forthcoming) stack-machine VM.
 //
 // `compile()` (in `compiler.h`) lowers a parser `AstNode` tree into a flat
-// `ByteCode` body that the VM (Bundle 5.2) will consume. The IR is a small
-// stack-oriented opcode set; the design is described in
-// `backup/plans/02-calc-engine.md` §2.4.
+// `ByteCode` body that the VM will consume. The IR is a small
+// stack-oriented opcode set.
 //
 // Layout:
 //   - `Instruction` is a 64-bit POD: `(opcode:8, a:24, b:32)`.

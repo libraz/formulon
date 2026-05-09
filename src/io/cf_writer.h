@@ -20,7 +20,6 @@
 //     follow-up PR.
 //
 // Design references:
-//   * backup/plans/20-conditional-format-deep.md §20.2 / §20.9
 //   * src/io/cf_reader.h (sister reader; canonical grammar)
 
 #ifndef FORMULON_IO_CF_WRITER_H_

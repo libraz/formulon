@@ -16,7 +16,6 @@
 //
 // Design references:
 //   * src/io/styles_reader.h (sister reader; canonical schema)
-//   * backup/plans/05-style-runtime.md
 
 #ifndef FORMULON_IO_STYLES_WRITER_H_
 #define FORMULON_IO_STYLES_WRITER_H_

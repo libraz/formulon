@@ -1,4 +1,4 @@
-# Formulon convenience targets (see backup/plans/06-build-packaging.md §6.2).
+# Formulon convenience targets.
 #
 # Long-running commands (lint, test, full builds) should redirect output to a
 # file and grep the file — never pipe directly into grep.
@@ -160,9 +160,11 @@ npm-pack: npm-package
 # universal2 wheel building is a later bundle.
 PY_PKG_DIR := packages/python
 PY_BUILD_DIR ?= build-py
+PYTHON ?= $(shell python3 -c 'import sys; print(sys.executable)')
+PY_PLATFORM_TAG ?= $(shell $(PYTHON) $(PY_PKG_DIR)/scripts/platform_tag.py)
 
 python-package:
-	@if ! command -v python3 >/dev/null 2>&1; then \
+	@if ! command -v $(PYTHON) >/dev/null 2>&1; then \
 	  echo "python-package: python3 not found in PATH"; \
 	  exit 1; \
 	fi
@@ -170,21 +172,30 @@ python-package:
 	  echo "python-package: cmake not found in PATH"; \
 	  exit 1; \
 	fi
-	python3 $(PY_PKG_DIR)/scripts/stage.py \
+	$(PYTHON) $(PY_PKG_DIR)/scripts/stage.py \
 	  --build-dir $(PY_BUILD_DIR) --config Release
 
 python-test: python-package
-	@(cd $(PY_PKG_DIR) && python3 -m unittest discover -v tests)
+	@(cd $(PY_PKG_DIR) && $(PYTHON) -m unittest discover -v tests)
 
 python-wheel: python-package
-	@if ! python3 -m pip --version >/dev/null 2>&1; then \
+	@if ! $(PYTHON) -m pip --version >/dev/null 2>&1; then \
 	  echo "python-wheel: pip not available for python3"; \
 	  exit 1; \
 	fi
+	@if ! $(PYTHON) -c "import setuptools" >/dev/null 2>&1; then \
+	  echo "python-wheel: Python package 'setuptools' not installed"; \
+	  exit 1; \
+	fi
+	@if ! $(PYTHON) -c "import wheel" >/dev/null 2>&1; then \
+	  echo "python-wheel: Python package 'wheel' not installed"; \
+	  exit 1; \
+	fi
 	mkdir -p $(PY_BUILD_DIR)/dist
-	(cd $(PY_PKG_DIR) && python3 -m pip wheel . \
-	  --wheel-dir ../../$(PY_BUILD_DIR)/dist/ \
-	  --no-deps --no-build-isolation)
+	(cd $(PY_PKG_DIR) && FORMULON_PYTHON_PLAT_NAME=$(PY_PLATFORM_TAG) \
+	  $(PYTHON) setup.py bdist_wheel \
+	    --dist-dir ../../$(PY_BUILD_DIR)/dist/ \
+	    --plat-name $(PY_PLATFORM_TAG))
 	@echo ""
 	@echo "python wheel:"
 	@ls -la $(PY_BUILD_DIR)/dist/formulon-*.whl 2>/dev/null | tail -1 || \
@@ -250,7 +261,7 @@ size-check:
 #   tools/oracle/requirements.lock   pinned versions (committed)
 #   tools/oracle/.venv/              local venv (gitignored)
 #
-# See tools/oracle/README.md and backup/plans/07-oracle-testing.md.
+# See tools/oracle/README.md.
 ORACLE_DIR := tools/oracle
 ORACLE_VENV := $(ORACLE_DIR)/.venv
 ORACLE_GEN := $(ORACLE_VENV)/bin/python tools/oracle/oracle_gen.py

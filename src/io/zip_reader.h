@@ -7,10 +7,6 @@
 // this module only knows about ZIP central directories and entry
 // names. miniz is hidden behind a PIMPL so the header stays free of
 // third-party includes.
-//
-// Design references:
-//   * backup/plans/04-xlsx-io.md §4.4 (Reader pipeline)
-//   * backup/plans/04-xlsx-io.md §4.4.4 (zip64, BOM, malformed input)
 
 #ifndef FORMULON_IO_ZIP_READER_H_
 #define FORMULON_IO_ZIP_READER_H_

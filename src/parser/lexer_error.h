@@ -1,10 +1,9 @@
 // Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Minimal lexer-level error record. The Pratt parser will merge a vector
-// of `LexerError` into its larger `ParseError` list (see
-// `backup/plans/19-parser-errors.md` §19.3); the tokenizer only needs
-// enough structure to round-trip the code, UTF-16 range, and offending
-// source span.
+// of `LexerError` into its larger `ParseError` list; the tokenizer only
+// needs enough structure to round-trip the code, UTF-16 range, and
+// offending source span.
 
 #ifndef FORMULON_PARSER_LEXER_ERROR_H_
 #define FORMULON_PARSER_LEXER_ERROR_H_

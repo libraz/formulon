@@ -20,8 +20,7 @@
 # two differ (Mac Excel 365 / Win Excel 365 / Formulon). PR reviewers
 # check this file's diff on any oracle-gen roll-forward.
 #
-# Schema (parsed by tools/oracle/oracle_gen.py::_load_divergence_skips
-# and by the divergence tooling planned in backup/plans/07 §7.4):
+# Schema (parsed by tools/oracle/oracle_gen.py::_load_divergence_skips):
 #
 #   entries:
 #     - id: <case_id from tests/oracle/cases/*.yaml>
@@ -435,28 +434,28 @@ entries:
   # via the active NameEnv frame.
 
   # Gap 3: REGEX* family with catastrophic-backtracking inputs. PCRE2
-  # bounds runtime via match_limit (1_000_000) and depth_limit (10_000)
-  # per backup/plans/13-security-limits.md §13.3.3, surfacing FALSE
-  # (REGEXTEST) or #CALC! (REGEXEXTRACT / REGEXREPLACE) when a pattern
-  # blows past the budget. Mac Excel applies no such bound and hangs
-  # indefinitely on the same inputs, which xlwings translates into a
-  # generation-time timeout. The Formulon outcomes are intentional
-  # safety-vs-fidelity choices and are exempt from oracle verification.
+  # bounds runtime via match_limit (1_000_000) and depth_limit (10_000),
+  # surfacing FALSE (REGEXTEST) or #CALC! (REGEXEXTRACT / REGEXREPLACE)
+  # when a pattern blows past the budget. Mac Excel applies no such
+  # bound and hangs indefinitely on the same inputs, which xlwings
+  # translates into a generation-time timeout. The Formulon outcomes
+  # are intentional safety-vs-fidelity choices and are exempt from
+  # oracle verification.
   - id: regex_match_limit_regextest
     mode: skip-oracle
-    reason: "REGEXTEST with catastrophic backtracking pattern: Mac Excel hangs indefinitely; Formulon returns FALSE after pcre2_match_limit=1000000 iterations per backup/plans/13-security-limits.md §13.3.3."
+    reason: "REGEXTEST with catastrophic backtracking pattern: Mac Excel hangs indefinitely; Formulon returns FALSE after pcre2_match_limit=1000000 iterations."
     prefer: formulon
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"
   - id: regex_match_limit_regexextract
     mode: skip-oracle
-    reason: "REGEXEXTRACT with catastrophic backtracking: Mac Excel hangs; Formulon returns #CALC! per backup/plans/13-security-limits.md §13.3.3."
+    reason: "REGEXEXTRACT with catastrophic backtracking: Mac Excel hangs; Formulon returns #CALC! after the pcre2 match limit is exceeded."
     prefer: formulon
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"
   - id: regex_match_limit_regexreplace
     mode: skip-oracle
-    reason: "REGEXREPLACE with catastrophic backtracking: Mac Excel hangs; Formulon returns #CALC! per backup/plans/13-security-limits.md §13.3.3."
+    reason: "REGEXREPLACE with catastrophic backtracking: Mac Excel hangs; Formulon returns #CALC! after the pcre2 match limit is exceeded."
     prefer: formulon
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"

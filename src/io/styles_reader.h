@@ -10,10 +10,6 @@
 // into that vector. The 164 built-in Excel format ids (0..163) are
 // resolved through `builtin_num_fmt(id)` (see below) and never appear
 // in `num_fmt_strings`.
-//
-// Design references:
-//   * backup/plans/04-xlsx-io.md §4.4 (Reader pipeline)
-//   * backup/plans/05-style-runtime.md (Style record schema)
 
 #ifndef FORMULON_IO_STYLES_READER_H_
 #define FORMULON_IO_STYLES_READER_H_

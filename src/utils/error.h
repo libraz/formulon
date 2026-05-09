@@ -2,11 +2,10 @@
 //
 // Formulon internal error representation.
 //
-// `FormulonErrorCode` partitions the 0-9999 space across 10 modules; see
-// backup/plans/23-error-codes.md for the authoritative specification.
+// `FormulonErrorCode` partitions the 0-9999 space across 10 modules.
 // `Error` is the payload type used by `Expected<T, Error>` throughout the
-// engine. It is distinct from the Excel-visible `ErrorCode` (see 02 §2.1),
-// which represents formula-level business errors like `#DIV/0!`.
+// engine. It is distinct from the Excel-visible `ErrorCode`, which
+// represents formula-level business errors like `#DIV/0!`.
 
 #ifndef FORMULON_UTILS_ERROR_H_
 #define FORMULON_UTILS_ERROR_H_

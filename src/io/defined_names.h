@@ -10,11 +10,7 @@
 //
 // Structured-reference resolution (e.g. `Table[@col]`) and named-range
 // resolution at evaluation time are explicitly out of scope at this
-// layer; both arrive in Phase 4.
-//
-// Design references:
-//   * backup/plans/04-xlsx-io.md (defined names section)
-//   * backup/plans/26-implementation-plan.md (Phase 2.4)
+// layer; both arrive in a follow-up.
 
 #ifndef FORMULON_IO_DEFINED_NAMES_H_
 #define FORMULON_IO_DEFINED_NAMES_H_

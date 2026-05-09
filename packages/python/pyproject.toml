@@ -8,7 +8,8 @@
 # Build flow:
 #   1. `make python-package` -> builds libformulon and stages it into
 #                               packages/python/formulon/_lib/.
-#   2. `make python-wheel`   -> runs `pip wheel .` against this directory.
+#   2. `make python-wheel`   -> runs `setup.py bdist_wheel` against this
+#                               directory with a platform tag.
 #
 # Stdlib-only at runtime. ctypes is the only binding mechanism.
 
@@ -18,7 +19,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "formulon"
-version = "0.1.0"
+version = "0.9.0"
 description = "Excel 365 calculation engine -- Python binding"
 readme = "README.md"
 license = "Apache-2.0"
@@ -48,7 +49,7 @@ Source = "https://github.com/libraz/formulon"
 Issues = "https://github.com/libraz/formulon/issues"
 
 [tool.setuptools]
-packages = ["formulon"]
+packages = ["formulon", "formulon._lib"]
 include-package-data = true
 
 [tool.setuptools.package-data]
@@ -56,20 +57,16 @@ include-package-data = true
 # and any sibling stub files all land in the wheel. setuptools' default
 # package-data discovery will not pick up files in _lib/ otherwise.
 formulon = [
-  "_lib/*.so",
-  "_lib/*.dylib",
-  "_lib/*.dll",
-  "_lib/*.lib",
   "py.typed",
   "*.pyi",
 ]
+"formulon._lib" = [
+  "*.so",
+  "*.dylib",
+  "*.dll",
+  "*.lib",
+]
 
-# Note on wheel tagging:
-# This wheel ships a native shared library (libformulon.{dylib,so,dll}),
-# but with a pure-pyproject.toml configuration setuptools cannot emit a
-# platform-tagged wheel automatically (that hook lives in setup.py via
-# Distribution.has_ext_modules). For the host-targeted verification flow
-# this is acceptable: the Makefile's `python-wheel` target passes
-# `--build-option=--plat-name=<host>` to `pip wheel` so the produced
-# artefact carries the correct platform tag. Cross-platform wheel
-# building (cibuildwheel matrix) is a later bundle.
+# Wheel tagging lives in setup.py: the binding itself is ctypes-only, but the
+# wheel is deliberately marked non-pure so it is py3-none-<platform>, never
+# py3-none-any. It bundles libformulon.{dylib,so,dll}.

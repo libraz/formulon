@@ -65,8 +65,7 @@ namespace {
 // ---------------------------------------------------------------------------
 // Feature matrix.
 //
-// Five axes, taken from Bundle 4.6 of `backup/plans/26-implementation-plan.md`.
-// The full Cartesian product is 4 * 4 * 4 * 4 * 2 = 512 combinations.
+// Five axes. The full Cartesian product is 4 * 4 * 4 * 4 * 2 = 512 combinations.
 // We project that down to 100 by stepping through the 512-space with a
 // stride of 5 (gcd(5, 512) == 1, so the stride is a complete permutation
 // generator) and taking the first 100 indices. That gives diverse

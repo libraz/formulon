@@ -12,10 +12,6 @@
 // Default-typed binary parts (images, OLE objects, …) are NOT
 // represented here; only Override-listed parts round-trip. See the
 // reader docs for the v1 caveat.
-//
-// Design references:
-//   * backup/plans/04-xlsx-io.md §4.2 (package structure)
-//   * backup/plans/26-implementation-plan.md (Phase 2.5)
 
 #ifndef FORMULON_IO_PASSTHROUGH_PART_H_
 #define FORMULON_IO_PASSTHROUGH_PART_H_

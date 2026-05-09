@@ -11,8 +11,7 @@
 // guarantee Excel users expect.
 //
 // The engine never executes VBA; these tests are purely about
-// detection and verbatim passthrough. See `backup/plans/04-xlsx-io.md`
-// §4.2 for the package-structure rules and `[OPC]` part 1 §10 /
+// detection and verbatim passthrough. See `[OPC]` part 1 §10 /
 // `[ECMA-376]` for the canonical content-type strings.
 
 #include <algorithm>

@@ -1,8 +1,7 @@
 // Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `VolatileTracker::is_volatile_function`. The set of
-// volatile functions is fixed by Excel's contract — see
-// `backup/plans/02-calc-engine.md §2.7.2`.
+// volatile functions is fixed by Excel's contract.
 
 #include "eval/volatile_tracker.h"
 

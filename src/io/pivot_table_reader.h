@@ -6,7 +6,6 @@
 // caller looks it up against the workbook's pivot caches).
 //
 // Design references:
-//   * backup/plans/15-pivot-and-advanced.md §15.1.1 / §15.1.4
 //   * src/io/pivot_cache_reader.h (sister reader)
 
 #ifndef FORMULON_IO_PIVOT_TABLE_READER_H_

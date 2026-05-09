@@ -22,11 +22,6 @@
 // sheet-level metadata are out of scope for v1: if the workbook
 // carries any, we log `xlsb.writer.deferred` and skip them. The OOXML
 // writer remains the canonical round-trip path for those features.
-//
-// Design references:
-//   * backup/plans/04-xlsx-io.md §4.6 (XLSB)
-//   * backup/plans/21-xlsb-ptg.md §21.5 (reader/writer symmetry)
-//   * backup/plans/26-implementation-plan.md (Phase 4 sequencing)
 
 #ifndef FORMULON_IO_XLSB_WRITER_H_
 #define FORMULON_IO_XLSB_WRITER_H_

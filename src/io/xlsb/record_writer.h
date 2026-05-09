@@ -17,8 +17,6 @@
 //   * `RkNumber` (integer or scaled IEEE 754 double, [MS-XLSB] §2.5.121).
 //
 // Design references:
-//   * backup/plans/04-xlsx-io.md §4.6 (XLSB record stream layout)
-//   * backup/plans/21-xlsb-ptg.md §21.5 (reader/writer symmetry)
 //   * [MS-XLSB] §2.1 (Record framing) and §2.5.121 (RkNumber)
 
 #ifndef FORMULON_IO_XLSB_RECORD_WRITER_H_

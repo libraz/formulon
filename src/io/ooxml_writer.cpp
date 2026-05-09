@@ -8,11 +8,6 @@
 // inline strings (`t="inlineStr"`); SST emission would force every text
 // cell to walk a side table for no observable gain — the inline form
 // round-trips cleanly already.
-//
-// Design references:
-//   * backup/plans/04-xlsx-io.md §4.2 (package structure)
-//   * backup/plans/04-xlsx-io.md §4.3 (part classification)
-//   * backup/plans/26-implementation-plan.md (Phase 2.5)
 
 #include "io/ooxml_writer.h"
 

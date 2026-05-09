@@ -4,9 +4,6 @@
 // emitted on stderr, which keeps the dependency footprint zero (no spdlog,
 // no fmt) while staying machine-parseable.
 //
-// The key vocabulary and level semantics are documented in
-// backup/plans/23-error-codes.md §23.4.
-//
 // Typical usage:
 //   StructuredLog("cell.evaluated")
 //     .field("sheet", "Sheet1")

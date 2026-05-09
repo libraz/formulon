@@ -10,11 +10,10 @@
 // The table covers the classic Excel function set up to ~0x17F. Newer
 // (`_xlfn.*`) functions live in higher id ranges and are added here as
 // they become Reader/Writer-relevant. Unknown ids are surfaced by
-// returning `nullptr`; the caller's policy (the Reader emits `#NAME?`
-// per backup/plans/21-xlsb-ptg.md §21.6) lives outside this table.
+// returning `nullptr`; the caller's policy (the Reader emits `#NAME?`)
+// lives outside this table.
 //
 // Design references:
-//   * backup/plans/21-xlsb-ptg.md §21.6 (function-id mapping)
 //   * [MS-XLSB] §2.5.97.74 (PtgFunc) and §2.5.97.75 (PtgFuncVar)
 //   * [MS-XLS] §2.5.198.16 (Cetab — historical id assignments)
 

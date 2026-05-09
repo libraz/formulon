@@ -22,10 +22,7 @@
 //     receive a literal `A1:B2` argument lose their AST shape during
 //     compile and the VM evaluates them through whatever `Value` the
 //     compiler-side LoadRange path produced. This is the documented IR
-//     limitation that bundles 5.3+ will revisit.
-//
-// See `backup/plans/02-calc-engine.md` §2.4 for the design and
-// `backup/plans/26-implementation-plan.md` Phase 5 for the bundle roadmap.
+//     limitation that future bundles will revisit.
 
 #ifndef FORMULON_EVAL_VM_H_
 #define FORMULON_EVAL_VM_H_

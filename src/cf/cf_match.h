@@ -7,8 +7,6 @@
 // re-implement CF semantics — it consumes `CFMatch` and either
 // looks up the engine-supplied dxf id or paints the resolved
 // colour / data bar / icon.
-//
-// See backup/plans/20-conditional-format-deep.md §20.5.
 
 #ifndef FORMULON_CF_CF_MATCH_H_
 #define FORMULON_CF_CF_MATCH_H_

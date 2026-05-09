@@ -3,10 +3,9 @@
 // Token representation.
 //
 // This header declares `TokenKind`, `TextRange`, and `Token`: the three
-// types that the Pratt parser consumes from the tokenizer. The token
-// catalog follows `backup/plans/02-calc-engine.md` §2.2; offsets use
+// types that the Pratt parser consumes from the tokenizer. Offsets use
 // UTF-16 code units so diagnostics drop directly into Monaco / CodeMirror 6
-// editors (see `backup/plans/19-parser-errors.md` §19.3).
+// editors.
 //
 // Token lifetime: `lexeme` and `text` are `string_view`s into storage owned
 // by either the original source buffer (most tokens) or the `Arena` held by

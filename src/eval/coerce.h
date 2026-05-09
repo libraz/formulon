@@ -5,8 +5,7 @@
 // carrying the Excel-visible error code on failure (`#VALUE!`, `#NUM!`, ...).
 //
 // The semantics match Excel 365's implicit conversion rules for scalar
-// arithmetic and string contexts; see `backup/plans/02-calc-engine.md`
-// §2.1.1 for the authoritative table.
+// arithmetic and string contexts.
 
 #ifndef FORMULON_EVAL_COERCE_H_
 #define FORMULON_EVAL_COERCE_H_

@@ -8,7 +8,6 @@
 // majority of authored workbooks.
 //
 // Design references:
-//   * backup/plans/20-conditional-format-deep.md §20.2 / §20.3
 //   * src/io/pivot_table_reader.h (sister reader, similar style)
 
 #ifndef FORMULON_IO_CF_READER_H_

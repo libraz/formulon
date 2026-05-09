@@ -9,11 +9,9 @@
 //
 // The writer emits plain (non-rich) entries only — every `BrtSSTItem`
 // is `flags=0x00` followed by an `XLWideString`. This is the minimum
-// shape `read_sst` recognises, and matches Bundle 4.1's reader
-// expectations.
+// shape `read_sst` recognises, and matches the reader's expectations.
 //
 // Design references:
-//   * backup/plans/04-xlsx-io.md §4.6 (XLSB record stream layout)
 //   * [MS-XLSB] §2.4.293 (BrtSSTItem) and §2.4.290 (BrtBeginSst)
 
 #ifndef FORMULON_IO_XLSB_SST_WRITER_H_

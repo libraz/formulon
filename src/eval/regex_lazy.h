@@ -14,8 +14,7 @@
 //
 // Compile + match runs through a single shared kernel in
 // `regex_lazy.cpp`; see that file for the option set, error mapping,
-// and resource limits applied to every regex evaluation
-// (backup/plans/13-security-limits.md §13.3.3).
+// and resource limits applied to every regex evaluation.
 
 #ifndef FORMULON_EVAL_REGEX_LAZY_H_
 #define FORMULON_EVAL_REGEX_LAZY_H_

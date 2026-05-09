@@ -1299,7 +1299,7 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
     case parser::NodeKind::BinaryOp: {
       const parser::BinOp op = node.as_binary_op();
       // Evaluate left first so error propagation honours the documented
-      // left-most-wins rule from backup/plans/02-calc-engine.md §2.1.1.
+      // left-most-wins rule.
       const Value lhs = eval_node(node.as_binary_lhs(), arena, registry, ctx);
       if (lhs.is_error()) {
         return lhs;

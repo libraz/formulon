@@ -1,8 +1,7 @@
 // Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `Value` is Formulon's scalar atom: the tagged union that the parser,
-// evaluator, and Excel error model all sit on top of. See
-// backup/plans/02-calc-engine.md §2.1 for the authoritative specification.
+// evaluator, and Excel error model all sit on top of.
 //
 // The current scope of this header covers the scalar variants `Blank`,
 // `Number`, `Bool`, `Error`, and `Text`, plus `Array` (non-owning pointer
@@ -97,8 +96,7 @@ enum class ErrorCode : std::uint16_t {
 
 /// Returns the OOXML wire code for `e`, or `-1` when `e` is out of range.
 ///
-/// The mapping follows the ECMA-376 / [MS-XLSB] convention. See
-/// backup/plans/02-calc-engine.md §2.1 for the authoritative table.
+/// The mapping follows the ECMA-376 / [MS-XLSB] convention.
 constexpr std::int32_t ooxml_code(ErrorCode e) noexcept {
   switch (e) {
     case ErrorCode::Null:
@@ -336,8 +334,7 @@ class Value {
     bool boolean;
     ErrorCode error;
     /// Transitional text payload: a non-owning view borrowed from
-    /// arena-interned storage. The long-term plan (per
-    /// backup/plans/02-calc-engine.md §2.1) is to replace this with a
+    /// arena-interned storage. The long-term plan is to replace this with a
     /// `uint32_t text_id` indexing a workbook-scoped SharedStringPool,
     /// which will shrink the union back toward 8 bytes.
     std::string_view text;
@@ -378,11 +375,10 @@ static_assert(std::is_trivially_destructible_v<ArrayValue>,
 static_assert(std::is_trivially_copyable_v<Value>, "Value must be trivially copyable");
 
 // The payload union is driven by the 16-byte `string_view` text member
-// (and will later be driven by a 16-byte `Reference` payload, see
-// backup/plans/02-calc-engine.md §2.1). The `Array` and `Lambda` payloads
-// are 8-byte pointers that fit inside the existing budget. With a 1-byte
-// tag and alignment padding the struct lands at 24 bytes on every platform
-// Formulon targets.
+// (and will later be driven by a 16-byte `Reference` payload). The
+// `Array` and `Lambda` payloads are 8-byte pointers that fit inside the
+// existing budget. With a 1-byte tag and alignment padding the struct
+// lands at 24 bytes on every platform Formulon targets.
 static_assert(sizeof(Value) <= 24, "Value must fit within 24 bytes");
 
 }  // namespace formulon

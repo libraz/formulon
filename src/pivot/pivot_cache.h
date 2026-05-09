@@ -4,8 +4,6 @@
 // `xl/pivotCache/cacheDefinition*.xml` and `cacheRecords*.xml`). The cache
 // is a snapshot of the source data taken at refresh time; the pivot
 // evaluator consumes it without reaching back into the source workbook.
-//
-// See backup/plans/15-pivot-and-advanced.md §15.1.6.
 
 #ifndef FORMULON_PIVOT_PIVOT_CACHE_H_
 #define FORMULON_PIVOT_PIVOT_CACHE_H_

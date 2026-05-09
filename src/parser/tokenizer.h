@@ -8,8 +8,7 @@
 // run is either skipped or emitted as an `Invalid` token so the downstream
 // Pratt parser can still produce partial ASTs for diagnostic purposes.
 //
-// Design notes (see `backup/plans/02-calc-engine.md` §2.2 and
-// `backup/plans/19-parser-errors.md` §19.4.3):
+// Design notes:
 //
 //   * Whitespace is *not* collapsed: the parser needs exact runs to decide
 //     whether a space is the intersection operator or ignorable indent.

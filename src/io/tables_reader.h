@@ -12,10 +12,6 @@
 // verbatim on each `TableColumn` for honest round-trip; the structured-
 // reference parser does not run at this layer (the formula text is not
 // rewritten or evaluated here).
-//
-// Design references:
-//   * backup/plans/04-xlsx-io.md (table parts)
-//   * backup/plans/26-implementation-plan.md (Phase 2.4)
 
 #ifndef FORMULON_IO_TABLES_READER_H_
 #define FORMULON_IO_TABLES_READER_H_

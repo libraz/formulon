@@ -29,7 +29,7 @@ if(DEFINED ENV{SOURCE_DATE_EPOCH})
 endif()
 
 # ---------------------------------------------------------------------------
-# Build options (see backup/plans/06-build-packaging.md §6.1.2)
+# Build options
 # ---------------------------------------------------------------------------
 option(FM_BUILD_TESTING       "Build unit/property/oracle tests" ON)
 option(FM_BUILD_WASM          "Build WASM target (requires emscripten)" OFF)
@@ -50,7 +50,7 @@ option(FORMULON_VM_PARITY_CHECK "Enable tree-walker / VM parity assertions" OFF)
 include(FormulonWarnings)
 
 # ---------------------------------------------------------------------------
-# Third-party dependencies (see backup/plans/06-build-packaging.md)
+# Third-party dependencies
 # ---------------------------------------------------------------------------
 # miniz and pugixml are engine dependencies required by OOXML/XLSB I/O.
 # pcre2 backs the REGEX* function family.

@@ -6,19 +6,14 @@
 // tag, plus tiny helpers for decoding the class bits that distinguish
 // Reference / Value / Array variants of class-marked Ptgs.
 //
-// The full enumeration mirrors backup/plans/21-xlsb-ptg.md §21.3 (which
-// itself summarises [MS-XLSB] §2.5.97). Class-marked Ptgs (the
-// `0x20`/`0x40`/`0x60` trio) collapse into a single `PtgKind` here; the
-// `class_from_byte` helper extracts the class so callers do not have to
-// duplicate the bit-twiddling per call site.
+// The full enumeration summarises [MS-XLSB] §2.5.97. Class-marked Ptgs
+// (the `0x20`/`0x40`/`0x60` trio) collapse into a single `PtgKind` here;
+// the `class_from_byte` helper extracts the class so callers do not have
+// to duplicate the bit-twiddling per call site.
 //
-// Bundle 4.1 ships only the dispatch table — no Ptg → AST conversion is
-// performed here. Bundle 4.2+ will add `ptg_reader.cpp` that consumes
+// This file ships only the dispatch table — no Ptg → AST conversion is
+// performed here. A follow-up will add `ptg_reader.cpp` that consumes
 // this table to build AST nodes.
-//
-// Design references:
-//   * backup/plans/21-xlsb-ptg.md (Ptg enumeration + v1.0 status)
-//   * backup/plans/04-xlsx-io.md §4.6 (XLSB record-stream layout)
 
 #ifndef FORMULON_IO_XLSB_PTG_H_
 #define FORMULON_IO_XLSB_PTG_H_

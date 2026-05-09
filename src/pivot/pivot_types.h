@@ -1,9 +1,7 @@
 // Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Pivot data-model primitives shared by the workbook layer, the OOXML
-// reader/writer, the pivot evaluator, and `GETPIVOTDATA`. See
-// backup/plans/15-pivot-and-advanced.md §15.1 for the authoritative
-// specification.
+// reader/writer, the pivot evaluator, and `GETPIVOTDATA`.
 //
 // This header is intentionally type-only: no behaviour, no allocation
 // strategy, no evaluator hooks. Subsequent PRs build the cache, evaluator,
