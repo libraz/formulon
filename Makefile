@@ -13,7 +13,7 @@ CLANG_TIDY ?= clang-tidy
 SRC_DIRS := src tests
 CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 2>/dev/null)
 
-.PHONY: all build release test test-slow test-all fmt lint clean \
+.PHONY: all build release test test-slow test-all format format-check lint clean \
         wasm wasm-debug test-wasm test-python size-check \
         npm-package npm-test npm-pack \
         node-native node-package node-test \
@@ -44,12 +44,13 @@ test-slow:
 test-all:
 	(cd $(BUILD_DIR) && $(CTEST) --output-on-failure --timeout 300)
 
-fmt:
-	@if [ -n "$(CPP_GLOB)" ]; then \
-	  $(CLANG_FORMAT) -i $(CPP_GLOB); \
-	else \
-	  echo "No C++ sources to format yet."; \
-	fi
+format:
+	@find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) -print0 \
+	  | xargs -0 -r $(CLANG_FORMAT) -i
+
+format-check:
+	@find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) -print0 \
+	  | xargs -0 -r $(CLANG_FORMAT) --dry-run --Werror
 
 lint:
 	@if [ ! -f $(BUILD_DIR)/compile_commands.json ]; then \

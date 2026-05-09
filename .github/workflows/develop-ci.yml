@@ -51,9 +51,7 @@ jobs:
             build-essential cmake ninja-build clang-format clang-tidy
 
       - name: clang-format check
-        run: |
-          find src tests -type f \( -name '*.cpp' -o -name '*.h' \) \
-            | xargs clang-format --dry-run -Werror
+        run: make format-check
 
       - name: Configure (Debug, for compile_commands.json)
         run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
