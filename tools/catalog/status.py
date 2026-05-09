@@ -29,7 +29,6 @@ from typing import Dict, List, Optional, Sequence, Set, Tuple
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CATALOG_PATH = REPO_ROOT / "tools" / "catalog" / "functions.txt"
 EVAL_DIR = REPO_ROOT / "src" / "eval"
-TREE_WALKER_PATH = EVAL_DIR / "tree_walker.cpp"
 SPECIAL_FORMS_PATH = EVAL_DIR / "special_forms_catalog.cpp"
 
 # Matches `FunctionDef{"SUM"`, `FunctionDef def{"AND"`, etc. We require at
@@ -154,14 +153,18 @@ def scan_registered_names(eval_dir: Path) -> Set[str]:
     return names
 
 
-def scan_lazy_names(tree_walker_path: Path) -> Set[str]:
+def scan_lazy_names(eval_dir: Path) -> Set[str]:
     """Returns every name appearing as a `{"NAME", &eval_..._lazy}` entry
-    inside `kLazyDispatch`. The broader `&eval_` anchor deliberately catches
-    any future lazy impl that follows the naming convention."""
-    if not tree_walker_path.exists():
-        return set()
-    text = tree_walker_path.read_text(encoding="utf-8", errors="replace")
-    return {m.group(1) for m in LAZY_ENTRY_RE.finditer(text)}
+    in any `src/eval/**/*.cpp`. The historical `kLazyDispatch` table was
+    split out of `tree_walker.cpp` into `tree_walker_lazy_table.cpp`, so a
+    file-specific scan would miss it; the regex anchor (`{"NAME", &eval_`)
+    is specific enough that a tree-wide rglob is safe."""
+    names: Set[str] = set()
+    for path in sorted(eval_dir.rglob("*.cpp")):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for m in LAZY_ENTRY_RE.finditer(text):
+            names.add(m.group(1))
+    return names
 
 
 def scan_special_form_names(path: Path) -> Set[str]:
@@ -185,11 +188,10 @@ def scan_special_form_names(path: Path) -> Set[str]:
 
 def scan_implemented(repo_root: Path) -> Set[str]:
     eval_dir = repo_root / "src" / "eval"
-    tree_walker = eval_dir / "tree_walker.cpp"
     special_forms = eval_dir / "special_forms_catalog.cpp"
     return (
         scan_registered_names(eval_dir)
-        | scan_lazy_names(tree_walker)
+        | scan_lazy_names(eval_dir)
         | scan_special_form_names(special_forms)
     )
 
