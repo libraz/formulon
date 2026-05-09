@@ -25,6 +25,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 # Cancel superseded runs on the same ref to save CI minutes.
 concurrency:
@@ -99,10 +100,27 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+
+      - name: Diagnose cmake before WASM build
+        # mymindstorm/setup-emsdk@v14 prepends emsdk paths to PATH and
+        # historically leaks a non-executable bundled `cmake` into PATH
+        # ahead of the system one. The `emcmake cmake` configure step
+        # masks this (it resolves cmake itself), but plain `cmake --build`
+        # in the second Makefile recipe line then exec()s the broken
+        # binary and dies with EACCES ("make: cmake: Permission denied").
+        # This diagnostic prints PATH and the `cmake` candidate so a
+        # regression has a paper trail.
+        run: |
+          set -x
+          which -a cmake || true
+          ls -la "$(which cmake)" || true
+          echo "PATH=$PATH"
 
       - name: Build WASM
-        run: make wasm
+        # Force the Makefile to use the apt-installed cmake instead of
+        # whatever PATH currently points at first (see diagnose step).
+        run: make CMAKE=/usr/bin/cmake wasm
 
       - name: Size report (human)
         run: tools/bench/wasm_size_report.sh build-wasm/formulon.wasm

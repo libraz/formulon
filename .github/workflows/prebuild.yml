@@ -39,6 +39,7 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -67,7 +68,9 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Node >=21 is required so `node --test 'test/*.test.mjs'`
+          # expands the glob; Node 20 looks for the literal path.
+          node-version: 22
 
       - name: Install build deps (Linux)
         if: startsWith(matrix.platform-arch, 'linux-')

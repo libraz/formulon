@@ -44,7 +44,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           registry-url: 'https://registry.npmjs.org'
 
       - uses: mymindstorm/setup-emsdk@v14
@@ -68,7 +68,9 @@ jobs:
           fi
 
       - name: Build WASM
-        run: make wasm
+        # Force apt-installed cmake; emsdk's PATH order can shadow it
+        # with a non-executable bundled cmake (see ci.yml WASM job).
+        run: make CMAKE=/usr/bin/cmake wasm
 
       - name: Size report (advisory)
         run: tools/bench/wasm_size_report.sh build-wasm/formulon.wasm
