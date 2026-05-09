@@ -317,6 +317,11 @@ TEST(SheetSpillTest, CommitOverExistingAnchorClearsOldRegionFirst) {
 // Bounds and shape rejection
 // ---------------------------------------------------------------------------
 
+// `commit_spill` validates shape and footprint via `assert(false)` followed
+// by a `return false` safety net. In debug builds the assert fires first; in
+// release builds (NDEBUG) the safety net is the only barrier. Cover both.
+#if defined(NDEBUG)
+
 TEST(SheetSpillTest, ZeroRowsOrZeroColsIsRejected) {
   Sheet s("Sheet1");
   EXPECT_FALSE(s.commit_spill(0U, 0U, 0U, 1U, std::vector<Value>{}));
@@ -343,6 +348,38 @@ TEST(SheetSpillTest, FootprintOverflowingSheetBoundsIsRejected) {
   EXPECT_FALSE(s.commit_spill(0U, Sheet::kMaxCols - 1U, 1U, 2U, std::move(cells2)));
   EXPECT_EQ(s.spill_region_at_anchor(0U, Sheet::kMaxCols - 1U), nullptr);
 }
+
+#elif GTEST_HAS_DEATH_TEST
+
+TEST(SheetSpillDeathTest, ZeroRowsAborts) {
+  Sheet s("Sheet1");
+  EXPECT_DEATH(s.commit_spill(0U, 0U, 0U, 1U, std::vector<Value>{}), "zero-sized spill region");
+}
+
+TEST(SheetSpillDeathTest, ZeroColsAborts) {
+  Sheet s("Sheet1");
+  EXPECT_DEATH(s.commit_spill(0U, 0U, 1U, 0U, std::vector<Value>{}), "zero-sized spill region");
+}
+
+TEST(SheetSpillDeathTest, MismatchedCellsLengthAborts) {
+  Sheet s("Sheet1");
+  std::vector<Value> wrong_size = {Value::number(1.0), Value::number(2.0)};
+  EXPECT_DEATH(s.commit_spill(0U, 0U, 3U, 1U, std::move(wrong_size)), "does not match");
+}
+
+TEST(SheetSpillDeathTest, FootprintOverflowsRowsAborts) {
+  Sheet s("Sheet1");
+  std::vector<Value> cells = {Value::number(1.0), Value::number(2.0)};
+  EXPECT_DEATH(s.commit_spill(Sheet::kMaxRows - 1U, 0U, 2U, 1U, std::move(cells)), "footprint exceeds sheet bounds");
+}
+
+TEST(SheetSpillDeathTest, FootprintOverflowsColsAborts) {
+  Sheet s("Sheet1");
+  std::vector<Value> cells = {Value::number(1.0), Value::number(2.0)};
+  EXPECT_DEATH(s.commit_spill(0U, Sheet::kMaxCols - 1U, 1U, 2U, std::move(cells)), "footprint exceeds sheet bounds");
+}
+
+#endif  // NDEBUG / GTEST_HAS_DEATH_TEST
 
 // ---------------------------------------------------------------------------
 // cell_at remains spill-blind
