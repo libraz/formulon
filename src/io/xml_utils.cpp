@@ -4,8 +4,11 @@
 
 #include "io/xml_utils.h"
 
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <limits>
 #include <string>
 #include <string_view>
 
@@ -29,6 +32,46 @@ void append_xml_attr_uint(std::string& out, std::string_view name, std::uint32_t
   out.append("=\"");
   out.append(std::to_string(value));
   out.append("\"");
+}
+
+std::uint32_t parse_xml_u32_attr(const pugi::xml_attribute& attr, std::uint32_t default_value) {
+  if (!attr) {
+    return default_value;
+  }
+  const char* raw = attr.value();
+  if (raw == nullptr || *raw == '\0') {
+    return default_value;
+  }
+  if (*raw == '-' || *raw == '+') {
+    return default_value;
+  }
+  errno = 0;
+  char* end = nullptr;
+  const unsigned long parsed = std::strtoul(raw, &end, 10);
+  if (end == raw || *end != '\0' || errno != 0 ||
+      parsed > static_cast<unsigned long>(std::numeric_limits<std::uint32_t>::max())) {
+    return default_value;
+  }
+  return static_cast<std::uint32_t>(parsed);
+}
+
+std::int32_t parse_xml_i32_attr(const pugi::xml_attribute& attr, std::int32_t default_value) {
+  if (!attr) {
+    return default_value;
+  }
+  const char* raw = attr.value();
+  if (raw == nullptr || *raw == '\0') {
+    return default_value;
+  }
+  errno = 0;
+  char* end = nullptr;
+  const long parsed = std::strtol(raw, &end, 10);
+  if (end == raw || *end != '\0' || errno != 0 ||
+      parsed > static_cast<long>(std::numeric_limits<std::int32_t>::max()) ||
+      parsed < static_cast<long>(std::numeric_limits<std::int32_t>::min())) {
+    return default_value;
+  }
+  return static_cast<std::int32_t>(parsed);
 }
 
 std::size_t append_rich_text(const pugi::xml_node& node, std::string& out) {

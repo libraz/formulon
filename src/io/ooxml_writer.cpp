@@ -177,6 +177,15 @@ struct EmissionPlan {
 
 std::string RelsPathForPart(std::string_view part_path);
 
+std::string NumberedPartPath(std::string_view prefix, std::uint32_t id, std::string_view suffix) {
+  std::string path;
+  path.reserve(prefix.size() + suffix.size() + 10U);
+  path.append(prefix);
+  path.append(std::to_string(id));
+  path.append(suffix);
+  return path;
+}
+
 /// Returns the set of paths the writer always generates, regardless of
 /// metadata. Used to detect passthrough collisions.
 std::unordered_set<std::string> BuildGeneratedPathSet(
@@ -273,7 +282,7 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb) {
           .field("assigned_id", static_cast<std::int64_t>(entry.numeric_id))
           .warn();
     }
-    entry.path = "xl/tables/table" + std::to_string(entry.numeric_id) + ".xml";
+    entry.path = NumberedPartPath("xl/tables/table", entry.numeric_id, ".xml");
     plan.tables_by_sheet[t.sheet_index].push_back(entry);
     flat_tables.push_back(entry);
   }
@@ -292,10 +301,10 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb) {
     entry.cache = cache;
     entry.numeric_id = static_cast<std::uint32_t>(i + 1);
     entry.cache_id = cache->cache_id();
-    const std::string n_str = std::to_string(entry.numeric_id);
-    entry.definition_path = "xl/pivotCache/pivotCacheDefinition" + n_str + ".xml";
-    entry.records_path = "xl/pivotCache/pivotCacheRecords" + n_str + ".xml";
-    entry.definition_rels_path = "xl/pivotCache/_rels/pivotCacheDefinition" + n_str + ".xml.rels";
+    entry.definition_path = NumberedPartPath("xl/pivotCache/pivotCacheDefinition", entry.numeric_id, ".xml");
+    entry.records_path = NumberedPartPath("xl/pivotCache/pivotCacheRecords", entry.numeric_id, ".xml");
+    entry.definition_rels_path =
+        NumberedPartPath("xl/pivotCache/_rels/pivotCacheDefinition", entry.numeric_id, ".xml.rels");
     // sheets rId1..rId(sheet_count), styles rId(sheet_count+1),
     // first cache rId(sheet_count+2). Cast safe: workbook size is
     // bounded well within uint32 range.
@@ -316,7 +325,7 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb) {
       EmissionPlan::PivotTablePlan entry;
       entry.table = tbl;
       entry.numeric_id = next_pivot_table_id++;
-      entry.path = "xl/pivotTables/pivotTable" + std::to_string(entry.numeric_id) + ".xml";
+      entry.path = NumberedPartPath("xl/pivotTables/pivotTable", entry.numeric_id, ".xml");
       plan.pivot_tables_by_sheet[s].push_back(std::move(entry));
     }
   }
@@ -333,8 +342,8 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb) {
     }
     EmissionPlan::CommentsPlan entry;
     entry.numeric_id = next_comments_id++;
-    entry.comments_path = "xl/comments" + std::to_string(entry.numeric_id) + ".xml";
-    entry.vml_path = "xl/drawings/vmlDrawing" + std::to_string(entry.numeric_id) + ".vml";
+    entry.comments_path = NumberedPartPath("xl/comments", entry.numeric_id, ".xml");
+    entry.vml_path = NumberedPartPath("xl/drawings/vmlDrawing", entry.numeric_id, ".vml");
     // Detect whether the workbook still carries the original VML bytes
     // via passthrough. If so, prefer those bytes over the writer's
     // stub so the round-trip stays byte-identical for unmodified

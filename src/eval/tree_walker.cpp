@@ -287,6 +287,38 @@ bool append_range_sourced_values(const FunctionDef& def, const Value* cells, std
   return true;
 }
 
+using RangeCallExpander = bool (*)(const parser::AstNode&, Arena&, const FunctionRegistry&, const EvalContext&,
+                                   std::vector<Value>*, ErrorCode*, std::uint32_t*, std::uint32_t*);
+
+bool append_expanded_call_argument(const FunctionDef& def, const parser::AstNode& arg_node,
+                                   std::string_view call_name, RangeCallExpander expand, Arena& arena,
+                                   const FunctionRegistry& registry, const EvalContext& ctx,
+                                   std::vector<Value>* values, bool* handled, Value* immediate_return) {
+  *handled = false;
+  if (!def.accepts_ranges || arg_node.kind() != parser::NodeKind::Call ||
+      !strings::case_insensitive_eq(arg_node.as_call_name(), call_name)) {
+    return true;
+  }
+  *handled = true;
+  std::vector<Value> cells;
+  ErrorCode err_code = ErrorCode::Value;
+  if (!expand(arg_node, arena, registry, ctx, &cells, &err_code, nullptr, nullptr)) {
+    const Value err = Value::error(err_code);
+    if (def.propagate_errors) {
+      *immediate_return = err;
+      return false;
+    }
+    values->push_back(err);
+    return true;
+  }
+  Value range_err = Value::blank();
+  if (!append_range_sourced_values(def, cells.data(), cells.size(), values, &range_err)) {
+    *immediate_return = range_err;
+    return false;
+  }
+  return true;
+}
+
 // Special-cased function-call dispatch.
 //
 // Lazy entries (`IF`, `IFERROR`, `IFNA`, the `*IF`/`*IFS` aggregators) are
@@ -529,23 +561,14 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
     // `INDIRECT("A1:B2")`) would need a `Value::Array` runtime to
     // expand; they fall through to `eval_node` and surface whatever
     // scalar result OFFSET / INDIRECT produces today.
-    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Call &&
-        strings::case_insensitive_eq(arg_node.as_call_name(), "OFFSET")) {
+    bool expanded_call_handled = false;
+    Value expanded_call_return = Value::blank();
+    if (!append_expanded_call_argument(*def, arg_node, "OFFSET", expand_offset_call, arena, registry, ctx, &values,
+                                       &expanded_call_handled, &expanded_call_return)) {
+      return expanded_call_return;
+    }
+    if (expanded_call_handled) {
       had_range_shaped_arg = true;
-      std::vector<Value> off_cells;
-      ErrorCode off_err = ErrorCode::Value;
-      if (!expand_offset_call(arg_node, arena, registry, ctx, &off_cells, &off_err, nullptr, nullptr)) {
-        const Value err = Value::error(off_err);
-        if (def->propagate_errors) {
-          return err;
-        }
-        values.push_back(err);
-        continue;
-      }
-      Value range_err = Value::blank();
-      if (!append_range_sourced_values(*def, off_cells.data(), off_cells.size(), &values, &range_err)) {
-        return range_err;
-      }
       continue;
     }
     // IF-as-range-producer mirrors the CHOOSE / OFFSET branches: when an
@@ -555,23 +578,12 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
     // range rather than collapse `r` to a scalar. `expand_if_call` shares
     // the same evaluation / range-resolution / filter contracts as the
     // CHOOSE / OFFSET expanders.
-    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Call &&
-        strings::case_insensitive_eq(arg_node.as_call_name(), "IF")) {
+    if (!append_expanded_call_argument(*def, arg_node, "IF", expand_if_call, arena, registry, ctx, &values,
+                                       &expanded_call_handled, &expanded_call_return)) {
+      return expanded_call_return;
+    }
+    if (expanded_call_handled) {
       had_range_shaped_arg = true;
-      std::vector<Value> if_cells;
-      ErrorCode if_err = ErrorCode::Value;
-      if (!expand_if_call(arg_node, arena, registry, ctx, &if_cells, &if_err, nullptr, nullptr)) {
-        const Value err = Value::error(if_err);
-        if (def->propagate_errors) {
-          return err;
-        }
-        values.push_back(err);
-        continue;
-      }
-      Value range_err = Value::blank();
-      if (!append_range_sourced_values(*def, if_cells.data(), if_cells.size(), &values, &range_err)) {
-        return range_err;
-      }
       continue;
     }
     // CHOOSE-as-range-producer mirrors the OFFSET branch above: when an
@@ -580,23 +592,12 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
     // itself an OFFSET / CHOOSE call). `expand_choose_call` shares the
     // same evaluation, range-resolution, and filter contracts so SUM /
     // AVERAGE / MIN / MAX / AVERAGEA all behave consistently.
-    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Call &&
-        strings::case_insensitive_eq(arg_node.as_call_name(), "CHOOSE")) {
+    if (!append_expanded_call_argument(*def, arg_node, "CHOOSE", expand_choose_call, arena, registry, ctx, &values,
+                                       &expanded_call_handled, &expanded_call_return)) {
+      return expanded_call_return;
+    }
+    if (expanded_call_handled) {
       had_range_shaped_arg = true;
-      std::vector<Value> ch_cells;
-      ErrorCode ch_err = ErrorCode::Value;
-      if (!expand_choose_call(arg_node, arena, registry, ctx, &ch_cells, &ch_err, nullptr, nullptr)) {
-        const Value err = Value::error(ch_err);
-        if (def->propagate_errors) {
-          return err;
-        }
-        values.push_back(err);
-        continue;
-      }
-      Value range_err = Value::blank();
-      if (!append_range_sourced_values(*def, ch_cells.data(), ch_cells.size(), &values, &range_err)) {
-        return range_err;
-      }
       continue;
     }
     // ROW(range) / COLUMN(range) as an aggregator argument: Excel 365 spills
@@ -607,23 +608,12 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
     // the scalar 1. Mirrors the OFFSET / CHOOSE / IF branches above; the
     // emitted cells are always `Number`, so `range_filter_*` rules pass
     // them through unchanged.
-    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Call &&
-        strings::case_insensitive_eq(arg_node.as_call_name(), "ROW")) {
+    if (!append_expanded_call_argument(*def, arg_node, "ROW", expand_row_call, arena, registry, ctx, &values,
+                                       &expanded_call_handled, &expanded_call_return)) {
+      return expanded_call_return;
+    }
+    if (expanded_call_handled) {
       had_range_shaped_arg = true;
-      std::vector<Value> row_cells;
-      ErrorCode row_err = ErrorCode::Value;
-      if (!expand_row_call(arg_node, arena, registry, ctx, &row_cells, &row_err, nullptr, nullptr)) {
-        const Value err = Value::error(row_err);
-        if (def->propagate_errors) {
-          return err;
-        }
-        values.push_back(err);
-        continue;
-      }
-      Value range_err = Value::blank();
-      if (!append_range_sourced_values(*def, row_cells.data(), row_cells.size(), &values, &range_err)) {
-        return range_err;
-      }
       continue;
     }
     if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::StructuredRef) {
@@ -658,23 +648,12 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       values.push_back(sr_val);
       continue;
     }
-    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Call &&
-        strings::case_insensitive_eq(arg_node.as_call_name(), "COLUMN")) {
+    if (!append_expanded_call_argument(*def, arg_node, "COLUMN", expand_column_call, arena, registry, ctx, &values,
+                                       &expanded_call_handled, &expanded_call_return)) {
+      return expanded_call_return;
+    }
+    if (expanded_call_handled) {
       had_range_shaped_arg = true;
-      std::vector<Value> col_cells;
-      ErrorCode col_err = ErrorCode::Value;
-      if (!expand_column_call(arg_node, arena, registry, ctx, &col_cells, &col_err, nullptr, nullptr)) {
-        const Value err = Value::error(col_err);
-        if (def->propagate_errors) {
-          return err;
-        }
-        values.push_back(err);
-        continue;
-      }
-      Value range_err = Value::blank();
-      if (!append_range_sourced_values(*def, col_cells.data(), col_cells.size(), &values, &range_err)) {
-        return range_err;
-      }
       continue;
     }
     Value v = eval_node(arg_node, arena, registry, ctx);

@@ -41,6 +41,22 @@ Expected<int, ErrorCode> read_int(const Value& v) {
   return static_cast<int>(std::trunc(d));
 }
 
+Expected<int, ErrorCode> read_optional_int(const Value* args, std::uint32_t arity, std::uint32_t index,
+                                           int default_value) {
+  if (arity <= index) {
+    return default_value;
+  }
+  return read_int(args[index]);
+}
+
+Expected<bool, ErrorCode> read_optional_bool(const Value* args, std::uint32_t arity, std::uint32_t index,
+                                             bool default_value) {
+  if (arity <= index) {
+    return default_value;
+  }
+  return coerce_to_bool(args[index]);
+}
+
 // True iff `ch` is an ASCII letter or digit.
 bool is_alnum_ascii(char ch) noexcept {
   return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9');
@@ -120,29 +136,20 @@ Value Address(const Value* args, std::uint32_t arity, Arena& arena) {
     return Value::error(ErrorCode::Value);
   }
 
-  // abs_num defaults to 1 ($A$1).
-  int abs_num = 1;
-  if (arity >= 3) {
-    auto abs_exp = read_int(args[2]);
-    if (!abs_exp) {
-      return Value::error(abs_exp.error());
-    }
-    abs_num = abs_exp.value();
-    if (abs_num < 1 || abs_num > 4) {
-      return Value::error(ErrorCode::Value);
-    }
+  auto abs_exp = read_optional_int(args, arity, 2, 1);
+  if (!abs_exp) {
+    return Value::error(abs_exp.error());
+  }
+  const int abs_num = abs_exp.value();
+  if (abs_num < 1 || abs_num > 4) {
+    return Value::error(ErrorCode::Value);
   }
 
-  // a1 defaults to TRUE (A1 style). Accept any truthy value through the
-  // standard bool coercion; an unparseable text is already `#VALUE!`.
-  bool a1_style = true;
-  if (arity >= 4) {
-    auto bool_exp = coerce_to_bool(args[3]);
-    if (!bool_exp) {
-      return Value::error(bool_exp.error());
-    }
-    a1_style = bool_exp.value();
+  auto bool_exp = read_optional_bool(args, arity, 3, true);
+  if (!bool_exp) {
+    return Value::error(bool_exp.error());
   }
+  const bool a1_style = bool_exp.value();
 
   // sheet_text is optional. When the argument is supplied at all (even
   // as empty text), Excel emits the trailing `!` separator — so

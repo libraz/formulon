@@ -5,9 +5,7 @@
 
 #include "io/pivot_table_reader.h"
 
-#include <cerrno>
 #include <cstdint>
-#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <string_view>
@@ -15,6 +13,7 @@
 #include <vector>
 
 #include "io/cell_parser.h"
+#include "io/xml_utils.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "pugixml.hpp"
@@ -23,31 +22,6 @@
 
 namespace formulon::io {
 namespace {
-
-/// Parses a non-negative decimal integer attribute body, locale-independent.
-/// Returns `default_value` on missing / empty / malformed / negative input;
-/// caps at `std::uint32_t` range. Mirrors the defensive parsing in
-/// `tables_reader.cpp` so a stray attribute does not reject an otherwise-
-/// valid pivot table.
-std::uint32_t ParseU32Attr(const pugi::xml_attribute& attr, std::uint32_t default_value) {
-  if (!attr) {
-    return default_value;
-  }
-  const char* raw = attr.value();
-  if (raw == nullptr || *raw == '\0') {
-    return default_value;
-  }
-  errno = 0;
-  char* end = nullptr;
-  const unsigned long parsed = std::strtoul(raw, &end, 10);
-  if (end == raw || *end != '\0' || errno != 0) {
-    return default_value;
-  }
-  if (parsed > 0xFFFFFFFFUL) {
-    return default_value;
-  }
-  return static_cast<std::uint32_t>(parsed);
-}
 
 /// Maps an OOXML `axis="..."` attribute body to a `PivotAxis`. Unknown /
 /// missing values fold to `Value` — both `axisValues` and the absent-
@@ -246,7 +220,7 @@ void ParsePivotFields(const pugi::xml_node& fields_node, pivot::PivotTable* out)
 /// onto `out`. Missing `x` defaults to 0 (matches OOXML schema).
 void ParseFieldOrder(const pugi::xml_node& parent, std::vector<std::uint32_t>* out) {
   for (pugi::xml_node f = parent.child("field"); f; f = f.next_sibling("field")) {
-    out->push_back(ParseU32Attr(f.attribute("x"), 0U));
+    out->push_back(parse_xml_u32_attr(f.attribute("x"), 0U));
   }
 }
 
@@ -263,7 +237,7 @@ Expected<void, Error> ParseDataFields(const pugi::xml_node& parent, pivot::Pivot
                         "context=pivot_table_reader");
     }
     entry.name = name_attr.value();
-    entry.field_index = ParseU32Attr(df.attribute("fld"), 0U);
+    entry.field_index = parse_xml_u32_attr(df.attribute("fld"), 0U);
     entry.aggregation = ParseAggregation(df.attribute("subtotal").as_string());
     if (pugi::xml_attribute nf = df.attribute("numFmtId"); nf) {
       entry.number_format = nf.value();
@@ -272,10 +246,10 @@ Expected<void, Error> ParseDataFields(const pugi::xml_node& parent, pivot::Pivot
       entry.show_as = ParseShowDataAs(sa.as_string());
     }
     if (pugi::xml_attribute bf = df.attribute("baseField"); bf) {
-      entry.show_as_base_field = ParseU32Attr(bf, 0U);
+      entry.show_as_base_field = parse_xml_u32_attr(bf, 0U);
     }
     if (pugi::xml_attribute bi = df.attribute("baseItem"); bi) {
-      entry.show_as_base_item = ParseU32Attr(bi, 0U);
+      entry.show_as_base_item = parse_xml_u32_attr(bi, 0U);
     }
     out->mutable_data_fields().push_back(std::move(entry));
   }
@@ -303,7 +277,7 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   if (pugi::xml_attribute name_attr = root.attribute("name"); name_attr) {
     table.set_name(name_attr.value());
   }
-  table.set_pivot_cache_id(ParseU32Attr(root.attribute("cacheId"), 0U));
+  table.set_pivot_cache_id(parse_xml_u32_attr(root.attribute("cacheId"), 0U));
 
   pugi::xml_node loc = root.child("location");
   if (!loc) {

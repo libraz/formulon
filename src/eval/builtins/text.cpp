@@ -36,6 +36,7 @@ namespace eval {
 namespace {
 
 using text_detail::read_int_arg;
+using text_detail::read_optional_int_arg;
 
 // Excel caps the result of REPT (and a handful of related text functions)
 // at 32,767 UTF-16 units. We reuse the same constant in REPT's overflow
@@ -116,14 +117,11 @@ Value Left(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!text) {
     return Value::error(text.error());
   }
-  int n = 1;
-  if (arity >= 2) {
-    auto parsed = read_int_arg(args[1]);
-    if (!parsed) {
-      return Value::error(parsed.error());
-    }
-    n = parsed.value();
+  auto parsed = read_optional_int_arg(args, arity, 1u, 1);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
+  const int n = parsed.value();
   if (n < 0) {
     return Value::error(ErrorCode::Value);
   }
@@ -139,14 +137,11 @@ Value Right(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!text) {
     return Value::error(text.error());
   }
-  int n = 1;
-  if (arity >= 2) {
-    auto parsed = read_int_arg(args[1]);
-    if (!parsed) {
-      return Value::error(parsed.error());
-    }
-    n = parsed.value();
+  auto parsed = read_optional_int_arg(args, arity, 1u, 1);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
+  const int n = parsed.value();
   if (n < 0) {
     return Value::error(ErrorCode::Value);
   }
@@ -342,14 +337,11 @@ Value Find(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!haystack) {
     return Value::error(haystack.error());
   }
-  int start = 1;
-  if (arity >= 3) {
-    auto parsed = read_int_arg(args[2]);
-    if (!parsed) {
-      return Value::error(parsed.error());
-    }
-    start = parsed.value();
+  auto parsed = read_optional_int_arg(args, arity, 2u, 1);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
+  const int start = parsed.value();
   const std::uint32_t total = utf16_units_in(haystack.value());
   if (start < 1 || static_cast<std::uint32_t>(start) > total + 1) {
     return Value::error(ErrorCode::Value);
@@ -381,14 +373,11 @@ Value Search(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!haystack) {
     return Value::error(haystack.error());
   }
-  int start = 1;
-  if (arity >= 3) {
-    auto parsed = read_int_arg(args[2]);
-    if (!parsed) {
-      return Value::error(parsed.error());
-    }
-    start = parsed.value();
+  auto parsed = read_optional_int_arg(args, arity, 2u, 1);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
+  const int start = parsed.value();
   const std::uint32_t total = utf16_units_in(haystack.value());
   if (start < 1 || static_cast<std::uint32_t>(start) > total + 1) {
     return Value::error(ErrorCode::Value);

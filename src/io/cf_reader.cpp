@@ -5,10 +5,7 @@
 
 #include "io/cf_reader.h"
 
-#include <cerrno>
-#include <climits>
 #include <cstdint>
-#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <string_view>
@@ -17,6 +14,7 @@
 
 #include "cf/cf_types.h"
 #include "io/cell_parser.h"
+#include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -30,28 +28,6 @@ bool ParseBoolAttr(const pugi::xml_attribute& attr) {
   }
   const std::string_view text = attr.value();
   return text == "1" || text == "true";
-}
-
-/// Parses a signed 32-bit attribute. On 64-bit hosts `long` covers the
-/// full int32 range so the implementation is safe; on 32-bit hosts
-/// `errno == ERANGE` traps overflow. The explicit `INT32_MIN..INT32_MAX`
-/// bounds are belt-and-suspenders for hosts where `long` is wider.
-std::int32_t ParseI32Attr(const pugi::xml_attribute& attr, std::int32_t default_value) {
-  if (!attr) {
-    return default_value;
-  }
-  const char* raw = attr.value();
-  if (raw == nullptr || *raw == '\0') {
-    return default_value;
-  }
-  errno = 0;
-  char* end = nullptr;
-  const long parsed = std::strtol(raw, &end, 10);
-  if (end == raw || *end != '\0' || errno != 0 || parsed > static_cast<long>(INT32_MAX) ||
-      parsed < static_cast<long>(INT32_MIN)) {
-    return default_value;
-  }
-  return static_cast<std::int32_t>(parsed);
 }
 
 cf::RuleType ParseRuleType(std::string_view text) {
@@ -410,11 +386,11 @@ cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
   cf::CFRule out;
   const pugi::xml_attribute type_attr = rule.attribute("type");
   out.type = ParseRuleType(type_attr.value());
-  out.priority = ParseI32Attr(rule.attribute("priority"), 1);
+  out.priority = parse_xml_i32_attr(rule.attribute("priority"), 1);
   out.stop_if_true = ParseBoolAttr(rule.attribute("stopIfTrue"));
   const pugi::xml_attribute dxf_attr = rule.attribute("dxfId");
   if (dxf_attr) {
-    out.dxf_id = static_cast<std::uint32_t>(ParseI32Attr(dxf_attr, 0));
+    out.dxf_id = static_cast<std::uint32_t>(parse_xml_i32_attr(dxf_attr, 0));
   }
   const pugi::xml_attribute id_attr = rule.attribute("id");
   if (id_attr) {
@@ -428,7 +404,7 @@ cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
     out.time_period = ParseTimePeriod(rule.attribute("timePeriod").value());
   }
   if (out.type == cf::RuleType::Top10) {
-    out.rank = ParseI32Attr(rule.attribute("rank"), 10);
+    out.rank = parse_xml_i32_attr(rule.attribute("rank"), 10);
     out.percent = ParseBoolAttr(rule.attribute("percent"));
     out.bottom = ParseBoolAttr(rule.attribute("bottom"));
   }

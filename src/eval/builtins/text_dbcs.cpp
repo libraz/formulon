@@ -41,14 +41,11 @@ Value FindB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!haystack) {
     return Value::error(haystack.error());
   }
-  int start = 1;
-  if (arity >= 3) {
-    auto parsed = read_int_arg(args[2]);
-    if (!parsed) {
-      return Value::error(parsed.error());
-    }
-    start = parsed.value();
+  auto parsed = read_optional_int_arg(args, arity, 2u, 1);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
+  const int start = parsed.value();
   const std::uint64_t total_dbcs = bytes_in_jajp(haystack.value());
   if (start < 1 || static_cast<std::uint64_t>(start) > total_dbcs + 1) {
     return Value::error(ErrorCode::Value);
@@ -80,14 +77,11 @@ Value SearchB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!haystack) {
     return Value::error(haystack.error());
   }
-  int start = 1;
-  if (arity >= 3) {
-    auto parsed = read_int_arg(args[2]);
-    if (!parsed) {
-      return Value::error(parsed.error());
-    }
-    start = parsed.value();
+  auto parsed = read_optional_int_arg(args, arity, 2u, 1);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
+  const int start = parsed.value();
   const std::uint64_t total_dbcs = bytes_in_jajp(haystack.value());
   if (start < 1 || static_cast<std::uint64_t>(start) > total_dbcs + 1) {
     return Value::error(ErrorCode::Value);
@@ -187,14 +181,6 @@ Utf8Step next_utf8_step(std::string_view src, std::size_t i) noexcept {
 
 namespace text_detail {
 
-Expected<int, ErrorCode> read_optional_byte_count(const Value* args, std::uint32_t arity, std::uint32_t index,
-                                                  int default_value) {
-  if (arity <= index) {
-    return default_value;
-  }
-  return read_int_arg(args[index]);
-}
-
 // LENB(text) - returns the ja-JP DBCS byte length of the coerced text.
 Value Lenb(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto text = coerce_to_text(args[0]);
@@ -212,7 +198,7 @@ Value Leftb(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!text) {
     return Value::error(text.error());
   }
-  auto byte_count = read_optional_byte_count(args, arity, 1, 1);
+  auto byte_count = read_optional_int_arg(args, arity, 1, 1);
   if (!byte_count) {
     return Value::error(byte_count.error());
   }
@@ -261,7 +247,7 @@ Value Rightb(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!text) {
     return Value::error(text.error());
   }
-  auto byte_count = read_optional_byte_count(args, arity, 1, 1);
+  auto byte_count = read_optional_int_arg(args, arity, 1, 1);
   if (!byte_count) {
     return Value::error(byte_count.error());
   }

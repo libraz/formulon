@@ -32,6 +32,12 @@ namespace text_detail {
 // REPT/FIND/SEARCH/SUBSTITUTE for their integer-typed parameters.
 Expected<int, ErrorCode> read_int_arg(const Value& v);
 
+// Reads optional integer argument `args[index]`, returning `default_value`
+// when the caller omitted it. Used by LEFT/RIGHT/FIND/SEARCH and their DBCS
+// variants so the defaulting rule stays in one place.
+Expected<int, ErrorCode> read_optional_int_arg(const Value* args, std::uint32_t arity, std::uint32_t index,
+                                               int default_value);
+
 // Per-character record: UTF-8 byte offset, byte length, 1-based DBCS
 // position (byte position under the ja-JP DBCS rule), and DBCS cost.
 struct DbcsCharRec {

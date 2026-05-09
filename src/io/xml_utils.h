@@ -41,6 +41,15 @@ void append_xml_attr(std::string& out, std::string_view name, std::string_view v
 /// because the rendered digits are always XML-safe.
 void append_xml_attr_uint(std::string& out, std::string_view name, std::uint32_t value);
 
+/// Parses a non-negative decimal integer attribute body. Missing, empty,
+/// malformed, signed, or out-of-range input returns `default_value` so a
+/// stray optional OOXML attribute does not reject the whole part.
+std::uint32_t parse_xml_u32_attr(const pugi::xml_attribute& attr, std::uint32_t default_value);
+
+/// Parses a signed 32-bit decimal attribute body. Missing, empty,
+/// malformed, or out-of-range input returns `default_value`.
+std::int32_t parse_xml_i32_attr(const pugi::xml_attribute& attr, std::int32_t default_value);
+
 /// Appends every `<t>` text descendant of `node` (whether a direct child or
 /// inside a nested `<r>` rich-text run) to `out`, in document order.
 /// `<rPh>` phonetic-guide subtrees are always skipped: kana annotations

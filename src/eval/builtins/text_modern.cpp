@@ -159,20 +159,16 @@ Expected<TextBeforeAfterOpts, ErrorCode> read_tba_opts(const Value* args, std::u
     }
     opts.instance_num = static_cast<int>(std::floor(d));
   }
-  if (arity >= 4) {
-    auto parsed = text_detail::read_int_arg(args[3]);
-    if (!parsed) {
-      return parsed.error();
-    }
-    opts.match_mode = parsed.value();
+  auto match_mode = text_detail::read_optional_int_arg(args, arity, 3u, 0);
+  if (!match_mode) {
+    return match_mode.error();
   }
-  if (arity >= 5) {
-    auto parsed = text_detail::read_int_arg(args[4]);
-    if (!parsed) {
-      return parsed.error();
-    }
-    opts.match_end = parsed.value();
+  opts.match_mode = match_mode.value();
+  auto match_end = text_detail::read_optional_int_arg(args, arity, 4u, 0);
+  if (!match_end) {
+    return match_end.error();
   }
+  opts.match_end = match_end.value();
   if (arity >= 6) {
     // if_not_found is a passthrough fallback value: an error value here is
     // only surfaced when the match actually fails. With propagate_errors=false

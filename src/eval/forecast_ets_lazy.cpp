@@ -1117,6 +1117,16 @@ bool read_int_arg(const parser::AstNode& node, Arena& arena, const FunctionRegis
   return true;
 }
 
+bool read_optional_int_arg(const parser::AstNode* node, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx, std::int64_t default_value, std::int64_t* out, Value* out_err,
+                           ErrorCode domain_error) {
+  if (node == nullptr) {
+    *out = default_value;
+    return true;
+  }
+  return read_int_arg(*node, arena, registry, ctx, default_value, out, out_err, domain_error);
+}
+
 // Reads an optional scalar number argument. Same semantics as
 // `read_int_arg` minus the truncation step.
 bool read_double_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
@@ -1310,12 +1320,8 @@ bool preprocess(const parser::AstNode& values_node, const parser::AstNode& timel
 // `true` on success with the parsed mode; otherwise writes the error.
 bool read_aggregation(const parser::AstNode* node, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx, AggregationMode* out, Value* out_err) {
-  if (node == nullptr) {
-    *out = AggregationMode::kAverage;
-    return true;
-  }
   std::int64_t v = 1;
-  if (!read_int_arg(*node, arena, registry, ctx, 1, &v, out_err, ErrorCode::Value)) {
+  if (!read_optional_int_arg(node, arena, registry, ctx, 1, &v, out_err, ErrorCode::Value)) {
     return false;
   }
   if (v < 1 || v > 7) {
@@ -1330,12 +1336,8 @@ bool read_aggregation(const parser::AstNode* node, Arena& arena, const FunctionR
 // allowed domain is exactly {0, 1}; anything else is `#VALUE!`.
 bool read_data_completion(const parser::AstNode* node, Arena& arena, const FunctionRegistry& registry,
                           const EvalContext& ctx, int* out, Value* out_err) {
-  if (node == nullptr) {
-    *out = 1;
-    return true;
-  }
   std::int64_t v = 1;
-  if (!read_int_arg(*node, arena, registry, ctx, 1, &v, out_err, ErrorCode::Value)) {
+  if (!read_optional_int_arg(node, arena, registry, ctx, 1, &v, out_err, ErrorCode::Value)) {
     return false;
   }
   if (v != 0 && v != 1) {
@@ -1350,12 +1352,8 @@ bool read_data_completion(const parser::AstNode* node, Arena& arena, const Funct
 // seasonal), 1 (auto-detect, default), or 2..kMaxSeasonalityArg.
 bool read_seasonality(const parser::AstNode* node, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx, std::int64_t* out, Value* out_err) {
-  if (node == nullptr) {
-    *out = 1;
-    return true;
-  }
   std::int64_t v = 1;
-  if (!read_int_arg(*node, arena, registry, ctx, 1, &v, out_err, ErrorCode::Num)) {
+  if (!read_optional_int_arg(node, arena, registry, ctx, 1, &v, out_err, ErrorCode::Num)) {
     return false;
   }
   if (v < 0 || v > static_cast<std::int64_t>(kMaxSeasonalityArg)) {

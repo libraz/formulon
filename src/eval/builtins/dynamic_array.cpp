@@ -31,6 +31,7 @@
 #include "eval/rng.h"
 #include "sheet.h"
 #include "utils/arena.h"
+#include "utils/expected.h"
 #include "value.h"
 
 namespace formulon {
@@ -44,6 +45,22 @@ namespace {
 // as Mac Excel's effective dynamic-array ceiling for a single formula. Going
 // over surfaces `#NUM!`, matching Excel's overflow code for SEQUENCE.
 constexpr std::size_t kMaxSequenceCells = 1U << 20;  // 1,048,576
+
+Expected<double, ErrorCode> read_optional_number_arg(const Value* args, std::uint32_t arity, std::uint32_t index,
+                                                     double default_value) {
+  if (arity <= index) {
+    return default_value;
+  }
+  return coerce_to_number(args[index]);
+}
+
+Expected<bool, ErrorCode> read_optional_bool_arg(const Value* args, std::uint32_t arity, std::uint32_t index,
+                                                 bool default_value) {
+  if (arity <= index) {
+    return default_value;
+  }
+  return coerce_to_bool(args[index]);
+}
 
 /// SEQUENCE(rows, [cols=1], [start=1], [step=1]).
 ///
@@ -68,30 +85,21 @@ Value Sequence(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!rows_c) {
     return Value::error(rows_c.error());
   }
-  double cols_d = 1.0;
-  if (arity >= 2U) {
-    auto cols_c = coerce_to_number(args[1]);
-    if (!cols_c) {
-      return Value::error(cols_c.error());
-    }
-    cols_d = cols_c.value();
+  auto cols_c = read_optional_number_arg(args, arity, 1U, 1.0);
+  if (!cols_c) {
+    return Value::error(cols_c.error());
   }
-  double start = 1.0;
-  if (arity >= 3U) {
-    auto start_c = coerce_to_number(args[2]);
-    if (!start_c) {
-      return Value::error(start_c.error());
-    }
-    start = start_c.value();
+  auto start_c = read_optional_number_arg(args, arity, 2U, 1.0);
+  if (!start_c) {
+    return Value::error(start_c.error());
   }
-  double step = 1.0;
-  if (arity >= 4U) {
-    auto step_c = coerce_to_number(args[3]);
-    if (!step_c) {
-      return Value::error(step_c.error());
-    }
-    step = step_c.value();
+  auto step_c = read_optional_number_arg(args, arity, 3U, 1.0);
+  if (!step_c) {
+    return Value::error(step_c.error());
   }
+  const double cols_d = cols_c.value();
+  const double start = start_c.value();
+  const double step = step_c.value();
 
   // Truncate-toward-zero is Mac Excel's behaviour for the row/col
   // dimensions; e.g. SEQUENCE(3.7) yields 3 rows, SEQUENCE(-0.5) yields
@@ -158,46 +166,31 @@ Value Sequence(const Value* args, std::uint32_t arity, Arena& arena) {
 /// RNG: shared per-thread Mersenne Twister via `thread_local_rng()` (same
 /// stream as RAND / RANDBETWEEN).
 Value RandArray(const Value* args, std::uint32_t arity, Arena& arena) {
-  double rows_d = 1.0;
-  if (arity >= 1U) {
-    auto c = coerce_to_number(args[0]);
-    if (!c) {
-      return Value::error(c.error());
-    }
-    rows_d = c.value();
+  auto rows_c = read_optional_number_arg(args, arity, 0U, 1.0);
+  if (!rows_c) {
+    return Value::error(rows_c.error());
   }
-  double cols_d = 1.0;
-  if (arity >= 2U) {
-    auto c = coerce_to_number(args[1]);
-    if (!c) {
-      return Value::error(c.error());
-    }
-    cols_d = c.value();
+  auto cols_c = read_optional_number_arg(args, arity, 1U, 1.0);
+  if (!cols_c) {
+    return Value::error(cols_c.error());
   }
-  double min_v = 0.0;
-  if (arity >= 3U) {
-    auto c = coerce_to_number(args[2]);
-    if (!c) {
-      return Value::error(c.error());
-    }
-    min_v = c.value();
+  auto min_c = read_optional_number_arg(args, arity, 2U, 0.0);
+  if (!min_c) {
+    return Value::error(min_c.error());
   }
-  double max_v = 1.0;
-  if (arity >= 4U) {
-    auto c = coerce_to_number(args[3]);
-    if (!c) {
-      return Value::error(c.error());
-    }
-    max_v = c.value();
+  auto max_c = read_optional_number_arg(args, arity, 3U, 1.0);
+  if (!max_c) {
+    return Value::error(max_c.error());
   }
-  bool whole_number = false;
-  if (arity >= 5U) {
-    auto b = coerce_to_bool(args[4]);
-    if (!b) {
-      return Value::error(b.error());
-    }
-    whole_number = b.value();
+  auto whole_number_c = read_optional_bool_arg(args, arity, 4U, false);
+  if (!whole_number_c) {
+    return Value::error(whole_number_c.error());
   }
+  const double rows_d = rows_c.value();
+  const double cols_d = cols_c.value();
+  const double min_v = min_c.value();
+  const double max_v = max_c.value();
+  const bool whole_number = whole_number_c.value();
 
   // Shape validation. SEQUENCE precedent: truncate-toward-zero, reject
   // <= 0 with #VALUE!, reject oversize with #NUM!.

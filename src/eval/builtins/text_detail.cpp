@@ -27,6 +27,14 @@ Expected<int, ErrorCode> read_int_arg(const Value& v) {
   return static_cast<int>(std::trunc(d));
 }
 
+Expected<int, ErrorCode> read_optional_int_arg(const Value* args, std::uint32_t arity, std::uint32_t index,
+                                               int default_value) {
+  if (arity <= index) {
+    return default_value;
+  }
+  return read_int_arg(args[index]);
+}
+
 }  // namespace text_detail
 }  // namespace eval
 }  // namespace formulon
