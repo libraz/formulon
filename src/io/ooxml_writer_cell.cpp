@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <string>
@@ -29,6 +30,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "double-conversion/double-conversion.h"
 #include "eval/utf8_length.h"
 #include "io/xml_escape.h"
 #include "sheet.h"
@@ -42,26 +44,59 @@ namespace {
 // Number formatting
 // ---------------------------------------------------------------------------
 
-// Emits a double using %.17g (round-trip safe under IEEE 754) with two
-// targeted normalisations:
+// Emits a double using Grisu3 shortest-roundtrip dtoa (via Google's
+// double-conversion library), shaped to match Excel's own OOXML output:
 //
-//   * -0.0 collapses to "0" so XML diffs stay deterministic across
-//     platforms that disagree on the sign-of-zero printout.
-//   * +0.0 takes the same fast path.
+//   * Uppercase 'E' as the exponent character (Excel-authored XLSX
+//     consistently uses 'E', whereas ECMAScript / printf("%g") use 'e').
+//   * EMIT_POSITIVE_EXPONENT_SIGN so the exponent on positive-magnitude
+//     forms carries a '+' sign (e.g. "1E+100"). Negative exponents
+//     never carry a sign (e.g. "1E-3"); this matches Excel.
+//   * UNIQUE_ZERO so -0.0 collapses to "0" without a special branch.
+//     The +0.0 / -0.0 fast path below is retained as a defensive
+//     optimisation: it avoids the converter call entirely for the
+//     overwhelmingly common case of literal zero.
+//   * decimal_in_shortest_low/high mirror the ECMAScript defaults
+//     (-6 / 21). Excel-authored files we surveyed switch between
+//     decimal and scientific shape inside this band; the precise
+//     boundary appears to depend on display-format-driven rendering
+//     rather than the underlying numeric value, so the ECMAScript
+//     defaults are the most defensible starting point.
 //
-// NaN / +/-inf are *not* handled here: the caller must short-circuit them to
-// an Error cell before reaching this point.
-//
-// TODO(grisu3): switch to shortest-roundtrip dtoa once double-conversion is
-// adopted.
+// NaN / +/-inf are *not* handled here: the caller must short-circuit
+// them to an Error cell before reaching this point. The converter is
+// constructed without infinity/NaN symbols so a stray special value
+// would surface as a ToShortest() failure rather than silent garbage,
+// but the pre-screen in AppendCellXml / AppendLiteralCellBody makes
+// that path unreachable in practice.
 void AppendNumberValue(std::string& out, double v) {
   if (v == 0.0) {
     out.push_back('0');
     return;
   }
+  using DC = double_conversion::DoubleToStringConverter;
+  // Built once at first call; the converter is stateless and thread-safe.
+  static const DC kConv(
+      /*flags=*/DC::UNIQUE_ZERO | DC::EMIT_POSITIVE_EXPONENT_SIGN,
+      /*infinity_symbol=*/nullptr,
+      /*nan_symbol=*/nullptr,
+      /*exponent_character=*/'E',
+      /*decimal_in_shortest_low=*/-6,
+      /*decimal_in_shortest_high=*/21,
+      /*max_leading_padding_zeroes_in_precision_mode=*/0,
+      /*max_trailing_padding_zeroes_in_precision_mode=*/0);
+  // 32 bytes covers every shortest output: kMaxCharsEcmaScriptShortest
+  // (25) plus the trailing NUL plus a comfortable margin.
   char buf[32];
-  std::snprintf(buf, sizeof(buf), "%.17g", v);
-  out.append(buf);
+  double_conversion::StringBuilder builder(buf, sizeof(buf));
+  // ToShortest() only fails for NaN/Inf when no special-value symbol
+  // is configured; the caller pre-screens those, so success is
+  // guaranteed here. We deliberately leave the return value
+  // unchecked: the project builds with -fno-exceptions and an
+  // assert/log on this unreachable branch would cost more bytes than
+  // it earns.
+  (void)kConv.ToShortest(v, &builder);
+  out.append(buf, static_cast<std::size_t>(builder.position()));
 }
 
 // ---------------------------------------------------------------------------

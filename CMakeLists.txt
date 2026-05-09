@@ -54,12 +54,15 @@ include(FormulonWarnings)
 # ---------------------------------------------------------------------------
 # miniz and pugixml are engine dependencies required by OOXML/XLSB I/O.
 # pcre2 backs the REGEX* function family.
+# double-conversion provides Grisu3 shortest-roundtrip dtoa for the OOXML
+# cell writer (matches Excel's own numeric serialisation shape).
 # When FM_USE_SYSTEM_DEPS=ON we expect system packages; otherwise we vendor
 # via FetchContent (default).
 if(FM_USE_SYSTEM_DEPS)
-  find_package(miniz   CONFIG REQUIRED)
-  find_package(pugixml CONFIG REQUIRED)
-  find_package(pcre2   CONFIG REQUIRED COMPONENTS 8BIT)
+  find_package(miniz             CONFIG REQUIRED)
+  find_package(pugixml           CONFIG REQUIRED)
+  find_package(pcre2             CONFIG REQUIRED COMPONENTS 8BIT)
+  find_package(double-conversion CONFIG REQUIRED)
   if(NOT TARGET formulon::miniz AND TARGET miniz::miniz)
     add_library(formulon::miniz ALIAS miniz::miniz)
   endif()
@@ -79,10 +82,25 @@ if(FM_USE_SYSTEM_DEPS)
       message(FATAL_ERROR "FM_USE_SYSTEM_DEPS: pcre2 8-bit target not found")
     endif()
   endif()
+  # double-conversion's installed CMake package exports
+  # `double-conversion::double-conversion`. Older Debian packages drop the
+  # namespace and just expose `double-conversion`. Alias whichever is
+  # present.
+  if(NOT TARGET formulon::double_conversion)
+    if(TARGET double-conversion::double-conversion)
+      add_library(formulon::double_conversion ALIAS double-conversion::double-conversion)
+    elseif(TARGET double-conversion)
+      add_library(formulon::double_conversion ALIAS double-conversion)
+    else()
+      message(FATAL_ERROR
+        "FM_USE_SYSTEM_DEPS: double-conversion target not found")
+    endif()
+  endif()
 else()
   include(cmake/FetchMiniz.cmake)
   include(cmake/FetchPugixml.cmake)
   include(cmake/FetchPcre2.cmake)
+  include(cmake/FetchDoubleConversion.cmake)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -271,6 +289,7 @@ target_link_libraries(formulon_core
     formulon::miniz
     formulon::pugixml
     formulon::pcre2
+    formulon::double_conversion
     Threads::Threads
 )
 
@@ -297,6 +316,7 @@ target_link_libraries(formulon_static
     formulon::miniz
     formulon::pugixml
     formulon::pcre2
+    formulon::double_conversion
     Threads::Threads
 )
 
@@ -326,6 +346,7 @@ if(FM_BUILD_C_API_SHARED)
       formulon::miniz
       formulon::pugixml
       formulon::pcre2
+      formulon::double_conversion
       Threads::Threads
   )
 endif()
