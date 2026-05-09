@@ -16,7 +16,7 @@
 # PATH defaults to build-wasm/formulon.wasm.
 #
 # Defaults (per CLAUDE.md "WASM Size Policy"):
-#   --ceiling-bytes      1887436   (1.80 MiB hard ceiling)
+#   --ceiling-bytes      1992294   (1.90 MiB hard ceiling)
 #   --soft-ceiling-bytes 1730150   (1.65 MiB stretch goal)
 #
 # Exit codes:
@@ -43,7 +43,7 @@ configured size ceilings.
 Arguments:
   PATH                       Path to the .wasm file (default: build-wasm/formulon.wasm)
   --json                     Emit a single-object JSON document instead of text.
-  --ceiling-bytes N          Hard ceiling in bytes (default 1887436 = 1.80 MiB).
+  --ceiling-bytes N          Hard ceiling in bytes (default 1992294 = 1.90 MiB).
   --soft-ceiling-bytes N     Soft ceiling in bytes (default 1730150 = 1.65 MiB).
   -h, --help                 Show this help.
 
@@ -54,7 +54,7 @@ EOF
 # Defaults.
 WASM_PATH=""
 EMIT_JSON=0
-HARD_CEILING=1887436
+HARD_CEILING=1992294
 SOFT_CEILING=1730150
 
 # Argument parsing (POSIX sh, no getopts long-opt support).

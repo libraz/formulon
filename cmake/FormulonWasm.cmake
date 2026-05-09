@@ -99,6 +99,13 @@ else()
   # thinLTO grew the artifact by ~270 KiB because the engine's hot lazy
   # dispatch tables benefit materially from -O3's inlining heuristics.
   # The size win comes instead from the wasm-opt post-link pass below.
+  #
+  # Full LTO (`-flto=full`) was retried 2026-05-09 with `-O3` + post-link
+  # `wasm-opt -Oz` to address the 2026-05 thinLTO regression. Empirical
+  # delta: +345 KiB (1.75 MiB -> 2.08 MiB). Same root cause: cross-TU
+  # inlining over the lazy dispatch tables expands more code than ICF
+  # reclaims. Both LTO modes are therefore confirmed off-limits for this
+  # codebase under current heuristics.
   set(_FM_WASM_OPT_FLAGS "-O3")
   set(_FM_WASM_LINK_OPT_FLAGS "-O3;-sASSERTIONS=0")
 endif()
