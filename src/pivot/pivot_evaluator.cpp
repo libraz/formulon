@@ -8,15 +8,20 @@
 #include "pivot/pivot_evaluator.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <utility>
 #include <vector>
 
+#include "eval/date_time.h"
+#include "eval/japanese_era.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
@@ -305,6 +310,76 @@ Value AggregateMin(const std::vector<Value>& values) {
   return Value::number(seen ? best : 0.0);
 }
 
+// Two-pass variance computation. Mirrors `VAR.S` / `VAR.P` from
+// `src/eval/builtins/stats.cpp`: collect numerics (booleans coerce as
+// 0/1, text and blanks are ignored), then compute mean and sum of
+// squared deviations. `population` controls the divisor: when true, n;
+// otherwise n - 1. The `min_n` guard rejects samples too small for the
+// chosen variant (n < 2 for sample, n < 1 for population) with
+// `#DIV/0!`, matching Excel's pivot behaviour. Errors in the input
+// dominate (handled by the caller's `first_error` short-circuit).
+Value variance_helper(const std::vector<Value>& values, bool population) {
+  if (const Value* err = first_error(values); err != nullptr) {
+    return *err;
+  }
+  std::vector<double> xs;
+  xs.reserve(values.size());
+  for (const auto& v : values) {
+    double x = 0.0;
+    if (coerce_arithmetic(v, x)) {
+      xs.push_back(x);
+    }
+  }
+  const std::size_t min_n = population ? 1u : 2u;
+  if (xs.size() < min_n) {
+    return Value::error(ErrorCode::Div0);
+  }
+  double sum = 0.0;
+  for (double x : xs) {
+    sum += x;
+  }
+  const double mean = sum / static_cast<double>(xs.size());
+  double ss = 0.0;
+  for (double x : xs) {
+    const double d = x - mean;
+    ss += d * d;
+  }
+  const double divisor = population ? static_cast<double>(xs.size()) : static_cast<double>(xs.size() - 1u);
+  const double r = ss / divisor;
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+Value AggregateVar(const std::vector<Value>& values) { return variance_helper(values, /*population=*/false); }
+
+Value AggregateVarP(const std::vector<Value>& values) { return variance_helper(values, /*population=*/true); }
+
+Value AggregateStdDev(const std::vector<Value>& values) {
+  Value v = variance_helper(values, /*population=*/false);
+  if (!v.is_number()) {
+    return v;
+  }
+  const double r = std::sqrt(v.as_number());
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+Value AggregateStdDevP(const std::vector<Value>& values) {
+  Value v = variance_helper(values, /*population=*/true);
+  if (!v.is_number()) {
+    return v;
+  }
+  const double r = std::sqrt(v.as_number());
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
 Value AggregateProduct(const std::vector<Value>& values) {
   if (const Value* err = first_error(values); err != nullptr) {
     return *err;
@@ -339,24 +414,92 @@ Value apply_aggregation(Aggregation agg, const std::vector<Value>& values) {
     case Aggregation::CountNumbers:
       return AggregateCountNumbers(values);
     case Aggregation::StdDev:
+      return AggregateStdDev(values);
     case Aggregation::StdDevP:
+      return AggregateStdDevP(values);
     case Aggregation::Var:
+      return AggregateVar(values);
     case Aggregation::VarP:
-      // Deferred to a follow-up. Surface as #N/A so GETPIVOTDATA
-      // returns a sentinel rather than silently aggregating to 0.
-      return Value::error(ErrorCode::NA);
+      return AggregateVarP(values);
   }
   return Value::error(ErrorCode::NA);
 }
 
 // ---------------------------------------------------------------------------
-// Filter (manual-only, via PivotItem::visible).
+// Record-level filters: manual `items[]` visibility + axis-level label
+// filters from `active_filters`.
 // ---------------------------------------------------------------------------
 
-// True iff `record` survives the manual filter on every field that
-// declares an `items` list. A field with empty `items` matches all
-// values (Excel default — items[] is only authored when the user has
-// hidden at least one value).
+// Resolves a filter `field_name` against `table.fields()`. Returns the
+// field's index on match, `std::nullopt` if no field has that name.
+// Cache fields and pivot fields share the same index in MVP, so this
+// also indexes into the cache record.
+std::optional<std::size_t> resolve_filter_field(const PivotTable& table, const std::string& name) {
+  for (std::size_t i = 0; i < table.fields().size(); ++i) {
+    if (table.fields()[i].source_name == name) {
+      return i;
+    }
+  }
+  return std::nullopt;
+}
+
+// Pulls the string payload of a filter when one is expected. Returns an
+// empty `string_view` when the variant carries a non-string value, which
+// effectively makes the filter a no-op rather than a runtime error.
+std::string_view filter_string_value(const PivotFilter& f) {
+  if (const auto* s = std::get_if<std::string>(&f.value)) {
+    return *s;
+  }
+  return {};
+}
+
+// Pulls the numeric payload of a filter when one is expected. The
+// variant carries either `int` or `double`; both coerce to double here.
+// Returns 0 for non-numeric variants (caller treats as no-op).
+double filter_number_value(const PivotFilter& f) {
+  if (const auto* d = std::get_if<double>(&f.value)) {
+    return *d;
+  }
+  if (const auto* i = std::get_if<int>(&f.value)) {
+    return static_cast<double>(*i);
+  }
+  return 0.0;
+}
+
+// Evaluates a single label-flavoured filter against `label`. Value-filter
+// types short-circuit to true: those are applied post-aggregation.
+bool label_filter_passes(const PivotFilter& f, const std::string& label) {
+  switch (f.type) {
+    case FilterType::LabelContains: {
+      const std::string_view needle = filter_string_value(f);
+      if (needle.empty()) {
+        return true;
+      }
+      return label.find(needle) != std::string::npos;
+    }
+    case FilterType::LabelBeginsWith: {
+      const std::string_view needle = filter_string_value(f);
+      if (needle.empty()) {
+        return true;
+      }
+      return label.size() >= needle.size() && label.compare(0, needle.size(), needle) == 0;
+    }
+    case FilterType::ValueTop10:
+    case FilterType::ValueGreaterThan:
+    case FilterType::ValueBetween:
+    case FilterType::LabelDate:
+      // Value-axis filters: handled later by `apply_value_filters`.
+      // `LabelDate` would need a date-range payload; deferred.
+      return true;
+  }
+  return true;
+}
+
+// True iff `record` survives the manual `items[]` filter on every field
+// that declares one, AND the axis-level label filters in
+// `active_filters`. Empty `items` lists match all values (Excel default
+// — items[] is only authored when the user has hidden at least one
+// value); axis filters with unresolved field names are skipped.
 bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cache, const PivotCacheRecord& record) {
   for (std::size_t fi = 0; fi < table.fields().size(); ++fi) {
     const PivotField& field = table.fields()[fi];
@@ -371,7 +514,157 @@ bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cach
       }
     }
   }
+  for (const PivotFilter& f : table.active_filters()) {
+    auto fi_or = resolve_filter_field(table, f.field_name);
+    if (!fi_or) {
+      continue;
+    }
+    const Value v = cell_value(cache, record, *fi_or);
+    const std::string label = display_string(v);
+    if (!label_filter_passes(f, label)) {
+      return false;
+    }
+  }
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Date grouping.
+// ---------------------------------------------------------------------------
+//
+// When a `PivotField` declares a `date_group`, the field's source `Value`
+// (which the cache stores as a date serial) is mapped to a bucket
+// `(sort_key, label)` pair. The sort key feeds the hierarchy's
+// `std::map<Value, HierNode, ValueLess>` so leaves order chronologically
+// (e.g. 2023 < 2024 < 2025); the label is what the renderer / GETPIVOTDATA
+// see as the bucket name.
+//
+// MVP scope: Year, Quarter, Month, Day for both Gregorian and Japanese
+// calendars; Week / Hour / Minute / Second pass through unchanged
+// (deferred — Excel's calendar-week rules and time-of-day grouping
+// require additional oracle authoring). For Japanese-calendar Year /
+// Month, the era prefix is the full kanji name (令和 / 平成 / ...);
+// pre-Meiji dates classify as Meiji, mirroring Excel's lenient
+// behaviour.
+
+struct DateBucket {
+  Value sort_key;     ///< Numeric sort handle (chronological order).
+  std::string label;  ///< Display string for the bucket.
+};
+
+// Two-digit zero-padded decimal append (no <iomanip>).
+void append_pad2(std::string& out, unsigned n) {
+  if (n < 10u) {
+    out.push_back('0');
+  }
+  out.append(std::to_string(n));
+}
+
+// Four-digit (or wider) zero-padded year append. Negative years emit a
+// leading `-`; the resulting label is sortable lexicographically only
+// within the same sign, which is fine because the sort key is
+// independent of the label.
+void append_year(std::string& out, int y) {
+  if (y < 0) {
+    out.push_back('-');
+    y = -y;
+  }
+  if (y < 10) {
+    out.append("000");
+  } else if (y < 100) {
+    out.append("00");
+  } else if (y < 1000) {
+    out.push_back('0');
+  }
+  out.append(std::to_string(y));
+}
+
+DateBucket bucket_date(double serial, const PivotDateGroup& dg) {
+  using formulon::eval::date_time::ymd_from_serial;
+  using formulon::eval::date_time::YMD;
+  using formulon::eval::japanese_era::classify_era;
+  using formulon::eval::japanese_era::EraInfo;
+
+  // Negative / non-finite serials are not valid Excel dates; pass them
+  // through so the existing display path renders the raw number.
+  if (!(serial >= 0.0)) {
+    Value raw = Value::number(serial);
+    return {raw, display_string(raw)};
+  }
+  const double serial_floor = std::floor(serial);
+  const YMD ymd = ymd_from_serial(serial_floor);
+
+  switch (dg.granularity) {
+    case DateGrouping::Year: {
+      if (dg.calendar == CalendarSystem::Japanese) {
+        const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
+        const int era_year = ymd.y - era.year_anchor + 1;
+        const double key = static_cast<double>(era.year_anchor) * 10000.0 + static_cast<double>(era_year);
+        std::string label = era.kanji2;
+        label.append(std::to_string(era_year));
+        // 年
+        label.append("\xE5\xB9\xB4");
+        return {Value::number(key), std::move(label)};
+      }
+      const double key = static_cast<double>(ymd.y);
+      std::string label;
+      append_year(label, ymd.y);
+      return {Value::number(key), std::move(label)};
+    }
+    case DateGrouping::Quarter: {
+      const int quarter = (static_cast<int>(ymd.m) - 1) / 3 + 1;
+      const double key = static_cast<double>(ymd.y) * 4.0 + static_cast<double>(quarter - 1);
+      std::string label;
+      append_year(label, ymd.y);
+      label.append("-Q");
+      label.append(std::to_string(quarter));
+      return {Value::number(key), std::move(label)};
+    }
+    case DateGrouping::Month: {
+      const double key = static_cast<double>(ymd.y) * 100.0 + static_cast<double>(ymd.m);
+      std::string label;
+      if (dg.calendar == CalendarSystem::Japanese) {
+        const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
+        const int era_year = ymd.y - era.year_anchor + 1;
+        label = era.kanji2;
+        label.append(std::to_string(era_year));
+        label.append("\xE5\xB9\xB4");  // 年
+        label.append(std::to_string(ymd.m));
+        label.append("\xE6\x9C\x88");  // 月
+      } else {
+        append_year(label, ymd.y);
+        label.push_back('-');
+        append_pad2(label, ymd.m);
+      }
+      return {Value::number(key), std::move(label)};
+    }
+    case DateGrouping::Day: {
+      // Use the floor serial as the sort key; it is already
+      // chronological. Label is `YYYY-MM-DD` (Gregorian) regardless of
+      // the calendar — Excel renders day-level buckets in the workbook
+      // locale's short-date pattern, which for ja-JP and en-US alike
+      // collapses to a numeric YMD.
+      std::string label;
+      append_year(label, ymd.y);
+      label.push_back('-');
+      append_pad2(label, ymd.m);
+      label.push_back('-');
+      append_pad2(label, ymd.d);
+      return {Value::number(serial_floor), std::move(label)};
+    }
+    case DateGrouping::Week:
+    case DateGrouping::Hour:
+    case DateGrouping::Minute:
+    case DateGrouping::Second:
+      // Deferred: pass the raw serial through so the rest of the
+      // evaluator behaves as if no grouping was requested. Once oracle
+      // cases for these granularities exist, replace this fall-through
+      // with the appropriate bucketing.
+      Value raw = Value::number(serial);
+      return {raw, display_string(raw)};
+  }
+  Value raw = Value::number(serial);
+  return {raw, display_string(raw)};
 }
 
 // ---------------------------------------------------------------------------
@@ -389,23 +682,51 @@ struct HierNode {
   // Index into the flat leaf array assigned during finalisation. Leaves
   // only.
   std::size_t leaf_index = static_cast<std::size_t>(-1);
+  // When non-empty, used in place of `display_string(key)` for this
+  // node's label. Set by `insert_path` for date-grouped fields where the
+  // bucket label diverges from the raw value's textual form.
+  std::string label_override;
 };
 
 struct HierLevel {
-  std::uint32_t field_index;  // Index into PivotTable::fields().
+  std::uint32_t field_index;          ///< Index into `PivotTable::fields()`.
+  const PivotDateGroup* date_group;   ///< Non-null when this level buckets dates.
 };
 
 // Inserts `record` into `tree`, walking `levels`. Returns the leaf
-// `HierNode*`. The caller assigns leaf indices in a second pass.
+// `HierNode*`. The caller assigns leaf indices in a second pass. When a
+// level carries a `date_group`, the cache value is bucketed first; the
+// label is stashed on the inserted child for the renderer to surface.
 HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& levels, const PivotCacheRecord& record,
                       HierNode& root) {
   HierNode* cursor = &root;
   for (const HierLevel& level : levels) {
-    const Value v = cell_value(cache, record, level.field_index);
-    auto [it, _] = cursor->children.emplace(v, HierNode{});
+    const Value raw = cell_value(cache, record, level.field_index);
+    Value key = raw;
+    std::string label_override;
+    if (level.date_group != nullptr && raw.is_number()) {
+      DateBucket bucket = bucket_date(raw.as_number(), *level.date_group);
+      key = bucket.sort_key;
+      label_override = std::move(bucket.label);
+    }
+    auto [it, inserted] = cursor->children.emplace(key, HierNode{});
+    if (inserted && !label_override.empty()) {
+      it->second.label_override = std::move(label_override);
+    }
     cursor = &it->second;
   }
   return cursor;
+}
+
+// Returns the display label for `(key, child)`: the override if set,
+// otherwise the standard `display_string(key)`. Used by all hierarchy
+// flatten / subtotal-walk sites so date-grouped buckets surface their
+// formatted label rather than the synthetic numeric sort key.
+std::string node_label(const Value& key, const HierNode& child) {
+  if (!child.label_override.empty()) {
+    return child.label_override;
+  }
+  return display_string(key);
 }
 
 // Recursively flattens a hierarchy into `Node` form (template so we can
@@ -421,7 +742,7 @@ void finalize_hierarchy(HierNode& tree, std::vector<Node>& out, std::vector<Hier
   out.reserve(tree.children.size());
   for (auto& [key, child] : tree.children) {
     Node node;
-    node.label = display_string(key);
+    node.label = node_label(key, child);
     if (child.children.empty()) {
       child.leaf_index = leaves.size();
       leaves.push_back(&child);
@@ -479,15 +800,27 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   }
 
   // 3. Build hierarchies.
+  //
+  // A field whose `date_group` is set bucketises the cache value at
+  // hierarchy-insertion time; we plumb the optional through `HierLevel`
+  // so `insert_path` can call the bucketer without re-walking the table
+  // metadata.
+  auto level_for = [&](std::uint32_t fi) -> HierLevel {
+    const PivotDateGroup* dg = nullptr;
+    if (fi < table.fields().size() && table.fields()[fi].date_group.has_value()) {
+      dg = &*table.fields()[fi].date_group;
+    }
+    return HierLevel{fi, dg};
+  };
   std::vector<HierLevel> row_levels;
   row_levels.reserve(table.row_field_order().size());
   for (std::uint32_t fi : table.row_field_order()) {
-    row_levels.push_back({fi});
+    row_levels.push_back(level_for(fi));
   }
   std::vector<HierLevel> col_levels;
   col_levels.reserve(table.col_field_order().size());
   for (std::uint32_t fi : table.col_field_order()) {
-    col_levels.push_back({fi});
+    col_levels.push_back(level_for(fi));
   }
 
   HierNode row_tree;
@@ -655,8 +988,8 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
         stack.pop_back();
         continue;
       }
-      const std::string label = display_string(top.it->first);
       HierNode* child = &top.it->second;
+      const std::string label = node_label(top.it->first, *child);
       ++top.it;
       if (child->children.empty()) {
         // Leaf: contributes to its enclosing frames' subtotal.
@@ -731,8 +1064,8 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
         stack.pop_back();
         continue;
       }
-      const std::string label = display_string(top.it->first);
       HierNode* child = &top.it->second;
+      const std::string label = node_label(top.it->first, *child);
       ++top.it;
       if (child->children.empty()) {
         stack_col_leaves.push_back(child->leaf_index);
@@ -792,6 +1125,400 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
     }
     if (!result.grand_totals.empty()) {
       result.grand_total = result.grand_totals[0];
+    }
+  }
+
+  // 7. Value-axis filters (Top-N, GreaterThan).
+  //
+  // Applied last so the pre-aggregation filter set has already shaped
+  // `result.values`; the pruning here only drops surviving leaves.
+  // Single-level axes only: when row hierarchy has more than one field,
+  // value filters are skipped (Excel's behaviour is config-dependent
+  // and out of MVP scope). Subtotals + grand totals retain their
+  // pre-filter values so a Top-N report can still surface "X out of
+  // total" framing.
+  for (const PivotFilter& f : table.active_filters()) {
+    if (f.type != FilterType::ValueTop10 && f.type != FilterType::ValueGreaterThan) {
+      continue;  // Label/Date filters handled pre-aggregation.
+    }
+    if (data_field_count == 0) {
+      continue;
+    }
+    // Score per leaf is the data-field-0 aggregate. For column-axis
+    // filtering we score across all rows for that column; row-axis
+    // similarly across all columns.
+    auto leaf_score = [&](std::size_t r, std::size_t c) -> Value {
+      if (r >= result.values.size() || c >= result.values[r].size() || result.values[r][c].empty()) {
+        return Value::blank();
+      }
+      return result.values[r][c][0];
+    };
+    if (f.axis == PivotAxis::Row && table.row_field_order().size() == 1) {
+      const std::size_t n = result.rows.size();
+      if (n == 0) {
+        continue;
+      }
+      // Compute a per-row scalar by summing data-field-0 across all cols.
+      std::vector<double> scores(n, 0.0);
+      std::vector<bool> all_blank(n, true);
+      for (std::size_t r = 0; r < n; ++r) {
+        for (std::size_t c = 0; c < (col_levels.empty() ? 1u : col_leaf_count); ++c) {
+          const Value v = leaf_score(r, c);
+          if (v.is_number()) {
+            scores[r] += v.as_number();
+            all_blank[r] = false;
+          } else if (v.is_boolean()) {
+            scores[r] += v.as_boolean() ? 1.0 : 0.0;
+            all_blank[r] = false;
+          }
+        }
+      }
+      std::vector<bool> keep(n, false);
+      if (f.type == FilterType::ValueTop10) {
+        const auto top_n = static_cast<std::size_t>(filter_number_value(f));
+        // Sort indices by score descending; rows with all-blank scores
+        // sink to the bottom regardless of N.
+        std::vector<std::size_t> order(n);
+        for (std::size_t i = 0; i < n; ++i) {
+          order[i] = i;
+        }
+        std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) {
+          if (all_blank[a] != all_blank[b]) {
+            return !all_blank[a];
+          }
+          return scores[a] > scores[b];
+        });
+        const std::size_t k = std::min(top_n, n);
+        for (std::size_t i = 0; i < k; ++i) {
+          if (!all_blank[order[i]]) {
+            keep[order[i]] = true;
+          }
+        }
+      } else {
+        // ValueGreaterThan
+        const double threshold = filter_number_value(f);
+        for (std::size_t i = 0; i < n; ++i) {
+          if (!all_blank[i] && scores[i] > threshold) {
+            keep[i] = true;
+          }
+        }
+      }
+      // Compact rows + values rows in place.
+      std::vector<RowHierarchyNode> new_rows;
+      new_rows.reserve(n);
+      std::vector<std::vector<std::vector<Value>>> new_values;
+      new_values.reserve(n);
+      for (std::size_t i = 0; i < n; ++i) {
+        if (keep[i]) {
+          new_rows.push_back(std::move(result.rows[i]));
+          new_values.push_back(std::move(result.values[i]));
+        }
+      }
+      result.rows = std::move(new_rows);
+      result.values = std::move(new_values);
+    } else if (f.axis == PivotAxis::Col && table.col_field_order().size() == 1) {
+      const std::size_t n = result.cols.size();
+      if (n == 0) {
+        continue;
+      }
+      std::vector<double> scores(n, 0.0);
+      std::vector<bool> all_blank(n, true);
+      const std::size_t row_n = row_levels.empty() ? 1u : result.values.size();
+      for (std::size_t c = 0; c < n; ++c) {
+        for (std::size_t r = 0; r < row_n; ++r) {
+          const Value v = leaf_score(r, c);
+          if (v.is_number()) {
+            scores[c] += v.as_number();
+            all_blank[c] = false;
+          } else if (v.is_boolean()) {
+            scores[c] += v.as_boolean() ? 1.0 : 0.0;
+            all_blank[c] = false;
+          }
+        }
+      }
+      std::vector<bool> keep(n, false);
+      if (f.type == FilterType::ValueTop10) {
+        const auto top_n = static_cast<std::size_t>(filter_number_value(f));
+        std::vector<std::size_t> order(n);
+        for (std::size_t i = 0; i < n; ++i) {
+          order[i] = i;
+        }
+        std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) {
+          if (all_blank[a] != all_blank[b]) {
+            return !all_blank[a];
+          }
+          return scores[a] > scores[b];
+        });
+        const std::size_t k = std::min(top_n, n);
+        for (std::size_t i = 0; i < k; ++i) {
+          if (!all_blank[order[i]]) {
+            keep[order[i]] = true;
+          }
+        }
+      } else {
+        const double threshold = filter_number_value(f);
+        for (std::size_t i = 0; i < n; ++i) {
+          if (!all_blank[i] && scores[i] > threshold) {
+            keep[i] = true;
+          }
+        }
+      }
+      std::vector<ColHierarchyNode> new_cols;
+      new_cols.reserve(n);
+      for (std::size_t c = 0; c < n; ++c) {
+        if (keep[c]) {
+          new_cols.push_back(std::move(result.cols[c]));
+        }
+      }
+      result.cols = std::move(new_cols);
+      // Compact every row's value matrix along the col dimension.
+      for (auto& row_slot : result.values) {
+        std::vector<std::vector<Value>> new_row;
+        new_row.reserve(n);
+        for (std::size_t c = 0; c < row_slot.size() && c < n; ++c) {
+          if (keep[c]) {
+            new_row.push_back(std::move(row_slot[c]));
+          }
+        }
+        row_slot = std::move(new_row);
+      }
+    }
+    // Multi-level axis OR mixed-direction filter: skipped (MVP).
+  }
+
+  // 8. Show-values-as transforms.
+  //
+  // Applied last so the input matrix already reflects pre-filter
+  // aggregation + post-filter pruning. For each data field with
+  // `show_as != Normal`, walk `result.values` and replace each cell with
+  // the derived value. Modes:
+  //
+  //   * PercentOfRow / PercentOfCol: cell / row-or-col sum (Div0 when 0).
+  //   * PercentOfTotal: cell / table grand total.
+  //   * RunningTotalInRow / RunningTotalInCol: cumulative sum along the
+  //     axis (errors short-circuit later cells in that row / column).
+  //   * Index: (cell * total) / (row_sum * col_sum); Div0 if either
+  //     partial is 0.
+  //
+  // Subtotals + grand totals retain the raw aggregate; only the values
+  // matrix is rewritten. Excel's pivot UI treats subtotals on a "show
+  // values as" data field as the same transform applied to the
+  // subtotal's row, but parity with that behaviour is out of MVP scope
+  // and would require a parallel transform pass over `row_subtotals` /
+  // `col_subtotals` / `grand_totals`.
+  if (!result.values.empty() && data_field_count > 0) {
+    auto cell_num = [](const Value& v) -> std::pair<bool, double> {
+      if (v.is_number()) {
+        return {true, v.as_number()};
+      }
+      if (v.is_boolean()) {
+        return {true, v.as_boolean() ? 1.0 : 0.0};
+      }
+      return {false, 0.0};
+    };
+    const std::size_t actual_row_count = result.values.size();
+    const std::size_t actual_col_count = result.values[0].size();
+
+    for (std::size_t df_idx = 0; df_idx < data_field_count; ++df_idx) {
+      const ShowValuesAs mode = table.data_fields()[df_idx].show_as;
+      if (mode == ShowValuesAs::Normal) {
+        continue;
+      }
+      switch (mode) {
+        case ShowValuesAs::PercentOfRow: {
+          for (std::size_t r = 0; r < actual_row_count; ++r) {
+            double row_sum = 0.0;
+            bool any_numeric = false;
+            for (std::size_t c = 0; c < actual_col_count; ++c) {
+              if (df_idx >= result.values[r][c].size()) {
+                continue;
+              }
+              auto [ok, n] = cell_num(result.values[r][c][df_idx]);
+              if (ok) {
+                row_sum += n;
+                any_numeric = true;
+              }
+            }
+            for (std::size_t c = 0; c < actual_col_count; ++c) {
+              if (df_idx >= result.values[r][c].size()) {
+                continue;
+              }
+              Value& cell = result.values[r][c][df_idx];
+              auto [ok, n] = cell_num(cell);
+              if (!ok || !any_numeric) {
+                continue;
+              }
+              if (row_sum == 0.0) {
+                cell = Value::error(ErrorCode::Div0);
+              } else {
+                cell = Value::number(n / row_sum);
+              }
+            }
+          }
+          break;
+        }
+        case ShowValuesAs::PercentOfCol: {
+          for (std::size_t c = 0; c < actual_col_count; ++c) {
+            double col_sum = 0.0;
+            bool any_numeric = false;
+            for (std::size_t r = 0; r < actual_row_count; ++r) {
+              if (c >= result.values[r].size() || df_idx >= result.values[r][c].size()) {
+                continue;
+              }
+              auto [ok, n] = cell_num(result.values[r][c][df_idx]);
+              if (ok) {
+                col_sum += n;
+                any_numeric = true;
+              }
+            }
+            for (std::size_t r = 0; r < actual_row_count; ++r) {
+              if (c >= result.values[r].size() || df_idx >= result.values[r][c].size()) {
+                continue;
+              }
+              Value& cell = result.values[r][c][df_idx];
+              auto [ok, n] = cell_num(cell);
+              if (!ok || !any_numeric) {
+                continue;
+              }
+              if (col_sum == 0.0) {
+                cell = Value::error(ErrorCode::Div0);
+              } else {
+                cell = Value::number(n / col_sum);
+              }
+            }
+          }
+          break;
+        }
+        case ShowValuesAs::PercentOfTotal: {
+          // Prefer the precomputed grand total; if absent (table did
+          // not request totals), recompute over the surviving cells.
+          double total = 0.0;
+          bool total_known = false;
+          if (df_idx < result.grand_totals.size()) {
+            auto [ok, n] = cell_num(result.grand_totals[df_idx]);
+            if (ok) {
+              total = n;
+              total_known = true;
+            }
+          }
+          if (!total_known) {
+            for (std::size_t r = 0; r < actual_row_count; ++r) {
+              for (std::size_t c = 0; c < actual_col_count && c < result.values[r].size(); ++c) {
+                if (df_idx >= result.values[r][c].size()) {
+                  continue;
+                }
+                auto [ok, n] = cell_num(result.values[r][c][df_idx]);
+                if (ok) {
+                  total += n;
+                  total_known = true;
+                }
+              }
+            }
+          }
+          for (std::size_t r = 0; r < actual_row_count; ++r) {
+            for (std::size_t c = 0; c < actual_col_count && c < result.values[r].size(); ++c) {
+              if (df_idx >= result.values[r][c].size()) {
+                continue;
+              }
+              Value& cell = result.values[r][c][df_idx];
+              auto [ok, n] = cell_num(cell);
+              if (!ok || !total_known) {
+                continue;
+              }
+              if (total == 0.0) {
+                cell = Value::error(ErrorCode::Div0);
+              } else {
+                cell = Value::number(n / total);
+              }
+            }
+          }
+          break;
+        }
+        case ShowValuesAs::RunningTotalInRow: {
+          for (std::size_t r = 0; r < actual_row_count; ++r) {
+            double running = 0.0;
+            for (std::size_t c = 0; c < actual_col_count && c < result.values[r].size(); ++c) {
+              if (df_idx >= result.values[r][c].size()) {
+                continue;
+              }
+              Value& cell = result.values[r][c][df_idx];
+              auto [ok, n] = cell_num(cell);
+              if (!ok) {
+                continue;
+              }
+              running += n;
+              cell = Value::number(running);
+            }
+          }
+          break;
+        }
+        case ShowValuesAs::RunningTotalInCol: {
+          for (std::size_t c = 0; c < actual_col_count; ++c) {
+            double running = 0.0;
+            for (std::size_t r = 0; r < actual_row_count; ++r) {
+              if (c >= result.values[r].size() || df_idx >= result.values[r][c].size()) {
+                continue;
+              }
+              Value& cell = result.values[r][c][df_idx];
+              auto [ok, n] = cell_num(cell);
+              if (!ok) {
+                continue;
+              }
+              running += n;
+              cell = Value::number(running);
+            }
+          }
+          break;
+        }
+        case ShowValuesAs::Index: {
+          // Index = (cell * grand_total) / (row_sum * col_sum). Compute
+          // partials on demand; if any partial is zero or non-numeric,
+          // surface Div0 / leave as-is.
+          double total = 0.0;
+          if (df_idx < result.grand_totals.size()) {
+            auto [ok, n] = cell_num(result.grand_totals[df_idx]);
+            if (ok) {
+              total = n;
+            }
+          }
+          // Precompute row sums + col sums for this df.
+          std::vector<double> row_sums(actual_row_count, 0.0);
+          std::vector<double> col_sums(actual_col_count, 0.0);
+          for (std::size_t r = 0; r < actual_row_count; ++r) {
+            for (std::size_t c = 0; c < actual_col_count && c < result.values[r].size(); ++c) {
+              if (df_idx >= result.values[r][c].size()) {
+                continue;
+              }
+              auto [ok, n] = cell_num(result.values[r][c][df_idx]);
+              if (ok) {
+                row_sums[r] += n;
+                col_sums[c] += n;
+              }
+            }
+          }
+          for (std::size_t r = 0; r < actual_row_count; ++r) {
+            for (std::size_t c = 0; c < actual_col_count && c < result.values[r].size(); ++c) {
+              if (df_idx >= result.values[r][c].size()) {
+                continue;
+              }
+              Value& cell = result.values[r][c][df_idx];
+              auto [ok, n] = cell_num(cell);
+              if (!ok) {
+                continue;
+              }
+              const double denom = row_sums[r] * col_sums[c];
+              if (denom == 0.0) {
+                cell = Value::error(ErrorCode::Div0);
+              } else {
+                cell = Value::number((n * total) / denom);
+              }
+            }
+          }
+          break;
+        }
+        case ShowValuesAs::Normal:
+          break;
+      }
     }
   }
 

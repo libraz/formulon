@@ -130,6 +130,29 @@ struct SortSpec {
   std::string by_field;
 };
 
+/// "Show values as" derivation applied to each cell after the raw
+/// aggregation finishes. Mirrors Excel's `dataField/@showDataAs`
+/// attribute. `Normal` leaves the aggregate unchanged.
+///
+/// MVP scope: PercentOfRow / PercentOfCol / PercentOfTotal /
+/// RunningTotalInRow / RunningTotalInCol / Index. The "% Difference
+/// From" / "Difference From" / "% Of Parent" variants need a reference
+/// item and are deferred until the data-field XML schema for them is
+/// modelled. When the show-as mode requires the grand total
+/// (`PercentOfTotal`, `Index`) but the table has both
+/// `grand_totals_rows == false` and `grand_totals_cols == false`, the
+/// transform falls back to recomputing the total over the surviving
+/// values matrix.
+enum class ShowValuesAs : std::uint8_t {
+  Normal = 0,
+  PercentOfRow = 1,
+  PercentOfCol = 2,
+  PercentOfTotal = 3,
+  RunningTotalInRow = 4,
+  RunningTotalInCol = 5,
+  Index = 6,
+};
+
 /// One data-field entry from `<dataFields>/<dataField>`.
 ///
 /// GETPIVOTDATA looks up data fields by `name` (e.g. "Sum of Amount").
@@ -142,6 +165,7 @@ struct PivotDataField {
   std::uint32_t field_index = 0;
   Aggregation aggregation = Aggregation::Sum;
   std::string number_format;
+  ShowValuesAs show_as = ShowValuesAs::Normal;
 };
 
 /// Field-level configuration as authored in the OOXML pivot definition.

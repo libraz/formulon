@@ -10,6 +10,7 @@
 #include "pivot/pivot_evaluator.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -434,6 +435,616 @@ TEST(PivotEvaluator, MaxMinProduct) {
     // South: 200 * 300 = 60_000
     EXPECT_DOUBLE_EQ(r.values[south][0][0].as_number(), 60000.0);
   }
+}
+
+// ---------------------------------------------------------------------------
+// 8b. StdDev / StdDevP / Var / VarP arithmetic
+// ---------------------------------------------------------------------------
+//
+// `build_basic_cache()` per region:
+//   North: {100, 50, 25}            mean = 175 / 3
+//   South: {200, 300}               mean = 250
+
+TEST(PivotEvaluator, StdDevAndVarFamily) {
+  PivotCache cache = build_basic_cache();
+
+  auto run = [&](Aggregation agg) {
+    PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+    table.mutable_data_fields()[0].aggregation = agg;
+    table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+    auto r_or = evaluate(table, cache);
+    EXPECT_TRUE(static_cast<bool>(r_or));
+    return r_or.value();
+  };
+
+  // North n=3, mean = 175/3, ss = sum((x - mean)^2)
+  //   = (100 - 175/3)^2 + (50 - 175/3)^2 + (25 - 175/3)^2
+  //   = (125/3)^2 + (-25/3)^2 + (-100/3)^2
+  //   = 15625/9 + 625/9 + 10000/9
+  //   = 26250/9
+  const double north_ss = (125.0 / 3.0) * (125.0 / 3.0) + (-25.0 / 3.0) * (-25.0 / 3.0) +
+                          (-100.0 / 3.0) * (-100.0 / 3.0);
+  // South n=2, mean = 250, ss = (200-250)^2 + (300-250)^2 = 5000
+  const double south_ss = 5000.0;
+
+  {
+    PivotResult r = run(Aggregation::Var);  // sample, divisor n-1
+    const std::size_t north = row_index(r, "North");
+    const std::size_t south = row_index(r, "South");
+    EXPECT_DOUBLE_EQ(r.values[north][0][0].as_number(), north_ss / 2.0);
+    EXPECT_DOUBLE_EQ(r.values[south][0][0].as_number(), south_ss / 1.0);
+  }
+  {
+    PivotResult r = run(Aggregation::VarP);  // population, divisor n
+    const std::size_t north = row_index(r, "North");
+    const std::size_t south = row_index(r, "South");
+    EXPECT_DOUBLE_EQ(r.values[north][0][0].as_number(), north_ss / 3.0);
+    EXPECT_DOUBLE_EQ(r.values[south][0][0].as_number(), south_ss / 2.0);
+  }
+  {
+    PivotResult r = run(Aggregation::StdDev);
+    const std::size_t north = row_index(r, "North");
+    const std::size_t south = row_index(r, "South");
+    EXPECT_DOUBLE_EQ(r.values[north][0][0].as_number(), std::sqrt(north_ss / 2.0));
+    EXPECT_DOUBLE_EQ(r.values[south][0][0].as_number(), std::sqrt(south_ss / 1.0));
+  }
+  {
+    PivotResult r = run(Aggregation::StdDevP);
+    const std::size_t north = row_index(r, "North");
+    const std::size_t south = row_index(r, "South");
+    EXPECT_DOUBLE_EQ(r.values[north][0][0].as_number(), std::sqrt(north_ss / 3.0));
+    EXPECT_DOUBLE_EQ(r.values[south][0][0].as_number(), std::sqrt(south_ss / 2.0));
+  }
+}
+
+TEST(PivotEvaluator, VarAndStdDevSampleNeedTwoValuesElseDiv0) {
+  PivotCache cache;
+  cache.set_cache_id(1);
+  cache.mutable_fields().push_back(PivotCacheField{"G", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"V", {}});
+
+  auto add = [&](const char* g, double v) {
+    PivotCacheRecord rec;
+    rec.cells.push_back(owned_text(cache, g));
+    rec.cells.push_back(Value::number(v));
+    cache.mutable_records().push_back(std::move(rec));
+  };
+  add("solo", 42.0);  // single record, sample stats undefined.
+  add("pair", 10.0);
+  add("pair", 20.0);
+
+  auto run = [&](Aggregation agg) {
+    PivotTable table;
+    table.set_pivot_cache_id(1);
+    PivotField gf;
+    gf.source_name = "G";
+    gf.axis = PivotAxis::Row;
+    PivotField vf;
+    vf.source_name = "V";
+    vf.axis = PivotAxis::Value;
+    table.mutable_fields().push_back(std::move(gf));
+    table.mutable_fields().push_back(std::move(vf));
+    table.mutable_row_field_order() = {0};
+    PivotDataField df;
+    df.name = "f";
+    df.field_index = 1;
+    df.aggregation = agg;
+    table.mutable_data_fields().push_back(std::move(df));
+    table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+    auto r_or = evaluate(table, cache);
+    EXPECT_TRUE(static_cast<bool>(r_or));
+    return r_or.value();
+  };
+
+  for (Aggregation agg : {Aggregation::Var, Aggregation::StdDev}) {
+    PivotResult r = run(agg);
+    const std::size_t solo = row_index(r, "solo");
+    const std::size_t pair = row_index(r, "pair");
+    ASSERT_NE(solo, static_cast<std::size_t>(-1));
+    ASSERT_NE(pair, static_cast<std::size_t>(-1));
+    ASSERT_TRUE(r.values[solo][0][0].is_error());
+    EXPECT_EQ(r.values[solo][0][0].as_error(), ErrorCode::Div0);
+    EXPECT_TRUE(r.values[pair][0][0].is_number());
+  }
+  for (Aggregation agg : {Aggregation::VarP, Aggregation::StdDevP}) {
+    PivotResult r = run(agg);
+    const std::size_t solo = row_index(r, "solo");
+    const std::size_t pair = row_index(r, "pair");
+    // Population variant accepts n=1 and yields 0.
+    EXPECT_TRUE(r.values[solo][0][0].is_number());
+    EXPECT_DOUBLE_EQ(r.values[solo][0][0].as_number(), 0.0);
+    EXPECT_TRUE(r.values[pair][0][0].is_number());
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 8c. Date grouping (Gregorian + Japanese)
+// ---------------------------------------------------------------------------
+//
+// Cache schema: Date (number, Excel serial) + Amount (number).
+// Records cover three calendar years and span the Heisei -> Reiwa boundary
+// so the Japanese-calendar bucket boundaries are exercised.
+PivotCache build_date_cache() {
+  // Excel serials (1900 leap-bug aware):
+  //   2018-12-31 -> 43465  (Heisei)
+  //   2019-04-30 -> 43585  (Heisei, last day of era)
+  //   2019-05-01 -> 43586  (Reiwa, first day of era)
+  //   2019-12-31 -> 43830  (Reiwa)
+  //   2024-03-15 -> 45366  (Reiwa)
+  //   2024-07-04 -> 45477  (Reiwa)
+  PivotCache cache;
+  cache.set_cache_id(1);
+  cache.mutable_fields().push_back(PivotCacheField{"Date", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+  auto add = [&](double serial, double amount) {
+    PivotCacheRecord rec;
+    rec.cells.push_back(Value::number(serial));
+    rec.cells.push_back(Value::number(amount));
+    cache.mutable_records().push_back(std::move(rec));
+  };
+  add(43465.0, 10.0);
+  add(43585.0, 20.0);
+  add(43586.0, 40.0);
+  add(43830.0, 80.0);
+  add(45366.0, 160.0);
+  add(45477.0, 320.0);
+  return cache;
+}
+
+PivotTable build_date_grouped_table(DateGrouping g, CalendarSystem cal) {
+  PivotTable table;
+  table.set_pivot_cache_id(1);
+  PivotField date_f;
+  date_f.source_name = "Date";
+  date_f.axis = PivotAxis::Row;
+  PivotDateGroup dg;
+  dg.granularity = g;
+  dg.calendar = cal;
+  date_f.date_group = dg;
+  PivotField amount_f;
+  amount_f.source_name = "Amount";
+  amount_f.axis = PivotAxis::Value;
+  table.mutable_fields().push_back(std::move(date_f));
+  table.mutable_fields().push_back(std::move(amount_f));
+  table.mutable_row_field_order() = {0};
+  PivotDataField sum;
+  sum.name = "Sum of Amount";
+  sum.field_index = 1;
+  sum.aggregation = Aggregation::Sum;
+  table.mutable_data_fields().push_back(std::move(sum));
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  return table;
+}
+
+TEST(PivotEvaluator, DateGroupingByYearGregorian) {
+  PivotCache cache = build_date_cache();
+  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // Three Gregorian years: 2018, 2019, 2024 (chronological).
+  ASSERT_EQ(r.rows.size(), 3U);
+  EXPECT_EQ(r.rows[0].label, "2018");
+  EXPECT_EQ(r.rows[1].label, "2019");
+  EXPECT_EQ(r.rows[2].label, "2024");
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 10.0);
+  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 20.0 + 40.0 + 80.0);
+  EXPECT_DOUBLE_EQ(r.values[2][0][0].as_number(), 160.0 + 320.0);
+}
+
+TEST(PivotEvaluator, DateGroupingByQuarterGregorian) {
+  PivotCache cache = build_date_cache();
+  PivotTable table = build_date_grouped_table(DateGrouping::Quarter, CalendarSystem::Gregorian);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // 2018-Q4 (Dec), 2019-Q2 (Apr+May), 2019-Q4 (Dec), 2024-Q1 (Mar), 2024-Q3 (Jul).
+  ASSERT_EQ(r.rows.size(), 5U);
+  EXPECT_EQ(r.rows[0].label, "2018-Q4");
+  EXPECT_EQ(r.rows[1].label, "2019-Q2");
+  EXPECT_EQ(r.rows[2].label, "2019-Q4");
+  EXPECT_EQ(r.rows[3].label, "2024-Q1");
+  EXPECT_EQ(r.rows[4].label, "2024-Q3");
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 10.0);
+  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 20.0 + 40.0);
+  EXPECT_DOUBLE_EQ(r.values[2][0][0].as_number(), 80.0);
+  EXPECT_DOUBLE_EQ(r.values[3][0][0].as_number(), 160.0);
+  EXPECT_DOUBLE_EQ(r.values[4][0][0].as_number(), 320.0);
+}
+
+TEST(PivotEvaluator, DateGroupingByMonthGregorian) {
+  PivotCache cache = build_date_cache();
+  PivotTable table = build_date_grouped_table(DateGrouping::Month, CalendarSystem::Gregorian);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // Six distinct months across the dataset.
+  ASSERT_EQ(r.rows.size(), 6U);
+  EXPECT_EQ(r.rows[0].label, "2018-12");
+  EXPECT_EQ(r.rows[1].label, "2019-04");
+  EXPECT_EQ(r.rows[2].label, "2019-05");
+  EXPECT_EQ(r.rows[3].label, "2019-12");
+  EXPECT_EQ(r.rows[4].label, "2024-03");
+  EXPECT_EQ(r.rows[5].label, "2024-07");
+}
+
+TEST(PivotEvaluator, DateGroupingByDay) {
+  PivotCache cache = build_date_cache();
+  PivotTable table = build_date_grouped_table(DateGrouping::Day, CalendarSystem::Gregorian);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // Each record is a distinct day -> 6 leaves in chronological order.
+  ASSERT_EQ(r.rows.size(), 6U);
+  EXPECT_EQ(r.rows[0].label, "2018-12-31");
+  EXPECT_EQ(r.rows[1].label, "2019-04-30");
+  EXPECT_EQ(r.rows[2].label, "2019-05-01");
+  EXPECT_EQ(r.rows[3].label, "2019-12-31");
+  EXPECT_EQ(r.rows[4].label, "2024-03-15");
+  EXPECT_EQ(r.rows[5].label, "2024-07-04");
+}
+
+TEST(PivotEvaluator, DateGroupingByYearJapaneseCalendar) {
+  PivotCache cache = build_date_cache();
+  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Japanese);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // 2018 -> Heisei 30, 2019-04-30 -> Heisei 31, 2019-05-01 -> Reiwa 1,
+  // 2019-12-31 -> Reiwa 1, 2024 -> Reiwa 6.
+  // Buckets in chronological order: 平成30 / 平成31 / 令和1 / 令和6.
+  ASSERT_EQ(r.rows.size(), 4U);
+  // 平成 = E5 B9 B3 E6 88 90, 令和 = E4 BB A4 E5 92 8C, 年 = E5 B9 B4
+  EXPECT_EQ(r.rows[0].label, std::string("\xE5\xB9\xB3\xE6\x88\x90") + "30" + "\xE5\xB9\xB4");
+  EXPECT_EQ(r.rows[1].label, std::string("\xE5\xB9\xB3\xE6\x88\x90") + "31" + "\xE5\xB9\xB4");
+  EXPECT_EQ(r.rows[2].label, std::string("\xE4\xBB\xA4\xE5\x92\x8C") + "1" + "\xE5\xB9\xB4");
+  EXPECT_EQ(r.rows[3].label, std::string("\xE4\xBB\xA4\xE5\x92\x8C") + "6" + "\xE5\xB9\xB4");
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 10.0);
+  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 20.0);
+  EXPECT_DOUBLE_EQ(r.values[2][0][0].as_number(), 40.0 + 80.0);
+  EXPECT_DOUBLE_EQ(r.values[3][0][0].as_number(), 160.0 + 320.0);
+}
+
+TEST(PivotEvaluator, DateGroupingNonNumericPassesThrough) {
+  PivotCache cache;
+  cache.set_cache_id(1);
+  cache.mutable_fields().push_back(PivotCacheField{"Date", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+  // A blank (not a serial) should not crash; bucket_date is only invoked
+  // for numeric values.
+  PivotCacheRecord rec;
+  rec.cells.push_back(Value::blank());
+  rec.cells.push_back(Value::number(42.0));
+  cache.mutable_records().push_back(std::move(rec));
+
+  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  // The single blank-keyed bucket survives without exploding; label is the
+  // empty string (per `display_string` for Blank).
+  ASSERT_EQ(r_or.value().rows.size(), 1U);
+}
+
+// ---------------------------------------------------------------------------
+// 8d. PivotFilter (LabelContains / LabelBeginsWith / ValueTop10 / ValueGreaterThan)
+// ---------------------------------------------------------------------------
+
+TEST(PivotEvaluator, LabelContainsFilterDropsRecords) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  // Drop records whose Region label contains "outh" (i.e. South).
+  PivotFilter f;
+  f.axis = PivotAxis::Row;
+  f.field_name = "Region";
+  f.type = FilterType::LabelContains;
+  f.value = std::string("outh");
+  // PivotFilter pre-aggregation reject: every match drops the record.
+  // Wait — LabelContains with payload "outh" *passes* records whose label
+  // contains it. To drop South we instead use LabelBeginsWith("North")
+  // below; LabelContains here keeps only South.
+  table.mutable_active_filters().push_back(f);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  ASSERT_EQ(r.rows.size(), 1U);
+  EXPECT_EQ(r.rows[0].label, "South");
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 500.0);  // 200 + 300
+}
+
+TEST(PivotEvaluator, LabelBeginsWithFilterDropsRecords) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  PivotFilter f;
+  f.axis = PivotAxis::Row;
+  f.field_name = "Region";
+  f.type = FilterType::LabelBeginsWith;
+  f.value = std::string("Nor");
+  table.mutable_active_filters().push_back(f);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  ASSERT_EQ(r.rows.size(), 1U);
+  EXPECT_EQ(r.rows[0].label, "North");
+}
+
+TEST(PivotEvaluator, ValueTop10FilterKeepsTopRows) {
+  // Use a richer cache so ranking is meaningful.
+  PivotCache cache;
+  cache.set_cache_id(1);
+  cache.mutable_fields().push_back(PivotCacheField{"Region", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+  auto add = [&](const char* region, double amount) {
+    PivotCacheRecord rec;
+    rec.cells.push_back(owned_text(cache, region));
+    rec.cells.push_back(Value::number(amount));
+    cache.mutable_records().push_back(std::move(rec));
+  };
+  add("A", 10.0);
+  add("B", 50.0);
+  add("C", 30.0);
+  add("D", 20.0);
+
+  PivotTable table;
+  table.set_pivot_cache_id(1);
+  PivotField rf;
+  rf.source_name = "Region";
+  rf.axis = PivotAxis::Row;
+  PivotField af;
+  af.source_name = "Amount";
+  af.axis = PivotAxis::Value;
+  table.mutable_fields().push_back(std::move(rf));
+  table.mutable_fields().push_back(std::move(af));
+  table.mutable_row_field_order() = {0};
+  PivotDataField sum;
+  sum.name = "Sum of Amount";
+  sum.field_index = 1;
+  sum.aggregation = Aggregation::Sum;
+  table.mutable_data_fields().push_back(std::move(sum));
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+
+  PivotFilter f;
+  f.axis = PivotAxis::Row;
+  f.field_name = "Region";
+  f.type = FilterType::ValueTop10;
+  f.value = 2;  // Top 2.
+  table.mutable_active_filters().push_back(f);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // Top 2 by amount: B (50), C (30).
+  ASSERT_EQ(r.rows.size(), 2U);
+  // Rows are still in alphabetical order after pruning (we kept only the
+  // surviving leaves' positions); order: B, C.
+  std::vector<std::string> labels;
+  std::vector<double> totals;
+  for (std::size_t i = 0; i < r.rows.size(); ++i) {
+    labels.push_back(r.rows[i].label);
+    totals.push_back(r.values[i][0][0].as_number());
+  }
+  // Sort to make assertions order-independent.
+  std::sort(labels.begin(), labels.end());
+  std::sort(totals.begin(), totals.end());
+  EXPECT_EQ(labels[0], "B");
+  EXPECT_EQ(labels[1], "C");
+  EXPECT_DOUBLE_EQ(totals[0], 30.0);
+  EXPECT_DOUBLE_EQ(totals[1], 50.0);
+}
+
+TEST(PivotEvaluator, ValueGreaterThanFilterKeepsAboveThreshold) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+
+  PivotFilter f;
+  f.axis = PivotAxis::Row;
+  f.field_name = "Region";
+  f.type = FilterType::ValueGreaterThan;
+  f.value = 200.0;  // Threshold; North (175) drops, South (500) survives.
+  table.mutable_active_filters().push_back(f);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  ASSERT_EQ(r.rows.size(), 1U);
+  EXPECT_EQ(r.rows[0].label, "South");
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 500.0);
+}
+
+TEST(PivotEvaluator, ValueTop10FilterOnColAxis) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{1});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+
+  PivotFilter f;
+  f.axis = PivotAxis::Col;
+  f.field_name = "Product";
+  f.type = FilterType::ValueTop10;
+  f.value = 1;  // Keep 1 column with the highest column total.
+  table.mutable_active_filters().push_back(f);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // Widget total = 100 + 200 + 25 = 325; Gadget total = 50 + 300 = 350.
+  // Top-1 by col total -> Gadget survives.
+  ASSERT_EQ(r.cols.size(), 1U);
+  EXPECT_EQ(r.cols[0].label, "Gadget");
+  // Each row keeps a single col slot.
+  ASSERT_EQ(r.values.size(), 2U);
+  for (const auto& row_slot : r.values) {
+    ASSERT_EQ(row_slot.size(), 1U);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 8e. Show values as (% of row / col / total / running total / index)
+// ---------------------------------------------------------------------------
+
+TEST(PivotEvaluator, ShowAsPercentOfRow) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{1});  // Region x Product.
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  table.mutable_data_fields()[0].show_as = ShowValuesAs::PercentOfRow;
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // North row totals: Gadget=50, Widget=125, sum=175.
+  // South row totals: Gadget=300, Widget=200, sum=500.
+  const std::size_t north = row_index(r, "North");
+  const std::size_t south = row_index(r, "South");
+  const std::size_t gadget = (r.cols[0].label == "Gadget") ? 0U : 1U;
+  const std::size_t widget = 1U - gadget;
+  EXPECT_DOUBLE_EQ(r.values[north][gadget][0].as_number(), 50.0 / 175.0);
+  EXPECT_DOUBLE_EQ(r.values[north][widget][0].as_number(), 125.0 / 175.0);
+  EXPECT_DOUBLE_EQ(r.values[south][gadget][0].as_number(), 300.0 / 500.0);
+  EXPECT_DOUBLE_EQ(r.values[south][widget][0].as_number(), 200.0 / 500.0);
+}
+
+TEST(PivotEvaluator, ShowAsPercentOfCol) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{1});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  table.mutable_data_fields()[0].show_as = ShowValuesAs::PercentOfCol;
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // Column totals: Gadget = 50 + 300 = 350, Widget = 125 + 200 = 325.
+  const std::size_t north = row_index(r, "North");
+  const std::size_t south = row_index(r, "South");
+  const std::size_t gadget = (r.cols[0].label == "Gadget") ? 0U : 1U;
+  const std::size_t widget = 1U - gadget;
+  EXPECT_DOUBLE_EQ(r.values[north][gadget][0].as_number(), 50.0 / 350.0);
+  EXPECT_DOUBLE_EQ(r.values[south][gadget][0].as_number(), 300.0 / 350.0);
+  EXPECT_DOUBLE_EQ(r.values[north][widget][0].as_number(), 125.0 / 325.0);
+  EXPECT_DOUBLE_EQ(r.values[south][widget][0].as_number(), 200.0 / 325.0);
+}
+
+TEST(PivotEvaluator, ShowAsPercentOfTotal) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{1});
+  table.set_grand_totals(/*rows=*/true, /*cols=*/true);
+  table.mutable_data_fields()[0].show_as = ShowValuesAs::PercentOfTotal;
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // Grand total = 100+50+200+300+25 = 675.
+  const std::size_t north = row_index(r, "North");
+  const std::size_t gadget = (r.cols[0].label == "Gadget") ? 0U : 1U;
+  EXPECT_DOUBLE_EQ(r.values[north][gadget][0].as_number(), 50.0 / 675.0);
+}
+
+TEST(PivotEvaluator, ShowAsRunningTotalInRow) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{1});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  table.mutable_data_fields()[0].show_as = ShowValuesAs::RunningTotalInRow;
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  const std::size_t north = row_index(r, "North");
+  const std::size_t gadget = (r.cols[0].label == "Gadget") ? 0U : 1U;
+  const std::size_t widget = 1U - gadget;
+  // Cumulative across cols in display order (Gadget < Widget).
+  EXPECT_DOUBLE_EQ(r.values[north][0][0].as_number(), gadget == 0 ? 50.0 : 125.0);
+  EXPECT_DOUBLE_EQ(r.values[north][1][0].as_number(), 50.0 + 125.0);
+  (void)widget;
+}
+
+TEST(PivotEvaluator, ShowAsIndex) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{1});
+  table.set_grand_totals(/*rows=*/true, /*cols=*/true);
+  table.mutable_data_fields()[0].show_as = ShowValuesAs::Index;
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // Index(N, Gadget) = (cell * total) / (row_sum * col_sum)
+  //                  = (50 * 675) / (175 * 350)
+  const std::size_t north = row_index(r, "North");
+  const std::size_t gadget = (r.cols[0].label == "Gadget") ? 0U : 1U;
+  EXPECT_DOUBLE_EQ(r.values[north][gadget][0].as_number(), (50.0 * 675.0) / (175.0 * 350.0));
+}
+
+TEST(PivotEvaluator, ShowAsPercentRowZeroSumYieldsDiv0) {
+  // Construct a degenerate row whose data field sums to 0 so the
+  // % of row transform must surface Div0 rather than NaN.
+  PivotCache cache;
+  cache.set_cache_id(1);
+  cache.mutable_fields().push_back(PivotCacheField{"R", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"C", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"V", {}});
+  auto add = [&](const char* row_label, const char* col_label, double v) {
+    PivotCacheRecord rec;
+    rec.cells.push_back(owned_text(cache, row_label));
+    rec.cells.push_back(owned_text(cache, col_label));
+    rec.cells.push_back(Value::number(v));
+    cache.mutable_records().push_back(std::move(rec));
+  };
+  add("X", "P", 5.0);
+  add("X", "Q", -5.0);  // Row X sums to 0.
+
+  PivotTable table;
+  table.set_pivot_cache_id(1);
+  PivotField rf;
+  rf.source_name = "R";
+  rf.axis = PivotAxis::Row;
+  PivotField cf;
+  cf.source_name = "C";
+  cf.axis = PivotAxis::Col;
+  PivotField vf;
+  vf.source_name = "V";
+  vf.axis = PivotAxis::Value;
+  table.mutable_fields().push_back(std::move(rf));
+  table.mutable_fields().push_back(std::move(cf));
+  table.mutable_fields().push_back(std::move(vf));
+  table.mutable_row_field_order() = {0};
+  table.mutable_col_field_order() = {1};
+  PivotDataField sum;
+  sum.name = "Sum of V";
+  sum.field_index = 2;
+  sum.aggregation = Aggregation::Sum;
+  sum.show_as = ShowValuesAs::PercentOfRow;
+  table.mutable_data_fields().push_back(std::move(sum));
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 1U);
+  ASSERT_EQ(r.cols.size(), 2U);
+  EXPECT_TRUE(r.values[0][0][0].is_error());
+  EXPECT_EQ(r.values[0][0][0].as_error(), ErrorCode::Div0);
+  EXPECT_TRUE(r.values[0][1][0].is_error());
 }
 
 // ---------------------------------------------------------------------------
