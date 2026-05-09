@@ -1,0 +1,251 @@
+# Release workflow.
+#
+# Triggered by `v*.*.*` tag pushes. Builds and publishes everything in
+# one workflow, mirroring the libsonare publish.yml shape:
+#
+#   - publish-npm   : build WASM, smoke-test, publish `@libraz/formulon`,
+#                     create the GitHub Release.
+#   - build-cli     : matrix-build `formulon_cli` per platform-arch,
+#                     upload tar.gz archives + sha256 sums.
+#   - python-wheels : matrix-build platform-tagged wheels per
+#                     platform-arch, upload as artifacts.
+#   - publish-pypi  : aggregate wheels and publish `formulon` to PyPI
+#                     via trusted publishing.
+#   - attach-cli    : after the release exists, upload CLI tarballs to it.
+#
+# Required setup:
+#   - `NPM_TOKEN` repository secret (Automation token).
+#   - PyPI trusted publishing configured for project `formulon`,
+#     environment `pypi`, this workflow file.
+#
+# The N-API addon (`@libraz/formulon-native`) ships its prebuilds via
+# `prebuild.yml` (`release-bundle` job runs on the same `v*` tag); npm
+# publish for the addon is currently manual and out of scope here.
+name: release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish-npm:
+    name: Publish npm + create GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.74
+          actions-cache-folder: emsdk-cache
+
+      - name: Install host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends brotli cmake ninja-build
+
+      - name: Verify version match (npm)
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          pkg_version=$(node -p "require('./packages/npm/package.json').version")
+          if [ "${tag_version}" != "${pkg_version}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} (version ${tag_version}) does not match packages/npm/package.json version ${pkg_version}"
+            exit 1
+          fi
+
+      - name: Build WASM
+        run: make wasm
+
+      - name: Size report (advisory)
+        run: tools/bench/wasm_size_report.sh build-wasm/formulon.wasm
+
+      - name: Stage and smoke-test npm package
+        run: |
+          make npm-package
+          make npm-test
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Formulon ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          body_path: docs/releases/${{ github.ref_name }}.md
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to npm
+        working-directory: packages/npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance
+
+  build-cli:
+    name: Build CLI ${{ matrix.platform-arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform-arch: darwin-arm64
+            runner: macos-latest
+            archive-ext: tar.gz
+          - platform-arch: linux-x64
+            runner: ubuntu-latest
+            archive-ext: tar.gz
+          - platform-arch: linux-arm64
+            runner: ubuntu-24.04-arm
+            archive-ext: tar.gz
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps (Linux)
+        if: startsWith(matrix.platform-arch, 'linux-')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build
+
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DFM_BUILD_TESTING=OFF
+
+      - name: Build CLI
+        run: cmake --build build --parallel --target formulon_cli
+
+      - name: Stage archive
+        id: stage
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          dir="formulon-${version}-${{ matrix.platform-arch }}"
+          mkdir -p "${dir}"
+          cp build/bin/formulon_cli "${dir}/formulon"
+          cp LICENSE "${dir}/LICENSE"
+          [ -f NOTICE ] && cp NOTICE "${dir}/NOTICE" || true
+          [ -f README.md ] && cp README.md "${dir}/README.md" || true
+          tar -czf "${dir}.tar.gz" "${dir}"
+          shasum -a 256 "${dir}.tar.gz" > "${dir}.tar.gz.sha256"
+          echo "archive=${dir}.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: formulon-cli-${{ matrix.platform-arch }}
+          path: |
+            formulon-*.tar.gz
+            formulon-*.tar.gz.sha256
+          retention-days: 14
+          if-no-files-found: error
+
+  python-wheels:
+    name: Build wheel ${{ matrix.platform-arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform-arch: darwin-arm64
+            runner: macos-latest
+          - platform-arch: linux-x64
+            runner: ubuntu-latest
+          - platform-arch: linux-arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build deps (Linux)
+        if: startsWith(matrix.platform-arch, 'linux-')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build
+
+      - name: Install Python build deps
+        run: python -m pip install --upgrade pip setuptools wheel
+
+      - name: Verify version match (PyPI)
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          pkg_version=$(python -c "import re; print(re.search(r'^version\s*=\s*\"([^\"]+)\"', open('packages/python/pyproject.toml').read(), re.M).group(1))")
+          if [ "${tag_version}" != "${pkg_version}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} (version ${tag_version}) does not match pyproject.toml version ${pkg_version}"
+            exit 1
+          fi
+
+      - name: Build wheel
+        run: make python-wheel
+
+      - name: Smoke test wheel
+        run: |
+          set -euo pipefail
+          wheel=$(ls build-py/dist/formulon-*.whl | head -1)
+          python -m pip install "${wheel}"
+          python -c "import formulon; print('formulon', formulon.__version__)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: formulon-wheel-${{ matrix.platform-arch }}
+          path: build-py/dist/formulon-*.whl
+          retention-days: 14
+          if-no-files-found: error
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [python-wheels]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/formulon
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: formulon-wheel-*
+          path: dist/
+          merge-multiple: true
+
+      - name: List wheels
+        run: ls -la dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+
+  attach-cli:
+    name: Attach CLI archives to GitHub Release
+    needs: [publish-npm, build-cli]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: formulon-cli-*
+          path: cli-dist/
+          merge-multiple: true
+
+      - name: List CLI archives
+        run: ls -la cli-dist/
+
+      - name: Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: cli-dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
