@@ -591,7 +591,14 @@ Value ImLn(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return text_complex(cplx_ln(c), arena);
 }
 
-Value ImLog10(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+// Shared kernel for IMLOG10 / IMLOG2 (and any future IMLOG_<base>): computes
+// log_base(z) = ln(z) * inv_ln_base. Returns #NUM! when z == 0; otherwise
+// scales the real and imaginary components of ln(z) by `inv_ln_base`. The
+// caller passes the precomputed `1 / ln(base)` constant so we keep one body.
+// Marked `noinline` so the body is emitted exactly once — the wrappers are
+// short enough that O3+LTO would otherwise inline a separate copy per call
+// site, defeating the size-sharing this kernel exists to provide.
+[[gnu::noinline]] Value im_log_base(double inv_ln_base, const Value* args, Arena& arena) {
   auto z = parse_complex_value(args[0]);
   if (!z) {
     return Value::error(z.error());
@@ -601,22 +608,15 @@ Value ImLog10(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
     return Value::error(ErrorCode::Num);
   }
   const Complex ln_z = cplx_ln(c);
-  const double inv = 1.0 / std::log(10.0);
-  return text_complex(Complex{ln_z.re * inv, ln_z.im * inv, c.suffix}, arena);
+  return text_complex(Complex{ln_z.re * inv_ln_base, ln_z.im * inv_ln_base, c.suffix}, arena);
+}
+
+Value ImLog10(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  return im_log_base(1.0 / std::log(10.0), args, arena);
 }
 
 Value ImLog2(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto z = parse_complex_value(args[0]);
-  if (!z) {
-    return Value::error(z.error());
-  }
-  const Complex c = z.value();
-  if (c.re == 0.0 && c.im == 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  const Complex ln_z = cplx_ln(c);
-  const double inv = 1.0 / std::log(2.0);
-  return text_complex(Complex{ln_z.re * inv, ln_z.im * inv, c.suffix}, arena);
+  return im_log_base(1.0 / std::log(2.0), args, arena);
 }
 
 Value ImSqrt(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
@@ -676,30 +676,31 @@ Value ImTan(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return text_complex(cplx_mul(s, cplx_recip(c)), arena);
 }
 
-Value ImSec(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+// Shared kernel for IMSEC / IMCSC / IMSECH / IMCSCH: computes 1 / op(z),
+// where `op` is one of cplx_cos / cplx_sin / cplx_cosh / cplx_sinh. Returns
+// #NUM! when |op(z)| == 0 (avoids divide-by-zero). Marked `noinline` so the
+// body is emitted once and shared across all four wrappers — without it,
+// O3+LTO would inline a separate specialization per call site and undo the
+// deduplication this kernel exists to provide.
+[[gnu::noinline]] Value im_unary_recip(Complex (*op)(Complex), const Value* args, Arena& arena) {
   auto z = parse_complex_value(args[0]);
   if (!z) {
     return Value::error(z.error());
   }
-  const Complex c = cplx_cos(z.value());
-  const double denom = c.re * c.re + c.im * c.im;
+  const Complex w = op(z.value());
+  const double denom = w.re * w.re + w.im * w.im;
   if (denom == 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  return text_complex(cplx_recip(c), arena);
+  return text_complex(cplx_recip(w), arena);
+}
+
+Value ImSec(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  return im_unary_recip(&cplx_cos, args, arena);
 }
 
 Value ImCsc(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto z = parse_complex_value(args[0]);
-  if (!z) {
-    return Value::error(z.error());
-  }
-  const Complex s = cplx_sin(z.value());
-  const double denom = s.re * s.re + s.im * s.im;
-  if (denom == 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  return text_complex(cplx_recip(s), arena);
+  return im_unary_recip(&cplx_sin, args, arena);
 }
 
 Value ImCot(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
@@ -745,29 +746,11 @@ Value ImCosh(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 }
 
 Value ImSech(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto z = parse_complex_value(args[0]);
-  if (!z) {
-    return Value::error(z.error());
-  }
-  const Complex c = cplx_cosh(z.value());
-  const double denom = c.re * c.re + c.im * c.im;
-  if (denom == 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  return text_complex(cplx_recip(c), arena);
+  return im_unary_recip(&cplx_cosh, args, arena);
 }
 
 Value ImCsch(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto z = parse_complex_value(args[0]);
-  if (!z) {
-    return Value::error(z.error());
-  }
-  const Complex s = cplx_sinh(z.value());
-  const double denom = s.re * s.re + s.im * s.im;
-  if (denom == 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  return text_complex(cplx_recip(s), arena);
+  return im_unary_recip(&cplx_sinh, args, arena);
 }
 
 }  // namespace
